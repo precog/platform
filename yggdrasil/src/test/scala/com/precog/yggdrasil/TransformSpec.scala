@@ -1,5 +1,7 @@
 package com.precog.yggdrasil
 
+import com.precog.common.json._
+
 import akka.dispatch.Await
 import akka.util.Duration
 
@@ -82,7 +84,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         Filter(
           Leaf(Source), 
           Map1(
-            DerefObjectStatic(Leaf(Source), JPathField("value")), 
+            DerefObjectStatic(Leaf(Source), CPathField("value")), 
             lookupF2(Nil, "mod").applyr(CLong(2)) andThen lookupF2(Nil, "eq").applyr(CLong(0))
           )
         )
@@ -106,7 +108,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       val fieldHead = field.head.get
       val table = fromSample(sample)
       val results = toJson(table.transform {
-        DerefObjectStatic(Leaf(Source), fieldHead.asInstanceOf[JPathField])
+        DerefObjectStatic(Leaf(Source), CPathField(fieldHead.asInstanceOf[JPathField].name))
       })
 
       val expected = sample.data.map { jv => jv(JPath(fieldHead)) } flatMap {
@@ -125,7 +127,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       val fieldHead = field.head.get
       val table = fromSample(sample)
       val results = toJson(table.transform {
-        DerefArrayStatic(Leaf(Source), fieldHead.asInstanceOf[JPathIndex])
+        DerefArrayStatic(Leaf(Source), CPathIndex(fieldHead.asInstanceOf[JPathIndex].index))
       })
 
       val expected = sample.data.map { jv => jv(JPath(fieldHead)) } flatMap {
@@ -143,8 +145,8 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       val table = fromSample(sample)
       val results = toJson(table.transform {
         Map2(
-          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
-          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2")),
           lookupF2(Nil, "add")
         )
       })
@@ -198,8 +200,8 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       val table = fromSample(sample)
       val results = toJson(table.transform {
         Equal(
-          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
-          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2"))
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2"))
         )
       })
 
@@ -248,8 +250,8 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       val table = fromSample(sample)
       val results = toJson(table.transform {
         ObjectConcat(
-          WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")), "value1"), "value"), 
-          WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2")), "value2"), "value") 
+          WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")), "value1"), "value"), 
+          WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2")), "value2"), "value") 
         )
       })
 
@@ -263,8 +265,8 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       val table = fromSample(sample)
       val results = toJson(table.transform {
         ObjectConcat(
-          WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")), "value1"),
-          WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2")), "value1")
+          WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")), "value1"),
+          WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2")), "value1")
         )
       })
 
@@ -279,8 +281,8 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       val results = toJson(table.transform {
         WrapObject(
           ArrayConcat(
-            WrapArray(DerefArrayStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathIndex(0))),
-            WrapArray(DerefArrayStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathIndex(1)))
+            WrapArray(DerefArrayStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathIndex(0))),
+            WrapArray(DerefArrayStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathIndex(1)))
           ), 
           "value"
         )
@@ -305,7 +307,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         val Some(field) = toDelete
 
         val result = toJson(table.transform {
-          ObjectDelete(DerefObjectStatic(Leaf(Source), JPathField("value")), Set(field)) 
+          ObjectDelete(DerefObjectStatic(Leaf(Source), CPathField("value")), Set(CPathField(field.name)))
         })
 
         val expected = sample.data.flatMap { jv => (jv \ "value").delete(JPath(field)) }
@@ -487,7 +489,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
     check { (sample: SampleData) =>
       val schema = sample.schema.getOrElse(0 -> List())._2
       val reducedSchema = schema.zipWithIndex.collect { case (ctpe, i) if i%2 == 0 => ctpe }
-      val valuejtpe = Schema.mkType(reducedSchema).getOrElse(JObjectFixedT(Map()))
+      val valuejtpe = Schema.mkType(reducedSchema map { case (path, ctype) => (CPath(path), ctype) }).getOrElse(JObjectFixedT(Map()))
       val jtpe = JObjectFixedT(Map(
         "value" -> valuejtpe,
         "key" -> JArrayUnfixedT
@@ -527,7 +529,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
-        Scan(DerefObjectStatic(Leaf(Source), JPathField("value")), lookupScanner(Nil, "sum"))
+        Scan(DerefObjectStatic(Leaf(Source), CPathField("value")), lookupScanner(Nil, "sum"))
       })
 
       val (_, expected) = sample.data.foldLeft((BigDecimal(0), Vector.empty[JValue])) { 
@@ -549,7 +551,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
     val results = toJson(table.transform {
       DerefObjectDynamic(
         Leaf(Source),
-        DerefObjectStatic(Leaf(Source), JPathField("ref"))
+        DerefObjectStatic(Leaf(Source), CPathField("ref"))
       )
     })
 
@@ -563,7 +565,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
-        ArraySwap(DerefObjectStatic(Leaf(Source), JPathField("value")), 2)
+        ArraySwap(DerefObjectStatic(Leaf(Source), CPathField("value")), 2)
       })
 
       val expected = sample.data map { jv =>
@@ -580,7 +582,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
     implicit val gen = undefineRowsForColumn(sample(_ => Seq(JPath("field") -> CLong)), JPath("value") \ "field")
     check { (sample: SampleData) =>
       val table = fromSample(sample)
-      val results = toJson(table.transform(ConstLiteral(CString("foo"), DerefObjectStatic(Leaf(Source), JPathField("value")))))
+      val results = toJson(table.transform(ConstLiteral(CString("foo"), DerefObjectStatic(Leaf(Source), CPathField("value")))))
       
       val expected = sample.data flatMap {
         case jv if jv \ "value" \ "field" == JNothing => None
