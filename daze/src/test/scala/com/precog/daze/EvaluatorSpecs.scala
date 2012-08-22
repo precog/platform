@@ -237,7 +237,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(42, 12, 77, 1, 13)
       }
     }
-
+    
     "evaluate a join given a relative path" in {
       val line = Line(0, "")
 
@@ -273,7 +273,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         result2 must contain(84, 24, 154, 2, 26)
       }
-    }.pendingUntilFixed       
+    }       
     
     "evaluate a join given a relative path with two different datasets" in {
       val line = Line(0, "")
@@ -289,9 +289,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val result2 = result collect {
           case (ids, SDecimal(d)) if ids.size == 2 => d.toInt
         }
+
         result2 must contain(84,54,119,43,55,43,54,24,89,13,25,13,119,89,154,78,90,78,43,13,78,2,14,2,55,25,90,14,26,14)
       }
-    }
+    }       
     
     "evaluate a negation mapped over numbers" in {
       val line = Line(0, "")
@@ -347,7 +348,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }.pendingUntilFixed 
 
-    "join two sets with a match" >> {
+    "join two sets" >> {
       "from different paths" >> {
         val line = Line(0, "")
 
@@ -1879,8 +1880,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
           result2 must contain(Vector.empty[SValue], Vector(SDecimal(9), SDecimal(10)), Map.empty[String, SValue])
 
-        }
-      }.pendingUntilFixed 
+        }.pendingUntilFixed  //TODO first place to look:  buildWrappedCrossSpec
+      }
 
       "and" >> {
         val line = Line(0, "")
@@ -1964,11 +1965,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "correctly order a match following a cross" in {
       val line = Line(0, "")
+        
+      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
       
       val input = Join(line, Mul, IdentitySort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
+        numbers,
         Join(line, Sub, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
+          numbers,
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers3")))))
           
       testEval(input) { result =>

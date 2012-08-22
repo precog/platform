@@ -17,25 +17,33 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package daze
+package com.precog.daze
 
-import scala.collection.mutable
-import com.precog.common.Path
+import org.specs2.mutable._
 
-trait PathRelativizer[M[+_]] extends DAG with StringLib[M] {
+import com.precog.yggdrasil._
+
+trait DAGRewriterSpecs[M[+_]] extends Specification 
+    with Evaluator[M]
+    with TestConfigComponent[M] {
+
   import dag._
   import instructions._
 
-  def makePathRelative(graph: DepGraph, prefix: Path): DepGraph = {
-    graph.mapDown { recurse => {
-      case dag.LoadLocal(loc, parent, jtpe) => {
-        dag.LoadLocal(loc, 
-          dag.Join(loc, BuiltInFunction2Op(concat), CrossRightSort, 
-            Root(loc, PushString(prefix.toString())), 
-            recurse(parent)), 
-          jtpe)
-      }
-    }}
+  "DAG rewriting" should {
+    "compute static provenance given a relative path" in {
+      val line = Line(0, "")
+
+      val input = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+
+      val result = rewriteDAG(true)(input)
+
+      result.provenance mustEqual Vector(StaticProvenance("/numbers"))
+    }
   }
+}
+
+object DAGRewriterSpecs extends DAGRewriterSpecs[test.YId] {
+  val M = test.YId.M
+  val coM = test.YId.M
 }
