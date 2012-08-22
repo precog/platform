@@ -32,6 +32,7 @@ import org.scalacheck.{Arbitrary,Gen}
 import blueeyes.json.JPath
 
 import com.precog.common.{Path,VectorCase}
+import com.precog.common.json._
 
 import java.io.File
 
@@ -67,7 +68,7 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
       size       <- chooseNum(1,100000)
       width      <- chooseNum(1,40)
       types      <- pick(width, List(CString, CBoolean, CLong, CDouble, CNum , CDate, CNull, CEmptyObject, CEmptyArray))
-      descriptor <- ProjectionDescriptor(1, types.toList.map { tpe => ColumnDescriptor(Path("/test"), JPath.Identity, tpe, Authorities(Set.empty)) })
+      descriptor <- ProjectionDescriptor(1, types.toList.map { tpe => ColumnDescriptor(Path("/test"), CPath.Identity, tpe, Authorities(Set.empty)) })
       val typeGens: Seq[Gen[CValue]] = types.map(genFor)
       data       <- genColumn(size, sequence[Array, CValue](typeGens))
     } yield ProjectionData(descriptor, data)

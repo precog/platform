@@ -39,6 +39,7 @@ import scalaz.Id._
 
 import java.io.File
 
+/*
 trait StubLevelDBQueryComponent extends LevelDBQueryComponent with DistributedSampleStubStorageModule[Future] with IterableDatasetOpsComponent {
   type TestDataset = Dataset[Seq[CValue]]
 
@@ -63,5 +64,6 @@ trait StubLevelDBQueryComponent extends LevelDBQueryComponent with DistributedSa
   object query extends QueryAPI
   object ops extends Ops
 }
+*/
 
 // vim: set ts=4 sw=4 et:

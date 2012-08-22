@@ -23,6 +23,7 @@ package jdbm3
 import iterable._
 import table._
 import com.precog.common._ 
+import com.precog.common.json._ 
 import com.precog.util._ 
 import com.precog.util.Bijection._
 
@@ -52,7 +53,6 @@ import scalaz.syntax.show._
 import scalaz.Scalaz._
 import IterateeT._
 
-import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
@@ -148,14 +148,12 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
         val requestedSize = DEFAULT_SLICE_SIZE
         val codec = ColumnCodec.readOnly
 
-        import blueeyes.json.{JPathField,JPathIndex}
-
         val keyColumns = (0 until descriptor.identities).map {
-          idx: Int => (ColumnRef(JPath(Key :: JPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) 
+          idx: Int => (ColumnRef(CPath(Key :: CPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) 
         }.toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
 
         val valColumns = descriptor.columns.map {
-          case ColumnDescriptor(_, selector, ctpe, _) => JDBMSlice.columnFor(JPath(Value), sliceSize)(ColumnRef(selector, ctpe))
+          case ColumnDescriptor(_, selector, ctpe, _) => JDBMSlice.columnFor(CPath(Value), sliceSize)(ColumnRef(selector, ctpe))
         }.toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
 
         def loadRowFromKey(row: Int, rowKey: Identities) {
@@ -170,7 +168,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
           }
         }
 
-        val desiredRefs: Set[ColumnRef] = desiredColumns.map { case ColumnDescriptor(_, selector, tpe, _) => ColumnRef(JPath(Value) \ selector, tpe) }
+        val desiredRefs: Set[ColumnRef] = desiredColumns.map { case ColumnDescriptor(_, selector, tpe, _) => ColumnRef(CPath(Value) \ selector, tpe) }
 
         override val columns = (keyColumns ++ valColumns.filter { case (ref, _) => desiredRefs.contains(ref) }).toMap
       }

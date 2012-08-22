@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common.json._
 import com.precog.bytecode._
 import com.precog.common._
 import com.precog.util._
@@ -180,10 +181,10 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
             idCount, 
             subschema flatMap {
               case (jpath, CNum | CLong | CDouble) =>
-                List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), jpath, _, Authorities.None) }
+                List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), CPath(jpath), _, Authorities.None) }
               
               case (jpath, ctype) =>
-                List(ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None))
+                List(ColumnDescriptor(Path("/test"), CPath(jpath), ctype, Authorities.None))
             } toList
           )
 
@@ -206,9 +207,9 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     import module.trans._
     import TableModule.paths._
 
-    val derefTransspec: TransSpec1 = sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), JPathField("value"))) {
-      case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, field)
-      case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
+    val derefTransspec: TransSpec1 = sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), CPathField("value"))) {
+      case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, CPathField(field.name))
+      case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, CPathIndex(index.index))
     }
 
     val sortTransspec = WrapArray(derefTransspec)
@@ -223,7 +224,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     }
 
     try {
-      val result = module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {
+      val result = module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema map { case (path, value) => CPath(path) -> value }).get).flatMap {
         _.sort(sortTransspec, SortAscending)
       }.flatMap {
         // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)

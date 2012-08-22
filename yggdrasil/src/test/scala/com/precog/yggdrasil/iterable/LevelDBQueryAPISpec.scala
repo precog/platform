@@ -41,6 +41,7 @@ import scalaz.effect.IO
 
 import org.specs2.mutable._
 
+/*
 class LevelDBQueryAPISpec extends Specification with StubLevelDBQueryComponent {
   object storage extends Storage
 
@@ -163,3 +164,4 @@ class LevelDBNestedMergeSpec extends Specification with StubLevelDBQueryComponen
     }
   }
 }
+*/

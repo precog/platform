@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package leveldb
 
+import com.precog.common.json._
 import scala.annotation.tailrec
 
 import metadata._
@@ -29,13 +30,12 @@ import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 import akka.dispatch.Await
 import akka.util.duration._
-import blueeyes.json.JPath
 import blueeyes.util.Clock
 
 import scalaz._
 
 abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: StorageMetadataSource[Future])(implicit asyncContext: ExecutionContext) {
-  type Sources = Set[(JPath, SType, ProjectionDescriptor)]
+  type Sources = Set[(CPath, SType, ProjectionDescriptor)]
 
   /**
    *
@@ -49,8 +49,8 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: Storag
 
   private def loadFuture(userUID: String, path: Path, expiresAt: Long, release: Release): Future[Dataset] = {
     for {
-      pathRoot <- shardMetadata.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) 
-      dataset  <- assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot), expiresAt, release)
+      pathRoot <- shardMetadata.userMetadataView(userUID).findPathMetadata(path, CPath.Identity) 
+      dataset  <- assemble(path, CPath.Identity, sources(CPath.Identity, pathRoot), expiresAt, release)
     } yield dataset
   }
 
@@ -59,10 +59,10 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: Storag
    */
   def mask(userUID: String, path: Path): DatasetMask[Dataset] = LevelDBDatasetMask(userUID, path, None, None) 
 
-  private case class LevelDBDatasetMask(userUID: String, path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[Dataset] {
-    def derefObject(field: String): DatasetMask[Dataset] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ field })
+  private case class LevelDBDatasetMask(userUID: String, path: Path, selector: Option[CPath], tpe: Option[SType]) extends DatasetMask[Dataset] {
+    def derefObject(field: String): DatasetMask[Dataset] = copy(selector = selector orElse Some(CPath.Identity) map { _ \ field })
 
-    def derefArray(index: Int): DatasetMask[Dataset] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ index })
+    def derefArray(index: Int): DatasetMask[Dataset] = copy(selector = selector orElse Some(CPath.Identity) map { _ \ index })
 
     def typed(tpe: SType): DatasetMask[Dataset] = copy(tpe = Some(tpe))
 
@@ -82,8 +82,8 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: Storag
           }
 
         case (None   , Some(tpe)) if tpe != SObject && tpe != SArray => 
-          shardMetadata.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) flatMap { pathRoot =>
-            assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot) filter { 
+          shardMetadata.userMetadataView(userUID).findPathMetadata(path, CPath.Identity) flatMap { pathRoot =>
+            assemble(path, CPath.Identity, sources(CPath.Identity, pathRoot) filter { 
               case (_, `tpe`, _) => true 
               case _ => false
             }, expiresAt, release)
@@ -95,8 +95,8 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: Storag
     )
   }
 
-  protected def sources(selector: JPath, root: PathRoot): Sources = {
-    def search(metadata: PathMetadata, selector: JPath, acc: Set[(JPath, SType, ProjectionDescriptor)]): Sources = {
+  protected def sources(selector: CPath, root: PathRoot): Sources = {
+    def search(metadata: PathMetadata, selector: CPath, acc: Set[(CPath, SType, ProjectionDescriptor)]): Sources = {
       metadata match {
         case PathField(name, children) =>
           children.flatMap(search(_, selector \ name, acc))
@@ -109,15 +109,15 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: Storag
       }
     }
 
-    root.children.flatMap(search(_, selector, Set.empty[(JPath, SType, ProjectionDescriptor)]))
+    root.children.flatMap(search(_, selector, Set.empty[(CPath, SType, ProjectionDescriptor)]))
   }
 
-  protected def assemble(path: Path, prefix: JPath, sources: Sources, expiresAt: Long, release: Release)(implicit asyncContext: ExecutionContext): Future[Dataset] = {
+  protected def assemble(path: Path, prefix: CPath, sources: Sources, expiresAt: Long, release: Release)(implicit asyncContext: ExecutionContext): Future[Dataset] = {
     // determine the projections from which to retrieve data
     // todo: for right now, this is implemented greedily such that the first
     // projection containing a desired column wins. It should be implemented
     // to choose the projection that satisfies the largest number of columns.
-    val minimalDescriptors = sources.foldLeft(Map.empty[JPath, Set[ProjectionDescriptor]]) {
+    val minimalDescriptors = sources.foldLeft(Map.empty[CPath, Set[ProjectionDescriptor]]) {
       case (acc, (selector, _, descriptor)) => 
         acc.get(selector) match {
           case Some(chosen) if chosen.contains(descriptor) ||
@@ -127,15 +127,15 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: Storag
         }
     }
 
-    val retrievals = minimalDescriptors.foldLeft(Map.empty[ProjectionDescriptor, Set[JPath]]) {
+    val retrievals = minimalDescriptors.foldLeft(Map.empty[ProjectionDescriptor, Set[CPath]]) {
       case (acc, (jpath, descriptors)) => descriptors.foldLeft(acc) {
-        (acc, descriptor) => acc + (descriptor -> (acc.getOrElse(descriptor, Set.empty[JPath]) + jpath))
+        (acc, descriptor) => acc + (descriptor -> (acc.getOrElse(descriptor, Set.empty[CPath]) + jpath))
       }
     }
 
     retrieveAndJoin(path, prefix, retrievals, expiresAt, release)
   }
 
-  protected def retrieveAndJoin(path: Path, prefix: JPath, retrievals: Map[ProjectionDescriptor, Set[JPath]], expiresAt: Long, release: Release): Future[Dataset]
+  protected def retrieveAndJoin(path: Path, prefix: CPath, retrievals: Map[ProjectionDescriptor, Set[CPath]], expiresAt: Long, release: Release): Future[Dataset]
 }
 // vim: set ts=4 sw=4 et:

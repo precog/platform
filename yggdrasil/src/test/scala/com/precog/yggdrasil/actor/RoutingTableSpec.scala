@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package actor
 
 import com.precog.common._
+import com.precog.common.json._
 
 import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
@@ -49,7 +50,7 @@ class RoutingTableSpec extends Specification {
       
       val msg = EventMessage(EventId(0,0), Event(Path("/a/b"), "token", jval, metadata))
       
-      val colDesc = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), CString, Authorities(Set("token")))
+      val colDesc = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("token")))
 
       val actions = rt.route(msg)
 
@@ -77,10 +78,10 @@ class RoutingTableSpec extends Specification {
 
       val msg = EventMessage(EventId(0,0), Event(Path("/a/b"), "token", jval, metadata))
 
-      val colDesc1 = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), CString, Authorities(Set("token")))
-      val colDesc2 = ColumnDescriptor(Path("/a/b/"),JPath(".foo.bar"), CLong, Authorities(Set("token")))
-      val colDesc3 = ColumnDescriptor(Path("/a/b/"),JPath(".foo.bat"), CDouble, Authorities(Set("token")))
-      val colDesc4 = ColumnDescriptor(Path("/a/b/"),JPath(".foo.baz"), CNum, Authorities(Set("token")))
+      val colDesc1 = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("token")))
+      val colDesc2 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bar"), CLong, Authorities(Set("token")))
+      val colDesc3 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bat"), CDouble, Authorities(Set("token")))
+      val colDesc4 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.baz"), CNum, Authorities(Set("token")))
 
       val actions = rt.route(msg)
 

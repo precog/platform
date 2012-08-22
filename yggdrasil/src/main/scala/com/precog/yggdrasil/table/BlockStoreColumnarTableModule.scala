@@ -20,14 +20,13 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common.json._
 import com.precog.common.{Path,VectorCase}
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.util._
 import Schema._
 import metadata._
-
-import blueeyes.json.{JPath,JPathField,JPathIndex}
 
 import java.io.File
 import java.util.SortedMap
@@ -59,7 +58,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
      * Determine the set of all projections that could potentially provide columns
      * representing the requested dataset.
      */
-    def loadable(metadataView: StorageMetadata[M], path: Path, prefix: JPath, jtpe: JType): M[Set[ProjectionDescriptor]] = {
+    def loadable(metadataView: StorageMetadata[M], path: Path, prefix: CPath, jtpe: JType): M[Set[ProjectionDescriptor]] = {
       jtpe match {
         case p: JPrimitiveType => ctypes(p).map(metadataView.findProjections(path, prefix, _)).sequence map {
           sources => 
@@ -78,7 +77,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
             sources.keySet filter { 
               _.columns exists { 
                 case ColumnDescriptor(`path`, selector, _, _) => 
-                  (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathIndex])
+                  (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[CPathIndex])
               }
             }
           }
@@ -95,7 +94,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
             sources.keySet filter { 
               _.columns exists { 
                 case ColumnDescriptor(`path`, selector, _, _) => 
-                  (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathField])
+                  (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[CPathField])
               }
             }
           }
@@ -337,10 +336,10 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
 
       for {
         paths               <- pathsM
-        coveringProjections <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
+        coveringProjections <- (paths map { path => loadable(metadataView, path, CPath.Identity, tpe) }).sequence map { _.flatten }
         result              <- mergeProjections(cellsM(minimalCover(tpe, coveringProjections))) { slice => 
             //todo: How do we actually determine the correct function for retrieving the key?
-            slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(JPathField("key") :: Nil) }).toList.sorted
+            slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(CPathField("key") :: Nil) }).toList.sorted
           }
       } yield result
     }
@@ -377,14 +376,14 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
       
       // Insert slice data based on columndescriptors
       val inputOp: M[SortOutput] = tableWithSortKey.slices.foldLeft(SortOutput(Map.empty, 0, 0l)) { case (SortOutput(indices, _, nextId), slice) => {
-        def columnsByPrefix(prefix: JPath): List[(ColumnRef,Column)] = slice.columns.collect {
+        def columnsByPrefix(prefix: CPath): List[(ColumnRef,Column)] = slice.columns.collect {
           // The conditional guarantees that dropPrefix will return Some
           case (ColumnRef(selector, tpe), col) if selector.hasPrefix(prefix) => (ColumnRef(selector.dropPrefix(prefix).get, tpe), col)
         }.toList
 
-        val dataColumns = columnsByPrefix(JPath(Value))
-        val idColumns   = columnsByPrefix(JPath(Key))
-        val sortColumns = columnsByPrefix(JPath(SortKey))
+        val dataColumns = columnsByPrefix(CPath(Value))
+        val idColumns   = columnsByPrefix(CPath(Key))
+        val sortColumns = columnsByPrefix(CPath(SortKey))
         val indexMapKey = (sortColumns ++ dataColumns).map(_._1).toSeq
 
         val (index, newIndices) = indices.get(indexMapKey).map((_,indices)).getOrElse {

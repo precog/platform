@@ -33,6 +33,7 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.common._
 import com.precog.common.util._
+import com.precog.common.json._
 
 import LevelDBByteProjectionSpec._
 
@@ -52,12 +53,12 @@ object LevelDBByteProjectionSpec {
   val cvEmptyObject = CEmptyObject
   val cvNull = CNull
 
-  val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(Path("path6"), JPath("key6"), CString, Authorities(Set()))
-  val colDesBoolean: ColumnDescriptor = ColumnDescriptor(Path("path0"), JPath("key0"), CBoolean, Authorities(Set()))
-  val colDesLong: ColumnDescriptor = ColumnDescriptor(Path("path2"), JPath("key2"), CLong, Authorities(Set()))
-  val colDesDouble: ColumnDescriptor = ColumnDescriptor(Path("path4"), JPath("key4"), CDouble, Authorities(Set()))
-  val colDesDouble2: ColumnDescriptor = ColumnDescriptor(Path("path8"), JPath("key8"), CDouble, Authorities(Set()))  
-  val colDesDecimal: ColumnDescriptor = ColumnDescriptor(Path("path7"), JPath("key7"), CNum, Authorities(Set()))
+  val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(Path("path6"), CPath("key6"), CString, Authorities(Set()))
+  val colDesBoolean: ColumnDescriptor = ColumnDescriptor(Path("path0"), CPath("key0"), CBoolean, Authorities(Set()))
+  val colDesLong: ColumnDescriptor = ColumnDescriptor(Path("path2"), CPath("key2"), CLong, Authorities(Set()))
+  val colDesDouble: ColumnDescriptor = ColumnDescriptor(Path("path4"), CPath("key4"), CDouble, Authorities(Set()))
+  val colDesDouble2: ColumnDescriptor = ColumnDescriptor(Path("path8"), CPath("key8"), CDouble, Authorities(Set()))  
+  val colDesDecimal: ColumnDescriptor = ColumnDescriptor(Path("path7"), CPath("key7"), CNum, Authorities(Set()))
 
 /*
   def byteProjectionInstance(indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) = { 

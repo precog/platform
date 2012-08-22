@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package leveldb
 
+import com.precog.common.json._
 import com.weiglewilczek.slf4s.Logging
 
 import org.fusesource.leveldbjni.KeyValueChunk
@@ -31,8 +32,6 @@ import com.precog.util.Bijection._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.serialization.bijections._
-
-import blueeyes.json.{JPath,JPathField,JPathIndex}
 
 /**
  * A slice that wraps a LevelDB KeyValue Chunk from a given
@@ -55,7 +54,7 @@ sealed trait LevelDBSlice extends Slice with Logging {
   }
 
   protected def keyColumns: Map[ColumnRef, Column] = (0 until identCount).map {
-    idx: Int => ColumnRef(JPath(JPathField("key") :: JPathIndex(idx) :: Nil), CLong) -> IdentColumn(idx)
+    idx: Int => ColumnRef(CPath(CPathField("key") :: CPathIndex(idx) :: Nil), CLong) -> IdentColumn(idx)
   }.toMap
 
   protected def valColumns: Seq[(ColumnRef, Column)]
@@ -84,7 +83,7 @@ object LevelDBSlice {
     private val rowWidth = offsets.sum
 
     def valColumns: Seq[(ColumnRef, Column)] = descriptors.zip(offsets).map {
-      case (ColumnDescriptor(_, selector, ctpe, _),rowOffset) => ColumnRef(JPath(".value") \ selector, ctpe) -> (ctpe match {
+      case (ColumnDescriptor(_, selector, ctpe, _),rowOffset) => ColumnRef(CPath(".value") \ selector, ctpe) -> (ctpe match {
         case CBoolean => new BoolColumn with BaseColumn {
           def apply(row: Int): Boolean = chunk.valueData.get(row * rowWidth + rowOffset) != 0
         }

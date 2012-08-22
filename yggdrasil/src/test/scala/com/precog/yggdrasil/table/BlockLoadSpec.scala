@@ -22,6 +22,7 @@ package table
 
 import com.precog.bytecode._
 import com.precog.common._
+import com.precog.common.json._
 import com.precog.util._
 
 import blueeyes.json._
@@ -74,10 +75,10 @@ trait BlockLoadTestSupport[M[+_]] extends TestColumnarTableModule[M] with StubSt
         val s0 = new Slice {
           val size = s.size
           val columns = s.columns filter {
-            case (ColumnRef(jpath, ctype), _) =>
+            case (ColumnRef(cpath, ctype), _) =>
               colSelection.isEmpty || 
-              jpath.nodes.head == JPathField("key") ||
-              colSelection.exists { desc => (JPathField("value") \ desc.selector) == jpath && desc.valueType == ctype }
+              cpath.nodes.head == CPathField("key") ||
+              colSelection.exists { desc => (CPathField("value") \ desc.selector) == cpath && desc.valueType == ctype }
           }
         }
 
@@ -327,10 +328,10 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
             idCount, 
             subschema flatMap {
               case (jpath, CNum | CLong | CDouble) =>
-                List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), jpath, _, Authorities.None) }
+                List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), CPath(jpath), _, Authorities.None) }
               
               case (jpath, ctype) =>
-                List(ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None))
+                List(ColumnDescriptor(Path("/test"), CPath(jpath), ctype, Authorities.None))
             } toList
           )
 
@@ -350,7 +351,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
       object storage extends Storage
     }
 
-    module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap(_.toJson).copoint.toStream must_== sample.data
+    module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema map { case (path, value) => CPath(path) -> value }).get).flatMap(_.toJson).copoint.toStream must_== sample.data
   }
 }
 

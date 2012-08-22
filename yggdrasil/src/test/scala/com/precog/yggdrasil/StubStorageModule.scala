@@ -27,6 +27,7 @@ import SValue._
 import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.util._
+import com.precog.common.json._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -63,14 +64,14 @@ trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
       val source = new TestMetadataStorage(projectionMetadata)
       def findChildren(path: Path) = M.point(source.findChildren(path))
       def findSelectors(path: Path) = M.point(source.findSelectors(path))
-      def findProjections(path: Path, selector: JPath) = M.point {
+      def findProjections(path: Path, selector: CPath) = M.point {
         projections.collect {
           case (descriptor, _) if descriptor.columns.exists { case ColumnDescriptor(p, s, _, _) => p == path && s == selector } => 
             (descriptor, ColumnMetadata.Empty)
         }
       }
 
-      def findPathMetadata(path: Path, selector: JPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
+      def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
     }
 
     def userMetadataView(uid: String) = new UserMetadataView[M](uid, new UnlimitedAccessControl(), metadata)

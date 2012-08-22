@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common.json._
 import com.precog.bytecode.JType
 import com.precog.common.Path
 import com.precog.common.VectorCase
@@ -55,7 +56,7 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
               case (acc, (jpath, JNothing)) => acc
               case (acc, (jpath, v)) =>
                 val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
-                val ref = ColumnRef(jpath, ctype)
+                val ref = ColumnRef(CPath(jpath), ctype)
   
                 val pair: (BitSet, Array[_]) = v match {
                   case JBool(b) => 

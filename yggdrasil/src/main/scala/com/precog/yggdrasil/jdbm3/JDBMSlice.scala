@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package jdbm3
 
+import com.precog.common.json._
 import com.weiglewilczek.slf4s.Logging
 
 import org.joda.time.DateTime
@@ -30,8 +31,6 @@ import java.util.SortedMap
 import com.precog.util.Bijection._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.serialization.bijections._
-
-import blueeyes.json.{JPath,JPathField,JPathIndex}
 
 import scala.collection.JavaConverters._
 
@@ -75,7 +74,7 @@ trait JDBMSlice[Key] extends Slice with Logging {
 }
 
 object JDBMSlice {
-  def columnFor(prefix: JPath, sliceSize: Int)(ref: ColumnRef) = (ref.copy(selector = (prefix \ ref.selector)), (ref.ctype match {
+  def columnFor(prefix: CPath, sliceSize: Int)(ref: ColumnRef) = (ref.copy(selector = (prefix \ ref.selector)), (ref.ctype match {
     case CString      => ArrayStrColumn.empty(sliceSize)
     case CBoolean     => ArrayBoolColumn.empty()
     case CLong        => ArrayLongColumn.empty(sliceSize)

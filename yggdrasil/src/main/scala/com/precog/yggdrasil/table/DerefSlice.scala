@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.{Path, VectorCase}
+import com.precog.common.json._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -28,10 +29,10 @@ import org.joda.time.DateTime
 
 import scala.collection.BitSet
 
-class DerefSlice(source: Slice, derefBy: PartialFunction[Int, JPathNode]) extends Slice {
-  private val forwardIndex: Map[JPathNode, Map[ColumnRef, Column]] = source.columns.foldLeft(Map.empty[JPathNode, Map[ColumnRef, Column]]) {
-    case (acc, (ColumnRef(JPath(root, xs @ _*), ctype), col)) => 
-      val resultRef = ColumnRef(JPath(xs: _*), ctype)
+class DerefSlice(source: Slice, derefBy: PartialFunction[Int, CPathNode]) extends Slice {
+  private val forwardIndex: Map[CPathNode, Map[ColumnRef, Column]] = source.columns.foldLeft(Map.empty[CPathNode, Map[ColumnRef, Column]]) {
+    case (acc, (ColumnRef(CPath(root, xs @ _*), ctype), col)) => 
+      val resultRef = ColumnRef(CPath(xs: _*), ctype)
       // we know the combination of xs and ctype to be unique within root
       acc + (root -> (acc.getOrElse(root, Map()) + (resultRef -> col)))
   }
@@ -39,8 +40,8 @@ class DerefSlice(source: Slice, derefBy: PartialFunction[Int, JPathNode]) extend
   val size = source.size
 
   val columns = source.columns.keySet.foldLeft(Map.empty[ColumnRef, Column]) {
-    case (acc, ColumnRef(JPath(_, xs @ _*), ctype)) => 
-      val resultRef = ColumnRef(JPath(xs: _*), ctype)
+    case (acc, ColumnRef(CPath(_, xs @ _*), ctype)) => 
+      val resultRef = ColumnRef(CPath(xs: _*), ctype)
 
       lazy val resultCol = ctype match {
         case CBoolean => 
@@ -173,8 +174,8 @@ derefBy.columns.headOption collect {
   case c: StrColumn =>
     val transforms: Map[String, Map[ColumnRef, (Column, Column with ArrayColumn[_])]] = 
       slice.columns.foldLeft(Map.empty[String, Map[ColumnRef, (Column, Column with ArrayColumn[_])]]) {
-        case (acc, (ColumnRef(JPath(JPathField(root), xs @ _*), ctype), col)) => 
-          val resultRef = ColumnRef(JPath(xs: _*), ctype)
+        case (acc, (ColumnRef(CPath(CPathField(root), xs @ _*), ctype), col)) => 
+          val resultRef = ColumnRef(CPath(xs: _*), ctype)
 
           // find the result column if it exists, or else create a new one.
           val resultColumn = acc.get(root).flatMap(_.get(resultRef).map(_._2)).getOrElse(

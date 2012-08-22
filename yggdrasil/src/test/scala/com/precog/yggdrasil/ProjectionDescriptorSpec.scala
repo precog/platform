@@ -28,6 +28,7 @@ import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 
 import com.precog.common._
+import com.precog.common.json._
 
 import scala.collection.immutable.ListMap
 
@@ -36,9 +37,9 @@ import scalaz._
 class ProjectionDescriptorSpec extends Specification {
 
   val descriptors = List(
-    ColumnDescriptor(Path("/abc"), JPath(".foo.bar"), CString, Authorities(Set())),
-    ColumnDescriptor(Path("/abc"), JPath(".foo.bar.baz"), CString, Authorities(Set())),
-    ColumnDescriptor(Path("/def"), JPath(".bar.baz"), CLong, Authorities(Set()))
+    ColumnDescriptor(Path("/abc"), CPath(".foo.bar"), CString, Authorities(Set())),
+    ColumnDescriptor(Path("/abc"), CPath(".foo.bar.baz"), CString, Authorities(Set())),
+    ColumnDescriptor(Path("/def"), CPath(".bar.baz"), CLong, Authorities(Set()))
   )
 
   val pdValidation = ProjectionDescriptor(3, descriptors)

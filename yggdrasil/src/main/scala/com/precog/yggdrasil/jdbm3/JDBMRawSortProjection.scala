@@ -20,10 +20,10 @@
 package com.precog.yggdrasil
 package jdbm3
 
+import com.precog.common.json._
 import com.precog.common.Path
 import com.precog.yggdrasil.table._
 
-import blueeyes.json.{JPath,JPathIndex}
 import org.apache.jdbm._
 import org.joda.time.DateTime
 import com.weiglewilczek.slf4s.Logging
@@ -78,11 +78,11 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
     val slice = new JDBMSlice[SortingKey] {
       def source = constrainedMap.entrySet.iterator.asScala
       def requestedSize = sliceSize
-      lazy val idColumns      = (0 until idCount).map { idx => (ColumnRef(JPath(Key :: JPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) }.toArray
-      lazy val sortKeyColumns = sortKeyRefs.map(JDBMSlice.columnFor(JPath(SortKey), sliceSize)).toArray
+      lazy val idColumns      = (0 until idCount).map { idx => (ColumnRef(CPath(Key :: CPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) }.toArray
+      lazy val sortKeyColumns = sortKeyRefs.map(JDBMSlice.columnFor(CPath(SortKey), sliceSize)).toArray
 
       lazy val keyColumns = (idColumns ++ sortKeyColumns).asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
-      lazy val valColumns = valRefs.map(JDBMSlice.columnFor(JPath(Value), sliceSize)).toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
+      lazy val valColumns = valRefs.map(JDBMSlice.columnFor(CPath(Value), sliceSize)).toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
 
       def loadRowFromKey(row: Int, rowKey: SortingKey) {
         if (row == 0) { firstKey = rowKey }

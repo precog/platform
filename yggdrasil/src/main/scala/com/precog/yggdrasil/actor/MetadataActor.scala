@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package actor 
 
+import com.precog.common.json._
 import metadata._
 import ColumnMetadata._
 
@@ -30,7 +31,6 @@ import com.weiglewilczek.slf4s.Logging
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
-import blueeyes.json.JPath
 
 import blueeyes.json.xschema.Decomposer
 import blueeyes.json.xschema.DefaultSerialization._
@@ -148,8 +148,8 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
   def status: JValue = JObject(JField("Metadata", JObject(JField("state", JString("Ice cream!")) :: Nil)) :: Nil) // TODO: no, really...
 
-  def findDescriptors(path: Path, selector: JPath): IO[Map[ProjectionDescriptor, ColumnMetadata]] = {
-    @inline def matches(path: Path, selector: JPath) = {
+  def findDescriptors(path: Path, selector: CPath): IO[Map[ProjectionDescriptor, ColumnMetadata]] = {
+    @inline def matches(path: Path, selector: CPath) = {
       (col: ColumnDescriptor) => col.path == path && (col.selector.nodes startsWith selector.nodes)
     }
 
@@ -232,8 +232,8 @@ case class ExpectedEventActions(eventId: EventId, count: Int) extends ShardMetad
 
 case class FindChildren(path: Path) extends ShardMetadataAction
 case class FindSelectors(path: Path) extends ShardMetadataAction
-case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
-case class FindPathMetadata(path: Path, selector: JPath) extends ShardMetadataAction
+case class FindDescriptors(path: Path, selector: CPath) extends ShardMetadataAction
+case class FindPathMetadata(path: Path, selector: CPath) extends ShardMetadataAction
 case class FindDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean) extends ShardMetadataAction
 case class MetadataSaved(saved: Set[ProjectionDescriptor]) extends ShardMetadataAction
 case object GetCurrentCheckpoint

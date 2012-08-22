@@ -19,9 +19,9 @@
  */
 package com.precog.yggdrasil
 
+import com.precog.common.json._
 import com.precog.common.Path
 import com.precog.bytecode.JType
-import blueeyes.json.{JPath, JPathField, JPathIndex}
 import blueeyes.json.JsonAST._
 
 import collection.Set
@@ -31,10 +31,10 @@ import scalaz.Monad
 
 object TableModule {
   object paths {
-    val Key   = JPathField("key")
-    val Value = JPathField("value")
-    val Group = JPathField("group")
-    val SortKey = JPathField("sortkey")
+    val Key   = CPathField("key")
+    val Value = CPathField("value")
+    val Group = CPathField("group")
+    val SortKey = CPathField("sortkey")
   }  
 }
 
@@ -72,7 +72,7 @@ trait TableModule[M[+_]] extends FNModule {
     // containing all the resulting columns.
     case class ObjectConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
 
-    case class ObjectDelete[+A <: SourceType](source: TransSpec[A], fields: Set[JPathField]) extends TransSpec[A]
+    case class ObjectDelete[+A <: SourceType](source: TransSpec[A], fields: Set[CPathField]) extends TransSpec[A]
     
     case class ArrayConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
     
@@ -84,11 +84,11 @@ trait TableModule[M[+_]] extends FNModule {
     
     case class WrapArray[+A <: SourceType](source: TransSpec[A]) extends TransSpec[A] //done
     
-    case class DerefObjectStatic[+A <: SourceType](source: TransSpec[A], field: JPathField) extends TransSpec[A] //done
+    case class DerefObjectStatic[+A <: SourceType](source: TransSpec[A], field: CPathField) extends TransSpec[A] //done
     
     case class DerefObjectDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
     
-    case class DerefArrayStatic[+A <: SourceType](source: TransSpec[A], element: JPathIndex) extends TransSpec[A] //done
+    case class DerefArrayStatic[+A <: SourceType](source: TransSpec[A], element: CPathIndex) extends TransSpec[A] //done
     
     case class DerefArrayDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
     
@@ -125,7 +125,7 @@ trait TableModule[M[+_]] extends FNModule {
      * @param key The key which will be used by `merge` to access this particular tic-variable (which may be refined by more than one `GroupKeySpecSource`)
      * @param spec A transform which defines this key part as a function of the source table in `GroupingSource`.
      */
-    case class GroupKeySpecSource(key: JPathField, spec: TransSpec1) extends GroupKeySpec
+    case class GroupKeySpecSource(key: CPathField, spec: TransSpec1) extends GroupKeySpec
     
     case class GroupKeySpecAnd(left: GroupKeySpec, right: GroupKeySpec) extends GroupKeySpec
     case class GroupKeySpecOr(left: GroupKeySpec, right: GroupKeySpec) extends GroupKeySpec

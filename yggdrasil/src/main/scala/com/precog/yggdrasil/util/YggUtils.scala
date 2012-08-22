@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package util
 
+import com.precog.common.json._
 import actor._
 import iterable._
 import leveldb._
@@ -50,7 +51,6 @@ import java.nio.ByteBuffer
 import collection.mutable.{Buffer, ListBuffer}
 import collection.JavaConversions._
 
-import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
@@ -153,7 +153,7 @@ object DatabaseTools extends Command with YggUtilsCommon {
     val config = new Config
     val parser = new OptionParser("yggutils db") {
       opt("p", "path", "<path>", "root data path", {p: String => config.path = Some(Path(p))})
-      opt("s", "selector", "<selector>", "root object selector", {s: String => config.selector = Some(JPath(s))})
+      opt("s", "selector", "<selector>", "root object selector", {s: String => config.selector = Some(CPath(s))})
       opt("v", "verbose", "show selectors as well", {config.verbose = true})
       arg("<datadir>", "shard data dir", {d: String => config.dataDir = d})
     }
@@ -185,12 +185,12 @@ object DatabaseTools extends Command with YggUtilsCommon {
     }
   }
 
-  implicit val t3ord = new Ordering[(JPath, CType, Seq[UID])] {
-    val jord = implicitly[Ordering[JPath]]
+  implicit val t3ord = new Ordering[(CPath, CType, Seq[UID])] {
+    val jord = implicitly[Ordering[CPath]]
     val sord = implicitly[Ordering[String]]
     val ssord = implicitly[Ordering[Seq[UID]]]
 
-    def compare(a: (JPath, CType, Seq[UID]), b: (JPath, CType, Seq[UID])) = {
+    def compare(a: (CPath, CType, Seq[UID]), b: (CPath, CType, Seq[UID])) = {
       val j = jord.compare(a._1,b._1)
       if(j != 0) {
         j 
@@ -213,13 +213,13 @@ object DatabaseTools extends Command with YggUtilsCommon {
     show(extract(load(config.dataDir).map(_._2)), config.verbose)
   }
 
-  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(JPath, CType, Seq[UID])]] = {
+  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(CPath, CType, Seq[UID])]] = {
     implicit val pord = new Ordering[Path] {
       val sord = implicitly[Ordering[String]] 
       def compare(a: Path, b: Path) = sord.compare(a.toString, b.toString)
     }
 
-    descs.foldLeft(SortedMap[Path,SortedSet[(JPath, CType, Seq[UID])]]()) {
+    descs.foldLeft(SortedMap[Path,SortedSet[(CPath, CType, Seq[UID])]]()) {
       case (acc, desc) =>
        desc.columns.foldLeft(acc) {
          case (acc, ColumnDescriptor(p, s, t, u)) =>
@@ -229,7 +229,7 @@ object DatabaseTools extends Command with YggUtilsCommon {
     }
   }
 
-  def show(summary: SortedMap[Path, SortedSet[(JPath, CType, Seq[UID])]], verbose: Boolean) {
+  def show(summary: SortedMap[Path, SortedSet[(CPath, CType, Seq[UID])]], verbose: Boolean) {
     summary.foreach { 
       case (p, sels) =>
         println(p)
@@ -243,7 +243,7 @@ object DatabaseTools extends Command with YggUtilsCommon {
   }
 
   class Config(var path: Option[Path] = None, 
-               var selector: Option[JPath] = None,
+               var selector: Option[CPath] = None,
                var dataDir: String = ".",
                var verbose: Boolean = false)
 }
@@ -258,7 +258,7 @@ object ChownTools extends Command with YggUtilsCommon {
     val config = new Config
     val parser = new OptionParser("yggutils dbchown") {
       opt("p", "path", "<path>", "root data path", {p: String => config.path = Some(Path(p))})
-      opt("s", "selector", "<selector>", "root object selector", {s: String => config.selector = Some(JPath(s))})
+      opt("s", "selector", "<selector>", "root object selector", {s: String => config.selector = Some(CPath(s))})
       opt("o", "owners", "<owners>", "new owners TOKEN1,TOKEN2", {s: String => config.owners = s.split(",").toSet})
       opt("d", "dryrun", "dry run only lists changes to be made", { config.dryrun = true }) 
       arg("<datadir>", "shard data dir", {d: String => config.dataDir = d})
@@ -283,7 +283,7 @@ object ChownTools extends Command with YggUtilsCommon {
   }
 
 
-  def filter(path: Option[Path], selector: Option[JPath], descs: Array[(File, ProjectionDescriptor)]): Array[(File, ProjectionDescriptor)] = {
+  def filter(path: Option[Path], selector: Option[CPath], descs: Array[(File, ProjectionDescriptor)]): Array[(File, ProjectionDescriptor)] = {
     descs.filter {
       case (_, proj) =>
         proj.columns.exists {
@@ -294,14 +294,14 @@ object ChownTools extends Command with YggUtilsCommon {
     }
   }
 
-  def changeOwners(path: Option[Path], selector: Option[JPath], owners: Set[String], descs: Array[(File, ProjectionDescriptor)]): Array[(File, ProjectionDescriptor)] = {
+  def changeOwners(path: Option[Path], selector: Option[CPath], owners: Set[String], descs: Array[(File, ProjectionDescriptor)]): Array[(File, ProjectionDescriptor)] = {
     descs.map {
       case (f, proj) => (f, changeOwners(path, selector, owners, proj))
     }
   }
 
-  private def changeOwners(path: Option[Path], selector: Option[JPath], owners: Set[String], proj: ProjectionDescriptor): ProjectionDescriptor = {
-    def updateColumnDescriptor(path: Option[Path], selector: Option[JPath], owners: Set[String], col: ColumnDescriptor): ColumnDescriptor = {
+  private def changeOwners(path: Option[Path], selector: Option[CPath], owners: Set[String], proj: ProjectionDescriptor): ProjectionDescriptor = {
+    def updateColumnDescriptor(path: Option[Path], selector: Option[CPath], owners: Set[String], col: ColumnDescriptor): ColumnDescriptor = {
       if(path.map { _ == col.path }.getOrElse(true) &&
          selector.map { _ == col.selector }.getOrElse(true)) {
         ColumnDescriptor(col.path, col.selector, col.valueType, Authorities(owners))
@@ -330,7 +330,7 @@ object ChownTools extends Command with YggUtilsCommon {
 
   class Config(var owners: Set[String] = Set.empty,
                var path: Option[Path] = None, 
-               var selector: Option[JPath] = None,
+               var selector: Option[CPath] = None,
                var dataDir: String = ".",
                var dryrun: Boolean = false)
 }

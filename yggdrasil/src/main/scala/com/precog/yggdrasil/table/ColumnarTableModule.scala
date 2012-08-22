@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.{Path, VectorCase}
+import com.precog.common.json._
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.jdbm3._
 
@@ -71,42 +72,42 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     
     def constBoolean(v: Set[CBoolean]): Table = {
       val column = ArrayBoolColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice])
+      table(Slice(Map(ColumnRef(CPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constLong(v: Set[CLong]): Table = {
       val column = ArrayLongColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice])
+      table(Slice(Map(ColumnRef(CPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constDouble(v: Set[CDouble]): Table = {
       val column = ArrayDoubleColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice])
+      table(Slice(Map(ColumnRef(CPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constDecimal(v: Set[CNum]): Table = {
       val column = ArrayNumColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice])
+      table(Slice(Map(ColumnRef(CPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constString(v: Set[CString]): Table = {
       val column = ArrayStrColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice])
+      table(Slice(Map(ColumnRef(CPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constDate(v: Set[CDate]): Table =  {
       val column = ArrayDateColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice])
+      table(Slice(Map(ColumnRef(CPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constNull: Table = 
-      table(Slice(Map(ColumnRef(JPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice])
+      table(Slice(Map(ColumnRef(CPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice])
 
     def constEmptyObject: Table = 
-      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice])
+      table(Slice(Map(ColumnRef(CPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice])
 
     def constEmptyArray: Table = 
-      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice])
+      table(Slice(Map(ColumnRef(CPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice])
   }
   
   object grouper extends Grouper {
@@ -276,7 +277,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                   cr <- sr.valueColumns
                   col <- f(cl, cr) // TODO: Unify columns of the same result type
                 } yield {
-                  (ColumnRef(JPath.Identity, col.tpe), col)
+                  (ColumnRef(CPath.Identity, col.tpe), col)
                 })(collection.breakOut)
             }
           }
@@ -317,7 +318,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
                 // In the following fold, we compute all paired columns, and the columns on the left that
                 // have no counterpart on the right.
-                val (paired, excludedLeft) = sl.columns.foldLeft((Map.empty[JPath, Column], Set.empty[Column])) {
+                val (paired, excludedLeft) = sl.columns.foldLeft((Map.empty[CPath, Column], Set.empty[Column])) {
                   case ((paired, excluded), (ref @ ColumnRef(selector, CLong | CDouble | CNum), col)) => 
                     val numEq = for {
                                   ctype <- CLong :: CDouble :: CNum :: Nil
@@ -381,7 +382,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                   }
                 )
                 
-                Map(ColumnRef(JPath.Identity, CBoolean) -> resultCol)
+                Map(ColumnRef(CPath.Identity, CBoolean) -> resultCol)
               }
             }
           }
@@ -410,12 +411,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
               val size = ss.size
               val columns = {
                 val (comparable, other) = ss.columns.toList.partition {
-                  case (ref @ ColumnRef(JPath.Identity, tpe), col) if CType.canCompare(CType.of(value),tpe) => true
+                  case (ref @ ColumnRef(CPath.Identity, tpe), col) if CType.canCompare(CType.of(value),tpe) => true
                   case _ => false
                 }
 
                 (comparable.flatMap { case (ref, col) => Eq.partialRight(value)(col).map { col => (ref, col.asInstanceOf[BoolColumn]) } } ++
-                 other.map { case (ref, col) => (ref.copy(selector = JPath.Identity), new Map1Column(col) with BoolColumn { def apply(row: Int) = false }) }).map {
+                 other.map { case (ref, col) => (ref.copy(selector = CPath.Identity), new Map1Column(col) with BoolColumn { def apply(row: Int) = false }) }).map {
                   case (ref, col) => (ref, transform(col)) 
                 }.groupBy { 
                   case (ref, col) => ref 
@@ -437,12 +438,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
         case WrapObject(source, field) =>
           composeSliceTransform2(source) map {
-            _ wrap JPathField(field) 
+            _ wrap CPathField(field) 
           }
 
         case WrapArray(source) =>
           composeSliceTransform2(source) map {
-            _ wrap JPathIndex(0) 
+            _ wrap CPathIndex(0) 
           }
 
         case ObjectConcat(left, right) =>
@@ -472,8 +473,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           val r0 = composeSliceTransform2(right)
 
           l0.zip(r0) { (sl, sr) =>
-            def assertDense(paths: Set[JPath]) = assert {
-              (paths collect { case JPath(JPathIndex(i), _ @ _*) => i }).toList.sorted.zipWithIndex forall { case (a, b) => a == b }
+            def assertDense(paths: Set[CPath]) = assert {
+              (paths collect { case CPath(CPathIndex(i), _ @ _*) => i }).toList.sorted.zipWithIndex forall { case (a, b) => a == b }
             }
 
             assertDense(sl.columns.keySet.map(_.selector))
@@ -482,9 +483,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             new Slice {
               val size = sl.size
               val columns: Map[ColumnRef, Column] = {
-                val (indices, lcols) = sl.columns.toList map { case t @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), _), _) => (i, t) } unzip
+                val (indices, lcols) = sl.columns.toList map { case t @ (ColumnRef(CPath(CPathIndex(i), xs @ _*), _), _) => (i, t) } unzip
                 val maxIndex = indices.reduceLeftOption(_ max _).map(_ + 1).getOrElse(0)
-                val rcols = sr.columns map { case (ColumnRef(JPath(JPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(JPath(JPathIndex(j + maxIndex) +: xs : _*), ctype), col) }
+                val rcols = sr.columns map { case (ColumnRef(CPath(CPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(CPath(CPathIndex(j + maxIndex) +: xs : _*), ctype), col) }
                 lcols.toMap ++ rcols
               }
             }
@@ -536,8 +537,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           l0.zip(r0) { (slice, derefBy) => 
             assert(derefBy.columns.size <= 1)
             derefBy.columns.headOption collect {
-              case (ColumnRef(JPath.Identity, CString), c: StrColumn) => 
-                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathField(c(row)) })
+              case (ColumnRef(CPath.Identity, CString), c: StrColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => CPathField(c(row)) })
             } getOrElse {
               slice
             }
@@ -555,14 +556,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           l0.zip(r0) { (slice, derefBy) => 
             assert(derefBy.columns.size <= 1)
             derefBy.columns.headOption collect {
-              case (ColumnRef(JPath.Identity, CLong), c: LongColumn) => 
-                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathIndex(c(row).toInt) })
+              case (ColumnRef(CPath.Identity, CLong), c: LongColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => CPathIndex(c(row).toInt) })
 
-              case (ColumnRef(JPath.Identity, CDouble), c: DoubleColumn) => 
-                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathIndex(c(row).toInt) })
+              case (ColumnRef(CPath.Identity, CDouble), c: DoubleColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => CPathIndex(c(row).toInt) })
 
-              case (ColumnRef(JPath.Identity, CNum), c: NumColumn) => 
-                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathIndex(c(row).toInt) })
+              case (ColumnRef(CPath.Identity, CNum), c: NumColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => CPathIndex(c(row).toInt) })
             } getOrElse {
               slice
             }

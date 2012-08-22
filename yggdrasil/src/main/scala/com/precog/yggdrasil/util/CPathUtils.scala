@@ -18,28 +18,23 @@
  *
  */
 package com.precog.yggdrasil
-package table
+package util
 
-import com.precog.common.json.CPath
-import com.precog.common.json.CPath._
+import com.precog.common.json._
+import blueeyes.json._
 
-import com.precog.common.Path
-import scalaz.syntax.semigroup._
-import scalaz.syntax.order._
-
-case class ColumnRef(selector: CPath, ctype: CType) {
-  type CA = ctype.CA
-}
-
-object ColumnRef {
-  implicit object order extends scalaz.Order[ColumnRef] {
-    def order(r1: ColumnRef, r2: ColumnRef): scalaz.Ordering = {
-      (r1.selector ?|? r2.selector) |+| (r1.ctype ?|? r2.ctype)
-    }
+object CPathUtils {
+  def cPathToJPaths(cpath: CPath, value: CValue): List[(JPath, CValue)] = (cpath.nodes, value) match {
+    case (CPathField(name) :: tail, _) => addComponent(JPathField(name), cPathToJPaths(CPath(tail), value))
+    case (CPathIndex(i) :: tail, _) => addComponent(JPathIndex(i), cPathToJPaths(CPath(tail), value))
+    // case (CPathArray :: tail, CArray(elems, CArrayType(elemType))) =>
+    //  elems.zipWithIndex flatMap { case (e, i) => addComponent(JPathIndex(i), cPathToJPaths(CPath(tail), elemType(e)) }
+    // case (CPathMeta(_) :: _, _) => Nil
+    case (Nil, _) => List((JPath.Identity, value))
+    case (path, _) => sys.error("Bad news, bob! " + path)
   }
 
-  implicit val ordering: scala.math.Ordering[ColumnRef]  = order.toScalaOrdering
+  private def addComponent(c: JPathNode, xs: List[(JPath, CValue)]): List[(JPath, CValue)] = xs map {
+    case (path, value) => (JPath(c :: path.nodes), value)
+  }
 }
-
-
-// vim: set ts=4 sw=4 et:

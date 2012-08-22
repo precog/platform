@@ -324,7 +324,7 @@ case object CBoolean extends CType(FixedWidth(1), SBoolean) {
 sealed abstract class CNumeric(format: StorageFormat, stype: SType) extends CType(format, stype)
 
 case class CLong(value: Long) extends CValue {
-  def toJValue = JNum(value)
+  def toJValue = JNum(BigDecimal(value, MathContext.UNLIMITED))
 }
 case object CLong extends CNumeric(FixedWidth(8), SDecimal) {
   def readResolve() = CLong
@@ -332,12 +332,12 @@ case object CLong extends CNumeric(FixedWidth(8), SDecimal) {
   val CC = classOf[Long]
   override def isNumeric: Boolean = true
   def order(v1: Long, v2: Long) = longInstance.order(v1, v2)
-  def jvalueFor(v: Long) = JNum(v)
+  def jvalueFor(v: Long) = JNum(BigDecimal(v, MathContext.UNLIMITED))
   implicit val manifest = implicitly[Manifest[Long]]
 }
 
 case class CDouble(value: Double) extends CValue {
-  def toJValue = JNum(value)
+  def toJValue = JNum(BigDecimal(value.toString, MathContext.UNLIMITED))
 }
 case object CDouble extends CNumeric(FixedWidth(8), SDecimal) {
   def readResolve() = CDouble
@@ -345,7 +345,7 @@ case object CDouble extends CNumeric(FixedWidth(8), SDecimal) {
   val CC = classOf[Double]
   override def isNumeric: Boolean = true
   def order(v1: Double, v2: Double) = doubleInstance.order(v1, v2)
-  def jvalueFor(v: Double) = JNum(v)
+  def jvalueFor(v: Double) = JNum(BigDecimal(v.toString, MathContext.UNLIMITED))
   implicit val manifest = implicitly[Manifest[Double]]
 }
 
