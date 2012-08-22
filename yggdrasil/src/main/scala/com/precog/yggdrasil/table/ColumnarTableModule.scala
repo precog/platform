@@ -154,7 +154,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           def keys = a.keys ++ b.keys
         }
 
-        val nodes: Map[Node, List[(GroupingSource[GroupId], GroupKeySpec)]] = universe groupBy { 
+        val nodes: Map[MergeNode, List[(GroupingSource[GroupId], GroupKeySpec)]] = universe groupBy { 
           case (source, groupKeySpec) => MergeNode(sources(groupKeySpec).map(_.key).toSet) 
         }
 
@@ -162,17 +162,21 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
         def computeSubgraphs(edges: Set[MergeEdge]): List[AdjacencyGraph] = {
           @tailrec
-          def processNext(remaining: Set[MergeEdge], currentGraph: AdjacencyGraph, currentReachable: Set[JPathField], graphs: List[AdjacencyGraph]): List[AdjacencyGraph] = (currentGraph, remaining) match {
-            case (Set(), Set())    => graphs
-            case (current, Set())  => current :: graphs
-            case (Set(), rest) => {
-              // Simple case, we need to start a new graph with the head node
-              val edge = rest.head
-              processNext(rest.tail, Set(edge), edge.keys, graphs) 
-            }
-            case (current, rest) => {
+          def processNext(remaining: Set[MergeEdge], currentGraph: AdjacencyGraph, currentReachable: Set[JPathField], graphs: List[AdjacencyGraph]): List[AdjacencyGraph] = {
+            if (currentGraph.isEmpty) {
+              if (remaining.isEmpty) { 
+                graphs 
+              } else {
+                // Simple case, we need to start a new graph with the head node
+                val edge = remaining.head
+                processNext(remaining.tail, Set(edge), edge.keys, graphs) 
+              }
+            } else if (remaining.isEmpty) {
+              currentGraph :: graphs
+            } else {
+              // both currentGraph and remaining contain nodes
               // Partition the remaining into nodes reachable from the current graph and those not reachable from the current graph
-              val (connected, disjoint) = rest.partition { edge => (currentReachable & edge.keys).nonEmpty }
+              val (connected, disjoint) = remaining.partition { edge => (currentReachable & edge.keys).nonEmpty }
 
               if (connected.isEmpty) {
                 // No more nodes reachable in this graph, time to start a new one
@@ -193,11 +197,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           processNext(edges, Set(), Set(), Nil)
         }
 
+        val intersectionSubgraphs: List[AdjacencyGraph] = computeSubgraphs(
+          (nodes.keys.toList.combinations(2).toSet: Set[List[MergeNode]]) flatMap {
+            case l :: r :: Nil => (l != r && (l.keys & r.keys).nonEmpty).option(MergeEdge(l, r))
+          }
+        )
 
-        val adjacencies: List[AdjacencyGraph] = computeSubgraphs(nodes.keySet.combinations(2).toSet flatMap {
-          case l :: r :: Nil => (l != r && (l.keys & r.keys).nonEmpty).option(MergeEdge(l, r))
-        })
-
+        val intersectionSpecs: List[MergeSpec] = intersectionSubgraphs map { subgraph =>
+          sys.error("todo")
+        }
+          
+        intersectionSpecs reduceLeft (CrossMergeSpec.apply _)
       }
 
       def evaluateMergeSpecs(specs: MergeSpec*): M[Table] = {
