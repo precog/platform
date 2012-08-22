@@ -91,6 +91,9 @@ trait Slice { source =>
   // TODO Here, if we delete a JPathIndex/JArrayFixedT, then we need to
   // construct a new Homo*ArrayColumn that has some indices missing.
   //
+  // -- I've added a col.without(indicies) method to H*ArrayColumn to support
+  // this operation.
+  //
   def delete(jtype: JType): Slice = new Slice {
     def fixArrays(columns: Map[ColumnRef, Column]): Map[ColumnRef, Column] = {
       columns.toSeq.sortBy(_._1).foldLeft((Map.empty[Vector[CPathNode], Int], Map.empty[ColumnRef, Column])) {

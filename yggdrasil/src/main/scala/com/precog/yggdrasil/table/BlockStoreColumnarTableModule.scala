@@ -69,13 +69,31 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
           if (elements.isEmpty) {
             metadataView.findProjections(path, prefix, CEmptyArray) map { _.keySet }
           } else {
-            (elements map { case (i, jtpe) => loadable(metadataView, path, prefix \ i, jtpe) } toSet).sequence map { _.flatten }
+
+            // If all the elements have the same (primitive \ JNull) type, then
+            // we also include the matching CArrayType(_)s in the list, as they
+            // are valid.
+
+            ((elements.head._2 match {
+              case elemType: JPrimitiveType if elements forall (_._2 == elemType) =>
+                val projs = Schema.ctypes(elemType) collect {
+                  case cType: CValueType[_] => CArrayType(cType)
+                } map (metadataView.findProjections(path, prefix, _))
+                projs.sequence map (_ flatMap(_.keySet))
+              case _ =>
+                Set.empty[ProjectionDescriptor].point[M]
+            }) |@| ((elements map { case (i, jtpe) =>
+              loadable(metadataView, path, prefix \ i, jtpe)
+            } toSet).sequence map { _.flatten }))(_ ++ _)
           }
 
         case JArrayUnfixedT =>
           metadataView.findProjections(path, prefix) map { sources =>
             sources.keySet filter { 
               _.columns exists { 
+                case ColumnDescriptor(`path`, selector, CArrayType(_), _) =>
+                  selector hasPrefix prefix
+
                 case ColumnDescriptor(`path`, selector, _, _) => 
                   (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[CPathIndex])
               }

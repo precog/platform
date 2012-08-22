@@ -27,6 +27,9 @@ import org.joda.time.DateTime
 import java.nio.{ ByteBuffer, CharBuffer }
 import java.nio.charset.{ Charset, CharsetEncoder, CoderResult }
 
+import scala.collection.immutable.BitSet
+import scala.collection.mutable
+
 import scala.annotation.tailrec
 import scala.{ specialized => spec }
 
@@ -254,6 +257,149 @@ object Codec {
   }
 
   implicit def ArrayCodec[A](implicit elemCodec: Codec[A]) = new ArrayCodec(elemCodec)
+
+
+  /** A Codec that can (un)wrap CValues of type CValueType. */
+  case class CValueCodec[A](cType: CValueType[A])(implicit val codec: Codec[A])
+      extends Codec[CWrappedValue[A]] {
+    type S = codec.S
+    def encodedSize(a: CWrappedValue[A]) = codec.encodedSize(a.value)
+    def writeUnsafe(a: CWrappedValue[A], sink: ByteBuffer) = codec.writeUnsafe(a.value, sink)
+    def writeInit(a: CWrappedValue[A], sink: ByteBuffer) = codec.writeInit(a.value, sink)
+    def writeMore(s: S, sink: ByteBuffer) = codec.writeMore(s, sink)
+    def read(src: ByteBuffer) = cType(codec.read(src))
+  }
+
+  trait StatefulCodec {
+    type A
+    val codec: Codec[A]
+
+    def init(a: A, sink: ByteBuffer): Option[State] =
+      codec.writeInit(a, sink) map (State(_))
+
+    case class State(s: codec.S) {
+      def more(sink: ByteBuffer): Option[State] = codec.writeMore(s, sink) map (State(_))
+    }
+  }
+
+  def wrappedWriteInit[AA](a: AA, sink: ByteBuffer)(implicit _codec: Codec[AA]): Option[StatefulCodec#State] = (new StatefulCodec {
+    type A = AA
+    val codec = _codec
+  }).init(a, sink)
+
+  case class xxx extends Codec[List[CValue]] {
+    type S = (StatefulCodec#State, List[CValue])
+
+    def encodedSize(xs: List[CValue]) = xs.foldLeft(0) { (acc, x) => acc + (x match {
+      case x: CWrappedValue[_] => forCValueType(x.cType).encodedSize(x.value)
+      case _ => 0
+    }) }
+
+    def writeUnsafe(xs: List[CValue], sink: ByteBuffer) {
+      xs foreach {
+        case x: CWrappedValue[_] => forCValueType(x.cType).writeUnsafe(x.value, sink)
+        case _ =>
+      }
+    }
+
+    @tailrec
+    private def writeCValues(xs: List[CValue], sink: ByteBuffer): Option[S] = xs match {
+      case x :: xs => (x match {
+        case CBoolean(x) => wrappedWriteInit[Boolean](x, sink)
+        case _ => sys.error("...")
+      }) match {
+        case None => writeCValues(xs, sink)
+        case Some(s) => Some((s, xs))
+      }
+
+      case Nil => None
+    }
+
+    def writeInit(xs: List[CValue], sink: ByteBuffer) = writeCValues(xs, sink)
+
+    def writeMore(more: S, sink: ByteBuffer) = {
+      val (s, xs) = more
+      s.more(sink) map ((_, xs)) orElse writeCValues(xs, sink)
+    }
+
+    def read(src: ByteBuffer): List[CValue] = sys.error("todo")
+  }
+
+
+  def readBitset(src: ByteBuffer, size: Int): BitSet = {
+    @tailrec @inline
+    def readBytes(bs: List[Byte]): Array[Byte] = {
+      val b = src.get()
+      if ((b & 3) == 0 || (b & 12) == 0 || (b & 48) == 0 || (b & 192) == 0) {
+        (b :: bs).reverse.toArray
+      } else readBytes(b :: bs)
+    }
+
+    val bytes = readBytes(Nil)
+    @inline def get(offset: Int): Boolean = (bytes(offset >> 3) & (1 << (offset & 7))) == 1
+
+    import collection.mutable
+    var bits = mutable.BitSet()
+    def read(offset: Int, l: Int, r: Int): Int = {
+      if (l == r) {
+        offset
+      } else if (r - l == 1) {
+        bits(l) = true
+        offset
+      } else {
+        val c = (l + r) / 2
+        (get(offset), get(offset + 1)) match {
+          case (false, false) => offset + 2
+          case (false, true) => read(offset + 2, c, r)
+          case (true, false) => read(offset + 2, l, c)
+          case (true, true) => read(offset + 2, l, c) + read(offset + 2, c, r)
+        }
+      }
+    }
+
+    read(0, 0, size)
+    bits.toImmutable
+  }
+}
+
+
+case class RowCodec(codecs: Seq[Either[CNullType, Codec.CValueCodec[_]]]) {
+  import Codec.CValueCodec
+
+  def encode(values: Seq[CValue], sink: ByteBuffer) = {
+    assert(codecs.size == values.size)
+    (codecs zip values) foreach {
+      case (_, CUndefined) =>
+
+      case (Left(CNull), CNull) =>
+      case (Left(CEmptyArray), CEmptyArray) =>
+      case (Left(CEmptyObject), CEmptyObject) =>
+      case (Left(CUndefined), _) => sys.error("This doesn't even make sense.")
+
+      case (Right(codec0), v) =>
+        val codec: CValueCodec[_] = codec0
+
+        (codec, v) match {
+          case (codec @ CValueCodec(CString), CString(s)) =>
+            codec.codec.writeUnsafe(s, sink)
+          case (codec @ CValueCodec(CBoolean), CBoolean(x)) =>
+            codec.codec.writeUnsafe(x, sink)
+          case (codec @ CValueCodec(CLong), CLong(x)) =>
+            codec.codec.writeUnsafe(x, sink)
+          case (codec @ CValueCodec(CDouble), CDouble(x)) =>
+            codec.codec.writeUnsafe(x, sink)
+          case (codec @ CValueCodec(CNum), CNum(x)) =>
+            codec.codec.writeUnsafe(x, sink)
+          case (codec @ CValueCodec(CDate), CDate(x)) =>
+            codec.codec.writeUnsafe(x, sink)
+          case (codec @ CValueCodec(codecCType: CArrayType[a]), CArray(xs, valueCType)) if codecCType == valueCType =>
+            // TODO Get rid of the cast.
+            codec.codec.writeUnsafe(xs.asInstanceOf[IndexedSeq[a]], sink)
+          case _ =>
+            sys.error("Cannot write value of type %s in column of type %s." format (v.cType, codec.cType))
+        }
+    }
+  }
 }
 
 
