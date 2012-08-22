@@ -132,22 +132,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       case class CrossMergeSpec(left: MergeSpec, right: MergeSpec) extends MergeSpec
 
       def composeMergeSpec(universe: List[(GroupingSource[GroupId], GroupKeySpec)]): MergeSpec = {
-        def bindingFields(keySpec: GroupKeySpec): Set[JPathField] = {
-          keySpec match {
-            case GroupKeySpecAnd(left, right) =>
-              bindingFields(left) ++ bindingFields(right)
-
-            case GroupKeySpecSource(field, spec) => Set(field)
-          }
+        def sources(spec: GroupKeySpec): Seq[GroupKeySpecSource] = (spec: @unchecked) match {
+          case GroupKeySpecAnd(left, right) => sources(left) ++ sources(right)
+          case src: GroupKeySpecSource => Vector(src)
         }
 
         // the GroupKeySpec passed to deriveTransSpecs must be either a source or a conjunction; all disjunctions
         // have been factored out by this point
-        def deriveTransSpecs(conjunction: GroupKeySpec, keyOrder: Map[JPathField, Int] = Map()) = {
-          def sources(spec: GroupKeySpec): Seq[GroupKeySpecSource] = (spec: @unchecked) match {
-            case GroupKeySpecAnd(left, right) => sources(left) ++ sources(right)
-            case src: GroupKeySpecSource => Vector(src)
-          }
+        def deriveTransSpec(conjunction: GroupKeySpec, keyOrder: Map[JPathField, Int] = Map()): TransSpec1 = {
 
           // [['a, value], ['b, value2]]
           val keySpecs = sources(conjunction).sortBy(src => keyOrder.getOrElse(src.key, Int.MaxValue)) map { src => 
@@ -157,9 +149,55 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           keySpecs reduce { ArrayConcat(_, _) }
         }
 
-        universe match {
-          case (source, groupKeySpec) :: Nil => sys.error("todo")
+        case class MergeNode(keys: Set[JPathField])
+        case class MergeEdge(a: MergeNode, b: MergeNode) {
+          def keys = a.keys ++ b.keys
         }
+
+        val nodes: Map[Node, List[(GroupingSource[GroupId], GroupKeySpec)]] = universe groupBy { 
+          case (source, groupKeySpec) => MergeNode(sources(groupKeySpec).map(_.key).toSet) 
+        }
+
+        type AdjacencyGraph = Set[MergeEdge]
+
+        def computeSubgraphs(edges: Set[MergeEdge]): List[AdjacencyGraph] = {
+          @tailrec
+          def processNext(remaining: Set[MergeEdge], currentGraph: AdjacencyGraph, currentReachable: Set[JPathField], graphs: List[AdjacencyGraph]): List[AdjacencyGraph] = (currentGraph, remaining) match {
+            case (Set(), Set())    => graphs
+            case (current, Set())  => current :: graphs
+            case (Set(), rest) => {
+              // Simple case, we need to start a new graph with the head node
+              val edge = rest.head
+              processNext(rest.tail, Set(edge), edge.keys, graphs) 
+            }
+            case (current, rest) => {
+              // Partition the remaining into nodes reachable from the current graph and those not reachable from the current graph
+              val (connected, disjoint) = rest.partition { edge => (currentReachable & edge.keys).nonEmpty }
+
+              if (connected.isEmpty) {
+                // No more nodes reachable in this graph, time to start a new one
+                processNext(disjoint, Set(), Set(), currentGraph :: graphs)
+              } else {
+                val (updatedGraph, updatedReachable) = connected.foldLeft ((currentGraph, currentReachable)) { 
+                  case ((g, r), edge) => {
+                    (g + edge, r ++ edge.keys)
+                  }
+                }
+
+                // Re-run the current graph in case the new additions make more nodes reachable
+                processNext(disjoint, updatedGraph, updatedReachable, graphs)
+              }
+            }
+          }
+
+          processNext(edges, Set(), Set(), Nil)
+        }
+
+
+        val adjacencies: List[AdjacencyGraph] = computeSubgraphs(nodes.keySet.combinations(2).toSet flatMap {
+          case l :: r :: Nil => (l != r && (l.keys & r.keys).nonEmpty).option(MergeEdge(l, r))
+        })
+
       }
 
       def evaluateMergeSpecs(specs: MergeSpec*): M[Table] = {
