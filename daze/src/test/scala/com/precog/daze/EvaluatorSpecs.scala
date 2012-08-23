@@ -2143,7 +2143,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       lazy val input: dag.Split = dag.Split(line,
         dag.Group(1, nums, UnfixedSolution(0, nums)),
         Join(line, Add, CrossLeftSort,
-          SplitGroup(line, 1, nums.provenance)(input),
+          SplitGroup(line, 1, nums.identities)(input),
           dag.Reduce(line, Max,
             Filter(line, IdentitySort,
               nums,
@@ -2191,7 +2191,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Join(line, WrapObject, CrossLeftSort,
             Root(line, PushString("num")),
             dag.Reduce(line, Count,
-              SplitGroup(line, 1, clicks.provenance)(input)))))
+              SplitGroup(line, 1, clicks.identities)(input)))))
       
       testEval(input) { result =>
         result must haveSize(10)
@@ -2304,7 +2304,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Join(line, WrapObject, CrossLeftSort,
             Root(line, PushString("num")),
             dag.Reduce(line, Count,
-              SplitGroup(line, 1, clicks.provenance)(histogram)))))
+              SplitGroup(line, 1, clicks.identities)(histogram)))))
        
       val input = Filter(line, IdentitySort,
         histogram,
