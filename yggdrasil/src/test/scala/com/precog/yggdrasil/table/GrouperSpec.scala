@@ -35,7 +35,7 @@ import scalaz.std.anyVal._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 
-object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] with ScalaCheck with test.YIdInstances {
+object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] with StubIdSourceScannerModule with ScalaCheck with test.YIdInstances {
   import trans._
 
   "simple single-key grouping" should {

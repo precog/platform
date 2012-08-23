@@ -161,7 +161,10 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
     private var currentIndex = 0
 
     import trans._
-    def sort(sortKet: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
+    def sort(memoId: MemoId, sortKet: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
+
+    def memoize(memoId: MemoId) = M.point(this)
+    def invalidate(memoId: MemoId) = ()
     
     override def load(uid: UserId, jtpe: JType) = {
       self.toJson map { events =>

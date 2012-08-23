@@ -23,6 +23,7 @@ package table
 import com.precog.bytecode._
 import com.precog.common._
 import com.precog.util._
+import com.precog.yggdrasil.util._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -45,7 +46,20 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 import SampleData._
 
-trait BlockLoadTestSupport[M[+_]] extends TestColumnarTableModule[M] with StubStorageModule[M] with TableModuleTestSupport[M] {
+trait BlockLoadTestSupport[M[+_]] extends
+  TestColumnarTableModule[M] with
+  StubStorageModule[M] with
+  IdSourceScannerModule[M] with
+  TableModuleTestSupport[M] {
+  
+  type YggConfig = IdSourceConfig
+  val yggConfig = new IdSourceConfig {
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
+    }
+  }
+  
   type Key = JArray
   case class Projection(descriptor: ProjectionDescriptor, data: Stream[JValue]) extends BlockProjectionLike[JArray, Slice] {
     val slices = fromJson(data).slices.toStream.copoint

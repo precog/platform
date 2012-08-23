@@ -17,29 +17,17 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil.util
+package com.precog.yggdrasil
+package table
 
-import com.precog.yggdrasil.{ IdSource, TableModule, YggConfigComponent }
-import com.precog.yggdrasil.table.{ ArrayLongColumn, Column, CScanner }
+import com.precog.yggdrasil.util._
 
-import scala.collection.immutable.BitSet
-
-trait IdSourceConfig {
-  def idSource: IdSource
-}
-
-trait IdSourceScannerModule[M[+_]] extends TableModule[M] with YggConfigComponent {
-  type YggConfig <: IdSourceConfig
-  
-  def freshIdScanner = new CScanner {
-    type A = Unit
-    def init = ()
-    
-    def scan(a: Unit, col: Column, range: Range): (A, Option[Column]) = {
-      val defined = BitSet(range filter col.isDefinedAt: _*)
-      val values = range map { _ => yggConfig.idSource.nextId() } toArray
-      
-      ((), Some(ArrayLongColumn(defined, values)))
+trait StubIdSourceScannerModule {
+  type YggConfig = IdSourceConfig
+  val yggConfig = new IdSourceConfig {
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
     }
   }
 }

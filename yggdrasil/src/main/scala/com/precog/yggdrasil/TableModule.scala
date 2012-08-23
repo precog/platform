@@ -42,6 +42,7 @@ trait TableModule[M[+_]] extends FNModule {
   type UserId
   type Scanner
   type Reducer[α]
+  type MemoId
 
   implicit def M: Monad[M]
 
@@ -273,7 +274,11 @@ trait TableModule[M[+_]] extends FNModule {
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table]
+    def sort(memoId: MemoId, sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table]
+    
+    def memoize(memoId: MemoId): M[Table]
+    
+    def invalidate(memoId: MemoId): Unit
     
     def distinct(spec: TransSpec1): Table
     

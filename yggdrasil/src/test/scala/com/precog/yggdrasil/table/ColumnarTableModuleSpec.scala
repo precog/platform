@@ -23,6 +23,7 @@ package table
 import com.precog.common.Path
 import com.precog.common.VectorCase
 import com.precog.bytecode.JType
+import com.precog.yggdrasil.util._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -131,7 +132,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   class UnloadableTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import trans._
     def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
+    def sort(memoId: MemoId, sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
+    def memoize(memoId: MemoId) = M.point(this)
+    def invalidate(memoId: MemoId) = ()
   }
 
   def table(slices: StreamT[M, Slice]) = new UnloadableTable(slices)
@@ -249,6 +252,14 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] {
   implicit def M = Trampoline.trampolineMonad
   implicit def coM = Trampoline.trampolineMonad
+
+  type YggConfig = IdSourceConfig
+  val yggConfig = new IdSourceConfig {
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
+    }
+  }
 }
 
 

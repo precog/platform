@@ -65,7 +65,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
 
       for {
-        sortedTable <- compactedTable.sort(sortKey, SortAscending)
+        sortedTable <- compactedTable.sort(IdGen.nextInt, sortKey, SortAscending) // TODO: memoId not associated with DepGraph
         count <- sortedTable.reduce(Count.reducer)
         median <- if (count % 2 == 0) {
                     val middleValues = sortedTable.take((count.toLong / 2) + 1).drop((count.toLong / 2) - 1)
@@ -162,7 +162,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
     def apply(table: Table) = {
       val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
-      val sortedTable: M[Table] = table.sort(sortKey, SortAscending)
+      val sortedTable: M[Table] = table.sort(IdGen.nextInt, sortKey, SortAscending) // TODO: memoId not associated with DepGraph
 
       sortedTable.flatMap(_.reduce(reducer).map(extract))
     }
@@ -869,7 +869,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     
     def apply(table: Table) = {
       val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
-      val sortedTable = table.sort(sortKey, SortAscending)
+      val sortedTable = table.sort(IdGen.nextInt, sortKey, SortAscending) // TODO: memoId not associated with DepGraph
 
       val transScan = Scan(DerefObjectStatic(Leaf(Source), paths.Value), rankScanner)
       
@@ -942,7 +942,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     
     def apply(table: Table) = {
       val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
-      val sortedTable = table.sort(sortKey, SortAscending)
+      val sortedTable = table.sort(IdGen.nextInt, sortKey, SortAscending) // TODO: memoId not associated with DepGraph
 
       val transScan = Scan(DerefObjectStatic(Leaf(Source), paths.Value), rankScanner)
       

@@ -173,6 +173,8 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     val module = new BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
       def M = self.M
       def coM = self.coM
+      
+      type MemoId = Int
 
       val projections = {
         schema.grouped(2) map { subschema =>
@@ -224,7 +226,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
 
     try {
       val result = module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {
-        _.sort(sortTransspec, SortAscending)
+        _.sort(IdGen.nextInt, sortTransspec, SortAscending)
       }.flatMap {
         // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
         table => M.point(table.transform(ObjectDelete(Leaf(Source), Set(SortKey))))
