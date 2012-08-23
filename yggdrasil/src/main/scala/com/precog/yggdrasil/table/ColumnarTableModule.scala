@@ -125,11 +125,28 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         Vector((v map { case (src, specs) => specs map { (src, _) } toStream } toList).sequence: _*)
       }
 
+      // MergeSpecs define a tree of intersect and cross operations that must be performed to 
+      // obtain a full table of bindings for a set of tic variables
       sealed trait MergeSpec
-
-      case class SourceMergeSpec(source: Table, keySpec: TransSpec1, valueSpec: TransSpec1) extends MergeSpec
-      case class IntersectMergeSpec(left: MergeSpec, right: MergeSpec, bindings: Seq[JPathField]) extends MergeSpec
+      case class SourceMergeSpec(source: Table, keySpec: TransSpec1, valueSpec: TransSpec1, sorting: Seq[JPathField]) extends MergeSpec
+      case class IntersectMergeSpec(left: MergeSpec, right: MergeSpec, sorting: Seq[JPathField]) extends MergeSpec
       case class CrossMergeSpec(left: MergeSpec, right: MergeSpec) extends MergeSpec
+
+      // MergeTrees describe intersections as edges in a graph, where the nodes correspond
+      // to sets of bindings
+      case class MergeNode(keys: Set[JPathField])
+      case class MergeEdge(a: MergeNode, b: MergeNode, sharedKey: Set[JPathField]) {
+        def nodes = Set(a, b)
+        def keys = a.keys ++ b.keys
+      }
+
+      // A maximal spanning tree for a merge graph, where the edge weights correspond
+      // to the size of the shared keyset for that edge. We use hte maximal weights
+      // since the larger the set of shared keys, the fewer constraints are imposed
+      // making it more likely that a sorting for those shared keys can be reused.
+      case class MergeTree(nodes: Set[MergeNode], edges: Set[MergeEdge] = Set()) {
+        def + (other: MergeTree) = MergeTree(nodes ++ other.nodes, edges ++ other.edges)
+      } 
 
       def composeMergeSpec(universe: List[(GroupingSource[GroupId], GroupKeySpec)]): MergeSpec = {
         def sources(spec: GroupKeySpec): Seq[GroupKeySpecSource] = (spec: @unchecked) match {
@@ -149,65 +166,72 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           keySpecs reduce { ArrayConcat(_, _) }
         }
 
-        case class MergeNode(keys: Set[JPathField])
-        case class MergeEdge(a: MergeNode, b: MergeNode) {
-          def keys = a.keys ++ b.keys
+        def kruskals(trees: Set[MergeTree], edges: List[MergeEdge]): Set[MergeTree] = {
+          if (edges.isEmpty) {
+            trees 
+          } else {
+            val MergeEdge(a, b, _) = edges.head
+            val newTrees = trees.find(t => t.nodes.contains(a)) map { t0 =>
+              if (t0.nodes.contains(b)) {
+                trees
+              } else {
+                trees.find(t => t.nodes.contains(b)) map { t1 =>
+                  (trees - t0 - t1) + (t0 + t1)
+                } getOrElse {
+                  (trees - t0) + MergeTree(t0.nodes + b, t0.edges + edges.head)
+                }
+              }
+            } orElse {
+              trees.find(t => t.nodes.contains(b)) map {
+                t0 => (trees - t0) + MergeTree(t0.nodes + a, t0.edges + edges.head)
+              }
+            } getOrElse {
+              trees + MergeTree(Set(a, b), Set(edges.head))
+            }
+
+            kruskals(newTrees, edges.tail)
+          }
         }
 
-        val nodes: Map[MergeNode, List[(GroupingSource[GroupId], GroupKeySpec)]] = universe groupBy { 
+        val nodeSources: Map[MergeNode, List[(GroupingSource[GroupId], GroupKeySpec)]] = universe groupBy { 
           case (source, groupKeySpec) => MergeNode(sources(groupKeySpec).map(_.key).toSet) 
         }
 
-        type AdjacencyGraph = Set[MergeEdge]
+        val adjacencyList: List[MergeEdge] = (for { 
+          l <- nodeSources.keys
+          r <- nodeSources.keys
+          if l != r
+          sharedKey = l.keys intersect r.keys
+          if sharedKey.nonEmpty
+        } yield {
+          MergeEdge(l, r, sharedKey)
+        })(collection.breakOut)
 
-        def computeSubgraphs(edges: Set[MergeEdge]): List[AdjacencyGraph] = {
-          @tailrec
-          def processNext(remaining: Set[MergeEdge], currentGraph: AdjacencyGraph, currentReachable: Set[JPathField], graphs: List[AdjacencyGraph]): List[AdjacencyGraph] = {
-            if (currentGraph.isEmpty) {
-              if (remaining.isEmpty) { 
-                graphs 
-              } else {
-                // Simple case, we need to start a new graph with the head node
-                val edge = remaining.head
-                processNext(remaining.tail, Set(edge), edge.keys, graphs) 
-              }
-            } else if (remaining.isEmpty) {
-              currentGraph :: graphs
-            } else {
-              // both currentGraph and remaining contain nodes
-              // Partition the remaining into nodes reachable from the current graph and those not reachable from the current graph
-              val (connected, disjoint) = remaining.partition { edge => (currentReachable & edge.keys).nonEmpty }
+        val intersectionSubtrees: Set[MergeTree] = kruskals(nodeSources.keySet map { node => MergeTree(Set(node)) }, adjacencyList.sortBy(-_.sharedKey.size))
 
-              if (connected.isEmpty) {
-                // No more nodes reachable in this graph, time to start a new one
-                processNext(disjoint, Set(), Set(), currentGraph :: graphs)
-              } else {
-                val (updatedGraph, updatedReachable) = connected.foldLeft ((currentGraph, currentReachable)) { 
-                  case ((g, r), edge) => {
-                    (g + edge, r ++ edge.keys)
-                  }
-                }
-
-                // Re-run the current graph in case the new additions make more nodes reachable
-                processNext(disjoint, updatedGraph, updatedReachable, graphs)
-              }
-            }
+        val allMergeSpecs = for (subtree <- intersectionSubtrees) yield {
+          val inbound = subtree.edges.foldLeft(Map.empty[MergeNode, Set[MergeEdge]]) {
+            case (acc, edge @ MergeEdge(a, b, _)) => 
+              val aInbound = acc.getOrElse(a, Set()) + edge
+              val bInbound = acc.getOrElse(b, Set()) + edge
+              acc + (a -> aInbound) + (b -> bInbound)
           }
 
-          processNext(edges, Set(), Set(), Nil)
-        }
-
-        val intersectionSubgraphs: List[AdjacencyGraph] = computeSubgraphs(
-          (nodes.keys.toList.combinations(2).toSet: Set[List[MergeNode]]) flatMap {
-            case l :: r :: Nil => (l != r && (l.keys & r.keys).nonEmpty).option(MergeEdge(l, r))
+          val nodeSources = inbound.toList.sortBy(-_._2.size).foldLeft(Map.empty[MergeNode, Set[SourceMergeSpec]]) {
+            case (acc, (node, edges)) => 
+              sys.error("todo")
           }
-        )
 
-        val intersectionSpecs: List[MergeSpec] = intersectionSubgraphs map { subgraph =>
-          sys.error("todo")
+          if (subtree.edges.isEmpty) {
+            assert(subtree.nodes.size == 1)
+            //nodeSources(subtree.nodes.head)
+            sys.error("todo")
+          } else {
+            sys.error("todo")
+          }
         }
           
-        intersectionSpecs reduceLeft (CrossMergeSpec.apply _)
+        allMergeSpecs reduceLeft (CrossMergeSpec.apply _)
       }
 
       def evaluateMergeSpecs(specs: MergeSpec*): M[Table] = {
@@ -806,6 +830,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                       // this will miss catching input-out-of-order errors, but we know that the right must
                       // be advanced fully within the 'EQ' state before we get here, so we can just
                       // increment the right by 1
+                      if (xrend == -1) sys.error("Inputs are not sorted; value on the left exceeded value on the right at the end of equal span.")
                       buildRemappings(lpos, xrend, Reset, Reset, endRight)
                     case EQ => 
                       ibufs.advanceBoth(lpos, rpos)
