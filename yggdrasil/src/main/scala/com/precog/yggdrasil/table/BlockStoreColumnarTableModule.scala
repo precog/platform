@@ -182,12 +182,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         def apply(initialCells: Set[Cell])(keyf: Slice => List[ColumnRef]): CellMatrix = {
           val size = initialCells.size
   
-          type ComparatorMatrix = Array[Array[(Int, Int) => Ordering]]
+          type ComparatorMatrix = Array[Array[RowComparator]]
           def fillMatrix(initialCells: Set[Cell]): ComparatorMatrix = {
-            val comparatorMatrix = Array.ofDim[(Int, Int) => Ordering](initialCells.size, initialCells.size)
+            val comparatorMatrix = Array.ofDim[RowComparator](initialCells.size, initialCells.size)
   
             for (Cell(i, _, s) <- initialCells; Cell(i0, _, s0) <- initialCells if i != i0) { 
-              comparatorMatrix(i)(i0) = Slice.rowComparator(s, s0)(keyf) 
+              comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf) 
             }
   
             comparatorMatrix
@@ -200,7 +200,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
             def cells = allCells.values
   
             def compare(cl: Cell, cr: Cell): Ordering = {
-              comparatorMatrix(cl.index)(cr.index)(cl.position, cr.position)
+              comparatorMatrix(cl.index)(cr.index).compare(cl.position, cr.position)
             }
   
             def refresh(index: Int, succ: M[Option[Cell]]): M[CellMatrix] = {
@@ -209,8 +209,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
                   allCells += (i -> c)
   
                   for ((_, Cell(i0, _, s0)) <- allCells if i0 != i) {
-                    comparatorMatrix(i)(i0) = Slice.rowComparator(s, s0)(keyf) 
-                    comparatorMatrix(i0)(i) = Slice.rowComparator(s0, s)(keyf)
+                    comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf) 
+                    comparatorMatrix(i0)(i) = Slice.rowComparatorFor(s0, s)(keyf)
                   }
   
                   self
