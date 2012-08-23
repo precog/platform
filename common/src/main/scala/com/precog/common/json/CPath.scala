@@ -143,6 +143,10 @@ sealed case class CPathIndex(index: Int) extends CPathNode {
   override def toString = "[" + index + "]"
 }
 
+case object CPathArray extends CPathNode {
+  override def toString = "[*]"
+}
+
 trait CPathSerialization {
   implicit val CPathDecomposer : Decomposer[CPath] = new Decomposer[CPath] {
     def decompose(cpath: CPath) : JValue = JString(cpath.toString)
