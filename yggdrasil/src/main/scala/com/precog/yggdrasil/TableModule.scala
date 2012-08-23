@@ -86,7 +86,7 @@ trait TableModule[M[+_]] extends FNModule {
     
     case class DerefObjectStatic[+A <: SourceType](source: TransSpec[A], field: CPathField) extends TransSpec[A] //done
     
-    case class DerefMetadataStatic[+A <: SourceType](source: TransSpec[A], field: JPathField) extends TransSpec[A]
+    case class DerefMetadataStatic[+A <: SourceType](source: TransSpec[A], field: CPathMeta) extends TransSpec[A]
     
     case class DerefObjectDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
     

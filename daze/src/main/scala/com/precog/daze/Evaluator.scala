@@ -504,7 +504,7 @@ trait Evaluator[M[+_]] extends DAG
             case Some(value @ SString(str)) => {
               for {
                 pendingTable <- loop(left, splits)
-              } yield PendingTable(pendingTable.table, pendingTable.graph, DerefMetadataStatic(pendingTable.trans, JPathField(str)))
+              } yield PendingTable(pendingTable.table, pendingTable.graph, DerefMetadataStatic(pendingTable.trans, CPathMeta(str)))
             }
             
             case _ =>

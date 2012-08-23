@@ -158,6 +158,10 @@ sealed case class CPathField(name: String) extends CPathNode {
   override def toString = "." + name
 }
 
+sealed case class CPathMeta(name: String) extends CPathNode {
+  override def toString = "@" + name
+}
+
 sealed case class CPathIndex(index: Int) extends CPathNode {
   override def toString = "[" + index + "]"
 }
