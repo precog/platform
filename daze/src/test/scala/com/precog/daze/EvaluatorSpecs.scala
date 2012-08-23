@@ -29,6 +29,7 @@ import com.precog.yggdrasil.test._
 import com.precog.common.VectorCase
 import com.precog.util.IOUtils
 import com.precog.util.IdGen
+import com.precog.bytecode._
 
 import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
@@ -90,12 +91,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
   val testUID = "testUID"
 
-  def testEval(graph: DepGraph)(test: Set[SEvent] => Result): Result = withContext { ctx =>
-    (consumeEval(testUID, graph, ctx, Path.Root) match {
+  def testEval(graph: DepGraph, path: Path = Path.Root)(test: Set[SEvent] => Result): Result = withContext { ctx =>
+    (consumeEval(testUID, graph, ctx, path) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     }) and 
-    (consumeEval(testUID, graph, ctx, Path.Root, false) match {
+    (consumeEval(testUID, graph, ctx, path, false) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     })
@@ -233,6 +234,61 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
         
         result2 must contain(42, 12, 77, 1, 13)
+      }
+    }
+
+    "evaluate a join given a relative path" in {
+      val line = Line(0, "")
+
+      val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+
+      val input = Join(line, Add, IdentitySort, numbers, numbers)
+
+      testEval(input, Path("/hom")) { result =>
+        result must haveSize(5)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+
+        result2 must contain(84, 24, 154, 2, 26)
+      }
+    }     
+    
+    "evaluate a join given a relative path with two different JTypes" in {
+      val line = Line(0, "")
+
+      val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+      val numbers0 = dag.LoadLocal(line, Root(line, PushString("/numbers")), JNumberT)
+
+      val input = Join(line, Add, IdentitySort, numbers, numbers0)
+
+      testEval(input, Path("/hom")) { result =>
+        result must haveSize(5)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+
+        result2 must contain(84, 24, 154, 2, 26)
+      }
+    }.pendingUntilFixed       
+    
+    "evaluate a join given a relative path with two different datasets" in {
+      val line = Line(0, "")
+
+      val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+      val numbers2 = dag.LoadLocal(line, Root(line, PushString("/numbers2")))
+
+      val input = Join(line, Add, CrossLeftSort, numbers, numbers2)
+
+      testEval(input, Path("/hom")) { result =>
+        result must haveSize(30)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 2 => d.toInt
+        }
+        result2 must contain(84,54,119,43,55,43,54,24,89,13,25,13,119,89,154,78,90,78,43,13,78,2,14,2,55,25,90,14,26,14)
       }
     }
     
