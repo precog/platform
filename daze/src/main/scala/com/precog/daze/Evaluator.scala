@@ -583,7 +583,7 @@ trait Evaluator[M[+_]] extends DAG
                 case _ => sys.error("unreachable code")
               }
               
-              val spec = buildWrappedJoinSpec(sharedPrefixLength(left, right), left.provenance.length, right.provenance.length)(transFromBinOp(op))
+              val spec = buildWrappedJoinSpec(sharedPrefixLength(left, right), left.identities.length, right.identities.length)(transFromBinOp(op))
 
               val result = for {
                 parentLeftTable <- pendingTableLeft.table 
@@ -644,7 +644,7 @@ trait Evaluator[M[+_]] extends DAG
                 case _ => sys.error("unreachable code")
               }
               
-              val spec = buildWrappedJoinSpec(sharedPrefixLength(target, boolean), target.provenance.length, boolean.provenance.length) { (srcLeft, srcRight) =>
+              val spec = buildWrappedJoinSpec(sharedPrefixLength(target, boolean), target.identities.length, boolean.identities.length) { (srcLeft, srcRight) =>
                 trans.Filter(srcLeft, srcRight)
               }
               
@@ -702,7 +702,7 @@ trait Evaluator[M[+_]] extends DAG
           if (indexes == Vector(0 until indexes.length: _*) && parent.sorting == IdentitySort) {
             loop(parent, splits)
           } else {
-            val fullOrder = indexes ++ ((0 until parent.provenance.length) filterNot (indexes contains))
+            val fullOrder = indexes ++ ((0 until parent.identities.length) filterNot (indexes contains))
             val idSpec = buildIdShuffleSpec(fullOrder)
             
             for {
@@ -920,7 +920,7 @@ trait Evaluator[M[+_]] extends DAG
   }
 
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
-    left.provenance zip right.provenance takeWhile { case (a, b) => a == b } length
+    left.identities zip right.identities takeWhile { case (a, b) => a == b } length
   
   private def svalueToCValue(sv: SValue) = sv match {
     case SString(str) => CString(str)

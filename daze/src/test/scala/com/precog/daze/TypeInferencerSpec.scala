@@ -454,7 +454,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
               SplitParam(line, 0)(input),
               Root(line, PushString("column1"))),
             Join(line, DerefObject, CrossLeftSort,
-              SplitGroup(line, 1, clicks.provenance)(input),
+              SplitGroup(line, 1, clicks.identities)(input),
               Root(line, PushString("column2")))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
@@ -489,7 +489,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
             Join(line, WrapObject, CrossLeftSort,
               Root(line, PushString("num")),
               Reduce(line, Count,
-                SplitGroup(line, 0, clicks.provenance)(input)))))
+                SplitGroup(line, 0, clicks.identities)(input)))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -523,7 +523,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
               Join(line, WrapObject, CrossLeftSort,
                 Root(line, PushString("num")),
                 Reduce(line, Count,
-                  SplitGroup(line, 0, clicks.provenance)(input)))),
+                  SplitGroup(line, 0, clicks.identities)(input)))),
             Join(line, WrapObject, CrossLeftSort,
               Root(line, PushString("age")),
               Join(line, DerefObject, CrossLeftSort,

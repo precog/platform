@@ -31,14 +31,14 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
   import instructions._
 
   "DAG rewriting" should {
-    "compute static provenance given a relative path" in {
+    "compute identities given a relative path" in {
       val line = Line(0, "")
 
       val input = dag.LoadLocal(line, Root(line, PushString("/numbers")))
 
       val result = rewriteDAG(true)(input)
 
-      result.provenance mustEqual Vector(StaticProvenance("/numbers"))
+      result.identities mustEqual Vector(LoadIds("/numbers"))
     }
   }
 }
