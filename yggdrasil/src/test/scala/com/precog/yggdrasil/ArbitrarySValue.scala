@@ -137,7 +137,7 @@ trait CValueGenerators extends ArbitraryBigDecimal {
       case (acc, (selector, jv)) => acc.unsafeInsert(selector, jv) 
     }
 
-    if (result != JNothing) result else sys.error("Cannot build object from " + parts)
+    if (result != JNothing || parts.isEmpty) result else sys.error("Cannot build object from " + parts)
   }
 }
 
