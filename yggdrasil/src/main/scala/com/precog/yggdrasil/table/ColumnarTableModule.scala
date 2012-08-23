@@ -4,6 +4,7 @@ package table
 import com.precog.common.{Path, VectorCase}
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.jdbm3._
+import com.precog.yggdrasil.util._
 
 import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
@@ -33,7 +34,7 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 
-trait ColumnarTableModule[M[+_]] extends TableModule[M] {
+trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModule[M] {
   import trans._
   import trans.constants._
 
@@ -999,7 +1000,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
       distinct0(SliceTransform1.identity(None : Option[Slice]), composeSliceTransform(spec))
     }
-
+    
     def drop(n: Long): Table = sys.error("todo")
     
     def take(n: Long): Table = sys.error("todo")
