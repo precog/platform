@@ -431,9 +431,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         }
         
         case ConstLiteral(value, target) =>
-          composeSliceTransform2(target) map {
-            _ filterColumns cf.util.DefinedConst(value)
-          }
+          composeSliceTransform2(target) map { _.definedConst(value) }
 
         case WrapObject(source, field) =>
           composeSliceTransform2(source) map {

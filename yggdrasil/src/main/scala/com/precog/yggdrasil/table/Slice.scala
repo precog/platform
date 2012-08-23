@@ -55,6 +55,8 @@ trait Slice { source =>
   }
 
   lazy val valueColumns: Set[Column] = columns collect { case (ColumnRef(JPath.Identity, _), col) => col } toSet
+  
+  def isDefinedAt(row: Int) = columns.values.exists(_.isDefinedAt(row))
 
   def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
@@ -69,6 +71,49 @@ trait Slice { source =>
     val size = source.size
     val columns = source.columns flatMap {
       case (ref, col) => f(col) map { (ref, _ ) }  
+    }
+  }
+  
+  def definedConst(value: CValue): Slice = new Slice {
+    val size = source.size
+    val columns = {
+      Map(
+        value match {
+          case CString(s) => (ColumnRef(JPath.Identity, CString), new StrColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = s
+          })
+          case CBoolean(b) => (ColumnRef(JPath.Identity, CBoolean), new BoolColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = b
+          })
+          case CLong(l) => (ColumnRef(JPath.Identity, CLong), new LongColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = l
+          })
+          case CDouble(d) => (ColumnRef(JPath.Identity, CDouble), new DoubleColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = d
+          })
+          case CNum(n) => (ColumnRef(JPath.Identity, CNum), new NumColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = n
+          })
+          case CDate(d) => (ColumnRef(JPath.Identity, CDate), new DateColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = d
+          })
+          case CNull => (ColumnRef(JPath.Identity, CNull), new NullColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+          })
+          case CEmptyObject => (ColumnRef(JPath.Identity, CEmptyObject), new EmptyObjectColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+          })
+          case CEmptyArray => (ColumnRef(JPath.Identity, CEmptyArray), new EmptyArrayColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+          })
+        }
+      )
     }
   }
 
