@@ -211,20 +211,38 @@ trait Slice { source =>
     val size = source.size
     val columns = {
       if(size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe))
-        source.columns.filter { case (ColumnRef(path, ctpe), _) => Schema.includes(jtpe, path, ctpe) }
+        source.columns filter {
+          case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe)
+        }
       else
         Map.empty[ColumnRef, Column]
     }
   }
 
   def nest(selectorPrefix: CPath) = new Slice {
+    val arraylessPrefix = CPath(selectorPrefix.nodes map {
+      case CPathArray => CPathIndex(0)
+      case n => n
+    }: _*)
+
     val size = source.size
-    val columns = source.columns map { case (ColumnRef(selector, ctype), v) => ColumnRef(selectorPrefix \ selector, ctype) -> v }
+    val columns = source.columns map { case (ColumnRef(selector, ctype), v) => ColumnRef(arraylessPrefix \ selector, ctype) -> v }
   }
 
   def arraySwap(index: Int) = new Slice {
     val size = source.size
     val columns = source.columns.collect {
+      case (ColumnRef(cPath @ CPath(CPathArray, _*), cType), col: HomogeneousArrayColumn[a]) =>
+        (ColumnRef(cPath, cType), new HomogeneousArrayColumn[a] {
+           val tpe = col.tpe
+           def isDefinedAt(row: Int) = col.isDefinedAt(row)
+           def apply(row: Int) = {
+             val xs = col(row)
+             if (xs.size == 0 || index >= xs.size) xs else {
+               xs.updated(0, xs(index)).updated(index, xs(0))
+             }
+           }
+        })
       case (ColumnRef(CPath(CPathIndex(0), xs @ _*), ctype), col) => 
         (ColumnRef(CPath(CPathIndex(index) +: xs : _*), ctype), col)
 

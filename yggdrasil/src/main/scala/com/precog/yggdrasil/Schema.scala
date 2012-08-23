@@ -87,6 +87,19 @@ object Schema {
 
 
   /**
+   * This is a less-strict version of `includes`. Instead of returning true iff
+   * the `(CPath, CType)` is included in the `JType`, it returns `true` if the
+   * `(CPath, CType)` pair may be required to satisify some requirement of the
+   * `JType`, even if the `(CPath, CType)` may contain more than necessary (eg.
+   * in the case of homogeneous arrays when only need a few elements).
+   */
+  def requiredBy(jtpe: JType, path: CPath, ctpe: CType): Boolean =
+    includes(jtpe, path, ctpe) || ((jtpe, path, ctpe) match {
+      case (JArrayFixedT(elements), CPath(CPathArray, tail @ _*), CArrayType(elemType)) =>
+        elements.values exists (requiredBy(_, CPath(tail: _*), elemType))
+    })
+
+  /**
    * Tests whether the supplied JType includes the supplied CPath and CType.
    *
    * This is strict, so a JArrayFixedT(_) cannot include a CPathArray/CArrayType(_).
