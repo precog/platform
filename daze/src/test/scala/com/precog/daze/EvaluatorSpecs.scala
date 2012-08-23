@@ -380,6 +380,22 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           result must haveSize(5)
         }
       }
+
+      "from the same path (with a relative path)" >> {
+        val line = Line(0, "")
+
+        val input = Join(line, Add, IdentitySort,
+          Join(line, DerefObject, CrossLeftSort, 
+            dag.LoadLocal(line, Root(line, PushString("/heightWeight"))),
+            Root(line, PushString("weight"))),
+          Join(line, DerefObject, CrossLeftSort,
+            dag.LoadLocal(line, Root(line, PushString("/heightWeight"))),
+            Root(line, PushString("height"))))
+
+        testEval(input, Path("/hom")) { result =>
+          result must haveSize(5)
+        }
+      }
     }
 
     "evaluate a binary numeric operation mapped over homogeneous numeric set" >> {
@@ -1156,6 +1172,28 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(7, -2.026315789473684, 0.006024096385542169, 13)
       }
+    }    
+
+    "evaluate matched binary numeric operation dropping undefined result (with relative path)" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Div, IdentitySort,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("/pairs"))),
+          Root(line, PushString("first"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("/pairs"))),
+          Root(line, PushString("second"))))
+        
+      testEval(input, Path("/hom")) { result =>
+        result must haveSize(4)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
+        }
+        
+        result2 must contain(7, -2.026315789473684, 0.006024096385542169, 13)
+      }
     }
     
     "compute the set difference of two sets" in {
@@ -1216,6 +1254,24 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
       testEval(input) { result =>
+        result must haveSize(10)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
+        }
+        
+        result2 must contain(42, 12, 77, 1, 13, 14, -1, 0)
+      }
+    }.pendingUntilFixed    
+
+    "compute the iunion of two homogeneous sets (with relative path)" in {
+      val line = Line(0, "")
+      
+      val input = IUI(line, true,
+        dag.LoadLocal(line, Root(line, PushString("/numbers"))),
+        dag.LoadLocal(line, Root(line, PushString("/numbers3"))))
+        
+      testEval(input, Path("/hom")) { result =>
         result must haveSize(10)
         
         val result2 = result collect {
@@ -1316,6 +1372,26 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             Root(line, PushNum("13"))))
           
         testEval(input) { result =>
+          result must haveSize(2)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(1, 12)
+        }
+      }      
+      
+      "less-than (with relative paths)" >> {
+        val line = Line(0, "")
+        
+        val input = Filter(line, IdentitySort,
+          dag.LoadLocal(line, Root(line, PushString("/numbers"))),
+          Join(line, Lt, CrossLeftSort,
+            dag.LoadLocal(line, Root(line, PushString("/numbers"))),
+            Root(line, PushNum("13"))))
+          
+        testEval(input, Path("/hom")) { result =>
           result must haveSize(2)
           
           val result2 = result collect {
@@ -1464,6 +1540,30 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
           result2 must contain(42, 12, 1)
         }
+      }      
+
+      "and (with relative paths)" >> {
+        val line = Line(0, "")
+        
+        val input = Filter(line, IdentitySort,
+          dag.LoadLocal(line, Root(line, PushString("/numbers"))),
+          Join(line, And, IdentitySort,
+            Join(line, NotEq, CrossLeftSort,
+              dag.LoadLocal(line, Root(line, PushString("/numbers"))),
+              Root(line, PushNum("77"))),
+            Join(line, NotEq, CrossLeftSort,
+              dag.LoadLocal(line, Root(line, PushString("/numbers"))),
+              Root(line, PushNum("13")))))
+          
+        testEval(input, Path("/hom")) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 12, 1)
+        }
       }
       
       "or" >> {
@@ -1543,6 +1643,26 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             Root(line, PushNum("13"))))
           
         testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(12, 1, 13)
+        }
+      }      
+
+      "less-than-equal (with relative path)" >> {
+        val line = Line(0, "")
+        
+        val input = Filter(line, IdentitySort,
+          dag.LoadLocal(line, Root(line, PushString("/numbers"))),
+          Join(line, LtEq, CrossLeftSort,
+            dag.LoadLocal(line, Root(line, PushString("/numbers"))),
+            Root(line, PushNum("13"))))
+          
+        testEval(input, Path("/het")) { result =>
           result must haveSize(3)
           
           val result2 = result collect {
