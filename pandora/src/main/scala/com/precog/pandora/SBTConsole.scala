@@ -41,6 +41,7 @@ import yggdrasil.memoization._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
+import yggdrasil.util._
 
 import com.precog.util.FilesystemFileOps
 

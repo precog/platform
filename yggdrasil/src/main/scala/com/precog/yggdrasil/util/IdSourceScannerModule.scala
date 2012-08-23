@@ -17,13 +17,20 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.daze
+package com.precog.yggdrasil.util
+
+import com.precog.yggdrasil.{ IdSource, YggConfigComponent }
+import com.precog.yggdrasil.table.{ ArrayLongColumn, Column, ColumnarTableModule, CScanner }
 
 import scala.collection.immutable.BitSet
 
-import com.precog.yggdrasil.table._
+trait IdSourceConfig {
+  def idSource: IdSource
+}
 
-trait IdSourceScannerModule[M[+_]] extends Evaluator[M] with ColumnarTableModule[M] {
+trait IdSourceScannerModule[M[+_]] extends ColumnarTableModule[M] with YggConfigComponent {
+  type YggConfig <: IdSourceConfig
+  
   def freshIdScanner = new CScanner {
     type A = Unit
     def init = ()

@@ -26,6 +26,7 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.memoization._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.test._
+import com.precog.yggdrasil.util._
 import com.precog.common.VectorCase
 import com.precog.util.IOUtils
 import com.precog.util.IdGen
