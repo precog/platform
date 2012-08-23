@@ -665,7 +665,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             val SlicePosition(lpos0, lkstate, lkey, lhead, ltail) = leftPosition
             val SlicePosition(rpos0, rkstate, rkey, rhead, rtail) = rightPosition
 
-            val compare = Slice.rowComparator(lkey, rkey) { slice => 
+            val comparator = Slice.rowComparatorFor(lkey, rkey) { slice => 
               // since we've used the key transforms, and since transforms are contracturally
               // forbidden from changing slice size, we can just use all
               slice.columns.keys.toList.sorted
@@ -679,7 +679,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
               if (xrstart != -1) {
                 // We're currently in a cartesian. 
                 if (lpos < lhead.size && rpos < rhead.size) {
-                  compare(lpos, rpos) match {
+                  comparator.compare(lpos, rpos) match {
                     case LT => 
                       buildRemappings(lpos + 1, xrstart, xrstart, rpos, endRight)
                     case GT => 
@@ -709,7 +709,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
               } else {
                 // not currently in a cartesian, hence we can simply proceed.
                 if (lpos < lhead.size && rpos < rhead.size) {
-                  compare(lpos, rpos) match {
+                  comparator.compare(lpos, rpos) match {
                     case LT => 
                       ibufs.advanceLeft(lpos)
                       buildRemappings(lpos + 1, rpos, Reset, Reset, endRight)
