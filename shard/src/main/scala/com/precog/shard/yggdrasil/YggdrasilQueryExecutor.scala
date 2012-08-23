@@ -2,7 +2,6 @@ package com.precog
 package shard
 package yggdrasil 
 
-import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 
 import daze._
@@ -10,6 +9,7 @@ import daze._
 import muspelheim.ParseEvalStack
 
 import com.precog.common._
+import com.precog.common.json._
 import com.precog.common.security._
 
 import com.precog.yggdrasil._
@@ -144,7 +144,7 @@ trait YggdrasilQueryExecutor
   }
 
   def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = {
-    val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, JPath(""))
+    val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, CPath(""))
 
     def transform(children: Set[PathMetadata]): JObject = {
       // Rewrite with collect or fold?
