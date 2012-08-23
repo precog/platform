@@ -85,8 +85,11 @@ object Schema {
     (primitives ++ array ++ obj).reduceOption(JUnionT)
   }
 
+
   /**
    * Tests whether the supplied JType includes the supplied CPath and CType.
+   *
+   * This is strict, so a JArrayFixedT(_) cannot include a CPathArray/CArrayType(_).
    */
   def includes(jtpe: JType, path: CPath, ctpe: CType): Boolean = (jtpe, (path, ctpe)) match {
     case (JNumberT, (CPath.Identity, CLong | CDouble | CNum)) => true
@@ -104,26 +107,20 @@ object Schema {
       fields.get(head).map(includes(_, CPath(tail: _*), ctpe)).getOrElse(false)
 
     case (JArrayUnfixedT, (CPath.Identity, CEmptyArray)) => true
-    case (JArrayUnfixedT, (CPath.Identity, CArrayType(_))) => true
+    case (JArrayUnfixedT, (CPath(CPathArray, _*), CArrayType(_))) => true
     case (JArrayUnfixedT, (CPath(CPathIndex(_), _*), _)) => true
     case (JArrayFixedT(elements), (CPath.Identity, CEmptyArray)) if elements.isEmpty => true
     case (JArrayFixedT(elements), (CPath(CPathIndex(i), tail @ _*), ctpe)) =>
       elements.get(i).map(includes(_, CPath(tail: _*), ctpe)).getOrElse(false)
-    case (JArrayHomogeneousT(jElemType), (CPath.Identity, CArrayType(cElemType))) =>
+    case (JArrayHomogeneousT(jElemType), (CPath(CPathArray, _*), CArrayType(cElemType))) =>
       fromCValueType(cElemType) == jElemType
 
     // TODO This is a bit contentious, as this situation will need to be dealt
     // with at a higher level if we let parts of a heterogeneous array fall
     // through, posing as a homogeneous array. Especially since, eg, someone
     // should be expecting that if a[1] exists, therefore a[0] exists.
-    case (JArrayHomogeneousT(jElemType), (CPath(CPathIndex(i), tail @ _*), ctpe: CValueType[_])) =>
-      fromCValueType(ctpe) == jElemType
-
-    // TODO This isn't really true and we can never know for sure that it is.
-    // Commented out for now, but need to investigate if a valid use-case for
-    // this may actually happen; ie. someone wants an array.
-    //case (JArrayFixedT(elements), (CPath.Identity, CArrayType(elemType))) =>
-    //  elements.values forall (includes(_, CPath.Identity, elemType))
+    case (JArrayHomogeneousT(jElemType), (CPath(CPathIndex(i), tail @ _*), ctpe)) =>
+      ctypes(jElemType) contains ctpe
 
     case (JUnionT(ljtpe, rjtpe), (path, ctpe)) => includes(ljtpe, path, ctpe) || includes(rjtpe, path, ctpe)
 
@@ -165,6 +162,7 @@ object Schema {
 
     case JArrayUnfixedT if ctpes.contains(CPath.Identity, CEmptyArray) => true
     case JArrayUnfixedT => ctpes.exists {
+      case (CPath(CPathArray, _*), _) => true
       case (CPath(CPathIndex(_), _*), _) => true
       case _ => false
     }
@@ -173,13 +171,14 @@ object Schema {
       indices.forall { i =>
         subsumes(
           ctpes.collect {
+            case (CPath(CPathArray, tail @ _*), CArrayType(elemType)) => (CPath(tail: _*), elemType)
             case (CPath(CPathIndex(`i`), tail @ _*), ctpe) => (CPath(tail : _*), ctpe)
           }, elements(i))
       }
     }
     case JArrayHomogeneousT(jElemType) => ctpes.exists {
-      case (CPath.Identity, CArrayType(cElemType)) =>
-        fromCValueType(cElemType) == jElemType
+      case (CPath(CPathArray, _*), CArrayType(cElemType)) =>
+        ctypes(jElemType) contains cElemType
       case _ => false
     }
 
