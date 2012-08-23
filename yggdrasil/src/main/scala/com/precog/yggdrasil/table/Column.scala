@@ -222,9 +222,11 @@ object Column {
     case CNum(v)      => const(v)
     case CString(v)   => const(v)
     case CDate(v)     => const(v)
-    case CEmptyObject => new InfiniteColumn with EmptyObjectColumn 
-    case CEmptyArray  => new InfiniteColumn with EmptyArrayColumn 
-    case CNull        => new InfiniteColumn with NullColumn 
+    case CArray(v, CArrayType(elemType)) => const(v)(elemType)
+    case CEmptyObject => new InfiniteColumn with EmptyObjectColumn
+    case CEmptyArray  => new InfiniteColumn with EmptyArrayColumn
+    case CNull        => new InfiniteColumn with NullColumn
+    case CUndefined => sys.error("Cannot construct constant column from CUndefined.")
   }
 
   @inline def const(v: Boolean) = new InfiniteColumn with BoolColumn {
@@ -249,6 +251,45 @@ object Column {
 
   @inline def const(v: DateTime) = new InfiniteColumn with DateColumn {
     def apply(row: Int) = v
+  }
+
+  @inline def const[A: CValueType](v: IndexedSeq[A]) = new InfiniteColumn with HomogeneousArrayColumn[A] {
+    val tpe = CArrayType(CValueType[A])
+    def apply(row: Int) = v
+  }
+
+  def lift(col: Column): HomogeneousArrayColumn[_] = col match {
+    case col: BoolColumn => new HomogeneousArrayColumn[Boolean] {
+      val tpe = CArrayType(CBoolean)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Vector(col(row))
+    }
+    case col: LongColumn => new HomogeneousArrayColumn[Long] {
+      val tpe = CArrayType(CLong)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Vector(col(row))
+    }
+    case col: NumColumn => new HomogeneousArrayColumn[BigDecimal] {
+      val tpe = CArrayType(CNum)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Vector(col(row))
+    }
+    case col: StrColumn => new HomogeneousArrayColumn[String] {
+      val tpe = CArrayType(CString)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Vector(col(row))
+    }
+    case col: DateColumn => new HomogeneousArrayColumn[DateTime] {
+      val tpe = CArrayType(CDate)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Vector(col(row))
+    }
+    case col: HomogeneousArrayColumn[a] => new HomogeneousArrayColumn[IndexedSeq[a]] {
+      val tpe = CArrayType(col.tpe)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int): IndexedSeq[IndexedSeq[a]] = Vector(col(row))
+    }
+    case _ => sys.error("Cannot lift non-value column.")
   }
 
   object unionRightSemigroup extends Semigroup[Column] {
