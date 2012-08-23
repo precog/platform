@@ -23,7 +23,10 @@ package table
 import util.CPathUtils
 
 import com.precog.common.VectorCase
-import com.precog.bytecode.JType
+import com.precog.bytecode.{ JType, JUnionT, JPrimitiveType }
+import com.precog.bytecode.{ JNumberT, JTextT, JBooleanT }
+import com.precog.bytecode.{ JArrayHomogeneousT, JArrayFixedT, JArrayUnfixedT }
+import com.precog.bytecode.{ JObjectFixedT, JObjectUnfixedT }
 
 import com.precog.common.json._
 
@@ -49,6 +52,11 @@ trait Slice { source =>
   def columns: Map[ColumnRef, Column]
 
   def logicalColumns: JType => Set[Column] = { jtpe =>
+    // TODO Use a flatMap and:
+    // If ColumnRef(_, CArrayType(_)) and jType has a JArrayFixedT of this type,
+    //   then we need to map these to multiple columns.
+    // Else if Schema.includes(...), then return List(col).
+    // Otherwise return Nil.
     columns collect {
       case (ColumnRef(jpath, ctype), col) if Schema.includes(jtpe, jpath, ctype) => col
     } toSet
@@ -74,16 +82,38 @@ trait Slice { source =>
 
   def deref(node: CPathNode): Slice = new Slice {
     val size = source.size
-    val columns = source.columns.collect {
-      // case (ColumnRef(CPath(`node` :: rest), ctype), col) => (ColumnRef(CPath(rest), ctype), col) // TODO: why won't this work?
-      case (ColumnRef(CPath(`node`, xs @ _*), ctype), col) => (ColumnRef(CPath(xs: _*), ctype), col)
+    val columns = node match {
+      case CPathIndex(i) => source.columns collect {
+        case (ColumnRef(CPath(CPathArray, xs @ _*), CArrayType(elemType)), col: HomogeneousArrayColumn[_]) =>
+          (ColumnRef(CPath(xs: _*), elemType), col.select(i))
+
+        case (ColumnRef(CPath(CPathIndex(`i`), xs @ _*), ctype), col) =>
+          (ColumnRef(CPath(xs: _*), ctype), col)
+      }
+
+      case _ => source.columns collect {
+        case (ColumnRef(CPath(`node`, xs @ _*), ctype), col) =>
+          (ColumnRef(CPath(xs: _*), ctype), col)
+      }
     }
   }
 
   def wrap(wrapper: CPathNode): Slice = new Slice {
     val size = source.size
-    val columns = source.columns.map {
-      case (ColumnRef(CPath(nodes @ _*), ctype), col) => (ColumnRef(CPath(wrapper +: nodes : _*), ctype), col)
+
+    // TODO This is a little weird; CPathArray actually wraps in CPathIndex(0).
+    // Unfortunately, CArrayType(_) cannot wrap CNullTypes, so we can't just
+    // arbitrarily wrap everything in a CPathArray.
+
+    val columns = wrapper match {
+      case CPathArray => source.columns map {
+        case (ColumnRef(CPath(nodes @ _*), ctype), col) =>
+          (ColumnRef(CPath(CPathIndex(0) +: nodes : _*), ctype), col)
+      }
+      case _ => source.columns map {
+        case (ColumnRef(CPath(nodes @ _*), ctype), col) =>
+          (ColumnRef(CPath(wrapper +: nodes : _*), ctype), col)
+      }
     }
   }
 
@@ -109,13 +139,62 @@ trait Slice { source =>
           (arrayPaths0, acc + (ColumnRef(CPath(nodes: _*), ctype) -> col))
       }._2
     }
-    
-    val size = source.size
-    val columns = fixArrays(
-      source.columns.filterNot {
-        case (ColumnRef(selector, ctype), _) => Schema.includes(jtype, selector, ctype)
+
+    // Used for homogeneous arrays. Constructs a function, suitable for use in a
+    // flatMap, that will modify the homogeneous array according to `jType`.
+    //
+    def flattenDeleteTree[A](jType: JType, cType: CValueType[A], cPath: CPath): A => Option[A] = {
+      val delete: A => Option[A] = _ => None
+      val retain: A => Option[A] = Some(_)
+
+      (jType, cType, cPath) match {
+        case (JUnionT(aJType, bJType), _, _) =>
+          flattenDeleteTree(aJType, cType, cPath) andThen (_ flatMap flattenDeleteTree(bJType, cType, cPath))
+        case (JTextT, CString, CPath.Identity) =>
+          delete
+        case (JBooleanT, CBoolean, CPath.Identity) =>
+          delete
+        case (JNumberT, CLong | CDouble | CNum, CPath.Identity) =>
+          delete
+        case (JObjectUnfixedT, _, CPath(CPathField(_), _*)) =>
+          delete
+        case (JObjectFixedT(fields), _, CPath(CPathField(name), cPath @ _*)) =>
+          fields get name map (flattenDeleteTree(_, cType, CPath(cPath: _*))) getOrElse(retain)
+        case (JArrayUnfixedT, _, CPath(CPathArray | CPathIndex(_), _*)) =>
+          delete
+        case (JArrayFixedT(elems), cType, CPath(CPathIndex(i), cPath @ _*)) =>
+          elems get i map (flattenDeleteTree(_, cType, CPath(cPath: _*))) getOrElse (retain)
+        case (JArrayFixedT(elems), CArrayType(cElemType), CPath(CPathArray, cPath @ _*)) =>
+          val mappers = elems mapValues (flattenDeleteTree(_, cElemType, CPath(cPath: _*)))
+          xs => Some(xs.zipWithIndex map { case (x, j) =>
+            mappers get j match {
+              case Some(f) => f(x)
+              case None => x
+            }
+          })
+        case (JArrayHomogeneousT(jType), CArrayType(cType), CPath(CPathArray, _*)) if Schema.ctypes(jType)(cType) =>
+          delete
+        case _ =>
+          retain
       }
-    )
+    }
+
+    val size = source.size
+    val columns = fixArrays(source.columns flatMap {
+      case (ColumnRef(cpath, ctype), _) if Schema.includes(jtype, cpath, ctype) =>
+        None
+
+      case (ref @ ColumnRef(cpath, ctype: CArrayType[a]), col: HomogeneousArrayColumn[_]) if ctype == col.tpe =>
+        val trans = flattenDeleteTree(jtype, ctype, cpath)
+        Some((ref, new HomogeneousArrayColumn[a] {
+          val tpe = ctype
+          def isDefinedAt(row: Int) = col.isDefinedAt(row)
+          def apply(row: Int): IndexedSeq[a] = trans(col(row).asInstanceOf[IndexedSeq[a]]) getOrElse sys.error("Oh dear, this cannot be happening to me.")
+        }))
+
+      case (ref, col) =>
+        Some((ref, col))
+    })
   }
 
   def deleteFields(prefixes: scala.collection.Set[CPathField]) = {
