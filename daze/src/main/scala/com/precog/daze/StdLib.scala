@@ -141,17 +141,12 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
             }
 
             def extract(r: Result): Table = {
+              import trans._
+              
               val left = x.extract(r._1)
               val right = acc.extract(r._2)
-              table(Apply[({ type λ[α] = StreamT[M, α] })#λ].zip.zip(left.slices, right.slices) map { 
-                case (sl, sr) => new Slice { 
-                  val size = sl.size max sr.size
-                  val columns = {
-                    (sl.columns map { case (ColumnRef(jpath, ctype), col) => (ColumnRef(JPathIndex(0) \ jpath, ctype) -> col) }) ++ 
-                    (sr.columns collect { case (ColumnRef(JPath(JPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(JPath(JPathIndex(j + 1) +: xs: _*), ctype) -> col) })
-                  }
-                }
-              })
+              
+              left.cross(right)(ArrayConcat(WrapArray(Leaf(SourceLeft)), Leaf(SourceRight)))
             }
 
             val namespace = Vector()
