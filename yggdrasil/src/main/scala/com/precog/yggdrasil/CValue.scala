@@ -349,7 +349,7 @@ case class CLong(value: Long) extends CNumericValue[Long] {
 case object CLong extends CNumericType[Long](FixedWidth(8)) {
   def readResolve() = CLong
   def order(v1: Long, v2: Long) = longInstance.order(v1, v2)
-  def jvalueFor(v: Long) = JNum(BigDecimal(v, MathContext.UNLIMITED))
+  def jValueFor(v: Long): JValue = JNum(BigDecimal(v, MathContext.UNLIMITED))
   def bigDecimalFor(v: Long) = BigDecimal(v, MathContext.UNLIMITED)
 }
 
@@ -360,7 +360,7 @@ case class CDouble(value: Double) extends CNumericValue[Double] {
 case object CDouble extends CNumericType[Double](FixedWidth(8)) {
   def readResolve() = CDouble
   def order(v1: Double, v2: Double) = doubleInstance.order(v1, v2)
-  def jvalueFor(v: Double) = JNum(BigDecimal(v.toString, MathContext.UNLIMITED))
+  def jValueFor(v: Double) = JNum(BigDecimal(v.toString, MathContext.UNLIMITED))
   def bigDecimalFor(v: Double) = BigDecimal(v, MathContext.UNLIMITED)
 }
 

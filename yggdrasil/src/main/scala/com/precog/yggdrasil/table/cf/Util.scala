@@ -66,6 +66,16 @@ object util {
       } 
     }
 
+    case (c1: HomogeneousArrayColumn[a], _c2: HomogeneousArrayColumn[_]) if c1.tpe == _c2.tpe =>
+      val c2 = _c2.asInstanceOf[HomogeneousArrayColumn[a]]
+      new UnionColumn(c1, c2) with HomogeneousArrayColumn[a] { 
+        val tpe = c1.tpe
+        def apply(row: Int) = {
+          if (c2.isDefinedAt(row)) c2(row) else if (c1.isDefinedAt(row)) c1(row) else sys.error("Attempt to retrieve undefined value for row: " + row)
+        } 
+      }
+
+
     case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => new UnionColumn(c1, c2) with EmptyArrayColumn
     case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => new UnionColumn(c1, c2) with EmptyObjectColumn
     case (c1: NullColumn, c2: NullColumn) => new UnionColumn(c1, c2) with NullColumn
@@ -95,6 +105,13 @@ object util {
     case (c1: DateColumn, c2: DateColumn) => new ConcatColumn(at, c1, c2) with DateColumn { 
       def apply(row: Int) = if (row < at) c1(row) else c2(row - at)
     }
+
+    case (c1: HomogeneousArrayColumn[a], _c2: HomogeneousArrayColumn[_]) if c1.tpe == _c2.tpe =>
+      val c2 = _c2.asInstanceOf[HomogeneousArrayColumn[a]]
+      new ConcatColumn(at, c1, c2) with HomogeneousArrayColumn[a] {
+        val tpe = c1.tpe
+        def apply(row: Int) = if (row < at) c1(row) else c2(row - at)
+      }
 
     case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => new ConcatColumn(at, c1, c2) with EmptyArrayColumn
     case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => new ConcatColumn(at, c1, c2) with EmptyObjectColumn
@@ -126,6 +143,11 @@ object util {
       def apply(row: Int) = c(row - by)
     }
 
+    case c: HomogeneousArrayColumn[a] => new ShiftColumn(by, c) with HomogeneousArrayColumn[a] { 
+      val tpe = c.tpe
+      def apply(row: Int) = c(row - by)
+    }
+
     case c: EmptyArrayColumn => new ShiftColumn(by, c) with EmptyArrayColumn
     case c: EmptyObjectColumn => new ShiftColumn(by, c) with EmptyObjectColumn
     case c: NullColumn => new ShiftColumn(by, c) with NullColumn
@@ -138,6 +160,10 @@ object util {
     case c: NumColumn    => new SparsenColumn(c, idx, toSize) with NumColumn { def apply(row: Int) = c(remap(row)) }
     case c: StrColumn    => new SparsenColumn(c, idx, toSize) with StrColumn { def apply(row: Int) = c(remap(row)) }
     case c: DateColumn   => new SparsenColumn(c, idx, toSize) with DateColumn { def apply(row: Int) = c(remap(row)) }
+    case c: HomogeneousArrayColumn[a] => new SparsenColumn(c, idx, toSize) with HomogeneousArrayColumn[a] {
+      val tpe = c.tpe
+      def apply(row: Int) = c(remap(row))
+    }
 
     case c: EmptyArrayColumn  => new SparsenColumn(c, idx, toSize) with EmptyArrayColumn
     case c: EmptyObjectColumn => new SparsenColumn(c, idx, toSize) with EmptyObjectColumn
@@ -151,6 +177,10 @@ object util {
     case c: NumColumn    => new RemapColumn(c, f) with NumColumn { def apply(row: Int) = c(f(row)) }
     case c: StrColumn    => new RemapColumn(c, f) with StrColumn { def apply(row: Int) = c(f(row)) }
     case c: DateColumn   => new RemapColumn(c, f) with DateColumn { def apply(row: Int) = c(f(row)) }
+    case c: HomogeneousArrayColumn[a] => new RemapColumn(c, f) with HomogeneousArrayColumn[a] {
+      val tpe = c.tpe
+      def apply(row: Int) = c(f(row))
+    }
 
     case c: EmptyArrayColumn  => new RemapColumn(c, f) with EmptyArrayColumn
     case c: EmptyObjectColumn => new RemapColumn(c, f) with EmptyObjectColumn
@@ -168,6 +198,12 @@ object util {
     case c: NumColumn    => new BitsetColumn(definedAt & c.definedAt(from, to)) with NumColumn { def apply(row: Int) = c(row) }
     case c: StrColumn    => new BitsetColumn(definedAt & c.definedAt(from, to)) with StrColumn { def apply(row: Int) = c(row) }
     case c: DateColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with DateColumn { def apply(row: Int) = c(row) }
+    case c: HomogeneousArrayColumn[a] =>
+      new BitsetColumn(definedAt & c.definedAt(from, to)) with HomogeneousArrayColumn[a] {
+        val tpe = c.tpe
+        def apply(row: Int) = c(row)
+      }
+
 
     case c: EmptyArrayColumn  => new BitsetColumn(definedAt & c.definedAt(from, to)) with EmptyArrayColumn
     case c: EmptyObjectColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with EmptyObjectColumn
@@ -207,7 +243,11 @@ object util {
       def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
       def apply(row: Int) = c(row)
     }
-
+    case c: HomogeneousArrayColumn[a] => new HomogeneousArrayColumn[a] {
+      val tpe = c.tpe
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
+      def apply(row: Int) = c(row)
+    }
     case c: EmptyArrayColumn  => new EmptyArrayColumn {
       def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
     }
@@ -246,6 +286,11 @@ object util {
           case CDate(d) => new DateColumn {
             def isDefinedAt(row: Int) = c.isDefinedAt(row)
             def apply(row: Int) = d
+          }
+          case value: CArray[a] => new HomogeneousArrayColumn[a] {
+            val tpe = value.cType
+            def isDefinedAt(row: Int) = c.isDefinedAt(row)
+            def apply(row: Int) = value.value
           }
           case CNull => new NullColumn {
             def isDefinedAt(row: Int) = c.isDefinedAt(row)
