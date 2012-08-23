@@ -702,9 +702,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                     case LT => 
                       buildRemappings(lpos + 1, xrstart, xrstart, rpos, endRight)
                     case GT => 
-                      // this will miss catching input-out-of-order errors, but we know that the right must
-                      // be advanced fully within the 'EQ' state before we get here, so we can just
-                      // increment the right by 1
+                      // catch input-out-of-order errors early
+                      if (xrend == -1) sys.error("Inputs are not sorted; value on the left exceeded value on the right at the end of equal span.")
                       buildRemappings(lpos, xrend, Reset, Reset, endRight)
                     case EQ => 
                       ibufs.advanceBoth(lpos, rpos)
