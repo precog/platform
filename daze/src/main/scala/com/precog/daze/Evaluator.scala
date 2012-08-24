@@ -476,14 +476,20 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {  //TODO the problem is here
-          println("JOIN CASE REACHED")
+        //case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {  //TODO the problem is here
+        //  println("JOIN CASE REACHED")
+        //  for {
+        //    pendingTable <- loop(left, splits)
+        //  } yield {
+        //    val trans2 = TableTransSpec.makeTransSpec(Map(paths.Value -> trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), false)))
+        //    PendingTable(pendingTable.table, pendingTable.graph, trans2)
+        //  }
+        //}
+        
+        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
           for {
             pendingTable <- loop(left, splits)
-          } yield {
-            val trans2 = TableTransSpec.makeTransSpec(Map(paths.Value -> trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), false)))
-            PendingTable(pendingTable.table, pendingTable.graph, trans2)
-          }
+          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), false))
         }
         
         case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
@@ -652,6 +658,13 @@ trait Evaluator[M[+_]] extends DAG
             pendingTableBoolean <- loop(boolean, splits)
           } yield {
             if (pendingTableTarget.graph == pendingTableBoolean.graph) {
+              println("pendingTableTarget.table: %s\n".format(pendingTableTarget.table))
+              println("pendingTableTarget.trans: %s\n".format(pendingTableTarget.trans))
+              println("target: %s\n".format(target))
+              println("pendingTableBoolean.table: %s\n".format(pendingTableBoolean.table))
+              println("pendingTableBoolean.trans: %s\n".format(pendingTableBoolean.trans))
+              println("boolean: %s\n".format(boolean))
+
               PendingTable(pendingTableTarget.table, pendingTableTarget.graph, trans.Filter(pendingTableTarget.trans, pendingTableBoolean.trans))
             }
             else {
@@ -675,17 +688,18 @@ trait Evaluator[M[+_]] extends DAG
               val spec = buildWrappedJoinSpec(sharedPrefixLength(target, boolean), target.identities.length, boolean.identities.length) { (srcLeft, srcRight) =>
                 trans.Filter(srcLeft, srcRight)
               }
-              
+
               val result = for {
                 parentTargetTable <- pendingTableTarget.table 
-                val targetResult = parentTargetTable.transform(pendingTableTarget.trans)
+                val targetResult = parentTargetTable.transform(liftToValues(pendingTableTarget.trans))
                 
                 parentBooleanTable <- pendingTableBoolean.table
-                val booleanResult = parentBooleanTable.transform(pendingTableBoolean.trans)
+                val booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
               } yield {
                 println("targetResult: %s\n booleanResult: %s\n".format(targetResult, booleanResult))
                 join(targetResult, booleanResult)(key, spec)
               }
+
 
               println("result from Filter node in Evaluator: %s\n".format(result))
               println("spec from Filter node in Evaluator: %s\n".format(spec))
