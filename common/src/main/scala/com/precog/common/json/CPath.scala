@@ -145,9 +145,12 @@ object CPathNode {
   implicit object CPathNodeOrder extends Order[CPathNode] {
     def order(n1: CPathNode, n2: CPathNode): Ordering = (n1, n2) match {
       case (CPathField(s1), CPathField(s2)) => Ordering.fromInt(s1.compare(s2))
-      case (CPathField(_) , _             ) => GT
-      case (CPathIndex(i1), CPathIndex(i2)) => Ordering.fromInt(i1.compare(i2))
-      case (CPathIndex(_) , _             ) => LT
+      case (CPathField(_) , _) => GT
+      case (CPathIndex(i1), CPathIndex(i2)) => if (i1 < i2) LT else if (i1 == i2) EQ else GT
+      case (CPathIndex(_) , CPathField(_)) => LT
+      case (CPathArray, CPathArray) => EQ
+      case (_, CPathArray) => GT
+      case (CPathArray, _) => LT
     }
   }
 
@@ -182,7 +185,7 @@ object CPath extends CPathSerialization {
 
   private[this] case class CompositeCPath(nodes: List[CPathNode]) extends CPath 
 
-  private val PathPattern  = """\.|(?=\[\d+\])""".r
+  private val PathPattern  = """\.|(?=\[\d+\])|(?=\[\*\])""".r
   private val IndexPattern = """^\[(\d+)\]$""".r
 
   val Identity = apply()
@@ -212,6 +215,7 @@ object CPath extends CPathSerialization {
         if (head.trim.length == 0) parse0(tail, acc)
         else parse0(tail,
           (head match {
+            case "[*]" => CPathArray
             case IndexPattern(index) => CPathIndex(index.toInt)
 
             case name => CPathField(name)
