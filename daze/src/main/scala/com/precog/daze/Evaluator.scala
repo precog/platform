@@ -278,7 +278,10 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pendingTable <- loop(parent, splits)
             val back = pendingTable.table flatMap { table => mor(table.transform(pendingTable.trans)) }
-          } yield PendingTable(back, graph, TransSpec1.Id)
+          } yield {
+            println("result from Morph1 node in Evaluator: %s\n".format(back))
+            PendingTable(back, graph, TransSpec1.Id)
+          }
         }
         
         case dag.Morph2(_, mor, left, right) => {
@@ -473,10 +476,14 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
+        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {  //TODO the problem is here
+          println("JOIN CASE REACHED")
           for {
             pendingTable <- loop(left, splits)
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), false))
+          } yield {
+            val trans2 = TableTransSpec.makeTransSpec(Map(paths.Value -> trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), false)))
+            PendingTable(pendingTable.table, pendingTable.graph, trans2)
+          }
         }
         
         case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
@@ -648,6 +655,13 @@ trait Evaluator[M[+_]] extends DAG
               PendingTable(pendingTableTarget.table, pendingTableTarget.graph, trans.Filter(pendingTableTarget.trans, pendingTableBoolean.trans))
             }
             else {
+              println("pendingTableTarget.table: %s\n".format(pendingTableTarget.table))
+              println("pendingTableTarget.trans: %s\n".format(pendingTableTarget.trans))
+              println("target: %s\n".format(target))
+              println("pendingTableBoolean.table: %s\n".format(pendingTableBoolean.table))
+              println("pendingTableBoolean.trans: %s\n".format(pendingTableBoolean.trans))
+              println("boolean: %s\n".format(boolean))
+
               val key = joinSort match {
                 case IdentitySort =>
                   trans.DerefObjectStatic(Leaf(Source), paths.Key)
@@ -658,8 +672,6 @@ trait Evaluator[M[+_]] extends DAG
                 case _ => sys.error("unreachable code")
               }
 
-              println("sharedPrefixLength: %s \n".format(sharedPrefixLength(target, boolean)))
-              
               val spec = buildWrappedJoinSpec(sharedPrefixLength(target, boolean), target.identities.length, boolean.identities.length) { (srcLeft, srcRight) =>
                 trans.Filter(srcLeft, srcRight)
               }
@@ -670,7 +682,13 @@ trait Evaluator[M[+_]] extends DAG
                 
                 parentBooleanTable <- pendingTableBoolean.table
                 val booleanResult = parentBooleanTable.transform(pendingTableBoolean.trans)
-              } yield join(targetResult, booleanResult)(key, spec)
+              } yield {
+                println("targetResult: %s\n booleanResult: %s\n".format(targetResult, booleanResult))
+                join(targetResult, booleanResult)(key, spec)
+              }
+
+              println("result from Filter node in Evaluator: %s\n".format(result))
+              println("spec from Filter node in Evaluator: %s\n".format(spec))
 
               PendingTable(result, graph, TransSpec1.Id)
             }

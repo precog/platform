@@ -839,6 +839,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
   object DenseRank extends Morphism1(StatsNamespace, "denseRank") {
     val tpe = UnaryOperationType(JNumberT, JNumberT)
+    override val retainIds = true
 
     def rankScanner: CScanner = {
       new CScanner {
@@ -912,6 +913,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
   object Rank extends Morphism1(StatsNamespace, "rank") {  //TODO what happens across slices??
     val tpe = UnaryOperationType(JNumberT, JNumberT)
+    override val retainIds = true
     
     def rankScanner: CScanner = {
       new CScanner {
@@ -951,8 +953,8 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     }
     
     def apply(table: Table) = {
-      val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
-      val sortedTable = table.sort(sortKey, SortAscending)
+      val sortByValue = DerefObjectStatic(Leaf(Source), paths.Value)
+      val sortedTable = table.sort(sortByValue, SortAscending)
 
       println("sortedTable: %s".format(sortedTable))
 
@@ -961,9 +963,13 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       val transScan = TableTransSpec.makeTransSpec(
         Map(paths.Value -> Scan(Typed(Leaf(Source), JNumberT), rankScanner)))
       
-      val result = sortedTable.map(_.transform(transScan))
-      println("result of apply: %s".format(result))
-      result
+      val result: M[Table] = sortedTable.map(_.transform(ObjectDelete(transScan, Set(paths.SortKey))))
+
+      val sortByKey = DerefObjectStatic(Leaf(Source), paths.Key)
+      val result2 = result flatMap { _.sort(sortByKey, SortAscending) }
+
+      println("result of apply: %s".format(result2))
+      result2
     }
 
 

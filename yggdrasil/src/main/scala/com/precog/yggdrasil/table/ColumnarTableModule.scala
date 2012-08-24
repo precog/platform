@@ -405,7 +405,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
             (b: BoolColumn) => b
           }
 
-          val transform: (BoolColumn => BoolColumn)  = if (invert) comp else boolId
+          def transform: (BoolColumn => BoolColumn)  = if (invert) comp else boolId
 
           sourceSlice map { ss =>
             new Slice {
