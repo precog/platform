@@ -97,6 +97,7 @@ object Schema {
     includes(jtpe, path, ctpe) || ((jtpe, path, ctpe) match {
       case (JArrayFixedT(elements), CPath(CPathArray, tail @ _*), CArrayType(elemType)) =>
         elements.values exists (requiredBy(_, CPath(tail: _*), elemType))
+      case _ => false
     })
 
   /**
