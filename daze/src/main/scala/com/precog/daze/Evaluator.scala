@@ -277,7 +277,7 @@ trait Evaluator[M[+_]] extends DAG
         case dag.Morph1(_, mor, parent) => {
           for {
             pendingTable <- loop(parent, splits)
-            val back = pendingTable.table flatMap { table => mor(table.transform(pendingTable.trans)) }
+            val back = pendingTable.table flatMap { table => mor(table.transform(liftToValues(pendingTable.trans))) }
           } yield {
             println("result from Morph1 node in Evaluator: %s\n".format(back))
             PendingTable(back, graph, TransSpec1.Id)
@@ -412,8 +412,8 @@ trait Evaluator[M[+_]] extends DAG
             val result = for {
               leftPendingTable <- leftPending.table
               rightPendingTable <- rightPending.table
-              val leftTable = leftPendingTable.transform(leftPending.trans)
-              val rightTable = rightPendingTable.transform(rightPending.trans)
+              val leftTable = leftPendingTable.transform(liftToValues(leftPending.trans))
+              val rightTable = rightPendingTable.transform(liftToValues(rightPending.trans))
               leftSorted <- ctx.memoizationContext.sort(leftTable, TransSpec1.Id, SortAscending, left.memoId)
               rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
             } yield {
@@ -450,8 +450,8 @@ trait Evaluator[M[+_]] extends DAG
             val result = for {
               leftPendingTable <- leftPending.table
               rightPendingTable <- rightPending.table
-              val leftTable = leftPendingTable.transform(leftPending.trans)
-              val rightTable = rightPendingTable.transform(rightPending.trans)
+              val leftTable = leftPendingTable.transform(liftToValues(leftPending.trans))
+              val rightTable = rightPendingTable.transform(liftToValues(rightPending.trans))
               leftSorted <- ctx.memoizationContext.sort(leftTable, TransSpec1.Id, SortAscending, left.memoId)
               rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
             } yield {
@@ -475,16 +475,6 @@ trait Evaluator[M[+_]] extends DAG
             PendingTable(result, graph, TransSpec1.Id)
           }
         }
-        
-        //case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {  //TODO the problem is here
-        //  println("JOIN CASE REACHED")
-        //  for {
-        //    pendingTable <- loop(left, splits)
-        //  } yield {
-        //    val trans2 = TableTransSpec.makeTransSpec(Map(paths.Value -> trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), false)))
-        //    PendingTable(pendingTable.table, pendingTable.graph, trans2)
-        //  }
-        //}
         
         case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
           for {
@@ -614,10 +604,10 @@ trait Evaluator[M[+_]] extends DAG
 
               val result = for {
                 parentLeftTable <- pendingTableLeft.table 
-                val leftResult = parentLeftTable.transform(pendingTableLeft.trans)
+                val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
                 
                 parentRightTable <- pendingTableRight.table 
-                val rightResult = parentRightTable.transform(pendingTableRight.trans)
+                val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
 
               } yield join(leftResult, rightResult)(key, spec)
 
@@ -635,10 +625,10 @@ trait Evaluator[M[+_]] extends DAG
           } yield {
             val result = for {
               parentLeftTable <- pendingTableLeft.table 
-              val leftResult = parentLeftTable.transform(pendingTableLeft.trans)
+              val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
               
               parentRightTable <- pendingTableRight.table 
-              val rightResult = parentRightTable.transform(pendingTableRight.trans)
+              val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
             } yield {
               if (isLeft)
                 leftResult.cross(rightResult)(buildWrappedCrossSpec(transFromBinOp(op)))
@@ -724,10 +714,10 @@ trait Evaluator[M[+_]] extends DAG
           } yield {
             val result = for {
               parentTargetTable <- pendingTableTarget.table 
-              val targetResult = parentTargetTable.transform(pendingTableTarget.trans)
+              val targetResult = parentTargetTable.transform(liftToValues(pendingTableTarget.trans))
               
               parentBooleanTable <- pendingTableBoolean.table
-              val booleanResult = parentBooleanTable.transform(pendingTableBoolean.trans)
+              val booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
             } yield {
               if (isLeft) {
                 val spec = buildWrappedCrossSpec { (srcLeft, srcRight) =>
