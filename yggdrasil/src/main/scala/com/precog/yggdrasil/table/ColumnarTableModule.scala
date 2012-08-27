@@ -1077,7 +1077,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           MergeEdge(l, r, sharedKey)
         })(collection.breakOut)
 
-        val intersectionSubtrees: Set[MergeTree] = kruskals(clusters.keySet map { node => MergeTree(Set(node)) }, adjacencyList.sortBy(-_.sharedKey.size))
+        val intersectionSubtrees: Set[MergeTree] = findSpanningForest(clusters.keySet map { node => MergeTree(Set(node)) }, adjacencyList)
 
         val allMergeSpecs = for (subtree <- intersectionSubtrees) yield {
           val inbound: Map[MergeNode, Set[MergeEdge]] = subtree.edges.foldLeft(subtree.nodes.map((_, Set.empty[MergeEdge])).toMap) {
@@ -1127,34 +1127,41 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       // since the larger the set of shared keys, the fewer constraints are imposed
       // making it more likely that a sorting for those shared keys can be reused.
       case class MergeTree(nodes: Set[MergeNode], edges: Set[MergeEdge] = Set()) {
-        def + (other: MergeTree) = MergeTree(nodes ++ other.nodes, edges ++ other.edges)
+        def join(other: MergeTree, edge: MergeEdge) = MergeTree(nodes ++ other.nodes, edges ++ other.edges + edge)
       } 
 
-      def kruskals(trees: Set[MergeTree], edges: List[MergeEdge]): Set[MergeTree] = {
-        if (edges.isEmpty) {
-          trees 
-        } else {
-          val MergeEdge(a, b, _) = edges.head
-          val newTrees = trees.find(t => t.nodes.contains(a)) map { t0 =>
-            if (t0.nodes.contains(b)) {
-              trees
-            } else {
-              trees.find(t => t.nodes.contains(b)) map { t1 =>
-                (trees - t0 - t1) + (t0 + t1)
-              } getOrElse {
-                (trees - t0) + MergeTree(t0.nodes + b, t0.edges + edges.head)
-              }
-            }
-          } orElse {
-            trees.find(t => t.nodes.contains(b)) map {
-              t0 => (trees - t0) + MergeTree(t0.nodes + a, t0.edges + edges.head)
-            }
-          } getOrElse {
-            trees + MergeTree(Set(a, b), Set(edges.head))
-          }
+      // An implementation of Kruskal's algorithm for finding a maximal spanning forest
+      // for a set of merge trees
+      def findSpanningForest(trees: Set[MergeTree], edges: List[MergeEdge]): Set[MergeTree] = {
+        def find0(trees: Set[MergeTree], edges: List[MergeEdge]): Set[MergeTree] = {
+          if (edges.isEmpty) {
+            trees 
+          } else {
+            val edge0 = edges.head
 
-          kruskals(newTrees, edges.tail)
+            val newTrees = trees.find(t => t.nodes.contains(edge0.a)) map { t0 =>
+              if (t0.nodes.contains(edge0.b)) {
+                trees
+              } else {
+                trees.find(t => t.nodes.contains(edge0.b)) map { t1 =>
+                  (trees - t0 - t1) + t0.join(t1, edge0)
+                } getOrElse {
+                  (trees - t0) + MergeTree(t0.nodes + edge0.b, t0.edges + edge0)
+                }
+              }
+            } orElse {
+              trees.find(t => t.nodes.contains(edge0.b)) map { t0 => 
+                (trees - t0) + MergeTree(t0.nodes + edge0.a, t0.edges + edge0)
+              }
+            } getOrElse {
+              trees + MergeTree(Set(edge0.a, edge0.b), Set(edge0))
+            }
+
+            find0(newTrees, edges.tail)
+          }
         }
+        
+        find0(trees, edges.sortBy(-_.sharedKey.size))
       }
 
       case class BindingConstraint(ordering: Seq[Set[TicVar]]) {

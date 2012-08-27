@@ -328,6 +328,55 @@ trait ColumnarTableModuleSpec[M[+_]] extends
         grouper.findBindingUniverses(union) must haveSize(4)
       }
     }
+
+    "derive a correct TransSpec for a conjunctive GroupKeySpec" in {
+      val keySpec = GroupKeySpecAnd(
+        GroupKeySpecSource(JPathField("1"), DerefObjectStatic(SourceValue.Single, JPathField("a"))),
+        GroupKeySpecSource(JPathField("2"), DerefObjectStatic(SourceValue.Single, JPathField("b"))))
+
+      val transspec = grouper.Universe.deriveTransSpec(keySpec)
+      val JArray(data) = JsonParser.parse("""[
+        {"key": [1], "value": {"a": 12, "b": 7}},
+        {"key": [2], "value": {"a": 42}},
+        {"key": [1], "value": {"a": 13, "c": true}}
+      ]""")
+
+      val JArray(expected) = JsonParser.parse("""[
+        [["1", 12], ["2", 7]],
+        [["1", 42]],
+        [["1", 13]]
+      ]""")
+
+      fromJson(data.toStream).transform(transspec).toJson.copoint must_== expected
+    }
+
+    "find the maximal spanning forest of a set of merge trees" in {
+      import grouper.Universe._
+
+      val abcd = MergeNode(Set("a", "b", "c", "d").map(JPathField(_)))
+      val abc = MergeNode(Set("a", "b", "c").map(JPathField(_)))
+      val ab = MergeNode(Set("a", "b").map(JPathField(_)))
+      val ac = MergeNode(Set("a", "c").map(JPathField(_)))
+      val a = MergeNode(Set(JPathField("a")))
+      val e = MergeNode(Set(JPathField("e")))
+
+      val connectedNodes = Set(abcd, abc, ab, ac, a)
+      val allNodes = connectedNodes + e
+      
+      val result = findSpanningForest(
+        allNodes.map(n => MergeTree(Set(n))),
+        (for (n1 <- connectedNodes; n2 <- connectedNodes if n1 != n2) yield MergeEdge(n1, n2, n1.keys & n2.keys)).toList
+      )
+
+      result.toList must beLike {
+        case MergeTree(n1, e1) :: MergeTree(n2, e2) :: Nil =>
+          val (nodes, edges) = if (n1 == Set(e)) (n2, e2) else (n1, e1)
+
+          nodes must haveSize(5)
+          edges must haveSize(4) 
+          edges.map(_.sharedKey.size) must_== Set(3, 2, 2, 1)
+      }
+    }
   }
 }
 
