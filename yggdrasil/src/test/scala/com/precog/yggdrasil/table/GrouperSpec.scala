@@ -18,12 +18,15 @@ import scalaz.syntax.monad._
 
 object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] with ScalaCheck with test.YIdInstances {
   import trans._
+  import constants._
 
   "simple single-key grouping" should {
     "compute a histogram by value" in check { set: Stream[Int] =>
       val data = set map { JNum(_) }
         
-      val spec = fromJson(data).group(TransSpec1.Id, 2,
+      val spec = GroupingSource(
+        fromJson(data), 
+        SourceKey.Single, TransSpec1.Id, 2, 
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
       val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
@@ -63,7 +66,9 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         }
       })
       
-      val spec = fromJson(data).group(Map1(Leaf(Source), doubleF1), 2,
+      val spec = GroupingSource(
+        fromJson(data), 
+        SourceKey.Single, Map1(TransSpec1.Id, doubleF1), 2, 
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
       val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
@@ -106,7 +111,9 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         }
       })
       
-      val spec = fromJson(data).group(TransSpec1.Id, 2,
+      val spec = GroupingSource(
+        fromJson(data),
+        SourceKey.Single, TransSpec1.Id, 2, 
         GroupKeySpecSource(JPathField("1"), Map1(Leaf(Source), mod2)))
         
       val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
@@ -170,9 +177,9 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       "and" >> {
         val table = fromJson(data)
         
-        val spec = table.group(
-          TransSpec1.Id,
-          3,
+        val spec = GroupingSource(
+          table,
+          SourceKey.Single, SourceValue.Single, 3,
           GroupKeySpecAnd(
             GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
@@ -224,9 +231,9 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       "or" >> {
         val table = fromJson(data)
         
-        val spec = table.group(
-          TransSpec1.Id,
-          3,
+        val spec = GroupingSource(
+          table,
+          SourceKey.Single, TransSpec1.Id, 3,
           GroupKeySpecOr(
             GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
@@ -302,9 +309,9 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       "and" >> {
         val table = fromJson(data)
         
-        val spec = table.group(
-          TransSpec1.Id,
-          3,
+        val spec = GroupingSource(
+          table,
+          SourceKey.Single, TransSpec1.Id, 3,
           GroupKeySpecAnd(
             GroupKeySpecSource(JPathField("extra"),
               Filter(Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1), Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1))),
@@ -346,9 +353,9 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       "or" >> {
         val table = fromJson(data)
         
-        val spec = table.group(
-          TransSpec1.Id,
-          3,
+        val spec = GroupingSource(
+          table,
+          SourceKey.Single, SourceValue.Single, 3,
           GroupKeySpecOr(
             GroupKeySpecSource(JPathField("extra"),
               Filter(Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1), Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1))),
@@ -411,22 +418,21 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       val table1 = fromJson(data1)
       val table2 = fromJson(data2)
       
-      val spec1 = table1.group(
-        TransSpec1.Id,
-        2,
+      val spec1 = GroupingSource(
+        table1,
+        SourceKey.Single, TransSpec1.Id, 2,
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
-      val spec2 = table2.group(
-        TransSpec1.Id,
-        3,
+      val spec2 = GroupingSource(
+        table2,
+        SourceKey.Single, TransSpec1.Id, 3,
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
-      val union = GroupingUnion(
+      val union = GroupingAlignment(
         DerefObjectStatic(Leaf(Source), JPathField("1")),
         DerefObjectStatic(Leaf(Source), JPathField("1")),
         spec1,
-        spec2,
-        GroupKeyAlign.Eq)
+        spec2)
           
       val result = grouper.merge(union) { (key, map) =>
         for {
@@ -493,22 +499,21 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       val table1 = fromJson(data1)
       val table2 = fromJson(data2)
       
-      val spec1 = table1.group(
-        TransSpec1.Id,
-        2,
+      val spec1 = GroupingSource(
+        table1,
+        SourceKey.Single, TransSpec1.Id, 2,
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
-      val spec2 = table2.group(
-        TransSpec1.Id,
-        3,
+      val spec2 = GroupingSource(
+        table2,
+        SourceKey.Single, TransSpec1.Id, 3,
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
-      val union = GroupingIntersect(
+      val union = GroupingAlignment(
         DerefObjectStatic(Leaf(Source), JPathField("1")),
         DerefObjectStatic(Leaf(Source), JPathField("1")),
         spec1,
-        spec2,
-        GroupKeyAlign.Eq)
+        spec2)
           
       val result = grouper.merge(union) { (key, map) =>
         for {
@@ -588,27 +593,26 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
         
-        val spec1 = table1.group(
-          TransSpec1.Id,
-          2,
+        val spec1 = GroupingSource(
+          table1,
+          SourceKey.Single, TransSpec1.Id, 2,
           GroupKeySpecAnd(
             GroupKeySpecSource(JPathField("1"),
               DerefObjectStatic(Leaf(Source), JPathField("a"))),
             GroupKeySpecSource(JPathField("2"),
               DerefObjectStatic(Leaf(Source), JPathField("b")))))
           
-        val spec2 = table2.group(
-          TransSpec1.Id,
-          3,
+        val spec2 = GroupingSource(
+          table2,
+          SourceKey.Single, TransSpec1.Id, 3,
           GroupKeySpecSource(JPathField("1"),
             DerefObjectStatic(Leaf(Source), JPathField("a"))))
           
-        val union = GroupingUnion(
+        val union = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           spec1,
-          spec2,
-          GroupKeyAlign.Eq)
+          spec2)
             
         val result = grouper.merge(union) { (key, map) =>
           for {
@@ -697,27 +701,26 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
         
-        val spec1 = table1.group(
-          TransSpec1.Id,
-          2,
+        val spec1 = GroupingSource(
+          table1,
+          SourceKey.Single, TransSpec1.Id, 2,
           GroupKeySpecOr(
             GroupKeySpecSource(JPathField("1"),
               DerefObjectStatic(Leaf(Source), JPathField("a"))),
             GroupKeySpecSource(JPathField("2"),
               DerefObjectStatic(Leaf(Source), JPathField("b")))))
           
-        val spec2 = table2.group(
-          TransSpec1.Id,
-          3,
+        val spec2 = GroupingSource(
+          table2,
+          SourceKey.Single, TransSpec1.Id, 3,
           GroupKeySpecSource(JPathField("1"),
             DerefObjectStatic(Leaf(Source), JPathField("a"))))
           
-        val union = GroupingUnion(
+        val union = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           spec1,
-          spec2,
-          GroupKeyAlign.Eq)
+          spec2)
             
         val result = grouper.merge(union) { (key, map) =>
           for {
@@ -809,27 +812,26 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
         
-        val spec1 = table1.group(
-          TransSpec1.Id,
-          2,
+        val spec1 = GroupingSource(
+          table1,
+          SourceKey.Single, TransSpec1.Id, 2,
           GroupKeySpecAnd(
             GroupKeySpecSource(JPathField("1"),
               DerefObjectStatic(Leaf(Source), JPathField("a"))),
             GroupKeySpecSource(JPathField("2"),
               DerefObjectStatic(Leaf(Source), JPathField("b")))))
           
-        val spec2 = table2.group(
-          TransSpec1.Id,
-          3,
+        val spec2 = GroupingSource(
+          table2,
+          SourceKey.Single, TransSpec1.Id, 3,
           GroupKeySpecSource(JPathField("1"),
             DerefObjectStatic(Leaf(Source), JPathField("a"))))
           
-        val union = GroupingIntersect(
+        val union = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           spec1,
-          spec2,
-          GroupKeyAlign.Eq)
+          spec2)
             
         val result = grouper.merge(union) { (key, map) =>
           for {
@@ -921,27 +923,26 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
         
-        val spec1 = table1.group(
-          TransSpec1.Id,
-          2,
+        val spec1 = GroupingSource(
+          table1,
+          SourceKey.Single, TransSpec1.Id, 2,
           GroupKeySpecOr(
             GroupKeySpecSource(JPathField("1"),
               DerefObjectStatic(Leaf(Source), JPathField("a"))),
             GroupKeySpecSource(JPathField("2"),
               DerefObjectStatic(Leaf(Source), JPathField("b")))))
           
-        val spec2 = table2.group(
-          TransSpec1.Id,
-          3,
+        val spec2 = GroupingSource(
+          table2,
+          SourceKey.Single, TransSpec1.Id, 3,
           GroupKeySpecSource(JPathField("1"),
             DerefObjectStatic(Leaf(Source), JPathField("a"))))
           
-        val union = GroupingUnion(
+        val union = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           spec1,
-          spec2,
-          GroupKeyAlign.Eq)
+          spec2)
             
         val result = grouper.merge(union) { (key, map) =>
           for {
@@ -1119,9 +1120,9 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         JObject(
           JField("d", JNum(0)) :: Nil))
           
-      val fooSpec = fromJson(foo).group(
-        TransSpec1.Id,
-        3,
+      val fooSpec = GroupingSource(
+        fromJson(foo),
+        SourceKey.Single, TransSpec1.Id, 3,
         GroupKeySpecAnd(
           GroupKeySpecSource(
             JPathField("1"),
@@ -1130,32 +1131,30 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             JPathField("2"),
             DerefObjectStatic(Leaf(Source), JPathField("b")))))
           
-      val barSpec = fromJson(bar).group(
-        TransSpec1.Id,
-        4,
+      val barSpec = GroupingSource(
+        fromJson(bar),
+        SourceKey.Single, TransSpec1.Id, 4,
         GroupKeySpecSource(
           JPathField("1"),
           DerefObjectStatic(Leaf(Source), JPathField("a"))))
           
-      val bazSpec = fromJson(baz).group(
-        TransSpec1.Id,
-        5,
+      val bazSpec = GroupingSource(
+        fromJson(baz),
+        SourceKey.Single, TransSpec1.Id, 5,
         GroupKeySpecSource(
           JPathField("2"),
           DerefObjectStatic(Leaf(Source), JPathField("b"))))
           
       "intersect" >> {
-        val spec = GroupingIntersect(
+        val spec = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), JPathField("2")),
           DerefObjectStatic(Leaf(Source), JPathField("2")),
-          GroupingIntersect(
+          GroupingAlignment(
             DerefObjectStatic(Leaf(Source), JPathField("1")),
             DerefObjectStatic(Leaf(Source), JPathField("1")),
             fooSpec,
-            barSpec,
-            GroupKeyAlign.Eq),
-          bazSpec,
-          GroupKeyAlign.Eq)
+            barSpec),
+          bazSpec)
           
         val forallResult = grouper.merge(spec) { (key, map) =>
           val keyJson = key.toJson.copoint
@@ -1230,17 +1229,15 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       }.pendingUntilFixed
           
       "union" >> {
-        val spec = GroupingUnion(
+        val spec = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), JPathField("2")),
           DerefObjectStatic(Leaf(Source), JPathField("2")),
-          GroupingUnion(
+          GroupingAlignment(
             DerefObjectStatic(Leaf(Source), JPathField("1")),
             DerefObjectStatic(Leaf(Source), JPathField("1")),
             fooSpec,
-            barSpec,
-            GroupKeyAlign.Eq),
-          bazSpec,
-          GroupKeyAlign.Eq)
+            barSpec),
+          bazSpec)
           
         val forallResult = grouper.merge(spec) { (key, map) =>
           val keyJson = key.toJson.copoint
