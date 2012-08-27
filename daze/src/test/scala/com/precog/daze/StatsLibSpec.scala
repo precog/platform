@@ -396,7 +396,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(1,2,3,4,5,6).only  
-    }.pendingUntilFixed
+    }
 
     "compute denseRank within a filter" in {
       val line = Line(0, "")
@@ -417,7 +417,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(11)
-    }.pendingUntilFixed
+    }
 
     "compute denseRank within a join" in {
       val line = Line(0, "")
@@ -436,7 +436,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(3,4,5,6,7,8).only  
-    }.pendingUntilFixed
+    }
   }
 
   "heterogenous sets" should {
@@ -455,7 +455,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(1,2,3,4,5,6).only  
-    }.pendingUntilFixed
+    }
 
     "compute denseRank within an equals filter" in {
       val line = Line(0, "")
@@ -476,7 +476,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(34)
-    }.pendingUntilFixed
+    }
 
     "compute denseRank within a less-than filter" in {
       val line = Line(0, "")
@@ -497,7 +497,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(-10,0,5,11,12).only
-    }.pendingUntilFixed
+    }
 
     "compute denseRank within a join" in {
       val line = Line(0, "")
@@ -516,7 +516,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(3,4,5,6,7,8).only  
-    }.pendingUntilFixed
+    }
   }
 
   "for homogenous sets, the appropriate stats function" should {
