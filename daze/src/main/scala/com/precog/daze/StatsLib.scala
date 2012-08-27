@@ -877,12 +877,16 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     }
     
     def apply(table: Table) = {
-      val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
-      val sortedTable = table.sort(sortKey, SortAscending)
+      val sortByValue = DerefObjectStatic(Leaf(Source), paths.Value)
+      val sortedTable = table.sort(sortByValue, SortAscending)
 
-      val transScan = Scan(DerefObjectStatic(Leaf(Source), paths.Value), rankScanner)
+      val transScan = TableTransSpec.makeTransSpec(
+        Map(paths.Value -> Scan(Typed(Leaf(Source), JNumberT), rankScanner)))
       
-      sortedTable.map(_.transform(transScan))
+      val result: M[Table] = sortedTable.map(_.transform(ObjectDelete(transScan, Set(paths.SortKey))))
+      val sortByKey = DerefObjectStatic(Leaf(Source), paths.Key)
+
+      result flatMap { _.sort(sortByKey, SortAscending) }
     }
 
 
@@ -956,46 +960,13 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       val sortByValue = DerefObjectStatic(Leaf(Source), paths.Value)
       val sortedTable = table.sort(sortByValue, SortAscending)
 
-      println("sortedTable: %s".format(sortedTable))
-
-      import TableTransSpec._
-
       val transScan = TableTransSpec.makeTransSpec(
         Map(paths.Value -> Scan(Typed(Leaf(Source), JNumberT), rankScanner)))
       
       val result: M[Table] = sortedTable.map(_.transform(ObjectDelete(transScan, Set(paths.SortKey))))
-
       val sortByKey = DerefObjectStatic(Leaf(Source), paths.Key)
-      val result2 = result flatMap { _.sort(sortByKey, SortAscending) }
 
-      println("result of apply: %s".format(result2))
-      result2
+      result flatMap { _.sort(sortByKey, SortAscending) }
     }
-
-
-    /* override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {
-      var countTotal = 0
-      var countEach = 1
-      var previous: Option[SValue] = Option.empty[SValue]
-
-      val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
-      val enum3: Dataset[SValue] = enum2 collect {
-        case s @ SDecimal(v) => {
-          if (Some(s) == previous) {
-            previous = Some(s)
-            countEach += 1
-
-            SDecimal(countTotal)
-          } else {
-            previous = Some(s)
-            countTotal += countEach 
-            countEach = 1
-          
-            SDecimal(countTotal)
-          }
-        }
-      }
-      Some(enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
-    } */
   }
 }
