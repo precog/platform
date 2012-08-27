@@ -649,7 +649,7 @@ trait DAG extends Instructions {
 
     case class Morph2(loc: Line, mor: Morphism2, left: DepGraph, right: DepGraph) extends DepGraph {
       lazy val identities = {
-        if (mor.retainIds) left.identities ++ right.identities  //TODO is this correct????
+        if (mor.retainIds) sys.error("not implemented yet") //TODO need to retain only the identities that are being used in the match
         else Vector(SynthIds(IdGen.nextInt()))
       }
       

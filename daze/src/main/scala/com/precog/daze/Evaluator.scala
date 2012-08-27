@@ -314,9 +314,8 @@ trait Evaluator[M[+_]] extends DAG
               rightSpec = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, JPathIndex(1)), paths.Value)
               transformed = aligned.transform(ArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
 
-              result = mor(transformed)
-              wrapped <- result //TODO
-            } yield wrapped
+              result <- mor(transformed)
+            } yield result
 
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
@@ -1039,11 +1038,11 @@ trait Evaluator[M[+_]] extends DAG
     TableTransSpec.makeTransSpec(Map(paths.Value -> trans))
    
   
-  /*private*/ type TableTransSpec[+A <: SourceType] = Map[JPathField, TransSpec[A]]
-  /*private*/ type TableTransSpec1 = TableTransSpec[Source1]
-  /*private*/ type TableTransSpec2 = TableTransSpec[Source2]
+  type TableTransSpec[+A <: SourceType] = Map[JPathField, TransSpec[A]]
+  type TableTransSpec1 = TableTransSpec[Source1]
+  type TableTransSpec2 = TableTransSpec[Source2]
   
-  /*private*/ object TableTransSpec {
+  object TableTransSpec {
     def makeTransSpec(tableTrans: TableTransSpec1): TransSpec1 = {
       val wrapped = for ((key @ JPathField(fieldName), value) <- tableTrans) yield {
         val mapped = deepMap(value) {
@@ -1054,7 +1053,7 @@ trait Evaluator[M[+_]] extends DAG
         trans.WrapObject(mapped, fieldName)
       }
       
-      wrapped.foldLeft(ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*)): TransSpec1) { (acc, ts) =>  //TODO what are we deleting and why?
+      wrapped.foldLeft(ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*)): TransSpec1) { (acc, ts) =>
         trans.ObjectConcat(acc, ts)
       }
     }

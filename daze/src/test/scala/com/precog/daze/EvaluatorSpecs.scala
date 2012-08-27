@@ -1370,110 +1370,110 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "filter homogeneous numeric set by binary operation" >> {
-      //"less-than" >> {
-      //  val line = Line(0, "")
-      //  val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      //  
-      //  val input = Filter(line, IdentitySort,
-      //    numbers,
-      //    Join(line, Lt, CrossLeftSort,
-      //      numbers,
-      //      Root(line, PushNum("13"))))
-      //    
-      //  testEval(input) { result =>
-      //    result must haveSize(2)
-      //    
-      //    val result2 = result collect {
-      //      case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-      //    }
-      //    
-      //    result2 must contain(1, 12)
-      //  }
-      //}      
-      //
-      //"less-than (with relative paths)" >> {
-      //  val line = Line(0, "")
-      //  val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
-      //  
-      //  val input = Filter(line, IdentitySort,
-      //    numbers,
-      //    Join(line, Lt, CrossLeftSort,
-      //      numbers,
-      //      Root(line, PushNum("13"))))
-      //    
-      //  testEval(input, Path("/hom")) { result =>
-      //    result must haveSize(2)
-      //    
-      //    val result2 = result collect {
-      //      case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-      //    }
-      //    
-      //    result2 must contain(1, 12)
-      //  }
-      //}
-      //
-      //"less-than-equal" >> {
-      //  val line = Line(0, "")
-      //  val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      //  
-      //  val input = Filter(line, IdentitySort,
-      //    numbers,
-      //    Join(line, LtEq, CrossLeftSort,
-      //      numbers,
-      //      Root(line, PushNum("13"))))
-      //    
-      //  testEval(input) { result =>
-      //    result must haveSize(3)
-      //    
-      //    val result2 = result collect {
-      //      case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-      //    }
-      //    
-      //    result2 must contain(12, 1, 13)
-      //  }
-      //}
-      //
-      //"greater-than" >> {
-      //  val line = Line(0, "")
-      //  val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      //  
-      //  val input = Filter(line, IdentitySort,
-      //    numbers,
-      //    Join(line, Gt, CrossLeftSort,
-      //      numbers,
-      //      Root(line, PushNum("13"))))
-      //    
-      //  testEval(input) { result =>
-      //    result must haveSize(2)
-      //    
-      //    val result2 = result collect {
-      //      case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-      //    }
-      //    
-      //    result2 must contain(42, 77)
-      //  }
-      //}
-      //
-      //"greater-than-equal" >> {
-      //  val line = Line(0, "")
-      //  val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      //  
-      //  val input = Filter(line, IdentitySort,
-      //    numbers,
-      //    Join(line, GtEq, CrossLeftSort,
-      //      numbers,
-      //      Root(line, PushNum("13"))))
-      //    
-      //  testEval(input) { result =>
-      //    result must haveSize(3)
-      //    
-      //    val result2 = result collect {
-      //      case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-      //    }
-      //    
-      //    result2 must contain(42, 77, 13)
-      //  }
-      //}
+      "less-than" >> {
+        val line = Line(0, "")
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        
+        val input = Filter(line, IdentitySort,
+          numbers,
+          Join(line, Lt, CrossLeftSort,
+            numbers,
+            Root(line, PushNum("13"))))
+          
+        testEval(input) { result =>
+          result must haveSize(2)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(1, 12)
+        }
+      }      
+      
+      "less-than (with relative paths)" >> {
+        val line = Line(0, "")
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+        
+        val input = Filter(line, IdentitySort,
+          numbers,
+          Join(line, Lt, CrossLeftSort,
+            numbers,
+            Root(line, PushNum("13"))))
+          
+        testEval(input, Path("/hom")) { result =>
+          result must haveSize(2)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(1, 12)
+        }
+      }
+      
+      "less-than-equal" >> {
+        val line = Line(0, "")
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        
+        val input = Filter(line, IdentitySort,
+          numbers,
+          Join(line, LtEq, CrossLeftSort,
+            numbers,
+            Root(line, PushNum("13"))))
+          
+        testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(12, 1, 13)
+        }
+      }
+      
+      "greater-than" >> {
+        val line = Line(0, "")
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        
+        val input = Filter(line, IdentitySort,
+          numbers,
+          Join(line, Gt, CrossLeftSort,
+            numbers,
+            Root(line, PushNum("13"))))
+          
+        testEval(input) { result =>
+          result must haveSize(2)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 77)
+        }
+      }
+      
+      "greater-than-equal" >> {
+        val line = Line(0, "")
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        
+        val input = Filter(line, IdentitySort,
+          numbers,
+          Join(line, GtEq, CrossLeftSort,
+            numbers,
+            Root(line, PushNum("13"))))
+          
+        testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 77, 13)
+        }
+      }
       
       "equal with a number literal" >> {
         val line = Line(0, "")
@@ -1496,139 +1496,139 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }       
 
-      //"equal without a filter" >> {
-      //  val line = Line(0, "")
-      //  
-      //  val input = Join(line, Eq, CrossLeftSort,
-      //      dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
-      //      Root(line, PushNum("13")))
-      //    
-      //  testEval(input) { result =>
-      //    result must haveSize(5)
-      //    
-      //    val result2 = result collect {
-      //      case (ids, SBoolean(d)) if ids.size == 1 => d
-      //    }
-      //    
-      //    result2 must contain(true, false)
-      //  }
-      //}
-      //
-      //"not-equal" >> {
-      //  val line = Line(0, "")
-      //  val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      //  
-      //  val input = Filter(line, IdentitySort,
-      //    numbers,
-      //    Join(line, NotEq, CrossLeftSort,
-      //      numbers,
-      //      Root(line, PushNum("13"))))
-      //    
-      //  testEval(input) { result =>
-      //    val result2 = result collect {
-      //      case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-      //    }
-      //    
-      //    result2 must contain(42, 12, 77, 1)
-      //  }
-      //}
-      //
-      //"and" >> {
-      //  val line = Line(0, "")
-      //  val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      //  
-      //  val input = Filter(line, IdentitySort,
-      //    numbers,
-      //    Join(line, And, IdentitySort,
-      //      Join(line, NotEq, CrossLeftSort,
-      //        numbers,
-      //        Root(line, PushNum("77"))),
-      //      Join(line, NotEq, CrossLeftSort,
-      //        numbers,
-      //        Root(line, PushNum("13")))))
-      //    
-      //  testEval(input) { result =>
-      //    result must haveSize(3)
-      //    
-      //    val result2 = result collect {
-      //      case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-      //    }
-      //    
-      //    result2 must contain(42, 12, 1)
-      //  }
-      //}      
+      "equal without a filter" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Eq, CrossLeftSort,
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
+            Root(line, PushNum("13")))
+          
+        testEval(input) { result =>
+          result must haveSize(5)
+          
+          val result2 = result collect {
+            case (ids, SBoolean(d)) if ids.size == 1 => d
+          }
+          
+          result2 must contain(true, false)
+        }
+      }
+      
+      "not-equal" >> {
+        val line = Line(0, "")
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        
+        val input = Filter(line, IdentitySort,
+          numbers,
+          Join(line, NotEq, CrossLeftSort,
+            numbers,
+            Root(line, PushNum("13"))))
+          
+        testEval(input) { result =>
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 12, 77, 1)
+        }
+      }
+      
+      "and" >> {
+        val line = Line(0, "")
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        
+        val input = Filter(line, IdentitySort,
+          numbers,
+          Join(line, And, IdentitySort,
+            Join(line, NotEq, CrossLeftSort,
+              numbers,
+              Root(line, PushNum("77"))),
+            Join(line, NotEq, CrossLeftSort,
+              numbers,
+              Root(line, PushNum("13")))))
+          
+        testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 12, 1)
+        }
+      }      
 
-      //"and (with relative paths)" >> {
-      //  val line = Line(0, "")
-      //  val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
-      //  
-      //  val input = Filter(line, IdentitySort,
-      //    numbers,
-      //    Join(line, And, IdentitySort,
-      //      Join(line, NotEq, CrossLeftSort,
-      //        numbers,
-      //        Root(line, PushNum("77"))),
-      //      Join(line, NotEq, CrossLeftSort,
-      //        numbers,
-      //        Root(line, PushNum("13")))))
-      //    
-      //  testEval(input, Path("/hom")) { result =>
-      //    result must haveSize(3)
-      //    
-      //    val result2 = result collect {
-      //      case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-      //    }
-      //    
-      //    result2 must contain(42, 12, 1)
-      //  }
-      //}
-      //
-      //"or" >> {
-      //  val line = Line(0, "")
-      //  val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      //  
-      //  val input = Filter(line, IdentitySort,
-      //    numbers,
-      //    Join(line, Or, IdentitySort,
-      //      Join(line, Eq, CrossLeftSort,
-      //        numbers,
-      //        Root(line, PushNum("77"))),
-      //      Join(line, Eq, CrossLeftSort,
-      //        numbers,
-      //        Root(line, PushNum("13")))))
-      //    
-      //  testEval(input) { result =>
-      //    result must haveSize(2)
-      //    
-      //    val result2 = result collect {
-      //      case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-      //    }
-      //    
-      //    result2 must contain(77, 13)
-      //  }
-      //}
-      //
-      //"complement of equality" >> {
-      //  val line = Line(0, "")
-      //  val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      //  
-      //  val input = Filter(line, IdentitySort,
-      //    numbers,
-      //    Operate(line, Comp,
-      //      Join(line, Eq, CrossLeftSort,
-      //        numbers,
-      //        Root(line, PushNum("13")))))
-      //    
-      //  testEval(input) { result =>
-      //    result must haveSize(4)
-      //    
-      //    val result2 = result collect {
-      //      case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-      //    }
-      //    
-      //    result2 must contain(42, 12, 77, 1)
-      //  }
-      //}
+      "and (with relative paths)" >> {
+        val line = Line(0, "")
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+        
+        val input = Filter(line, IdentitySort,
+          numbers,
+          Join(line, And, IdentitySort,
+            Join(line, NotEq, CrossLeftSort,
+              numbers,
+              Root(line, PushNum("77"))),
+            Join(line, NotEq, CrossLeftSort,
+              numbers,
+              Root(line, PushNum("13")))))
+          
+        testEval(input, Path("/hom")) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 12, 1)
+        }
+      }
+      
+      "or" >> {
+        val line = Line(0, "")
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        
+        val input = Filter(line, IdentitySort,
+          numbers,
+          Join(line, Or, IdentitySort,
+            Join(line, Eq, CrossLeftSort,
+              numbers,
+              Root(line, PushNum("77"))),
+            Join(line, Eq, CrossLeftSort,
+              numbers,
+              Root(line, PushNum("13")))))
+          
+        testEval(input) { result =>
+          result must haveSize(2)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(77, 13)
+        }
+      }
+      
+      "complement of equality" >> {
+        val line = Line(0, "")
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        
+        val input = Filter(line, IdentitySort,
+          numbers,
+          Operate(line, Comp,
+            Join(line, Eq, CrossLeftSort,
+              numbers,
+              Root(line, PushNum("13")))))
+          
+        testEval(input) { result =>
+          result must haveSize(4)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 12, 77, 1)
+        }
+      }
     }
     
     "filter heterogeneous numeric set by binary operation" >> {

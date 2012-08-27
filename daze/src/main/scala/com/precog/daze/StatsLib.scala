@@ -887,31 +887,6 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
       result flatMap { _.sort(sortByKey, SortAscending) }
     }
-
-
-
-    /* override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {
-      var count = 0
-      var previous: Option[SValue] = Option.empty[SValue]
-
-      val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
-      val enum3: Dataset[SValue] = enum2 collect {
-        case s @ SDecimal(v) => {
-          if (Some(s) == previous) {
-            previous = Some(s)
-
-            SDecimal(count)
-          } else {
-            previous = Some(s)
-            count += 1
-
-            SDecimal(count)
-          }
-        }
-      }
-      Some(enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
-    } */
-
   }
 
   object Rank extends Morphism1(StatsNamespace, "rank") {  //TODO what happens across slices??

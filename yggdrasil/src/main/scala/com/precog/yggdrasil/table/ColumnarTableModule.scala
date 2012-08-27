@@ -40,7 +40,6 @@ import java.util.SortedMap
 import scala.collection.BitSet
 import scala.collection.Set
 import scala.annotation.tailrec
-import scala.collection.immutable.NumericRange
 
 import scalaz._
 import scalaz.Ordering._
