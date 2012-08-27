@@ -36,6 +36,7 @@ import scala.collection.BitSet
 import scalaz._
 import scalaz.effect.IO 
 import scalaz.syntax.copointed._
+import scalaz.std.anyVal._
 
 import org.specs2._
 import org.specs2.mutable.Specification
@@ -55,7 +56,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   BlockLoadSpec[M] with
   BlockSortSpec[M] with
   CompactSpec[M] with 
-  DistinctSpec[M] { spec =>
+  DistinctSpec[M] with
+  GrouperSpec[M] { spec =>
+
+  import trans._
+  import constants._
     
   override val defaultPrettyParams = Pretty.Params(2)
 
@@ -136,6 +141,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
   def table(slices: StreamT[M, Slice]) = new UnloadableTable(slices)
 
+  /*
   "a table dataset" should {
     "verify bijection from static JSON" in {
       val sample: List[JValue] = List(
@@ -243,9 +249,84 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "have no duplicate rows" in testDistinct
     }
   }
+  */
 
   "grouping support" should {  
-    "derive the universes of binding constraints" in {
+    "derive the universes of binding constraints" >> {
+      "single-source groupings should generate single binding universes" in {
+        val spec = GroupingSource(
+          ops.empty, 
+          SourceKey.Single, TransSpec1.Id, 2, 
+          GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
+
+        grouper.findBindingUniverses(spec) must haveSize(1)
+      }
+      
+      "single-source groupings should generate single binding universes if no disjunctions are present" in {
+        val spec = GroupingSource(
+          ops.empty,
+          SourceKey.Single, SourceValue.Single, 3,
+          GroupKeySpecAnd(
+            GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
+            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+
+        grouper.findBindingUniverses(spec) must haveSize(1)
+      }
+      
+      "multiple-source groupings should generate single binding universes if no disjunctions are present" in {
+        val spec1 = GroupingSource(
+          ops.empty,
+          SourceKey.Single, TransSpec1.Id, 2,
+          GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
+          
+        val spec2 = GroupingSource(
+          ops.empty,
+          SourceKey.Single, TransSpec1.Id, 3,
+          GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
+          
+        val union = GroupingAlignment(
+          DerefObjectStatic(Leaf(Source), JPathField("1")),
+          DerefObjectStatic(Leaf(Source), JPathField("1")),
+          spec1,
+          spec2)
+
+        grouper.findBindingUniverses(union) must haveSize(1)
+      }
+
+      "single-source groupings should generate a number of binding universes equal to the number of disjunctive clauses" in {
+        val spec = GroupingSource(
+          ops.empty,
+          SourceKey.Single, SourceValue.Single, 3,
+          GroupKeySpecOr(
+            GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
+            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+
+        grouper.findBindingUniverses(spec) must haveSize(2)
+      }
+      
+      "multiple-source groupings should generate a number of binding universes equal to the product of the number of disjunctive clauses from each source" in {
+        val spec1 = GroupingSource(
+          ops.empty,
+          SourceKey.Single, TransSpec1.Id, 2,
+          GroupKeySpecOr(
+            GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
+            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+          
+        val spec2 = GroupingSource(
+          ops.empty,
+          SourceKey.Single, TransSpec1.Id, 3,
+          GroupKeySpecOr(
+            GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
+            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+          
+        val union = GroupingAlignment(
+          DerefObjectStatic(Leaf(Source), JPathField("1")),
+          DerefObjectStatic(Leaf(Source), JPathField("1")),
+          spec1,
+          spec2)
+
+        grouper.findBindingUniverses(union) must haveSize(4)
+      }
     }
   }
 }

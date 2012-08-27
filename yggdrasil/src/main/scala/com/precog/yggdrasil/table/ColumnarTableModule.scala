@@ -1404,12 +1404,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       }
     }
 
-    def findUniverses[GroupId](v: Vector[(GroupingSource[GroupId], Vector[GroupKeySpec])]): Stream[Universe] = {
-      val protoUniverses = (v map { case (src, specs) => specs map { (src, _) } toStream } toList).sequence 
-      
-      protoUniverses map { proto =>
-        Universe(proto map { case (src, spec) => Binding(src.table, src.idTrans, src.targetTrans, spec) })
+    def findBindingUniverses[GroupId](grouping: GroupingSpec[GroupId]): Seq[Universe] = {
+      @inline def find0(v: Vector[(GroupingSource[GroupId], Vector[GroupKeySpec])]): Stream[Universe] = {
+        val protoUniverses = (v map { case (src, specs) => specs map { (src, _) } toStream } toList).sequence 
+        
+        protoUniverses map { proto =>
+          Universe(proto map { case (src, spec) => Binding(src.table, src.idTrans, src.targetTrans, spec) })
+        }
       }
+
+      import GroupKeySpec.{dnf, toVector}
+      find0(grouping.sources map { source => (source, ((dnf _) andThen (toVector _)) apply source.groupKeySpec) })
     }
 
     def merge[GroupId: scalaz.Equal](grouping: GroupingSpec[GroupId])(body: (Table, GroupId => Table) => M[Table]): M[Table] = {
@@ -1417,11 +1422,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         sys.error("todo")
       }
 
-      import GroupKeySpec.{dnf, toVector}
-      val universes: Seq[Universe] = findUniverses(
-        grouping.sources map { source => (source, ((dnf _) andThen (toVector _)) apply source.groupKeySpec) }
-      )
-      
+      val universes = findBindingUniverses(grouping)
       evaluateMergeSpecs(universes map { _.composeMergeSpec }: _*)
     }
   }

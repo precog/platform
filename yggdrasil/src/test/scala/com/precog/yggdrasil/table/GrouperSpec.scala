@@ -35,7 +35,7 @@ import scalaz.std.anyVal._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 
-object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] with ScalaCheck with test.YIdInstances {
+trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] {
   import trans._
   import constants._
 
@@ -1202,7 +1202,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               JField("bar", JNum(barPJson.size)) ::
               JField("baz", JNum(bazPJson.size)) :: Nil))
               
-          implicitly[Pointed[test.YId]].point(fromJson(result))
+          fromJson(result).point[M]
         }
         
         val forallJson = forallResult flatMap { _.toJson } copoint
@@ -1284,7 +1284,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               JField("bar", JNum(barPJson.size)) ::
               JField("baz", JNum(bazPJson.size)) :: Nil))
               
-          implicitly[Pointed[test.YId]].point(fromJson(result))
+          fromJson(result).point[M]
         }
         
         val forallJson = forallResult flatMap { _.toJson } copoint
