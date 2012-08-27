@@ -70,7 +70,6 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         median <- if (count % 2 == 0) {
           val middleValues = sortedTable.takeRange((count.toLong / 2) - 1, 2)
           val transformedTable = middleValues.transform(trans.DerefObjectStatic(Leaf(Source), paths.Value))  //todo make function for this
-          //println("middleValues: %s and count: %s and sortedTable: %s".format(middleValues, count, sortedTable))
           Mean(transformedTable)
         } else {
           val middleValue = M.point(sortedTable.takeRange((count.toLong / 2), 1))
@@ -945,9 +944,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
                 }
               }
 
-              val result = ((finalValue, finalCountEach, finalCountTotal), Some(ArrayNumColumn(defined, acc)))
-              acc map { x => print(" " + x) }
-              result
+              ((finalValue, finalCountEach, finalCountTotal), Some(ArrayNumColumn(defined, acc)))
             }
 
           case _ => (a, None)

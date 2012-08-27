@@ -278,10 +278,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pendingTable <- loop(parent, splits)
             val back = pendingTable.table flatMap { table => mor(table.transform(liftToValues(pendingTable.trans))) }
-          } yield {
-            println("result from Morph1 node in Evaluator: %s\n".format(back))
-            PendingTable(back, graph, TransSpec1.Id)
-          }
+          } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
         case dag.Morph2(_, mor, left, right) => {
@@ -648,23 +645,8 @@ trait Evaluator[M[+_]] extends DAG
             pendingTableBoolean <- loop(boolean, splits)
           } yield {
             if (pendingTableTarget.graph == pendingTableBoolean.graph) {
-              println("pendingTableTarget.table: %s\n".format(pendingTableTarget.table))
-              println("pendingTableTarget.trans: %s\n".format(pendingTableTarget.trans))
-              println("target: %s\n".format(target))
-              println("pendingTableBoolean.table: %s\n".format(pendingTableBoolean.table))
-              println("pendingTableBoolean.trans: %s\n".format(pendingTableBoolean.trans))
-              println("boolean: %s\n".format(boolean))
-
               PendingTable(pendingTableTarget.table, pendingTableTarget.graph, trans.Filter(pendingTableTarget.trans, pendingTableBoolean.trans))
-            }
-            else {
-              println("pendingTableTarget.table: %s\n".format(pendingTableTarget.table))
-              println("pendingTableTarget.trans: %s\n".format(pendingTableTarget.trans))
-              println("target: %s\n".format(target))
-              println("pendingTableBoolean.table: %s\n".format(pendingTableBoolean.table))
-              println("pendingTableBoolean.trans: %s\n".format(pendingTableBoolean.trans))
-              println("boolean: %s\n".format(boolean))
-
+            } else {
               val key = joinSort match {
                 case IdentitySort =>
                   trans.DerefObjectStatic(Leaf(Source), paths.Key)
@@ -685,14 +667,7 @@ trait Evaluator[M[+_]] extends DAG
                 
                 parentBooleanTable <- pendingTableBoolean.table
                 val booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
-              } yield {
-                println("targetResult: %s\n booleanResult: %s\n".format(targetResult, booleanResult))
-                join(targetResult, booleanResult)(key, spec)
-              }
-
-
-              println("result from Filter node in Evaluator: %s\n".format(result))
-              println("spec from Filter node in Evaluator: %s\n".format(spec))
+              } yield join(targetResult, booleanResult)(key, spec)
 
               PendingTable(result, graph, TransSpec1.Id)
             }
@@ -967,11 +942,8 @@ trait Evaluator[M[+_]] extends DAG
     case _ => trans.Map2(left, right, op2(op).f2)
   }
 
-  private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int = {
-    println("left identities: %s\n".format(left.identities))
-    println("right identities: %s\n".format(right.identities))
+  private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
     left.identities zip right.identities takeWhile { case (a, b) => a == b } length
-  }
   
   private def svalueToCValue(sv: SValue) = sv match {
     case SString(str) => CString(str)
@@ -1014,17 +986,11 @@ trait Evaluator[M[+_]] extends DAG
       yield DerefArrayStatic(rightIdentitySpec, JPathIndex(i))
     
     val derefs: Seq[TransSpec2] = sharedDerefs ++ unsharedLeft ++ unsharedRight
-
-    println("sharedLength: %s".format(sharedLength))
-
-    println("sharedDerefs: %s \n unsharedLeft: %s \n unsharedRight: %s \n".format(sharedDerefs, unsharedLeft, unsharedRight))
     
     val newIdentitySpec = if (derefs.isEmpty)
       trans.ConstLiteral(CEmptyArray, Leaf(SourceLeft))
-    else {
-      println("is this the array concat?")
+    else
       derefs reduce { trans.ArrayConcat(_, _) }
-    }
     
     val wrappedIdentitySpec = trans.WrapObject(trans.WrapArray(newIdentitySpec), paths.Key.name)
     
