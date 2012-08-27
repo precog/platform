@@ -377,6 +377,93 @@ trait ColumnarTableModuleSpec[M[+_]] extends
           edges.map(_.sharedKey.size) must_== Set(3, 2, 2, 1)
       }
     }
+
+    "binding constraints" >> {
+      import grouper.Universe._
+      import grouper.Universe.BindingConstraints._
+      def constraint(str: String) = BindingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
+      def ticvars(str: String) = str.toSeq.map((c: Char) => JPathField(c.toString))
+
+      "minimize" >> {
+        "minimize to multiple sets" in {
+          val abcd = constraint("abcd")
+          val abc = constraint("abc")
+          val ab = constraint("ab")
+          val ac = constraint("ac")
+
+          val expected = Set(
+            constraint("ab,c,d"),
+            constraint("ac")
+          )
+
+          minimize(Set(abcd, abc, ab, ac)) must_== expected
+        }
+
+        "minimize to multiple sets with a singleton" in {
+          val abcd = constraint("abcd")
+          val abc = constraint("abc")
+          val ab = constraint("ab")
+          val ac = constraint("ac")
+          val c = constraint("c")
+
+          val expected = Set(
+            constraint("c,a,b,d"),
+            constraint("ab")
+          )
+
+          minimize(Set(abcd, abc, ab, ac, c)) must_== expected
+        }
+
+        "not minimize completely disjoint constraints" in {
+          val ab = constraint("ab")
+          val bc = constraint("bc")
+          val ca = constraint("ca")
+
+          val expected = Set(
+            constraint("ab"),
+            constraint("bc"),
+            constraint("ca")
+          )
+
+          minimize(Set(ab, bc, ca)) must_== expected
+        }
+      }
+
+      "fix ordering" >> {
+        "trivial case" in {
+          fix(Set(constraint("a,b,c,d"))).map(_.toList) must_== Set(ticvars("abcd"))
+        }
+
+        "case with prior restrictions" in {
+          val abc = constraint("ab,c")
+
+          fix(Set(abc), Some(ticvars("ab"))).map(_.toList) must_== Set(ticvars("abc"))
+        }
+
+        "nontrivial case with prior restrictions" in {
+          val minimized = Set(
+            constraint("c,a,b,d"),
+            constraint("ab")
+          )
+
+          val expected = Set(
+            ticvars("cabd"),
+            ticvars("ab")
+          )
+
+          fix(minimized, Some(ticvars("ab"))) must_== expected
+        }
+
+        "error if hint cannot be respected" in {
+          val minimized = Set(
+            constraint("c,a,b,d"),
+            constraint("ab")
+          )
+
+          fix(minimized, Some(ticvars("ac"))) must throwA[RuntimeException]
+        }
+      }
+    }
   }
 }
 

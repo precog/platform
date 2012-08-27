@@ -1080,14 +1080,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         val intersectionSubtrees: Set[MergeTree] = findSpanningForest(clusters.keySet map { node => MergeTree(Set(node)) }, adjacencyList)
 
         val allMergeSpecs = for (subtree <- intersectionSubtrees) yield {
-          val inbound: Map[MergeNode, Set[MergeEdge]] = subtree.edges.foldLeft(subtree.nodes.map((_, Set.empty[MergeEdge])).toMap) {
-            case (acc, edge @ MergeEdge(a, b, _)) => 
-              val aInbound = acc(a) + edge
-              val bInbound = acc(b) + edge
-              acc + (a -> aInbound) + (b -> bInbound)
-          }
-
-          buildMerges(clusters, inbound)
+          buildMerges(clusters, subtree)
         }
           
         allMergeSpecs reduceLeft (CrossMergeSpec.apply _)
@@ -1128,7 +1121,60 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       // making it more likely that a sorting for those shared keys can be reused.
       case class MergeTree(nodes: Set[MergeNode], edges: Set[MergeEdge] = Set()) {
         def join(other: MergeTree, edge: MergeEdge) = MergeTree(nodes ++ other.nodes, edges ++ other.edges + edge)
-      } 
+
+        val inbound: Map[MergeNode, Set[MergeEdge]] = edges.foldLeft(nodes.map((_, Set.empty[MergeEdge])).toMap) {
+          case (acc, edge @ MergeEdge(a, b, _)) => 
+            val aInbound = acc(a) + edge
+            val bInbound = acc(b) + edge
+            acc + (a -> aInbound) + (b -> bInbound)
+        }
+
+        val rootNode = (inbound.toList maxBy { case (_, edges) => edges.size })._1
+        
+        // A depth-first traversal of merge edges that results in a set of binding constraints for each node.
+        // These binding constraints may be underconstrained (i.e. an element of the constraint sequence
+        // may have arity > 1, so a second pass from the top down will be necessary to determine a fixed
+        // ordering that then gets propagated downward.
+        val underconstrained: Map[MergeNode, Set[BindingConstraint]] = {
+          def find0(node: MergeNode, graph: Map[MergeNode, Set[MergeEdge]]): Map[MergeNode, Set[BindingConstraint]] = {
+            if (graph.get(node).forall(_.isEmpty)) {
+              Map(node -> Set(BindingConstraint(Seq(node.keys))))
+            } else {
+              val outbound = graph(node)
+
+              // subset the graph to only include edges that do not involve the current node
+              val graph0: Map[MergeNode, Set[MergeEdge]] = (graph - node) map { 
+                {(_: Set[MergeEdge]).filterNot({case MergeEdge(a, b, _) => a == node || b == node})}.second 
+              }
+
+              // for all outbound edges, visit the remote node collecting sets of BindingConstraints
+              // associated with the edge that produced the set
+              val edgeConstraints = outbound map {
+                case MergeEdge(`node`, other, _) => (other, find0(other, graph0))
+                case MergeEdge(other, `node`, _) => (other, find0(other, graph0))
+              }
+
+              // compute all compatible BindingConstraints between this node's key set and the constraints
+              // associated with each edge
+              val nodeConstraints: Set[BindingConstraint] = edgeConstraints flatMap {
+                case (other, constraints) => 
+                  // the computeCompatible call here should never return None; if it does, then the 
+                  // edge should have been pruned from the graph in the first place.
+                  constraints(other) map { 
+                    _ computeCompatible node.keys getOrElse sys.error("Edge from " + node + " to " + other + " is bad; incompatible constraint found.") 
+                  }
+              }
+
+              //Now, we need to compute the minimal disjoint set of constraints from the node constraints.
+              //Note that the edge information is irrelevant; we can always find the edge constraints because
+              //they are exactly the same as the constraints on the node at the other end of the edge.
+              edgeConstraints.map(_._2).suml + (node -> BindingConstraints.minimize(nodeConstraints))
+            }
+          }
+
+          find0(rootNode, inbound)
+        } 
+      }
 
       // An implementation of Kruskal's algorithm for finding a maximal spanning forest
       // for a set of merge trees
@@ -1193,6 +1239,33 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
       object BindingConstraints {
         /**
+         * Compute a new constraint that can replace both input constraints
+         */
+        def replacementFor(a: BindingConstraint, b: BindingConstraint): Option[BindingConstraint] = {
+          @tailrec
+          def alignConstraints(left: Seq[Set[TicVar]], right: Seq[Set[TicVar]], computed: Seq[Set[TicVar]] = Seq()): Option[BindingConstraint] = {
+            if (left.isEmpty) {
+              // left is a prefix or equal to the shifted right, so we can use computed :: right as our common constraint
+              Some(BindingConstraint(computed ++ right))
+            } else {
+              val intersection = left.head & right.head
+              val diff = right.head diff left.head
+              if (intersection == left.head) {
+                // If left's head is a subset of right's, we can split right's head, use the subset as the next part
+                // of our computed sequence, then push the unused portion back onto right for another round of alignment
+                val newRight = if (diff.nonEmpty) diff +: right.tail else right.tail
+                alignConstraints(left.tail, newRight, computed :+ intersection)
+              } else {
+                // left is not a subset, so these constraints can't be aligned
+                None
+              }
+            }
+          }
+
+          alignConstraints(a.ordering, b.ordering) orElse alignConstraints(b.ordering, a.ordering)
+        }
+
+        /**
          * Given the set of input constraints, find a _minimal_ set of compatible BindingConstraints that
          * covers that set.
          */
@@ -1222,81 +1295,22 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         // to pass in the downward traversal, we must be sure that the constraints at the current node are
         // respected.
         def fix(constraints: Set[BindingConstraint], hint: Option[Seq[TicVar]] = None): Set[Seq[TicVar]] = {
+          val original = minimize(constraints)
           // Minimize the constraints, possibly including the hint, then flatten the minimal constraints into Seqs
-          minimize(hint.map { s => constraints + BindingConstraint(s.map(Set(_))) }.getOrElse(constraints)).map(_.ordering.flatten)
+          val newMin = minimize(hint.map { s => original + BindingConstraint(s.map(Set(_))) }.getOrElse(original))
+          
+          if (newMin.size <= original.size) {
+            newMin.map(_.ordering.flatten) 
+          } else {
+            sys.error("Hint could not be respected during fix. This indicates a bug in the grouping algorithm.")
+          }
         }
 
         def select(preferred: Set[Seq[TicVar]], dispreferred: Set[Seq[TicVar]], among: Set[BindingConstraint]): Seq[TicVar] = {
           sys.error("todo")
         }
-
-        /**
-         * Compute a new constraint that can replace both input constraints
-         */
-        def replacementFor(a: BindingConstraint, b: BindingConstraint): Option[BindingConstraint] = {
-          @tailrec
-          def alignConstraints(left: Seq[Set[TicVar]], right: Seq[Set[TicVar]], computed: Seq[Set[TicVar]] = Seq()): Option[BindingConstraint] = {
-            if (left.isEmpty) {
-              // left is a prefix or equal to the shifted right, so we can use computed :: right as our common constraint
-              Some(BindingConstraint(computed ++ right))
-            } else {
-              val intersection = left.head & right.head
-              val diff = right.head diff left.head
-              if (intersection == left.head) {
-                // If left's head is a subset of right's, we can split right's head, use the subset as the next part
-                // of our computed sequence, then push the unused portion back onto right for another round of alignment
-                val newRight = if (diff.nonEmpty) diff +: right.tail else right.tail
-                alignConstraints(left.tail, newRight, computed :+ intersection)
-              } else {
-                // left is not a subset, so these constraints can't be aligned
-                None
-              }
-            }
-          }
-
-          alignConstraints(a.ordering, b.ordering) orElse alignConstraints(b.ordering, a.ordering)
-        }
       }
 
-      // A depth-first traversal of merge edges that results in a set of binding constraints for each node.
-      // These binding constraints may be underconstrained (i.e. an element of the constraint sequence
-      // may have arity > 1, so a second pass from the top down will be necessary to determine a fixed
-      // ordering that then gets propagated downward.
-      def findUnderconstrained(node: MergeNode, graph: Map[MergeNode, Set[MergeEdge]]): Map[MergeNode, Set[BindingConstraint]] = {
-        if (graph.get(node).forall(_.isEmpty)) {
-          Map(node -> Set(BindingConstraint(Seq(node.keys))))
-        } else {
-          val outbound = graph(node)
-
-          // subset the graph to only include edges that do not involve the current node
-          val graph0: Map[MergeNode, Set[MergeEdge]] = (graph - node) map { 
-            {(_: Set[MergeEdge]).filterNot({case MergeEdge(a, b, _) => a == node || b == node})}.second 
-          }
-
-          // for all outbound edges, visit the remote node collecting sets of BindingConstraints
-          // associated with the edge that produced the set
-          val edgeConstraints = outbound map {
-            case MergeEdge(`node`, other, _) => (other, findUnderconstrained(other, graph0))
-            case MergeEdge(other, `node`, _) => (other, findUnderconstrained(other, graph0))
-          }
-
-          // compute all compatible BindingConstraints between this node's key set and the constraints
-          // associated with each edge
-          val nodeConstraints: Set[BindingConstraint] = edgeConstraints flatMap {
-            case (other, constraints) => 
-              // the computeCompatible call here should never return None; if it does, then the 
-              // edge should have been pruned from the graph in the first place.
-              constraints(other) map { 
-                _ computeCompatible node.keys getOrElse sys.error("Edge from " + node + " to " + other + " is bad; incompatible constraint found.") 
-              }
-          }
-
-          //Now, we need to compute the minimal disjoint set of constraints from the node constraints.
-          //Note that the edge information is irrelevant; we can always find the edge constraints because
-          //they are exactly the same as the constraints on the node at the other end of the edge.
-          edgeConstraints.map(_._2).suml + (node -> BindingConstraints.minimize(nodeConstraints))
-        }
-      }
 
       // Each MergeNode corresponds to a set of MergeSpecs, each of which is keyed by the 
       // sequence of TicVar that define the tic variables. It occurs to me that TicVar
@@ -1307,7 +1321,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       // 2. Relating tables with disjoint sources is alignment on group keys
       // 3. Relating tables with disjoint group keys is a cross
       // 
-      def buildMerges(clusters: Map[MergeNode, List[Binding]], graph: Map[MergeNode, Set[MergeEdge]]) = {
+      def buildMerges(clusters: Map[MergeNode, List[Binding]], mergeTree: MergeTree) = {
         /**
          * General algorithm:
          *  1) Compute alignment on keys between current node and remote node for each source in current node.
@@ -1400,14 +1414,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           }
         }
 
-        val largestNode = (graph.toList maxBy { case (_, edges) => edges.size })._1
-        val underConstrained = findUnderconstrained(largestNode, graph)
-
         // the initial set of fixed constraints; not all of these will eventually be used, but each 
         // edge visited will choose a member of this set to include in the final set of orderings
         // for this node
-        val fixedConstraints = BindingConstraints.fix(underConstrained(largestNode))
-        buildMergeSpec(largestNode, fixedConstraints, graph, underConstrained)
+        val fixedConstraints = BindingConstraints.fix(mergeTree.underconstrained(mergeTree.rootNode))
+        buildMergeSpec(mergeTree.rootNode, fixedConstraints, mergeTree.inbound, mergeTree.underconstrained)
       }
     }
 
