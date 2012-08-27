@@ -351,7 +351,7 @@ trait Evaluator[M[+_]] extends DAG
             liftedTrans = liftToValues(pendingTable.trans)
 
             result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, paths.Value))) }
-            keyWrapped = trans.WrapObject(trans.Map1(trans.DerefArrayStatic(Leaf(Source), JPathIndex(0)), ConstantEmptyArray), paths.Key.name)  //TODO deref by index 0 is WRONG
+            keyWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, trans.DerefArrayStatic(Leaf(Source), JPathIndex(0))), paths.Key.name)  //TODO deref by index 0 is WRONG
             valueWrapped = trans.ObjectConcat(keyWrapped, trans.WrapObject(Leaf(Source), paths.Value.name))
             wrapped = result map { _ transform valueWrapped }
             _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (m -> wrapped)) }
@@ -422,7 +422,7 @@ trait Evaluator[M[+_]] extends DAG
               if (union) {
                 leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
               } else {
-                val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
+                val emptySpec = trans.ConstLiteral(CEmptyArray, Leaf(Source))
                 val fullSpec = trans.WrapArray(Leaf(SourceLeft))
               
                 val wrapped = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(emptySpec, emptySpec, fullSpec)
@@ -457,8 +457,8 @@ trait Evaluator[M[+_]] extends DAG
                   DerefObjectStatic(Leaf(Source), paths.Value),
                   paths.Value.name))
               
-              val emptySpec1 = trans.Map1(Leaf(Source), ConstantEmptyArray)
-              val emptySpec2 = trans.Map1(Leaf(SourceLeft), ConstantEmptyArray)
+              val emptySpec1 = trans.ConstLiteral(CEmptyArray, Leaf(Source))
+              val emptySpec2 = trans.ConstLiteral(CEmptyArray, Leaf(SourceLeft))
               val fullSpec = trans.WrapArray(Leaf(Source))
               
               val wrappedResult = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(fullSpec, emptySpec1, emptySpec2)
@@ -961,7 +961,7 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  //TODO don't use Map1, returns an empty array of type CNum
-    val bottomWrapped = trans.WrapObject(trans.Map1(source, ConstantEmptyArray), paths.Key.name)
+    val bottomWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, source), paths.Key.name)
     trans.ObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
   }
 
