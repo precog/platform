@@ -67,7 +67,7 @@ trait JDBMSlice[Key] extends Slice with Logging {
     }
   }
 
-  load()
+  // load()
 
   def size = row
 

@@ -114,6 +114,8 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
           i += 1
         }        
       }
+
+      load()
     }
 
     DB.close() // creating the slice should have already read contents into memory

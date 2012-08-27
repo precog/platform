@@ -216,6 +216,8 @@ trait Evaluator[M[+_]] extends DAG
     lazy val reductions: Map[DepGraph, NEL[dag.Reduce]] = findReductions(graph)
 
     def loop(graph: DepGraph, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, PendingTable] = {
+      logger.trace("Loop on %s".format(graph))
+      
       val assumptionCheck: StateT[Id, EvaluatorState, Option[M[Table]]] = for {
         state <- get[EvaluatorState]
       } yield state.assume.get(graph)
@@ -268,9 +270,9 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pendingTable <- loop(parent, splits)
             Path(prefixStr) = prefix
-            f1 = Infix.concatString.f2.partialLeft(CString(prefixStr))
-            trans2 = trans.Map1(pendingTable.trans, f1)
-            val back = pendingTable.table flatMap { _.transform(liftToValues(trans2)).load(userUID, jtpe) }
+            f1 = Infix.concatString.f2.partialLeft(CString(prefixStr.replaceAll("/$", "")))
+            trans2 = trans.Map1(trans.DerefObjectStatic(pendingTable.trans, paths.Value), f1)
+            val back = pendingTable.table flatMap { _.transform(trans2).load(userUID, jtpe) }
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         

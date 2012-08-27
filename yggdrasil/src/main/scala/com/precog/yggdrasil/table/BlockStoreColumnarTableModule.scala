@@ -35,6 +35,8 @@ import java.util.SortedMap
 
 import org.apache.jdbm.DBMaker
 
+import com.weiglewilczek.slf4s.Logging
+
 import scalaz._
 import scalaz.Ordering._
 import scalaz.std.set._
@@ -213,7 +215,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         }
   
         def slice = {
-          slice0.sparsen(remap, remap(position - 1) + 1)
+          slice0.sparsen(remap, if (position > 0) remap(position - 1) + 1 else 0)
         }
   
         def split: (Slice, Cell) = {
@@ -365,6 +367,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     private object loadMergeEngine extends MergeEngine[Key,BD]
 
     def load(uid: UserId, tpe: JType): M[Table] = {
+      logger.debug("Performing load for %s on %s".format(uid, tpe))
+
       import loadMergeEngine._
       val metadataView = storage.userMetadataView(uid)
 
@@ -469,10 +473,37 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
             DB.commit()
           }
+          
+          // Iterate over the slice
+          //TODO why doesn't this work with a tailrec? 
+          var row = 0
+          var globalId = nextId
 
-          storeRow(storage, row + 1, globalId + 1)
-        } else {
-          globalId
+          while (row < slice.size) {
+            val identities = VectorCase(idColumns.map(_._2.asInstanceOf[LongColumn].apply(row)) : _*)
+  
+            if (dataColumns.forall(_._2.isDefinedAt(row))) {
+              try {
+                index.storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
+              } catch {
+                case t: Throwable => println("Error on storeRow: " + t); throw t
+              }
+    
+              if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
+                DB.commit()
+              }
+              globalId += 1
+            }
+            row += 1
+          }
+  
+          SortOutput(newIndices, idColumns.size, globalId)
+        }}.map {
+          case output @ SortOutput(indices, idCount, lastId) => {
+            DB.close()
+            logger.debug("Sorted %d rows to JDBM".format(lastId - 1))
+            output
+          }
         }
 
         SortOutput(newIndices, idColumns.size, storeRow(index.storage, 0, nextId))
