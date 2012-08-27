@@ -356,7 +356,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
     private type SortBlockData = BlockProjectionData[SortingKey,Slice]
     private object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
 
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = {
+    override def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = {
       import sortMergeEngine._
 
       // Bookkeeping types/case classes

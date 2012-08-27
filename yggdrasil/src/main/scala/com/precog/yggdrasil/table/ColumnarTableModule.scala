@@ -1044,13 +1044,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     import trans._
     type TicVar = JPathField
 
-    def allSources[GroupId](spec: GroupingSpec[GroupId]): Vector[GroupingSource[GroupId]] = spec match {
-      case GroupingAlignment(ltrans, rtrans, leftParent, rightParent) =>
-       allSources(leftParent) ++ allSources(rightParent) 
-
-      case source @ GroupingSource(_, _, _, _) => Vector(source)
-    }
-
     case class MergeAlignment(left: MergeSpec, right: MergeSpec, keys: Seq[TicVar])
     
     sealed trait MergeSpec
@@ -1070,7 +1063,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       import Universe._
 
       def composeMergeSpec: MergeSpec = {
-
         val clusters: Map[MergeNode, List[Binding]] = bindings groupBy { 
           case Binding(_, _, _, groupKeySpec) => MergeNode(sources(groupKeySpec).map(_.key).toSet) 
         }
@@ -1416,7 +1408,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       val protoUniverses = (v map { case (src, specs) => specs map { (src, _) } toStream } toList).sequence 
       
       protoUniverses map { proto =>
-        Universe(proto map { case (src, spec) => Binding(src.table, sys.error("NEED ID TS"), src.targetTrans, spec) })
+        Universe(proto map { case (src, spec) => Binding(src.table, src.idTrans, src.targetTrans, spec) })
       }
     }
 
@@ -1427,7 +1419,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
       import GroupKeySpec.{dnf, toVector}
       val universes: Seq[Universe] = findUniverses(
-        allSources(grouping) map { source => (source, ((dnf _) andThen (toVector _)) apply source.groupKeySpec) }
+        grouping.sources map { source => (source, ((dnf _) andThen (toVector _)) apply source.groupKeySpec) }
       )
       
       evaluateMergeSpecs(universes map { _.composeMergeSpec }: _*)

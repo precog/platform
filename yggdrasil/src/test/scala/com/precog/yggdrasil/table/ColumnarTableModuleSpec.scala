@@ -243,6 +243,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "have no duplicate rows" in testDistinct
     }
   }
+
+  "grouping support" should {  
+    "derive the universes of binding constraints" in {
+    }
+  }
 }
 
 object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] {

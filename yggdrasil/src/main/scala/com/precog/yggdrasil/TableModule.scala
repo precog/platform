@@ -160,7 +160,9 @@ trait TableModule[M[+_]] extends FNModule {
       }
     }
     
-    sealed trait GroupingSpec[GroupId]
+    sealed trait GroupingSpec[GroupId] {
+      def sources: Vector[GroupingSource[GroupId]] 
+    }
     
     /**
      * Definition for a single group set and its associated composite key part.
@@ -169,9 +171,14 @@ trait TableModule[M[+_]] extends FNModule {
      * @param targetTrans The key which will be used by `merge` to access a particular subset of the target
      * @param groupKeySpec A composite union/intersect overlay on top of transspec indicating the composite key for this target set
      */
-    final case class GroupingSource[GroupId: scalaz.Equal](table: Table, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec) extends GroupingSpec[GroupId]
+    final case class GroupingSource[GroupId: scalaz.Equal](table: Table, idTrans: TransSpec1, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec) extends GroupingSpec[GroupId] {
+      def sources: Vector[GroupingSource[GroupId]] = Vector(this)
+    }
     
-    final case class GroupingAlignment[GroupId: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[GroupId], right: GroupingSpec[GroupId]) extends GroupingSpec[GroupId]
+    final case class GroupingAlignment[GroupId: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[GroupId], right: GroupingSpec[GroupId]) extends GroupingSpec[GroupId] {
+      def sources: Vector[GroupingSource[GroupId]] = left.sources ++ right.sources
+    }
+
     
     sealed trait GroupKeyAlign
     object GroupKeyAlign {
@@ -305,9 +312,7 @@ trait TableModule[M[+_]] extends FNModule {
     
     def distinct(spec: TransSpec1): Table
 
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]]
-    
-    def group[GroupId: scalaz.Equal](trans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec): GroupingSpec[GroupId] = GroupingSource[GroupId](this, trans, groupId, groupKeySpec)
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = sys.error("override me")
     
     def drop(n: Long): Table
     
