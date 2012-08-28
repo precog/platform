@@ -1129,13 +1129,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             acc + (a -> aInbound) + (b -> bInbound)
         }
 
+        def adjacent(a: MergeNode, b: MergeNode) = {
+          edges.find { e => (e.a == a && e.b == a) || (e.a == b && e.b == a) }.isDefined
+        }
+
         val rootNode = (inbound.toList maxBy { case (_, edges) => edges.size })._1
         
         // A depth-first traversal of merge edges that results in a set of binding constraints for each node.
         // These binding constraints may be underconstrained (i.e. an element of the constraint sequence
         // may have arity > 1, so a second pass from the top down will be necessary to determine a fixed
         // ordering that then gets propagated downward.
-        val underconstrained: Map[MergeNode, Set[BindingConstraint]] = {
+        lazy val underconstrained: Map[MergeNode, Set[BindingConstraint]] = {
           def find0(node: MergeNode, graph: Map[MergeNode, Set[MergeEdge]]): Map[MergeNode, Set[BindingConstraint]] = {
             if (graph.get(node).forall(_.isEmpty)) {
               Map(node -> Set(BindingConstraint(Seq(node.keys))))
@@ -1153,7 +1157,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                 case MergeEdge(`node`, other, _) => (other, find0(other, graph0))
                 case MergeEdge(other, `node`, _) => (other, find0(other, graph0))
               }
-
+              
               // compute all compatible BindingConstraints between this node's key set and the constraints
               // associated with each edge
               val nodeConstraints: Set[BindingConstraint] = edgeConstraints flatMap {
@@ -1220,8 +1224,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             val remainder = keys diff tail.head
             val intersection = tail.head intersect keys
             if (remainder.isEmpty && intersection.nonEmpty) {
-              // the remaining keys are entirely contained in the head of the tail, so we have to split the head
-              Some(BindingConstraint((acc :+ intersection :+ (tail.head diff keys)) ++ tail.tail))
+              // no need to retain the rest of the tail, since the keys that form the restriction
+              // are all that count
+              Some(BindingConstraint(acc :+ intersection))
             } else if ((tail.head diff keys).isEmpty && intersection.nonEmpty) { 
               // the head of the tail is entirely contained in the key set, so recurse on the remainder
               computeCompatible(remainder, tail.tail, acc :+ tail.head)
@@ -1307,7 +1312,23 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         }
 
         def select(preferred: Set[Seq[TicVar]], dispreferred: Set[Seq[TicVar]], among: Set[BindingConstraint]): Seq[TicVar] = {
-          sys.error("todo")
+          def isCompatible(seq: Seq[TicVar], constraint: Seq[Set[TicVar]]): Boolean = {
+            seq.isEmpty || 
+            ( constraint.nonEmpty && 
+              constraint.head.contains(seq.head) && 
+              {
+                val remainder = (constraint.head - seq.head)
+                isCompatible(seq.tail, if (remainder.nonEmpty) remainder +: constraint.tail else constraint.tail) 
+              } )
+          }
+
+          def find(selection: Set[Seq[TicVar]]): Option[Seq[TicVar]] = {
+            (for (seq <- selection; constraint <- among if isCompatible(seq, constraint.ordering)) yield seq).headOption
+          }
+
+          find(preferred).orElse(find(dispreferred)) getOrElse {
+            sys.error("Could not find a matching binding constrant from " + preferred + " or " + dispreferred + " among " + among + "; this indicates a bug in the grouping algorithm.")
+          }
         }
       }
 
