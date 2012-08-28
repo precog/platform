@@ -226,7 +226,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
 
     try {
       val result = module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {
-        _.sort(IdGen.nextInt, sortTransspec, SortAscending)
+        _.sort(sortTransspec, SortAscending)
       }.flatMap {
         // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
         table => M.point(table.transform(ObjectDelete(Leaf(Source), Set(SortKey))))

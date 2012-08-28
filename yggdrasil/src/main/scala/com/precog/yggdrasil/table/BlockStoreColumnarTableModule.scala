@@ -49,13 +49,67 @@ import scala.collection.mutable
 
 trait BlockStoreColumnarTableModule[M[+_]] extends
   ColumnarTableModule[M] with
-  StorageModule[M] with 
+  StorageModule[M] with
   IdSourceScannerModule[M] { self =>
     
   override type UserId = String
   type Key
   type Projection <: BlockProjectionLike[Key, Slice]
   type BD = BlockProjectionData[Key,Slice]
+  
+  def newMemoContext = new MemoContext
+  
+  class MemoContext extends MemoizationContext{
+    import trans._
+    
+    private val memoCache = mutable.HashMap.empty[MemoId, M[Table]]
+    
+    private val memoKey   = "MemoKey"
+    private val memoValue = "MemoValue"
+    
+    def memoize(table: Table, memoId: MemoId): M[Table] = {
+      val preMemoTable =
+        table.transform(
+          ObjectConcat(
+            WrapObject(
+              Scan(
+                ConstLiteral(CLong(0), Leaf(Source)),
+                freshIdScanner),
+              memoKey),
+            WrapObject(
+              Leaf(Source),
+              memoValue
+            )
+          )
+        )
+      
+      val memoTable = sort(preMemoTable, DerefObjectStatic(Leaf(Source), JPathField(memoKey)), SortAscending, memoId)
+      M.map(memoTable) { _.transform(DerefObjectStatic(Leaf(Source), JPathField(memoValue))) }
+    }
+    
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId): M[Table] = {
+      // yup, we still block the whole world. Yay.
+      memoCache.synchronized {
+        memoCache.get(memoId) match {
+          case Some(memoTable) => memoTable
+          case None =>
+            val memoTable = table.sort(sortKey, sortOrder)
+            memoCache += (memoId -> memoTable)
+            memoTable
+        }
+      }
+    }
+    
+    def expire(memoId: MemoId): Unit =
+      memoCache.synchronized {
+        memoCache -= memoId
+      }
+    
+    def purge() : Unit =
+      memoCache.synchronized {
+        memoCache.clear()
+      }
+  }
 
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import trans._
@@ -353,164 +407,119 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     private type SortBlockData = BlockProjectionData[SortingKey,Slice]
     private object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
 
-    private val memoCache = mutable.HashMap.empty[MemoId, M[Table]]
-    
     /**
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(memoId: MemoId, sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = {
-      def sort0: M[Table] = {
-        import sortMergeEngine._
-        import TableModule.paths._
-  
-        // Bookkeeping types/case classes
-        type IndexStore = SortedMap[SortingKey,Array[Byte]]
-        case class SliceIndex(name: String, storage: IndexStore, sortRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef])
-  
-        // Map a set of slice columns to a given JDBM DB index, since each slice could vary in column formats, names, etc
-        type IndexMap = Map[Seq[ColumnRef], SliceIndex]
-  
-        case class SortOutput(indices: IndexMap, idCount: Int, globalId: Long)
-  
-        // We use the sort transspec1 to compute a new table with a combination of the 
-        // original data and the new sort columns, referenced under the sortkey namespace
-        val tableWithSortKey = transform(ObjectConcat(Leaf(Source), WrapObject(sortKey, SortKey.name)))
-  
-        // Open a JDBM3 DB for use in sorting under a temp directory
-        val dbFile = new File(newScratchDir(), "sortspace")
-        val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
-  
-        val codec = new ColumnCodec()
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = {
+      import sortMergeEngine._
+      import TableModule.paths._
+
+      // Bookkeeping types/case classes
+      type IndexStore = SortedMap[SortingKey,Array[Byte]]
+      case class SliceIndex(name: String, storage: IndexStore, sortRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef])
+
+      // Map a set of slice columns to a given JDBM DB index, since each slice could vary in column formats, names, etc
+      type IndexMap = Map[Seq[ColumnRef], SliceIndex]
+
+      case class SortOutput(indices: IndexMap, idCount: Int, globalId: Long)
+
+      // We use the sort transspec1 to compute a new table with a combination of the 
+      // original data and the new sort columns, referenced under the sortkey namespace
+      val tableWithSortKey = transform(ObjectConcat(Leaf(Source), WrapObject(sortKey, SortKey.name)))
+
+      // Open a JDBM3 DB for use in sorting under a temp directory
+      val dbFile = new File(newScratchDir(), "sortspace")
+      val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
+
+      val codec = new ColumnCodec()
+      
+      // Insert slice data based on columndescriptors
+      val inputOp: M[SortOutput] = tableWithSortKey.slices.foldLeft(SortOutput(Map.empty, 0, 0l)) { case (SortOutput(indices, _, nextId), slice) => {
+        def columnsByPrefix(prefix: JPath): List[(ColumnRef,Column)] = slice.columns.collect {
+          // The conditional guarantees that dropPrefix will return Some
+          case (ColumnRef(selector, tpe), col) if selector.hasPrefix(prefix) => (ColumnRef(selector.dropPrefix(prefix).get, tpe), col)
+        }.toList
+
+        val dataColumns = columnsByPrefix(JPath(Value))
+        val idColumns   = columnsByPrefix(JPath(Key))
+        val sortColumns = columnsByPrefix(JPath(SortKey))
+        val indexMapKey = (sortColumns ++ dataColumns).map(_._1).toSeq
+
+        val (index, newIndices) = indices.get(indexMapKey).map((_,indices)).getOrElse {
+          val newIndex = SliceIndex(indexMapKey.toString,
+                                    DB.createTreeMap(indexMapKey.toString, 
+                                                     SortingKeyComparator(sortOrder.isAscending),
+                                                     SortingKeySerializer(idColumns.size),
+                                                     null /* Use default serialization */),
+                                    sortColumns.map(_._1),
+                                    dataColumns.map(_._1))
+
+          (newIndex, indices + (indexMapKey -> newIndex))
+        }
         
-        // Insert slice data based on columndescriptors
-        val inputOp: M[SortOutput] = tableWithSortKey.slices.foldLeft(SortOutput(Map.empty, 0, 0l)) { case (SortOutput(indices, _, nextId), slice) => {
-          def columnsByPrefix(prefix: JPath): List[(ColumnRef,Column)] = slice.columns.collect {
-            // The conditional guarantees that dropPrefix will return Some
-            case (ColumnRef(selector, tpe), col) if selector.hasPrefix(prefix) => (ColumnRef(selector.dropPrefix(prefix).get, tpe), col)
-          }.toList
-  
-          val dataColumns = columnsByPrefix(JPath(Value))
-          val idColumns   = columnsByPrefix(JPath(Key))
-          val sortColumns = columnsByPrefix(JPath(SortKey))
-          val indexMapKey = (sortColumns ++ dataColumns).map(_._1).toSeq
-  
-          val (index, newIndices) = indices.get(indexMapKey).map((_,indices)).getOrElse {
-            val newIndex = SliceIndex(indexMapKey.toString,
-                                      DB.createTreeMap(indexMapKey.toString, 
-                                                       SortingKeyComparator(sortOrder.isAscending),
-                                                       SortingKeySerializer(idColumns.size),
-                                                       null /* Use default serialization */),
-                                      sortColumns.map(_._1),
-                                      dataColumns.map(_._1))
-  
-            (newIndex, indices + (indexMapKey -> newIndex))
+        // Iterate over the slice
+        @inline
+        @tailrec
+        def storeRow(storage: IndexStore, row: Int, globalId: Long): Long = if (row < slice.size) {
+          val identities = VectorCase(idColumns.map(_._2.asInstanceOf[LongColumn].apply(row)) : _*)
+
+          storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
+
+          if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
+            DB.commit()
           }
-          
-          // Iterate over the slice
-          @inline
-          @tailrec
-          def storeRow(storage: IndexStore, row: Int, globalId: Long): Long = if (row < slice.size) {
-            val identities = VectorCase(idColumns.map(_._2.asInstanceOf[LongColumn].apply(row)) : _*)
-  
-            storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
-  
-            if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
-              DB.commit()
-            }
-  
-            storeRow(storage, row + 1, globalId + 1)
-          } else {
-            globalId
-          }
-  
-          SortOutput(newIndices, idColumns.size, storeRow(index.storage, 0, nextId))
-        }}.map {
-          case output @ SortOutput(indices, idCount, lastId) => {
-            DB.close()
-            logger.debug("Sorted %d rows to JDBM".format(lastId - 1))
-            output
-          }
+
+          storeRow(storage, row + 1, globalId + 1)
+        } else {
+          globalId
         }
-  
-        // A little ugly, but getting this implicitly seemed a little crazy
-        val sortingKeyOrder: Order[SortingKey] = scalaz.Order.fromScalaOrdering(
-          scala.math.Ordering.comparatorToOrdering(
-            SortingKeyComparator(sortOrder.isAscending)
-          )
+
+        SortOutput(newIndices, idColumns.size, storeRow(index.storage, 0, nextId))
+      }}.map {
+        case output @ SortOutput(indices, idCount, lastId) => {
+          DB.close()
+          logger.debug("Sorted %d rows to JDBM".format(lastId - 1))
+          output
+        }
+      }
+
+      // A little ugly, but getting this implicitly seemed a little crazy
+      val sortingKeyOrder: Order[SortingKey] = scalaz.Order.fromScalaOrdering(
+        scala.math.Ordering.comparatorToOrdering(
+          SortingKeyComparator(sortOrder.isAscending)
         )
-  
-  
-        // Merge the resulting slice indices back together
-        inputOp.flatMap { 
-          case SortOutput(_, _, 0l) => {
-            // We've been asked to sort an empty table. Return the input
-            M.point(this)
-          }
-          case SortOutput(indices, idCount, _) => {
-            // Map the distinct indices into SortProjections/Cells, then merge them
-            val cells: Set[M[Option[Cell]]] = indices.zipWithIndex.map {
-              case ((_, SliceIndex(name, _, sortColumns, valColumns)), index) => {
-                val sortProjection = new JDBMRawSortProjection(dbFile, name, idCount, sortColumns, valColumns) {
-                  def keyOrder: Order[SortingKey] = sortingKeyOrder
-                }
-  
-                val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
-  
-                succ(None) map { 
-                  _ map { nextBlock => Cell(index, nextBlock.maxKey, nextBlock.data) { k => succ(Some(k)) } }
-                }
+      )
+
+
+      // Merge the resulting slice indices back together
+      inputOp.flatMap { 
+        case SortOutput(_, _, 0l) => {
+          // We've been asked to sort an empty table. Return the input
+          M.point(this)
+        }
+        case SortOutput(indices, idCount, _) => {
+          // Map the distinct indices into SortProjections/Cells, then merge them
+          val cells: Set[M[Option[Cell]]] = indices.zipWithIndex.map {
+            case ((_, SliceIndex(name, _, sortColumns, valColumns)), index) => {
+              val sortProjection = new JDBMRawSortProjection(dbFile, name, idCount, sortColumns, valColumns) {
+                def keyOrder: Order[SortingKey] = sortingKeyOrder
               }
-            }.toSet
-  
-            mergeProjections(cells, sortOrder.isAscending) { slice => {
-              // ensure that sort keys compare before identities
-              slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(SortKey :: Nil) }).toList.sorted :::
-              slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(Key :: Nil) }).toList.sorted
-            }}
-          }
+
+              val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
+
+              succ(None) map { 
+                _ map { nextBlock => Cell(index, nextBlock.maxKey, nextBlock.data) { k => succ(Some(k)) } }
+              }
+            }
+          }.toSet
+
+          mergeProjections(cells, sortOrder.isAscending) { slice => {
+            // ensure that sort keys compare before identities
+            slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(SortKey :: Nil) }).toList.sorted :::
+            slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(Key :: Nil) }).toList.sorted
+          }}
         }
-      }
-      
-      // yup, we still block the whole world. Yay.
-      memoCache.synchronized {
-        memoCache.get(memoId) match {
-          case Some(memoTable) => memoTable
-          case None =>
-            val memoTable = sort0
-            memoCache += (memoId -> memoTable)
-            memoTable
-        }
-      }
-    }
-    
-    private val memoKey   = "MemoKey"
-    private val memoValue = "MemoValue"
-    
-    def memoize(memoId: MemoId): M[Table] = {
-      val preMemoTable =
-        transform(
-          ObjectConcat(
-            WrapObject(
-              Scan(
-                ConstLiteral(CLong(0), Leaf(Source)),
-                freshIdScanner),
-              memoKey),
-            WrapObject(
-              Leaf(Source),
-              memoValue
-            )
-          )
-        )
-      
-      val memoTable = preMemoTable.sort(memoId, DerefObjectStatic(Leaf(Source), JPathField(memoKey)), SortAscending)
-      M.map(memoTable) { _.transform(DerefObjectStatic(Leaf(Source), JPathField(memoValue))) }
-    }
-    
-    def invalidate(memoId: MemoId): Unit = {
-      // yup, we still block the whole world. Yay.
-      memoCache.synchronized {
-        memoCache -= memoId
       }
     }
   }

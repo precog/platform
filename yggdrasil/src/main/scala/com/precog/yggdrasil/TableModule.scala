@@ -42,7 +42,6 @@ trait TableModule[M[+_]] extends FNModule {
   type UserId
   type Scanner
   type Reducer[α]
-  type MemoId
 
   implicit def M: Monad[M]
 
@@ -274,11 +273,7 @@ trait TableModule[M[+_]] extends FNModule {
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(memoId: MemoId, sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table]
-    
-    def memoize(memoId: MemoId): M[Table]
-    
-    def invalidate(memoId: MemoId): Unit
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table]
     
     def distinct(spec: TransSpec1): Table
     
@@ -291,5 +286,40 @@ trait TableModule[M[+_]] extends FNModule {
     def takeRight(n: Long): Table
 
     def toJson: M[Iterable[JValue]]
+  }
+
+  type MemoId
+  type MemoContext <: MemoizationContext
+  
+  def newMemoContext : MemoContext 
+
+  def withMemoizationContext[A](f: MemoContext => A): A = {
+    val ctx = newMemoContext
+    try {
+      f(ctx)
+    } finally {
+      ctx.purge()
+    }
+  }
+
+  trait MemoizationContext {
+    import trans._
+    
+    def memoize(table: Table, memoId: MemoId): M[Table]
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId): M[Table]
+    
+    def expire(memoId: MemoId): Unit
+    def purge(): Unit
+  }
+
+  class DummyMemoizationContext extends MemoizationContext {
+    import trans._
+    
+    def memoize(table: Table, memoId: MemoId): M[Table] = M.point(table)
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId): M[Table] =
+      table.sort(sortKey, sortOrder)
+    
+    def expire(memoId: MemoId): Unit = ()
+    def purge(): Unit = ()
   }
 }

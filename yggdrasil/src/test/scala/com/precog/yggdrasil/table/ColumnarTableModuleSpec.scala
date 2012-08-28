@@ -132,10 +132,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   class UnloadableTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import trans._
     def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
-    def sort(memoId: MemoId, sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
-    def memoize(memoId: MemoId) = M.point(this)
-    def invalidate(memoId: MemoId) = ()
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
   }
+  
+  type MemoContext = DummyMemoizationContext
+  def newMemoContext = new DummyMemoizationContext
 
   def table(slices: StreamT[M, Slice]) = new UnloadableTable(slices)
 

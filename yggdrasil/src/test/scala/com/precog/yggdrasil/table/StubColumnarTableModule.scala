@@ -150,22 +150,21 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
   }
 }
 
-// vim: set ts=4 sw=4 et:
 trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
   type Table = StubTable
 
   def table(slices: StreamT[M, Slice]): StubTable = new StubTable(slices)
 
+  type MemoContext = DummyMemoizationContext
+  def newMemoContext = new DummyMemoizationContext
+  
   class StubTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) { self: Table => 
     private var initialIndices = collection.mutable.Map[Path, Int]()
     private var currentIndex = 0
 
     import trans._
-    def sort(memoId: MemoId, sortKet: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
+    def sort(sortKet: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
 
-    def memoize(memoId: MemoId) = M.point(this)
-    def invalidate(memoId: MemoId) = ()
-    
     override def load(uid: UserId, jtpe: JType) = {
       self.toJson map { events =>
         fromJson {
@@ -198,3 +197,4 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
   }
 }
 
+// vim: set ts=4 sw=4 et:

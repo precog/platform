@@ -88,7 +88,11 @@ trait Evaluator[M[+_]] extends DAG
   type YggConfig <: EvaluatorConfig
   
   def withContext[A](f: Context => A): A = 
-    f(new Context {})
+    withMemoizationContext { ctx =>
+      f(new Context {
+          val memoizationContext = ctx
+        })
+      }
 
   import yggConfig._
 
@@ -384,12 +388,11 @@ trait Evaluator[M[+_]] extends DAG
                   for {
                     pendingTable <- pending.table
                     val table = pendingTable.transform(liftToValues(pending.trans))  
-                    memoized <- table.memoize(s.memoId)
-                  } yield {
-                    child.findMemos(s).foreach { memoized.invalidate(_) }
-                    memoized
-                  }
+                    memoized <- ctx.memoizationContext.memoize(table, s.memoId)
+                  } yield memoized
                 }
+                
+                child.findMemos(s).foreach { ctx.memoizationContext.expire(_) }
                 
                 back.eval(state)  //: M[Table]
               }
@@ -408,8 +411,8 @@ trait Evaluator[M[+_]] extends DAG
               rightPendingTable <- rightPending.table
               val leftTable = leftPendingTable.transform(leftPending.trans)
               val rightTable = rightPendingTable.transform(rightPending.trans)
-              leftSorted <- leftTable.sort(left.memoId, TransSpec1.Id, SortAscending)
-              rightSorted <- rightTable.sort(right.memoId, TransSpec1.Id, SortAscending)
+              leftSorted <- ctx.memoizationContext.sort(leftTable, TransSpec1.Id, SortAscending, left.memoId)
+              rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
             } yield {
               val keyValueSpec = trans.ObjectConcat(
                 trans.WrapObject(
@@ -446,8 +449,8 @@ trait Evaluator[M[+_]] extends DAG
               rightPendingTable <- rightPending.table
               val leftTable = leftPendingTable.transform(leftPending.trans)
               val rightTable = rightPendingTable.transform(rightPending.trans)
-              leftSorted <- leftTable.sort(left.memoId, TransSpec1.Id, SortAscending)
-              rightSorted <- rightTable.sort(right.memoId, TransSpec1.Id, SortAscending)
+              leftSorted <- ctx.memoizationContext.sort(leftTable, TransSpec1.Id, SortAscending, left.memoId)
+              rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
             } yield {
               val keyValueSpec = trans.ObjectConcat(
                 trans.WrapObject(
@@ -724,7 +727,7 @@ trait Evaluator[M[+_]] extends DAG
                 val table = pendingTable.transform(liftToValues(pending.trans))
                 val shuffled = table.transform(TableTransSpec.makeTransSpec(Map(paths.Key -> idSpec)))
                 // TODO this could be made more efficient by only considering the indexes we care about
-                sorted <- shuffled.sort(parent.memoId, DerefObjectStatic(Leaf(Source), paths.Key), SortAscending)
+                sorted <- ctx.memoizationContext.sort(shuffled, DerefObjectStatic(Leaf(Source), paths.Key), SortAscending, parent.memoId)
               } yield {                              
                 parent.sorting match {
                   case ValueSort(id) =>
@@ -749,7 +752,7 @@ trait Evaluator[M[+_]] extends DAG
               val result = for {
                 pendingTable <- pending.table
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                sorted <- table.sort(parent.memoId, liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending)
+                sorted <- ctx.memoizationContext.sort(table, liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending, parent.memoId)
               } yield {
                 val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(sortField))
                 val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(valueField))
@@ -788,7 +791,7 @@ trait Evaluator[M[+_]] extends DAG
               val result = for {
                 pendingTable <- pending.table
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                sorted <- table.sort(parent.memoId, DerefObjectStatic(Leaf(Source), JPathField("sort-" + id)), SortAscending)
+                sorted <- ctx.memoizationContext.sort(table, DerefObjectStatic(Leaf(Source), JPathField("sort-" + id)), SortAscending, parent.memoId)
               } yield sorted
               
               PendingTable(result, graph, TransSpec1.Id)
@@ -803,7 +806,7 @@ trait Evaluator[M[+_]] extends DAG
             val result = for {
               pendingTable <- pending.table
               val table = pendingTable.transform(pending.trans)
-              memoized <- table.memoize(memoId)
+              memoized <- ctx.memoizationContext.memoize(table, memoId)
             } yield memoized
             
             PendingTable(result, graph, TransSpec1.Id)
@@ -1078,7 +1081,9 @@ trait Evaluator[M[+_]] extends DAG
     }
   }
 
-  sealed trait Context
+  sealed trait Context {
+    def memoizationContext: MemoContext
+  }
   
   private case class EvaluatorState(assume: Map[DepGraph, M[Table]] = Map(), extraCount: Int = 0)
   

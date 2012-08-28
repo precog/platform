@@ -132,9 +132,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModule[M] with TestColumnarTableModule[M] {
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import trans._
-    def sort(memoId: MemoId, sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
-    def memoize(memoId: MemoId) = M.point(this)
-    def invalidate(memoId: MemoId) = ()
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
     def load(uid: UserId, tpe: JType): M[Table] = {
       val pathsM = this.reduce {
         new CReducer[Set[Path]] {
@@ -168,6 +166,9 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
     def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = new Projection(descriptor, data)
   }
 
+  type MemoContext = DummyMemoizationContext
+  def newMemoContext = new DummyMemoizationContext
+  
   def table(slices: StreamT[M, Slice]) = new Table(slices)
 
   object storage extends Storage
