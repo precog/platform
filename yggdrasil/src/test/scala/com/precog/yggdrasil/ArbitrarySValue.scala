@@ -45,6 +45,19 @@ object CValueGenerators {
 
 trait CValueGenerators extends ArbitraryBigDecimal {
   import CValueGenerators._
+  
+  def inferSchema(data: Seq[JValue]): JSchema = {
+    if (data.isEmpty) {
+      Seq.empty
+    } else {
+      val current = data.head.flattenWithPath flatMap {
+        case (path, jv) =>
+          CType.forJValue(jv) map { ct => (path, ct) }
+      }
+      
+      (current ++ inferSchema(data.tail)).distinct
+    }
+  }
 
   def schema(depth: Int): Gen[JSchema] = {
     if (depth <= 0) leafSchema
@@ -134,8 +147,10 @@ trait CValueGenerators extends ArbitraryBigDecimal {
       falseSize   <- choose(0, 5)
       falseIds    <- containerOfN[Set, Identities](falseSize, containerOfN[List, Long](idCount, posNum[Long]) map { i => VectorCase(i: _*) })
       falseValues <- containerOfN[List, Seq[(JPath, JValue)]](falseSize, Gen.sequence[List, (JPath, JValue)](falseSchema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
+      
+      falseIds2 = falseIds -- ids     // distinct ids
     } yield {
-      (idCount, (ids zip values).toStream ++ (falseIds zip falseValues).toStream)
+      (idCount, (ids zip values).toStream ++ (falseIds2 zip falseValues).toStream)
     }
 
   def assemble(parts: Seq[(JPath, JValue)]): JValue = {
