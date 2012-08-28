@@ -1040,7 +1040,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     }
   }
 
-  object grouper extends Grouper {
+  trait Grouper extends GrouperLike {
     import trans._
     type TicVar = JPathField
 
@@ -1058,13 +1058,16 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     // The GroupKeySpec for a binding is comprised only of conjunctions that refer only
     // to members of the source table. The targetTrans defines a transformation of the
     // table to be used as the value output after keys have been derived. 
-    case class Binding(source: Table, idTrans: TransSpec1, targetTrans: TransSpec1, groupKeySpec: GroupKeySpec)
+    // while Binding as the same general structure as GroupingSource, we keep it as a seperate type because
+    // of the constraint that the groupKeySpec must be a conjunction, or just a single source clause. Reusing
+    // the same type would be confusing
+    case class Binding(source: Table, idTrans: TransSpec1, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec)
     case class Universe(bindings: List[Binding]) {
       import Universe._
 
       def composeMergeSpec: MergeSpec = {
         val clusters: Map[MergeNode, List[Binding]] = bindings groupBy { 
-          case Binding(_, _, _, groupKeySpec) => MergeNode(sources(groupKeySpec).map(_.key).toSet) 
+          case Binding(_, _, _, _, groupKeySpec) => MergeNode(sources(groupKeySpec).map(_.key).toSet) 
         }
 
         val adjacencyList: List[MergeEdge] = (for { 
@@ -1096,7 +1099,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
       // the GroupKeySpec passed to deriveTransSpecs must be either a source or a conjunction; all disjunctions
       // have been factored out by this point
-      def deriveTransSpec(conjunction: GroupKeySpec, keyOrder: Seq[TicVar] = Nil): TransSpec1 = {
+      def deriveKeyTransSpec(conjunction: GroupKeySpec, keyOrder: Seq[TicVar] = Nil): TransSpec1 = {
         val keyMap = keyOrder.zipWithIndex.toMap
 
         // [['a, value], ['b, value2]]
@@ -1383,7 +1386,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             NodeMergeSpec(
               ordering,
               (clusters(node) map { binding =>
-                SortMergeSpec(SourceMergeSpec(binding), deriveTransSpec(binding.groupKeySpec, ordering))
+                SortMergeSpec(SourceMergeSpec(binding), deriveKeyTransSpec(binding.groupKeySpec, ordering))
               })(collection.breakOut)
             )
           } else {
@@ -1409,7 +1412,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
               val alignSpec: List[MergeSpec] = clusters(node) map { binding =>
                 val sourceSort = SortMergeSpec(
                   SourceMergeSpec(binding),
-                  deriveTransSpec(binding.groupKeySpec, edgeConstraint)
+                  deriveKeyTransSpec(binding.groupKeySpec, edgeConstraint)
                 )
                 
                 LeftAlignMergeSpec(MergeAlignment(sourceSort, otherNodeSpec, edgeConstraint))
@@ -1443,12 +1446,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       }
     }
 
-    def findBindingUniverses[GroupId](grouping: GroupingSpec[GroupId]): Seq[Universe] = {
-      @inline def find0(v: Vector[(GroupingSource[GroupId], Vector[GroupKeySpec])]): Stream[Universe] = {
+    def findBindingUniverses(grouping: GroupingSpec): Seq[Universe] = {
+      @inline def find0(v: Vector[(GroupingSource, Vector[GroupKeySpec])]): Stream[Universe] = {
         val protoUniverses = (v map { case (src, specs) => specs map { (src, _) } toStream } toList).sequence 
         
         protoUniverses map { proto =>
-          Universe(proto map { case (src, spec) => Binding(src.table, src.idTrans, src.targetTrans, spec) })
+          Universe(proto map { case (src, spec) => Binding(src.table, src.idTrans, src.targetTrans, src.groupId, spec) })
         }
       }
 
@@ -1456,7 +1459,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       find0(grouping.sources map { source => (source, ((dnf _) andThen (toVector _)) apply source.groupKeySpec) })
     }
 
-    def merge[GroupId: scalaz.Equal](grouping: GroupingSpec[GroupId])(body: (Table, GroupId => Table) => M[Table]): M[Table] = {
+    def merge(grouping: GroupingSpec)(body: (Table, GroupId => Table) => M[Table]): M[Table] = {
       def evaluateMergeSpecs(specs: MergeSpec*): M[Table] = {
         sys.error("todo")
       }

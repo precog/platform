@@ -38,9 +38,15 @@ import scalaz._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 import scalaz.syntax.std.boolean._
+import scalaz.std.anyVal._
 
 trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
   implicit def coM: Copointed[M]
+
+  type GroupId = Int
+  object grouper extends Grouper {
+    implicit val geq: scalaz.Equal[GroupId] = intInstance
+  }
 
   def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
     val sliceSize = maxSliceSize.getOrElse(10)

@@ -40,6 +40,7 @@ object TableModule {
 
 trait TableModule[M[+_]] extends FNModule {
   type UserId
+  type GroupId
   type Scanner
   type Reducer[α]
 
@@ -160,8 +161,8 @@ trait TableModule[M[+_]] extends FNModule {
       }
     }
     
-    sealed trait GroupingSpec[GroupId] {
-      def sources: Vector[GroupingSource[GroupId]] 
+    sealed trait GroupingSpec {
+      def sources: Vector[GroupingSource] 
     }
     
     /**
@@ -171,12 +172,12 @@ trait TableModule[M[+_]] extends FNModule {
      * @param targetTrans The key which will be used by `merge` to access a particular subset of the target
      * @param groupKeySpec A composite union/intersect overlay on top of transspec indicating the composite key for this target set
      */
-    final case class GroupingSource[GroupId: scalaz.Equal](table: Table, idTrans: TransSpec1, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec) extends GroupingSpec[GroupId] {
-      def sources: Vector[GroupingSource[GroupId]] = Vector(this)
+    final case class GroupingSource(table: Table, idTrans: TransSpec1, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec) extends GroupingSpec {
+      def sources: Vector[GroupingSource] = Vector(this)
     }
     
-    final case class GroupingAlignment[GroupId: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[GroupId], right: GroupingSpec[GroupId]) extends GroupingSpec[GroupId] {
-      def sources: Vector[GroupingSource[GroupId]] = left.sources ++ right.sources
+    final case class GroupingAlignment(groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec, right: GroupingSpec) extends GroupingSpec {
+      def sources: Vector[GroupingSource] = left.sources ++ right.sources
     }
 
     
@@ -253,15 +254,18 @@ trait TableModule[M[+_]] extends FNModule {
   def grouper: Grouper
   
   type Table <: TableLike
-  
-  trait Grouper {
+  type Grouper <: GrouperLike
+
+  trait GrouperLike {
     import trans._
+
+    implicit val geq: scalaz.Equal[GroupId]
 
     /**
      * @param grouping The group spec
      * @param body The evaluator, taking a ''map'' from a key to some table (representing a tic variable or group set)
      */
-    def merge[GroupId: scalaz.Equal](grouping: GroupingSpec[GroupId])(body: (Table, GroupId => Table) => M[Table]): M[Table]
+    def merge(grouping: GroupingSpec)(body: (Table, GroupId => Table) => M[Table]): M[Table]
   }
     
   trait TableLike { this: Table =>

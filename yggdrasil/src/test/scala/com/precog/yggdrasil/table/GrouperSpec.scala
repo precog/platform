@@ -39,6 +39,8 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
   import trans._
   import constants._
 
+  type GroupId = Int
+
   "simple single-key grouping" should {
     "compute a histogram by value" in check { set: Stream[Int] =>
       val data = set map { JNum(_) }

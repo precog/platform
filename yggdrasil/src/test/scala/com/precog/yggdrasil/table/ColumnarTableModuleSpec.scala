@@ -254,6 +254,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   */
 
   "grouping support" should {  
+    import grouper._
     import grouper.Universe._
     def constraint(str: String) = BindingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
     def ticvars(str: String) = str.toSeq.map((c: Char) => JPathField(c.toString))
@@ -340,7 +341,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
         GroupKeySpecSource(JPathField("1"), DerefObjectStatic(SourceValue.Single, JPathField("a"))),
         GroupKeySpecSource(JPathField("2"), DerefObjectStatic(SourceValue.Single, JPathField("b"))))
 
-      val transspec = grouper.Universe.deriveTransSpec(keySpec)
+      val transspec = grouper.Universe.deriveKeyTransSpec(keySpec)
       val JArray(data) = JsonParser.parse("""[
         {"key": [1], "value": {"a": 12, "b": 7}},
         {"key": [2], "value": {"a": 42}},
@@ -471,11 +472,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     "graph traversal" >> {
       def norm(s: Set[BindingConstraint]) = s.map(_.ordering.toList)
 
-      val abcd = MergeNode(Set("a", "b", "c", "d").map(JPathField(_)))
-      val abc = MergeNode(Set("a", "b", "c").map(JPathField(_)))
-      val ab = MergeNode(Set("a", "b").map(JPathField(_)))
-      val ac = MergeNode(Set("a", "c").map(JPathField(_)))
-      val a = MergeNode(Set(JPathField("a")))
+      val abcd = MergeNode(ticvars("abcd").toSet)
+      val abc = MergeNode(ticvars("abc").toSet)
+      val ab = MergeNode(ticvars("ab").toSet)
+      val ac = MergeNode(ticvars("ac").toSet)
+      val a = MergeNode(ticvars("a").toSet)
 
       "find underconstrained binding constraints" >> {
         "for a graph with singleton sets" in {
@@ -578,6 +579,75 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
         BindingConstraints.select(preferred, dispreferred, constraints) must throwA[RuntimeException]
       }
+    }
+
+    "generate a trivial merge specification" in {
+      // Query:
+      // forall 'a 
+      //   foo' := foo where foo.a = 'a
+
+      val ticvar = JPathField("a")
+      val node = MergeNode(Set(ticvar))
+      val tree = MergeTree(Set(node))
+      val binding = Binding(ops.empty, SourceKey.Single, TransSpec1.Id, 1, GroupKeySpecSource(ticvar, DerefObjectStatic(SourceValue.Single, ticvar)))
+
+      val result = buildMerges(Map(node -> List(binding)), tree)
+
+      val expected = NodeMergeSpec(
+        List(ticvar),
+        Set(
+          SortMergeSpec(
+            SourceMergeSpec(binding),
+            WrapArray(
+              ArrayConcat(
+                WrapArray(ConstLiteral(CString("a"),DerefObjectStatic(SourceValue.Single, ticvar))),
+                WrapArray(DerefObjectStatic(SourceValue.Single, ticvar)))))))
+      
+      result must_== expected
+    }
+
+    "generate a merge specification" in {
+      // Query:
+      // forall 'a forall 'b
+      //   foo' := foo where foo.a = 'a
+      //   bar' := bar where bar.a = 'a & bar.b = 'b
+
+      val tica = JPathField("a")
+      val ticb = JPathField("b")
+      val foonode = MergeNode(Set(tica))
+      val barnode = MergeNode(Set(tica, ticb))
+      val tree = MergeTree(Set(foonode, barnode), Set(MergeEdge(foonode, barnode, Set(tica))))
+      val foobinding = Binding(ops.empty, SourceKey.Single, TransSpec1.Id, 1, GroupKeySpecSource(tica, DerefObjectStatic(SourceValue.Single, tica)))
+      val barbinding = Binding(ops.empty, SourceKey.Single, TransSpec1.Id, 1, 
+        GroupKeySpecAnd(
+          GroupKeySpecSource(tica, DerefObjectStatic(SourceValue.Single, tica)),
+          GroupKeySpecSource(ticb, DerefObjectStatic(SourceValue.Single, ticb))))
+
+      val result = buildMerges(Map(foonode -> List(foobinding), barnode -> List(barbinding)), tree)
+
+      val expected = NodeMergeSpec(
+        Vector(tica),
+        Set(
+          LeftAlignMergeSpec(
+            MergeAlignment(
+              SortMergeSpec(
+                SourceMergeSpec(foobinding),
+                WrapArray(
+                  ArrayConcat(
+                    WrapArray(ConstLiteral(CString("a"),DerefObjectStatic(SourceValue.Single,tica))),
+                    WrapArray(DerefObjectStatic(SourceValue.Single,tica))))),
+              NodeMergeSpec(
+                List(tica, ticb),
+                Set(
+                  SortMergeSpec(
+                    SourceMergeSpec(barbinding),
+                    ArrayConcat(
+                      WrapArray(ArrayConcat(WrapArray(ConstLiteral(CString("a"),DerefObjectStatic(SourceValue.Single,tica))),WrapArray(DerefObjectStatic(SourceValue.Single,tica)))),
+                      WrapArray(ArrayConcat(WrapArray(ConstLiteral(CString("b"),DerefObjectStatic(SourceValue.Single,ticb))),WrapArray(DerefObjectStatic(SourceValue.Single,ticb)))))))),
+              Vector(tica)
+            ))))
+
+      result must_== expected
     }
   }
 }
