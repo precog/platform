@@ -26,7 +26,7 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 
-trait StorageMetadata[M[+_]] extends Logging {
+trait StorageMetadata[M[+_]] {
   implicit def M: Monad[M]
 
   def findChildren(path: Path): M[Set[Path]]
@@ -79,7 +79,6 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
 
   def findSelectors(path: Path): M[Set[JPath]] = {
     metadata.findSelectors(path) flatMap { selectors =>
-      logger.debug("Found selectors %s for path %s".format(selectors, path))
       selectors traverse { selector =>
         findProjections(path, selector) map { result =>
           if(result.isEmpty) List.empty else List(selector)
@@ -89,7 +88,6 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
   }
 
   def findProjections(path: Path, selector: JPath): M[Map[ProjectionDescriptor, ColumnMetadata]] = {
-    logger.debug("Find projections for %s, %s".format(path, selector))
     metadata.findProjections(path, selector) flatMap { pmap =>
       traverseFilter(pmap) {
         case (key, value) =>
