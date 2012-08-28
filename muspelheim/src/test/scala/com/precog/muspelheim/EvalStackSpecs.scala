@@ -758,7 +758,7 @@ trait EvalStackSpecs extends Specification {
           | std::math::pow(selectCpm, 2)""".stripMargin
 
         eval(input) mustEqual Set(SDecimal(25), SDecimal(1), SDecimal(36), SDecimal(81), SDecimal(16))
-      }.pendingUntilFixed
+      }
 
       "Timelib" >> {
         val input = """

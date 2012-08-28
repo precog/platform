@@ -218,7 +218,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
 
   def table(slices: StreamT[M, Slice]): Table
 
-  abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike with Logging { self: Table =>
+  abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike { self: Table =>
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */

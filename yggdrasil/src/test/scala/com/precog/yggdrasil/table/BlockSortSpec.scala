@@ -27,6 +27,8 @@ import com.precog.util._
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 
+import com.weiglewilczek.slf4s.Logging
+
 import scala.annotation.tailrec
 import scala.util.Random
 import scalaz._

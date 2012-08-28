@@ -35,7 +35,7 @@ import java.util.SortedMap
 
 import org.apache.jdbm.DBMaker
 
-import com.weiglewilczek.slf4s.Logging
+import com.weiglewilczek.slf4s.Logger
 
 import scalaz._
 import scalaz.Ordering._
@@ -367,8 +367,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     private object loadMergeEngine extends MergeEngine[Key,BD]
 
     def load(uid: UserId, tpe: JType): M[Table] = {
-      logger.debug("Performing load for %s on %s".format(uid, tpe))
-
       import loadMergeEngine._
       val metadataView = storage.userMetadataView(uid)
 
@@ -482,7 +480,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           while (row < slice.size) {
             val identities = VectorCase(idColumns.map(_._2.asInstanceOf[LongColumn].apply(row)) : _*)
   
-            if (dataColumns.forall(_._2.isDefinedAt(row))) {
+            if (dataColumns.exists(_._2.isDefinedAt(row))) {
               try {
                 index.storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
               } catch {
@@ -501,7 +499,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         }}.map {
           case output @ SortOutput(indices, idCount, lastId) => {
             DB.close()
-            logger.debug("Sorted %d rows to JDBM".format(lastId - 1))
             output
           }
         }
