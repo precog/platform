@@ -178,7 +178,7 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
     override def load(uid: UserId, jtpe: JType) = {
       self.toJson map { events =>
         fromJson {
-          events.toStream map (_ \ "value") flatMap {
+          events.toStream flatMap {
             case JString(pathStr) => 
               val path = Path(pathStr)
         
