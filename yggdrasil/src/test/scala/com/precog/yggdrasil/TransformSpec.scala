@@ -168,10 +168,10 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         )
       })
 
-      val expected = sample.data map { jv =>
+      val expected = sample.data flatMap { jv =>
         ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-          case (JNum(x), JNum(y)) => JNum(x+y)
-          case _ => failure("Bogus test data")
+          case (JNum(x), JNum(y)) => Some(JNum(x+y))
+          case _ => None
         }
       }
 
@@ -222,12 +222,11 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         )
       })
 
-      val expected = sample.data.map { jv =>
+      val expected = sample.data flatMap { jv =>
         ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-          case (JNum(x), JNum(y))  => JBool(x == y)
-          case (JNothing, JNum(y)) => JNothing
-          case (JNum(x), JNothing) => JNothing
-          case _ => failure("Bogus test data")
+          case (JNothing, _) => None
+          case (_, JNothing) => None
+          case (x, y) => Some(JBool(x == y))
         }
       }
 
@@ -272,7 +271,17 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         )
       })
 
-      results.copoint must_== sample.data.map({ case JObject(fields) => JObject(fields.filter(_.name == "value")) })
+      results.copoint must_== (sample.data flatMap {
+        case JObject(fields) => {
+          val back = JObject(fields filter { f => f.name == "value" && f.value.isInstanceOf[JObject] })
+          if (back \ "value" \ "value1" == JNothing || back \ "value" \ "value2" == JNothing)
+            None
+          else
+            Some(back)
+        }
+        
+        case _ => None
+      })
     }
   }
 
@@ -287,7 +296,10 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         )
       })
 
-      results.copoint must_== (sample.data map { _ \ "value" } map { case v => JObject(JField("value1", v \ "value2") :: Nil) })
+      results.copoint must_== (sample.data map { _ \ "value" } collect {
+        case v if (v \ "value1") != JNothing && (v \ "value2") != JNothing =>
+          JObject(JField("value1", v \ "value2") :: Nil)
+      })
     }
   }
 
@@ -304,8 +316,19 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
           "value"
         )
       })
-
-      results.copoint must_== sample.data.map({ case JObject(fields) => JObject(fields.filter(_.name == "value")) })
+      
+      results.copoint must_== (sample.data flatMap {
+        case obj @ JObject(fields) => {
+          (obj \ "value") match {
+            case JArray(inner) if inner.length >= 2 =>
+              Some(JObject(JField("value", JArray(inner take 2)) :: Nil))
+            
+            case _ => None
+          }
+        }
+        
+        case _ => None
+      })
     }
   }
 
@@ -487,14 +510,21 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         )
       })
 
-      val expected = sample.data map { jv =>
-        JObject(
-          JField("value",
-            JObject(
-              JField("value1", jv \ "value" \ "value1") ::
-              JField("value3", jv \ "value" \ "value3") ::
-              Nil)) ::
-          Nil)
+      val expected = sample.data flatMap { jv =>
+        val value1 = jv \ "value" \ "value1"
+        val value3 = jv \ "value" \ "value3"
+        
+        if (value1.isInstanceOf[JNum] && value3.isInstanceOf[JNum]) {
+          Some(JObject(
+            JField("value",
+              JObject(
+                JField("value1", jv \ "value" \ "value1") ::
+                JField("value3", jv \ "value" \ "value3") ::
+                Nil)) ::
+            Nil))
+        } else {
+          None
+        }
       }
 
       results.copoint must_== expected
@@ -519,8 +549,8 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
 
       val included = reducedSchema.toMap
 
-      val expected = sample.data map { jv =>
-        JValue.unflatten(jv.flattenWithPath.filter {
+      val expected = sample.data flatMap { jv =>
+        val back = JValue.unflatten(jv.flattenWithPath.filter {
           case (path @ JPath(JPathField("key"), _*), _) => true
           case (path @ JPath(JPathField("value"), tail @ _*), value) if included.contains(JPath(tail : _*)) => {
             (included(JPath(tail : _*)), value) match {
@@ -535,6 +565,11 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
           }
           case _ => false
         })
+        
+        if (back \ "value" == JNothing)
+          None
+        else
+          Some(back)
       }
 
       results.copoint must_== expected
@@ -585,9 +620,10 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         ArraySwap(DerefObjectStatic(Leaf(Source), JPathField("value")), 2)
       })
 
-      val expected = sample.data map { jv =>
-        ((jv \ "value"): @unchecked) match {
-          case JArray(x :: y :: z :: xs) => JArray(z :: y :: x :: xs)
+      val expected = sample.data flatMap { jv =>
+        (jv \ "value") match {
+          case JArray(x :: y :: z :: xs) => Some(JArray(z :: y :: x :: xs))
+          case _ => None
         }
       }
 
