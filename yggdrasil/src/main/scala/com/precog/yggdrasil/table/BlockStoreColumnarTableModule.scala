@@ -461,53 +461,32 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         }
         
         // Iterate over the slice
-        @inline
-        @tailrec
-        def storeRow(storage: IndexStore, row: Int, globalId: Long): Long = if (row < slice.size) {
+        //TODO why doesn't this work with a tailrec?
+        var row = 0
+        var globalId = nextId
+
+        while (row < slice.size) {
           val identities = VectorCase(idColumns.map(_._2.asInstanceOf[LongColumn].apply(row)) : _*)
 
-          storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
-
-          if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
-            DB.commit()
-          }
-          
-          // Iterate over the slice
-          //TODO why doesn't this work with a tailrec? 
-          var row = 0
-          var globalId = nextId
-
-          while (row < slice.size) {
-            val identities = VectorCase(idColumns.map(_._2.asInstanceOf[LongColumn].apply(row)) : _*)
-  
-            if (dataColumns.exists(_._2.isDefinedAt(row))) {
-              try {
-                index.storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
-              } catch {
-                case t: Throwable => println("Error on storeRow: " + t); throw t
-              }
-    
-              if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
-                DB.commit()
-              }
-              globalId += 1
+          if (dataColumns.exists(_._2.isDefinedAt(row))) {
+            try {
+              index.storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
+            } catch {
+              case t: Throwable => println("Error on storeRow: " + t); throw t
             }
-            row += 1
+
+            if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
+              DB.commit()
+            }
+            globalId += 1
           }
-  
-          SortOutput(newIndices, idColumns.size, globalId)
-        }}.map {
-          case output @ SortOutput(indices, idCount, lastId) => {
-            DB.close()
-            output
-          }
+          row += 1
         }
 
-        SortOutput(newIndices, idColumns.size, storeRow(index.storage, 0, nextId))
+        SortOutput(newIndices, idColumns.size, globalId)
       }}.map {
         case output @ SortOutput(indices, idCount, lastId) => {
           DB.close()
-          logger.debug("Sorted %d rows to JDBM".format(lastId - 1))
           output
         }
       }

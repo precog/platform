@@ -450,7 +450,7 @@ trait EvalStackSpecs extends Specification {
     "evaluate the with operator across the campaigns dataset" in {
       val input = "count(//campaigns with { t: 42 })"
       eval(input) mustEqual Set(SDecimal(100))
-    }
+    }.pendingUntilFixed
 
     "perform distinct" >> {
       "on a homogenous set of numbers" >> {
@@ -506,7 +506,7 @@ trait EvalStackSpecs extends Specification {
         }
         case r => failure("Result has wrong shape: "+r)
       }
-    }.pendingUntilFixed
+    }
 
     "correctly handle cross-match situations" in {
       val input = """
