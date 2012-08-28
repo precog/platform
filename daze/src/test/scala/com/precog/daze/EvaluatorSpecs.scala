@@ -363,7 +363,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         testEval(input) { result =>
           result must haveSize(500)
         }
-      }
+      }.pendingUntilFixed
 
       "from the same path" >> {
         val line = Line(0, "")
@@ -2415,7 +2415,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }
+    }.pendingUntilFixed
 
     "distinct homogenous set of numbers" in {
       val line = Line(0, "")
