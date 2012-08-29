@@ -45,27 +45,14 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
 trait AccessControl[M[+_]] {
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): M[Boolean]
-  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): M[Boolean]
   def mayAccess(uid: UID, path: Path, ownders: Set[UID], accessType: AccessType): M[Boolean]
 }
 
 class UnlimitedAccessControl[M[+_]: Pointed] extends AccessControl[M] {
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess) = Pointed[M].point(true)
-  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess) = Pointed[M].point(true)
   def mayAccess(uid: UID, path: Path, ownders: Set[UID], accessType: AccessType) = Pointed[M].point(true)
 }
 
 class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Monad[M]) extends AccessControl[M] with Logging {
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): M[Boolean] = 
-    pathAccess match {
-      case PathRead => mayAccess(uid, path, Set(uid), ReadPermission) 
-      case PathWrite => mayAccess(uid, path, Set.empty, WritePermission)
-    }
-
-  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): M[Boolean] = 
-    mayAccess(uid, path, owners, ReadPermission)
- 
   def mayAccess(uid: TokenID, path: Path, owners: Set[UID], accessType: AccessType): M[Boolean] = {
     tokens.findToken(uid).flatMap{ _.map { t => 
       logger.debug("Checking %s access to %s from token %s with owners: %s".format(accessType, path, uid, owners))
@@ -126,28 +113,6 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
             }.getOrElse(M.point(false))
           )})
         })
-      case ModifyPermission =>
-        if(owners.isEmpty) M.point(false)
-        else forall(owners.map { owner =>
-          exists(t.grants.map { gid =>
-            tokens.findGrant(gid).flatMap( _.map {
-              case g @ Grant(_, _, ModifyPermission(p, o, _)) =>
-                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
-              case _ => M.point(false)
-            }.getOrElse(M.point(false))
-          )})
-        })
-      case TransformPermission =>
-        if(owners.isEmpty) M.point(false)
-        else forall(owners.map { owner =>
-          exists(t.grants.map { gid =>
-            tokens.findGrant(gid).flatMap( _.map { 
-              case g @ Grant(_, _, TransformPermission(p, o, _)) =>
-                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
-              case _ => M.point(false)
-            }.getOrElse(M.point(false))
-          )})
-        })
     }
   }
 
@@ -159,4 +124,3 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
     }.getOrElse { logger.debug("No issuer, parent grant == true"); M.point(true) }).map { _ && !grant.permission.isExpired(new DateTime()) }
   }
 }
-

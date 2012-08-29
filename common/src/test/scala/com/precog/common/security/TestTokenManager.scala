@@ -143,9 +143,7 @@ object TestTokenManager {
       ("write", WritePermission(_, _)),
       ("owner", OwnerPermission(_, _)),
       ("read", ReadPermission(_, owner, _)),
-      ("reduce", ReducePermission(_, owner, _)),
-      ("modify", ModifyPermission(_, owner, _)),
-      ("transform", TransformPermission(_, owner, _))
+      ("reduce", ReducePermission(_, owner, _))
     )
     
     config map {
