@@ -74,7 +74,7 @@ trait TableModule[M[+_]] extends FNModule {
 
     case class ObjectDelete[+A <: SourceType](source: TransSpec[A], fields: Set[JPathField]) extends TransSpec[A]
     
-    case class ArrayConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
+    case class ArrayConcat[+A <: SourceType](arrays: TransSpec[A]*) extends TransSpec[A] //done
     
     // Take the output of the specified TransSpec and prefix all of the resulting selectors with the
     // specified field. 

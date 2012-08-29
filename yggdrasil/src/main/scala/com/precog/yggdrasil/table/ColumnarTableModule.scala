@@ -466,7 +466,41 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
             }
           }
 
-        case ArrayConcat(left, right) =>
+        case ArrayConcat(elements @ _*) =>
+          // array concats cannot reduce the number of columns except by eliminating empty columns
+          elements.map(composeSliceTransform2).reduceLeft {
+            (tacc, t2) => tacc.zip(t2) { (sliceAcc, s2) =>
+              new Slice {
+                val size = sliceAcc.size
+                val columns: Map[ColumnRef, Column] = {
+                  val accCols = sliceAcc.columns collect { case (ref @ ColumnRef(JPath(JPathIndex(i), _*), ctype), col) => (i, ref, col) }
+                  val s2cols = s2.columns collect { case (ref @ ColumnRef(JPath(JPathIndex(i), xs @ _*), ctype), col) => (i, xs, ref, col) }
+
+                  if (accCols.isEmpty && s2cols.isEmpty) {
+                    val intersectedEmptyColumn = for {
+                      accEmpty <- (sliceAcc.columns collect { case (ColumnRef(JPath.Identity, CEmptyArray), col) => col }).headOption
+                      s2Empty  <- (s2.columns       collect { case (ColumnRef(JPath.Identity, CEmptyArray), col) => col }).headOption
+                    } yield {
+                      (ColumnRef(JPath.Identity, CEmptyArray) -> new IntersectColumn(accEmpty, s2Empty) with EmptyArrayColumn)
+                    } 
+                    
+                    intersectedEmptyColumn.toMap
+                  } else if ((accCols.isEmpty && !accCols.keys.exists(_.ctype == CEmptyArray)) || (s2cols.isEmpty && !s2cols.keys.exists(_.ctype == CEmptyArray))) {
+                    Map.empty[ColumnRef, Column]
+                  } else {
+                    val maxId = accCols.map(_._1).max
+                    val newCols = (accCols map { case (_, ref, col) => ref -> col }) ++ 
+                                  (s2cols  map { case (i, xs, ref, col) => ColumnRef(JPath(JPathIndex(i + maxId + 1) :: xs.toList), ref.ctype) -> col })
+
+                    newCols.toMap
+                  }
+                }
+              }
+            }
+          }
+          /*
+
+
           val l0 = composeSliceTransform2(left)
           val r0 = composeSliceTransform2(right)
 
@@ -493,7 +527,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
                 }
 
                 if (lempty.nonEmpty && rempty.nonEmpty) {
-                  Map(lempty.head._1 -> new IntersectColumn(lempty.head._2, rempty.head._2) with EmptyArrayColumn)
+                  Map(lempty.head._1 -> 
                 } else if (sl.columns.isEmpty || sr.columns.isEmpty) { 
                   Map() 
                 } else {
@@ -513,6 +547,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
               }
             }
           }
+          */
 
         case ObjectDelete(source, mask) => 
           composeSliceTransform2(source) map {
