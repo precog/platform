@@ -64,7 +64,7 @@ trait EvalStackSpecs extends Specification {
     "accept a dereferenced array" >> {
       "non-empty array" >> {
         eval("[1,2,3].foo") mustEqual Set()
-      }.pendingUntilFixed
+      }
 
       "empty array" >> {
         eval("[].foo") mustEqual Set()
@@ -431,7 +431,7 @@ trait EvalStackSpecs extends Specification {
     "evaluate the with operator across the campaigns dataset" in {
       val input = "count(//campaigns with { t: 42 })"
       eval(input) mustEqual Set(SDecimal(100))
-    }.pendingUntilFixed
+    }
 
     "perform distinct" >> {
       "on a homogenous set of numbers" >> {
@@ -981,13 +981,13 @@ trait EvalStackSpecs extends Specification {
           val result = eval("""{ name: "John", age: 29, gender: "male" }""")
           result must haveSize(1)
           result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SString("male"))))
-        }.pendingUntilFixed      
+        }
         
         "object with null" >> {
           val result = eval("""{ name: "John", age: 29, gender: null }""")
           result must haveSize(1)
           result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SNull)))
-        }.pendingUntilFixed
+        }
         
         "boolean" >> {
           val result = eval("true")
