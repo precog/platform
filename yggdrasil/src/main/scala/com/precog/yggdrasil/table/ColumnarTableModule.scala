@@ -493,7 +493,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
                 }
 
                 if (lempty.nonEmpty && rempty.nonEmpty) {
-                  Map(lempty.head._1 -> new UnionColumn(lempty.head._2, rempty.head._2) with EmptyArrayColumn)
+                  Map(lempty.head._1 -> new IntersectColumn(lempty.head._2, rempty.head._2) with EmptyArrayColumn)
+                } else if (sl.columns.isEmpty || sr.columns.isEmpty) { 
+                  Map() 
                 } else {
                   val (indices, lcols) = lnonEmpty map { 
                     case t @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), _), _) => (Some(i), t) 

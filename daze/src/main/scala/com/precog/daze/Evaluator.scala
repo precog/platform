@@ -1015,12 +1015,6 @@ trait Evaluator[M[+_]] extends DAG
     val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
     
     val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
-      
-    //ObjectConcat(
-    //  ObjectConcat(
-    //    ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)),
-    //    wrappedIdentitySpec),
-    //  wrappedValueSpec)
 
     ObjectConcat(wrappedIdentitySpec, wrappedValueSpec)
   }
