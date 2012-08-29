@@ -1018,7 +1018,7 @@ trait Evaluator[M[+_]] extends DAG
   private object TableTransSpec {
     def makeTransSpec(tableTrans: TableTransSpec1): TransSpec1 = {
       val wrapped = for ((key @ JPathField(fieldName), value) <- tableTrans) yield {
-        val mapped = deepMap(value) {
+        val mapped = TransSpec1.deepMap(value) {
           case lf @ Leaf(_) =>
             DerefObjectStatic(lf, key)
         }
@@ -1029,27 +1029,6 @@ trait Evaluator[M[+_]] extends DAG
       wrapped.foldLeft(ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*)): TransSpec1) { (acc, ts) =>
         trans.ObjectConcat(acc, ts)
       }
-    }
-    
-    private def deepMap(spec: TransSpec1)(f: PartialFunction[TransSpec1, TransSpec1]): TransSpec1 = spec match {
-      case x if f isDefinedAt x => f(x)
-      case x @ Leaf(_) => x
-      case trans.Filter(source, pred) => trans.Filter(deepMap(source)(f), deepMap(pred)(f))
-      case Scan(source, scanner) => Scan(deepMap(source)(f), scanner)
-      case trans.Map1(source, f1) => trans.Map1(deepMap(source)(f), f1)
-      case trans.Map2(left, right, f2) => trans.Map2(deepMap(left)(f), deepMap(right)(f), f2)
-      case trans.ObjectConcat(left, right) => trans.ObjectConcat(deepMap(left)(f), deepMap(right)(f))
-      case trans.ArrayConcat(left, right) => trans.ArrayConcat(deepMap(left)(f), deepMap(right)(f))
-      case trans.WrapObject(source, field) => trans.WrapObject(deepMap(source)(f), field)
-      case trans.WrapArray(source) => trans.WrapArray(deepMap(source)(f))
-      case DerefObjectStatic(source, field) => DerefObjectStatic(deepMap(source)(f), field)
-      case DerefObjectDynamic(left, right) => DerefObjectDynamic(deepMap(left)(f), deepMap(right)(f))
-      case DerefArrayStatic(source, element) => DerefArrayStatic(deepMap(source)(f), element)
-      case DerefArrayDynamic(left, right) => DerefArrayDynamic(deepMap(left)(f), deepMap(right)(f))
-      case trans.ArraySwap(source, index) => trans.ArraySwap(deepMap(source)(f), index)
-      case Typed(source, tpe) => Typed(deepMap(source)(f), tpe)
-      case trans.Equal(left, right) => trans.Equal(deepMap(left)(f), deepMap(right)(f))
-      case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(deepMap(source)(f), value, invert)
     }
   }
 

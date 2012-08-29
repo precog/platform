@@ -75,6 +75,7 @@ trait TableModule[M[+_]] extends FNModule {
 
     case class ObjectDelete[+A <: SourceType](source: TransSpec[A], fields: Set[JPathField]) extends TransSpec[A]
     
+    // TODO: Make ArrayConcat n-ary
     case class ArrayConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
     
     // Take the output of the specified TransSpec and prefix all of the resulting selectors with the
@@ -108,10 +109,59 @@ trait TableModule[M[+_]] extends FNModule {
     // that is not undefined
     case class ConstLiteral[+A <: SourceType](value: CValue, target: TransSpec[A]) extends TransSpec[A]
   
-    type TransSpec1 = TransSpec[Source1]
+    type TransSpec1 = TransSpec[Source.type]
+
+    object TransSpec {
+      def mapSources[A <: SourceType, B <: SourceType](spec: TransSpec[A])(f: A => B): TransSpec[B] = {
+        spec match {
+          case Leaf(source) => Leaf(f(source))
+          case trans.Filter(source, pred) => trans.Filter(mapSources(source)(f), mapSources(pred)(f))
+          case Scan(source, scanner) => Scan(mapSources(source)(f), scanner)
+          case trans.Map1(source, f1) => trans.Map1(mapSources(source)(f), f1)
+          case trans.Map2(left, right, f2) => trans.Map2(mapSources(left)(f), mapSources(right)(f), f2)
+          case trans.ObjectConcat(left, right) => trans.ObjectConcat(mapSources(left)(f), mapSources(right)(f))
+          case trans.ArrayConcat(left, right) => trans.ArrayConcat(mapSources(left)(f), mapSources(right)(f))
+          case trans.WrapObject(source, field) => trans.WrapObject(mapSources(source)(f), field)
+          case trans.WrapArray(source) => trans.WrapArray(mapSources(source)(f))
+          case DerefObjectStatic(source, field) => DerefObjectStatic(mapSources(source)(f), field)
+          case DerefObjectDynamic(left, right) => DerefObjectDynamic(mapSources(left)(f), mapSources(right)(f))
+          case DerefArrayStatic(source, element) => DerefArrayStatic(mapSources(source)(f), element)
+          case DerefArrayDynamic(left, right) => DerefArrayDynamic(mapSources(left)(f), mapSources(right)(f))
+          case trans.ArraySwap(source, index) => trans.ArraySwap(mapSources(source)(f), index)
+          case Typed(source, tpe) => Typed(mapSources(source)(f), tpe)
+          case trans.Equal(left, right) => trans.Equal(mapSources(left)(f), mapSources(right)(f))
+          case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(mapSources(source)(f), value, invert)
+        }
+      }
+
+      def deepMap[A <: SourceType](spec: TransSpec[A])(f: PartialFunction[TransSpec[A], TransSpec[A]]): TransSpec[A] = spec match {
+        case x if f isDefinedAt x => f(x)
+        case x @ Leaf(source) => x
+        case trans.Filter(source, pred) => trans.Filter(deepMap(source)(f), deepMap(pred)(f))
+        case Scan(source, scanner) => Scan(deepMap(source)(f), scanner)
+        case trans.Map1(source, f1) => trans.Map1(deepMap(source)(f), f1)
+        case trans.Map2(left, right, f2) => trans.Map2(deepMap(left)(f), deepMap(right)(f), f2)
+        case trans.ObjectConcat(left, right) => trans.ObjectConcat(deepMap(left)(f), deepMap(right)(f))
+        case trans.ArrayConcat(left, right) => trans.ArrayConcat(deepMap(left)(f), deepMap(right)(f))
+        case trans.WrapObject(source, field) => trans.WrapObject(deepMap(source)(f), field)
+        case trans.WrapArray(source) => trans.WrapArray(deepMap(source)(f))
+        case DerefObjectStatic(source, field) => DerefObjectStatic(deepMap(source)(f), field)
+        case DerefObjectDynamic(left, right) => DerefObjectDynamic(deepMap(left)(f), deepMap(right)(f))
+        case DerefArrayStatic(source, element) => DerefArrayStatic(deepMap(source)(f), element)
+        case DerefArrayDynamic(left, right) => DerefArrayDynamic(deepMap(left)(f), deepMap(right)(f))
+        case trans.ArraySwap(source, index) => trans.ArraySwap(deepMap(source)(f), index)
+        case Typed(source, tpe) => Typed(deepMap(source)(f), tpe)
+        case trans.Equal(left, right) => trans.Equal(deepMap(left)(f), deepMap(right)(f))
+        case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(deepMap(source)(f), value, invert)
+      }
+    }
     
     object TransSpec1 {
       val Id = Leaf(Source)
+
+      val DerefArray0 = DerefArrayStatic(Leaf(Source), JPathIndex(0))
+      val DerefArray1 = DerefArrayStatic(Leaf(Source), JPathIndex(1))
+      val DerefArray2 = DerefArrayStatic(Leaf(Source), JPathIndex(2))
     }
     
     type TransSpec2 = TransSpec[Source2]
@@ -236,7 +286,7 @@ trait TableModule[M[+_]] extends FNModule {
     }
   }
   
-  trait TableOps {
+  trait TableCompanionLike {
     def empty: Table
     
     def constString(v: Set[CString]): Table
@@ -248,12 +298,16 @@ trait TableModule[M[+_]] extends FNModule {
     
     def constEmptyObject: Table
     def constEmptyArray: Table
+
+    def align(sources: (Table, trans.TransSpec1)*): M[Seq[Table]]
+    def intersect(sources: (Table, trans.TransSpec1)*): M[Table]
   }
   
-  def ops: TableOps
+  def ops: TableCompanion
   def grouper: Grouper
   
   type Table <: TableLike
+  type TableCompanion <: TableCompanionLike
   type Grouper <: GrouperLike
 
   trait GrouperLike {

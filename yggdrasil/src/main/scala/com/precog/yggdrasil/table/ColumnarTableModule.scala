@@ -64,11 +64,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
   type Reducer[α] = CReducer[α]
   type RowId = Int
   type Table <: ColumnarTable
+  type TableCompanion = ColumnarTableCompanion
 
   def newScratchDir(): File = Files.createTempDir()
   def jdbmCommitInterval: Long = 200000l
 
-  object ops extends TableOps {
+  object ops extends ColumnarTableCompanion
+
+  trait ColumnarTableCompanion extends TableCompanionLike {
     import scala.collection.Set
     def empty: Table = table(StreamT.empty[M, Slice])
     
@@ -110,6 +113,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
     def constEmptyArray: Table = 
       table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice])
+
+    def align(sources: (Table, trans.TransSpec1)*): M[Seq[Table]] = sys.error("todo")
+    def intersect(sources: (Table, trans.TransSpec1)*): M[Table] = sys.error("todo")
   }
   
   implicit def liftF1(f: F1) = new F1Like {
@@ -1047,10 +1053,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     case class MergeAlignment(left: MergeSpec, right: MergeSpec, keys: Seq[TicVar])
     
     sealed trait MergeSpec
-    case class SortMergeSpec(target: MergeSpec, sortBy: TransSpec1) extends MergeSpec
     case class SourceMergeSpec(binding: Binding) extends MergeSpec
+    case class SortMergeSpec(target: MergeSpec, sortBy: TransSpec1) extends MergeSpec
     case class LeftAlignMergeSpec(alignment: MergeAlignment) extends MergeSpec
-    case class RightAlignMergeSpec(alignment: MergeAlignment) extends MergeSpec
     case class IntersectMergeSpec(mergeSpecs: Set[MergeSpec]) extends MergeSpec
     case class NodeMergeSpec(ordering: Seq[TicVar], toAlign: Set[MergeSpec]) extends MergeSpec
     case class CrossMergeSpec(left: MergeSpec, right: MergeSpec) extends MergeSpec
@@ -1061,7 +1066,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     // while Binding as the same general structure as GroupingSource, we keep it as a seperate type because
     // of the constraint that the groupKeySpec must be a conjunction, or just a single source clause. Reusing
     // the same type would be confusing
-    case class Binding(source: Table, idTrans: TransSpec1, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec)
+    case class Binding(source: Table, idTrans: TransSpec1, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec) 
+
     case class Universe(bindings: List[Binding]) {
       import Universe._
 
@@ -1399,7 +1405,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
             def mergeEdge(constraints: Set[Seq[TicVar]], alignments: Set[MergeSpec], other: MergeNode): (Set[Seq[TicVar]], Set[MergeSpec]) = {
               // choose a single ordering that will be used to align tables of this node
-              // with tables of that node
+              // with tables of that node. The other node *must* return a MergeSpec with
+              // keys in this order so that we have a natural alignment
               val edgeConstraint: Seq[TicVar] = BindingConstraints.select(constraints, candidates, underConstrained(other))
 
               // Fix any underconstrained orderings for the remote node, ensuring that the ordering
@@ -1459,15 +1466,199 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       find0(grouping.sources map { source => (source, ((dnf _) andThen (toVector _)) apply source.groupKeySpec) })
     }
 
+    /**
+     * Merge controls the iteration over the table of group key values. 
+     */
     def merge(grouping: GroupingSpec)(body: (Table, GroupId => Table) => M[Table]): M[Table] = {
+      case class Mergeable(groupId: GroupId, table: Table, idTrans: TransSpec1, targetTrans: TransSpec1, sortTrans: Option[TransSpec1])
+
+      def evaluateMergeSpec(spec: MergeSpec): M[(Set[GroupId], Map[GroupId, List[Mergeable]])] = {
+        spec match {
+          case SourceMergeSpec(binding) => 
+            val mergeResults = Map(binding.groupId -> List(Mergeable(binding.groupId, binding.source, binding.idTrans, binding.targetTrans, None)))
+            (Set(binding.groupId), mergeResults).point[M]
+
+          case SortMergeSpec(target, sortBy) => 
+            evaluateMergeSpec(target) flatMap {
+              case (childGroups, mergeResults) =>
+                val mergeResults0 = mergeResults map { 
+                  case (groupId, mergeables) =>
+                    val mergeablesM = mergeables map {
+                      case Mergeable(groupId, table, idTrans, targetTrans, _) => 
+                        table.sort(sortBy, SortAscending) map { sortedTable =>
+                          Mergeable(
+                            groupId, 
+                            sortedTable,
+                            TransSpec.deepMap(idTrans) { case Leaf(_) => TransSpec1.DerefArray1 },
+                            TransSpec.deepMap(targetTrans) { case Leaf(_) => TransSpec1.DerefArray1 },
+                            Some(TransSpec1.DerefArray0)
+                          )
+                        }
+                    }
+
+                    mergeablesM.sequence map { m0 => (groupId -> m0) }
+                }
+
+                mergeResults0.toStream.sequence map { rs => (childGroups, rs.toMap) }
+            }
+
+          case LeftAlignMergeSpec(MergeAlignment(left, right, keys)) =>
+            evaluateMergeSpec(left) flatMap {
+              case (leftGroups, leftResults) =>
+                evaluateMergeSpec(right) flatMap {
+                  case (rightGroups, rightResults) =>
+                    val toAlign = for {
+                      leftGroupId  <- leftGroups
+                      rightGroupId <- rightGroups
+                    } yield (leftGroupId, rightGroupId, leftResults(leftGroupId), rightResults(rightGroupId))
+
+                    val alignedMs : Set[M[Seq[Mergeable]]] = toAlign map {
+                      case (leftGroupId, rightGroupId, leftResults, rightResults) =>
+                        val alignedMs0 = for {
+                          leftResult <- leftResults
+                          rightResult <- rightResults
+                        } yield {
+                          for {
+                            aligned <- ops.align(
+                                         (leftResult.table -> leftResult.sortTrans.get), 
+                                         (rightResult.table -> rightResult.sortTrans.get)
+                                       ) 
+                          } yield {
+                            (aligned.toList: @unchecked) match {
+                              case leftAligned :: rightAligned :: Nil =>
+                                Vector(
+                                  Mergeable(leftGroupId, leftAligned, leftResult.idTrans, leftResult.targetTrans, leftResult.sortTrans),
+                                  Mergeable(rightGroupId, rightAligned, rightResult.idTrans, rightResult.targetTrans, rightResult.sortTrans) 
+                                )
+                            }
+                          }
+                        }
+
+                        alignedMs0.sequence map { _.flatten }
+                    }
+
+                    alignedMs.sequence map { aligned => 
+                      val resultMap = aligned.flatten.groupBy(_.groupId).mapValues(_.toList)
+                      (resultMap.keySet, resultMap)
+                    }
+                }
+            }
+
+          case IntersectMergeSpec(specs) =>
+            specs.map(evaluateMergeSpec).sequence map { _.suml }
+
+          case CrossMergeSpec(left, right) =>
+            // union the results by group key
+            evaluateMergeSpec(left) flatMap {
+              case (leftGroups, leftResults) =>
+                evaluateMergeSpec(right) flatMap {
+                  case (rightGroups, rightResults) =>
+                        // We need to cross the results by groupId, but be able to separate out the original data for each source
+                        val crossedMaps = for {
+                          leftGroupId <- leftGroups
+                          rightGroupId <- rightGroups
+                          leftMergeable <- leftResults(leftGroupId)
+                          rightMergeable <- rightResults(rightGroupId)
+                        } yield {
+                          val crossedTable = leftMergeable.table.cross(rightMergeable.table) {
+                            ArrayConcat(
+                              // array element 0 is the group keys
+                              WrapArray(
+                                ArrayConcat(
+                                  TransSpec.mapSources(leftMergeable.sortTrans.get) { (_: Source1) => SourceLeft },
+                                  TransSpec.mapSources(rightMergeable.sortTrans.get) { (_: Source1) => SourceRight }
+                                )
+                              ),
+                              ArrayConcat(
+                                // array element 1 is the left id and left target
+                                WrapArray(
+                                  TransSpec.mapSources(ArrayConcat(WrapArray(leftMergeable.idTrans), WrapArray(leftMergeable.targetTrans))) {
+                                    (_: Source1) => SourceLeft 
+                                  }
+                                ),
+                                // array element 2 is the right id and right target
+                                WrapArray(
+                                  TransSpec.mapSources(ArrayConcat(WrapArray(leftMergeable.idTrans), WrapArray(leftMergeable.targetTrans))) {
+                                    (_: Source1) => SourceRight
+                                  }
+                                )
+                              )
+                            )
+                          }
+
+                          Map(
+                            leftGroupId -> List(Mergeable(leftGroupId, 
+                                                     crossedTable, 
+                                                     DerefArrayStatic(TransSpec1.DerefArray1, JPathIndex(0)),
+                                                     DerefArrayStatic(TransSpec1.DerefArray1, JPathIndex(1)),
+                                                     Some(TransSpec1.DerefArray0))),
+                            rightGroupId -> List(Mergeable(rightGroupId, 
+                                                     crossedTable, 
+                                                     DerefArrayStatic(TransSpec1.DerefArray2, JPathIndex(0)),
+                                                     DerefArrayStatic(TransSpec1.DerefArray2, JPathIndex(1)),
+                                                     Some(TransSpec1.DerefArray0)))
+                          )
+                        }
+
+                      val result = crossedMaps.suml
+                      (result.keySet, result).point[M]
+              }
+            }
+
+          case NodeMergeSpec(ordering, toAlign) =>
+            // we'll either have a set of IntersectMergeSpecs to align, or a set of sorted SourceMergeSpecs.
+            toAlign.map(evaluateMergeSpec).sequence flatMap { alignMergeables => 
+              val (nodeGroups, groupMergeables) = alignMergeables.suml
+
+              val alignedPairs = for (groupId <- nodeGroups) yield {
+                val toIntersect = groupMergeables(groupId)
+
+                val groupMergeablesM = if (toIntersect.size > 1) {
+                  val sortedMs: List[M[(Table,TransSpec1)]] = toIntersect map { mergeable: Mergeable => 
+                    mergeable.table.sort(mergeable.idTrans, SortAscending) map { t => (t, mergeable.targetTrans) }
+                  }
+
+                  for {
+                    sorted      <- sortedMs.sequence 
+                    intersected <- ops.intersect((sorted map (_._1 -> TransSpec1.DerefArray0)): _*)
+                  } yield {
+                    val targetTrans = TransSpec.deepMap(sorted.head._2) { case Leaf(_) => TransSpec1.DerefArray1 }
+                    List(Mergeable(groupId, intersected, TransSpec1.DerefArray0, targetTrans, Some(TransSpec1.DerefArray0)))
+                  }
+                } else {
+                  toIntersect.point[M]
+                }
+
+                // all the intersected mergeables for the group 
+                groupMergeablesM map { mergeables => groupId -> mergeables }
+              }
+
+              alignedPairs.sequence map { m0 => (nodeGroups -> m0.toMap) }
+            }
+        }
+      }
+      
       def evaluateMergeSpecs(specs: MergeSpec*): M[Table] = {
+        // Each MergeSpec will give rise to a mapping from GroupId => Table where each table is sorted
+        // with respect to the group keys within; this is necessary so that we can seek within that
+        // table when looking up a group set by group key (as must be done in the closure that we
+        // return to the evaluator)
+
+        // Each MergeSpec also gives rise to a table of group key values. These tables must be unioned
+        // and sorted with respect to group key, eliminating repeated values. This can effectively be
+        // achieved by sorting in JDBM without providing any identity information.
+
+        // We then iterate over the group key table (in M, of course), calling the body function for each group key.
+        // The closure that we pass to the body function must seek within each of the tables generated by
+        // the individual MergeSpecs, and must union together those results. Ideally the resulting table would then
+        // be distinct'ed by identity.
         sys.error("todo")
       }
 
+      // all of the universes will be unioned together.
       val universes = findBindingUniverses(grouping)
       evaluateMergeSpecs(universes map { _.composeMergeSpec }: _*)
     }
   }
-
 }
 // vim: set ts=4 sw=4 et:
