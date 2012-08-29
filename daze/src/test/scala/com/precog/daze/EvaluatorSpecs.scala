@@ -341,12 +341,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result must haveSize(1)
 
         val result2 = result collect {
-          case (ids, SDecimal(d)) if ids.size == 1 => d
+          case (ids, SDecimal(d)) if ids.size == 0 => d
         }
 
         result2 must contain(259)
       }
-    }.pendingUntilFixed 
+    }
 
     "evaluate a join of two reductions on the same dataset using a MegaReduce" in {
       val line = Line(0, "")
@@ -354,7 +354,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers7")))
       
       val mega = dag.MegaReduce(line, 
-        NEL(dag.Reduce(line, Count, parent), dag.Reduce(line, Count, parent)), 
+        NEL(dag.Reduce(line, Count, parent), dag.Reduce(line, Sum, parent)), 
         parent)
 
       val input = Join(line, Add, CrossRightSort, 
@@ -374,7 +374,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         result2 must contain(259)
       }
-    }.pendingUntilFixed 
+    }
 
     "join two sets" >> {
       "from different paths" >> {
