@@ -472,7 +472,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
 
           l0.zip(r0) { (sl, sr) =>
             def assertDense(paths: Set[JPath]) = assert {
-              (paths collect { case JPath(JPathIndex(i), _ @ _*) => i }).toList.sorted.zipWithIndex forall { case (a, b) => a == b }
+              (paths collect { 
+                case JPath(JPathIndex(i), _ @ _*) => i 
+              }).toList.sorted.zipWithIndex forall { case (a, b) => a == b }
             }
 
             assertDense(sl.columns.keySet.map(_.selector))
@@ -481,9 +483,18 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
             new Slice {
               val size = sl.size
               val columns: Map[ColumnRef, Column] = {
-                val (indices, lcols) = sl.columns.toList map { case t @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), _), _) => (i, t) } unzip
-                val maxIndex = indices.reduceLeftOption(_ max _).map(_ + 1).getOrElse(0)
-                val rcols = sr.columns map { case (ColumnRef(JPath(JPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(JPath(JPathIndex(j + maxIndex) +: xs : _*), ctype), col) }
+                val (indices, lcols) = sl.columns.toList map { 
+                  case t @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), _), _) => (Some(i), t) 
+                  case t @ (ColumnRef(_, CEmptyArray), _) => (None, t)
+                } unzip
+
+                val someIndices = indices collect { case Some(i) => i }
+                val maxIndex = someIndices.reduceLeftOption(_ max _).map(_ + 1).getOrElse(0)
+
+                val rcols = sr.columns map { 
+                  case (ColumnRef(JPath(JPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(JPath(JPathIndex(j + maxIndex) +: xs : _*), ctype), col) 
+                  case t @ (ColumnRef(_, CEmptyArray), _) => t
+                }
                 lcols.toMap ++ rcols
               }
             }

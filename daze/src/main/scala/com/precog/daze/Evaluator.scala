@@ -434,7 +434,7 @@ trait Evaluator[M[+_]] extends DAG
                 wrapped.transform(DerefArrayStatic(Leaf(Source), JPathIndex(0)))
               }
             }
-            
+
             PendingTable(result, graph, TransSpec1.Id)
           }
         }

@@ -158,9 +158,11 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
   type MemoContext = DummyMemoizationContext
   def newMemoContext = new DummyMemoizationContext
   
+  private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
+  private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
+  private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
+  
   class StubTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) { self: Table => 
-    private var initialIndices = collection.mutable.Map[Path, Int]()
-    private var currentIndex = 0
 
     import trans._
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = {
@@ -179,7 +181,7 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
       self.toJson map { events =>
         fromJson {
           events.toStream flatMap {
-            case JString(pathStr) => 
+            case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
               val path = Path(pathStr)
         
               val index = initialIndices get path getOrElse {
@@ -196,6 +198,7 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
               parsed zip (Stream from index) map {
                 case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
               }
+            }
 
             case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
           }
@@ -207,4 +210,3 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
   }
 }
 
-// vim: set ts=4 sw=4 et:

@@ -333,7 +333,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers7")))
 
-      val input = Join(line, Add, CrossRightSort, 
+      val input = Join(line, Add, CrossRightSort,
         dag.Reduce(line, Count, parent),
         dag.Reduce(line, Sum, parent))
 
@@ -342,6 +342,34 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         val result2 = result collect {
           case (ids, SDecimal(d)) if ids.size == 1 => d
+        }
+
+        result2 must contain(259)
+      }
+    }.pendingUntilFixed 
+
+    "evaluate a join of two reductions on the same dataset using a MegaReduce" in {
+      val line = Line(0, "")
+
+      val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers7")))
+      
+      val mega = dag.MegaReduce(line, 
+        NEL(dag.Reduce(line, Count, parent), dag.Reduce(line, Count, parent)), 
+        parent)
+
+      val input = Join(line, Add, CrossRightSort, 
+        Join(line, DerefArray, CrossLeftSort,
+          mega,
+          Root(line, PushNum("0"))),
+        Join(line, DerefArray, CrossLeftSort,
+          mega,
+          Root(line, PushNum("1"))))
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 0 => d
         }
 
         result2 must contain(259)
@@ -826,7 +854,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val input = Join(line, JoinObject, CrossLeftSort,
         Join(line, WrapObject, CrossLeftSort,
           Root(line, PushString("question")),
-          Root(line, PushString("What is six times nine?"))),
+          Root(line, PushString("What is six times seven?"))),
         Join(line, WrapObject, CrossLeftSort,
           Root(line, PushString("answer")),
           Root(line, PushNum("42"))))
@@ -851,10 +879,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         obj must haveKey("question")
         obj("question") must beLike {
-          case SString(str) => str mustEqual "What is six times nine?"
+          case SString(str) => str mustEqual "What is six times seven?"
         }
       }
-    }.pendingUntilFixed
+    }
     
     "evaluate join_array on single values" in {
       val line = Line(0, "")
@@ -885,7 +913,43 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
+
+    "create an array" >> {
+      val line = Line(0, "")
+      
+      val input = 
+        Join(line, JoinArray, CrossLeftSort,
+          Operate(line, WrapArray,
+            Root(line, PushNum("12"))),
+          Join(line, JoinArray, CrossLeftSort,
+            Operate(line, WrapArray,
+              Root(line, PushNum("24"))),
+            Operate(line, WrapArray,
+              Root(line, PushNum("42")))))
+        
+      testEval(input) { result =>
+        result must haveSize(1)
+        
+        val optArr = result find {
+          case (ids, SArray(_)) if ids.isEmpty => true
+          case _ => false
+        } collect {
+          case (_, SArray(arr)) => arr
+        }
+        
+        optArr must beSome
+        val arr = optArr.get
+        
+        arr must beLike {
+          case Vector(SDecimal(d1), SDecimal(d2), SDecimal(d3)) => {
+            d1 mustEqual 12
+            d2 mustEqual 24
+            d3 mustEqual 42
+          }
+        }
+      }
+    }
     
     "evaluate array_swap on single values" >> {
       "at start" >> {
@@ -923,7 +987,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             }
           }
         }
-      }.pendingUntilFixed
+      }
       
       "at end" >> {
         val line = Line(0, "")
@@ -954,13 +1018,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
           arr must beLike {
             case Vector(SDecimal(d1), SDecimal(d2), SDecimal(d3)) => {
-              d1 mustEqual 12
-              d2 mustEqual 42
-              d3 mustEqual 24
+              d1 mustEqual 42
+              d2 mustEqual 24
+              d3 mustEqual 12
             }
           }
         }
-      }.pendingUntilFixed
+      }
     }
     
     "evaluate descent on a homogeneous set" in {
@@ -1201,16 +1265,20 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(7, -2.026315789473684, 0.006024096385542169, 13)
       }
     }
-    
+
     "compute the set difference of two sets" in {
       val line = Line(0, "")
       val clicks2 = dag.LoadLocal(line, Root(line, PushString("/clicks2")))
       
       val input = Diff(line,
         clicks2,
-        Join(line, DerefObject, CrossLeftSort,
-          clicks2,
-          Root(line, PushString("time"))))
+        Filter(line, IdentitySort,
+          clicks2, 
+          Join(line, Gt, CrossLeftSort,
+            Join(line, DerefObject, CrossLeftSort,
+              clicks2,
+              Root(line, PushString("time"))),
+            Root(line, PushNum("0")))))
         
       testEval(input) { result =>
         result must haveSize(6)
@@ -1267,10 +1335,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val result2 = result collect {
           case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
         }
-        
         result2 must contain(42, 12, 77, 1, 13, 14, -1, 0)
+
+        val result3 = result collect {
+          case (ids, _) => ids
+        }
+        result3 must haveSize(10)
       }
-    }.pendingUntilFixed    
+    }.pendingUntilFixed
 
     "compute the iunion of two homogeneous sets (with relative path)" in {
       val line = Line(0, "")
@@ -1290,7 +1362,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }.pendingUntilFixed
     
-    "compute the iunion of two datasets" in {
+    "compute the iunion of two datasets, one with objects" in {
       val line = Line(0, "")
       
       val input = IUI(line, true,
@@ -1299,49 +1371,6 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
       testEval(input) { result =>
         result must haveSize(105)
-      }
-    }.pendingUntilFixed
-    
-    "compute the iintersect of two homogeneous sets" in {
-      val line = Line(0, "")
-      
-      val input = IUI(line, false,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
-        
-      testEval(input) { result =>
-        result must haveSize(2)
-        
-        val result2 = result collect {
-          case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
-        }
-        
-        result2 must contain(1, 42)
-      }
-    }.pendingUntilFixed
-
-    "compute the iintersect of two heterogeneous sets" in {
-      val line = Line(0, "")
-      
-      val input = IUI(line, false,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
-        
-      testEval(input) { result =>
-        result must haveSize(7)
-
-        forall(result) {
-          _ must beLike {
-            case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble must beOneOf(1, 42)
-            case (ids, SBoolean(d)) if ids.size == 1 => d must beOneOf(true, false)
-            case (ids, SObject(d)) if ids.size == 1 => {
-              d must haveKey("test")
-              d must haveValue("fubar")
-            }
-            case (ids, SString(d)) if ids.size == 1 => d mustEqual "daniel"
-            case (ids, SArray(d)) if ids.size == 1 => d.size mustEqual 0
-          }
-        }
       }
     }.pendingUntilFixed
     
@@ -2306,7 +2335,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           case _ => failure("Result has wrong shape")
         }
       }
-    }.pendingUntilFixed
+    }
     
     "evaluate filter with null" in {
       val line = Line(0, "")
