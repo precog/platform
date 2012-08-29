@@ -480,22 +480,34 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
             assertDense(sl.columns.keySet.map(_.selector))
             assertDense(sr.columns.keySet.map(_.selector))
 
+
             new Slice {
               val size = sl.size
               val columns: Map[ColumnRef, Column] = {
-                val (indices, lcols) = sl.columns.toList map { 
-                  case t @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), _), _) => (Some(i), t) 
-                  case t @ (ColumnRef(_, CEmptyArray), _) => (None, t)
-                } unzip
+                val (lempty, lnonEmpty) = sl.columns partition {
+                  case (ColumnRef(_, tpe), _) => tpe == CEmptyArray 
+                } 
 
-                val someIndices = indices collect { case Some(i) => i }
-                val maxIndex = someIndices.reduceLeftOption(_ max _).map(_ + 1).getOrElse(0)
-
-                val rcols = sr.columns map { 
-                  case (ColumnRef(JPath(JPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(JPath(JPathIndex(j + maxIndex) +: xs : _*), ctype), col) 
-                  case t @ (ColumnRef(_, CEmptyArray), _) => t
+                val (rempty, rnonEmpty) = sr.columns.partition {
+                  case (ColumnRef(_, tpe), _) => tpe == CEmptyArray 
                 }
-                lcols.toMap ++ rcols
+
+                if (lempty.nonEmpty && rempty.nonEmpty) {
+                  Map(lempty.head._1 -> new UnionColumn(lempty.head._2, rempty.head._2) with EmptyArrayColumn)
+                } else {
+                  val (indices, lcols) = lnonEmpty map { 
+                    case t @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), _), _) => (Some(i), t) 
+                  } unzip
+
+                  val someIndices = indices collect { case Some(i) => i }
+                  val maxIndex = someIndices.reduceLeftOption(_ max _).map(_ + 1).getOrElse(0)
+
+                  val rcols = rnonEmpty map { 
+                    case (ColumnRef(JPath(JPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(JPath(JPathIndex(j + maxIndex) +: xs : _*), ctype), col) 
+                  }
+
+                  lnonEmpty.toMap ++ rcols
+                }
               }
             }
           }

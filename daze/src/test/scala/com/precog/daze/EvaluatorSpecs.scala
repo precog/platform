@@ -677,7 +677,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
           result2 must contain(43, 13, 78, 2, 14)
         }
-      }.pendingUntilFixed
+      }
 
       "a reduction on the left side of the cross" >> {
         val line = Line(0, "")
@@ -696,7 +696,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
           result2 must contain(43, 13, 78, 2, 14)
         }
-      }.pendingUntilFixed
+      }
 
       "a root on the right side of the cross" >> {
         val line = Line(0, "")
