@@ -72,7 +72,7 @@ trait HomogeneousArrayColumn[A] extends Column with (Int => IndexedSeq[A]) { sel
     def isDefinedAt(row: Int) = self.isDefinedAt(row)
     val tpe = self.tpe
   }
- }
+}
 
 object HomogeneousArrayColumn {
   def unapply[A](col: HomogeneousArrayColumn[A]): Option[CValueType[A]] = Some(col.tpe.elemType)

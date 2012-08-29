@@ -521,7 +521,7 @@ object Slice {
             if (thisVal == c2(thatRow)) EQ else if (thisVal) GT else LT
           }
 
-        case (c1: LongColumn, c2: LongColumn) => 
+        case (c1: LongColumn, c2: LongColumn) =>
           val ord = Order[Long]
           (thisRow: Int, thatRow: Int) => {
             ord.order(c1(thisRow), c2(thatRow))
@@ -581,6 +581,20 @@ object Slice {
             ord.order(c1(thisRow), c2(thatRow))
           }
 
+        // TODO This should be more efficient... Also, should check if c1.tpe =~ c2.tpe (modulo num types).
+        case (c1: HomogeneousArrayColumn[_], c2: HomogeneousArrayColumn[_]) =>
+          val cmps = Stream.from(0) map { i => compare0(c1.select(i), c2.select(i)) }
+
+          (thisRow: Int, thatRow: Int) => {
+            val c1size = c1(thisRow).size
+            val c2size = c2(thisRow).size
+            
+            cmps take (c1size min c2size) map (_(thisRow, thatRow)) find (_ != EQ) getOrElse {
+              if (c1size < c2size) LT
+              else if (c1size > c2size) GT
+              else EQ
+            }
+          }
 
         case (c1: StrColumn, c2: StrColumn) => 
           val ord = Order[String]
@@ -616,15 +630,43 @@ object Slice {
       if (i == columns.length) -1 else i
     }
 
+    // Returns 2 columns for the intersection between ref1 and ref2.
+    def intersection(ref1: ColumnRef, ref2: ColumnRef): (Column, Column) = {
+      val col1 = s1.columns(ref1)
+      val col2 = s2.columns(ref2)
+
+      if (ref1.selector == ref2.selector) (col1, col2) else {
+        @tailrec
+        def rec(ps1: List[CPathNode], ps2: List[CPathNode], col1: Column, col2: Column): (Column, Column) =
+          (ps1, ps2, col1, col2) match {
+            case (Nil, Nil, _, _) =>
+              (col1, col2)
+            case (CPathArray :: ps1, CPathIndex(i) :: ps2, col1: HomogeneousArrayColumn[_], _) =>
+              rec(ps1, ps2, col1.select(i), col2)
+            case (CPathIndex(i) :: ns1, CPathArray :: ns2, _, col2: HomogeneousArrayColumn[_]) =>
+              rec(ps1, ps2, col1, col2.select(i))
+            case (p1 :: ps1, p2 :: ps2, _, _) =>
+              rec(ps1, ps2, col1, col2)
+          }
+
+        rec(ref1.selector.nodes, ref2.selector.nodes, col1, col2)
+      }
+    }
+
     @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): (Int, Int) => Ordering = {
-      val array1 = l1.map(s1.columns).toArray
-      val array2 = l2.map(s2.columns).toArray
+      val array1: Array[Column] = l1.map(s1.columns)(collection.breakOut)
+      val array2: Array[Column] = l2.map(s2.columns)(collection.breakOut)
+
+      // ColumnRef vs. ColumnRef -> Column
 
       // Build an array of pairwise comparator functions for later use
-      val comparators = (for {
+      //  -- Tom: We need to guarantee that CPathIndex(0) comes first.... are these ordered?
+      // If HomogeneousArray vs. CPathIndex, then we need to group as HomogeneousArray vs. all CPathIndices.
+      // Go through CPath; run select on a[*].b
+      val comparators: Array[(Int, Int) => Ordering] = (for {
         i1 <- 0 until array1.length
         i2 <- 0 until array2.length
-      } yield compare0(array1(i1), array2(i2))).toArray
+      } yield compare0(array1(i1), array2(i2)))(collection.breakOut)
 
       (i: Int, j: Int) => {
         val first1 = firstDefinedIndexFor(array1, i)
@@ -644,6 +686,7 @@ object Slice {
       }
     }
 
+
     @inline @tailrec
     def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[(Int, Int) => Ordering]): List[(Int, Int) => Ordering] = (l1, l2) match {
       case (h1 :: t1, h2 :: t2) if h1.selector == h2.selector => {
@@ -651,6 +694,148 @@ object Slice {
         val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
 
         pairColumns(l1Rest, l2Rest, genComparatorFor(l1Equal, l2Equal) :: comparators)
+      }
+
+      case (h1 :: t1, h2 :: t2) if CPathUtils.intersect(h1.selector, h2.selector).isDefined => {
+
+        // The union of h1 & h2 form a k-dimensional sub-space of array indices (N^k).
+        // For a fixed set of `ColumnRef`s that are either axis-aligned
+        // subspaces or single points, we construct an oracle that, given a point in
+        // N^k, returns all the `ColumnRef`s that intersect that point.
+
+        // Constructing the oracle is simple; for each dim, we project all `ColumnRef`s
+        // onto it. Each projection will either be a single point or a it'll span
+        // the entire dimension. We create a Map[Int, Set[ColumnRef]] for the single
+        // points of intersection and then create a Set[ColumnRef] for all the
+        // columns that span the entire dimension. We can then answer a query in this
+        // projection by returning the union of the `ColumnRef`s that span the dim and
+        // the `ColumnRef`s at the point projected on the dimension itself.
+        // To find the set of `ColumnRef`s that intersect a single point, we just
+        // intersect all the answers for each dimension individually together.
+
+        val Some(path) = CPathUtils.union(h1.selector, h2.selector)
+
+        val (l1Equal, l1Rest) = l1 partition { ref =>
+          CPathUtils.intersect(path, path).isDefined
+        }
+        val (l2Equal, l2Rest) = l2 partition { ref =>
+          CPathUtils.intersect(path, path).isDefined
+        }
+
+        sealed trait Step[+A]
+        case object Inc extends Step[Nothing]
+        case object Shift extends Step[Nothing]
+        case class Done[A](a: A) extends Step[A]
+
+        def walkArraySpace[A](dimension: Int)(f: List[Int] => Step[A]): Option[A] = {
+          def rec(left: List[Int], lvl: Int): Step[A] = if (lvl > 0) {
+            @inline @tailrec def loop(x: Int): Step[A] = rec(x :: left, lvl - 1) match {
+              case Inc => loop(x + 1)
+              case Shift if x > 0 => Inc
+              case step => step
+            }
+
+            loop(0)
+          } else {
+            f(left)
+          }
+
+          rec(Nil, dimension) match {
+            case Done(a) => Some(a)
+            case _ => None
+          }
+        }
+
+        // Is this enough? Do we need to recurse? If not, we can blank out all CPathIndex's.
+        val space = (l1Equal ++ l2Equal).map(_.selector).foldLeft(path)(CPathUtils.union(_, _).get)
+        val dimension = space.nodes.foldLeft(0) {
+          case (acc, CPathArray) => acc + 1
+          case (acc, _) => acc
+        }
+
+        // Projections are either a single point (Some) or span the entire dimension (None).
+        def projections(cPath: CPath): List[Option[Int]] =
+          (cPath.nodes zip space.nodes).foldLeft(Nil: List[Option[Int]]) {
+            case (acc, (CPathIndex(x), CPathArray)) => Some(x) :: acc
+            case (acc, (CPathArray, CPathArray)) => None :: acc
+            case (acc, _) => acc
+          }.reverse
+
+        def oracle(cols: List[ColumnRef]): List[Int] => List[ColumnRef] = {
+          type Col = (ColumnRef, Int)
+          val all = cols.zipWithIndex.toSet
+
+          val colProjections = all.foldLeft(List.fill(dimension)((Map.empty[Int, Set[Col]], Set.empty[Col]))) {
+            case (acc, col @ (ColumnRef(cPath, _), _)) =>
+              (acc zip projections(cPath)) map {
+                case ((points, ranges), Some(x)) =>
+                  (points + (x -> (points.getOrElse(x, Set.empty[Col]) + col)), ranges)
+                case ((points, ranges), None) =>
+                  (points, ranges + col)
+              }
+          }
+
+          // Note: Anytime ranges == all, we can drop that dimension.
+
+          p => (colProjections zip p).foldLeft(all) { case (acc, ((points, ranges), x)) =>
+            acc intersect (points(x) union ranges)
+          }.toList.sortBy(_._2).map(_._1)
+        }
+
+        val l1Oracle = oracle(l1Equal)
+        val l2Oracle = oracle(l2Equal)
+
+        @tailrec
+        def narrow(ps: List[CPathNode], is: List[Int], col: Column): Option[Column] = {
+          (ps, is, col) match {
+            case (CPathIndex(i) :: ps, j :: is, col: Column) if i == j =>
+              narrow(ps, is, col)
+            case (CPathArray :: ps, i :: is, col: HomogeneousArrayColumn[_]) =>
+              narrow(ps, is, col.select(i))
+            case (CPathIndex(_) :: _, _, _) =>
+              None
+            case (p :: ps, _, _) =>
+              narrow(ps, is, col)
+            case (Nil, Nil, _) =>
+              Some(col)
+            case (Nil, _, _) =>
+              None
+            case (_, Nil, _) =>
+              None
+          }
+        }
+
+        val columns1 = s1.columns
+        val columns2 = s2.columns
+
+        val cmp = (row1: Int, row2: Int) => {
+          walkArraySpace(dimension) { p =>
+            val refs1 = l1Oracle(p.reverse)
+            val refs2 = l2Oracle(p.reverse)
+
+            val col1 = refs1 map { ref => ref -> columns1(ref) } flatMap {
+              case (ColumnRef(path, tpe), col) => narrow(path.nodes, p, col)
+            } find (_ isDefinedAt row1)
+
+            val col2 = refs2 map { ref => ref -> columns2(ref) } flatMap {
+              case (ColumnRef(path, tpe), col) => narrow(path.nodes, p, col)
+            } find (_ isDefinedAt row2)
+
+            
+            (col1, col2) match {
+              case (Some(col1), Some(col2)) =>
+                val cmp = compare0(col1, col2)(row1, row2)
+                if (cmp == EQ) Inc else Done(cmp)
+              case (Some(_), None) => Done(GT)
+              case (None, Some(_)) => Done(LT)
+              case (None, None) => Shift
+                // TODO ^^ this is not enough for this case. We need to see if any single
+                // point projections exist beyond this and, if so, we need to Inc instead.
+            }
+          } getOrElse EQ
+        }
+
+        pairColumns(l1Rest, l2Rest, cmp :: comparators)
       }
 
       case (h1 :: t1, h2 :: t2) if h1.selector < h2.selector => {
@@ -693,5 +878,5 @@ object Slice {
 
       compare1(pairColumns(refs1, refs2, Nil))
     }
-  } 
+  }
 }
