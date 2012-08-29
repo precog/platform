@@ -67,7 +67,7 @@ trait TypeInferencer extends DAG {
   
         case Reduce(_, red, parent) => collectTypes(red.tpe.arg, typing, parent)
 
-        case MegaReduce(_, reds, parent) => collectTypes(jtpe, typing, parent)
+        case MegaReduce(_, reds, parent) => collectTypes(JType.JUnfixedT, typing, parent)
   
         case Morph1(_, m, parent) => collectTypes(m.tpe.arg, typing, parent)
   

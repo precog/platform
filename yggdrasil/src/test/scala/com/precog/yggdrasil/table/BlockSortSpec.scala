@@ -28,6 +28,8 @@ import com.precog.util._
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 
+import com.weiglewilczek.slf4s.Logging
+
 import scala.annotation.tailrec
 import scala.util.Random
 import scalaz._
@@ -174,6 +176,8 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     val module = new BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
       def M = self.M
       def coM = self.coM
+      
+      type MemoId = Int
 
       val projections = {
         schema.grouped(2) map { subschema =>

@@ -105,7 +105,9 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ FindDescriptors(path, selector) => 
       logger.trace(msg.toString)
-      sender ! findDescriptors(path, selector).unsafePerformIO
+      val result = findDescriptors(path, selector).unsafePerformIO
+      logger.trace("Found descriptors: " + result)
+      sender ! result
 
     case msg @ FindPathMetadata(path, selector) => 
       logger.trace(msg.toString)

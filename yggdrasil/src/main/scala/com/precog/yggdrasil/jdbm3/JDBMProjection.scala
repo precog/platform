@@ -169,6 +169,8 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
           }
         }
 
+        load()
+
         val desiredRefs: Set[ColumnRef] = desiredColumns.map { case ColumnDescriptor(_, selector, tpe, _) => ColumnRef(CPath(Value) \ selector, tpe) }
 
         override val columns = super.columns filterKeys desiredRefs
@@ -176,7 +178,11 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
         //  (keyColumns ++ valColumns.filter { desiredRefs(_._1) }).toMap
       }
 
-      Some(BlockProjectionData[Identities,Slice](firstKey, lastKey, slice))
+      if (slice.size == 0) {
+        None
+      } else {
+        Some(BlockProjectionData[Identities,Slice](firstKey, lastKey, slice))
+      }
     } catch {
       case e: java.util.NoSuchElementException => None
     }

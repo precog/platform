@@ -60,7 +60,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
     def apply(table: Table) = {  //TODO write tests for the empty table case
-      val compactedTable = table.compact(Leaf(Source))
+      val compactedTable = table.compact(WrapObject(Typed(DerefObjectStatic(Leaf(Source), paths.Value), JNumberT), paths.Value.name))
 
       val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
 
@@ -68,12 +68,19 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         sortedTable <- compactedTable.sort(sortKey, SortAscending)
         count <- sortedTable.reduce(Count.reducer)
         median <- if (count % 2 == 0) {
-                    val middleValues = sortedTable.take((count.toLong / 2) + 1).drop((count.toLong / 2) - 1)
-                    Mean(middleValues)
-                  } else {
-                    M.point(sortedTable.take((count.toLong / 2) + 1).drop(count.toLong / 2))
-                  }
-      } yield median
+          val middleValues = sortedTable.takeRange((count.toLong / 2) - 1, 2)
+          val transformedTable = middleValues.transform(trans.DerefObjectStatic(Leaf(Source), paths.Value))  //todo make function for this
+          Mean(transformedTable)
+        } else {
+          val middleValue = M.point(sortedTable.takeRange((count.toLong / 2), 1))
+          middleValue map { _.transform(trans.DerefObjectStatic(Leaf(Source), paths.Value)) }
+        }
+      } yield {
+        val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+        val valueTable = median.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
+        
+        valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+      }
     }
   }
   
@@ -831,6 +838,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
   object DenseRank extends Morphism1(StatsNamespace, "denseRank") {
     val tpe = UnaryOperationType(JNumberT, JNumberT)
+    override val retainIds = true
 
     def rankScanner: CScanner = {
       new CScanner {
@@ -868,42 +876,22 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     }
     
     def apply(table: Table) = {
-      val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
-      val sortedTable = table.sort(sortKey, SortAscending)
+      val sortByValue = DerefObjectStatic(Leaf(Source), paths.Value)
+      val sortedTable = table.sort(sortByValue, SortAscending)
 
-      val transScan = Scan(DerefObjectStatic(Leaf(Source), paths.Value), rankScanner)
+      val transScan = TableTransSpec.makeTransSpec(
+        Map(paths.Value -> Scan(Typed(Leaf(Source), JNumberT), rankScanner)))
       
-      sortedTable.map(_.transform(transScan))
+      val result: M[Table] = sortedTable.map(_.transform(ObjectDelete(transScan, Set(paths.SortKey))))
+      val sortByKey = DerefObjectStatic(Leaf(Source), paths.Key)
+
+      result flatMap { _.sort(sortByKey, SortAscending) }
     }
-
-
-
-    /* override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {
-      var count = 0
-      var previous: Option[SValue] = Option.empty[SValue]
-
-      val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
-      val enum3: Dataset[SValue] = enum2 collect {
-        case s @ SDecimal(v) => {
-          if (Some(s) == previous) {
-            previous = Some(s)
-
-            SDecimal(count)
-          } else {
-            previous = Some(s)
-            count += 1
-
-            SDecimal(count)
-          }
-        }
-      }
-      Some(enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
-    } */
-
   }
 
   object Rank extends Morphism1(StatsNamespace, "rank") {  //TODO what happens across slices??
     val tpe = UnaryOperationType(JNumberT, JNumberT)
+    override val retainIds = true
     
     def rankScanner: CScanner = {
       new CScanner {
@@ -941,38 +929,16 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     }
     
     def apply(table: Table) = {
-      val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
-      val sortedTable = table.sort(sortKey, SortAscending)
+      val sortByValue = DerefObjectStatic(Leaf(Source), paths.Value)
+      val sortedTable = table.sort(sortByValue, SortAscending)
 
-      val transScan = Scan(DerefObjectStatic(Leaf(Source), paths.Value), rankScanner)
+      val transScan = TableTransSpec.makeTransSpec(
+        Map(paths.Value -> Scan(Typed(Leaf(Source), JNumberT), rankScanner)))
       
-      sortedTable.map(_.transform(transScan))
+      val result: M[Table] = sortedTable.map(_.transform(ObjectDelete(transScan, Set(paths.SortKey))))
+      val sortByKey = DerefObjectStatic(Leaf(Source), paths.Key)
+
+      result flatMap { _.sort(sortByKey, SortAscending) }
     }
-
-
-    /* override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {
-      var countTotal = 0
-      var countEach = 1
-      var previous: Option[SValue] = Option.empty[SValue]
-
-      val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
-      val enum3: Dataset[SValue] = enum2 collect {
-        case s @ SDecimal(v) => {
-          if (Some(s) == previous) {
-            previous = Some(s)
-            countEach += 1
-
-            SDecimal(countTotal)
-          } else {
-            previous = Some(s)
-            countTotal += countEach 
-            countEach = 1
-          
-            SDecimal(countTotal)
-          }
-        }
-      }
-      Some(enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
-    } */
   }
 }

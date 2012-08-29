@@ -24,6 +24,7 @@ import com.precog.common.json._
 import com.precog.common.{Path,VectorCase}
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
+import com.precog.yggdrasil.util._
 import com.precog.util._
 import Schema._
 import metadata._
@@ -32,6 +33,8 @@ import java.io.File
 import java.util.SortedMap
 
 import org.apache.jdbm.DBMaker
+
+import com.weiglewilczek.slf4s.Logger
 
 import scalaz._
 import scalaz.Ordering._
@@ -45,11 +48,69 @@ import scalaz.syntax.std.stream._
 import scala.annotation.tailrec
 import scala.collection.mutable
 
-trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with StorageModule[M] { self =>
+trait BlockStoreColumnarTableModule[M[+_]] extends
+  ColumnarTableModule[M] with
+  StorageModule[M] with
+  IdSourceScannerModule[M] { self =>
+    
   override type UserId = String
   type Key
   type Projection <: BlockProjectionLike[Key, Slice]
   type BD = BlockProjectionData[Key,Slice]
+  
+  def newMemoContext = new MemoContext
+  
+  class MemoContext extends MemoizationContext{
+    import trans._
+    
+    private val memoCache = mutable.HashMap.empty[MemoId, M[Table]]
+    
+    private val memoKey   = "MemoKey"
+    private val memoValue = "MemoValue"
+    
+    def memoize(table: Table, memoId: MemoId): M[Table] = {
+      val preMemoTable =
+        table.transform(
+          ObjectConcat(
+            WrapObject(
+              Scan(
+                ConstLiteral(CLong(0), Leaf(Source)),
+                freshIdScanner),
+              memoKey),
+            WrapObject(
+              Leaf(Source),
+              memoValue
+            )
+          )
+        )
+      
+      val memoTable = sort(preMemoTable, DerefObjectStatic(Leaf(Source), JPathField(memoKey)), SortAscending, memoId)
+      M.map(memoTable) { _.transform(DerefObjectStatic(Leaf(Source), JPathField(memoValue))) }
+    }
+    
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId): M[Table] = {
+      // yup, we still block the whole world. Yay.
+      memoCache.synchronized {
+        memoCache.get(memoId) match {
+          case Some(memoTable) => memoTable
+          case None =>
+            val memoTable = table.sort(sortKey, sortOrder)
+            memoCache += (memoId -> memoTable)
+            memoTable
+        }
+      }
+    }
+    
+    def expire(memoId: MemoId): Unit =
+      memoCache.synchronized {
+        memoCache -= memoId
+      }
+    
+    def purge() : Unit =
+      memoCache.synchronized {
+        memoCache.clear()
+      }
+  }
 
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import trans._
@@ -171,7 +232,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         }
   
         def slice = {
-          slice0.sparsen(remap, remap(position - 1) + 1)
+          slice0.sparsen(remap, if (position > 0) remap(position - 1) + 1 else 0)
         }
   
         def split: (Slice, Cell) = {
@@ -199,12 +260,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         def apply(initialCells: Set[Cell])(keyf: Slice => List[ColumnRef]): CellMatrix = {
           val size = initialCells.size
   
-          type ComparatorMatrix = Array[Array[(Int, Int) => Ordering]]
+          type ComparatorMatrix = Array[Array[RowComparator]]
           def fillMatrix(initialCells: Set[Cell]): ComparatorMatrix = {
-            val comparatorMatrix = Array.ofDim[(Int, Int) => Ordering](initialCells.size, initialCells.size)
+            val comparatorMatrix = Array.ofDim[RowComparator](initialCells.size, initialCells.size)
   
             for (Cell(i, _, s) <- initialCells; Cell(i0, _, s0) <- initialCells if i != i0) { 
-              comparatorMatrix(i)(i0) = Slice.rowComparator(s, s0)(keyf) 
+              comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf) 
             }
   
             comparatorMatrix
@@ -217,7 +278,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
             def cells = allCells.values
   
             def compare(cl: Cell, cr: Cell): Ordering = {
-              comparatorMatrix(cl.index)(cr.index)(cl.position, cr.position)
+              comparatorMatrix(cl.index)(cr.index).compare(cl.position, cr.position)
             }
   
             def refresh(index: Int, succ: M[Option[Cell]]): M[CellMatrix] = {
@@ -226,8 +287,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
                   allCells += (i -> c)
   
                   for ((_, Cell(i0, _, s0)) <- allCells if i0 != i) {
-                    comparatorMatrix(i)(i0) = Slice.rowComparator(s, s0)(keyf) 
-                    comparatorMatrix(i0)(i) = Slice.rowComparator(s0, s)(keyf)
+                    comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf) 
+                    comparatorMatrix(i0)(i) = Slice.rowComparatorFor(s0, s)(keyf)
                   }
   
                   self
@@ -417,27 +478,32 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         }
         
         // Iterate over the slice
-        @inline
-        @tailrec
-        def storeRow(storage: IndexStore, row: Int, globalId: Long): Long = if (row < slice.size) {
+        //TODO why doesn't this work with a tailrec?
+        var row = 0
+        var globalId = nextId
+
+        while (row < slice.size) {
           val identities = VectorCase(idColumns.map(_._2.asInstanceOf[LongColumn].apply(row)) : _*)
 
-          storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
+          if (dataColumns.exists(_._2.isDefinedAt(row))) {
+            try {
+              index.storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
+            } catch {
+              case t: Throwable => println("Error on storeRow: " + t); throw t
+            }
 
-          if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
-            DB.commit()
+            if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
+              DB.commit()
+            }
+            globalId += 1
           }
-
-          storeRow(storage, row + 1, globalId + 1)
-        } else {
-          globalId
+          row += 1
         }
 
-        SortOutput(newIndices, idColumns.size, storeRow(index.storage, 0, nextId))
+        SortOutput(newIndices, idColumns.size, globalId)
       }}.map {
         case output @ SortOutput(indices, idCount, lastId) => {
           DB.close()
-          logger.debug("Sorted %d rows to JDBM".format(lastId - 1))
           output
         }
       }

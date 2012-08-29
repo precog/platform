@@ -74,7 +74,9 @@ class PlatformSpecs
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
 
-  class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
+  val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO
+
+  class Storage extends SystemActorStorageLike(fileMetadataStorage) {
     val accessControl = new UnlimitedAccessControl[Future]()
   }
 
@@ -82,7 +84,8 @@ class PlatformSpecs
 
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
-    def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+    def baseDir(descriptor: ProjectionDescriptor): File =
+      fileMetadataStorage.findDescriptorRoot(descriptor, false).unsafePerformIO getOrElse sys.error("Cannot find base dir. for descriptor: " + descriptor)
   }
 
   override def startup() {

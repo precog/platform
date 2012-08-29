@@ -24,6 +24,7 @@ import com.precog.common.{Path, VectorCase}
 import com.precog.common.json._
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.jdbm3._
+import com.precog.yggdrasil.util._
 
 import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
@@ -53,7 +54,7 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 
-trait ColumnarTableModule[M[+_]] extends TableModule[M] {
+trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModule[M] {
   import trans._
   import trans.constants._
 
@@ -218,7 +219,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
   def table(slices: StreamT[M, Slice]): Table
 
-  abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike with Logging { self: Table =>
+  abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike { self: Table =>
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
@@ -404,7 +405,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             (b: BoolColumn) => b
           }
 
-          val transform: (BoolColumn => BoolColumn)  = if (invert) comp else boolId
+          def transform: (BoolColumn => BoolColumn)  = if (invert) comp else boolId
 
           sourceSlice map { ss =>
             new Slice {
@@ -432,9 +433,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         }
         
         case ConstLiteral(value, target) =>
-          composeSliceTransform2(target) map {
-            _ filterColumns cf.util.DefinedConst(value)
-          }
+          composeSliceTransform2(target) map { _.definedConst(value) }
 
         case WrapObject(source, field) =>
           composeSliceTransform2(source) map {
@@ -473,8 +472,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           val r0 = composeSliceTransform2(right)
 
           l0.zip(r0) { (sl, sr) =>
-            def assertDense(paths: Set[CPath]) = assert {
-              (paths collect { case CPath(CPathIndex(i), _ @ _*) => i }).toList.sorted.zipWithIndex forall { case (a, b) => a == b }
+            def assertDense(paths: Set[JPath]) = assert {
+              (paths collect { 
+                case CPath(CPathIndex(i), _ @ _*) => i 
+              }).toList.sorted.zipWithIndex forall { case (a, b) => a == b }
             }
 
             assertDense(sl.columns.keySet.map(_.selector))
@@ -483,9 +484,18 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             new Slice {
               val size = sl.size
               val columns: Map[ColumnRef, Column] = {
-                val (indices, lcols) = sl.columns.toList map { case t @ (ColumnRef(CPath(CPathIndex(i), xs @ _*), _), _) => (i, t) } unzip
-                val maxIndex = indices.reduceLeftOption(_ max _).map(_ + 1).getOrElse(0)
-                val rcols = sr.columns map { case (ColumnRef(CPath(CPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(CPath(CPathIndex(j + maxIndex) +: xs : _*), ctype), col) }
+                val (indices, lcols) = sl.columns.toList map { 
+                  case t @ (ColumnRef(CPath(CPathIndex(i), xs @ _*), _), _) => (Some(i), t) 
+                  case t @ (ColumnRef(_, CEmptyArray), _) => (None, t)
+                } unzip
+
+                val someIndices = indices collect { case Some(i) => i }
+                val maxIndex = someIndices.reduceLeftOption(_ max _).map(_ + 1).getOrElse(0)
+
+                val rcols = sr.columns map { 
+                  case (ColumnRef(CPath(CPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(CPath(CPathIndex(j + maxIndex) +: xs : _*), ctype), col) 
+                  case t @ (ColumnRef(_, CEmptyArray), _) => t
+                }
                 lcols.toMap ++ rcols
               }
             }
@@ -685,7 +695,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             val SlicePosition(lpos0, lkstate, lkey, lhead, ltail) = leftPosition
             val SlicePosition(rpos0, rkstate, rkey, rhead, rtail) = rightPosition
 
-            val compare = Slice.rowComparator(lkey, rkey) { slice => 
+            val comparator = Slice.rowComparatorFor(lkey, rkey) { slice => 
               // since we've used the key transforms, and since transforms are contracturally
               // forbidden from changing slice size, we can just use all
               slice.columns.keys.toList.sorted
@@ -699,13 +709,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
               if (xrstart != -1) {
                 // We're currently in a cartesian. 
                 if (lpos < lhead.size && rpos < rhead.size) {
-                  compare(lpos, rpos) match {
+                  comparator.compare(lpos, rpos) match {
                     case LT => 
                       buildRemappings(lpos + 1, xrstart, xrstart, rpos, endRight)
                     case GT => 
-                      // this will miss catching input-out-of-order errors, but we know that the right must
-                      // be advanced fully within the 'EQ' state before we get here, so we can just
-                      // increment the right by 1
+                      // catch input-out-of-order errors early
+                      if (xrend == -1) sys.error("Inputs are not sorted; value on the left exceeded value on the right at the end of equal span.")
                       buildRemappings(lpos, xrend, Reset, Reset, endRight)
                     case EQ => 
                       ibufs.advanceBoth(lpos, rpos)
@@ -730,7 +739,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
               } else {
                 // not currently in a cartesian, hence we can simply proceed.
                 if (lpos < lhead.size && rpos < rhead.size) {
-                  compare(lpos, rpos) match {
+                  comparator.compare(lpos, rpos) match {
                     case LT => 
                       ibufs.advanceLeft(lpos)
                       buildRemappings(lpos + 1, rpos, Reset, Reset, endRight)
@@ -1022,12 +1031,28 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
       distinct0(SliceTransform1.identity(None : Option[Slice]), composeSliceTransform(spec))
     }
+    
+    def takeRange(startIndex: Long, numberToTake: Long): Table = {  //in slice.takeRange, need to numberToTake to not be larger than the slice. 
+      def loop(s: Stream[Slice], readSoFar: Long): Stream[Slice] = s match {
+        case h #:: rest if (readSoFar + h.size) < startIndex => loop(rest, readSoFar + h.size)
+        case rest if readSoFar < startIndex + 1 => {
+          inner(rest, 0, (startIndex - readSoFar).toInt)
+        }
+        case _ => Stream.empty[Slice]
+      }
 
-    def drop(n: Long): Table = sys.error("todo")
-    
-    def take(n: Long): Table = sys.error("todo")
-    
-    def takeRight(n: Long): Table = sys.error("todo")
+      def inner(s: Stream[Slice], takenSoFar: Long, sliceStartIndex: Int): Stream[Slice] = s match {
+        case h #:: rest if takenSoFar < numberToTake && h.size > numberToTake - takenSoFar => {
+          val needed = h.takeRange(sliceStartIndex, (numberToTake - takenSoFar).toInt)
+          needed #:: Stream.empty[Slice]
+        }
+        case h #:: rest if takenSoFar < numberToTake =>
+          h #:: inner(rest, takenSoFar + h.size, 0)
+        case _ => Stream.empty[Slice]
+      }
+
+      table(StreamT.fromStream(slices.toStream.map(loop(_, 0))))
+    }
 
     def normalize: Table = table(slices.filter(!_.isEmpty))
 
