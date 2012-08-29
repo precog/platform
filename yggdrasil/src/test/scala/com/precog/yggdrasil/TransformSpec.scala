@@ -585,9 +585,12 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       })
 
       val (_, expected) = sample.data.foldLeft((BigDecimal(0), Vector.empty[JValue])) { 
-        case ((a, s), jv) => 
-          val JNum(i) = jv \ "value"
-          (a + i, s :+ JNum(a + i))
+        case ((a, s), jv) => { 
+          (jv \ "value") match {
+            case JNum(i) => (a + i, s :+ JNum(a + i))
+            case _ => (a, s)
+          }
+        }
       }
 
       results.copoint must_== expected.toStream
@@ -635,7 +638,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
     implicit val gen = undefineRowsForColumn(sample(_ => Seq(JPath("field") -> CLong)), JPath("value") \ "field")
     check { (sample: SampleData) =>
       val table = fromSample(sample)
-      val results = toJson(table.transform(ConstLiteral(CString("foo"), DerefObjectStatic(Leaf(Source), JPathField("value")))))
+      val results = toJson(table.transform(ConstLiteral(CString("foo"), DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("field")))))
       
       val expected = sample.data flatMap {
         case jv if jv \ "value" \ "field" == JNothing => None
