@@ -616,7 +616,7 @@ trait Evaluator[M[+_]] extends DAG
   
         case j @ Join(_, op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => {
           val isLeft = joinSort == CrossLeftSort
-          
+
           for {
             pendingTableLeft <- loop(left, splits)
             pendingTableRight <- loop(right, splits)
@@ -805,7 +805,7 @@ trait Evaluator[M[+_]] extends DAG
           } yield {
             val result = for {
               pendingTable <- pending.table
-              val table = pendingTable.transform(pending.trans)
+              val table = pendingTable.transform(liftToValues(pending.trans))
               memoized <- ctx.memoizationContext.memoize(table, memoId)
             } yield memoized
             

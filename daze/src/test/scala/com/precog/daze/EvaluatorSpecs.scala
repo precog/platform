@@ -93,7 +93,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
   val testUID = "testUID"
 
   def testEval(graph: DepGraph, path: Path = Path.Root)(test: Set[SEvent] => Result): Result = withContext { ctx =>
-    (consumeEval(testUID, graph, ctx, path) match {
+    (consumeEval(testUID, graph, ctx, path, true) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     }) and 
@@ -390,8 +390,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         testEval(input) { result =>
           result must haveSize(500)
+
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 2 => ids
+          }
+
+          result2 must haveSize(500)
         }
-      }.pendingUntilFixed
+      }
 
       "from the same path" >> {
         val line = Line(0, "")
@@ -407,6 +413,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         testEval(input) { result =>
           result must haveSize(5)
+
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d
+          }
+
+          result2 must contain(218, 147, 118, 172, 224)
         }
       }
 
@@ -424,6 +436,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         testEval(input, Path("/hom")) { result =>
           result must haveSize(5)
+
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d
+          }
+
+          result2 must contain(218, 147, 118, 172, 224)
         }
       }
     }
@@ -2444,7 +2462,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
 
     "distinct homogenous set of numbers" in {
       val line = Line(0, "")
