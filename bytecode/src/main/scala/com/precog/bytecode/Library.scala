@@ -6,6 +6,7 @@ trait Morphism1Like {
   val name: String
   val opcode: Int
   val tpe: UnaryOperationType
+  val retainIds: Boolean = false
 
   lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   override def toString = "[0x%06x]".format(opcode) + fqn
@@ -21,6 +22,7 @@ trait Morphism2Like {
   val name: String
   val opcode: Int
   val tpe: BinaryOperationType
+  val retainIds: Boolean = false
 
   lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   override def toString = "[0x%06x]".format(opcode) + fqn
