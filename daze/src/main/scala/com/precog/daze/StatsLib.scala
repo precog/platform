@@ -845,17 +845,24 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         type A = (Option[BigDecimal], BigDecimal)  // (value, count)
         val init = (None, BigDecimal(0))
 
-        def scan(a: A, col: Column, range: Range): (A, Option[Column]) = {
-          col match {
-            case lc: LongColumn => {
-              val filteredRange = range filter lc.isDefinedAt
-              val defined: BitSet = BitSet(filteredRange: _*)
+        def scan(a: A, cols: Set[Column], range: Range): (A, Set[Column]) = {
+          val prioritized = cols.toSeq filter {
+            case _: LongColumn | _: DoubleColumn | _: NumColumn => true
+            case _ => false
+          }
 
-              val ((finalValue, finalCount), acc) = filteredRange.foldLeft((a, new Array[BigDecimal](range.end))) {
-                case (((value, count), acc), i) => {
-                  if (value == None) {  //TODO best way to deal with the None case, which occurs only on the first fold
+          val filteredRange = range filter { i => prioritized exists { _ isDefinedAt i }}
+          val defined = BitSet(filteredRange: _*)
+          
+          val ((finalValue, finalCount), acc) = filteredRange.foldLeft((a, new Array[BigDecimal](range.end))) {
+            case (((value, count), acc), i) => {
+              val col = prioritized find { _ isDefinedAt i }
+
+              val acc2 = col map {
+                case lc: LongColumn => {
+                  if (value == None) {
                     acc(i) = 1
-                    ((Some(BigDecimal(lc(i))), 1), acc)
+                    ((Some(BigDecimal(lc(i))), BigDecimal(1)), acc)
                   } else if (Some(BigDecimal(lc(i))) == value) {
                     acc(i) = count
                     ((Some(BigDecimal(lc(i))), count), acc)
@@ -864,13 +871,36 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
                     ((Some(BigDecimal(lc(i))), count + 1), acc)
                   }
                 }
+                case nc: NumColumn => {
+                  if (value == None) {
+                    acc(i) = 1
+                    ((Some(nc(i)), BigDecimal(1)), acc)
+                  } else if (Some(nc(i)) == value) {
+                    acc(i) = count
+                    ((Some(nc(i)), count), acc)
+                  } else  {
+                    acc(i) = count + 1
+                    ((Some(nc(i)), count + 1), acc)
+                  }
+                }
+                case dc: DoubleColumn => {
+                  if (value == None) {
+                    acc(i) = 1
+                    ((Some(BigDecimal(dc(i))), BigDecimal(1)), acc)
+                  } else if (Some(BigDecimal(dc(i))) == value) {
+                    acc(i) = count
+                    ((Some(BigDecimal(dc(i))), count), acc)
+                  } else  {
+                    acc(i) = count + 1
+                    ((Some(BigDecimal(dc(i))), count + 1), acc)
+                  }
+                }
               }
-
-              ((finalValue, finalCount), Some(ArrayNumColumn(defined, acc)))
+              acc2 getOrElse ((value, count), acc)
             }
-
-          case _ => (a, None)
           }
+          
+          ((finalValue, finalCount), Set(ArrayNumColumn(defined, acc)))
         }
       }
     }
@@ -898,32 +928,62 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         type A = (Option[BigDecimal], BigDecimal, BigDecimal)  // (value, countEach, countTotal)
         val init = (None, BigDecimal(0), BigDecimal(0))
 
-        def scan(a: A, col: Column, range: Range): (A, Option[Column]) = {
-          col match {
-            case lc: LongColumn => {
-              val filteredRange = range filter lc.isDefinedAt
-              val defined: BitSet = BitSet(filteredRange: _*)
+        def scan(a: A, cols: Set[Column], range: Range): (A, Set[Column]) = {
+          val prioritized = cols.toSeq filter {
+            case _: LongColumn | _: DoubleColumn | _: NumColumn => true
+            case _ => false
+          }
 
-              val ((finalValue, finalCountEach, finalCountTotal), acc) = filteredRange.foldLeft((a, new Array[BigDecimal](range.end))) {
-                case (((value, countEach, countTotal), acc), i) => {
-                  if (value == None) {  //TODO best way to deal with the None case, which occurs only on the first fold
+          val filteredRange = range filter { i => prioritized exists { _ isDefinedAt i }}
+          val defined = BitSet(filteredRange: _*)
+
+          val ((finalValue, finalCountEach, finalCountTotal), acc) = filteredRange.foldLeft((a, new Array[BigDecimal](range.end))) {
+            case (((value, countEach, countTotal), acc), i) => {
+              val col = prioritized find { _ isDefinedAt i }
+             
+              val acc2 = col map {
+                case lc: LongColumn => {
+                  if (value == None) {
                     acc(i) = 1
-                    ((Some(BigDecimal(lc(i))), 1, 1), acc)
+                    ((Some(BigDecimal(lc(i))), BigDecimal(1), BigDecimal(1)), acc)
                   } else if (Some(BigDecimal(lc(i))) == value) {
                     acc(i) = countTotal
                     ((Some(BigDecimal(lc(i))), countEach + 1, countTotal), acc)
                   } else  {
                     acc(i) = countEach + countTotal
-                    ((Some(BigDecimal(lc(i))), 1, countEach + countTotal), acc)
+                    ((Some(BigDecimal(lc(i))), BigDecimal(1), countEach + countTotal), acc)
+                  }
+                }
+                case nc: NumColumn => {
+                  if (value == None) {
+                    acc(i) = 1
+                    ((Some(nc(i)), BigDecimal(1), BigDecimal(1)), acc)
+                  } else if (Some(nc(i)) == value) {
+                    acc(i) = countTotal
+                    ((Some(nc(i)), countEach + 1, countTotal), acc)
+                  } else  {
+                    acc(i) = countEach + countTotal
+                    ((Some(nc(i)), BigDecimal(1), countEach + countTotal), acc)
+                  }
+                }
+                case dc: DoubleColumn => {
+                  if (value == None) {
+                    acc(i) = 1
+                    ((Some(BigDecimal(dc(i))), BigDecimal(1), BigDecimal(1)), acc)
+                  } else if (Some(BigDecimal(dc(i))) == value) {
+                    acc(i) = countTotal
+                    ((Some(BigDecimal(dc(i))), countEach + 1, countTotal), acc)
+                  } else  {
+                    acc(i) = countEach + countTotal
+                    ((Some(BigDecimal(dc(i))), BigDecimal(1), countEach + countTotal), acc)
                   }
                 }
               }
-
-              ((finalValue, finalCountEach, finalCountTotal), Some(ArrayNumColumn(defined, acc)))
+              acc2 getOrElse ((value, countEach, countTotal), acc)
             }
-
-          case _ => (a, None)
           }
+
+          ((finalValue, finalCountEach, finalCountTotal), Set(ArrayNumColumn(defined, acc)))
         }
       }
     }
