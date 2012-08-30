@@ -172,14 +172,25 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     //println("testing for sample: " + sample)
     val Some((idCount, schema)) = sample.schema
 
+    def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
+      case (_: JNum, CNum | CLong | CDouble) => true
+      case (JNothing, CUndefined) => true
+      case (JNull, CNull) => true
+      case (_: JBool, CBoolean) => true
+      case (_: JString, CString) => true
+      case (JObject(Nil), CEmptyObject) => true
+      case (JArray(Nil), CEmptyArray) => true
+      case _ => false
+    }
+    
+    val actualSchema = inferSchema(sample.data map { _ \ "value" })
+
     val module = new BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
       def M = self.M
       def coM = self.coM
-      
-      type MemoId = Int
 
       val projections = {
-        schema.grouped(2) map { subschema =>
+        actualSchema.grouped(1) map { subschema =>
           val descriptor = ProjectionDescriptor(
             idCount, 
             subschema flatMap {
@@ -193,12 +204,23 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
 
           descriptor -> Projection( 
             descriptor, 
-            sample.data map { jv =>
-              subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
-                case (obj, (jpath, _)) => 
+            sample.data flatMap { jv =>
+              val back = subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
+                case (obj, (jpath, ctype)) => { 
                   val vpath = JPath(JPathField("value") :: jpath.nodes)
-                  obj.set(vpath, jv.get(vpath))
+                  val valueAtPath = jv.get(vpath)
+                  
+                  if (compliesWithSchema(valueAtPath, ctype))
+                    obj.set(vpath, valueAtPath)
+                  else
+                    obj
+                }
               }
+              
+              if (back \ "value" == JNothing)
+                None
+              else
+                Some(back)
             }
           )
         } toMap
@@ -240,10 +262,10 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
         v => sortKey.extract(v \ "value")
       })(jvalueOrdering).toList
 
-      //if (result != original) {
-      //  println("Original = " + original)
-      //  println("Result   = " + result)
-      //}
+      if (result != original) {
+        println("Original = " + original)
+        println("Result   = " + result)
+      }
 
       result must_== original
     } catch {

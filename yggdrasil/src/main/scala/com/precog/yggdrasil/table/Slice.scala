@@ -607,9 +607,9 @@ object Slice {
           if (first1 == -1 && first2 == -1) {
             EQ
           } else if (first1 == -1) {
-            LT
-          } else if (first2 == -1) {
             GT
+          } else if (first2 == -1) {
+            LT
           } else {
             // We have the indices, so use it to look up the comparator for the rows
             comparators(first1 * array2.length + first2).compare(i, j)
