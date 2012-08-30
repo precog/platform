@@ -330,9 +330,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       ]""")
 
       val JArray(expected) = JsonParser.parse("""[
-        [["1", 12], ["2", 7]],
-        [["1", 42]],
-        [["1", 13]]
+        [12, 7],
+        [42],
+        [13]
       ]""")
 
       fromJson(data.toStream).transform(transspec).toJson.copoint must_== expected
@@ -579,10 +579,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
         Set(
           SourceMergeSpec(
             binding,
-            WrapArray(
-              ArrayConcat(
-                WrapArray(ConstLiteral(CString("a"),DerefObjectStatic(SourceValue.Single, ticvar))),
-                WrapArray(DerefObjectStatic(SourceValue.Single, ticvar)))),
+            ArrayConcat(WrapArray(DerefObjectStatic(SourceValue.Single, ticvar))),
             List(ticvar)
           )))
       
@@ -615,10 +612,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
             MergeAlignment(
               SourceMergeSpec(
                 foobinding, 
-                WrapArray(
-                  ArrayConcat(
-                    WrapArray(ConstLiteral(CString("a"),DerefObjectStatic(SourceValue.Single,tica))),
-                    WrapArray(DerefObjectStatic(SourceValue.Single,tica)))),
+                ArrayConcat(WrapArray(DerefObjectStatic(SourceValue.Single,tica))),
                 List(tica)
               ),
               NodeMergeSpec(
@@ -627,8 +621,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends
                   SourceMergeSpec(
                     barbinding,
                     ArrayConcat(
-                      WrapArray(ArrayConcat(WrapArray(ConstLiteral(CString("a"),DerefObjectStatic(SourceValue.Single,tica))),WrapArray(DerefObjectStatic(SourceValue.Single,tica)))),
-                      WrapArray(ArrayConcat(WrapArray(ConstLiteral(CString("b"),DerefObjectStatic(SourceValue.Single,ticb))),WrapArray(DerefObjectStatic(SourceValue.Single,ticb))))),
+                      WrapArray(DerefObjectStatic(SourceValue.Single,tica)),
+                      WrapArray(DerefObjectStatic(SourceValue.Single,ticb))),
                     List(tica, ticb)
                   ))),
               Vector(tica)
