@@ -1116,12 +1116,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       def deriveKeyTransSpec(conjunction: GroupKeySpec, keyOrder: Seq[TicVar] = Nil): TransSpec1 = {
         val keyMap = keyOrder.zipWithIndex.toMap
 
-        // [['a, value], ['b, value2]]
+        // [avalue, bvalue]
         val keySpecs = sources(conjunction).sortBy(src => keyMap.getOrElse(src.key, Int.MaxValue)) map { src => 
-          WrapArray(ArrayConcat(WrapArray(ConstLiteral(CString(src.key.name), src.spec)), WrapArray(src.spec))) : TransSpec1
+          WrapArray(src.spec)
         }
         
-        keySpecs reduce { ArrayConcat(_, _) }
+        ArrayConcat(keySpecs: _*)
       }
 
       // MergeTrees describe intersections as edges in a graph, where the nodes correspond
@@ -1566,25 +1566,21 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                           val crossedTable = leftMergeable.table.cross(rightMergeable.table) {
                             ArrayConcat(
                               // array element 0 is the group keys
-                              WrapArray(
-                                ArrayConcat(
-                                  TransSpec.mapSources(leftMergeable.groupKeyTrans) { (_: Source1) => SourceLeft },
-                                  TransSpec.mapSources(rightMergeable.groupKeyTrans) { (_: Source1) => SourceRight }
-                                )
-                              ),
                               ArrayConcat(
-                                // array element 1 is the left id and left target
-                                WrapArray(
-                                  TransSpec.mapSources(ArrayConcat(WrapArray(leftMergeable.idTrans), WrapArray(leftMergeable.targetTrans))) {
-                                    (_: Source1) => SourceLeft 
-                                  }
-                                ),
-                                // array element 2 is the right id and right target
-                                WrapArray(
-                                  TransSpec.mapSources(ArrayConcat(WrapArray(leftMergeable.idTrans), WrapArray(leftMergeable.targetTrans))) {
-                                    (_: Source1) => SourceRight
-                                  }
-                                )
+                                TransSpec.mapSources(leftMergeable.groupKeyTrans) { (_: Source1) => SourceLeft },
+                                TransSpec.mapSources(rightMergeable.groupKeyTrans) { (_: Source1) => SourceRight }
+                              ),
+                              // array element 1 is the left id and left target
+                              WrapArray(
+                                TransSpec.mapSources(ArrayConcat(WrapArray(leftMergeable.idTrans), WrapArray(leftMergeable.targetTrans))) {
+                                  (_: Source1) => SourceLeft 
+                                }
+                              ),
+                              // array element 2 is the right id and right target
+                              WrapArray(
+                                TransSpec.mapSources(ArrayConcat(WrapArray(leftMergeable.idTrans), WrapArray(leftMergeable.targetTrans))) {
+                                  (_: Source1) => SourceRight
+                                }
                               )
                             )
                           }
@@ -1626,13 +1622,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                     val groupKeyTrans = mergeable.alignedGroupKeyTrans(ordering)
                     val sortableTrans = ArrayConcat(
                       WrapArray(mergeable.idTrans),
-                      ArrayConcat(
-                        WrapArray(mergeable.targetTrans),
-                        WrapArray(groupKeyTrans)
-                      )
+                      WrapArray(mergeable.targetTrans),
+                      WrapArray(groupKeyTrans)
                     )
-
-                    // ('a, 'c) => [12, 25]
 
                     mergeable.table.transform(sortableTrans).sort(TransSpec1.DerefArray0, SortAscending) map { sortedTable => 
                       Mergeable(mergeable.groupId, sortedTable, TransSpec1.DerefArray0, ValueTrans, GroupKeyTrans, ordering)
