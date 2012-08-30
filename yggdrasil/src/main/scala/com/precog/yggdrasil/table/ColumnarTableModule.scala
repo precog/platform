@@ -444,32 +444,31 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
             _ wrap JPathIndex(0) 
           }
 
-        case ObjectConcat(left, right) =>
-          val l0 = composeSliceTransform2(left)
-          val r0 = composeSliceTransform2(right)
+        case ObjectConcat(objects @ _*) =>
+          objects.map(composeSliceTransform2).reduceLeft { (l0, r0) =>
+            l0.zip(r0) { (sl, sr) =>
+              new Slice {
+                val size = sl.size
+                val columns = {
+                  val logicalFilters = sr.columns.groupBy(_._1.selector) mapValues { cols => new BoolColumn {
+                    def isDefinedAt(row: Int) = cols.exists(_._2.isDefinedAt(row))
+                    def apply(row: Int) = !isDefinedAt(row)
+                  }}   
 
-          l0.zip(r0) { (sl, sr) =>
-            new Slice {
-              val size = sl.size
-              val columns = {
-                val logicalFilters = sr.columns.groupBy(_._1.selector) mapValues { cols => new BoolColumn {
-                  def isDefinedAt(row: Int) = cols.exists(_._2.isDefinedAt(row))
-                  def apply(row: Int) = !isDefinedAt(row)
-                }}
+                  val remapped = sl.columns map {
+                    case (ref @ ColumnRef(jpath, ctype), col) => (ref, logicalFilters.get(jpath).flatMap(c => cf.util.FilterComplement(c)(col)).getOrElse(col))
+                  }    
 
-                val remapped = sl.columns map {
-                  case (ref @ ColumnRef(jpath, ctype), col) => (ref, logicalFilters.get(jpath).flatMap(c => cf.util.FilterComplement(c)(col)).getOrElse(col))
-                }
-
-                remapped ++ sr.columns
-              }
-            }
-          }
+                  remapped ++ sr.columns
+                }    
+              }    
+            }    
+          }    
 
         case ArrayConcat(elements @ _*) =>
           // array concats cannot reduce the number of columns except by eliminating empty columns
-          elements.map(composeSliceTransform2).reduceLeft {
-            (tacc, t2) => tacc.zip(t2) { (sliceAcc, s2) =>
+          elements.map(composeSliceTransform2).reduceLeft { (tacc, t2) => 
+            tacc.zip(t2) { (sliceAcc, s2) =>
               new Slice {
                 val size = sliceAcc.size
                 val columns: Map[ColumnRef, Column] = {
@@ -482,10 +481,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
                       s2Empty  <- (s2.columns       collect { case (ColumnRef(JPath.Identity, CEmptyArray), col) => col }).headOption
                     } yield {
                       (ColumnRef(JPath.Identity, CEmptyArray) -> new IntersectColumn(accEmpty, s2Empty) with EmptyArrayColumn)
-                    } 
-                    
+                    }    
+     
                     intersectedEmptyColumn.toMap
-                  } else if ((accCols.isEmpty && !accCols.keys.exists(_.ctype == CEmptyArray)) || (s2cols.isEmpty && !s2cols.keys.exists(_.ctype == CEmptyArray))) {
+                  } else if ((accCols.isEmpty && !sliceAcc.columns.keys.exists(_.ctype == CEmptyArray)) || 
+                             (s2cols.isEmpty && !s2.columns.keys.exists(_.ctype == CEmptyArray))) {
                     Map.empty[ColumnRef, Column]
                   } else {
                     val maxId = accCols.map(_._1).max
@@ -493,61 +493,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
                                   (s2cols  map { case (i, xs, ref, col) => ColumnRef(JPath(JPathIndex(i + maxId + 1) :: xs.toList), ref.ctype) -> col })
 
                     newCols.toMap
-                  }
-                }
-              }
-            }
-          }
-          /*
-
-
-          val l0 = composeSliceTransform2(left)
-          val r0 = composeSliceTransform2(right)
-
-          l0.zip(r0) { (sl, sr) =>
-            def assertDense(paths: Set[JPath]) = assert {
-              (paths collect { 
-                case JPath(JPathIndex(i), _ @ _*) => i 
-              }).toList.sorted.zipWithIndex forall { case (a, b) => a == b }
-            }
-
-            assertDense(sl.columns.keySet.map(_.selector))
-            assertDense(sr.columns.keySet.map(_.selector))
-
-
-            new Slice {
-              val size = sl.size
-              val columns: Map[ColumnRef, Column] = {
-                val (lempty, lnonEmpty) = sl.columns partition {
-                  case (ColumnRef(_, tpe), _) => tpe == CEmptyArray 
-                } 
-
-                val (rempty, rnonEmpty) = sr.columns.partition {
-                  case (ColumnRef(_, tpe), _) => tpe == CEmptyArray 
-                }
-
-                if (lempty.nonEmpty && rempty.nonEmpty) {
-                  Map(lempty.head._1 -> 
-                } else if (sl.columns.isEmpty || sr.columns.isEmpty) { 
-                  Map() 
-                } else {
-                  val (indices, lcols) = lnonEmpty map { 
-                    case t @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), _), _) => (Some(i), t) 
-                  } unzip
-
-                  val someIndices = indices collect { case Some(i) => i }
-                  val maxIndex = someIndices.reduceLeftOption(_ max _).map(_ + 1).getOrElse(0)
-
-                  val rcols = rnonEmpty map { 
-                    case (ColumnRef(JPath(JPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(JPath(JPathIndex(j + maxIndex) +: xs : _*), ctype), col) 
-                  }
-
-                  lnonEmpty.toMap ++ rcols
-                }
-              }
-            }
-          }
-          */
+                  }    
+                }    
+              }    
+            }    
+          }    
 
         case ObjectDelete(source, mask) => 
           composeSliceTransform2(source) map {
