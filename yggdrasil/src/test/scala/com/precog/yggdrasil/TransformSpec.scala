@@ -575,6 +575,29 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       results.copoint must_== expected
     }
   }
+  
+  def testTrivialScan = {
+    val data = JObject(JField("value", JNum(BigDecimal("2705009941739170689"))) :: JField("key", JArray(JNum(1) :: Nil)) :: Nil) #::
+               JObject(JField("value", JString("")) :: JField("key", JArray(JNum(2) :: Nil)) :: Nil) #::
+               Stream.empty
+               
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+    val results = toJson(table.transform {
+      Scan(DerefObjectStatic(Leaf(Source), JPathField("value")), lookupScanner(Nil, "sum"))
+    })
+
+    val (_, expected) = sample.data.foldLeft((BigDecimal(0), Vector.empty[JValue])) { 
+      case ((a, s), jv) => { 
+        (jv \ "value") match {
+          case JNum(i) => (a + i, s :+ JNum(a + i))
+          case _ => (a, s)
+        }
+      }
+    }
+
+    results.copoint must_== expected.toStream
+  }
 
   def checkScan = {
     implicit val gen = sample(_ => Seq(JPath.Identity -> CLong))

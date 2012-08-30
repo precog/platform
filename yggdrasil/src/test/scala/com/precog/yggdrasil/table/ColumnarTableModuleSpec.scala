@@ -88,40 +88,36 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "sum" -> new CScanner {
         type A = BigDecimal
         val init = BigDecimal(0)
-        def scan(a: BigDecimal, col: Column, range: Range): (A, Option[Column]) = {
-          col match {
-            case lc: LongColumn => 
-              val (a0, acc) = range.foldLeft((a, new Array[BigDecimal](range.end))) {
-                case ((a0, acc), i) => 
-                  val intermediate = a0 + lc(i)
-                  acc(i) = intermediate
-                  (intermediate, acc)
-              }
-
-              (a0, Some(ArrayNumColumn(BitSet(range: _*), acc)))
-              
-            case lc: DoubleColumn =>
-              val (a0, acc) = range.foldLeft((a, new Array[BigDecimal](range.end))) {
-                case ((a0, acc), i) => 
-                  val intermediate = a0 + lc(i)
-                  acc(i) = intermediate
-                  (intermediate, acc)
-              }
-
-              (a0, Some(ArrayNumColumn(BitSet(range: _*), acc)))
-              
-            case lc: NumColumn =>
-              val (a0, acc) = range.foldLeft((a, new Array[BigDecimal](range.end))) {
-                case ((a0, acc), i) => 
-                  val intermediate = a0 + lc(i)
-                  acc(i) = intermediate
-                  (intermediate, acc)
-              }
-
-              (a0, Some(ArrayNumColumn(BitSet(range: _*), acc)))
-
-            case _ => (a, None)
+        def scan(a: BigDecimal, cols: Set[Column], range: Range): (A, Set[Column]) = {
+          val prioritized = cols.toSeq filter {
+            case _: LongColumn | _: DoubleColumn | _: NumColumn => true
+            case _ => false
           }
+          
+          val mask = BitSet(range filter { i => prioritized exists { _ isDefinedAt i } }: _*)
+          
+          val (a2, arr) = range.foldLeft((a, new Array[BigDecimal](range.end))) {
+            case ((acc, arr), i) => {
+              val col = prioritized find { _ isDefinedAt i }
+              
+              val acc2 = col map {
+                case lc: LongColumn =>
+                  acc + lc(i)
+                
+                case dc: DoubleColumn =>
+                  acc + dc(i)
+                
+                case nc: NumColumn =>
+                  acc + nc(i)
+              }
+              
+              acc2 foreach { arr(i) = _ }
+              
+              (acc2 getOrElse acc, arr)
+            }
+          }
+          
+          (a2, Set(ArrayNumColumn(mask, arr)))
         }
       }
     )
@@ -212,6 +208,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "delete elements according to a JType" in checkObjectDelete
       "perform a trivial type-based filter" in checkTypedTrivial
       "perform a less trivial type-based filter" in checkTyped
+      "perform a summation scan case 1" in testTrivialScan
       "perform a summation scan" in checkScan
       "perform dynamic object deref" in testDerefObjectDynamic
       "perform an array swap" in checkArraySwap

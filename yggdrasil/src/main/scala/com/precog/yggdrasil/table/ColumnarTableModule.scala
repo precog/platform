@@ -526,22 +526,40 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
           composeSliceTransform2(source) andThen {
             SliceTransform1[scanner.A](
               scanner.init,
-              (state: scanner.A, slice: Slice) => {
-                assert(slice.columns.size <= 1)
-                slice.columns.headOption flatMap {
-                  case (ColumnRef(selector, ctype), col) =>
-                    val (nextState, nextCol) = scanner.scan(state, col, 0 until slice.size)
-                    nextCol map { c =>
-                      ( nextState, 
-                        new Slice { 
-                          val size = slice.size; 
-                          val columns = Map(ColumnRef(selector, c.tpe) -> c)
-                        }
-                      )
-                    }
-                } getOrElse {
+              { (state: scanner.A, slice: Slice) =>
+                if (slice.columns.isEmpty) {
                   (state, slice)
-                } 
+                } else {
+                  val (selectors, columns) = Map(slice.columns.toSeq: _*).toSeq collect {
+                    case (ColumnRef(selector, _), col) if selector == JPath.Identity => (selector, col)
+                  } unzip
+                  
+                  if (selectors.isEmpty) {
+                    (state,
+                      new Slice {
+                        override val size = slice.size
+                        override val columns = Map[ColumnRef, Column]()
+                      })
+                  } else {
+                    val selector = selectors.head
+                    val (nextState, nextCols) = scanner.scan(state, collection.immutable.Set(columns.toSeq: _*), 0 until slice.size)
+                    
+                    val cleanedCols = nextCols.foldLeft(Map[CType, Column]()) {
+                      case (acc, col) => {
+                        val ctype = col.tpe
+                        val col2 = acc get ctype flatMap { col2 => cf.util.UnionRight(col, col2) } getOrElse col
+                        acc.updated(ctype, col2)
+                      }
+                    } values
+                    
+                    (nextState, 
+                      new Slice { 
+                        override val size = slice.size 
+                        val columns: Map[ColumnRef, Column] =
+                          cleanedCols.map({ c => ColumnRef(selector, c.tpe) -> c })(collection.breakOut)
+                      })
+                  }
+                }
               }
             )
           }

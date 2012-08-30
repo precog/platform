@@ -35,11 +35,11 @@ trait IdSourceScannerModule[M[+_]] extends TableModule[M] with YggConfigComponen
     type A = Unit
     def init = ()
     
-    def scan(a: Unit, col: Column, range: Range): (A, Option[Column]) = {
-      val defined = BitSet(range filter col.isDefinedAt: _*)
+    def scan(a: Unit, col: Set[Column], range: Range): (A, Set[Column]) = {
+      val defined = BitSet(range filter { i => col exists { _ isDefinedAt i } }: _*)
       val values = range map { _ => yggConfig.idSource.nextId() } toArray
       
-      ((), Some(ArrayLongColumn(defined, values)))
+      ((), Set(ArrayLongColumn(defined, values)))
     }
   }
 }
