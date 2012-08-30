@@ -169,6 +169,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
     "in cogroup" >> {
       "perform a simple cogroup" in testSimpleCogroup
+      "perform another simple cogroup" in testAnotherSimpleCogroup
+      "perform yet another simple cogroup" in testAnotherSimpleCogroupSwitched
       "cogroup across slice boundaries" in testCogroupSliceBoundaries
       "error on unsorted inputs" in testUnsortedInputs
 
