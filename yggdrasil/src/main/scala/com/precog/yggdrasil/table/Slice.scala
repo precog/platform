@@ -462,7 +462,7 @@ object Slice {
 
   def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): RowComparator = {
     def compare0(cols: (Column, Column)): RowComparator = {
-      (cols: @unchecked) match {
+      cols match {
         case (c1: BoolColumn, c2: BoolColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow) 
@@ -566,6 +566,14 @@ object Slice {
 
         case (c1: NullColumn, c2: NullColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = EQ
+        }
+        
+        case (c1, c2) => {
+          val ordering = implicitly[Order[CType]].apply(c1.tpe, c2.tpe)
+          
+          new RowComparator {
+            def compare(thisRow: Int, thatRow: Int) = ordering
+          }
         }
       }
     }
