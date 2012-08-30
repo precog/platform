@@ -596,12 +596,14 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       val expected = NodeMergeSpec(
         List(ticvar),
         Set(
-          SortMergeSpec(
-            SourceMergeSpec(binding),
+          SourceMergeSpec(
+            binding,
             WrapArray(
               ArrayConcat(
                 WrapArray(ConstLiteral(CString("a"),DerefObjectStatic(SourceValue.Single, ticvar))),
-                WrapArray(DerefObjectStatic(SourceValue.Single, ticvar)))))))
+                WrapArray(DerefObjectStatic(SourceValue.Single, ticvar)))),
+            List(ticvar)
+          )))
       
       result must_== expected
     }
@@ -630,20 +632,24 @@ trait ColumnarTableModuleSpec[M[+_]] extends
         Set(
           LeftAlignMergeSpec(
             MergeAlignment(
-              SortMergeSpec(
-                SourceMergeSpec(foobinding),
+              SourceMergeSpec(
+                foobinding, 
                 WrapArray(
                   ArrayConcat(
                     WrapArray(ConstLiteral(CString("a"),DerefObjectStatic(SourceValue.Single,tica))),
-                    WrapArray(DerefObjectStatic(SourceValue.Single,tica))))),
+                    WrapArray(DerefObjectStatic(SourceValue.Single,tica)))),
+                List(tica)
+              ),
               NodeMergeSpec(
                 List(tica, ticb),
                 Set(
-                  SortMergeSpec(
-                    SourceMergeSpec(barbinding),
+                  SourceMergeSpec(
+                    barbinding,
                     ArrayConcat(
                       WrapArray(ArrayConcat(WrapArray(ConstLiteral(CString("a"),DerefObjectStatic(SourceValue.Single,tica))),WrapArray(DerefObjectStatic(SourceValue.Single,tica)))),
-                      WrapArray(ArrayConcat(WrapArray(ConstLiteral(CString("b"),DerefObjectStatic(SourceValue.Single,ticb))),WrapArray(DerefObjectStatic(SourceValue.Single,ticb)))))))),
+                      WrapArray(ArrayConcat(WrapArray(ConstLiteral(CString("b"),DerefObjectStatic(SourceValue.Single,ticb))),WrapArray(DerefObjectStatic(SourceValue.Single,ticb))))),
+                    List(tica, ticb)
+                  ))),
               Vector(tica)
             ))))
 

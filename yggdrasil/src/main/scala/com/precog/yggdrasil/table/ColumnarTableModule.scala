@@ -114,7 +114,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     def constEmptyArray: Table = 
       table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice])
 
-    def align[Id](sources: (Table, trans.TransSpec1, Id)*): M[Seq[(Id, Table)]] = sys.error("todo")
+    def align(sources: (Table, trans.TransSpec1)*): M[Seq[Table]] = sys.error("todo")
     def intersect(sources: (Table, trans.TransSpec1)*): M[Table] = sys.error("todo")
   }
   
@@ -466,25 +466,36 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             }
           }
 
-        case ArrayConcat(left, right) =>
-          val l0 = composeSliceTransform2(left)
-          val r0 = composeSliceTransform2(right)
+        case ArrayConcat(elements @ _*) =>
+          // array concats cannot reduce the number of columns except by eliminating empty columns
+          elements.map(composeSliceTransform2).reduceLeft {
+            (tacc, t2) => tacc.zip(t2) { (sliceAcc, s2) =>
+              new Slice {
+                val size = sliceAcc.size
+                val columns: Map[ColumnRef, Column] = {
+                  val accCols = sliceAcc.columns collect { case (ref @ ColumnRef(JPath(JPathIndex(i), _*), ctype), col) => (i, ref, col) }
+                  val s2cols = s2.columns collect { case (ref @ ColumnRef(JPath(JPathIndex(i), xs @ _*), ctype), col) => (i, xs, ref, col) }
 
-          l0.zip(r0) { (sl, sr) =>
-            def assertDense(paths: Set[JPath]) = assert {
-              (paths collect { case JPath(JPathIndex(i), _ @ _*) => i }).toList.sorted.zipWithIndex forall { case (a, b) => a == b }
-            }
+                  if (accCols.isEmpty && s2cols.isEmpty) {
+                    val intersectedEmptyColumn = for {
+                      accEmpty <- (sliceAcc.columns collect { case (ColumnRef(JPath.Identity, CEmptyArray), col) => col }).headOption
+                      s2Empty  <- (s2.columns       collect { case (ColumnRef(JPath.Identity, CEmptyArray), col) => col }).headOption
+                    } yield {
+                      (ColumnRef(JPath.Identity, CEmptyArray) -> new IntersectColumn(accEmpty, s2Empty) with EmptyArrayColumn)
+                    } 
+                    
+                    intersectedEmptyColumn.toMap
+                  } else if ((accCols.isEmpty && !sliceAcc.columns.keys.exists(_.ctype == CEmptyArray)) || 
+                             (s2cols.isEmpty && !s2.columns.keys.exists(_.ctype == CEmptyArray))) {
+                    Map.empty[ColumnRef, Column]
+                  } else {
+                    val maxId = accCols.map(_._1).max
+                    val newCols = (accCols map { case (_, ref, col) => ref -> col }) ++ 
+                                  (s2cols  map { case (i, xs, ref, col) => ColumnRef(JPath(JPathIndex(i + maxId + 1) :: xs.toList), ref.ctype) -> col })
 
-            assertDense(sl.columns.keySet.map(_.selector))
-            assertDense(sr.columns.keySet.map(_.selector))
-
-            new Slice {
-              val size = sl.size
-              val columns: Map[ColumnRef, Column] = {
-                val (indices, lcols) = sl.columns.toList map { case t @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), _), _) => (i, t) } unzip
-                val maxIndex = indices.reduceLeftOption(_ max _).map(_ + 1).getOrElse(0)
-                val rcols = sr.columns map { case (ColumnRef(JPath(JPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(JPath(JPathIndex(j + maxIndex) +: xs : _*), ctype), col) }
-                lcols.toMap ++ rcols
+                    newCols.toMap
+                  }
+                }
               }
             }
           }
@@ -1471,7 +1482,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           if (groupKeyOrder == targetOrder) {
             groupKeyTrans
           } else {
-            ArrayConcat(targetOrder map { ticvar => WrapArray(DerefArrayStatic(groupKeyTrans, groupKeyOrder.indexOf(ticvar))) }: _*)
+            ArrayConcat(targetOrder map { ticvar => WrapArray(DerefArrayStatic(groupKeyTrans, JPathIndex(groupKeyOrder.indexOf(ticvar)))) }: _*)
           }
         }
       }
@@ -1512,15 +1523,15 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                         } yield {
                           for {
                             aligned <- ops.align(
-                                         (leftResult.table, leftResult.groupKeyTrans, leftGroupId), 
-                                         (rightResult.table, rightResult.groupKeyTrans, rightGroupId)
+                                         (leftResult.table, leftResult.groupKeyTrans), 
+                                         (rightResult.table, rightResult.groupKeyTrans)
                                        ) 
                           } yield {
                             (aligned.toList: @unchecked) match {
                               case leftAligned :: rightAligned :: Nil =>
                                 Vector(
-                                  leftResult.copy(table = leftAligned._2),
-                                  rightResult.copy(table = rightAligned._2)
+                                  leftResult.copy(table = leftAligned),
+                                  rightResult.copy(table = rightAligned)
                                 )
                             }
                           }
@@ -1674,7 +1685,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
       // all of the universes will be unioned together.
       val universes = findBindingUniverses(grouping)
-      val universeMergeables = universes.map { _.composeMergeSpec }.map(evaluateMergeSpec).sequence
+      for {
+        universeMergeables <- universes.map(u => evaluateMergeSpec(u.composeMergeSpec)).toStream.sequence
+      } yield {
+        sys.error("todo")
+      }
+
+      
     }
   }
 }

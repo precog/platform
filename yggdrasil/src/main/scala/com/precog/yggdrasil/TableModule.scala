@@ -75,8 +75,7 @@ trait TableModule[M[+_]] extends FNModule {
 
     case class ObjectDelete[+A <: SourceType](source: TransSpec[A], fields: Set[JPathField]) extends TransSpec[A]
     
-    // TODO: Make ArrayConcat n-ary
-    case class ArrayConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
+    case class ArrayConcat[+A <: SourceType](arrays: TransSpec[A]*) extends TransSpec[A] //done
     
     // Take the output of the specified TransSpec and prefix all of the resulting selectors with the
     // specified field. 
@@ -120,7 +119,7 @@ trait TableModule[M[+_]] extends FNModule {
           case trans.Map1(source, f1) => trans.Map1(mapSources(source)(f), f1)
           case trans.Map2(left, right, f2) => trans.Map2(mapSources(left)(f), mapSources(right)(f), f2)
           case trans.ObjectConcat(left, right) => trans.ObjectConcat(mapSources(left)(f), mapSources(right)(f))
-          case trans.ArrayConcat(left, right) => trans.ArrayConcat(mapSources(left)(f), mapSources(right)(f))
+          case trans.ArrayConcat(arrays @ _*) => trans.ArrayConcat(arrays.map(mapSources(_)(f)): _*)
           case trans.WrapObject(source, field) => trans.WrapObject(mapSources(source)(f), field)
           case trans.WrapArray(source) => trans.WrapArray(mapSources(source)(f))
           case DerefObjectStatic(source, field) => DerefObjectStatic(mapSources(source)(f), field)
@@ -142,7 +141,7 @@ trait TableModule[M[+_]] extends FNModule {
         case trans.Map1(source, f1) => trans.Map1(deepMap(source)(f), f1)
         case trans.Map2(left, right, f2) => trans.Map2(deepMap(left)(f), deepMap(right)(f), f2)
         case trans.ObjectConcat(left, right) => trans.ObjectConcat(deepMap(left)(f), deepMap(right)(f))
-        case trans.ArrayConcat(left, right) => trans.ArrayConcat(deepMap(left)(f), deepMap(right)(f))
+        case trans.ArrayConcat(arrays @ _*) => trans.ArrayConcat(arrays.map(deepMap(_)(f)): _*)
         case trans.WrapObject(source, field) => trans.WrapObject(deepMap(source)(f), field)
         case trans.WrapArray(source) => trans.WrapArray(deepMap(source)(f))
         case DerefObjectStatic(source, field) => DerefObjectStatic(deepMap(source)(f), field)
