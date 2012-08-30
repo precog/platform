@@ -338,8 +338,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
     "derive a correct TransSpec for a conjunctive GroupKeySpec" in {
       val keySpec = GroupKeySpecAnd(
-        GroupKeySpecSource(JPathField("1"), DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(JPathField("2"), DerefObjectStatic(SourceValue.Single, JPathField("b"))))
+        GroupKeySpecAnd(
+          GroupKeySpecSource(JPathField("tica"), DerefObjectStatic(SourceValue.Single, JPathField("a"))),
+          GroupKeySpecSource(JPathField("ticb"), DerefObjectStatic(SourceValue.Single, JPathField("b")))),
+        GroupKeySpecSource(JPathField("ticc"), DerefObjectStatic(SourceValue.Single, JPathField("c"))))
 
       val transspec = grouper.Universe.deriveKeyTransSpec(keySpec)
       val JArray(data) = JsonParser.parse("""[
@@ -349,9 +351,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       ]""")
 
       val JArray(expected) = JsonParser.parse("""[
-        [12, 7],
-        [42],
-        [13]
+        {"0": 12, "1": 7},
+        {"0": 42},
+        {"0": 13, "2": true}
       ]""")
 
       fromJson(data.toStream).transform(transspec).toJson.copoint must_== expected
@@ -598,7 +600,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
         Set(
           SourceMergeSpec(
             binding,
-            ArrayConcat(WrapArray(DerefObjectStatic(SourceValue.Single, ticvar))),
+            ObjectConcat(WrapObject(DerefObjectStatic(SourceValue.Single, ticvar), "0")),
             List(ticvar)
           )))
       
@@ -631,7 +633,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
             MergeAlignment(
               SourceMergeSpec(
                 foobinding, 
-                ArrayConcat(WrapArray(DerefObjectStatic(SourceValue.Single,tica))),
+                ObjectConcat(WrapObject(DerefObjectStatic(SourceValue.Single,tica), "0")),
                 List(tica)
               ),
               NodeMergeSpec(
@@ -639,9 +641,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
                 Set(
                   SourceMergeSpec(
                     barbinding,
-                    ArrayConcat(
-                      WrapArray(DerefObjectStatic(SourceValue.Single,tica)),
-                      WrapArray(DerefObjectStatic(SourceValue.Single,ticb))),
+                    ObjectConcat(
+                      WrapObject(DerefObjectStatic(SourceValue.Single,tica), "0"),
+                      WrapObject(DerefObjectStatic(SourceValue.Single,ticb), "1")),
                     List(tica, ticb)
                   ))),
               Vector(tica)

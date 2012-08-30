@@ -71,7 +71,7 @@ trait TableModule[M[+_]] extends FNModule {
     
     // Perform the specified transformation on the left and right sides, and then create a new set of columns
     // containing all the resulting columns.
-    case class ObjectConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
+    case class ObjectConcat[+A <: SourceType](objects: TransSpec[A]*) extends TransSpec[A] //done
 
     case class ObjectDelete[+A <: SourceType](source: TransSpec[A], fields: Set[JPathField]) extends TransSpec[A]
     
@@ -118,7 +118,7 @@ trait TableModule[M[+_]] extends FNModule {
           case Scan(source, scanner) => Scan(mapSources(source)(f), scanner)
           case trans.Map1(source, f1) => trans.Map1(mapSources(source)(f), f1)
           case trans.Map2(left, right, f2) => trans.Map2(mapSources(left)(f), mapSources(right)(f), f2)
-          case trans.ObjectConcat(left, right) => trans.ObjectConcat(mapSources(left)(f), mapSources(right)(f))
+          case trans.ObjectConcat(objects @ _*) => trans.ObjectConcat(objects.map(mapSources(_)(f)): _*)
           case trans.ArrayConcat(arrays @ _*) => trans.ArrayConcat(arrays.map(mapSources(_)(f)): _*)
           case trans.WrapObject(source, field) => trans.WrapObject(mapSources(source)(f), field)
           case trans.WrapArray(source) => trans.WrapArray(mapSources(source)(f))
@@ -140,7 +140,7 @@ trait TableModule[M[+_]] extends FNModule {
         case Scan(source, scanner) => Scan(deepMap(source)(f), scanner)
         case trans.Map1(source, f1) => trans.Map1(deepMap(source)(f), f1)
         case trans.Map2(left, right, f2) => trans.Map2(deepMap(left)(f), deepMap(right)(f), f2)
-        case trans.ObjectConcat(left, right) => trans.ObjectConcat(deepMap(left)(f), deepMap(right)(f))
+        case trans.ObjectConcat(objects @ _*) => trans.ObjectConcat(objects.map(deepMap(_)(f)): _*)
         case trans.ArrayConcat(arrays @ _*) => trans.ArrayConcat(arrays.map(deepMap(_)(f)): _*)
         case trans.WrapObject(source, field) => trans.WrapObject(deepMap(source)(f), field)
         case trans.WrapArray(source) => trans.WrapArray(deepMap(source)(f))

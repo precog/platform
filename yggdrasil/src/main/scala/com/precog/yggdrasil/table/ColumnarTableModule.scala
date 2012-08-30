@@ -444,32 +444,31 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             _ wrap JPathIndex(0) 
           }
 
-        case ObjectConcat(left, right) =>
-          val l0 = composeSliceTransform2(left)
-          val r0 = composeSliceTransform2(right)
+        case ObjectConcat(objects @ _*) =>
+          objects.map(composeSliceTransform2).reduceLeft { (l0, r0) =>
+            l0.zip(r0) { (sl, sr) =>
+              new Slice {
+                val size = sl.size
+                val columns = {
+                  val logicalFilters = sr.columns.groupBy(_._1.selector) mapValues { cols => new BoolColumn {
+                    def isDefinedAt(row: Int) = cols.exists(_._2.isDefinedAt(row))
+                    def apply(row: Int) = !isDefinedAt(row)
+                  }}
 
-          l0.zip(r0) { (sl, sr) =>
-            new Slice {
-              val size = sl.size
-              val columns = {
-                val logicalFilters = sr.columns.groupBy(_._1.selector) mapValues { cols => new BoolColumn {
-                  def isDefinedAt(row: Int) = cols.exists(_._2.isDefinedAt(row))
-                  def apply(row: Int) = !isDefinedAt(row)
-                }}
+                  val remapped = sl.columns map {
+                    case (ref @ ColumnRef(jpath, ctype), col) => (ref, logicalFilters.get(jpath).flatMap(c => cf.util.FilterComplement(c)(col)).getOrElse(col))
+                  }
 
-                val remapped = sl.columns map {
-                  case (ref @ ColumnRef(jpath, ctype), col) => (ref, logicalFilters.get(jpath).flatMap(c => cf.util.FilterComplement(c)(col)).getOrElse(col))
+                  remapped ++ sr.columns
                 }
-
-                remapped ++ sr.columns
               }
             }
           }
 
         case ArrayConcat(elements @ _*) =>
           // array concats cannot reduce the number of columns except by eliminating empty columns
-          elements.map(composeSliceTransform2).reduceLeft {
-            (tacc, t2) => tacc.zip(t2) { (sliceAcc, s2) =>
+          elements.map(composeSliceTransform2).reduceLeft { (tacc, t2) => 
+            tacc.zip(t2) { (sliceAcc, s2) =>
               new Slice {
                 val size = sliceAcc.size
                 val columns: Map[ColumnRef, Column] = {
@@ -1117,11 +1116,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         val keyMap = keyOrder.zipWithIndex.toMap
 
         // [avalue, bvalue]
-        val keySpecs = sources(conjunction).sortBy(src => keyMap.getOrElse(src.key, Int.MaxValue)) map { src => 
-          WrapArray(src.spec)
+        val keySpecs = sources(conjunction).sortBy(src => keyMap.getOrElse(src.key, Int.MaxValue)).zipWithIndex map { 
+          case (src, idx) => WrapObject(src.spec, idx.toString)
         }
         
-        ArrayConcat(keySpecs: _*)
+        ObjectConcat(keySpecs: _*)
       }
 
       // MergeTrees describe intersections as edges in a graph, where the nodes correspond
