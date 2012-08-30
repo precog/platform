@@ -1872,7 +1872,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "equal with an array" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))
         
         val input = Filter(line, IdentitySort,
           numbers,
@@ -1894,11 +1894,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
           result2 must contain(Vector(8, 9, 10))
         }
-      }.pendingUntilFixed  
+      }.pendingUntilFixed
       
       "equal with an object" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))
         
         val input = Filter(line, IdentitySort,
           numbers,
@@ -1920,7 +1920,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             }
           }
         }
-      }.pendingUntilFixed 
+      }.pendingUntilFixed
 
       "equal without a filter" >> {
         val line = Line(0, "")
