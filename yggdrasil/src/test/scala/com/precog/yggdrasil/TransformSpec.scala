@@ -305,7 +305,14 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
 
   def checkArrayConcat = {
     implicit val gen = sample(_ => Seq(JPath("[0]") -> CLong, JPath("[1]") -> CLong))
-    check { (sample: SampleData) =>
+    check { (sample0: SampleData) =>
+      val sample = SampleData(sample0.data flatMap { jv =>
+        (jv \ "value") match {
+          case JArray(x :: Nil) => None
+          case z => Some(z)
+        }
+      })
+
       val table = fromSample(sample)
       val results = toJson(table.transform {
         WrapObject(
