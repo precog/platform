@@ -480,7 +480,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
                       accEmpty <- (sliceAcc.columns collect { case (ColumnRef(JPath.Identity, CEmptyArray), col) => col }).headOption
                       s2Empty  <- (s2.columns       collect { case (ColumnRef(JPath.Identity, CEmptyArray), col) => col }).headOption
                     } yield {
-                      (ColumnRef(JPath.Identity, CEmptyArray) -> new IntersectColumn(accEmpty, s2Empty) with EmptyArrayColumn)
+                      val emptyArrayCol = new IntersectColumn(accEmpty, s2Empty) with EmptyArrayColumn
+                      (ColumnRef(JPath.Identity, CEmptyArray) -> emptyArrayCol)
                     }    
      
                     intersectedEmptyColumn.toMap
