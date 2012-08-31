@@ -50,6 +50,8 @@ trait JDBMProjectionModule extends ProjectionModule {
     def fileOps: FileOps
 
     def baseDir(descriptor: ProjectionDescriptor): File
+    
+    def archiveDir(descriptor: ProjectionDescriptor): File
 
     def open(descriptor: ProjectionDescriptor): IO[Projection] = {
       pmLogger.debug("Opening JDBM projection for " + descriptor)
@@ -69,6 +71,12 @@ trait JDBMProjectionModule extends ProjectionModule {
     def close(projection: Projection) = {
       pmLogger.debug("Requesting close on " + projection)
       IO(projection.close())
+    }
+    
+    def archive(projection: Projection) = {
+      pmLogger.debug("Archiving " + projection)
+      val descriptor = projection.descriptor
+      close(projection).flatMap(_ => fileOps.rename(baseDir(descriptor), archiveDir(descriptor)))
     }
   }
 }

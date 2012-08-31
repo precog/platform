@@ -114,7 +114,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
 
       val projDes: List[ProjectionDescriptor] = {
         sampleData.zipWithIndex.foldLeft(List.empty[ProjectionDescriptor]) {
-          case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
+          case (acc, (jobj, i)) => routingTable.routeEvent(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
             case (acc, ProjectionData(descriptor, values, _)) =>
               acc :+ descriptor
           }
@@ -144,7 +144,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
 
       val projDes: List[ProjectionDescriptor] = {
         sampleData.zipWithIndex.foldLeft(List.empty[ProjectionDescriptor]) {
-          case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
+          case (acc, (jobj, i)) => routingTable.routeEvent(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
             case (acc, ProjectionData(descriptor, values, _)) =>
               acc :+ descriptor
           }
@@ -173,7 +173,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
 
       val projDes: List[ProjectionDescriptor] = {
         sampleData.zipWithIndex.foldLeft(List.empty[ProjectionDescriptor]) {
-          case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
+          case (acc, (jobj, i)) => routingTable.routeEvent(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
             case (acc, ProjectionData(descriptor, values, _)) =>
               acc :+ descriptor
           }
@@ -202,7 +202,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
 
       val projDes: List[ProjectionDescriptor] = {
         sampleData.zipWithIndex.foldLeft(List.empty[ProjectionDescriptor]) {
-          case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
+          case (acc, (jobj, i)) => routingTable.routeEvent(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
             case (acc, ProjectionData(descriptor, values, _)) =>
               acc :+ descriptor
           }

@@ -106,7 +106,7 @@ trait YggdrasilQueryExecutorComponent {
         def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
       }
 
-      class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
+      class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
         val accessControl = extAccessControl
       }
 
@@ -115,6 +115,7 @@ trait YggdrasilQueryExecutorComponent {
       object Projection extends JDBMProjectionCompanion {
         val fileOps = FilesystemFileOps
         def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+        def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
       }
     }
   }

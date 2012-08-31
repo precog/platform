@@ -95,8 +95,8 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
       val values = Vector[CValue](CString("Test123"))
       val metadata = Vector(Set[Metadata]())
 
-      val row1 = ProjectionInsert.Row(EventId(0,1), values, metadata)
-      val row2 = ProjectionInsert.Row(EventId(0,2), values, metadata)
+      val row1 = ProjectionUpdate.Row(EventId(0,1), values, metadata)
+      val row2 = ProjectionUpdate.Row(EventId(0,2), values, metadata)
 
       actorRef ! IngestBatchMetadata(Map(descriptor -> ProjectionMetadata.columnMetadata(descriptor, Seq(row1, row2))), VectorClock.empty.update(0, 1).update(0, 2), Some(0l))
       (actorRef ? FlushMetadata) must whenDelivered {

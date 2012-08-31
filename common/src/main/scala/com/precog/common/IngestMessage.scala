@@ -41,6 +41,7 @@ class IngestMessageSerialization {
     override def decompose(ingestMessage: IngestMessage): JValue = ingestMessage match {
       //case sm @ SyncMessage(_, _, _)  => SyncMessage.SyncMessageDecomposer.apply(sm)
       case em @ EventMessage(_, _) => EventMessage.EventMessageDecomposer.apply(em)
+      case dm @ ArchiveMessage(_, _) => ArchiveMessage.ArchiveMessageDecomposer.apply(dm)
     }
   }
 }
@@ -101,10 +102,41 @@ object EventMessage extends EventMessageSerialization {
   }
 }
 
+case class ArchiveId(producerId: ProducerId, sequenceId: SequenceId) {
+  val uid = (producerId.toLong << 32) | (sequenceId.toLong & 0xFFFFFFFFL)
+}
+
+case class ArchiveMessage(archiveId: ArchiveId, archive: Archive) extends IngestMessage
+
+trait ArchiveMessageSerialization {
+  implicit val ArchiveMessageDecomposer: Decomposer[ArchiveMessage] = new Decomposer[ArchiveMessage] {
+    override def decompose(archiveMessage: ArchiveMessage): JValue = JObject(
+      List(
+        JField("producerId", archiveMessage.archiveId.producerId.serialize),
+        JField("deletionId", archiveMessage.archiveId.sequenceId.serialize),
+        JField("deletion", archiveMessage.archive.serialize)))
+  }
+
+  implicit val ArchiveMessageExtractor: Extractor[ArchiveMessage] = new Extractor[ArchiveMessage] with ValidatedExtraction[ArchiveMessage] {
+    override def validated(obj: JValue): Validation[Error, ArchiveMessage] =
+      ((obj \ "producerId" ).validated[Int] |@|
+        (obj \ "deletionId").validated[Int] |@|
+        (obj \ "deletion").validated[Archive]).apply(ArchiveMessage(_, _, _))
+  }
+}
+
+object ArchiveMessage extends ArchiveMessageSerialization {
+
+  def apply(producerId: ProducerId, sequenceId: SequenceId, archive: Archive): ArchiveMessage = {
+    ArchiveMessage(ArchiveId(producerId, sequenceId), archive)
+  }
+}
+
 object IngestMessageSerialization {
   private val stopByte: Byte = 0x00
   private val jsonEventFlag: Byte = 0x01
   private val jsonSyncFlag: Byte = 0x02
+  private val jsonArchiveFlag: Byte = 0x03
   private val magicByte: Byte = -123
 
   val charset = Charset.forName("UTF-8")
@@ -124,8 +156,9 @@ object IngestMessageSerialization {
 
   def write(buffer: ByteBuffer, msg: IngestMessage) {
     (msg match {
-      //case SyncMessage(_, _, _)     => writeSync _
-      case EventMessage(_, _)    => writeEvent _
+      //case SyncMessage(_, _, _)    => writeSync _
+      case EventMessage(_, _)      => writeEvent _
+      case ArchiveMessage(_, _)    => writeArchive _
     })(msg)(buffer)
   }
   
@@ -134,6 +167,9 @@ object IngestMessageSerialization {
 
   def writeEvent(msg: IngestMessage): ByteBuffer => ByteBuffer = (writeHeader(_: ByteBuffer, jsonEventFlag)) andThen 
                                                                  (writeMessage(_: ByteBuffer, msg))
+  
+  def writeArchive(msg: IngestMessage): ByteBuffer => ByteBuffer = (writeHeader(_: ByteBuffer, jsonArchiveFlag)) andThen 
+                                                                   (writeMessage(_: ByteBuffer, msg))
   
   def writeHeader(buffer: ByteBuffer, encodingFlag: Byte): ByteBuffer = {
     buffer.put(magicByte).put(encodingFlag).put(stopByte)

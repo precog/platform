@@ -101,7 +101,7 @@ trait DistributedSampleStubStorageModule[M[+_]] extends StubStorageModule[M] {
   lazy val sampleData: Vector[JValue] = DistributedSampleSet.sample(sampleSize, 0)._1
 
   lazy val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, Projection]) { 
-    case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
+    case (acc, (jobj, i)) => routingTable.routeEvent(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
       case (acc, ProjectionData(descriptor, values, _)) =>
         acc + (descriptor -> (Projection(descriptor, acc.get(descriptor).map(_.data).getOrElse(TreeMap.empty(ordering)) + (VectorCase(EventId(0,i).uid) -> values))))
     }

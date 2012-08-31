@@ -58,7 +58,7 @@ object ShardTestInit extends App with JDBMProjectionModule with SystemActorStora
 
   val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
 
-  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO
+  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
   val actorSystem = ActorSystem("shard-test-init")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -72,6 +72,7 @@ object ShardTestInit extends App with JDBMProjectionModule with SystemActorStora
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
     def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+    def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
   }
 
   def usage() {

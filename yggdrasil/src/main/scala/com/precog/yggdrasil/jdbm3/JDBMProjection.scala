@@ -66,7 +66,7 @@ object JDBMProjection {
 
   final val DEFAULT_SLICE_SIZE = 10000
   final val INDEX_SUBDIR = "jdbm"
-
+    
   def isJDBMProjection(baseDir: File) = (new File(baseDir, INDEX_SUBDIR)).isDirectory
 }
 

@@ -184,7 +184,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
 object ProjectionMetadata {
   import metadata._
-  import ProjectionInsert.Row
+  import ProjectionUpdate.Row
 
   def columnMetadata(desc: ProjectionDescriptor, rows: Seq[Row]): ColumnMetadata = {
     rows.foldLeft(ColumnMetadata.Empty) { 

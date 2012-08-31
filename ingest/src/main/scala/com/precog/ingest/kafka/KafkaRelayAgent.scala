@@ -47,9 +47,9 @@ class KafkaRelayAgent(eventIdSeq: EventIdSequence, localConfig: Configuration, c
   lazy private val localTopic = localConfig[String]("topic")
   lazy private val centralTopic = centralConfig[String]("topic")
 
-  lazy private val eventCodec = new KafkaEventCodec
+  lazy private val ingestCodec = new KafkaIngestMessageCodec
   lazy private val centralProperties = JProperties.configurationToProperties(centralConfig)
-  lazy private val producer = new Producer[String, EventMessage](new ProducerConfig(centralProperties))
+  lazy private val producer = new Producer[String, IngestMessage](new ProducerConfig(centralProperties))
 
   lazy private val consumer = {
     val hostname = localConfig[String]("broker.host", "localhost")
@@ -65,10 +65,16 @@ class KafkaRelayAgent(eventIdSeq: EventIdSequence, localConfig: Configuration, c
 
   def relayMessages(messages: List[MessageAndOffset]) {
     val outgoing = messages.map { msg =>
-      val (producerId, sequenceId) = eventIdSeq.next(msg.offset)
-      EventMessage(producerId, sequenceId, eventCodec.toEvent(msg.message))
+      ingestCodec.toEvent(msg.message) match {
+        case em: EventMessage =>
+          val (producerId, sequenceId) = eventIdSeq.next(msg.offset)
+          EventMessage(producerId, sequenceId, em.event)
+        case am: ArchiveMessage =>
+          val (producerId, sequenceId) = eventIdSeq.next(msg.offset)
+          ArchiveMessage(producerId, sequenceId, am.archive)
+      }
     }
-    val data = new ProducerData[String, EventMessage](centralTopic, outgoing)
+    val data = new ProducerData[String, IngestMessage](centralTopic, outgoing)
     producer.send(data)
     eventIdSeq.saveState(messages.last.offset)
   }
