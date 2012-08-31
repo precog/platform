@@ -84,8 +84,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           )
         )
       
-      val memoTable = sort(preMemoTable, DerefObjectStatic(Leaf(Source), JPathField(memoKey)), SortAscending, memoId)
-      M.map(memoTable) { _.transform(DerefObjectStatic(Leaf(Source), JPathField(memoValue))) }
+      val memoTable = sort(preMemoTable, DerefObjectStatic(Leaf(Source), CPathField(memoKey)), SortAscending, memoId)
+      M.map(memoTable) { _.transform(DerefObjectStatic(Leaf(Source), CPathField(memoValue))) }
     }
     
     def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId): M[Table] = {
@@ -463,6 +463,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         val dataColumns = columnsByPrefix(CPath(Value))
         val idColumns   = columnsByPrefix(CPath(Key))
         val sortColumns = columnsByPrefix(CPath(SortKey))
+        implicit val rowCodec = Codec.RowCodec(dataColumns map (_._1.ctype))
         val indexMapKey = (sortColumns ++ dataColumns).map(_._1).toSeq
 
         val (index, newIndices) = indices.get(indexMapKey).map((_,indices)).getOrElse {
@@ -487,7 +488,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
           if (dataColumns.exists(_._2.isDefinedAt(row))) {
             try {
-              index.storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
+              index.storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId),
+                codec.encode(dataColumns, row))
             } catch {
               case t: Throwable => println("Error on storeRow: " + t); throw t
             }

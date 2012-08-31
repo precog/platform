@@ -91,37 +91,37 @@ trait Slice { source =>
     val columns = {
       Map(
         value match {
-          case CString(s) => (ColumnRef(JPath.Identity, CString), new StrColumn {
+          case CString(s) => (ColumnRef(CPath.Identity, CString), new StrColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = s
           })
-          case CBoolean(b) => (ColumnRef(JPath.Identity, CBoolean), new BoolColumn {
+          case CBoolean(b) => (ColumnRef(CPath.Identity, CBoolean), new BoolColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = b
           })
-          case CLong(l) => (ColumnRef(JPath.Identity, CLong), new LongColumn {
+          case CLong(l) => (ColumnRef(CPath.Identity, CLong), new LongColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = l
           })
-          case CDouble(d) => (ColumnRef(JPath.Identity, CDouble), new DoubleColumn {
+          case CDouble(d) => (ColumnRef(CPath.Identity, CDouble), new DoubleColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = d
           })
-          case CNum(n) => (ColumnRef(JPath.Identity, CNum), new NumColumn {
+          case CNum(n) => (ColumnRef(CPath.Identity, CNum), new NumColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = n
           })
-          case CDate(d) => (ColumnRef(JPath.Identity, CDate), new DateColumn {
+          case CDate(d) => (ColumnRef(CPath.Identity, CDate), new DateColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = d
           })
-          case CNull => (ColumnRef(JPath.Identity, CNull), new NullColumn {
+          case CNull => (ColumnRef(CPath.Identity, CNull), new NullColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
-          case CEmptyObject => (ColumnRef(JPath.Identity, CEmptyObject), new EmptyObjectColumn {
+          case CEmptyObject => (ColumnRef(CPath.Identity, CEmptyObject), new EmptyObjectColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
-          case CEmptyArray => (ColumnRef(JPath.Identity, CEmptyArray), new EmptyArrayColumn {
+          case CEmptyArray => (ColumnRef(CPath.Identity, CEmptyArray), new EmptyArrayColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
         }
@@ -898,7 +898,7 @@ object Slice {
             
             (col1, col2) match {
               case (Some(col1), Some(col2)) =>
-                val cmp = compare0(col1, col2)(row1, row2)
+                val cmp = compare0(col1, col2).compare(row1, row2)
                 if (cmp == EQ) Inc else Done(cmp)
               case (Some(_), None) => Done(GT)
               case (None, Some(_)) => Done(LT)

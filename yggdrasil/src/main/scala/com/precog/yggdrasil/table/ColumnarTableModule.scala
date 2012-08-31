@@ -472,7 +472,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
           val r0 = composeSliceTransform2(right)
 
           l0.zip(r0) { (sl, sr) =>
-            def assertDense(paths: Set[JPath]) = assert {
+            def assertDense(paths: Set[CPath]) = assert {
               (paths collect { 
                 case CPath(CPathIndex(i), _ @ _*) => i 
               }).toList.sorted.zipWithIndex forall { case (a, b) => a == b }

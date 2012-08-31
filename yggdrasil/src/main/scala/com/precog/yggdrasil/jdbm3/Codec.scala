@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package jdbm3
 
 import com.precog.yggdrasil.table._
+import com.precog.util._
 
 import org.joda.time.DateTime
 
@@ -46,7 +47,11 @@ import java.math.MathContext
 trait Codec[@spec(Boolean, Long, Double) A] { self =>
   type S
 
+  /** Returns the exact encoded size of `a`. */
   def encodedSize(a: A): Int
+
+  /** Returns an upper bound on the size of `a`. */
+  def boundSize(a: A): Int = encodedSize(a)
 
   def writeInit(a: A, buffer: ByteBuffer): Option[S]
   def writeMore(s: S, buffer: ByteBuffer): Option[S]
@@ -59,6 +64,7 @@ trait Codec[@spec(Boolean, Long, Double) A] { self =>
     type S = self.S
 
     def encodedSize(b: B) = self.encodedSize(to(b))
+    override def boundSize(b: B) = self.boundSize(to(b))
 
     def writeUnsafe(b: B, buf: ByteBuffer) = self.writeUnsafe(to(b), buf)
     def writeInit(b: B, buf: ByteBuffer) = self.writeInit(to(b), buf)
@@ -72,7 +78,31 @@ trait Codec[@spec(Boolean, Long, Double) A] { self =>
 
 object Codec {
 
-  def apply[A](implicit codec: Codec[A]): Codec[A] = codec
+  @inline def apply[A](implicit codec: Codec[A]): Codec[A] = codec
+
+  private val byteBufferPool = new ByteBufferPool()
+
+  def writeToArray[A](a: A)(implicit codec: Codec[A]): Array[Byte] = {
+    @tailrec def loop(s: Option[codec.S], buffers: List[ByteBuffer]): Array[Byte] = s match {
+      case Some(s) =>
+        val buf = byteBufferPool.acquire
+        loop(codec.writeMore(s, buf), buf :: buffers)
+
+      case None =>
+        buffers foreach { _.flip() }
+        val out = Array.ofDim[Byte](buffers.foldLeft(0)(_ + _.remaining))
+        buffers.foldRight(0) { (buffer, offset) =>
+          val len = buffer.remaining
+          buffer.get(out, offset, len)
+          byteBufferPool.release(buffer)
+          offset + len
+        }
+        out
+    }
+
+    val initBuffer = byteBufferPool.acquire
+    loop(codec.writeInit(a, initBuffer), initBuffer :: Nil)
+  }
 
   private final val FALSE_VALUE = 0.toByte
   private final val TRUE_VALUE = 1.toByte
@@ -89,7 +119,7 @@ object Codec {
     case CDouble => DoubleCodec
     case CNum => BigDecimalCodec
     case CDate => DateCodec
-    case CArrayType(elemType) => ArrayCodec(Codec.forCValueType(elemType))
+    case CArrayType(elemType) => IndexedSeqCodec(Codec.forCValueType(elemType))
   }
 
 
@@ -155,6 +185,8 @@ object Codec {
 
     type S = Either[String, (CharBuffer, CharsetEncoder)]
 
+    override def boundSize(s: String): Int = s.length * 4
+
     def encodedSize(s: String): Int = {
       var i = 0
       var size = 0
@@ -170,6 +202,7 @@ object Codec {
           size += 4
           i += 1
         }
+        i += 1
       }
       size
     }
@@ -218,7 +251,7 @@ object Codec {
   implicit val BigDecimalCodec = Utf8Codec.as[BigDecimal](_.toString, BigDecimal(_, MathContext.UNLIMITED))
 
 
-  final class ArrayCodec[A](val elemCodec: Codec[A]) extends Codec[IndexedSeq[A]] {
+  final class IndexedSeqCodec[A](val elemCodec: Codec[A]) extends Codec[IndexedSeq[A]] {
 
     type S = Either[IndexedSeq[A], (elemCodec.S, List[A])]
 
@@ -256,7 +289,9 @@ object Codec {
       ((0 until src.getInt()) map (_ => elemCodec.read(src))).toIndexedSeq
   }
 
-  implicit def ArrayCodec[A](implicit elemCodec: Codec[A]) = new ArrayCodec(elemCodec)
+  implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]) = new IndexedSeqCodec(elemCodec)
+
+  implicit def ArrayCodec[A: Codec: Manifest] = Codec[IndexedSeq[A]].as[Array[A]](_.toIndexedSeq, _.toArray)
 
 
   /** A Codec that can (un)wrap CValues of type CValueType. */
@@ -270,6 +305,8 @@ object Codec {
     def read(src: ByteBuffer) = cType(codec.read(src))
   }
 
+
+  // Problem: This can't be specialised.
   trait StatefulCodec {
     type A
     val codec: Codec[A]
@@ -287,15 +324,36 @@ object Codec {
     val codec = _codec
   }).init(a, sink)
 
-  case class xxx extends Codec[List[CValue]] {
-    type S = (StatefulCodec#State, List[CValue])
 
-    def encodedSize(xs: List[CValue]) = xs.foldLeft(0) { (acc, x) => acc + (x match {
-      case x: CWrappedValue[_] => forCValueType(x.cType).encodedSize(x.value)
-      case _ => 0
-    }) }
+  case class RowCodec(cTypes: List[CType]) extends Codec[List[CValue]] {
+    implicit val bitSetCodec: Codec[BitSet] = BitSetCodec // SparseBitSetCodec(cTypes.size)
+    private val codecs: List[Codec[_ <: CValue]] = cTypes map {
+      case cType: CValueType[_] => CValueCodec(cType)(forCValueType(cType))
+      case cType: CNullType => ConstCodec(cType)
+    }
+
+    type S = (Either[bitSetCodec.S, StatefulCodec#State], List[CValue])
+
+    private def undefineds(xs: List[CValue]): BitSet = BitSet(xs.zipWithIndex collect {
+      case (CUndefined, i) => i
+    }: _*)
+
+    def encodedSize(xs: List[CValue]) = xs.foldLeft(bitSetCodec.encodedSize(undefineds(xs))) {
+      (acc, x) => acc + (x match {
+        case x: CWrappedValue[_] => forCValueType(x.cType).encodedSize(x.value)
+        case _ => 0
+      })
+    }
+
+    override def boundSize(xs: List[CValue]) = xs.foldLeft(bitSetCodec.boundSize(undefineds(xs))) {
+      (acc, x) => acc + (x match {
+        case x: CWrappedValue[_] => forCValueType(x.cType).boundSize(x.value)
+        case _ => 0
+      })
+    }
 
     def writeUnsafe(xs: List[CValue], sink: ByteBuffer) {
+      bitSetCodec.writeUnsafe(undefineds(xs), sink)
       xs foreach {
         case x: CWrappedValue[_] => forCValueType(x.cType).writeUnsafe(x.value, sink)
         case _ =>
@@ -306,155 +364,346 @@ object Codec {
     private def writeCValues(xs: List[CValue], sink: ByteBuffer): Option[S] = xs match {
       case x :: xs => (x match {
         case CBoolean(x) => wrappedWriteInit[Boolean](x, sink)
-        case _ => sys.error("...")
+        case CString(x) => wrappedWriteInit[String](x, sink)
+        case CDate(x) => wrappedWriteInit[DateTime](x, sink)
+        case CLong(x) => wrappedWriteInit[Long](x, sink)
+        case CDouble(x) => wrappedWriteInit[Double](x, sink)
+        case CNum(x) => wrappedWriteInit[BigDecimal](x, sink)
+        case CArray(x, cType) => wrappedWriteInit(x, sink)(forCValueType(cType))
+        case _: CNullType => None
       }) match {
         case None => writeCValues(xs, sink)
-        case Some(s) => Some((s, xs))
+        case Some(s) => Some((Right(s), xs))
       }
 
       case Nil => None
     }
 
-    def writeInit(xs: List[CValue], sink: ByteBuffer) = writeCValues(xs, sink)
+    def writeInit(xs: List[CValue], sink: ByteBuffer) =
+      bitSetCodec.writeInit(undefineds(xs), sink) map (s => (Left(s), xs)) orElse writeCValues(xs, sink)
 
-    def writeMore(more: S, sink: ByteBuffer) = {
-      val (s, xs) = more
-      s.more(sink) map ((_, xs)) orElse writeCValues(xs, sink)
+    def writeMore(more: S, sink: ByteBuffer) = more match {
+      case (Left(s), xs) => bitSetCodec.writeMore(s, sink) map (s => (Left(s), xs)) orElse writeCValues(xs, sink)
+      case (Right(s), xs) => s.more(sink) map (s => (Right(s), xs)) orElse writeCValues(xs, sink)
     }
-
-    def read(src: ByteBuffer): List[CValue] = sys.error("todo")
-  }
-
-
-  def readBitset(src: ByteBuffer, size: Int): BitSet = {
-    @tailrec @inline
-    def readBytes(bs: List[Byte]): Array[Byte] = {
-      val b = src.get()
-      if ((b & 3) == 0 || (b & 12) == 0 || (b & 48) == 0 || (b & 192) == 0) {
-        (b :: bs).reverse.toArray
-      } else readBytes(b :: bs)
-    }
-
-    val bytes = readBytes(Nil)
-    @inline def get(offset: Int): Boolean = (bytes(offset >> 3) & (1 << (offset & 7))) == 1
-
-    import collection.mutable
-    var bits = mutable.BitSet()
-    def read(offset: Int, l: Int, r: Int): Int = {
-      if (l == r) {
-        offset
-      } else if (r - l == 1) {
-        bits(l) = true
-        offset
-      } else {
-        val c = (l + r) / 2
-        (get(offset), get(offset + 1)) match {
-          case (false, false) => offset + 2
-          case (false, true) => read(offset + 2, c, r)
-          case (true, false) => read(offset + 2, l, c)
-          case (true, true) => read(offset + 2, l, c) + read(offset + 2, c, r)
-        }
+    
+    def read(src: ByteBuffer): List[CValue] = {
+      val undefined = bitSetCodec.read(src)
+      codecs.zipWithIndex collect {
+        case (codec, i) if undefined(i) => CUndefined
+        case (codec, _) => codec.read(src)
       }
     }
 
-    read(0, 0, size)
-    bits.toImmutable
+    def readIntoColumns(src: ByteBuffer, row: Int, colCodecs: Seq[ColCodec[_]]) {
+      val undefined = bitSetCodec.read(src)
+      for {
+        (codec, i) <- colCodecs.zipWithIndex if !undefined(i)
+      } yield codec.decode(row, src)
+    }
+
+    private def writeFromColumn(row: Int, colCodec: ColCodec[_], buffers: List[ByteBuffer]): List[ByteBuffer] = {
+
+      @tailrec def loop(s: Option[colCodec.codec.S], buffers: List[ByteBuffer]): List[ByteBuffer] = s match {
+        case Some(s) =>
+          val buf = Codec.byteBufferPool.acquire
+          loop(colCodec.codec.writeMore(s, buf), buf :: buffers)
+
+        case None => buffers
+      }
+
+      val (buf, bufs) = buffers match {
+        case buf :: bufs => (buf, bufs)
+        case _ => (Codec.byteBufferPool.acquire, Nil)
+      }
+      loop(colCodec.writeInit(row, buf), buf :: bufs)
+    }
+
+    def readFromColumns(row: Int, colCodecs: List[ColCodec[_]]): Array[Byte] = {
+      val undefined = BitSet(colCodecs.zipWithIndex collect {
+        case (codec, i) if codec.column isDefinedAt row => i
+      }: _*)
+
+      val bitSetCodec = Codec[BitSet]
+
+      @tailrec
+      def writeBitSet(s: Option[bitSetCodec.S], buffers: List[ByteBuffer]): List[ByteBuffer] = s match {
+        case Some(s) =>
+          val buf = Codec.byteBufferPool.acquire
+          writeBitSet(bitSetCodec.writeMore(s, buf), buf :: buffers)
+        case None => buffers
+      }
+
+      val buf = Codec.byteBufferPool.acquire
+      val initBuffers = writeBitSet(bitSetCodec.writeInit(undefined, buf), buf :: Nil)
+      val buffers = (colCodecs.zipWithIndex filter (c => undefined(c._2))).foldLeft(initBuffers) {
+        case (buffers, (colCodec, _)) => writeFromColumn(row, colCodec, buffers)
+      }
+
+      buffers foreach (_.flip())
+
+      val out = Array.ofDim[Byte](buffers.foldLeft(0)(_ + _.remaining))
+      buffers.foldRight(0) { (buffer, offset) =>
+        val len = buffer.remaining
+        buffer.get(out, offset, len)
+        Codec.byteBufferPool.release(buffer)
+        offset + len
+      }
+
+      out
+    }
   }
-}
 
 
-case class RowCodec(codecs: Seq[Either[CNullType, Codec.CValueCodec[_]]]) {
-  import Codec.CValueCodec
+  private def bitSet2Array(bs: BitSet): Array[Long] = {
+    val size = if (bs.isEmpty) 0 else { (bs.max >>> 6) + 1 }
+    val bytes = Array.ofDim[Long](size)
+    bs foreach { i =>
+      bytes(i >>> 6) |= 1L << (i & 0x3F)
+    }
+    bytes
+  }
 
-  def encode(values: Seq[CValue], sink: ByteBuffer) = {
-    assert(codecs.size == values.size)
-    (codecs zip values) foreach {
-      case (_, CUndefined) =>
+  implicit val BitSetCodec = Codec[Array[Long]].as[BitSet](bitSet2Array(_), BitSet.fromArray(_))
 
-      case (Left(CNull), CNull) =>
-      case (Left(CEmptyArray), CEmptyArray) =>
-      case (Left(CEmptyObject), CEmptyObject) =>
-      case (Left(CUndefined), _) => sys.error("This doesn't even make sense.")
+  case class SparseBitSetCodec(size: Int) extends Codec[BitSet] {
 
-      case (Right(codec0), v) =>
-        val codec: CValueCodec[_] = codec0
+    // The maxBytes is max. bits / 8 = (highestOneBit(size) << 2) / 8
+    private val maxBytes = java.lang.Integer.highestOneBit(size) >>> 1
 
-        (codec, v) match {
-          case (codec @ CValueCodec(CString), CString(s)) =>
-            codec.codec.writeUnsafe(s, sink)
-          case (codec @ CValueCodec(CBoolean), CBoolean(x)) =>
-            codec.codec.writeUnsafe(x, sink)
-          case (codec @ CValueCodec(CLong), CLong(x)) =>
-            codec.codec.writeUnsafe(x, sink)
-          case (codec @ CValueCodec(CDouble), CDouble(x)) =>
-            codec.codec.writeUnsafe(x, sink)
-          case (codec @ CValueCodec(CNum), CNum(x)) =>
-            codec.codec.writeUnsafe(x, sink)
-          case (codec @ CValueCodec(CDate), CDate(x)) =>
-            codec.codec.writeUnsafe(x, sink)
-          case (codec @ CValueCodec(codecCType: CArrayType[a]), CArray(xs, valueCType)) if codecCType == valueCType =>
-            // TODO Get rid of the cast.
-            codec.codec.writeUnsafe(xs.asInstanceOf[IndexedSeq[a]], sink)
-          case _ =>
-            sys.error("Cannot write value of type %s in column of type %s." format (v.cType, codec.cType))
+    type S = (Array[Byte], Int)
+
+    def encodedSize(bs: BitSet) = writeBitSet(bs).size
+    override def boundSize(bs: BitSet) = maxBytes
+
+    def writeUnsafe(bs: BitSet, sink: ByteBuffer) {
+      sink.put(writeBitSet(bs))
+    }
+
+    def writeInit(bs: BitSet, sink: ByteBuffer): Option[S] = {
+      val spaceLeft = sink.remaining()
+      val bytes = writeBitSet(bs)
+
+      if (spaceLeft >= bytes.length) {
+        sink.put(bytes)
+        None
+      } else {
+        sink.put(bytes, 0, spaceLeft)
+        Some((bytes, spaceLeft))
+      }
+    }
+
+    def writeMore(more: S, sink: ByteBuffer): Option[S] = {
+      val (bytes, offset) = more
+      val bytesLeft = bytes.length - offset
+      val spaceLeft = sink.remaining()
+
+      if (spaceLeft >= bytesLeft) {
+        sink.put(bytes, offset, bytesLeft)
+        None
+      } else {
+        sink.put(bytes, offset, spaceLeft)
+        Some((bytes, offset + spaceLeft))
+      }
+    }
+
+    def read(src: ByteBuffer): BitSet = readBitSet(src)
+
+
+    def writeBitSet(bs: BitSet): Array[Byte] = {
+      val bytes = Array.ofDim[Byte](maxBytes)
+
+      def set(offset: Int) {
+        val i = offset >>> 3
+        bytes(i) = ((1 << (offset & 0x7)) | bytes(i).toInt).toByte
+      }
+
+      def rec(bs: List[Int], l: Int, r: Int, offset: Int): Int = {
+        val c = (l + r) / 2
+
+        if (c == l) {
+          offset
+        } else {
+          bs partition (_ < c) match {
+            case (Nil, Nil) =>
+              offset
+            case (Nil, hi) =>
+              set(offset + 1)
+              rec(hi, c, r, offset + 2)
+            case (lo, Nil) =>
+              set(offset)
+              rec(lo, l, c, offset + 2)
+            case (lo, hi) =>
+              set(offset)
+              set(offset + 1)
+              rec(hi, c, r, rec(lo, l, c, offset + 2))
+          }
         }
+      }
+
+      val len = rec(bs.toList, 0, size, 0)
+      java.util.Arrays.copyOf(bytes, (len >>> 3) + 1) // The +1 covers the extra 2 '0' bits.
+    }
+
+    def readBitSet(src: ByteBuffer): BitSet = {
+      @tailrec @inline
+      def readBytes(bs: List[Byte]): Array[Byte] = {
+        val b = src.get()
+        if ((b & 3) == 0 || (b & 12) == 0 || (b & 48) == 0 || (b & 192) == 0) {
+          (b :: bs).reverse.toArray
+        } else readBytes(b :: bs)
+      }
+
+      val bytes = readBytes(Nil)
+      @inline def get(offset: Int): Boolean = (bytes(offset >>> 3) & (1 << (offset & 7))) != 0
+
+      import collection.mutable
+      var bits = mutable.BitSet()
+      def read(l: Int, r: Int, offset: Int): Int = {
+        if (l == r) {
+          offset
+        } else if (r - l == 1) {
+          bits(l) = true
+          offset
+        } else {
+          val c = (l + r) / 2
+          (get(offset), get(offset + 1)) match {
+            case (false, false) => offset + 2
+            case (false, true) => read(c, r, offset + 2)
+            case (true, false) => read(l, c, offset + 2)
+            case (true, true) => read(c, r, read(l, c, offset + 2))
+          }
+        }
+      }
+
+      read(0, size, 0)
+      bits.toImmutable
     }
   }
 }
 
 
-case class ColCodec[@spec(Boolean, Long, Double) A](codec: Codec[A], column: ArrayColumn[A]) {
-  def decode(row: Int, data: ByteBuffer) {
-    ColumnCodec.readOnly.readCType(data) match {
-      case CUndefined =>
-        // Skip.
-      case _ =>
-        column.update(row, codec.read(data))
-    }
-  }
+// case class RowCodec(codecs: Seq[Either[CNullType, Codec.CValueCodec[_]]]) {
+//   import Codec.CValueCodec
+// 
+//   def encode(values: Seq[CValue], sink: ByteBuffer) = {
+//     assert(codecs.size == values.size)
+//     (codecs zip values) foreach {
+//       case (_, CUndefined) =>
+// 
+//       case (Left(CNull), CNull) =>
+//       case (Left(CEmptyArray), CEmptyArray) =>
+//       case (Left(CEmptyObject), CEmptyObject) =>
+//       case (Left(CUndefined), _) => sys.error("This doesn't even make sense.")
+// 
+//       case (Right(codec0), v) =>
+//         val codec: CValueCodec[_] = codec0
+// 
+//         (codec, v) match {
+//           case (codec @ CValueCodec(CString), CString(s)) =>
+//             codec.codec.writeUnsafe(s, sink)
+//           case (codec @ CValueCodec(CBoolean), CBoolean(x)) =>
+//             codec.codec.writeUnsafe(x, sink)
+//           case (codec @ CValueCodec(CLong), CLong(x)) =>
+//             codec.codec.writeUnsafe(x, sink)
+//           case (codec @ CValueCodec(CDouble), CDouble(x)) =>
+//             codec.codec.writeUnsafe(x, sink)
+//           case (codec @ CValueCodec(CNum), CNum(x)) =>
+//             codec.codec.writeUnsafe(x, sink)
+//           case (codec @ CValueCodec(CDate), CDate(x)) =>
+//             codec.codec.writeUnsafe(x, sink)
+//           case (codec @ CValueCodec(codecCType: CArrayType[a]), CArray(xs, valueCType)) if codecCType == valueCType =>
+//             // TODO Get rid of the cast.
+//             codec.codec.writeUnsafe(xs.asInstanceOf[IndexedSeq[a]], sink)
+//           case _ =>
+//             sys.error("Cannot write value of type %s in column of type %s." format (v.cType, codec.cType))
+//         }
+//     }
+//   }
+// }
+
+// trait SerializationFormat {
+//   implicit def LongCodec: Codec[Long]
+//   implicit def DoubleCodec: Codec[Long]
+//   implicit def BigDecimal: Codec[BigDecimal]
+//   implicit def DateTime: Codec[DateTime]
+//   implicit def Boolean: Codec[Boolean]
+//   implicit def String: Codec[String]
+//   implicit def BitSetCodec: Codec[BitSet]
+//
+//   def writeColumns(colCodec: ColCodec[_])
+// }
+
+trait ColCodec[@spec(Boolean, Long, Double) A] {
+  val codec: Codec[A]
+  val column: ArrayColumn[A]
+
+  def writeInit(row: Int, src: ByteBuffer): Option[codec.S]
+  def decode(row: Int, src: ByteBuffer): Unit // This method is intentionally left blank (@spec problem).
 }
+
 
 object ColCodec {
+
+  def constant(_column: ArrayColumn[Boolean]) = new ColCodec[Boolean] {
+    val codec = Codec.ConstCodec(true)
+    val column = _column
+    def writeInit(row: Int, src: ByteBuffer) = None
+    def decode(row: Int, data: ByteBuffer) = column.update(row, codec.read(data))
+  }
+
   def forCType(cType: CType, sliceSize: Int): ColCodec[_] = cType match {
     case cType: CValueType[_] => forCValueType(cType, sliceSize)
-    case CNull =>
-      ColCodec(Codec.ConstCodec(true), MutableNullColumn.empty())
-    case CEmptyObject =>
-      ColCodec(Codec.ConstCodec(true), MutableEmptyObjectColumn.empty())
-    case CEmptyArray =>
-      ColCodec(Codec.ConstCodec(true), MutableEmptyArrayColumn.empty())
-    case CUndefined =>
-      sys.error("CUndefined cannot be serialized")
+    case CNull => constant(MutableNullColumn.empty())
+    case CEmptyObject => constant(MutableEmptyObjectColumn.empty())
+    case CEmptyArray => constant(MutableEmptyArrayColumn.empty())
+    case CUndefined => sys.error("CUndefined cannot be serialized")
   }
-
 
   def forCValueType[A](cType: CValueType[A], sliceSize: Int): ColCodec[A] = cType match {
-    case CBoolean =>
-      ColCodec(Codec[Boolean], ArrayBoolColumn.empty())
-    case CString =>
-      ColCodec(Codec[String], ArrayStrColumn.empty(sliceSize))
-    case CLong =>
-      ColCodec(Codec[Long], ArrayLongColumn.empty(sliceSize))
-    case CDouble =>
-      ColCodec(Codec[Double], ArrayDoubleColumn.empty(sliceSize))
-    case CNum =>
-      ColCodec(Codec[BigDecimal], ArrayNumColumn.empty(sliceSize))
-    case CDate =>
-      ColCodec(Codec[DateTime], ArrayDateColumn.empty(sliceSize))
-    case cType @ CArrayType(elemType) =>
-      val col = ArrayHomogeneousArrayColumn.empty(sliceSize)(elemType)
-      ColCodec(Codec.forCValueType(cType), col)
+    case CBoolean => new ColCodec[Boolean] {
+      val codec = Codec[Boolean]
+      val column = ArrayBoolColumn.empty()
+      def writeInit(row: Int, src: ByteBuffer) = codec.writeInit(column(row), src)
+      def decode(row: Int, data: ByteBuffer) = column.update(row, codec.read(data))
+    }
+    case CLong => new ColCodec[Long] {
+      val codec = Codec[Long]
+      val column = ArrayLongColumn.empty(sliceSize)
+      def writeInit(row: Int, src: ByteBuffer) = codec.writeInit(column(row), src)
+      def decode(row: Int, data: ByteBuffer) = column.update(row, codec.read(data))
+    }
+    case CDouble => new ColCodec[Double] {
+      val codec = Codec[Double]
+      val column = ArrayDoubleColumn.empty(sliceSize)
+      def writeInit(row: Int, src: ByteBuffer) = codec.writeInit(column(row), src)
+      def decode(row: Int, data: ByteBuffer) = column.update(row, codec.read(data))
+    }
+    case CNum => new ColCodec[BigDecimal] {
+      val codec = Codec[BigDecimal]
+      val column = ArrayNumColumn.empty(sliceSize)
+      def writeInit(row: Int, src: ByteBuffer) = codec.writeInit(column(row), src)
+      def decode(row: Int, data: ByteBuffer) = column.update(row, codec.read(data))
+    }
+    case CString => new ColCodec[String] {
+      val codec = Codec[String]
+      val column = ArrayStrColumn.empty(sliceSize)
+      def writeInit(row: Int, src: ByteBuffer) = codec.writeInit(column(row), src)
+      def decode(row: Int, data: ByteBuffer) = column.update(row, codec.read(data))
+    }
+    case CDate => new ColCodec[DateTime] {
+      val codec = Codec[DateTime]
+      val column = ArrayDateColumn.empty(sliceSize)
+      def writeInit(row: Int, src: ByteBuffer) = codec.writeInit(column(row), src)
+      def decode(row: Int, data: ByteBuffer) = column.update(row, codec.read(data))
+    }
+    case cType: CArrayType[a] => new ColCodec[IndexedSeq[a]] {
+      val codec = Codec.forCValueType(cType)
+      val column = ArrayHomogeneousArrayColumn.empty(sliceSize)(cType.elemType)
+      def writeInit(row: Int, src: ByteBuffer) = codec.writeInit(column(row), src)
+      def decode(row: Int, data: ByteBuffer) = column.update(row, codec.read(data))
+    }
   }
 }
-
-
-case class SliceCodec(colCodecs: Seq[ColCodec[_]]) {
-  def decode(row: Int, data: ByteBuffer) {
-    colCodecs foreach (_.decode(row, data))
-  }
-}
-
-
-
 
 

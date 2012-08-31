@@ -39,7 +39,7 @@ import scala.collection.JavaConverters._
  * A Projection wrapping a raw JDBM TreeMap index used for sorting. It's assumed that
  * the index has been created and filled prior to creating this wrapper.
  */
-abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, idCount: Int, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[SortingKey,Slice] with Logging {
+abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, idCount: Int, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[SortingKey,Slice] with Logging { projection =>
   import TableModule.paths._
 
   // These should not actually be used in sorting
@@ -54,6 +54,8 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
 
     DB.close()
   }
+
+  private val rowCodec = Codec.RowCodec((valRefs map (_.ctype)).toList)
 
   def getBlockAfter(id: Option[SortingKey], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[SortingKey,Slice]] = try {
     // TODO: Make this far, far less ugly
@@ -81,10 +83,16 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
       lazy val idColumns      = (0 until idCount).map { idx => (ColumnRef(CPath(Key :: CPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) }.toArray
       lazy val sortKeyColumns = sortKeyRefs.map(JDBMSlice.columnFor(CPath(SortKey), sliceSize)).toArray
 
+      // lazy val sortKeyColumns = sortKeyRefs map { case ColumnRef(selector, cType) =>
+      //   (ColumnRef(CPath(SortKey) \ selector, cType), ColCodec.forCType(cType, sliceSize))
+      // }
+
       lazy val keyColumns = (idColumns ++ sortKeyColumns).asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
-      lazy val valColumns = valRefs map { case ColumnRef(selector, cType) =>
+      lazy val valColumns: Array[(ColumnRef, ColCodec[_])] = valRefs.map { case ColumnRef(selector, cType) =>
         (ColumnRef(CPath(Value) \ selector, cType), ColCodec.forCType(cType, sliceSize))
-      }
+      }(collection.breakOut)
+
+      val rowCodec = projection.rowCodec
 
       def loadRowFromKey(row: Int, rowKey: SortingKey) {
         if (row == 0) { firstKey = rowKey }
@@ -116,7 +124,7 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
             case (_, CUndefined)    => // NOOP, array/mutable columns start fully undefined
           }
           i += 1
-        }        
+        }
       }
 
       load()

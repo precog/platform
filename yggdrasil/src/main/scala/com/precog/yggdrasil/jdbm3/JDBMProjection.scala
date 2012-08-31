@@ -70,7 +70,7 @@ object JDBMProjection {
   def isJDBMProjection(baseDir: File) = (new File(baseDir, INDEX_SUBDIR)).isDirectory
 }
 
-abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Identities, Slice] {
+abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Identities, Slice] { projection =>
   import JDBMProjection._
 
   val logger = Logger("col:" + descriptor.shows)
@@ -113,10 +113,12 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     logger.debug("Closed column index files")
   }
 
+  implicit private val rowCodec = Codec.RowCodec(descriptor.columns map (_.valueType))
+
   def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
     logger.trace("Inserting %s => %s".format(ids, v))
-    val codec = new ColumnCodec()
-    treeMap.put(ids, codec.encode(v))
+
+    treeMap.put(ids, Codec.writeToArray(v.toList))
 
     if (shouldSync) {
       idIndexFile.commit()
@@ -124,8 +126,10 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   }
 
   def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = new IterableDataset(descriptor.identities, new Iterable[(Identities,Seq[CValue])] {
-    private val codec = ColumnCodec.readOnly
-    def iterator = treeMap.entrySet.iterator.asScala.map { case kvEntry => (kvEntry.getKey, codec.decodeToCValues(kvEntry.getValue)) }
+    def iterator = treeMap.entrySet.iterator.asScala.map { case kvEntry =>
+      println(kvEntry.getValue)
+      (kvEntry.getKey, rowCodec.read(ByteBuffer.wrap(kvEntry.getValue)))
+    }
   })
 
   // Compute the successor to the provided Identities. Assumes that we would never use a VectorCase() for Identities
@@ -146,16 +150,17 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
       val slice = new JDBMSlice[Identities] {
         val source = constrainedMap.entrySet.iterator.asScala
         val requestedSize = DEFAULT_SLICE_SIZE
-        val codec = ColumnCodec.readOnly
+
+        val rowCodec = projection.rowCodec
 
         val keyColumns = (0 until descriptor.identities).map {
           idx: Int => (ColumnRef(CPath(Key :: CPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) 
         }.toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
 
-        val valColumns = descriptor.columns.map {
+        val valColumns: Array[(ColumnRef, ColCodec[_])] = descriptor.columns.map {
           case ColumnDescriptor(_, selector, cType, _) =>
             (ColumnRef(CPath(Value) \ selector, cType), ColCodec.forCType(cType, sliceSize))
-        }
+        }(collection.breakOut)
 
         def loadRowFromKey(row: Int, rowKey: Identities) {
           if (row == 0) { firstKey = rowKey }
@@ -173,9 +178,10 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
         val desiredRefs: Set[ColumnRef] = desiredColumns.map { case ColumnDescriptor(_, selector, tpe, _) => ColumnRef(CPath(Value) \ selector, tpe) }
 
-        override val columns = super.columns filterKeys desiredRefs
-        //override val columns =
-        //  (keyColumns ++ valColumns.filter { desiredRefs(_._1) }).toMap
+        override val columns = super.columns filterKeys {
+          case ref @ ColumnRef(CPath(Value, _*), _) => desiredRefs(ref)
+          case _ => true
+        }
       }
 
       if (slice.size == 0) {

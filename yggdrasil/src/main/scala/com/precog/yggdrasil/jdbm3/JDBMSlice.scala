@@ -47,25 +47,23 @@ trait JDBMSlice[Key] extends Slice with Logging {
   protected def requestedSize: Int
 
   protected def keyColumns: Array[(ColumnRef, ArrayColumn[_])]
-  protected def valColumns: Seq[(ColumnRef, ColCodec[_])]
-  protected lazy val sliceCodec = SliceCodec(valColumns map (_._2))
+  protected def valColumns: Array[(ColumnRef, ColCodec[_])]
 
-  // protected def keyColumns: Array[(ColumnRef,ArrayColumn[_])]
-  // protected def valColumns: Array[(ColumnRef,ArrayColumn[_])]
+  private lazy val colCodecs: Seq[ColCodec[_]] = valColumns map (_._2)
 
   // This method is responsible for loading the data from the key at the given row,
   // most likely into one or more of the key columns defined above
   protected def loadRowFromKey(row: Int, key: Key): Unit
 
   private var row = 0
-  // private def onlyValColumns = valColumns.map(_._2)
+
+  protected def rowCodec: Codec.RowCodec
 
   protected def load() {
     source.take(requestedSize).foreach {
       entry => {
         loadRowFromKey(row, entry.getKey)
-        sliceCodec.decode(row, ByteBuffer.wrap(entry.getValue))
-        // ColumnCodec.readOnly.decodeToArrayColumns(entry.getValue, row, onlyValColumns)
+        rowCodec.readIntoColumns(ByteBuffer.wrap(entry.getValue), row, colCodecs)
         row += 1
       }
     }
@@ -75,10 +73,9 @@ trait JDBMSlice[Key] extends Slice with Logging {
 
   def size = row
 
-  def columns = (keyColumns ++ valColumns.map { case (ref, codec) =>
+  def columns: Map[ColumnRef, Column] = (keyColumns ++ valColumns.map { case (ref, codec) =>
     (ref, codec.column)
-  }).toMap
-  // def columns = (keyColumns ++ valColumns).toMap
+  })(collection.breakOut)
 }
 
 object JDBMSlice {
