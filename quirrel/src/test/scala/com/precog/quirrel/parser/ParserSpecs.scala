@@ -153,6 +153,30 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       }
     }
     
+    "accept a solve expression with a single expression constraint" in {
+      parse("solve 'a = 12 + true 1") must beLike {
+        case Solve(_, Vector(Eq(_, TicVar(_, "'a"), Add(_, NumLit(_, "12"), BoolLit(_, true)))), NumLit(_, "1")) => ok
+      }
+    }
+    
+    "accept a solve expression with a single expression constraint and one tic variable" in {
+      parse("solve 'a = 12 + true, 'b 1") must beLike {
+        case Solve(_, Vector(Eq(_, TicVar(_, "'a"), Add(_, NumLit(_, "12"), BoolLit(_, true))), TicVar(_, "'b")), NumLit(_, "1")) => ok
+      }
+    }
+    
+    "accept a solve expression with a nested solve expression as a constraint" in {
+      parse("solve solve 'a 1 2") must beLike {
+        case Solve(_, Vector(Solve(_, Vector(TicVar(_, "'a")), NumLit(_, "1"))), NumLit(_, "2")) => ok
+      }
+    }
+    
+    "accept a solve expression with a nested solve expression with two tic variables as a constraint" in {
+      parse("solve solve 'a, 'b 1 2") must beLike {
+        case Solve(_, Vector(Solve(_, Vector(TicVar(_, "'a"), TicVar(_, "'b")), NumLit(_, "1"))), NumLit(_, "2")) => ok
+      }
+    }
+    
     "accept a solve expression followed by a let" in {
       parse("solve 'a foo('b) := 'b + 'a foo") must beLike {
         case Solve(_, Vector(TicVar(_, "'a")), Let(_, Identifier(Vector(), "foo"), Vector("'b"), Add(_, TicVar(_, "'b"), TicVar(_, "'a")), Dispatch(_, Identifier(Vector(), "foo"), Vector()))) => ok
