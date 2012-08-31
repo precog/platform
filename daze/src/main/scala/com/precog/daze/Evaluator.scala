@@ -616,7 +616,7 @@ trait Evaluator[M[+_]] extends DAG
   
         case j @ Join(_, op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => {
           val isLeft = joinSort == CrossLeftSort
-          
+
           for {
             pendingTableLeft <- loop(left, splits)
             pendingTableRight <- loop(right, splits)
@@ -805,7 +805,7 @@ trait Evaluator[M[+_]] extends DAG
           } yield {
             val result = for {
               pendingTable <- pending.table
-              val table = pendingTable.transform(pending.trans)
+              val table = pendingTable.transform(liftToValues(pending.trans))
               memoized <- ctx.memoizationContext.memoize(table, memoId)
             } yield memoized
             
@@ -1010,22 +1010,13 @@ trait Evaluator[M[+_]] extends DAG
     val newIdentitySpec = ArrayConcat(leftIdentitySpec, rightIdentitySpec)
     
     val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, paths.Key.name)
-    
+
     val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), paths.Value)
     val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
     
     val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
-      
-    ObjectConcat(
-      ObjectConcat(
-        ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)),
-        wrappedIdentitySpec),
-      wrappedValueSpec)
 
-    /** TODO
     ObjectConcat(wrappedIdentitySpec, wrappedValueSpec)
-    this uses all of permgen in EvaluatorSpecs!?
-    */
   }
   
   private def buildIdShuffleSpec(indexes: Vector[Int]): TransSpec1 = {

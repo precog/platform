@@ -70,11 +70,11 @@ trait TableModule[M[+_]] extends FNModule {
     
     // Perform the specified transformation on the left and right sides, and then create a new set of columns
     // containing all the resulting columns.
-    case class ObjectConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
+    case class ObjectConcat[+A <: SourceType](objects: TransSpec[A]*) extends TransSpec[A] //done
 
     case class ObjectDelete[+A <: SourceType](source: TransSpec[A], fields: Set[JPathField]) extends TransSpec[A]
     
-    case class ArrayConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
+    case class ArrayConcat[+A <: SourceType](arrays: TransSpec[A]*) extends TransSpec[A] //done
     
     // Take the output of the specified TransSpec and prefix all of the resulting selectors with the
     // specified field. 
