@@ -297,7 +297,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
           "value"
         )
       })
-      
+
       results.copoint must_== (sample.data flatMap {
         case obj @ JObject(fields) => {
           (obj \ "value") match {
