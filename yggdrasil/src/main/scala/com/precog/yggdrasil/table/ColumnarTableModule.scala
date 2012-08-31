@@ -1083,17 +1083,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           case Binding(_, _, _, _, groupKeySpec) => MergeNode(sources(groupKeySpec).map(_.key).toSet) 
         }
 
-        val adjacencyList: List[MergeEdge] = (for { 
-          l <- clusters.keys
-          r <- clusters.keys
-          if l != r
-          sharedKey = l.keys intersect r.keys
-          if sharedKey.nonEmpty
-        } yield {
-          MergeEdge(l, r, sharedKey)
-        })(collection.breakOut)
-
-        val intersectionSubtrees: Set[MergeTree] = findSpanningForest(clusters.keySet map { node => MergeTree(Set(node)) }, adjacencyList)
+        val intersectionSubtrees: Set[MergeGraph] = findSpanningGraphs(edgeMap(clusters.keySet))
 
         val allMergeSpecs = for (subtree <- intersectionSubtrees) yield {
           buildMerges(clusters, subtree)
@@ -1104,6 +1094,24 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     }
     
     object Universe {
+      def allEdges(nodes: collection.Set[MergeNode]): collection.Set[MergeEdge] = {
+        for {
+          l <- nodes
+          r <- nodes
+          if l != r
+          sharedKey = l.keys intersect r.keys
+          if sharedKey.nonEmpty
+        } yield {
+          MergeEdge(l, r, sharedKey)
+        }
+      }
+
+      def edgeMap(nodes: collection.Set[MergeNode]): Map[MergeNode, Set[MergeEdge]] = {
+        allEdges(nodes).foldLeft(nodes.map(n => n -> Set.empty[MergeEdge]).toMap) { 
+          case (acc, edge @ MergeEdge(a, b, _)) => acc + (a -> (acc.getOrElse(a, Set()) + edge)) + (b -> (acc.getOrElse(b, Set()) + edge))
+        } 
+      }
+
       // a universe is a conjunction of binding clauses, which must contain no disjunctions
       def sources(spec: GroupKeySpec): Seq[GroupKeySpecSource] = (spec: @unchecked) match {
         case GroupKeySpecAnd(left, right) => sources(left) ++ sources(right)
@@ -1128,15 +1136,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       case class MergeNode(keys: Set[TicVar])
       case class MergeEdge(a: MergeNode, b: MergeNode, sharedKey: Set[TicVar]) {
         def nodes = Set(a, b)
-        def keys = a.keys ++ b.keys
+        def keys: Set[TicVar] = a.keys ++ b.keys
+
+        def reverse = MergeEdge(b, a, sharedKey)
       }
 
       // A maximal spanning tree for a merge graph, where the edge weights correspond
       // to the size of the shared keyset for that edge. We use hte maximal weights
       // since the larger the set of shared keys, the fewer constraints are imposed
       // making it more likely that a sorting for those shared keys can be reused.
-      case class MergeTree(nodes: Set[MergeNode], edges: Set[MergeEdge] = Set()) {
-        def join(other: MergeTree, edge: MergeEdge) = MergeTree(nodes ++ other.nodes, edges ++ other.edges + edge)
+      case class MergeGraph(nodes: Set[MergeNode], edges: Set[MergeEdge] = Set()) {
+        def join(other: MergeGraph, edge: MergeEdge) = MergeGraph(nodes ++ other.nodes, edges ++ other.edges + edge)
 
         val inbound: Map[MergeNode, Set[MergeEdge]] = edges.foldLeft(nodes.map((_, Set.empty[MergeEdge])).toMap) {
           case (acc, edge @ MergeEdge(a, b, _)) => 
@@ -1196,38 +1206,51 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         } 
       }
 
-      // An implementation of Kruskal's algorithm for finding a maximal spanning forest
-      // for a set of merge trees
-      def findSpanningForest(trees: Set[MergeTree], edges: List[MergeEdge]): Set[MergeTree] = {
-        def find0(trees: Set[MergeTree], edges: List[MergeEdge]): Set[MergeTree] = {
-          if (edges.isEmpty) {
-            trees 
-          } else {
-            val edge0 = edges.head
-
-            val newTrees = trees.find(t => t.nodes.contains(edge0.a)) map { t0 =>
-              if (t0.nodes.contains(edge0.b)) {
-                trees
-              } else {
-                trees.find(t => t.nodes.contains(edge0.b)) map { t1 =>
-                  (trees - t0 - t1) + t0.join(t1, edge0)
-                } getOrElse {
-                  (trees - t0) + MergeTree(t0.nodes + edge0.b, t0.edges + edge0)
+      // An implementation of our algorithm for finding a minimally connected set of graphs
+      def findSpanningGraphs(outbound: Map[MergeNode, Set[MergeEdge]]): Set[MergeGraph] = {
+        def isConnected(from: MergeNode, to: MergeNode, outbound: Map[MergeNode, Set[MergeEdge]], constraintSet: Set[TicVar]): Boolean = {
+          outbound.getOrElse(from, Set()).exists {
+            case edge @ MergeEdge(a, b, _) => 
+              a == to || b == to ||
+              {
+                val other = if (a == from) b else a
+                // the other node's keys must be a superset of the constraint set we're concerned with in order to traverse it.
+                ((other.keys & constraintSet) == constraintSet) && {
+                  val pruned = outbound mapValues { _ - edge }
+                  isConnected(other,to, pruned, constraintSet)
                 }
               }
-            } orElse {
-              trees.find(t => t.nodes.contains(edge0.b)) map { t0 => 
-                (trees - t0) + MergeTree(t0.nodes + edge0.a, t0.edges + edge0)
-              }
-            } getOrElse {
-              trees + MergeTree(Set(edge0.a, edge0.b), Set(edge0))
-            }
-
-            find0(newTrees, edges.tail)
           }
         }
-        
-        find0(trees, edges.sortBy(-_.sharedKey.size))
+
+        def find0(outbound: Map[MergeNode, Set[MergeEdge]], edges: Set[MergeEdge]): Map[MergeNode, Set[MergeEdge]] = {
+          if (edges.isEmpty) {
+            outbound
+          } else {
+            val edge = edges.head
+
+            // node we're searching from
+            val fromNode = edge.a
+            val toNode = edge.b
+
+            val pruned = outbound mapValues { _ - edge }
+
+            find0(if (isConnected(fromNode, toNode, pruned, edge.keys)) pruned else outbound, edges.tail)
+          }
+        }
+
+        def partition(in: Map[MergeNode, Set[MergeEdge]]): Set[MergeGraph] = {
+          in.values.flatten.foldLeft(in.keySet map { k => MergeGraph(Set(k)) }) {
+            case (acc, edge @ MergeEdge(a, b, _)) => 
+              val g1 = acc.find(_.nodes.contains(a)).get
+              val g2 = acc.find(_.nodes.contains(b)).get
+
+              val resultGraph = g1.join(g2, edge)
+              acc - g1 - g2 + resultGraph
+          }
+        }
+
+        partition(find0(outbound, outbound.values.flatten.toSet))
       }
 
       case class BindingConstraint(ordering: Seq[Set[TicVar]]) {
@@ -1358,7 +1381,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       // 2. Relating tables with disjoint sources is alignment on group keys
       // 3. Relating tables with disjoint group keys is a cross
       // 
-      def buildMerges(clusters: Map[MergeNode, List[Binding]], mergeTree: MergeTree) = {
+      def buildMerges(clusters: Map[MergeNode, List[Binding]], mergeGraph: MergeGraph) = {
         /**
          * General algorithm:
          *  1) Compute alignment on keys between current node and remote node for each source in current node.
@@ -1454,8 +1477,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         // the initial set of fixed constraints; not all of these will eventually be used, but each 
         // edge visited will choose a member of this set to include in the final set of orderings
         // for this node
-        val fixedConstraints = BindingConstraints.fix(mergeTree.underconstrained(mergeTree.rootNode))
-        buildMergeSpec(mergeTree.rootNode, fixedConstraints, mergeTree.inbound, mergeTree.underconstrained)
+        val fixedConstraints = BindingConstraints.fix(mergeGraph.underconstrained(mergeGraph.rootNode))
+        buildMergeSpec(mergeGraph.rootNode, fixedConstraints, mergeGraph.inbound, mergeGraph.underconstrained)
       }
     }
 
@@ -1481,7 +1504,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           if (groupKeyOrder == targetOrder) {
             groupKeyTrans
           } else {
-            ArrayConcat(targetOrder map { ticvar => WrapArray(DerefArrayStatic(groupKeyTrans, JPathIndex(groupKeyOrder.indexOf(ticvar)))) }: _*)
+            ObjectConcat(
+              targetOrder map { ticvar => 
+                WrapObject(
+                  DerefObjectStatic(groupKeyTrans, JPathField(groupKeyOrder.indexOf(ticvar).toString)), 
+                  targetOrder.indexOf(ticvar).toString)
+            }: _*)
           }
         }
       }
@@ -1681,8 +1709,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       } yield {
         sys.error("todo")
       }
-
-      
     }
   }
 }

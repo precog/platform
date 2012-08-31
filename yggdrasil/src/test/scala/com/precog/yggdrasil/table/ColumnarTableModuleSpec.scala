@@ -362,28 +362,44 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     "find the maximal spanning forest of a set of merge trees" in {
       import grouper.Universe._
 
-      val abcd = MergeNode(Set("a", "b", "c", "d").map(JPathField(_)))
-      val abc = MergeNode(Set("a", "b", "c").map(JPathField(_)))
-      val ab = MergeNode(Set("a", "b").map(JPathField(_)))
-      val ac = MergeNode(Set("a", "c").map(JPathField(_)))
-      val a = MergeNode(Set(JPathField("a")))
-      val e = MergeNode(Set(JPathField("e")))
+      val abcd = MergeNode(ticvars("abcd").toSet)
+      val abc = MergeNode(ticvars("abc").toSet)
+      val ab = MergeNode(ticvars("ab").toSet)
+      val ac = MergeNode(ticvars("ac").toSet)
+      val a = MergeNode(ticvars("a").toSet)
+      val e = MergeNode(ticvars("e").toSet)
 
       val connectedNodes = Set(abcd, abc, ab, ac, a)
       val allNodes = connectedNodes + e
-      
-      val result = findSpanningForest(
-        allNodes.map(n => MergeTree(Set(n))),
-        (for (n1 <- connectedNodes; n2 <- connectedNodes if n1 != n2) yield MergeEdge(n1, n2, n1.keys & n2.keys)).toList
-      )
+      val result = findSpanningGraphs(edgeMap(allNodes))
 
       result.toList must beLike {
-        case MergeTree(n1, e1) :: MergeTree(n2, e2) :: Nil =>
+        case MergeGraph(n1, e1) :: MergeGraph(n2, e2) :: Nil =>
           val (nodes, edges) = if (n1 == Set(e)) (n2, e2) else (n1, e1)
 
           nodes must haveSize(5)
           edges must haveSize(4) 
           edges.map(_.sharedKey.size) must_== Set(3, 2, 2, 1)
+      }
+    }
+
+    "find the maximal spanning forest of a set of merge trees" in {
+      import grouper.Universe._
+
+      val ab = MergeNode(ticvars("ab").toSet)
+      val bc = MergeNode(ticvars("bc").toSet)
+      val ac = MergeNode(ticvars("ac").toSet)
+
+      val connectedNodes = Set(ab, bc, ac)
+      val result = findSpanningGraphs(edgeMap(connectedNodes))
+
+      result must haveSize(1)
+      result.head.nodes must_== connectedNodes
+
+      val expectedUnorderedEdges = edgeMap(connectedNodes).values.flatten.toSet
+      forall(result.head.edges) { edge =>
+        (expectedUnorderedEdges must contain(edge)) or
+        (expectedUnorderedEdges must contain(edge.reverse))
       }
     }
 
@@ -481,67 +497,21 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       val a = MergeNode(ticvars("a").toSet)
 
       "find underconstrained binding constraints" >> {
-        "for a graph with singleton sets" in {
+        "for a graph with a supernode" in {
           val allNodes = Random.shuffle(Set(abcd, abc, ab, ac, a))
 
-          val spanningForest = findSpanningForest(
-            allNodes.map(n => MergeTree(Set(n))),
-            (for (n1 <- allNodes; n2 <- allNodes if n1 != n2) yield MergeEdge(n1, n2, n1.keys & n2.keys)).toList
-          )
+          val spanningForest = findSpanningGraphs(edgeMap(allNodes))
 
           spanningForest must haveSize(1)
 
           val underconstrained = spanningForest.head.underconstrained
 
           norm(underconstrained(a)) must_== norm(Set(constraint("a")))
-          norm(underconstrained(ab)) must_== norm(Set(constraint("a,b")))
-          norm(underconstrained(ac)) must_== norm(Set(constraint("ac")))
-          norm(underconstrained(abc)) must_== norm(Set(constraint("a,b,c"), constraint("ac,b")))
-          norm(underconstrained(abcd)) must_== norm(Set(constraint("abcd")))
-        }
-
-        "for a graph with no singleton sets" in { 
-          val allNodes = Random.shuffle(LinkedHashSet(abcd, abc, ab, ac))
-
-          val spanningForest = findSpanningForest(
-            allNodes.map(n => MergeTree(Set(n))).asInstanceOf[Set[MergeTree]],
-            (for (n1 <- allNodes; n2 <- allNodes if n1 != n2) yield MergeEdge(n1, n2, n1.keys & n2.keys)).toList
-          )
-
-          spanningForest must haveSize(1)
-          val tree = spanningForest.head
-
-          val underconstrained = tree.underconstrained
-
-          // These exist for all permutations
           norm(underconstrained(ab)) must_== norm(Set(constraint("ab")))
           norm(underconstrained(ac)) must_== norm(Set(constraint("ac")))
-          norm(underconstrained(abcd)) must_== norm(Set(constraint("ab,cd"), constraint("ac,bd")))
-
-          {
-            // ab->abcd and ac->abc
-            tree.adjacent(ab, abcd) must beTrue
-            tree.adjacent(ac, abc) must beTrue
-            norm(underconstrained(abc)) must_== norm(Set(constraint("ac,b"))) 
-          } or {
-            // ac->abcd and ab->abc
-            tree.adjacent(ac, abcd) must beTrue
-            tree.adjacent(ab, abc) must beTrue
-            norm(underconstrained(abc)) must_== norm(Set(constraint("ab,c"))) 
-          } or {
-            // abcd->abc and (ab, ac)->abcd
-            tree.adjacent(abc, abcd) must beTrue
-            tree.adjacent(ac, abcd) must beTrue
-            tree.adjacent(ab, abcd) must beTrue
-            norm(underconstrained(abc)) must_== norm(Set(constraint("abc"))) 
-          } or {
-            // abc->ab, abc->ac, abcd->abc
-            tree.adjacent(abc, abcd) must beTrue
-            tree.adjacent(ac, abc) must beTrue
-            tree.adjacent(ab, abc) must beTrue
-            norm(underconstrained(abc)) must_== norm(Set(constraint("ab,c"), constraint("ac,b"))) 
-          }
-        }.pendingUntilFixed
+          norm(underconstrained(abc)) must_== norm(Set(constraint("abc")))
+          norm(underconstrained(abcd)) must_== norm(Set(constraint("a,bcd"), constraint("ab,cd"), constraint("ac,bd"), constraint("abc,d")))
+        }
       }
     }
 
@@ -590,7 +560,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
       val ticvar = JPathField("a")
       val node = MergeNode(Set(ticvar))
-      val tree = MergeTree(Set(node))
+      val tree = MergeGraph(Set(node))
       val binding = Binding(ops.empty, SourceKey.Single, TransSpec1.Id, 1, GroupKeySpecSource(ticvar, DerefObjectStatic(SourceValue.Single, ticvar)))
 
       val result = buildMerges(Map(node -> List(binding)), tree)
@@ -617,7 +587,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       val ticb = JPathField("b")
       val foonode = MergeNode(Set(tica))
       val barnode = MergeNode(Set(tica, ticb))
-      val tree = MergeTree(Set(foonode, barnode), Set(MergeEdge(foonode, barnode, Set(tica))))
+      val tree = MergeGraph(Set(foonode, barnode), Set(MergeEdge(foonode, barnode, Set(tica))))
       val foobinding = Binding(ops.empty, SourceKey.Single, TransSpec1.Id, 1, GroupKeySpecSource(tica, DerefObjectStatic(SourceValue.Single, tica)))
       val barbinding = Binding(ops.empty, SourceKey.Single, TransSpec1.Id, 1, 
         GroupKeySpecAnd(
