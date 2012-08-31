@@ -121,65 +121,65 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("import _ 42") must throwA[ParseException]
     }
 
-    "accept a single forall expression" in {
-      parse("forall 'a 'a + 42") must beLike {
-        case Forall(_, "'a", Add(_, TicVar(_, "'a"), NumLit(_, "42"))) => ok
+    "accept a single solve expression" in {
+      parse("solve 'a 'a + 42") must beLike {
+        case Solve(_, Vector(TicVar(_, "'a")), Add(_, TicVar(_, "'a"), NumLit(_, "42"))) => ok
       }
     }
 
-    "accept a forall expression with two tic variables" >> {
+    "accept a solve expression with two tic variables" >> {
       "with Add" >> {
-        parse("forall 'a forall 'b 'a + 'b") must beLike {
-          case Forall(_, "'a", Forall(_, "'b", Add(_, TicVar(_, "'a"), TicVar(_, "'b")))) => ok
+        parse("solve 'a, 'b 'a + 'b") must beLike {
+          case Solve(_, Vector(TicVar(_, "'a"), TicVar(_, "'b")), Add(_, TicVar(_, "'a"), TicVar(_, "'b"))) => ok
         }
       }
 
       "with Union" >> {
-        parse("forall 'a forall 'b 'a union 'b") must beLike {
-          case Forall(_, "'a", Forall(_, "'b", Union(_, TicVar(_, "'a"), TicVar(_, "'b")))) => ok
+        parse("solve 'a, 'b 'a union 'b") must beLike {
+          case Solve(_, Vector(TicVar(_, "'a"), TicVar(_, "'b")), Union(_, TicVar(_, "'a"), TicVar(_, "'b"))) => ok
         }
       }
 
       "with Difference" >> {
-        parse("forall 'a forall 'b 'a difference 'b") must beLike {
-          case Forall(_, "'a", Forall(_, "'b", Difference(_, TicVar(_, "'a"), TicVar(_, "'b")))) => ok
+        parse("solve 'a, 'b 'a difference 'b") must beLike {
+          case Solve(_, Vector(TicVar(_, "'a"), TicVar(_, "'b")), Difference(_, TicVar(_, "'a"), TicVar(_, "'b"))) => ok
         }
       }
 
       "with And, Where" >> {
-        parse("forall 'a forall 'b ('a where true) & ('b where false)") must beLike {
-          case Forall(_, "'a", Forall(_, "'b", And(_, Paren(_, Where(_, TicVar(_, "'a"), BoolLit(_, true))), Paren(_, Where(_, TicVar(_, "'b"), BoolLit(_, false)))))) => ok
+        parse("solve 'a, 'b ('a where true) & ('b where false)") must beLike {
+          case Solve(_, Vector(TicVar(_, "'a"), TicVar(_, "'b")), And(_, Paren(_, Where(_, TicVar(_, "'a"), BoolLit(_, true))), Paren(_, Where(_, TicVar(_, "'b"), BoolLit(_, false))))) => ok
         }
       }
     }
     
-    "accept a forall expression followed by a let" in {
-      parse("forall 'a foo('b) := 'b + 'a foo") must beLike {
-        case Forall(_, "'a", Let(_, Identifier(Vector(), "foo"), Vector("'b"), Add(_, TicVar(_, "'b"), TicVar(_, "'a")), Dispatch(_, Identifier(Vector(), "foo"), Vector()))) => ok
+    "accept a solve expression followed by a let" in {
+      parse("solve 'a foo('b) := 'b + 'a foo") must beLike {
+        case Solve(_, Vector(TicVar(_, "'a")), Let(_, Identifier(Vector(), "foo"), Vector("'b"), Add(_, TicVar(_, "'b"), TicVar(_, "'a")), Dispatch(_, Identifier(Vector(), "foo"), Vector()))) => ok
       }
     }
     
-    "accept a let expression without a parameter followed by a forall" in {
-      parse("foo := (forall 'b 10 + 'b) foo") must beLike {
-        case Let(_, Identifier(Vector(), "foo"), Vector(), Paren(_, Forall(_, "'b", Add(_, NumLit(_, "10"), TicVar(_, "'b")))), Dispatch(_, Identifier(Vector(), "foo"), Vector())) => ok
+    "accept a let expression without a parameter followed by a solve" in {
+      parse("foo := (solve 'b 10 + 'b) foo") must beLike {
+        case Let(_, Identifier(Vector(), "foo"), Vector(), Paren(_, Solve(_, Vector(TicVar(_, "'b")), Add(_, NumLit(_, "10"), TicVar(_, "'b")))), Dispatch(_, Identifier(Vector(), "foo"), Vector())) => ok
       }
     }
     
-    "accept a let expression with a parameter followed by a forall" in {
-      parse("foo('a) := (forall 'b 'a + 'b) foo") must beLike {
-        case Let(_, Identifier(Vector(), "foo"), Vector("'a"), Paren(_, Forall(_, "'b", Add(_, TicVar(_, "'a"), TicVar(_, "'b")))), Dispatch(_, Identifier(Vector(), "foo"), Vector())) => ok
+    "accept a let expression with a parameter followed by a solve" in {
+      parse("foo('a) := (solve 'b 'a + 'b )foo") must beLike {
+        case Let(_, Identifier(Vector(), "foo"), Vector("'a"), Paren(_, Solve(_, Vector(TicVar(_, "'b")), Add(_, TicVar(_, "'a"), TicVar(_, "'b")))), Dispatch(_, Identifier(Vector(), "foo"), Vector())) => ok
       }
     }
         
-    "accept a let expression followed by a forall with no parens around the forall" in {
-      parse("foo := forall 'b 'b foo") must beLike {
-        case Let(_, Identifier(Vector(), "foo"), Vector(), Forall(_, "'b", TicVar(_, "'b")), Dispatch(_, Identifier(Vector(), "foo"), Vector())) => ok
+    "accept a let expression followed by a solve with no parens around the solve" in {
+      parse("foo := solve 'b 'b foo") must beLike {
+        case Let(_, Identifier(Vector(), "foo"), Vector(), Solve(_, Vector(TicVar(_, "'b")), TicVar(_, "'b")), Dispatch(_, Identifier(Vector(), "foo"), Vector())) => ok
       }
     }
     
-    "disambiguate forall and let" in {
-      parse("forall 'a foo('b) := (forall 'c 'b + 'c) foo + 'a") must beLike {
-        case Forall(_, "'a", Let(_, Identifier(Vector(), "foo"), Vector("'b"), Paren(_, Forall(_, "'c", Add(_, TicVar(_, "'b"), TicVar(_, "'c")))), Add(_, Dispatch(_, Identifier(Vector(), "foo"), Vector()), TicVar(_, "'a")))) => ok
+    "disambiguate solve and let" in {
+      parse("solve 'a foo('b) := (solve 'c 'b + 'c) foo + 'a") must beLike {
+        case Solve(_, Vector(TicVar(_, "'a")), Let(_, Identifier(Vector(), "foo"), Vector("'b"), Paren(_, Solve(_, Vector(TicVar(_, "'c")), Add(_, TicVar(_, "'b"), TicVar(_, "'c")))), Add(_, Dispatch(_, Identifier(Vector(), "foo"), Vector()), TicVar(_, "'a")))) => ok
       }
     }
 
@@ -195,8 +195,8 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       }
     }
 
-    "accept a 'new' expression followed by a forall" in {
-      parse("new forall 'a 'a") must beLike {
+    "accept a 'new' expression followed by a solve" in {
+      parse("new solve 'a 'a") must beLike {
         case New(_, _) => ok
       }
     }
@@ -1244,9 +1244,9 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
         }
       }      
 
-      "forall" >> {
-        parse("forallfoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "forallfoo"), Vector()) => ok
+      "solve" >> {
+        parse("solvefoo") must beLike {
+          case Dispatch(_, Identifier(Vector(), "solvefoo"), Vector()) => ok
         }
       }
     }

@@ -385,8 +385,9 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       
       result.errors must beEmpty
     }
-        
-    "detect duplicate tic variable in forall" in {
+    
+    // TODO
+    /* "detect duplicate tic variable in forall" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'a", Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42"))))
       bindRoot(tree, tree)
 
@@ -412,7 +413,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
 
       val results = shakeTree(tree)
       results.errors mustEqual Set(UnusedTicVariable("'b"))
-    }  
+    } */  
 
     "detect unused tic-variable in let" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("'a", "'b"), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
@@ -464,13 +465,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }    
 
-    "detect unused tic-variable from forall in new" in {
+    /* "detect unused tic-variable from forall in new" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", New(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in relate" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Relate(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25"), NumLit(LineStream(), "26")))
@@ -548,7 +549,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       }
     }
     
-    "detect unused tic-variable from forall in relate" in {
+    /* "detect unused tic-variable from forall in relate" in {
       {
         val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Relate(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"), NumLit(LineStream(), "25"))))
         bindRoot(tree, tree)
@@ -572,7 +573,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
         val result = shakeTree(tree)
         result.errors mustEqual Set(UnusedTicVariable("'b"))
       }
-    }
+    } */
     
     "eliminate let when not found in scope in object definition" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), ObjectDef(LineStream(), Vector("foo" -> NumLit(LineStream(), "24"))))
@@ -606,13 +607,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }    
 
-    "detect unused tic-variable from forall in object definition" in {
+    /* "detect unused tic-variable from forall in object definition" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", ObjectDef(LineStream(), Vector("foo" -> Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42"))))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in array definition" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), ArrayDef(LineStream(), Vector(NumLit(LineStream(), "24"))))
@@ -646,13 +647,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }    
 
-    "detect unused tic-variable from forall in array definition" in {
+    /* "detect unused tic-variable from forall in array definition" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", ArrayDef(LineStream(), Vector(Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42"))))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in descent" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Descent(LineStream(), NumLit(LineStream(), "24"), "foo"))
@@ -686,13 +687,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }    
 
-    "detect unused tic-variable from forall in descent" in {
+    /* "detect unused tic-variable from forall in descent" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Descent(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), "foo")))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in deref" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Deref(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -740,13 +741,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }    
 
-    "detect unused tic-variable from forall in deref" in {
+    /* "detect unused tic-variable from forall in deref" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Deref(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "42"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in dispatch" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Dispatch(LineStream(), Identifier(Vector(), "count"), Vector(NumLit(LineStream(), "24"))))
@@ -780,13 +781,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }   
 
-    "detect unused tic-variable from forall in dispatch" in {
+    /* "detect unused tic-variable from forall in dispatch" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Dispatch(LineStream(), Identifier(Vector(), "count"), Vector(Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42"))))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in where" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Where(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -834,13 +835,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in where" in {
+    /* "detect unused tic-variable from forall in where" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Where(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in addition" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Add(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -888,13 +889,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in addition" in {
+    /* "detect unused tic-variable from forall in addition" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Add(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in subtraction" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Sub(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -943,13 +944,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     
-    "detect unused tic-variable from forall in subtraction" in {
+    /* "detect unused tic-variable from forall in subtraction" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Sub(LineStream(), Sub(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in multiplication" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Mul(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -997,13 +998,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in multiplication" in {
+    /* "detect unused tic-variable from forall in multiplication" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Mul(LineStream(), Mul(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in division" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Div(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -1051,13 +1052,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in division" in {
+    /* "detect unused tic-variable from forall in division" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Div(LineStream(), Div(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in less-than" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Lt(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -1105,13 +1106,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in less-than" in {
+    /* "detect unused tic-variable from forall in less-than" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Lt(LineStream(), Lt(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in less-than-equal" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), LtEq(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -1159,13 +1160,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in less-than-equal" in {
+    /* "detect unused tic-variable from forall in less-than-equal" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", LtEq(LineStream(), LtEq(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in greater-than" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Gt(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -1213,13 +1214,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in greater-than" in {
+    /* "detect unused tic-variable from forall in greater-than" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Gt(LineStream(), Gt(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in greater-than-equal" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), GtEq(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -1267,13 +1268,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in greater-than-equal" in {
+    /* "detect unused tic-variable from forall in greater-than-equal" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", GtEq(LineStream(), GtEq(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in equality" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Eq(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -1321,13 +1322,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in equality" in {
+    /* "detect unused tic-variable from forall in equality" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Eq(LineStream(), Eq(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in not equality" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), NotEq(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -1375,13 +1376,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in not equality" in {
+    /* "detect unused tic-variable from forall in not equality" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", NotEq(LineStream(), NotEq(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in boolean and" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), And(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -1429,13 +1430,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in boolean and" in {
+    /* "detect unused tic-variable from forall in boolean and" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", And(LineStream(), And(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in boolean or" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Or(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
@@ -1483,13 +1484,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in boolean or" in {
+    /* "detect unused tic-variable from forall in boolean or" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Or(LineStream(), Or(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in complement" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Comp(LineStream(), NumLit(LineStream(), "24")))
@@ -1523,13 +1524,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
         
-    "detect unused tic-variable from forall in complement" in {
+    /* "detect unused tic-variable from forall in complement" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Comp(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
     
     "eliminate let when not found in scope in negation" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Neg(LineStream(), NumLit(LineStream(), "24")))
@@ -1563,13 +1564,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }    
 
-    "detect unused tic-variable from forall in negation" in {
+    /* "detect unused tic-variable from forall in negation" in {
       val tree = Forall(LineStream(), "'a", Forall(LineStream(), "'b", Neg(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors mustEqual Set(UnusedTicVariable("'b"))
-    }
+    } */
   }
   
   "name binding after tree shake" should {
@@ -1586,7 +1587,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       }
     }
 
-    "re-bind tic variables from forall" in {
+    /* "re-bind tic variables from forall" in {
       val tree = Forall(LineStream(), "'a", Paren(LineStream(), TicVar(LineStream(), "'a")))
       bindRoot(tree, tree)
       
@@ -1597,7 +1598,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
         case Forall(LineStream(), "'a", t @ TicVar(LineStream(), "'a")) =>
           t.binding must beLike { case ForallDef(`result`) => ok }
       }
-    }
+    } */
     
     "re-bind dispatch" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("'a"), Paren(LineStream(), TicVar(LineStream(), "'a")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))

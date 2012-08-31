@@ -45,9 +45,8 @@ trait Binder extends parser.AST with Library {
         }
       }
 
-      case b @ Forall(_, param, child) => {
-        loop(child, env + (Left(param) -> ForallDef(b)))
-      }
+      case b @ Solve(_, constraints, child) => 
+        sys.error("todo")
       
       case Import(_, spec, child) => { //todo see scalaz's Boolean.option
         val addend = spec match {
@@ -114,11 +113,6 @@ trait Binder extends parser.AST with Library {
             t.binding = b
             Set()
           }
-          case Some(b @ ForallDef(_)) => {
-            t.binding = b
-            Set()
-          }
-          
           case None => {
             t.binding = NullBinding
             Set(Error(t, UndefinedTicVariable(name)))
@@ -276,10 +270,6 @@ trait Binder extends parser.AST with Library {
     override val toString = "@%d".format(b.nodeId)
   }  
 
-  case class ForallDef(b: Forall) extends Binding with FormalBinding {
-    override val toString = "@%d".format(b.nodeId)
-  }
-  
   case object NullBinding extends Binding with FormalBinding {
     override val toString = "<null>"
   }

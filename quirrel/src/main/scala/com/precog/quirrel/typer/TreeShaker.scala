@@ -56,17 +56,8 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       }
     }
 
-    case b @ Forall(loc, param, child) => {
-      val (child2, bindings, errors) = performShake(child)
-
-      val unusedParamBinding = Set((param, ForallDef(b): Binding)) &~ bindings.collect {
-        case (Left(id), b) => (id, b)
-      }
-
-      val errorsFromUnused = unusedParamBinding map { case (id, _) => Error(b, UnusedTicVariable(id)) }
-
-      (Forall(loc, param, child2), bindings, errorsFromUnused ++ errors) 
-    }
+    case b @ Solve(loc, constraints, child) =>
+      sys.error("todo")
     
     case Import(loc, spec, child) => {
       val (child2, bindings, errors) = performShake(child)

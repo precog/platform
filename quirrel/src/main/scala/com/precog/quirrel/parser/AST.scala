@@ -94,10 +94,12 @@ trait AST extends Phases {
           indent + "required-params: " + e.requiredParams
       }
 
-      case Forall(loc, ticVar, child) => {
-        indent + "type: forall\n" +
-          indent + "ticVar: \n" + ticVar + "\n" +
-          indent + "child: \n" + prettyPrint(child, level + 2)
+      case Solve(loc, constraints, child) => {
+        val constraintsStr = constraints map { indent + "  -\n" + prettyPrint(_, level + 4) } mkString "\n"
+        
+        indent + "type: solve\n" +
+          indent + "constraints:\n" + constraintsStr + "\n" +
+          indent + "child:\n" + prettyPrint(child, level + 2)
       }
       
       case Import(loc, spec, child) => {
@@ -407,8 +409,14 @@ trait AST extends Phases {
           (left1 equalsIgnoreLoc left2) &&
           (right1 equalsIgnoreLoc right2)
 
-      case (Forall(_, ticVar1, child1), Forall(_, ticVar2, child2)) =>
-        (ticVar1 == ticVar2) && (child1 equalsIgnoreLoc child2)
+      case (Solve(_, constraints1, child1), Solve(_, constraints2, child2)) => {
+        val sizing = constraints1.length == constraints2.length
+        val contents = constraints1 zip constraints2 forall {
+          case (e1, e2) => e1 equalsIgnoreLoc e2
+        }
+        
+        sizing && contents && (child1 equalsIgnoreLoc child2)
+      }
           
       case (Import(_, spec1, child1), Import(_, spec2, child2)) =>
         (child1 equalsIgnoreLoc child2) && (spec1 == spec2)
@@ -536,8 +544,8 @@ trait AST extends Phases {
       case Let(_, id, params, left, right) =>
         id.hashCode + params.hashCode + left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
 
-      case Forall(_, ticVar, child) =>
-        ticVar.hashCode + child.hashCodeIgnoreLoc
+      case Solve(_, constraints, child) =>
+        (constraints map { _.hashCodeIgnoreLoc } sum) + child.hashCodeIgnoreLoc
       
       case Import(_, spec, child) =>
         spec.hashCode + child.hashCodeIgnoreLoc
@@ -689,9 +697,12 @@ trait AST extends Phases {
       private[quirrel] def requiredParams_=(req: Int) = _requiredParams() = req
     }
 
-    final case class Forall(loc: LineStream, param: TicId, child: Expr) extends ExprUnaryNode {
-      val sym = 'forall
-      val isPrefix = true
+    final case class Solve(loc: LineStream, constraints: Vector[Expr], child: Expr) extends Expr with Node {
+      val sym = 'solve
+      
+      def form = 'solve ~ (constraints.init map { _ ~ 'comma } reduceOption { _ ~ _ } map { _ ~ constraints.last ~ child } getOrElse (constraints.last ~ child))
+      
+      def children = child +: constraints toList
     }
 
     final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends ExprUnaryNode {
