@@ -522,9 +522,14 @@ object ZookeeperTools extends Command {
       case (path, data) =>
         JsonParser.parse(data).validated[YggCheckpoint] match {
           case Success(_) =>
+            if (! client.exists(path)) {
+              client.createPersistent(path, true)
+            }
+
             client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
               def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
             })  
+
             println("Checkpoint updated: %s with %s".format(path, data))
           case Failure(e) => println("Invalid json for checkpoint: %s".format(e))
       }
