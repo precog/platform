@@ -21,3 +21,4 @@ hs_err_pid*log
 tools/lib/*
 yggdrasil/data
 /TAGS
+/standaloneArtifacts
