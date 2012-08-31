@@ -74,7 +74,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
   val testUID = "testUID"
 
   def testEval(graph: DepGraph, path: Path = Path.Root)(test: Set[SEvent] => Result): Result = withContext { ctx =>
-    (consumeEval(testUID, graph, ctx, path) match {
+    (consumeEval(testUID, graph, ctx, path, true) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     }) and 
@@ -322,12 +322,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result must haveSize(1)
 
         val result2 = result collect {
-          case (ids, SDecimal(d)) if ids.size == 1 => d
+          case (ids, SDecimal(d)) if ids.size == 0 => d
         }
 
         result2 must contain(259)
       }
-    }.pendingUntilFixed 
+    }
 
     "evaluate a join of two reductions on the same dataset using a MegaReduce" in {
       val line = Line(0, "")
@@ -335,7 +335,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers7")))
       
       val mega = dag.MegaReduce(line, 
-        NEL(dag.Reduce(line, Count, parent), dag.Reduce(line, Count, parent)), 
+        NEL(dag.Reduce(line, Count, parent), dag.Reduce(line, Sum, parent)), 
         parent)
 
       val input = Join(line, Add, CrossRightSort, 
@@ -355,7 +355,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         result2 must contain(259)
       }
-    }.pendingUntilFixed 
+    }
 
     "join two sets" >> {
       "from different paths" >> {
@@ -371,8 +371,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         testEval(input) { result =>
           result must haveSize(500)
+
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 2 => ids
+          }
+
+          result2 must haveSize(500)
         }
-      }.pendingUntilFixed
+      }
 
       "from the same path" >> {
         val line = Line(0, "")
@@ -388,6 +394,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         testEval(input) { result =>
           result must haveSize(5)
+
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d
+          }
+
+          result2 must contain(218, 147, 118, 172, 224)
         }
       }
 
@@ -405,6 +417,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         testEval(input, Path("/hom")) { result =>
           result must haveSize(5)
+
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d
+          }
+
+          result2 must contain(218, 147, 118, 172, 224)
         }
       }
     }
@@ -640,7 +658,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
           result2 must contain(43, 13, 78, 2, 14)
         }
-      }.pendingUntilFixed
+      }
 
       "a reduction on the left side of the cross" >> {
         val line = Line(0, "")
@@ -659,7 +677,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
           result2 must contain(43, 13, 78, 2, 14)
         }
-      }.pendingUntilFixed
+      }
 
       "a root on the right side of the cross" >> {
         val line = Line(0, "")
@@ -2425,7 +2443,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
 
     "distinct homogenous set of numbers" in {
       val line = Line(0, "")
