@@ -251,7 +251,7 @@ object Console extends App {
 
   val repl: IO[scalaz.Validation[blueeyes.json.xschema.Extractor.Error, Lifecycle]] = for {
     replConfig <- loadConfig(args.headOption) 
-    fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, FilesystemFileOps)
+    fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, replConfig.archiveDir, FilesystemFileOps)
   } yield {
       scalaz.Success[blueeyes.json.xschema.Extractor.Error, Lifecycle](new REPL 
           with Lifecycle 
@@ -281,6 +281,7 @@ object Console extends App {
         object Projection extends JDBMProjectionCompanion {
           val fileOps = FilesystemFileOps
           def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+          def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
         }
 
         def startup = IO { Await.result(storage.start(), controlTimeout) }

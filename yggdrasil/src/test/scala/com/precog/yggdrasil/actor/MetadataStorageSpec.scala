@@ -33,6 +33,7 @@ class MetadataStorageSpec extends Specification {
   val output = inputMetadata
   
   val base = IOUtils.createTmpDir("MetadataStorageSpec").unsafePerformIO
+  val archive = IOUtils.createTmpDir("MetadataStorageSpec-archive").unsafePerformIO
 
   def cleanupBaseDir = Step {
     IOUtils.recursiveDelete(base)
@@ -51,7 +52,7 @@ class MetadataStorageSpec extends Specification {
 
   trait metadataStore extends Scope {
     val fileOps = TestFileOps
-    val ms = FileMetadataStorage.load(base, fileOps).unsafePerformIO
+    val ms = FileMetadataStorage.load(base, archive, fileOps).unsafePerformIO
   }
 
   "metadata storage" should {
