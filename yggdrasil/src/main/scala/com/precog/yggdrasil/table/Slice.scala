@@ -190,7 +190,7 @@ trait Slice { source =>
       case (ColumnRef(JPath(JPathIndex(`index`), xs @ _*), ctype), col) => 
         (ColumnRef(JPath(JPathIndex(0) +: xs : _*), ctype), col)
 
-      case unchanged => unchanged
+      case c @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), ctype), col) => c
     }
   }
 

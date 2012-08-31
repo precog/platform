@@ -63,7 +63,7 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     if (depth <= 0) leafSchema
     else oneOf(1, 2, 3) flatMap {
       case 1 => objectSchema(depth, choose(1, 3))
-      case 2 => arraySchema(depth, choose(1, 3))
+      case 2 => arraySchema(depth, choose(1, 5))
       case 3 => leafSchema
     }
   }
