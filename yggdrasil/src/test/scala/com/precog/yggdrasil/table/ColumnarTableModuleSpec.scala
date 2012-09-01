@@ -461,14 +461,25 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
           val spanningGraph = findSpanningGraphs(edgeMap(Set(abcd, abc, ab, ac, a))).head
 
-          val requiredSorts = findRequiredSorts(spanningGraph)
+          def checkPermutation(nodeList: List[MergeNode]) = {
+            val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
 
-          requiredSorts(a) must_== Set(ticvars("a"))
-          requiredSorts(ac) must_== Set(ticvars("ac"))
-          requiredSorts(ab) must_== Set(ticvars("ab"))
-          (requiredSorts(abc), requiredSorts(abcd)) must beLike {
-            case (sabc, sabcd) =>
-              (sabc must_== Set(ticvars("abc")) and (sabcd must_== Set(ticvars("abc"), ticvars("ac"))))
+            requiredSorts(a) must_== Set(ticvars("a"))
+            requiredSorts(ac) must_== Set(ticvars("ac"))
+            requiredSorts(ab) must_== Set(ticvars("ab"))
+            (requiredSorts(abc), requiredSorts(abcd)) must beLike {
+              case (sabc, sabcd) =>
+                (
+                  (sabc == Set(ticvars("abc")) && (sabcd == Set(ticvars("abc"), ticvars("ac")))) ||
+                  (sabc == Set(ticvars("acb")) && (sabcd == Set(ticvars("acb"), ticvars("ab")))) ||
+                  (sabc == Set(ticvars("abc"), ticvars("ac")) && (sabcd == Set(ticvars("abc")))) ||
+                  (sabc == Set(ticvars("acb"), ticvars("ab")) && (sabcd == Set(ticvars("acb")))) 
+                ) must beTrue
+            }
+          }
+
+          forall(spanningGraph.nodes.toList.permutations) { nodeList =>
+            checkPermutation(nodeList)
           }
         }
 
@@ -479,11 +490,51 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
           val spanningGraph = findSpanningGraphs(edgeMap(Set(ab, ac, bc))).head
 
-          val requiredSorts = findRequiredSorts(spanningGraph)
+          forall(spanningGraph.nodes.toList.permutations) { nodeList =>
+            val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
 
-          requiredSorts(ab) must_== Set(ticvars("a"), ticvars("b"))
-          requiredSorts(ac) must_== Set(ticvars("a"), ticvars("c"))
-          requiredSorts(bc) must_== Set(ticvars("b"), ticvars("c"))
+            requiredSorts(ab) must_== Set(ticvars("a"), ticvars("b"))
+            requiredSorts(ac) must_== Set(ticvars("a"), ticvars("c"))
+            requiredSorts(bc) must_== Set(ticvars("b"), ticvars("c"))
+          }
+        }
+
+        "in connected cycles" in {
+          val ab = MergeNode(ticvars("ab").toSet, null)
+          val ac = MergeNode(ticvars("ac").toSet, null)
+          val bc = MergeNode(ticvars("bc").toSet, null)
+          val ad = MergeNode(ticvars("ad").toSet, null)
+          val db = MergeNode(ticvars("db").toSet, null)
+
+          val spanningGraph = findSpanningGraphs(edgeMap(Set(ab, ac, bc, ad, db))).head
+
+          forall(spanningGraph.nodes.toList.permutations) { nodeList =>
+            val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
+
+            requiredSorts(ab) must_== Set(ticvars("a"), ticvars("b"))
+            requiredSorts(ac) must_== Set(ticvars("a"), ticvars("c"))
+            requiredSorts(bc) must_== Set(ticvars("b"), ticvars("c"))
+            requiredSorts(ad) must_== Set(ticvars("a"), ticvars("d"))
+            requiredSorts(db) must_== Set(ticvars("d"), ticvars("b"))
+          }
+        }
+
+        "in a connected cycle with extraneous constraints" in {
+          val ab = MergeNode(ticvars("ab").toSet, null)
+          val ac = MergeNode(ticvars("ac").toSet, null)
+          val bc = MergeNode(ticvars("bc").toSet, null)
+          val ad = MergeNode(ticvars("ad").toSet, null)
+
+          val spanningGraph = findSpanningGraphs(edgeMap(Set(ab, ac, bc, ad))).head
+
+          forall(spanningGraph.nodes.toList.permutations) { nodeList =>
+            val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
+
+            requiredSorts(ab) must_== Set(ticvars("a"), ticvars("b"))
+            requiredSorts(ac) must_== Set(ticvars("a"), ticvars("c"))
+            requiredSorts(bc) must_== Set(ticvars("b"), ticvars("c"))
+            requiredSorts(ad) must_== Set(ticvars("a"))
+          }
         }
       }
 

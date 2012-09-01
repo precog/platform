@@ -1539,7 +1539,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       }
     }
 
+
     def findRequiredSorts(spanningGraph: MergeGraph): Map[MergeNode, Set[Seq[TicVar]]] = {
+      findRequiredSorts(spanningGraph, spanningGraph.nodes.toList)
+    }
+
+    private[table] def findRequiredSorts(spanningGraph: MergeGraph, nodeList: List[MergeNode]): Map[MergeNode, Set[Seq[TicVar]]] = {
       import OrderingConstraints.minimize
       def inPrefix(seq: Seq[TicVar], keys: Set[TicVar], acc: Seq[TicVar] = Vector()): Option[Seq[TicVar]] = {
         if (keys.isEmpty) Some(acc) else {
@@ -1549,7 +1554,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         }
       }
 
-      def fix(nodes: Set[MergeNode], underconstrained: Map[MergeNode, Set[OrderingConstraint]]): Map[MergeNode, Set[OrderingConstraint]] = {
+      def fix(nodes: List[MergeNode], underconstrained: Map[MergeNode, Set[OrderingConstraint]]): Map[MergeNode, Set[OrderingConstraint]] = {
         if (nodes.isEmpty) underconstrained else {
           val node = nodes.head
           val fixed = minimize(underconstrained(node)).map(_.ordering.flatten)
@@ -1578,7 +1583,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             acc + (a -> aConstraints) + (b -> bConstraints)
         }
         
-        fix(spanningGraph.nodes, unconstrained).mapValues(s => minimize(s).map(_.fixed))
+        fix(nodeList, unconstrained).mapValues(s => minimize(s).map(_.fixed))
       }
     }
 
