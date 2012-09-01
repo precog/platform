@@ -28,13 +28,14 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         
       val spec = GroupingSource(
         fromJson(data), 
-        SourceKey.Single, TransSpec1.Id, 2, 
+        SourceKey.Single, Some(TransSpec1.Id), 2, 
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
-      val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
+      val result = grouper.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
         for {
           keyIter <- key.toJson
-          setIter <- map(2).toJson
+          group2  <- map(2)
+          setIter <- group2.toJson
         } yield {
           keyIter must haveSize(1)
           keyIter.head must beLike {
@@ -70,13 +71,14 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
       
       val spec = GroupingSource(
         fromJson(data), 
-        SourceKey.Single, Map1(TransSpec1.Id, doubleF1), 2, 
+        SourceKey.Single, Some(Map1(TransSpec1.Id, doubleF1)), 2, 
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
-      val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
+      val result = grouper.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
         for {
           keyIter <- key.toJson
-          setIter <- map(2).toJson
+          group2  <- map(2)
+          setIter <- group2.toJson
         } yield {
           keyIter must haveSize(1)
           keyIter.head must beLike {
@@ -115,13 +117,14 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
       
       val spec = GroupingSource(
         fromJson(data),
-        SourceKey.Single, TransSpec1.Id, 2, 
+        SourceKey.Single, Some(TransSpec1.Id), 2, 
         GroupKeySpecSource(JPathField("1"), Map1(Leaf(Source), mod2)))
         
-      val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
+      val result = grouper.merge(spec) { (key: Table, map: Int => M[Table]) =>
         for {
           keyIter <- key.toJson
-          setIter <- map(2).toJson
+          group2  <- map(2)
+          setIter <- group2.toJson
         } yield {
           keyIter must haveSize(1)
           keyIter.head must beLike {
@@ -181,7 +184,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         
         val spec = GroupingSource(
           table,
-          SourceKey.Single, SourceValue.Single, 3,
+          SourceKey.Single, Some(SourceValue.Single), 3,
           GroupKeySpecAnd(
             GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
@@ -189,7 +192,8 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         val result = grouper.merge(spec) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(3).toJson
+            group3  <- map(3)
+            gs1Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -235,7 +239,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         
         val spec = GroupingSource(
           table,
-          SourceKey.Single, TransSpec1.Id, 3,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecOr(
             GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
@@ -243,7 +247,8 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         val result = grouper.merge(spec) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(3).toJson
+            group3  <- map(3)
+            gs1Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -313,7 +318,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         
         val spec = GroupingSource(
           table,
-          SourceKey.Single, TransSpec1.Id, 3,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecAnd(
             GroupKeySpecSource(JPathField("extra"),
               Filter(Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1), Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1))),
@@ -322,7 +327,8 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         val result = grouper.merge(spec) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(3).toJson
+            group3  <- map(3)
+            gs1Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -357,7 +363,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         
         val spec = GroupingSource(
           table,
-          SourceKey.Single, SourceValue.Single, 3,
+          SourceKey.Single, Some(SourceValue.Single), 3,
           GroupKeySpecOr(
             GroupKeySpecSource(JPathField("extra"),
               Filter(Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1), Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1))),
@@ -365,7 +371,8 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
             
         val result = grouper.merge(spec) { (key, map) =>
           for {
-            gs1Json <- map(3).toJson
+            group3  <- map(3)
+            gs1Json <- group3.toJson
             keyJson <- key.toJson
           } yield {
             gs1Json must haveSize(1)
@@ -422,12 +429,12 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
       
       val spec1 = GroupingSource(
         table1,
-        SourceKey.Single, TransSpec1.Id, 2,
+        SourceKey.Single, Some(TransSpec1.Id), 2,
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
       val spec2 = GroupingSource(
         table2,
-        SourceKey.Single, TransSpec1.Id, 3,
+        SourceKey.Single, Some(TransSpec1.Id), 3,
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
       val union = GroupingAlignment(
@@ -439,8 +446,10 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
       val result = grouper.merge(union) { (key, map) =>
         for {
           keyJson <- key.toJson
-          gs1Json <- map(2).toJson
-          gs2Json <- map(3).toJson
+          group2  <- map(2)
+          group3  <- map(3)
+          gs1Json <- group2.toJson
+          gs2Json <- group3.toJson
         } yield {
           keyJson must haveSize(1)
           
@@ -503,12 +512,12 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
       
       val spec1 = GroupingSource(
         table1,
-        SourceKey.Single, TransSpec1.Id, 2,
+        SourceKey.Single, Some(TransSpec1.Id), 2,
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
       val spec2 = GroupingSource(
         table2,
-        SourceKey.Single, TransSpec1.Id, 3,
+        SourceKey.Single, Some(TransSpec1.Id), 3,
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
       val union = GroupingAlignment(
@@ -520,8 +529,10 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
       val result = grouper.merge(union) { (key, map) =>
         for {
           keyJson <- key.toJson
-          gs1Json <- map(2).toJson
-          gs2Json <- map(3).toJson
+          group2  <- map(2)
+          group3  <- map(3)
+          gs1Json <- group2.toJson
+          gs2Json <- group3.toJson
         } yield {
           keyJson must haveSize(1)
           
@@ -597,7 +608,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         
         val spec1 = GroupingSource(
           table1,
-          SourceKey.Single, TransSpec1.Id, 2,
+          SourceKey.Single, Some(TransSpec1.Id), 2,
           GroupKeySpecAnd(
             GroupKeySpecSource(JPathField("1"),
               DerefObjectStatic(Leaf(Source), JPathField("a"))),
@@ -606,7 +617,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           
         val spec2 = GroupingSource(
           table2,
-          SourceKey.Single, TransSpec1.Id, 3,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecSource(JPathField("1"),
             DerefObjectStatic(Leaf(Source), JPathField("a"))))
           
@@ -619,8 +630,10 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         val result = grouper.merge(union) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(2).toJson
-            gs2Json <- map(3).toJson
+            group2  <- map(2)
+            group3  <- map(3)
+            gs1Json <- group2.toJson
+            gs2Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -705,7 +718,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         
         val spec1 = GroupingSource(
           table1,
-          SourceKey.Single, TransSpec1.Id, 2,
+          SourceKey.Single, Some(TransSpec1.Id), 2,
           GroupKeySpecOr(
             GroupKeySpecSource(JPathField("1"),
               DerefObjectStatic(Leaf(Source), JPathField("a"))),
@@ -714,7 +727,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           
         val spec2 = GroupingSource(
           table2,
-          SourceKey.Single, TransSpec1.Id, 3,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecSource(JPathField("1"),
             DerefObjectStatic(Leaf(Source), JPathField("a"))))
           
@@ -727,8 +740,10 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         val result = grouper.merge(union) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(2).toJson
-            gs2Json <- map(3).toJson
+            group2  <- map(2)
+            group3  <- map(3)
+            gs1Json <- group2.toJson
+            gs2Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -816,7 +831,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         
         val spec1 = GroupingSource(
           table1,
-          SourceKey.Single, TransSpec1.Id, 2,
+          SourceKey.Single, Some(TransSpec1.Id), 2,
           GroupKeySpecAnd(
             GroupKeySpecSource(JPathField("1"),
               DerefObjectStatic(Leaf(Source), JPathField("a"))),
@@ -825,7 +840,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           
         val spec2 = GroupingSource(
           table2,
-          SourceKey.Single, TransSpec1.Id, 3,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecSource(JPathField("1"),
             DerefObjectStatic(Leaf(Source), JPathField("a"))))
           
@@ -838,8 +853,10 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         val result = grouper.merge(union) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(2).toJson
-            gs2Json <- map(3).toJson
+            group2  <- map(2)
+            group3  <- map(3)
+            gs1Json <- group2.toJson
+            gs2Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -927,7 +944,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         
         val spec1 = GroupingSource(
           table1,
-          SourceKey.Single, TransSpec1.Id, 2,
+          SourceKey.Single, Some(TransSpec1.Id), 2,
           GroupKeySpecOr(
             GroupKeySpecSource(JPathField("1"),
               DerefObjectStatic(Leaf(Source), JPathField("a"))),
@@ -936,7 +953,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           
         val spec2 = GroupingSource(
           table2,
-          SourceKey.Single, TransSpec1.Id, 3,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecSource(JPathField("1"),
             DerefObjectStatic(Leaf(Source), JPathField("a"))))
           
@@ -949,8 +966,10 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         val result = grouper.merge(union) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(2).toJson
-            gs2Json <- map(3).toJson
+            group2  <- map(2)
+            group3  <- map(3)
+            gs1Json <- group2.toJson
+            gs2Json <- group3.toJson
           } yield {
             
             keyJson must haveSize(1)
@@ -1124,7 +1143,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           
       val fooSpec = GroupingSource(
         fromJson(foo),
-        SourceKey.Single, TransSpec1.Id, 3,
+        SourceKey.Single, Some(TransSpec1.Id), 3,
         GroupKeySpecAnd(
           GroupKeySpecSource(
             JPathField("1"),
@@ -1135,14 +1154,14 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           
       val barSpec = GroupingSource(
         fromJson(bar),
-        SourceKey.Single, TransSpec1.Id, 4,
+        SourceKey.Single, Some(TransSpec1.Id), 4,
         GroupKeySpecSource(
           JPathField("1"),
           DerefObjectStatic(Leaf(Source), JPathField("a"))))
           
       val bazSpec = GroupingSource(
         fromJson(baz),
-        SourceKey.Single, TransSpec1.Id, 5,
+        SourceKey.Single, Some(TransSpec1.Id), 5,
         GroupKeySpecSource(
           JPathField("2"),
           DerefObjectStatic(Leaf(Source), JPathField("b"))))
@@ -1169,23 +1188,28 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           a mustNotEqual JNothing
           b mustNotEqual JNothing
           
-          val fooPJson = map(3).toJson.copoint
-          val barPJson = map(4).toJson.copoint
-          val bazPJson = map(5).toJson.copoint
-          
-          fooPJson must not(beEmpty)
-          barPJson must not(beEmpty)
-          bazPJson must not(beEmpty)
-          
-          val result = Stream(
-            JObject(
-              JField("a", a) ::
-              JField("b", b) ::
-              JField("foo", JNum(fooPJson.size)) ::
-              JField("bar", JNum(barPJson.size)) ::
-              JField("baz", JNum(bazPJson.size)) :: Nil))
-              
-          fromJson(result).point[M]
+          for {
+            group3 <- map(3)
+            group4 <- map(4)
+            group5 <- map(5)
+            fooPJson <- group3.toJson
+            barPJson <- group4.toJson
+            bazPJson <- group5.toJson
+          } yield {
+            fooPJson must not(beEmpty)
+            barPJson must not(beEmpty)
+            bazPJson must not(beEmpty)
+
+            val result = Stream(
+              JObject(
+                JField("a", a) ::
+                JField("b", b) ::
+                JField("foo", JNum(fooPJson.size)) ::
+                JField("bar", JNum(barPJson.size)) ::
+                JField("baz", JNum(bazPJson.size)) :: Nil))
+                
+            fromJson(result)
+          }
         }
         
         val forallJson = forallResult flatMap { _.toJson } copoint
@@ -1251,23 +1275,28 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           
           (a mustNotEqual JNothing) or (b mustNotEqual JNothing)
           
-          val fooPJson = map(3).toJson.copoint
-          val barPJson = map(4).toJson.copoint
-          val bazPJson = map(5).toJson.copoint
-          
-          (fooPJson must not(beEmpty)) or
-            (barPJson must not(beEmpty)) or
-            (bazPJson must not(beEmpty))
-          
-          val result = Stream(
-            JObject(
-              JField("a", a) ::
-              JField("b", b) ::
-              JField("foo", JNum(fooPJson.size)) ::
-              JField("bar", JNum(barPJson.size)) ::
-              JField("baz", JNum(bazPJson.size)) :: Nil))
-              
-          fromJson(result).point[M]
+          for {
+            fooP <- map(3)
+            barP <- map(4)
+            bazP <- map(5)
+            fooPJson <- fooP.toJson
+            barPJson <- barP.toJson
+            bazPJson <- bazP.toJson
+          } yield {
+            (fooPJson must not(beEmpty)) or
+              (barPJson must not(beEmpty)) or
+              (bazPJson must not(beEmpty))
+            
+            val result = Stream(
+              JObject(
+                JField("a", a) ::
+                JField("b", b) ::
+                JField("foo", JNum(fooPJson.size)) ::
+                JField("bar", JNum(barPJson.size)) ::
+                JField("baz", JNum(bazPJson.size)) :: Nil))
+                
+            fromJson(result)
+          }
         }
         
         val forallJson = forallResult flatMap { _.toJson } copoint
