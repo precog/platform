@@ -168,6 +168,10 @@ trait TableModule[M[+_]] extends FNModule {
     object TransSpec2 {
       val LeftId = Leaf(SourceLeft)
       val RightId = Leaf(SourceRight)
+
+      def DerefArray0(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(0))
+      def DerefArray1(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(1))
+      def DerefArray2(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(2))
     }
   
     sealed trait GroupKeySpec 
@@ -213,7 +217,7 @@ trait TableModule[M[+_]] extends FNModule {
     sealed trait GroupingSpec {
       def sources: Vector[GroupingSource] 
     }
-    
+
     /**
      * Definition for a single group set and its associated composite key part.
      *
@@ -221,7 +225,7 @@ trait TableModule[M[+_]] extends FNModule {
      * @param targetTrans The key which will be used by `merge` to access a particular subset of the target
      * @param groupKeySpec A composite union/intersect overlay on top of transspec indicating the composite key for this target set
      */
-    final case class GroupingSource(table: Table, idTrans: TransSpec1, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec) extends GroupingSpec {
+    final case class GroupingSource(table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupId: GroupId, groupKeySpec: GroupKeySpec) extends GroupingSpec {
       def sources: Vector[GroupingSource] = Vector(this)
     }
     
@@ -318,7 +322,7 @@ trait TableModule[M[+_]] extends FNModule {
      * @param grouping The group spec
      * @param body The evaluator, taking a ''map'' from a key to some table (representing a tic variable or group set)
      */
-    def merge(grouping: GroupingSpec)(body: (Table, GroupId => Table) => M[Table]): M[Table]
+    def merge(grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => M[Table]): M[Table]
   }
     
   trait TableLike { this: Table =>
@@ -370,6 +374,8 @@ trait TableModule[M[+_]] extends FNModule {
     def distinct(spec: TransSpec1): Table
 
     def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = sys.error("override me")
+
+    def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = sys.error("override me")
     
     def drop(n: Long): Table
     
