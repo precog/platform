@@ -256,7 +256,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   "grouping support" should {  
     import grouper._
     import grouper.Universe._
-    def constraint(str: String) = BindingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
+    def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
     def ticvars(str: String) = str.toSeq.map((c: Char) => JPathField(c.toString))
 
     "derive the universes of binding constraints" >> {
@@ -404,7 +404,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     }
 
     "binding constraints" >> {
-      import grouper.BindingConstraints._
+      import grouper.OrderingConstraints._
 
       "minimize" >> {
         "minimize to multiple sets" in {
@@ -451,6 +451,43 @@ trait ColumnarTableModuleSpec[M[+_]] extends
         }
       }
 
+      "find required sorts" >> {
+        "simple sort" in {
+          val abcd = MergeNode(ticvars("abcd").toSet, null)
+          val abc = MergeNode(ticvars("abc").toSet, null)
+          val ab = MergeNode(ticvars("ab").toSet, null)
+          val ac = MergeNode(ticvars("ac").toSet, null)
+          val a = MergeNode(ticvars("a").toSet, null)
+
+          val spanningGraph = findSpanningGraphs(edgeMap(Set(abcd, abc, ab, ac, a))).head
+
+          val requiredSorts = findRequiredSorts(spanningGraph)
+
+          requiredSorts(a) must_== Set(ticvars("a"))
+          requiredSorts(ac) must_== Set(ticvars("ac"))
+          requiredSorts(ab) must_== Set(ticvars("ab"))
+          (requiredSorts(abc), requiredSorts(abcd)) must beLike {
+            case (sabc, sabcd) =>
+              (sabc must_== Set(ticvars("abc")) and (sabcd must_== Set(ticvars("abc"), ticvars("ac"))))
+          }
+        }
+
+        "in a cycle" in {
+          val ab = MergeNode(ticvars("ab").toSet, null)
+          val ac = MergeNode(ticvars("ac").toSet, null)
+          val bc = MergeNode(ticvars("bc").toSet, null)
+
+          val spanningGraph = findSpanningGraphs(edgeMap(Set(ab, ac, bc))).head
+
+          val requiredSorts = findRequiredSorts(spanningGraph)
+
+          requiredSorts(ab) must_== Set(ticvars("a"), ticvars("b"))
+          requiredSorts(ac) must_== Set(ticvars("a"), ticvars("c"))
+          requiredSorts(bc) must_== Set(ticvars("b"), ticvars("c"))
+        }
+      }
+
+      /*
       "fix ordering" >> {
         "trivial case" in {
           fix(Set(constraint("a,b,c,d"))).map(_.toList) must_== Set(ticvars("abcd"))
@@ -485,10 +522,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends
           fix(minimized, Some(ticvars("ac"))) must throwA[RuntimeException]
         }
       }
+      */
     }
 
     "graph traversal" >> {
-      def norm(s: Set[BindingConstraint]) = s.map(_.ordering.toList)
+      def norm(s: Set[OrderingConstraint]) = s.map(_.ordering.toList)
 
       val abcd = MergeNode(ticvars("abcd").toSet, null)
       val abc = MergeNode(ticvars("abc").toSet, null)
@@ -496,6 +534,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       val ac = MergeNode(ticvars("ac").toSet, null)
       val a = MergeNode(ticvars("a").toSet, null)
 
+      /*
       "find underconstrained binding constraints" >> {
         "for a graph with a supernode" in {
           val allNodes = Random.shuffle(Set(abcd, abc, ab, ac, a))
@@ -512,9 +551,26 @@ trait ColumnarTableModuleSpec[M[+_]] extends
           norm(underconstrained(abc)) must_== norm(Set(constraint("abc")))
           norm(underconstrained(abcd)) must_== norm(Set(constraint("a,bcd"), constraint("ab,cd"), constraint("ac,bd"), constraint("abc,d")))
         }
+
+        "for a graph without a supernode" in {
+          val abd = MergeNode(ticvars("abd").toSet, null)
+          val allNodes = Random.shuffle(Set(abd, abc, ab))
+
+          val spanningForest = findSpanningGraphs(edgeMap(allNodes))
+
+          spanningForest must haveSize(1)
+
+          val underconstrained = spanningForest.head.underconstrained
+
+          norm(underconstrained(ab)) must_== norm(Set(constraint("ab")))
+          norm(underconstrained(abc)) must_== norm(Set(constraint("abc"), constraint("ab,c")))
+          norm(underconstrained(abd)) must_== norm(Set(constraint("abd"), constraint("ab,d")))
+        }
       }
+      */
     }
 
+/*
     "select constraint matching a set of binding constraints" >> {
       "a preferred match" in {
         val preferred = Set(ticvars("abc"), ticvars("abd"))
@@ -524,7 +580,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
           constraint("a,c,b")
         )
 
-        BindingConstraints.select(preferred, constraints) must beSome(ticvars("abc"))
+        OrderingConstraints.select(preferred, constraints) must beSome(ticvars("abc"))
       }
 
       "error on no match" in {
@@ -535,11 +591,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends
           constraint("a,c,b")
         )
 
-        BindingConstraints.select(preferred, constraints) must beNone
+        OrderingConstraints.select(preferred, constraints) must beNone
       }
     }
 
-/*
     "generate a trivial merge specification" in {
       // Query:
       // forall 'a 
