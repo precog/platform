@@ -24,6 +24,7 @@ import com.precog.yggdrasil.table._
 
 import blueeyes.json.JPath
 import org.joda.time.DateTime
+import com.weiglewilczek.slf4s.Logging
 
 import java.nio.ByteBuffer
 
@@ -37,7 +38,7 @@ object ColumnCodec {
  * This class is responsible for encoding and decoding a Seq[(ColumnRef,Column)]
  * into a byte array for serialization. It is *not* thread-safe.
  */
-class ColumnCodec(bufferSize: Int = (16 * 1024)) {
+class ColumnCodec(bufferSize: Int = (16 * 1024)) extends Logging {
   import CTypeMappings._
 
   private final val workBuffer = ByteBuffer.allocate(bufferSize)

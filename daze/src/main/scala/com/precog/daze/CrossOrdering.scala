@@ -52,7 +52,7 @@ trait CrossOrdering extends DAG {
       def inner(node: DepGraph): DepGraph = node match {
         case node @ SplitParam(loc, index) => SplitParam(loc, index)(splits(node.parent))
         
-        case node @ SplitGroup(loc, index, provenance) => SplitGroup(loc, index, provenance)(splits(node.parent))
+        case node @ SplitGroup(loc, index, identities) => SplitGroup(loc, index, identities)(splits(node.parent))
         
         case node @ Root(_, _) => node
         
@@ -121,8 +121,8 @@ trait CrossOrdering extends DAG {
           def sortLeft = Sort(left2, leftIndexes)
           def sortRight = Sort(right2, rightIndexes)
           
-          def sortLeftAux = Sort(left2, Vector(0 until left2.provenance.length: _*))
-          def sortRightAux = Sort(right2, Vector(0 until right2.provenance.length: _*))
+          def sortLeftAux = Sort(left2, Vector(0 until left2.identities.length: _*))
+          def sortRightAux = Sort(right2, Vector(0 until right2.identities.length: _*))
           
           (left2.sorting, leftPrefix, right2.sorting, rightPrefix) match {
             case (IdentitySort, true,  IdentitySort, true ) => Join(loc, op, IdentitySort, left2, right2)
@@ -180,8 +180,8 @@ trait CrossOrdering extends DAG {
           def sortTarget     = Sort(target2, targetIndexes)
           def sortBoolean    = Sort(boolean2, booleanIndexes)
 
-          def sortTargetAux  = Sort(target2, Vector(0 until target2.provenance.length: _*))
-          def sortBooleanAux = Sort(boolean2, Vector(0 until boolean2.provenance.length: _*))
+          def sortTargetAux  = Sort(target2, Vector(0 until target2.identities.length: _*))
+          def sortBooleanAux = Sort(boolean2, Vector(0 until boolean2.identities.length: _*))
           
           (target2.sorting, targetPrefix, boolean2.sorting, booleanPrefix) match {
             case (IdentitySort, true,  IdentitySort, true ) => Filter(loc, IdentitySort, target2, boolean2)
@@ -224,12 +224,12 @@ trait CrossOrdering extends DAG {
   }
 
   private def determineSort(left2: DepGraph, right2: DepGraph): (Vector[Int], Vector[Int]) = {
-    val leftPairs = left2.provenance.zipWithIndex filter {
-      case (p, i) => right2.provenance contains p
+    val leftPairs = left2.identities.zipWithIndex filter {
+      case (p, i) => right2.identities contains p
     }
     
-    val rightPairs = right2.provenance.zipWithIndex filter {
-      case (p, i) => left2.provenance contains p
+    val rightPairs = right2.identities.zipWithIndex filter {
+      case (p, i) => left2.identities contains p
     }
     
     val (_, leftIndexes) = leftPairs.unzip

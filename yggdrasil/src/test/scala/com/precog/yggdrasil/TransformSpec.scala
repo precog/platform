@@ -603,7 +603,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       
       val expected = sample.data flatMap {
         case jv if jv \ "value" \ "field" == JNothing => None
-        case _ => Some(JObject(JField("field", JString("foo")) :: Nil))
+        case _ => Some(JString("foo"))
       }
 
       results.copoint must_== expected

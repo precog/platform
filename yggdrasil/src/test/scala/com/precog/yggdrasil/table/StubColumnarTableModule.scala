@@ -156,24 +156,38 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
   }
 }
 
-// vim: set ts=4 sw=4 et:
 trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
   type Table = StubTable
 
   def table(slices: StreamT[M, Slice]): StubTable = new StubTable(slices)
 
+  type MemoContext = DummyMemoizationContext
+  def newMemoContext = new DummyMemoizationContext
+  
+  private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
+  private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
+  private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
+  
   class StubTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) { self: Table => 
-    private var initialIndices = collection.mutable.Map[Path, Int]()
-    private var currentIndex = 0
 
     import trans._
-    def sort(sortKet: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = {
+      // We use the sort transspec1 to compute a new table with a combination of the 
+      // original data and the new sort columns, referenced under the sortkey namespace
+      val tableWithSortKey = transform(ObjectConcat(Leaf(Source), WrapObject(sortKey, TableModule.paths.SortKey.name)))
+
+      implicit val jValueOrdering = blueeyes.json.xschema.DefaultOrderings.JValueOrdering
+
+      tableWithSortKey.toJson.map {
+        jvals => fromJson(jvals.toList.sorted.toStream)
+      }
+    }
     
     override def load(uid: UserId, jtpe: JType) = {
       self.toJson map { events =>
         fromJson {
-          events.toStream map (_ \ "value") flatMap {
-            case JString(pathStr) => 
+          events.toStream flatMap {
+            case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
               val path = Path(pathStr)
         
               val index = initialIndices get path getOrElse {
@@ -190,6 +204,7 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
               parsed zip (Stream from index) map {
                 case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
               }
+            }
 
             case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
           }

@@ -797,6 +797,16 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("a / b - c") must beLike { case Sub(_, Div(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
     }
     
+    "favor multiplication/division according to left/right ordering" in {
+      parse("1 * 2 / 3") must beLike { case Div(_, Mul(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 / 2 * 3") must beLike { case Mul(_, Div(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+    }
+    
+    "favor addition/subtraction according to left/right ordering" in {
+      parse("1 + 2 - 3") must beLike { case Sub(_, Add(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 - 2 + 3") must beLike { case Add(_, Sub(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+    }
+    
     "favor addition/subtraction over inequality operators" in {
       parse("a < b + c") must beLike { case Lt(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Add(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
       parse("a <= b + c") must beLike { case LtEq(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Add(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
@@ -817,6 +827,18 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("a >= b - c") must beLike { case GtEq(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Sub(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
       parse("a - b > c") must beLike { case Gt(_, Sub(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
       parse("a - b >= c") must beLike { case GtEq(_, Sub(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+    }
+    
+    "favor inequality operators according to left/right ordering" in {
+      parse("1 < 2 <= 3") must beLike { case LtEq(_, Lt(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 < 2 > 3") must beLike { case Gt(_, Lt(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 < 2 >= 3") must beLike { case GtEq(_, Lt(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      
+      parse("1 <= 2 < 3") must beLike { case Lt(_, LtEq(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 > 2 < 3") must beLike { case Lt(_, Gt(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 >= 2 < 3") must beLike { case Lt(_, GtEq(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      
+      // note: doesn't actually test *every* case, but it's hard to imagine someone introducing a bug here
     }
     
     "favor inequality operators over equality operators" in {
@@ -841,6 +863,11 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("a >= b != c") must beLike { case NotEq(_, GtEq(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
     }
     
+    "favor equality operators according to left/right ordering" in {
+      parse("1 = 2 != 3") must beLike { case NotEq(_, Eq(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 != 2 = 3") must beLike { case Eq(_, NotEq(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+    }
+    
     "favor equality operators over and/or" in {
       parse("a & b = c") must beLike { case And(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Eq(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
       parse("a | b = c") must beLike { case Or(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Eq(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
@@ -853,9 +880,46 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("a != b | c") must beLike { case Or(_, NotEq(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
     }
     
-    "favor and/or operators over new" in {
-      parse("new a & b") must beLike { case New(_, And(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector()))) => ok }
-      parse("new a | b") must beLike { case New(_, Or(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector()))) => ok }
+    "favor and/or according to left/right ordering" in {
+      parse("1 & 2 | 3") must beLike { case Or(_, And(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 | 2 & 3") must beLike { case And(_, Or(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+    }
+    
+    "favor and/or operators over union/intersect/diff" in {
+      parse("a union b & c") must beLike { case Union(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), And(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
+      parse("a intersect b & c") must beLike { case Intersect(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), And(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
+      parse("a difference b & c") must beLike { case Difference(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), And(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
+      parse("a & b union c") must beLike { case Union(_, And(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+      parse("a & b intersect c") must beLike { case Intersect(_, And(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+      parse("a & b difference c") must beLike { case Difference(_, And(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+      
+      parse("a union b | c") must beLike { case Union(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Or(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
+      parse("a intersect b | c") must beLike { case Intersect(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Or(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
+      parse("a difference b | c") must beLike { case Difference(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Or(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
+      parse("a | b union c") must beLike { case Union(_, Or(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+      parse("a | b intersect c") must beLike { case Intersect(_, Or(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+      parse("a | b difference c") must beLike { case Difference(_, Or(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+    }
+    
+    "favor union/intersect/diff according to left/right ordering" in {
+      parse("1 union 2 intersect 3") must beLike { case Intersect(_, Union(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 intersect 2 union 3") must beLike { case Union(_, Intersect(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      
+      parse("1 union 2 difference 3") must beLike { case Difference(_, Union(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 difference 2 union 3") must beLike { case Union(_, Difference(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+    }
+    
+    "favor union/intersect/diff over with" in {
+      parse("a with b union c") must beLike { case With(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Union(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
+      parse("a with b intersect c") must beLike { case With(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Intersect(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
+      parse("a with b difference c") must beLike { case With(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Difference(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
+      parse("a union b with c") must beLike { case With(_, Union(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+      parse("a intersect b with c") must beLike { case With(_, Intersect(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+      parse("a difference b with c") must beLike { case With(_, Difference(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+    }
+    
+    "favor with over new" in {
+      parse("new a with b") must beLike { case New(_, With(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector()))) => ok }
     }
     
     "favor new over where" in {

@@ -23,12 +23,14 @@ package table
 import com.precog.common.Path
 import com.precog.common.VectorCase
 import com.precog.bytecode.JType
+import com.precog.yggdrasil.util._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
+import com.weiglewilczek.slf4s.Logging
 
 import scala.annotation.tailrec
 import scala.collection.BitSet
@@ -140,6 +142,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
   }
+  
+  type MemoContext = DummyMemoizationContext
+  def newMemoContext = new DummyMemoizationContext
 
   def table(slices: StreamT[M, Slice]) = new UnloadableTable(slices)
 
@@ -176,6 +181,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     "in cogroup" >> {
       "perform a simple cogroup" in testSimpleCogroup
       "cogroup across slice boundaries" in testCogroupSliceBoundaries
+      "error on unsorted inputs" in testUnsortedInputs
 
       "survive pathology 1" in testCogroupPathology1
       "survive pathology 2" in testCogroupPathology2
@@ -747,6 +753,14 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] {
   implicit def M = Trampoline.trampolineMonad
   implicit def coM = Trampoline.trampolineMonad
+
+  type YggConfig = IdSourceConfig
+  val yggConfig = new IdSourceConfig {
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
+    }
+  }
 }
 
 

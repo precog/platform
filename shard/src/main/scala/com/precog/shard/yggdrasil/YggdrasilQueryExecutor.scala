@@ -37,6 +37,7 @@ import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.util._
 
 import com.precog.util.FilesystemFileOps
 

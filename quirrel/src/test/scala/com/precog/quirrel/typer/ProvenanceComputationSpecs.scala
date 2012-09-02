@@ -498,6 +498,11 @@ object ProvenanceComputationSpecs extends Specification
           case DynamicProvenance(_) => ok
         }
         tree.errors must beEmpty
+      }      
+      {
+        val tree = compile("""load("/clicks")""")
+        tree.provenance mustEqual StaticProvenance("/clicks")
+        tree.errors must beEmpty
       }
     }
     

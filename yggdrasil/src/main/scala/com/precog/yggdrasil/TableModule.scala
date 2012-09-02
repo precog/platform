@@ -385,12 +385,43 @@ trait TableModule[M[+_]] extends FNModule {
 
     def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = sys.error("override me")
     
-    def drop(n: Long): Table
+    def takeRange(startIndex: Long, numberToTake: Long): Table
     
-    def take(n: Long): Table
-    
-    def takeRight(n: Long): Table
-
     def toJson: M[Iterable[JValue]]
+  }
+
+  type MemoId
+  type MemoContext <: MemoizationContext
+  
+  def newMemoContext : MemoContext 
+
+  def withMemoizationContext[A](f: MemoContext => A): A = {
+    val ctx = newMemoContext
+    try {
+      f(ctx)
+    } finally {
+      ctx.purge()
+    }
+  }
+
+  trait MemoizationContext {
+    import trans._
+    
+    def memoize(table: Table, memoId: MemoId): M[Table]
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId): M[Table]
+    
+    def expire(memoId: MemoId): Unit
+    def purge(): Unit
+  }
+
+  class DummyMemoizationContext extends MemoizationContext {
+    import trans._
+    
+    def memoize(table: Table, memoId: MemoId): M[Table] = M.point(table)
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId): M[Table] =
+      table.sort(sortKey, sortOrder)
+    
+    def expire(memoId: MemoId): Unit = ()
+    def purge(): Unit = ()
   }
 }

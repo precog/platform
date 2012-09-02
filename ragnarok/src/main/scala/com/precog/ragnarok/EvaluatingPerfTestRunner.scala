@@ -22,10 +22,11 @@ package ragnarok
 
 import common.Path
 
-import daze.{ Evaluator, EvaluatorConfig, IdSourceScannerModule }
+import daze.{ Evaluator, EvaluatorConfig }
 
 import yggdrasil.{ StorageModule, BaseConfig, IdSource }
 import yggdrasil.{ Identities, SValue, SEvent }
+import yggdrasil.util._
 import yggdrasil.serialization._
 
 import muspelheim.ParseEvalStack

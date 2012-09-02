@@ -38,6 +38,7 @@ import yggdrasil.actor._
 import yggdrasil.memoization._
 import yggdrasil.serialization._
 import yggdrasil.table._
+import yggdrasil.util._
 import muspelheim._
 
 import org.specs2.mutable._
@@ -74,7 +75,9 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
 
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  class ParseEvalStackSpecConfig extends BaseConfig with DatasetConsumersConfig {
+  type YggConfig <: DatasetConsumersConfig with IdSourceConfig
+  
+  class ParseEvalStackSpecConfig extends BaseConfig with DatasetConsumersConfig with IdSourceConfig {
     logger.trace("Init yggConfig")
     val config = Configuration parse {
       Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }

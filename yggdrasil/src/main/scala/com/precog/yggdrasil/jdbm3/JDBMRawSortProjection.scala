@@ -97,6 +97,8 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
 
         ColumnCodec.readOnly.readSortColumns(rowKey, keyColumns)
       }
+
+      load()
     }
 
     DB.close() // creating the slice should have already read contents into memory

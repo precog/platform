@@ -160,6 +160,21 @@ trait CogroupSpec[M[+_]] extends TableModuleSpec[M] {
     jsonResult.copoint must containAllOf(expected).only
   }
 
+  def testUnsortedInputs = {
+    def recl(i: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JString(i.toString)))))
+    def recr(i: Int) = toRecord(VectorCase(i), JObject(List(JField("right", JString(i.toString)))))
+    def recBoth(i: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JString(i.toString)), JField("right", JString(i.toString)))))
+
+    val ltable  = fromSample(SampleData(Stream(recl(0), recl(1))))
+    val rtable  = fromSample(SampleData(Stream(recr(1), recr(0))))
+
+    toJson(ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
+      Leaf(Source),
+      Leaf(Source),
+      ObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(ObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
+    )).copoint must throwAn[Exception]
+  }
+
   def testCogroupPathology1 = {
     import JsonParser.parse
     val s1 = SampleData(Stream(toRecord(VectorCase(1, 1, 1), parse("""{ "a":[] }"""))))

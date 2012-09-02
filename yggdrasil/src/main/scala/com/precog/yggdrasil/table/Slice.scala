@@ -36,6 +36,10 @@ import scalaz.syntax.foldable._
 import scalaz.syntax.semigroup._
 import scalaz.std.iterable._
 
+trait RowComparator {
+  def compare(i1: Int, i2: Int): Ordering
+}
+
 trait Slice { source =>
   import Slice._
   import TableModule._
@@ -52,6 +56,8 @@ trait Slice { source =>
   }
 
   lazy val valueColumns: Set[Column] = columns collect { case (ColumnRef(JPath.Identity, _), col) => col } toSet
+  
+  def isDefinedAt(row: Int) = columns.values.exists(_.isDefinedAt(row))
 
   def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
@@ -66,6 +72,49 @@ trait Slice { source =>
     val size = source.size
     val columns = source.columns flatMap {
       case (ref, col) => f(col) map { (ref, _ ) }  
+    }
+  }
+  
+  def definedConst(value: CValue): Slice = new Slice {
+    val size = source.size
+    val columns = {
+      Map(
+        value match {
+          case CString(s) => (ColumnRef(JPath.Identity, CString), new StrColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = s
+          })
+          case CBoolean(b) => (ColumnRef(JPath.Identity, CBoolean), new BoolColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = b
+          })
+          case CLong(l) => (ColumnRef(JPath.Identity, CLong), new LongColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = l
+          })
+          case CDouble(d) => (ColumnRef(JPath.Identity, CDouble), new DoubleColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = d
+          })
+          case CNum(n) => (ColumnRef(JPath.Identity, CNum), new NumColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = n
+          })
+          case CDate(d) => (ColumnRef(JPath.Identity, CDate), new DateColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = d
+          })
+          case CNull => (ColumnRef(JPath.Identity, CNull), new NullColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+          })
+          case CEmptyObject => (ColumnRef(JPath.Identity, CEmptyObject), new EmptyObjectColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+          })
+          case CEmptyArray => (ColumnRef(JPath.Identity, CEmptyArray), new EmptyArrayColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+          })
+        }
+      )
     }
   }
 
@@ -219,13 +268,13 @@ trait Slice { source =>
         val acc = new ArrayIntList
         
         def findSelfDistinct(prevRow: Int, curRow: Int) = {
-          val selfComparator = rowComparator(filter, filter)(_.columns.keys.toList.sorted)
+          val selfComparator = rowComparatorFor(filter, filter)(_.columns.keys.toList.sorted)
         
           @tailrec
           def findSelfDistinct0(prevRow: Int, curRow: Int) : ArrayIntList = {
             if(curRow >= filter.size) acc
             else {
-              val retain = selfComparator(prevRow, curRow) != EQ
+              val retain = selfComparator.compare(prevRow, curRow) != EQ
               if(retain) acc.add(curRow)
               findSelfDistinct0(if(retain) curRow else prevRow, curRow+1)
             }
@@ -235,13 +284,13 @@ trait Slice { source =>
         }
 
         def findStraddlingDistinct(prev: Slice, prevRow: Int, curRow: Int) = {
-          val straddleComparator = rowComparator(prev, filter)(_.columns.keys.toList.sorted) 
+          val straddleComparator = rowComparatorFor(prev, filter)(_.columns.keys.toList.sorted) 
 
           @tailrec
           def findStraddlingDistinct0(prevRow: Int, curRow: Int): ArrayIntList = {
             if(curRow >= filter.size) acc
             else {
-              val retain = straddleComparator(prevRow, curRow) != EQ
+              val retain = straddleComparator.compare(prevRow, curRow) != EQ
               if(retain) acc.add(curRow)
               if(retain)
                 findSelfDistinct(curRow, curRow+1)
@@ -305,6 +354,15 @@ trait Slice { source =>
       val columns = source.columns mapValues { col => (col |> cf.util.Remap({case i if i < size => i + idx})).get }
     }
   )
+
+  def takeRange(startIndex: Int, numberToTake: Int): Slice = {
+    new Slice {
+      val size = numberToTake
+      val columns = source.columns mapValues { 
+        col => (col |> cf.util.Remap( { case i if i < numberToTake => i + startIndex} )).get 
+      }
+    }
+  }
 
   def append(other: Slice): Slice = {
     new Slice {
@@ -410,97 +468,113 @@ object Slice {
     xs(j) = temp;
   }
 
-  def rowComparator(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): (Int, Int) => Ordering = {
-    def compare0(cols: (Column, Column)): (Int, Int) => Ordering = {
+  def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): RowComparator = {
+    def compare0(cols: (Column, Column)): RowComparator = {
       (cols: @unchecked) match {
-        case (c1: BoolColumn, c2: BoolColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: BoolColumn, c2: BoolColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow) 
             if (thisVal == c2(thatRow)) EQ else if (thisVal) GT else LT
           }
+        }
 
-        case (c1: LongColumn, c2: LongColumn) => 
-          val ord = Order[Long]
-          (thisRow: Int, thatRow: Int) => {
-            ord.order(c1(thisRow), c2(thatRow))
-          }
-
-        case (c1: LongColumn, c2: DoubleColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: LongColumn, c2: LongColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = c2(thatRow)
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: LongColumn, c2: NumColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: LongColumn, c2: DoubleColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = c2(thatRow)
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: DoubleColumn, c2: LongColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: LongColumn, c2: NumColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = c2(thatRow)
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: DoubleColumn, c2: DoubleColumn) => 
-          val ord = Order[Double]
-          (thisRow: Int, thatRow: Int) => {
-            ord.order(c1(thisRow), c2(thatRow))
+        case (c1: DoubleColumn, c2: LongColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
+            val thisVal = c1(thisRow)
+            val thatVal = c2(thatRow)
+            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: DoubleColumn, c2: NumColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: DoubleColumn, c2: DoubleColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
+            val thisVal = c1(thisRow)
+            val thatVal = c2(thatRow)
+            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+          }
+        }
+
+        case (c1: DoubleColumn, c2: NumColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = BigDecimal(c1(thisRow))
             val thatVal = c2(thatRow)
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: NumColumn, c2: LongColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: NumColumn, c2: LongColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = BigDecimal(c2(thatRow))
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: NumColumn, c2: DoubleColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: NumColumn, c2: DoubleColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = BigDecimal(c2(thatRow))
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: NumColumn, c2: NumColumn) => 
+        case (c1: NumColumn, c2: NumColumn) => new RowComparator {
           val ord = Order[BigDecimal]
-          (thisRow: Int, thatRow: Int) => {
+          def compare(thisRow: Int, thatRow: Int) = {
             ord.order(c1(thisRow), c2(thatRow))
           }
+        }
 
-
-        case (c1: StrColumn, c2: StrColumn) => 
+        case (c1: StrColumn, c2: StrColumn) => new RowComparator {
           val ord = Order[String]
-          (thisRow: Int, thatRow: Int) => {
+          def compare(thisRow: Int, thatRow: Int) = {
             ord.order(c1(thisRow), c2(thatRow))
           }
+        }
 
-        case (c1: DateColumn, c2: DateColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: DateColumn, c2: DateColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = c2(thatRow)
             if (thisVal isAfter thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => 
-          (thisRow: Int, thatRow: Int) => EQ
+        case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = EQ
+        }
 
-        case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => 
-          (thisRow: Int, thatRow: Int) => EQ
+        case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = EQ
+        }
 
-        case (c1: NullColumn, c2: NullColumn) => 
-          (thisRow: Int, thatRow: Int) => EQ
+        case (c1: NullColumn, c2: NullColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = EQ
+        }
       }
     }
 
@@ -514,36 +588,38 @@ object Slice {
       if (i == columns.length) -1 else i
     }
 
-    @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): (Int, Int) => Ordering = {
+    @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): RowComparator = {
       val array1 = l1.map(s1.columns).toArray
       val array2 = l2.map(s2.columns).toArray
 
       // Build an array of pairwise comparator functions for later use
-      val comparators = (for {
+      val comparators: Array[RowComparator] = (for {
         i1 <- 0 until array1.length
         i2 <- 0 until array2.length
       } yield compare0(array1(i1), array2(i2))).toArray
 
-      (i: Int, j: Int) => {
-        val first1 = firstDefinedIndexFor(array1, i)
-        val first2 = firstDefinedIndexFor(array2, j)
+      new RowComparator {
+        def compare(i: Int, j: Int) = {
+          val first1 = firstDefinedIndexFor(array1, i)
+          val first2 = firstDefinedIndexFor(array2, j)
 
-        // In the following, undefined always sorts LT defined values
-        if (first1 == -1 && first2 == -1) {
-          EQ
-        } else if (first1 == -1) {
-          LT
-        } else if (first2 == -1) {
-          GT
-        } else {
-          // We have the indices, so use it to look up the comparator for the rows
-          comparators(first1 * array2.length + first2)(i, j)
+          // In the following, undefined always sorts LT defined values
+          if (first1 == -1 && first2 == -1) {
+            EQ
+          } else if (first1 == -1) {
+            LT
+          } else if (first2 == -1) {
+            GT
+          } else {
+            // We have the indices, so use it to look up the comparator for the rows
+            comparators(first1 * array2.length + first2).compare(i, j)
+          }
         }
       }
     }
 
     @inline @tailrec
-    def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[(Int, Int) => Ordering]): List[(Int, Int) => Ordering] = (l1, l2) match {
+    def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[RowComparator]): List[RowComparator] = (l1, l2) match {
       case (h1 :: t1, h2 :: t2) if h1.selector == h2.selector => {
         val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
         val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
@@ -580,16 +656,20 @@ object Slice {
       case (h1 :: t1, h2 :: t2) => sys.error("selector guard failure in pairColumns")
     }
 
-    (i1: Int, i2: Int) => {
-      @inline @tailrec def compare1(l: List[(Int, Int) => Ordering]): Ordering = l match {
-        case h :: t => 
-          val intermediateOrder = h(i1, i2)
-          if (intermediateOrder == EQ) compare1(t) else intermediateOrder
+    val comparators: Array[RowComparator] = pairColumns(refs1, refs2, Nil).toArray
 
-        case Nil => EQ
+    new RowComparator {
+      def compare(i1: Int, i2: Int) = {
+        var i = 0
+        var result: Ordering = EQ
+
+        while (i < comparators.length && result == EQ) {
+          result = comparators(i).compare(i1, i2)
+          i += 1
+        }
+        
+        result
       }
-
-      compare1(pairColumns(refs1, refs2, Nil))
     }
   } 
 }
