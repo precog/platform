@@ -36,9 +36,15 @@ object TableModule {
     val Group = JPathField("group")
     val SortKey = JPathField("sortkey")
   }  
+
+  sealed trait Definedness
+  case object AnyDefined extends Definedness
+  case object AllDefined extends Definedness
 }
 
 trait TableModule[M[+_]] extends FNModule {
+  import TableModule._
+
   type UserId
   type GroupId
   type Scanner
@@ -107,6 +113,8 @@ trait TableModule[M[+_]] extends FNModule {
     // and have the constant value wherever a row provided by the target transspec has at least one member
     // that is not undefined
     case class ConstLiteral[+A <: SourceType](value: CValue, target: TransSpec[A]) extends TransSpec[A]
+
+    case class FilterDefined[+A <: SourceType](source: TransSpec[A], definedFor: TransSpec[A], definedness: Definedness) extends TransSpec[A]
   
     type TransSpec1 = TransSpec[Source.type]
 

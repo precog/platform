@@ -38,6 +38,7 @@ import scalaz.std.iterable._
 
 trait Slice { source =>
   import Slice._
+  import TableModule._
 
   def size: Int
   def isEmpty: Boolean = size == 0
@@ -183,12 +184,19 @@ trait Slice { source =>
     }
   }
 
-  def compact(filter: Slice): Slice = {
+  def compact(filter: Slice, definedness: Definedness): Slice = {
     new Slice {
-      lazy val retained =
-        (0 until filter.size).foldLeft(new ArrayIntList) {
-          case (acc, i) => if(filter.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
-        }
+      lazy val retained = definedness match {
+        case AnyDefined =>
+          (0 until filter.size).foldLeft(new ArrayIntList) {
+            case (acc, i) => if (filter.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
+          }
+
+        case AllDefined =>
+          (0 until filter.size).foldLeft(new ArrayIntList) {
+            case (acc, i) => if (filter.columns.values.forall(_.isDefinedAt(i))) acc.add(i) ; acc
+          }
+      }
 
       lazy val size = retained.size
       lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }

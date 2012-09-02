@@ -55,6 +55,7 @@ import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 
 trait ColumnarTableModule[M[+_]] extends TableModule[M] {
+  import TableModule._
   import trans._
   import trans.constants._
 
@@ -225,7 +226,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     }
 
     def compact(spec: TransSpec1): Table = {
-      table(transformStream((SliceTransform.identity(()) zip composeSliceTransform(spec))(_ compact _), slices)).normalize
+      transform(FilterDefined(Leaf(Source), spec, AnyDefined)).normalize
     }
 
     private def map0(f: Slice => Slice): SliceTransform1[Unit] = SliceTransform1[Unit]((), Function.untupled(f.second[Unit]))
@@ -580,6 +581,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         case ArraySwap(source, index) =>
           composeSliceTransform2(source) map {
             _ arraySwap index 
+          }
+
+        case FilterDefined(source, definedFor, definedness) =>
+          val sourceTransform = composeSliceTransform2(source)
+          val keyTransform = composeSliceTransform2(definedFor)
+
+          sourceTransform.zip(keyTransform) { (s1, s2) =>
+            s1.compact(s2, definedness)
           }
       }
       
@@ -1131,51 +1140,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       }
 
       val rootNode = (edgesFor.toList maxBy { case (_, edges) => edges.size })._1
-      
-      /*
-      // A depth-first traversal of merge edges that results in a set of binding constraints for each node.
-      // These binding constraints may be underconstrained (i.e. an element of the constraint sequence
-      // may have arity > 1, so a second pass from the top down will be necessary to determine a fixed
-      // ordering that then gets propagated downward.
-      lazy val underconstrained: Map[MergeNode, Set[OrderingConstraint]] = {
-        def find0(node: MergeNode, visited: Set[MergeNode], graph: Map[MergeNode, Set[MergeEdge]], acc: Map[MergeNode, Set[OrderingConstraint]]): Map[MergeNode, Set[OrderingConstraint]] = {
-
-          if (graph.get(node).forall(_.isEmpty)) {
-            acc += (node -> Set(OrderingConstraint(Seq(node.keys))))
-          } else {
-            val outbound = graph(node)
-
-            // for all outbound edges, visit the remote node collecting sets of OrderingConstraints
-            // associated with the edge that produced the set
-            val remoteNodes: Set[MergeNode] = outbound map {
-              case MergeEdge(`node`, other) => other
-              case MergeEdge(other, `node`) => other
-            }
-
-            (remoteNodes diff visited).map(find0(other, visited + node, graph, acc))
-            
-            
-            // compute all compatible OrderingConstraints between this node's key set and the constraints
-            // associated with each edge
-            val nodeConstraints: Set[OrderingConstraint] = edgeConstraints flatMap {
-              case (other, constraints) => 
-                // the computeCompatible call here should never return None; if it does, then the 
-                // edge should have been pruned from the graph in the first place.
-                constraints(other) map { 
-                  _ computeCompatible node.keys 
-                }
-            }
-
-            //Now, we need to compute the minimal disjoint set of constraints from the node constraints.
-            //Note that the edge information is irrelevant; we can always find the edge constraints because
-            //they are exactly the same as the constraints on the node at the other end of the edge.
-            edgeConstraints.map(_._2).suml + (node -> OrderingConstraints.minimize(nodeConstraints))
-          }
-        }
-
-        find0(rootNode, edgesFor)
-      } 
-      */
     }
 
     case class Universe(bindings: List[Binding]) {
@@ -1190,42 +1154,80 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       }
     }
 
-    case class OrderingConstraint(ordering: Seq[Set[TicVar]]) {
-      /*
-      //
-      // ordering: [{'a, 'b, 'c}]
-      //           [{'a, 'b}, {'c}]
-      //           [{'b}, {'a}, {'c}]
-      //
-      // keys: {'a, 'b}
-      //
-      final def computeCompatible(keys: Set[TicVar]): OrderingConstraint = {
-        @tailrec def computeCompatible0(keys: Set[TicVar], tail: Seq[Set[TicVar]], acc: Seq[Set[TicVar]]): OrderingConstraint = {
-          if (tail.isEmpty) {
-            // no more constraints are imposed by the existing constraint sequence, so we can just tack on the remaining key set
-            // and be done
-            OrderingConstraint(acc :+ keys)
-          } else {
-            val remainder = keys diff tail.head
-            val intersection = tail.head intersect keys
-            if (remainder.isEmpty && intersection.nonEmpty) {
-              // no need to retain the rest of the tail, since the keys that form the restriction
-              // are all that count
-              OrderingConstraint(acc :+ intersection)
-            } else if ((tail.head diff keys).isEmpty && intersection.nonEmpty) { 
-              // the head of the tail is entirely contained in the key set, so recurse on the remainder
-              computeCompatible(remainder, tail.tail, acc :+ tail.head)
-            } else {
-              OrderingConstraint(acc :+ remainder)
-            } 
+    object Universe {
+      def allEdges(nodes: collection.Set[MergeNode]): collection.Set[MergeEdge] = {
+        for {
+          l <- nodes
+          r <- nodes
+          if l != r
+          sharedKey = l.keys intersect r.keys
+          if sharedKey.nonEmpty
+        } yield {
+          MergeEdge(l, r)
+        }
+      }
+
+      def edgeMap(nodes: collection.Set[MergeNode]): Map[MergeNode, Set[MergeEdge]] = {
+        allEdges(nodes).foldLeft(nodes.map(n => n -> Set.empty[MergeEdge]).toMap) { 
+          case (acc, edge @ MergeEdge(a, b)) => acc + (a -> (acc.getOrElse(a, Set()) + edge)) + (b -> (acc.getOrElse(b, Set()) + edge))
+        } 
+      }
+
+      // a universe is a conjunction of binding clauses, which must contain no disjunctions
+      def sources(spec: GroupKeySpec): Seq[GroupKeySpecSource] = (spec: @unchecked) match {
+        case GroupKeySpecAnd(left, right) => sources(left) ++ sources(right)
+        case src: GroupKeySpecSource => Vector(src)
+      }
+
+      // An implementation of our algorithm for finding a minimally connected set of graphs
+      def findSpanningGraphs(outbound: Map[MergeNode, Set[MergeEdge]]): Set[MergeGraph] = {
+        def isConnected(from: MergeNode, to: MergeNode, outbound: Map[MergeNode, Set[MergeEdge]], constraintSet: Set[TicVar]): Boolean = {
+          outbound.getOrElse(from, Set()).exists {
+            case edge @ MergeEdge(a, b) => 
+              a == to || b == to ||
+              {
+                val other = if (a == from) b else a
+                // the other node's keys must be a superset of the constraint set we're concerned with in order to traverse it.
+                ((other.keys & constraintSet) == constraintSet) && {
+                  val pruned = outbound mapValues { _ - edge }
+                  isConnected(other,to, pruned, constraintSet)
+                }
+              }
           }
         }
 
-        computeCompatible0(keys, ordering, Vector())
+        def find0(outbound: Map[MergeNode, Set[MergeEdge]], edges: Set[MergeEdge]): Map[MergeNode, Set[MergeEdge]] = {
+          if (edges.isEmpty) {
+            outbound
+          } else {
+            val edge = edges.head
+
+            // node we're searching from
+            val fromNode = edge.a
+            val toNode = edge.b
+
+            val pruned = outbound mapValues { _ - edge }
+
+            find0(if (isConnected(fromNode, toNode, pruned, edge.keys)) pruned else outbound, edges.tail)
+          }
+        }
+
+        def partition(in: Map[MergeNode, Set[MergeEdge]]): Set[MergeGraph] = {
+          in.values.flatten.foldLeft(in.keySet map { k => MergeGraph(Set(k)) }) {
+            case (acc, edge @ MergeEdge(a, b)) => 
+              val g1 = acc.find(_.nodes.contains(a)).get
+              val g2 = acc.find(_.nodes.contains(b)).get
+
+              val resultGraph = g1.join(g2, edge)
+              acc - g1 - g2 + resultGraph
+          }
+        }
+
+        partition(find0(outbound, outbound.values.flatten.toSet))
       }
-      */
+    }
 
-
+    case class OrderingConstraint(ordering: Seq[Set[TicVar]]) {
       // Fix this binding constraint into a sort order. Any non-singleton TicVar sets will simply
       // be convered into an arbitrary sequence
       lazy val fixed = ordering.flatten
@@ -1283,233 +1285,60 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
         reduce(constraints, Set())
       }
-
-      // Choose a set of strict orderings for the tic variables involved in the specified binding constraints.
-      // If a hint is specified, then the hinted sequence must be represented in the resulting set of constraints 
-      // by a sequence that is a prefix of the hint. We use a prefix because the graph is traversed in order
-      // from largest number of tic variables per node to least, so as we choose a set of fixed constraints
-      // to pass in the downward traversal, we must be sure that the constraints at the current node are
-      // respected.
-      /*
-      def fix(constraints: Set[OrderingConstraint], hint: Option[Seq[TicVar]] = None): Set[Seq[TicVar]] = {
-        val original = minimize(constraints)
-        // Minimize the constraints, possibly including the hint, then flatten the minimal constraints into Seqs
-        val newMin = minimize(hint.map { s => original + OrderingConstraint(s.map(Set(_))) }.getOrElse(original))
-        
-        if (newMin.size <= original.size) {
-          newMin.map(_.ordering.flatten) 
-        } else {
-          sys.error("Hint could not be respected during fix. This indicates a bug in the grouping algorithm.")
-        }
-      }
-
-      def select(candidates: Set[Seq[TicVar]], among: Set[OrderingConstraint]): Option[Seq[TicVar]] = {
-        def isCompatible(seq: Seq[TicVar], constraint: Seq[Set[TicVar]]): Boolean = {
-          seq.isEmpty || 
-          ( constraint.nonEmpty && 
-            constraint.head.contains(seq.head) && 
-            {
-              val remainder = (constraint.head - seq.head)
-              isCompatible(seq.tail, if (remainder.nonEmpty) remainder +: constraint.tail else constraint.tail) 
-            } )
-        }
-
-        (for (seq <- candidates; constraint <- among if isCompatible(seq, constraint.ordering)) yield seq).headOption
-      }
-      */
     }
 
-    object Universe {
-      def allEdges(nodes: collection.Set[MergeNode]): collection.Set[MergeEdge] = {
-        for {
-          l <- nodes
-          r <- nodes
-          if l != r
-          sharedKey = l.keys intersect r.keys
-          if sharedKey.nonEmpty
-        } yield {
-          MergeEdge(l, r)
+    // todo: Maybe make spec an ArrayConcat?
+    case class GroupKeyTrans(spec: TransSpec1, keyOrder: Seq[TicVar]) {
+      import GroupKeyTrans._
+
+      def alignTo(targetOrder: Seq[TicVar]): GroupKeyTrans = {
+        if (keyOrder == targetOrder) this else {
+          val keyMap = targetOrder.zipWithIndex.toMap
+          val newOrder = keyOrder.sortBy(key => keyMap.getOrElse(key, Int.MaxValue))
+
+          val keyComponents = newOrder.zipWithIndex map { 
+            case (ticvar, i) => reindex(spec, keyOrder.indexOf(ticvar), i)
+          }
+
+          GroupKeyTrans(
+            ObjectConcat(keyComponents: _*),
+            newOrder
+          )
         }
       }
 
-      def edgeMap(nodes: collection.Set[MergeNode]): Map[MergeNode, Set[MergeEdge]] = {
-        allEdges(nodes).foldLeft(nodes.map(n => n -> Set.empty[MergeEdge]).toMap) { 
-          case (acc, edge @ MergeEdge(a, b)) => acc + (a -> (acc.getOrElse(a, Set()) + edge)) + (b -> (acc.getOrElse(b, Set()) + edge))
-        } 
+      def prefixTrans(length: Int): TransSpec1 = {
+        if (keyOrder.size == length) spec else {
+          ObjectConcat((0 until length) map { i => reindex(spec, i, i) }: _*)
+        }
       }
+    }
 
-      // a universe is a conjunction of binding clauses, which must contain no disjunctions
-      def sources(spec: GroupKeySpec): Seq[GroupKeySpecSource] = (spec: @unchecked) match {
-        case GroupKeySpecAnd(left, right) => sources(left) ++ sources(right)
-        case src: GroupKeySpecSource => Vector(src)
-      }
+    object GroupKeyTrans {
+      // 999999 ticvars should be enough for anybody.
+      def keyName(i: Int) = "%06d".format(i)
+      def keyVar(i: Int): TicVar = JPathField(keyName(i))
+
+      def reindex(spec: TransSpec1, from: Int, to: Int) = WrapObject(DerefObjectStatic(spec, keyVar(from)), keyName(to))
 
       // the GroupKeySpec passed to deriveTransSpecs must be either a source or a conjunction; all disjunctions
       // have been factored out by this point
-      def deriveKeyTransSpec(conjunction: GroupKeySpec, keyOrder: Seq[TicVar] = Nil): TransSpec1 = {
-        val keyMap = keyOrder.zipWithIndex.toMap
-
+      def apply(conjunction: Seq[GroupKeySpecSource]): GroupKeyTrans = {
         // [avalue, bvalue]
-        val keySpecs = sources(conjunction).sortBy(src => keyMap.getOrElse(src.key, Int.MaxValue)).zipWithIndex map { 
-          case (src, idx) => WrapObject(src.spec, idx.toString)
-        }
-        
-        ObjectConcat(keySpecs: _*)
+        val (keySpecs, fullKeyOrder) = conjunction.zipWithIndex.map({ case (src, i) => WrapObject(src.spec, keyName(i)) -> src.key }).unzip
+        val groupKeys = ObjectConcat(keySpecs: _*)
+
+        GroupKeyTrans(groupKeys, fullKeyOrder)
       }
-
-      // An implementation of our algorithm for finding a minimally connected set of graphs
-      def findSpanningGraphs(outbound: Map[MergeNode, Set[MergeEdge]]): Set[MergeGraph] = {
-        def isConnected(from: MergeNode, to: MergeNode, outbound: Map[MergeNode, Set[MergeEdge]], constraintSet: Set[TicVar]): Boolean = {
-          outbound.getOrElse(from, Set()).exists {
-            case edge @ MergeEdge(a, b) => 
-              a == to || b == to ||
-              {
-                val other = if (a == from) b else a
-                // the other node's keys must be a superset of the constraint set we're concerned with in order to traverse it.
-                ((other.keys & constraintSet) == constraintSet) && {
-                  val pruned = outbound mapValues { _ - edge }
-                  isConnected(other,to, pruned, constraintSet)
-                }
-              }
-          }
-        }
-
-        def find0(outbound: Map[MergeNode, Set[MergeEdge]], edges: Set[MergeEdge]): Map[MergeNode, Set[MergeEdge]] = {
-          if (edges.isEmpty) {
-            outbound
-          } else {
-            val edge = edges.head
-
-            // node we're searching from
-            val fromNode = edge.a
-            val toNode = edge.b
-
-            val pruned = outbound mapValues { _ - edge }
-
-            find0(if (isConnected(fromNode, toNode, pruned, edge.keys)) pruned else outbound, edges.tail)
-          }
-        }
-
-        def partition(in: Map[MergeNode, Set[MergeEdge]]): Set[MergeGraph] = {
-          in.values.flatten.foldLeft(in.keySet map { k => MergeGraph(Set(k)) }) {
-            case (acc, edge @ MergeEdge(a, b)) => 
-              val g1 = acc.find(_.nodes.contains(a)).get
-              val g2 = acc.find(_.nodes.contains(b)).get
-
-              val resultGraph = g1.join(g2, edge)
-              acc - g1 - g2 + resultGraph
-          }
-        }
-
-        partition(find0(outbound, outbound.values.flatten.toSet))
-      }
-
-
-/*
-
-      // Each MergeNode corresponds to a set of MergeSpecs, each of which is keyed by the 
-      // sequence of TicVar that define the tic variables. It occurs to me that TicVar
-      // isn't actually the right type for the ticvar.
-      //         
-      // Composition rules:
-      // 1. Relating tables sharing a source is intersection on identity
-      // 2. Relating tables with disjoint sources is alignment on group keys
-      // 3. Relating tables with disjoint group keys is a cross
-      // 
-      def buildMerges(mergeGraph: MergeGraph) = {
-        // 
-        // General algorithm:
-        //  1) Compute alignment on keys between current node and remote node for each source in current node.
-        //     This may produce multiple "versions" of a single source, filtered according to different key orderings.
-        //  2) In any case where multiple versions of a source have been generated, produce a single source
-        //     via identity intersection.
-        //  3) Now, sort each source by the sort ordering specified by the edgesFor edge and align with one another
-        //     according to group key value. This will produce a set of tables that are minimized with respect to one another
-        //     and to the child nodes. However, these tables are not yet globally minimized within the subgraph.
-        //  4) Since all sources within the node are now aligned to one another, any one of them can be used as
-        //     the alignment target for the parent node (if any.) 
-        //  5) What to return? In the simplest case (a leaf node) this will simply be a product containing
-        //     a source table, a transspec defining the group key columns (which also gives the group sorting key),
-        //     and a transspec defining the value columns. 
-        //     In the case that a node is defined by more than one source, then we must return all of those sources
-        //     aligned by group key on a common sequence of ticvars. Once aligned, any one of them can be used
-        //     to provid filtering for the next node outward. 
-        //     Returning a Map[MergeNode, KeyFilter] gives us a view of the entire tree, which will allow
-        //     us to traverse again downward to perform the final right-alignment. That is, we left-align
-        //     going up (removing elements from the derived sets higher in the tree) and then right-align
-        //     to remove elements from the derived sets going back down to the leaves, at which point we're done.
-        // 
-        //     To think of what we need to return in very simple terms, each node in the tree acts as a 
-        //     supervisor for the nodes closer to the leaves. As a supervisor, the node collects and
-        //     refines feedback, passes it upward, and then disseminates the information it has received
-        //     from above when a final decision about what group keys to include has been reached.
-        // 
-        //     Alignment evaluation should actually start top-down, then proceed bottom-up to obtain the final 
-        //     set since alignments higher in the tree will result in greater amounts of data reduction, since
-        //     more constraints are in play.
-        // 
-        def buildMergeSpec(node: MergeNode, candidates: Set[Seq[TicVar]], adjacencies: Map[MergeNode, Set[MergeEdge]], underConstrained: Map[MergeNode, Set[OrderingConstraint]]): NodeMergeSpec = {
-          // TODO: Factor our common traversal structure, for now it's copypasta
-          if (adjacencies.get(node).forall(_.isEmpty)) {
-            // no outbound edges will exist, so we can just pick arbitrarily from the set of candidates;
-            // we only need one ordering for values within a leaf node.
-            val ordering = candidates.head
-            NodeMergeSpec(
-              ordering,
-              SourceMergeSpec(node.binding, deriveKeyTransSpec(node.binding.groupKeySpec, ordering), ordering)
-            )
-          } else {
-            val outbound = adjacencies(node)
-
-            // subset the adjacencies to only include edges that do not involve the current node
-            val graph0: Map[MergeNode, Set[MergeEdge]] = (adjacencies - node) map { 
-              ((_: Set[MergeEdge]).filterNot({case MergeEdge(a, b, _) => a == node || b == node})).second 
-            }
-
-            def mergeEdge(constraints: Set[Seq[TicVar]], alignments: Set[MergeSpec], other: MergeNode): (Set[Seq[TicVar]], Set[MergeSpec]) = {
-              // choose a single ordering that will be used to align tables of this node
-              // with tables of that node. The other node *must* return a MergeSpec with
-              // keys in this order so that we have a natural alignment
-              val edgeConstraint: Seq[TicVar] = OrderingConstraints.select(constraints, candidates, underConstrained(other))
-
-              // Fix any underconstrained orderings for the remote node, ensuring that the ordering
-              // we plan to use for the internode alignment is among the orderings that the remote set will
-              // ultimately be sorted by.
-              val otherFixed = OrderingConstraints.fix(underConstrained(other), Some(edgeConstraint))
-
-              val otherNodeSpec = buildMergeSpec(other, otherFixed, graph0, underConstrained)
-
-              val alignSpec: List[MergeSpec] = clusters(node) map { binding =>
-                val groupKeyTransSpec = deriveKeyTransSpec(binding.groupKeySpec, edgeConstraint)
-                val sourceSort = SourceMergeSpec(binding, groupKeyTransSpec, edgeConstraint)
-                
-                LeftAlignMergeSpec(MergeAlignment(sourceSort, otherNodeSpec, edgeConstraint))
-              }
-
-              (constraints + edgeConstraint, alignments ++ alignSpec)
-            }
-                
-            val (edgeConstraints, edgeAlignments) = outbound.foldLeft((Set.empty[Seq[TicVar]], Set.empty[MergeSpec])) {
-              case ((constraints, alignments), MergeEdge(`node`, other, _)) => mergeEdge(constraints, alignments, other)
-              case ((constraints, alignments), MergeEdge(other, `node`, _)) => mergeEdge(constraints, alignments, other)
-            }
-
-            val groupedIntersections = edgeAlignments groupBy {
-              case LeftAlignMergeSpec(MergeAlignment(source,  _, _)) => source
-            } 
-            
-            val intersections: Set[MergeSpec] = (groupedIntersections map {
-              case (_, specs) => if (specs.size > 1) IntersectMergeSpec(specs) else specs.head
-            })(collection.breakOut)
-
-            NodeMergeSpec(edgeConstraints.head, intersections)
-          }
-        }
-
-        buildMergeSpec(mergeGraph.rootNode, fixedConstraints, mergeGraph.edgesFor, mergeGraph.underconstrained)
-      }
-      */
     }
+
+    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
+      def sortedOn = groupKeyTrans.alignTo(groupKeyPrefix).prefixTrans(groupKeyPrefix.size)
+    }
+
+    /////////////////
+    /// functions ///
+    /////////////////
 
     def findBindingUniverses(grouping: GroupingSpec): Seq[Universe] = {
       @inline def find0(v: Vector[(GroupingSource, Vector[GroupKeySpec])]): Stream[Universe] = {
@@ -1523,22 +1352,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       import GroupKeySpec.{dnf, toVector}
       find0(grouping.sources map { source => (source, ((dnf _) andThen (toVector _)) apply source.groupKeySpec) })
     }
-
-    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: TransSpec1, groupKeyOrder: Seq[TicVar]) {
-      def alignedGroupKeyTrans(targetOrder: Seq[TicVar]): TransSpec1 = {
-        if (groupKeyOrder == targetOrder) {
-          groupKeyTrans
-        } else {
-          ObjectConcat(
-            targetOrder map { ticvar => 
-              WrapObject(
-                DerefObjectStatic(groupKeyTrans, JPathField(groupKeyOrder.indexOf(ticvar).toString)), 
-                targetOrder.indexOf(ticvar).toString)
-          }: _*)
-        }
-      }
-    }
-
 
     def findRequiredSorts(spanningGraph: MergeGraph): Map[MergeNode, Set[Seq[TicVar]]] = {
       findRequiredSorts(spanningGraph, spanningGraph.nodes.toList)
@@ -1587,32 +1400,46 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       }
     }
 
+    /**
+     * Perform the sorts required for the specified node (needed to align this node with each
+     * node to which it is connected) and return as a map from the sort ordering for the connecting
+     * edge to the sorted table with the appropriate dereference transspecs.
+     */
+    def materializeSortOrders(node: MergeNode, requiredSorts: Set[Seq[TicVar]]): M[Map[Seq[TicVar], NodeSubset]] = {
+      val groupKeyTrans = GroupKeyTrans(Universe.sources(node.binding.groupKeySpec))
+      val requireFullGroupKeyTrans = FilterDefined(node.binding.targetTrans.get, groupKeyTrans.spec, AllDefined)
+      val filteredSource: Table = node.binding.source.transform(requireFullGroupKeyTrans)
+
+      val nodeSubsetsM: M[Set[(Seq[TicVar], NodeSubset)]] = requiredSorts.map { ticvars => 
+        val sortTransSpec = groupKeyTrans.alignTo(ticvars).prefixTrans(ticvars.length)
+
+        val sorted: M[Table] = filteredSource.sort(sortTransSpec)
+        sorted.map { sortedTable => 
+          ticvars ->
+          NodeSubset(node,
+                     sortedTable,
+                     TransSpec.deepMap(node.binding.idTrans) { case Leaf(_) => TransSpec1.DerefArray1 },
+                     node.binding.targetTrans.map(t => TransSpec.deepMap(t) { case Leaf(_) => TransSpec1.DerefArray1 }),
+                     groupKeyTrans.copy(spec = TransSpec.deepMap(groupKeyTrans.spec) { case Leaf(_) => TransSpec1.DerefArray1 }),
+                     ticvars)
+        }
+      }.sequence
+
+      nodeSubsetsM map { _.toMap }
+    }
+
     def alignOnEdges(spanningGraph: MergeGraph): M[Map[GroupId, Set[NodeSubset]]] = {
       import OrderingConstraints._
 
       // Compute required sort orders based on graph traversal
       val requiredSorts: Map[MergeNode, Set[Seq[TicVar]]] = findRequiredSorts(spanningGraph)
 
-      val sortPairs: M[Stream[(MergeNode, Map[Seq[TicVar], NodeSubset])]] = requiredSorts.map {
-        case (node, orders) => 
-          val nodeSubsetsM: M[Set[(Seq[TicVar], NodeSubset)]] = orders.map { ticvars => 
-            val sorted: M[Table] = node.binding.source.sort(Universe.deriveKeyTransSpec(node.binding.groupKeySpec, ticvars))
-            sorted.map { sortedTable => 
-              ticvars ->
-              NodeSubset(node,
-                         sortedTable,
-                         TransSpec.deepMap(node.binding.idTrans) { case Leaf(_) => TransSpec1.DerefArray1 },
-                         node.binding.targetTrans.map(t => TransSpec.deepMap(t) { case Leaf(_) => TransSpec1.DerefArray1 }),
-                         TransSpec1.DerefArray0,
-                         ticvars)
-            }
-          }.sequence
-
-          nodeSubsetsM map { orders => node -> orders.toMap }
-      }.toStream.sequence
+      val sortPairs: M[Map[MergeNode, Map[Seq[TicVar], NodeSubset]]] = 
+        requiredSorts.map({ case (node, orders) => materializeSortOrders(node, orders) map { node -> _ }}).toStream
+        .sequence.map(_.toMap)
       
       for {
-        sorts <- sortPairs.map(_.toMap)
+        sorts <- sortPairs
         groupedSubsets <- {
           val edgeAlignments = spanningGraph.edges flatMap {
             case MergeEdge(a, b) =>
@@ -1627,14 +1454,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
               common map {
                 case (aSorted, bSorted) => 
-                  val alignedM = ops.align((aSorted.table, aSorted.groupKeyTrans), 
-                                           (bSorted.table, bSorted.groupKeyTrans))
+                  val alignedM = ops.align((aSorted.table, aSorted.sortedOn), 
+                                           (bSorted.table, bSorted.sortedOn))
                   
                   for (alignedPair <- alignedM) yield {
                     alignedPair.toList match {
                       case aAligned :: bAligned :: Nil => List(
-                        NodeSubset(a, aAligned, aSorted.idTrans, aSorted.targetTrans, aSorted.groupKeyTrans, aSorted.groupKeyOrder),
-                        NodeSubset(b, bAligned, bSorted.idTrans, bSorted.targetTrans, bSorted.groupKeyTrans, bSorted.groupKeyOrder)
+                        NodeSubset(a, aAligned, aSorted.idTrans, aSorted.targetTrans, aSorted.groupKeyTrans, aSorted.groupKeyPrefix),
+                        NodeSubset(b, bAligned, bSorted.idTrans, bSorted.targetTrans, bSorted.groupKeyTrans, bSorted.groupKeyPrefix)
                     )
                   }
               }

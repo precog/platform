@@ -143,7 +143,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
   def table(slices: StreamT[M, Slice]) = new UnloadableTable(slices)
 
-  /*
   "a table dataset" should {
     "verify bijection from static JSON" in {
       val sample: List[JValue] = List(
@@ -230,10 +229,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     }                           
 
     "sort" >> {
-      "fully homogeneous data"        in homogeneousSortSample
-      "data with undefined sort keys" in partiallyUndefinedSortSample
-      "heterogeneous sort keys"       in heterogeneousSortSample
-      "arbitrary datasets"            in checkSortDense
+      "fully homogeneous data"        in homogeneousSortSample.pendingUntilFixed
+      "data with undefined sort keys" in partiallyUndefinedSortSample.pendingUntilFixed
+      "heterogeneous sort keys"       in heterogeneousSortSample.pendingUntilFixed
+      "arbitrary datasets"            in checkSortDense.pendingUntilFixed
     }
     
     "in compact" >> {
@@ -251,7 +250,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "have no duplicate rows" in testDistinct
     }
   }
-  */
 
   "grouping support" should {  
     import grouper._
@@ -343,7 +341,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
           GroupKeySpecSource(JPathField("ticb"), DerefObjectStatic(SourceValue.Single, JPathField("b")))),
         GroupKeySpecSource(JPathField("ticc"), DerefObjectStatic(SourceValue.Single, JPathField("c"))))
 
-      val transspec = grouper.Universe.deriveKeyTransSpec(keySpec)
+      val transspec = GroupKeyTrans(grouper.Universe.sources(keySpec))
       val JArray(data) = JsonParser.parse("""[
         {"key": [1], "value": {"a": 12, "b": 7}},
         {"key": [2], "value": {"a": 42}},
@@ -351,12 +349,12 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       ]""")
 
       val JArray(expected) = JsonParser.parse("""[
-        {"0": 12, "1": 7},
-        {"0": 42},
-        {"0": 13, "2": true}
+        {"000000": 12, "000001": 7},
+        {"000000": 42},
+        {"000000": 13, "000002": true}
       ]""")
 
-      fromJson(data.toStream).transform(transspec).toJson.copoint must_== expected
+      fromJson(data.toStream).transform(transspec.spec).toJson.copoint must_== expected
     }
 
     "find the maximal spanning forest of a set of merge trees" in {
@@ -715,6 +713,34 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       result must_== expected
     }
     */
+
+    "transform a group key transspec to use a desired sort key order" in {
+      import GroupKeyTrans._
+
+      val trans = GroupKeyTrans(
+        ObjectConcat(
+          WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a")), keyName(0)),
+          WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b")), keyName(1)),
+          WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("c")), keyName(2))
+        ),
+        ticvars("abc")
+      )
+
+      val JArray(data) = JsonParser.parse("""[
+        {"key": [1], "value": {"a": 12, "b": 7}},
+        {"key": [2], "value": {"a": 42}},
+        {"key": [1], "value": {"a": 13, "c": true}}
+      ]""")
+
+      val JArray(expected) = JsonParser.parse("""[
+        {"000001": 12, "000002": 7},
+        {"000001": 42},
+        {"000001": 13, "000000": true}
+      ]""")
+
+      val alignedSpec = trans.alignTo(ticvars("ca")).spec
+      fromJson(data.toStream).transform(alignedSpec).toJson.copoint must_== expected
+    }
   }
 }
 
