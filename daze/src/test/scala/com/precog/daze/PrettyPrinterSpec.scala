@@ -99,7 +99,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
               SplitParam(line, 0)(input),
               Root(line, PushString("column1"))),
             Join(line, DerefObject, CrossLeftSort,
-              SplitGroup(line, 1, clicks.provenance)(input),
+              SplitGroup(line, 1, clicks.identities)(input),
               Root(line, PushString("column2")))))
 
       val result = prettyPrint(input)
@@ -129,7 +129,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
            |        Root(line, PushString("column1"))
            |      ),
            |      Join(line, DerefObject, CrossLeftSort,
-           |        SplitParam(line, 1, Vector(StaticProvenance("/file"))(input),
+           |        SplitParam(line, 1, Vector(LoadIds("/file"))(input),
            |        Root(line, PushString("column2"))
            |      )
            |    )

@@ -20,3 +20,5 @@ hs_err_pid*log
 .DS_Store
 tools/lib/*
 yggdrasil/data
+/TAGS
+/standaloneArtifacts
