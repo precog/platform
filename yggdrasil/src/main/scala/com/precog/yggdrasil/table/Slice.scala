@@ -53,6 +53,7 @@ trait RowComparator { self =>
 
         case LT => 
           nextLeftIndex(compare, lidx + step, lsize, ridx, step)
+      }
     } else {
       lsize
     }
