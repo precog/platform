@@ -36,8 +36,27 @@ import scalaz.syntax.foldable._
 import scalaz.syntax.semigroup._
 import scalaz.std.iterable._
 
-trait RowComparator {
+trait RowComparator { self =>
   def compare(i1: Int, i2: Int): Ordering
+
+  def swap: RowComparator = new RowComparator {
+    def compare(i1: Int, i2: Int) = self.compare(i2, i1)
+  }
+
+  @tailrec
+  def nextLeftIndex(lidx: Int, lsize: Int, ridx: Int, step: Int): Int = {
+    if (lidx < lsize) {
+      compare(lidx, ridx) match {
+        case EQ | GT =>
+          if (step <= 1) lidx -1
+          nextLeftIndex(compare, lidx - (step / 2), lsize, ridx, step / 2)
+
+        case LT => 
+          nextLeftIndex(compare, lidx + step, lsize, ridx, step)
+    } else {
+      lsize
+    }
+  }
 }
 
 trait Slice { source =>
@@ -589,16 +608,16 @@ object Slice {
     }
 
     @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): RowComparator = {
-      val array1 = l1.map(s1.columns).toArray
-      val array2 = l2.map(s2.columns).toArray
-
-      // Build an array of pairwise comparator functions for later use
-      val comparators: Array[RowComparator] = (for {
-        i1 <- 0 until array1.length
-        i2 <- 0 until array2.length
-      } yield compare0(array1(i1), array2(i2))).toArray
-
       new RowComparator {
+        private val array1 = l1.map(s1.columns).toArray
+        private val array2 = l2.map(s2.columns).toArray
+
+        // Build an array of pairwise comparator functions for later use
+        private val comparators: Array[RowComparator] = (for {
+          i1 <- 0 until array1.length
+          i2 <- 0 until array2.length
+        } yield compare0(array1(i1), array2(i2))).toArray
+
         def compare(i: Int, j: Int) = {
           val first1 = firstDefinedIndexFor(array1, i)
           val first2 = firstDefinedIndexFor(array2, j)

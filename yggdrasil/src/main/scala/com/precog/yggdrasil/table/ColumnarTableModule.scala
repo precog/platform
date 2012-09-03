@@ -71,8 +71,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
   def newScratchDir(): File = Files.createTempDir()
   def jdbmCommitInterval: Long = 200000l
 
-  object ops extends ColumnarTableCompanion
-
   trait ColumnarTableCompanion extends TableCompanionLike {
     import scala.collection.Set
     def empty: Table = table(StreamT.empty[M, Slice])
@@ -116,7 +114,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
     def constEmptyArray: Table = 
       table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice])
 
-    def align(sources: (Table, trans.TransSpec1)*): M[Seq[Table]] = sys.error("todo")
     def intersect(sources: (Table, trans.TransSpec1)*): M[Table] = sys.error("todo")
   }
   
@@ -140,6 +137,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
 
   protected case class SliceTransform1[A](initial: A, f: (A, Slice) => (A, Slice)) {
     def apply(s: Slice) = f(initial, s)
+
+    def advance(s: Slice): (SliceTransform1[A], Slice)  = {
+      val (a0, s0) = f(initial, s)
+      (this.copy(initial = a0), s0)
+    }
 
     def andThen[B](t: SliceTransform1[B]): SliceTransform1[(A, B)] = {
       SliceTransform1(
@@ -1419,8 +1421,29 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
      * edge to the sorted table with the appropriate dereference transspecs.
      */
     def materializeSortOrders(node: MergeNode, requiredSorts: Set[Seq[TicVar]]): M[Map[Seq[TicVar], NodeSubset]] = {
-      val groupKeyTrans = GroupKeyTrans(Universe.sources(node.binding.groupKeySpec))
-      val requireFullGroupKeyTrans = FilterDefined(node.binding.targetTrans.get, groupKeyTrans.spec, AllDefined)
+      import TransSpec.deepMap
+
+      val protoGroupKeyTrans = GroupKeyTrans(Universe.sources(node.binding.groupKeySpec))
+
+      // Since a transspec for a group key may perform a bunch of work (computing values, etc)
+      // it seems like we really want to do that work only once; prior to the initial sort. 
+      // This means carrying around the *computed* group key everywhere
+      // post the initial sort separate from the values that it was derived from. 
+      val (payloadTrans, idTrans, targetTrans, groupKeyTrans) = node.binding.targetTrans match {
+        case Some(targetSetTrans) => 
+          val payloadTrans = ArrayConcat(WrapArray(targetSetTrans), WrapArray(protoGroupKeyTrans.spec))
+
+          (payloadTrans,
+           deepMap(node.binding.idTrans) { case Leaf(_) => TransSpec1.DerefArray0 },
+           Some(TransSpec1.DerefArray0), 
+           GroupKeyTrans(TransSpec1.DerefArray1, protoGroupKeyTrans.keyOrder))
+
+        case None =>
+          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec))
+          (payloadTrans, TransSpec1.DerefArray0, None, GroupKeyTrans(TransSpec1.DerefArray1, protoGroupKeyTrans.keyOrder))
+      }
+
+      val requireFullGroupKeyTrans = FilterDefined(payloadTrans, groupKeyTrans.spec, AllDefined)
       val filteredSource: Table = node.binding.source.transform(requireFullGroupKeyTrans)
 
       val nodeSubsetsM: M[Set[(Seq[TicVar], NodeSubset)]] = requiredSorts.map { ticvars => 
@@ -1431,9 +1454,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
           ticvars ->
           NodeSubset(node,
                      sortedTable,
-                     TransSpec.deepMap(node.binding.idTrans) { case Leaf(_) => TransSpec1.DerefArray1 },
-                     node.binding.targetTrans.map(t => TransSpec.deepMap(t) { case Leaf(_) => TransSpec1.DerefArray1 }),
-                     groupKeyTrans.copy(spec = TransSpec.deepMap(groupKeyTrans.spec) { case Leaf(_) => TransSpec1.DerefArray1 }),
+                     deepMap(idTrans) { case Leaf(_) => TransSpec1.DerefArray1 },
+                     targetTrans.map(t => deepMap(t) { case Leaf(_) => TransSpec1.DerefArray1 }),
+                     groupKeyTrans.copy(spec = deepMap(groupKeyTrans.spec) { case Leaf(_) => TransSpec1.DerefArray1 }),
                      ticvars)
         }
       }.sequence
@@ -1467,18 +1490,15 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
 
               common map {
                 case (aSorted, bSorted) => 
-                  val alignedM = ops.align((aSorted.table, aSorted.sortedOn), 
-                                           (bSorted.table, bSorted.sortedOn))
+                  val alignedM = ops.align(aSorted.table, aSorted.sortedOn, bSorted.table, bSorted.sortedOn)
                   
-                  for (alignedPair <- alignedM) yield {
-                    alignedPair.toList match {
-                      case aAligned :: bAligned :: Nil => List(
-                        NodeSubset(a, aAligned, aSorted.idTrans, aSorted.targetTrans, aSorted.groupKeyTrans, aSorted.groupKeyPrefix),
-                        NodeSubset(b, bAligned, bSorted.idTrans, bSorted.targetTrans, bSorted.groupKeyTrans, bSorted.groupKeyPrefix)
+                  alignedM map {
+                    case (aAligned, bAligned) => List(
+                      NodeSubset(a, aAligned, aSorted.idTrans, aSorted.targetTrans, aSorted.groupKeyTrans, aSorted.groupKeyPrefix),
+                      NodeSubset(b, bAligned, bSorted.idTrans, bSorted.targetTrans, bSorted.groupKeyTrans, bSorted.groupKeyPrefix)
                     )
                   }
               }
-            }
           }
 
           edgeAlignments.sequence

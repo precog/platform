@@ -298,6 +298,8 @@ trait TableModule[M[+_]] extends FNModule {
   }
   
   trait TableCompanionLike {
+    import trans._
+
     def empty: Table
     
     def constString(v: Set[CString]): Table
@@ -310,7 +312,7 @@ trait TableModule[M[+_]] extends FNModule {
     def constEmptyObject: Table
     def constEmptyArray: Table
 
-    def align(sources: (Table, trans.TransSpec1)*): M[Seq[Table]]
+    def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)]
     def intersect(sources: (Table, trans.TransSpec1)*): M[Table]
   }
   
