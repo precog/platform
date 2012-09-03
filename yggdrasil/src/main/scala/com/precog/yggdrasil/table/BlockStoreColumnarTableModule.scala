@@ -51,6 +51,8 @@ import scalaz.syntax.std.stream._
 import scala.annotation.tailrec
 import scala.collection.mutable
 
+import TableModule._
+
 trait BlockStoreColumnarTableModule[M[+_]] extends
   ColumnarTableModule[M] with
   StorageModule[M] with
@@ -117,7 +119,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       }
   }
 
-  object ops extends ColumnarTableCompanion {
+  trait BlockStoreColumnarTableCompanion extends ColumnarTableCompanion {
     import SliceTransform._
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = {
@@ -137,8 +139,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       case class MoreLeft(span: Span, leq: mutable.BitSet, ridx: Int, req: mutable.BitSet) extends NextStep
       case class MoreRight(span: Span, lidx: Int, leq: mutable.BitSet, req: mutable.BitSet) extends NextStep
 
-      // todo: does this Unit need to be something we can use to get a handle on the resulting 
-      // table?
       def emitSlice(memoId: MemoId, slice: Slice): M[Unit] = sys.error("todo")
 
       def loadTable(memoId: MemoId): M[Table] = sys.error("todo")
