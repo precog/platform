@@ -105,8 +105,7 @@ trait BlockLoadTestSupport[M[+_]] extends
 
 
 trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
-  implicit def M: Monad[M]
-  implicit def coM: Copointed[M]
+  implicit def M: Monad[M] with Copointed[M]
 
   def checkLoadDense = {
     implicit val gen = sample(objectSchema(_, 3))
@@ -335,7 +334,9 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
 
     val module = new BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
       def M = self.M
-      def coM = self.coM
+
+      trait TableCompanion extends BlockStoreColumnarTableCompanion
+      object ops extends TableCompanion
 
       val projections = {
         schema.grouped(2) map { subschema =>
