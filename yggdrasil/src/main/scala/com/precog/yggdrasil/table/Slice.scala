@@ -49,10 +49,10 @@ trait RowComparator { self =>
       compare(lidx, ridx) match {
         case EQ | GT =>
           if (step <= 1) lidx -1
-          nextLeftIndex(compare, lidx - (step / 2), lsize, ridx, step / 2)
+          nextLeftIndex(lidx - (step / 2), lsize, ridx, step / 2)
 
         case LT => 
-          nextLeftIndex(compare, lidx + step, lsize, ridx, step)
+          nextLeftIndex(lidx + step, lsize, ridx, step)
       }
     } else {
       lsize
