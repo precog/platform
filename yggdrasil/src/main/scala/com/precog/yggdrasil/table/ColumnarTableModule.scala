@@ -1520,7 +1520,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
     }
 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
-    def borg(connectedGraph: ConnectedSubgraph): M[BorgResult] = {
+    def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {
       // connectedGraph.foldLeft
       sys.error("todo")
     }
@@ -1541,11 +1541,20 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       // all of the universes will be unioned together.
       val universes = findBindingUniverses(grouping)
       val borgedUniverses: M[Stream[BorgResult]] = universes.toStream.map { universe =>
-        val alignedSpanningGraphsM: M[Set[Map[GroupId, Set[NodeSubset]]]] = universe.spanningGraphs.map(alignOnEdges).sequence
-        val minimizedSpanningGraphsM: M[Set[ConnectedSubgraph]] = for {
-          spanningGraphs <- alignedSpanningGraphsM
-          intersected    <- spanningGraphs.map(_.values.toStream.map(intersect).sequence).sequence
-        } yield intersected.map(_.toSet)
+        val alignedSpanningGraphsM: M[Set[(MergeGraph, Map[GroupId, Set[NodeSubset]])]] = 
+          universe.spanningGraphs.map { spanningGraph =>
+            for (aligned <- alignOnEdges(spanningGraph))
+              yield (spanningGraph, aligned)
+          }.sequence
+
+        val minimizedSpanningGraphsM: M[Set[(MergeGraph, ConnectedSubgraph)]] = for {
+          aligned      <- alignedSpanningGraphsM
+          intersected  <- aligned.map { 
+                            case (spanningGraph, alignment) => 
+                              for (intersected <- alignment.values.toStream.map(intersect).sequence)
+                                yield (spanningGraph, intersected.toSet)
+                          }.sequence
+        } yield intersected
 
         for {
           spanningGraphs <- minimizedSpanningGraphsM
