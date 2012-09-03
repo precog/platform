@@ -44,7 +44,7 @@ trait RowComparator { self =>
   }
 
   @tailrec
-  def nextLeftIndex(lidx: Int, lsize: Int, ridx: Int, step: Int): Int = {
+  final def nextLeftIndex(lidx: Int, lsize: Int, ridx: Int, step: Int): Int = {
     if (lidx < lsize) {
       compare(lidx, ridx) match {
         case EQ | GT =>
