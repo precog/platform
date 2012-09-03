@@ -1250,13 +1250,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       }
     }
 
-    case class OrderingConstraint(ordering: Seq[Set[TicVar]]) {
+    case class OrderingConstraint(ordering: Seq[Set[TicVar]]) { self =>
       // Fix this binding constraint into a sort order. Any non-singleton TicVar sets will simply
       // be convered into an arbitrary sequence
       lazy val fixed = ordering.flatten
+
+      def & (that: OrderingConstraint): Option[OrderingConstraint] = OrderingConstraints.replacementFor(self, that)
     }
 
     object OrderingConstraints {
+      val Zero = OrderingConstraint(Vector.empty)
+
       /**
        * Compute a new constraint that can replace both input constraints
        */
@@ -1355,7 +1359,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       }
     }
 
-    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
+    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], size: Long = 1) {
       def sortedOn = groupKeyTrans.alignTo(groupKeyPrefix).prefixTrans(groupKeyPrefix.size)
     }
 
@@ -1525,30 +1529,112 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       sys.error("todo")
     }
 
-    /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
-    def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {
-      // TODO: Pick optimal (?) traversal order to minimize resorts
-      def pickTraversalOrder(spanningGraph: MergeGraph): List[MergeNode] = {
-        def connections(node: MergeNode): Set[MergeNode] = spanningGraph.edgesFor(node).flatMap(e => Set(e.a, e.b)) - node
 
-        def pick0(remainder: Set[MergeNode], traversalOrder: List[MergeNode], options: Set[MergeNode]): List[MergeNode] = {
-          if (remainder.isEmpty) Nil
-          else traversalOrder match {
-            case Nil => 
-              pick0(remainder.tail, remainder.head :: Nil, connections(remainder.head))
+    final case class BorgTraversalModel private (ioCost: Long, size: Long, ordering: OrderingConstraint) { self =>
+      def ticVars: Set[TicVar] = ordering.ordering.toSet.flatten
 
-            case last :: _ =>
-              val choice = options.head
+      def cogroup(rightSize: Long, rightTicVars: Set[TicVar]): BorgTraversalModel = {
+        val (newIoCost, newSize, newOrdering) = {
+          // We have to resort this one:
+          val uniqueTicVars = ((ticVars diff rightTicVars) union (rightTicVars diff ticVars)).size
 
-              val newOptions = options ++ connections(choice) - choice
+          val newSize = (size + rightSize) * (uniqueTicVars + 1)
 
-              pick0(remainder - choice, choice :: traversalOrder, newOptions)
+          (ordering & OrderingConstraint(Seq(rightTicVars))) match {
+            case Some(newConstraint) =>
+              // Don't need to resort this one, just the next one:
+              (2 * rightSize, newSize, newConstraint)
+
+            case None =>
+              ({                
+                val inputCost = size + rightSize
+                val outputCost = newSize
+
+                inputCost + outputCost
+              }, newSize, OrderingConstraint(Seq(rightTicVars, self.ticVars -- rightTicVars)))
           }
         }
-        
-        pick0(spanningGraph.nodes, List.empty, Set.empty).reverse
+
+        BorgTraversalModel(self.ioCost + ioCost, newSize, newOrdering)
+      }
+    }
+    object BorgTraversalModel {
+      val Zero = new BorgTraversalModel(0, 0, OrderingConstraint(Vector.empty))
+
+      implicit val OrderingBorgTraversalModel = new scala.math.Ordering[BorgTraversalModel] {
+        def compare(a: BorgTraversalModel, b: BorgTraversalModel): Int = (a.ioCost - b.ioCost).toInt
+      }
+    }
+    case class BorgTraversalPlan(traversalOrder: Vector[MergeNode], orderings: Vector[OrderingConstraint], model: BorgTraversalModel) {
+      def cogroup(rightNode: MergeNode, rightSize: Long, rightTicVars: Set[TicVar]) = {
+        val cogroupModel = model.cogroup(rightSize, rightTicVars)
+
+        copy(
+          traversalOrder = traversalOrder :+ rightNode,
+          orderings      = orderings :+ cogroupModel.ordering,
+          model          = cogroupModel
+        )
+      }
+    }
+    object BorgTraversalPlan {
+      val Zero = BorgTraversalPlan(Vector.empty, Vector.empty, BorgTraversalModel.Zero) 
+    }
+
+    def findBorgTraversalOrder(spanningGraph: MergeGraph, connectedSubgraph: ConnectedSubgraph): List[MergeNode] = {
+      val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
+
+      def connections(node: MergeNode): Set[MergeNode] = spanningGraph.edgesFor(node).flatMap(e => Set(e.a, e.b)) - node
+
+      // TODO: Pick optimal (?) traversal order to minimize resorts
+      def pick0(remainder: Set[MergeNode], traversalOrder: List[MergeNode], options: Set[MergeNode]): List[MergeNode] = {
+        if (remainder.isEmpty) Nil
+        else traversalOrder match {
+          case Nil => 
+            pick0(remainder.tail, remainder.head :: Nil, connections(remainder.head))
+
+          case last :: _ =>
+            val choice = options.head
+
+            val newOptions = (options - choice) ++ connections(choice)
+
+            pick0(remainder - choice, choice :: traversalOrder, newOptions)
+        }
       }
 
+      def pick0_2(fixed: Set[MergeNode], unfixed: Set[MergeNode] = Set.empty, options: Set[MergeNode] = Set.empty, 
+                  optimalPlans: Map[Set[MergeNode], BorgTraversalPlan] = 
+                                Map(Set.empty -> BorgTraversalPlan.Zero)): Map[Set[MergeNode], BorgTraversalPlan] = {
+
+        def chooseFrom(choices: Set[MergeNode]): Map[Set[MergeNode], BorgTraversalPlan] = {
+          choices.foldLeft(optimalPlans) {
+            case (optimalPlans, choice) =>
+              val node = subsetForNode(choice)
+
+              val newFixed   = fixed + choice
+              val newUnfixed = unfixed - choice
+              val newOptions = (options - choice) ++ connections(choice)
+
+              val newPlan = optimalPlans(fixed).cogroup(choice, node.size, node.groupKeyTrans.keyOrder.toSet)
+
+              val bestPlan = optimalPlans.get(fixed).map { oldPlan =>
+                if (oldPlan.model.ioCost < newPlan.model.ioCost) oldPlan else newPlan
+              }.getOrElse(newPlan)
+
+              pick0_2(newFixed, newUnfixed, newOptions, optimalPlans + (fixed -> bestPlan))
+          }
+        }
+
+        if (unfixed.isEmpty) optimalPlans
+        else if (options.isEmpty) chooseFrom(unfixed)
+        else chooseFrom(options)
+      }
+      pick0_2(spanningGraph.nodes)(spanningGraph.nodes)
+      
+      pick0(spanningGraph.nodes, List.empty, Set.empty).reverse
+    }
+
+    /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
+    def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {
       val (spanningGraph, connectedSubgraph) = tuple
 
       val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
@@ -1557,7 +1643,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       // case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
       // case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, 
       //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
-      pickTraversalOrder(spanningGraph) match {
+      findBorgTraversalOrder(spanningGraph, connectedSubgraph) match {
         case x :: xs =>
           val node = subsetForNode(x)
 
