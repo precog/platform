@@ -1529,24 +1529,24 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
     def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {
       // TODO: Pick optimal (?) traversal order to minimize resorts
       def pickTraversalOrder(spanningGraph: MergeGraph): List[MergeNode] = {
-        def pick0(remainder: Set[MergeNode], acc: List[MergeNode]): List[MergeNode] = {
+        def connections(node: MergeNode): Set[MergeNode] = spanningGraph.edgesFor(node).flatMap(e => Set(e.a, e.b)) - node
+
+        def pick0(remainder: Set[MergeNode], traversalOrder: List[MergeNode], options: Set[MergeNode]): List[MergeNode] = {
           if (remainder.isEmpty) Nil
-          else acc match {
+          else traversalOrder match {
             case Nil => 
-              pick0(remainder.tail, remainder.head :: Nil)
+              pick0(remainder.tail, remainder.head :: Nil, connections(remainder.head))
 
             case last :: _ =>
-              val edges = spanningGraph.edgesFor(last)
-
-              val options = edges.flatMap(e => Set(e.a, e.b)) -- acc
-
               val choice = options.head
 
-              pick0(remainder - choice, choice :: acc)
+              val newOptions = options ++ connections(choice) - choice
+
+              pick0(remainder - choice, choice :: traversalOrder, newOptions)
           }
         }
         
-        pick0(spanningGraph.nodes, List.empty[MergeNode]).reverse
+        pick0(spanningGraph.nodes, List.empty, Set.empty).reverse
       }
 
       val (spanningGraph, connectedSubgraph) = tuple
