@@ -1525,12 +1525,36 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
     def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {
+      // TODO: Pick optimal (?) traversal order to minimize resorts
+      def pickTraversalOrder(spanningGraph: MergeGraph): List[MergeNode] = spanningGraph.nodes.toList
+
       val (spanningGraph, connectedSubgraph) = tuple
 
       val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
 
+      // case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
+      // case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, 
+      //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
+      pickTraversalOrder(spanningGraph) match {
+        case x :: xs =>
+          val node = subsetForNode(x)
+
+          val initial = BorgResult(
+                          table         = node.table, 
+                          groupKeyTrans = node.groupKeyTrans.spec,
+                          idTrans       = Map(node.node.binding.groupId -> node.idTrans),
+                          rowTrans      = node.targetTrans.map(targetTrans => Map(node.node.binding.groupId -> targetTrans)).getOrElse(Map()))
 
 
+          xs.foldLeft(initial) {
+            case (acc, x) => 
+              val node = subsetForNode(x)
+
+              acc
+          }
+
+          case Nil => sys.error("synthesize empty table???")
+      }
 
       // connectedGraph.foldLeft
       sys.error("todo")
