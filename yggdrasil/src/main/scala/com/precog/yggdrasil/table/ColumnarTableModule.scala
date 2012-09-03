@@ -1150,30 +1150,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       val Zero = BorgTraversalPlan(Vector.empty, Vector.empty, BorgTraversalModel.Zero) 
     }
 
-    def findBorgTraversalOrder(spanningGraph: MergeGraph, connectedSubgraph: ConnectedSubgraph): List[MergeNode] = {
+    def findBorgTraversalOrder(spanningGraph: MergeGraph, connectedSubgraph: ConnectedSubgraph): BorgTraversalPlan = {
       val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
 
       def connections(node: MergeNode): Set[MergeNode] = spanningGraph.edgesFor(node).flatMap(e => Set(e.a, e.b)) - node
 
-      // TODO: Pick optimal (?) traversal order to minimize resorts
-      def pick0(remainder: Set[MergeNode], traversalOrder: List[MergeNode], options: Set[MergeNode]): List[MergeNode] = {
-        if (remainder.isEmpty) Nil
-        else traversalOrder match {
-          case Nil => 
-            pick0(remainder.tail, remainder.head :: Nil, connections(remainder.head))
-
-          case last :: _ =>
-            val choice = options.head
-
-            val newOptions = (options - choice) ++ connections(choice)
-
-            pick0(remainder - choice, choice :: traversalOrder, newOptions)
-        }
-      }
-
-      def pick0_2(fixed: Set[MergeNode], unfixed: Set[MergeNode] = Set.empty, options: Set[MergeNode] = Set.empty, 
-                  optimalPlans: Map[Set[MergeNode], BorgTraversalPlan] = 
-                                Map(Set.empty -> BorgTraversalPlan.Zero)): Map[Set[MergeNode], BorgTraversalPlan] = {
+      def pick0(fixed: Set[MergeNode], unfixed: Set[MergeNode] = Set.empty, options: Set[MergeNode] = Set.empty, 
+                optimalPlans: Map[Set[MergeNode], BorgTraversalPlan] = Map(Set.empty -> BorgTraversalPlan.Zero)): Map[Set[MergeNode], BorgTraversalPlan] = {
 
         def chooseFrom(choices: Set[MergeNode]): Map[Set[MergeNode], BorgTraversalPlan] = {
           choices.foldLeft(optimalPlans) {
@@ -1190,7 +1173,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 if (oldPlan.model.ioCost < newPlan.model.ioCost) oldPlan else newPlan
               }.getOrElse(newPlan)
 
-              pick0_2(newFixed, newUnfixed, newOptions, optimalPlans + (newFixed -> bestPlan))
+              pick0(newFixed, newUnfixed, newOptions, optimalPlans + (newFixed -> bestPlan))
           }
         }
 
@@ -1198,9 +1181,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         else if (options.isEmpty) chooseFrom(unfixed)
         else chooseFrom(options)
       }
-      pick0_2(spanningGraph.nodes)(spanningGraph.nodes)
       
-      pick0(spanningGraph.nodes, List.empty, Set.empty).reverse
+      pick0(spanningGraph.nodes)(spanningGraph.nodes)
     }
 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
@@ -1213,26 +1195,25 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       // case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
       // case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, 
       //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
-      findBorgTraversalOrder(spanningGraph, connectedSubgraph) match {
-        case x :: xs =>
+      val plan = findBorgTraversalOrder(spanningGraph, connectedSubgraph)
+
+      val x =  plan.traversalOrder.head
+      val xs = plan.traversalOrder.tail
+
+      val node = subsetForNode(x)
+
+      val initial = BorgResult(
+                      table         = node.table, 
+                      groupKeyTrans = node.groupKeyTrans.spec,
+                      idTrans       = Map(node.node.binding.groupId -> node.idTrans),
+                      rowTrans      = node.targetTrans.map(node.node.binding.groupId -> _).toMap
+                    ).point[M]
+
+      xs.foldLeft(initial) {
+        case (acc, x) => 
           val node = subsetForNode(x)
 
-          val initial = BorgResult(
-                          table         = node.table, 
-                          groupKeyTrans = node.groupKeyTrans.spec,
-                          idTrans       = Map(node.node.binding.groupId -> node.idTrans),
-                          rowTrans      = node.targetTrans.map(node.node.binding.groupId -> _).toMap
-                        ).point[M]
-
-
-          xs.foldLeft(initial) {
-            case (acc, x) => 
-              val node = subsetForNode(x)
-
-              acc
-          }
-
-          case Nil => sys.error("synthesize empty table???")
+          acc
       }
     }
 
