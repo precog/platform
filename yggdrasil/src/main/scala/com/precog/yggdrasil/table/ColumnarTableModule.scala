@@ -1169,6 +1169,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       }
     }
 
+    type ConnectedSubgraph = Set[NodeSubset]
+
+    case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
+
     object Universe {
       def allEdges(nodes: collection.Set[MergeNode]): collection.Set[MergeEdge] = {
         for {
@@ -1511,15 +1515,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       }
     }
 
-    type ConnectedSubgraph = Set[NodeSubset]
-
     def intersect(set: Set[NodeSubset]): M[NodeSubset] = {
       sys.error("todo")
     }
 
-    case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
     def borg(connectedGraph: ConnectedSubgraph): M[BorgResult] = {
+      // connectedGraph.foldLeft
       sys.error("todo")
     }
 
