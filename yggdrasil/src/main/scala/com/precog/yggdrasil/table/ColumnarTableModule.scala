@@ -1431,16 +1431,19 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       // post the initial sort separate from the values that it was derived from. 
       val (payloadTrans, idTrans, targetTrans, groupKeyTrans) = node.binding.targetTrans match {
         case Some(targetSetTrans) => 
-          val payloadTrans = ArrayConcat(WrapArray(targetSetTrans), WrapArray(protoGroupKeyTrans.spec))
+          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(targetSetTrans), WrapArray(protoGroupKeyTrans.spec))
 
           (payloadTrans,
-           deepMap(node.binding.idTrans) { case Leaf(_) => TransSpec1.DerefArray0 },
-           Some(TransSpec1.DerefArray0), 
-           GroupKeyTrans(TransSpec1.DerefArray1, protoGroupKeyTrans.keyOrder))
+           TransSpec1.DerefArray0, 
+           Some(TransSpec1.DerefArray1), 
+           GroupKeyTrans(TransSpec1.DerefArray2, protoGroupKeyTrans.keyOrder))
 
         case None =>
           val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec))
-          (payloadTrans, TransSpec1.DerefArray0, None, GroupKeyTrans(TransSpec1.DerefArray1, protoGroupKeyTrans.keyOrder))
+          (payloadTrans, 
+           TransSpec1.DerefArray0, 
+           None, 
+           GroupKeyTrans(TransSpec1.DerefArray1, protoGroupKeyTrans.keyOrder))
       }
 
       val requireFullGroupKeyTrans = FilterDefined(payloadTrans, groupKeyTrans.spec, AllDefined)
