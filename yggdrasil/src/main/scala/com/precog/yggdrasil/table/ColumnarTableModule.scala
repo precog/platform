@@ -1186,11 +1186,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
               val newPlan = optimalPlans(fixed).cogroup(choice, node.size, node.groupKeyTrans.keyOrder.toSet)
 
-              val bestPlan = optimalPlans.get(fixed).map { oldPlan =>
+              val bestPlan = optimalPlans.get(newFixed).map { oldPlan =>
                 if (oldPlan.model.ioCost < newPlan.model.ioCost) oldPlan else newPlan
               }.getOrElse(newPlan)
 
-              pick0_2(newFixed, newUnfixed, newOptions, optimalPlans + (fixed -> bestPlan))
+              pick0_2(newFixed, newUnfixed, newOptions, optimalPlans + (newFixed -> bestPlan))
           }
         }
 
