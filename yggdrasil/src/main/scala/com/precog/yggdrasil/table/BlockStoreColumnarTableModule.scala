@@ -139,10 +139,13 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
       // todo: does this Unit need to be something we can use to get a handle on the resulting 
       // table?
-      def emitSlice(left: Boolean, slice: Slice): M[Unit] = sys.error("todo")
+      def emitSlice(memoId: MemoId, slice: Slice): M[Unit] = sys.error("todo")
+
+      def loadTable(memoId: MemoId): M[Table] = sys.error("todo")
 
       def dumpStreams[A, B](left: StreamT[M, Slice], leftKeyTrans: SliceTransform1[A],
-                            right: StreamT[M, Slice], rightKeyTrans: SliceTransform1[B]) = {
+                            right: StreamT[M, Slice], rightKeyTrans: SliceTransform1[B],
+                            leftMemoId: MemoId, rightMemoId: MemoId): M[(Table, Table)] = {
 
         // We will *always* have a lhead and rhead, because if at any point we run out of data,
         // we'll still be hanging on to the last slice on the other side to use as the authority
@@ -220,10 +223,10 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   // done on left, and we're not in an equal span on the right (since LeftSpan can only
                   // be emitted if we're not in a right span) so we're entirely done.
                   val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size - 1, req))) 
-                  remission map { e => emitSlice(false, e) } getOrElse ().point[M]
+                  remission map { e => emitSlice(rightMemoId, e) } getOrElse ().point[M]
               }
 
-              lemission map { e => emitSlice(true, e) >> next } getOrElse next
+              lemission map { e => emitSlice(leftMemoId, e) >> next } getOrElse next
 
             case MoreRight(span, lidx, lex, req) =>
               // if span == RightSpan and no more data exists on the right, we need to 
@@ -245,7 +248,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                     case NoSpan => 
                       // entirely done; just emit both 
                       val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size -1, leq)))
-                      lemission map { e => emitSlice(true, e) } getOrElse ().point[M]
+                      lemission map { e => emitSlice(leftMemoId, e) } getOrElse ().point[M]
 
                     case RightSpan => 
                       // need to switch to left spanning in buildFilters
@@ -254,7 +257,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   }
               }
 
-              remission map { e => emitSlice(false, e) >> next } getOrElse next
+              remission map { e => emitSlice(rightMemoId, e) >> next } getOrElse next
           }
 
 
@@ -334,21 +337,31 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             right.uncons.flatMap {
               case Some((rhead, rtail)) =>
                 val (lstate, lkey) = leftKeyTrans(lhead)
-                step(FindEqualAdvancingRight(0, lkey), lhead, ltail, new mutable.BitSet(),
-                                              rhead, rtail, new mutable.BitSet(),
-                                              lstate, rightKeyTrans.initial)
+                val stepResult  = step(FindEqualAdvancingRight(0, lkey), 
+                                       lhead, ltail, new mutable.BitSet(),
+                                       rhead, rtail, new mutable.BitSet(),
+                                       lstate, rightKeyTrans.initial)
+
+                for {
+                  _ <- stepResult
+                  ltable <- loadTable(leftMemoId)
+                  rtable <- loadTable(rightMemoId)
+                } yield (ltable, rtable)
 
               case None =>
-                ().point[M]
+                (ops.empty, ops.empty).point[M]
             }
 
           case None =>
-            ().point[M]
+            (ops.empty, ops.empty).point[M]
         }
       }
 
-      dumpStreams(sourceLeft.slices, composeSliceTransform(alignOnL), sourceRight.slices, composeSliceTransform(alignOnR))
-      sys.error("remove me once dumpStreams returns the correct type.")
+      // We need some id that can be used to memoize then load table for each side.
+      val (leftMemoId, rightMemoId) = sys.error("todo"): (MemoId, MemoId)
+      dumpStreams(sourceLeft.slices, composeSliceTransform(alignOnL), 
+                  sourceRight.slices, composeSliceTransform(alignOnR), 
+                  leftMemoId, rightMemoId)
     }
   }
 
