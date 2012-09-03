@@ -13,8 +13,6 @@ trait YIdInstances {
     def bind[A, B](m: YId[A])(f: A => YId[B]) = f(m.a)
     def copoint[A](y: YId[A]) = y.a
   }
-
-  implicit val coM: Copointed[YId] = M
 }
 
 object YId extends YIdInstances
