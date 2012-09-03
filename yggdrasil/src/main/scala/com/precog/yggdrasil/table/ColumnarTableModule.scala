@@ -378,7 +378,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
                         // if any excluded column exists for the row, unequal
                         excluded.exists(_.isDefinedAt(row)) || 
                          // if any paired column compares unequal, unequal
-                        paired.exists({ case (_, equal: BoolColumn) => equal.isDefinedAt(row) && !equal(row) })
+                        paired.exists { 
+                          case (_, equal: BoolColumn) => equal.isDefinedAt(row) && !equal(row) 
+
+                          case _ => false
+                        }
                       )
                     }
                   }
@@ -1521,6 +1525,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
     def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {
+      val (spanningGraph, connectedSubgraph) = tuple
+
+      val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
+
+
+
+
       // connectedGraph.foldLeft
       sys.error("todo")
     }
