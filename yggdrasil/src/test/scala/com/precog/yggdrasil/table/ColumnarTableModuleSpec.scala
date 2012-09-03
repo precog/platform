@@ -32,6 +32,8 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
+import TableModule._
+
 trait ColumnarTableModuleSpec[M[+_]] extends
   TableModuleSpec[M] with
   CogroupSpec[M] with
@@ -126,6 +128,13 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   
   type MemoContext = DummyMemoizationContext
   def newMemoContext = new DummyMemoizationContext
+
+  trait TableCompanion extends ColumnarTableCompanion {
+    def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = 
+      sys.error("not implemented here")
+  }
+
+  object ops extends TableCompanion
 
   def table(slices: StreamT[M, Slice]) = new UnloadableTable(slices)
 
