@@ -1519,6 +1519,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       }
     }
 
+    // TODO: This should NOT return NodeSubset, but rather, something like it, without
+    //        groupKeyPrefix (which is MEANINGELSS for the return value)
     def intersect(set: Set[NodeSubset]): M[NodeSubset] = {
       sys.error("todo")
     }
@@ -1526,11 +1528,31 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
     def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {
       // TODO: Pick optimal (?) traversal order to minimize resorts
-      def pickTraversalOrder(spanningGraph: MergeGraph): List[MergeNode] = spanningGraph.nodes.toList
+      def pickTraversalOrder(spanningGraph: MergeGraph): List[MergeNode] = {
+        def pick0(remainder: Set[MergeNode], acc: List[MergeNode]): List[MergeNode] = {
+          if (remainder.isEmpty) Nil
+          else acc match {
+            case Nil => 
+              pick0(remainder.tail, remainder.head :: Nil)
+
+            case last :: _ =>
+              val edges = spanningGraph.edgesFor(last)
+
+              val options = edges.flatMap(e => Set(e.a, e.b)) -- acc
+
+              val choice = options.head
+
+              pick0(remainder - choice, choice :: acc)
+          }
+        }
+        
+        pick0(spanningGraph.nodes, List.empty[MergeNode]).reverse
+      }
 
       val (spanningGraph, connectedSubgraph) = tuple
 
       val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
+
 
       // case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
       // case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, 
@@ -1543,7 +1565,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
                           table         = node.table, 
                           groupKeyTrans = node.groupKeyTrans.spec,
                           idTrans       = Map(node.node.binding.groupId -> node.idTrans),
-                          rowTrans      = node.targetTrans.map(targetTrans => Map(node.node.binding.groupId -> targetTrans)).getOrElse(Map()))
+                          rowTrans      = node.targetTrans.map(node.node.binding.groupId -> _).toMap
+                        ).point[M]
 
 
           xs.foldLeft(initial) {
@@ -1555,9 +1578,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
 
           case Nil => sys.error("synthesize empty table???")
       }
-
-      // connectedGraph.foldLeft
-      sys.error("todo")
     }
 
     def crossAll(borgResults: Set[BorgResult]): M[BorgResult] = {
