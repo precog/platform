@@ -71,192 +71,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
   def newScratchDir(): File = Files.createTempDir()
   def jdbmCommitInterval: Long = 200000l
 
-  trait ColumnarTableCompanion extends TableCompanionLike {
-    import scala.collection.Set
-    def empty: Table = table(StreamT.empty[M, Slice])
-    
-    def constBoolean(v: Set[CBoolean]): Table = {
-      val column = ArrayBoolColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice])
-    }
-
-    def constLong(v: Set[CLong]): Table = {
-      val column = ArrayLongColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice])
-    }
-
-    def constDouble(v: Set[CDouble]): Table = {
-      val column = ArrayDoubleColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice])
-    }
-
-    def constDecimal(v: Set[CNum]): Table = {
-      val column = ArrayNumColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice])
-    }
-
-    def constString(v: Set[CString]): Table = {
-      val column = ArrayStrColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice])
-    }
-
-    def constDate(v: Set[CDate]): Table =  {
-      val column = ArrayDateColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice])
-    }
-
-    def constNull: Table = 
-      table(Slice(Map(ColumnRef(JPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice])
-
-    def constEmptyObject: Table = 
-      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice])
-
-    def constEmptyArray: Table = 
-      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice])
-
-    def intersect(sources: (Table, trans.TransSpec1)*): M[Table] = sys.error("todo")
-  }
-  
-  implicit def liftF1(f: F1) = new F1Like {
-    def compose(f1: F1) = f compose f1
-    def andThen(f1: F1) = f andThen f1
-  }
-
-  implicit def liftF2(f: F2) = new F2Like {
-    def applyl(cv: CValue) = new CF1(f(Column.const(cv), _))
-    def applyr(cv: CValue) = new CF1(f(_, Column.const(cv)))
-
-    def andThen(f1: F1) = new CF2((c1, c2) => f(c1, c2) flatMap f1.apply)
-  }
-
   protected object SliceTransform {
     def identity[A](initial: A) = SliceTransform1[A](initial, (a: A, s: Slice) => (a, s))
     def left[A](initial: A)  = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sl))
     def right[A](initial: A) = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sr))
-  }
-
-  protected case class SliceTransform1[A](initial: A, f: (A, Slice) => (A, Slice)) {
-    def apply(s: Slice) = f(initial, s)
-
-    def advance(s: Slice): (SliceTransform1[A], Slice)  = {
-      val (a0, s0) = f(initial, s)
-      (this.copy(initial = a0), s0)
-    }
-
-    def andThen[B](t: SliceTransform1[B]): SliceTransform1[(A, B)] = {
-      SliceTransform1(
-        (initial, t.initial),
-        { case ((a, b), s) => 
-            val (a0, sa) = f(a, s) 
-            val (b0, sb) = t.f(b, sa)
-            ((a0, b0), sb)
-        }
-      )
-    }
-
-    def zip[B](t: SliceTransform1[B])(combine: (Slice, Slice) => Slice): SliceTransform1[(A, B)] = {
-      SliceTransform1(
-        (initial, t.initial),
-        { case ((a, b), s) =>
-            val (a0, sa) = f(a, s)
-            val (b0, sb) = t.f(b, s)
-            assert(sa.size == sb.size)
-            ((a0, b0), combine(sa, sb))
-        }
-      )
-    }
-
-    def map(mapFunc: Slice => Slice): SliceTransform1[A] = {
-      SliceTransform1(
-        initial,
-        { case (a, s) =>
-            val (a0, sa) = f(a, s)
-            (a0, mapFunc(sa))
-        }
-      )
-    }
-  }
-
-  protected case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => (A, Slice), source: Option[TransSpec[SourceType]] = None) {
-    def apply(s1: Slice, s2: Slice) = f(initial, s1, s2)
-
-    def andThen[B](t: SliceTransform1[B]): SliceTransform2[(A, B)] = {
-      SliceTransform2(
-        (initial, t.initial),
-        { case ((a, b), sl, sr) => 
-            val (a0, sa) = f(a, sl, sr) 
-            val (b0, sb) = t.f(b, sa)
-            ((a0, b0), sb)
-        }
-      )
-    }
-
-    def zip[B](t: SliceTransform2[B])(combine: (Slice, Slice) => Slice): SliceTransform2[(A, B)] = {
-      SliceTransform2(
-        (initial, t.initial),
-        { case ((a, b), sl, sr) =>
-            val (a0, sa) = f(a, sl, sr)
-            val (b0, sb) = t.f(b, sl, sr)
-            assert(sa.size == sb.size) 
-            ((a0, b0), combine(sa, sb))
-        }
-      )
-    }
-
-    def map(mapFunc: Slice => Slice): SliceTransform2[A] = {
-      SliceTransform2(
-        initial,
-        { case (a, sl, sr) =>
-            val (a0, s0) = f(a, sl, sr)
-            (a0, mapFunc(s0))
-        }
-      )
-    }
-
-    def parallel: SliceTransform1[A] = SliceTransform1[A](initial, (a: A, s: Slice) => f(a,s,s))
-
-    def withSource(ts: TransSpec[SourceType]) = copy(source = Some(ts))
-  }
-
-  def table(slices: StreamT[M, Slice]): Table
-
-  abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike { self: Table =>
-    /**
-     * Folds over the table to produce a single value (stored in a singleton table).
-     */
-    def reduce[A](reducer: Reducer[A])(implicit monoid: Monoid[A]): M[A] = {  
-      (slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }).foldLeft(monoid.zero)((a, b) => monoid.append(a, b))
-    }
-
-    def compact(spec: TransSpec1): Table = {
-      transform(FilterDefined(Leaf(Source), spec, AnyDefined)).normalize
-    }
-
-    private def map0(f: Slice => Slice): SliceTransform1[Unit] = SliceTransform1[Unit]((), Function.untupled(f.second[Unit]))
-
-    private def transformStream[A](sliceTransform: SliceTransform1[A], slices: StreamT[M, Slice]): StreamT[M, Slice] = {
-      def stream(state: A, slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT(
-        for {
-          head <- slices.uncons
-        } yield {
-          head map { case (s, sx) =>
-            val (nextState, s0) = sliceTransform.f(state, s)
-            StreamT.Yield(s0, stream(nextState, sx))
-          } getOrElse {
-            StreamT.Done
-          }
-        }
-      )
-
-      stream(sliceTransform.initial, slices)
-    }
-
-    protected def composeSliceTransform(spec: TransSpec1): SliceTransform1[_] = {
+ 
+    def composeSliceTransform(spec: TransSpec1): SliceTransform1[_] = {
       composeSliceTransform2(spec).parallel
     }
 
     // No transform defined herein may reduce the size of a slice. Be it known!
-    protected def composeSliceTransform2(spec: TransSpec[SourceType]): SliceTransform2[_] = {
+    def composeSliceTransform2(spec: TransSpec[SourceType]): SliceTransform2[_] = {
       val result = spec match {
         case Leaf(source) if source == Source || source == SourceLeft => SliceTransform.left(())
         case Leaf(source) if source == SourceRight => SliceTransform.right(())
@@ -598,7 +423,186 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       }
       
       result.withSource(spec)
+    }  }
+
+  protected case class SliceTransform1[A](initial: A, f: (A, Slice) => (A, Slice)) {
+    def apply(s: Slice) = f(initial, s)
+
+    def advance(s: Slice): (SliceTransform1[A], Slice)  = {
+      val (a0, s0) = f(initial, s)
+      (this.copy(initial = a0), s0)
     }
+
+    def andThen[B](t: SliceTransform1[B]): SliceTransform1[(A, B)] = {
+      SliceTransform1(
+        (initial, t.initial),
+        { case ((a, b), s) => 
+            val (a0, sa) = f(a, s) 
+            val (b0, sb) = t.f(b, sa)
+            ((a0, b0), sb)
+        }
+      )
+    }
+
+    def zip[B](t: SliceTransform1[B])(combine: (Slice, Slice) => Slice): SliceTransform1[(A, B)] = {
+      SliceTransform1(
+        (initial, t.initial),
+        { case ((a, b), s) =>
+            val (a0, sa) = f(a, s)
+            val (b0, sb) = t.f(b, s)
+            assert(sa.size == sb.size)
+            ((a0, b0), combine(sa, sb))
+        }
+      )
+    }
+
+    def map(mapFunc: Slice => Slice): SliceTransform1[A] = {
+      SliceTransform1(
+        initial,
+        { case (a, s) =>
+            val (a0, sa) = f(a, s)
+            (a0, mapFunc(sa))
+        }
+      )
+    }
+  }
+
+  protected case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => (A, Slice), source: Option[TransSpec[SourceType]] = None) {
+    def apply(s1: Slice, s2: Slice) = f(initial, s1, s2)
+
+    def andThen[B](t: SliceTransform1[B]): SliceTransform2[(A, B)] = {
+      SliceTransform2(
+        (initial, t.initial),
+        { case ((a, b), sl, sr) => 
+            val (a0, sa) = f(a, sl, sr) 
+            val (b0, sb) = t.f(b, sa)
+            ((a0, b0), sb)
+        }
+      )
+    }
+
+    def zip[B](t: SliceTransform2[B])(combine: (Slice, Slice) => Slice): SliceTransform2[(A, B)] = {
+      SliceTransform2(
+        (initial, t.initial),
+        { case ((a, b), sl, sr) =>
+            val (a0, sa) = f(a, sl, sr)
+            val (b0, sb) = t.f(b, sl, sr)
+            assert(sa.size == sb.size) 
+            ((a0, b0), combine(sa, sb))
+        }
+      )
+    }
+
+    def map(mapFunc: Slice => Slice): SliceTransform2[A] = {
+      SliceTransform2(
+        initial,
+        { case (a, sl, sr) =>
+            val (a0, s0) = f(a, sl, sr)
+            (a0, mapFunc(s0))
+        }
+      )
+    }
+
+    def parallel: SliceTransform1[A] = SliceTransform1[A](initial, (a: A, s: Slice) => f(a,s,s))
+
+    def withSource(ts: TransSpec[SourceType]) = copy(source = Some(ts))
+  }
+
+  trait ColumnarTableCompanion extends TableCompanionLike {
+    import scala.collection.Set
+
+    def empty: Table = table(StreamT.empty[M, Slice])
+    
+    def constBoolean(v: Set[CBoolean]): Table = {
+      val column = ArrayBoolColumn(v.map(_.value).toArray)
+      table(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice])
+    }
+
+    def constLong(v: Set[CLong]): Table = {
+      val column = ArrayLongColumn(v.map(_.value).toArray)
+      table(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice])
+    }
+
+    def constDouble(v: Set[CDouble]): Table = {
+      val column = ArrayDoubleColumn(v.map(_.value).toArray)
+      table(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice])
+    }
+
+    def constDecimal(v: Set[CNum]): Table = {
+      val column = ArrayNumColumn(v.map(_.value).toArray)
+      table(Slice(Map(ColumnRef(JPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice])
+    }
+
+    def constString(v: Set[CString]): Table = {
+      val column = ArrayStrColumn(v.map(_.value).toArray)
+      table(Slice(Map(ColumnRef(JPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice])
+    }
+
+    def constDate(v: Set[CDate]): Table =  {
+      val column = ArrayDateColumn(v.map(_.value).toArray)
+      table(Slice(Map(ColumnRef(JPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice])
+    }
+
+    def constNull: Table = 
+      table(Slice(Map(ColumnRef(JPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice])
+
+    def constEmptyObject: Table = 
+      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice])
+
+    def constEmptyArray: Table = 
+      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice])
+
+    def intersect(sources: (Table, trans.TransSpec1)*): M[Table] = sys.error("todo")
+ 
+  }
+  
+  implicit def liftF1(f: F1) = new F1Like {
+    def compose(f1: F1) = f compose f1
+    def andThen(f1: F1) = f andThen f1
+  }
+
+  implicit def liftF2(f: F2) = new F2Like {
+    def applyl(cv: CValue) = new CF1(f(Column.const(cv), _))
+    def applyr(cv: CValue) = new CF1(f(_, Column.const(cv)))
+
+    def andThen(f1: F1) = new CF2((c1, c2) => f(c1, c2) flatMap f1.apply)
+  }
+
+  def table(slices: StreamT[M, Slice]): Table
+
+  abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike { self: Table =>
+    import SliceTransform._
+
+    /**
+     * Folds over the table to produce a single value (stored in a singleton table).
+     */
+    def reduce[A](reducer: Reducer[A])(implicit monoid: Monoid[A]): M[A] = {  
+      (slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }).foldLeft(monoid.zero)((a, b) => monoid.append(a, b))
+    }
+
+    def compact(spec: TransSpec1): Table = {
+      transform(FilterDefined(Leaf(Source), spec, AnyDefined)).normalize
+    }
+
+    private def map0(f: Slice => Slice): SliceTransform1[Unit] = SliceTransform1[Unit]((), Function.untupled(f.second[Unit]))
+
+    private def transformStream[A](sliceTransform: SliceTransform1[A], slices: StreamT[M, Slice]): StreamT[M, Slice] = {
+      def stream(state: A, slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT(
+        for {
+          head <- slices.uncons
+        } yield {
+          head map { case (s, sx) =>
+            val (nextState, s0) = sliceTransform.f(state, s)
+            StreamT.Yield(s0, stream(nextState, sx))
+          } getOrElse {
+            StreamT.Done
+          }
+        }
+      )
+
+      stream(sliceTransform.initial, slices)
+    }
+
     
     /**
      * Performs a one-pass transformation of the keys and values in the table.
@@ -1439,12 +1443,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       // post the initial sort separate from the values that it was derived from. 
       val (payloadTrans, idTrans, targetTrans, groupKeyTrans) = node.binding.targetTrans match {
         case Some(targetSetTrans) => 
-          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(targetSetTrans), WrapArray(protoGroupKeyTrans.spec))
+          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec), WrapArray(targetSetTrans))
 
           (payloadTrans,
            TransSpec1.DerefArray0, 
-           Some(TransSpec1.DerefArray1), 
-           GroupKeyTrans(TransSpec1.DerefArray2, protoGroupKeyTrans.keyOrder))
+           Some(TransSpec1.DerefArray2), 
+           GroupKeyTrans(TransSpec1.DerefArray1, protoGroupKeyTrans.keyOrder))
 
         case None =>
           val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec))

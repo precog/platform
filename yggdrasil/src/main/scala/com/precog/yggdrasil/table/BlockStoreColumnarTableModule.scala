@@ -46,6 +46,7 @@ import scalaz.std.stream._
 import scalaz.syntax.monad._
 import scalaz.syntax.monoid._
 import scalaz.syntax.traverse._
+import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.stream._
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -54,6 +55,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   ColumnarTableModule[M] with
   StorageModule[M] with
   IdSourceScannerModule[M] { self =>
+
+  import trans._
     
   override type UserId = String
   type Key
@@ -114,7 +117,243 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       }
   }
 
+  object ops extends ColumnarTableCompanion {
+    import SliceTransform._
+
+    def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = {
+      sealed trait AlignState
+      case class RunLeft(rightRow: Int, rightKey: Slice) extends AlignState
+      case class RunRight(leftRow: Int, leftKey: Slice) extends AlignState
+      case class FindEqualAdvancingRight(leftRow: Int, leftKey: Slice) extends AlignState
+      case class FindEqualAdvancingLeft(rightRow: Int, rightKey: Slice) extends AlignState
+
+      sealed trait Span
+      case object LeftSpan extends Span
+      case object RightSpan extends Span
+      case object NoSpan extends Span
+
+
+      sealed trait NextStep
+      case class MoreLeft(span: Span, leq: mutable.BitSet, ridx: Int, req: mutable.BitSet) extends NextStep
+      case class MoreRight(span: Span, lidx: Int, leq: mutable.BitSet, req: mutable.BitSet) extends NextStep
+
+      // todo: does this Unit need to be something we can use to get a handle on the resulting 
+      // table?
+      def emitSlice(left: Boolean, slice: Slice): M[Unit] = sys.error("todo")
+
+      def dumpStreams[A, B](left: StreamT[M, Slice], leftKeyTrans: SliceTransform1[A],
+                            right: StreamT[M, Slice], rightKeyTrans: SliceTransform1[B]) = {
+
+        // We will *always* have a lhead and rhead, because if at any point we run out of data,
+        // we'll still be hanging on to the last slice on the other side to use as the authority
+        // for equality comparisons
+        def step(state: AlignState, lhead: Slice, ltail: StreamT[M, Slice], leq: mutable.BitSet,
+                                    rhead: Slice, rtail: StreamT[M, Slice], req: mutable.BitSet,
+                                    lstate: A, rstate: B): M[Unit] = {
+
+          @tailrec def buildFilters(comparator: RowComparator, 
+                                    lidx: Int, lsize: Int, lacc: mutable.BitSet, 
+                                    ridx: Int, rsize: Int, racc: mutable.BitSet,
+                                    span: Span): NextStep = {
+
+            // todo: This is optimized for sparse alignments; if you get into an alignment
+            // where every pair is distinct and equal, you'll do 2*n comparisons.
+            // This should instead be optimized for dense alignments, using an algorithm that
+            // advances both sides after an equal, then backtracks on inequality
+            if (span eq LeftSpan) {
+              // We don't need to compare the index on the right, since it will be left unchanged
+              // throughout the time that we're advancing left, and even if it's beyond the end of
+              // input we can use the next-to-last element for comparison
+              
+              if (lidx < lsize) {
+                comparator.compare(lidx, ridx - 1) match {
+                  case EQ => 
+                    buildFilters(comparator, lidx + 1, lsize, lacc + lidx, ridx, rsize, racc, LeftSpan)
+                  case LT => 
+                    sys.error("Inputs to align are not correctly sorted.")
+                  case GT =>
+                    buildFilters(comparator, lidx, lsize, lacc, ridx, rsize, racc, NoSpan)
+                }
+              } else {
+                // left is exhausted in the midst of a span
+                MoreLeft(LeftSpan, lacc, ridx, racc)
+              }
+            } else {
+              if (lidx < lsize && ridx < rsize) {
+                comparator.compare(lidx, ridx) match {
+                  case EQ => 
+                    buildFilters(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc + ridx, RightSpan)
+                  case LT => 
+                    if (span eq RightSpan) {
+                      // drop into left spanning of equal
+                      buildFilters(comparator, lidx, lsize, lacc, ridx, rsize, racc, LeftSpan)
+                    } else {
+                      // advance the left in the not-left-spanning state
+                      buildFilters(comparator, lidx + 1, lsize, lacc, ridx, rsize, racc, NoSpan)
+                    }
+                  case GT =>
+                    if (span eq RightSpan) sys.error("Inputs to align are not correctly sorted")
+                    else buildFilters(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc, NoSpan)
+                }
+              } else if (lidx < lsize) {
+                // right is exhausted; span will be RightSpan or NoSpan
+                MoreRight(span, lidx, lacc, racc)
+              } else {
+                MoreLeft(NoSpan, lacc, ridx, racc)
+              }
+            }
+          }
+
+          def continue(nextStep: NextStep, comparator: RowComparator, lstate: A, lkey: Slice, rstate: B, rkey: Slice): M[Unit] = nextStep match {
+            case MoreLeft(span, leq, ridx, req) =>
+              val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size - 1, leq)))
+
+              @inline def next = ltail.uncons flatMap {
+                case Some((lhead0, ltail0)) =>
+                  val nextState = (span: @unchecked) match {
+                    case NoSpan => FindEqualAdvancingLeft(ridx, rkey)
+                    case LeftSpan => RunLeft(ridx, rkey)
+                  }
+
+                  step(nextState, lhead0, ltail0, new mutable.BitSet(), rhead, rtail, req, lstate, rstate)
+                case None =>
+                  // done on left, and we're not in an equal span on the right (since LeftSpan can only
+                  // be emitted if we're not in a right span) so we're entirely done.
+                  val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size - 1, req))) 
+                  remission map { e => emitSlice(false, e) } getOrElse ().point[M]
+              }
+
+              lemission map { e => emitSlice(true, e) >> next } getOrElse next
+
+            case MoreRight(span, lidx, lex, req) =>
+              // if span == RightSpan and no more data exists on the right, we need to 
+              // continue in buildFilters spanning on the left.
+              val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size - 1, req)))
+
+              @inline def next = rtail.uncons flatMap {
+                case Some((rhead0, rtail0)) => 
+                  val nextState = (span: @unchecked) match {
+                    case NoSpan => FindEqualAdvancingRight(lidx, lkey)
+                    case RightSpan => RunRight(lidx, lkey)
+                  }
+
+                  step(nextState, lhead, ltail, leq, rhead0, rtail0, new mutable.BitSet(), lstate, rstate)
+
+                case None =>
+                  // no need here to check for LeftSpan by the contract of buildFilters
+                  (span: @unchecked) match {
+                    case NoSpan => 
+                      // entirely done; just emit both 
+                      val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size -1, leq)))
+                      lemission map { e => emitSlice(true, e) } getOrElse ().point[M]
+
+                    case RightSpan => 
+                      // need to switch to left spanning in buildFilters
+                      val nextState = buildFilters(comparator, lidx, lhead.size, leq, rhead.size, rhead.size, req, LeftSpan)
+                      continue(nextState, comparator, lstate, lkey, rstate, rkey)
+                  }
+              }
+
+              remission map { e => emitSlice(false, e) >> next } getOrElse next
+          }
+
+
+          // this is an optimization that uses a preemptory comparison and a binary
+          // search to skip over big chunks of (or entire) slices if possible.
+          def findEqual(comparator: RowComparator, leftRow: Int, rightRow: Int): NextStep = {
+            comparator.compare(leftRow, rightRow) match {
+              case EQ => 
+                buildFilters(comparator, leftRow, lhead.size, leq, rightRow, rhead.size, req, NoSpan)
+
+              case LT => 
+                val leftIdx = comparator.nextLeftIndex(lhead.size - 1, lhead.size, 0, lhead.size - leftRow - 1)
+                if (leftIdx == lhead.size) {
+                  MoreLeft(NoSpan, leq, rightRow, req)
+                } else {
+                  buildFilters(comparator, leftIdx, lhead.size, leq, rightRow, rhead.size, req, NoSpan)
+                }
+            
+              case GT => 
+                val rightIdx = comparator.swap.nextLeftIndex(rhead.size - 1, rhead.size, 0, rhead.size - rightRow - 1)
+                if (rightIdx == rhead.size) {
+                  MoreRight(NoSpan, leftRow, leq, req)
+                } else {
+                  // do a binary search to find the indices where the comparison becomse LT or EQ
+                  buildFilters(comparator, leftRow, lhead.size, leq, rightIdx, rhead.size, req, NoSpan)
+                }
+            }
+          }
+
+          state match {
+            case FindEqualAdvancingRight(leftRow, lkey) => 
+              // whenever we drop into buildFilters in this case, we know that we will be neither
+              // in a left span nor a right span because we didn't have an equal case at the
+              // last iteration.
+
+              val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
+              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
+              
+              // do some preliminary comparisons to figure out if we even need to look at the current slice
+              val nextState = findEqual(comparator, leftRow, 0)
+              continue(nextState, comparator, lstate, lkey, nextB, rkey)    
+            
+            case FindEqualAdvancingLeft(rightRow, rkey) => 
+              // whenever we drop into buildFilters in this case, we know that we will be neither
+              // in a left span nor a right span because we didn't have an equal case at the
+              // last iteration.
+
+              val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
+              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
+              
+              // do some preliminary comparisons to figure out if we even need to look at the current slice
+              val nextState = findEqual(comparator, 0, rightRow)
+              continue(nextState, comparator, nextA, lkey, rstate, rkey)    
+            
+            case RunRight(leftRow, lkey) =>
+              val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
+              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }               
+
+              val nextState = buildFilters(comparator, leftRow, lhead.size, leq, 
+                                                       0, rhead.size, new mutable.BitSet(), RightSpan)
+
+              continue(nextState, comparator, lstate, lkey, nextB, rkey)
+            
+            case RunLeft(rightRow, rkey) =>
+              val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
+              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
+
+              val nextState = buildFilters(comparator, 0, lhead.size, new mutable.BitSet(), 
+                                                       rightRow, rhead.size, req, LeftSpan)
+
+              continue(nextState, comparator, nextA, lkey, rstate, rkey)
+          }
+        }
+        
+        left.uncons flatMap {
+          case Some((lhead, ltail)) =>
+            right.uncons.flatMap {
+              case Some((rhead, rtail)) =>
+                val (lstate, lkey) = leftKeyTrans(lhead)
+                step(FindEqualAdvancingRight(0, lkey), lhead, ltail, new mutable.BitSet(),
+                                              rhead, rtail, new mutable.BitSet(),
+                                              lstate, rightKeyTrans.initial)
+
+              case None =>
+                ().point[M]
+            }
+
+          case None =>
+            ().point[M]
+        }
+      }
+
+      dumpStreams(sourceLeft.slices, composeSliceTransform(alignOnL), sourceRight.slices, composeSliceTransform(alignOnR))
+      sys.error("remove me once dumpStreams returns the correct type.")
+    }
+  }
+
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+    import SliceTransform._
     import trans._
 
     /** 

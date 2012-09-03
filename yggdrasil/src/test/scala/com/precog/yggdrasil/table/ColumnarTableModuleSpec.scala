@@ -146,6 +146,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   type MemoContext = DummyMemoizationContext
   def newMemoContext = new DummyMemoizationContext
 
+  object ops extends ColumnarTableCompanion {
+    def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = 
+      sys.error("not implemented here")
+  }
+
   def table(slices: StreamT[M, Slice]) = new UnloadableTable(slices)
 
   "a table dataset" should {
