@@ -88,6 +88,10 @@ class InfiniteColumn { this: Column =>
   def isDefinedAt(row: Int) = true
 }
 
+class RangeColumn(range: Range) { this: Column =>
+  def isDefinedAt(row: Int) = range.contains(row)
+}
+
 class EmptyColumn[T <: Column] { this: T =>
   def isDefinedAt(row: Int) = false
   def apply(row: Int): Nothing = sys.error("Undefined.")

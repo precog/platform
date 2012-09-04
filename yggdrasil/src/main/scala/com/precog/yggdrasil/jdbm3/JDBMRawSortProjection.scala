@@ -23,7 +23,8 @@ package jdbm3
 import com.precog.common.Path
 import com.precog.yggdrasil.table._
 
-import blueeyes.json.{JPath,JPathIndex}
+import blueeyes.json._
+
 import org.apache.jdbm._
 import org.joda.time.DateTime
 import com.weiglewilczek.slf4s.Logging
@@ -41,6 +42,7 @@ import scala.collection.JavaConverters._
  * the index has been created and filled prior to creating this wrapper.
  */
 abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte],Slice] with Logging {
+
   // These should not actually be used in sorting
   def descriptor: ProjectionDescriptor = sys.error("Sort projections do not have full ProjectionDescriptors")
   def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("Insertion on sort projections is unsupported")
@@ -54,16 +56,22 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
     DB.close()
   }
 
-  // Compute the next possible key > the given key
   private def keyAfter(k: Array[Byte]): Array[Byte] = {
-    val output = ByteBuffer.wrap(new Array[Byte](k.length))
 
-    // Copy the input, read out the last 4 bytes (unique ID), then write out the successor to the unique ID
-    output.put(k).position(k.length - 5)
-    val inputId = output.getInt()
-    output.position(k.length - 5).asInstanceOf[ByteBuffer].putInt(inputId + 1)
-    output.array()
+    // TODO This won't be nearly as fast as Derek's, since JDBMSlice can no
+    // longer get into the same level of detail about the encoded format. Is
+    // this a problem? Should we allow writes w/ "holes?"
+
+    val vals = keyFormat.decode(k)
+    val last = vals.last match {
+      case CLong(n) => CLong(n + 1)
+      case v => sys.error("Expected a CLong (global ID) in the last position, but found " + v)
+    }
+    keyFormat.encode(vals.init :+ last)
   }
+
+  val rowFormat = RowFormat.forValues(valRefs)
+  val keyFormat = RowFormat.forValues(sortKeyRefs)
 
   def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Array[Byte],Slice]] = try {
     // TODO: Make this far, far less ugly
@@ -79,7 +87,6 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
     }
 
     val constrainedMap = id.map { idKey => index.tailMap(keyAfter(idKey)) }.getOrElse(index)
-    
     constrainedMap.lastKey() // should throw an exception if the map is empty, but...
 
     var firstKey: Array[Byte] = null
@@ -88,14 +95,18 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
     val slice = new JDBMSlice[Array[Byte]] {
       def source = constrainedMap.entrySet.iterator.asScala
       def requestedSize = sliceSize
-      lazy val keyColumns = sortKeyRefs.map(JDBMSlice.columnFor(JPath("[0]"), sliceSize)).toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
-      lazy val valColumns = valRefs.map(JDBMSlice.columnFor(JPath("[1]"), sliceSize)).toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
+
+      lazy val keyColumns: Array[(ColumnRef, ArrayColumn[_])] = sortKeyRefs.map(JDBMSlice.columnFor(JPath("[0]"), sliceSize))(collection.breakOut)
+      lazy val valColumns: Array[(ColumnRef, ArrayColumn[_])] = valRefs.map(JDBMSlice.columnFor(JPath("[1]"), sliceSize))(collection.breakOut)
+
+      val columnDecoder = rowFormat.ColumnDecoder(valColumns map (_._2))
+      val keyColumnDecoder = keyFormat.ColumnDecoder(keyColumns map (_._2))
 
       def loadRowFromKey(row: Int, rowKey: Array[Byte]) {
         if (row == 0) { firstKey = rowKey }
         lastKey = rowKey
 
-        ColumnCodec.readOnly.readSortColumns(rowKey, keyColumns)
+        keyColumnDecoder.decodeToRow(row, rowKey)
       }
 
       load()

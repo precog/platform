@@ -317,7 +317,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 val (paired, excludedLeft) = sl.columns.foldLeft((Map.empty[JPath, Column], Set.empty[Column])) {
                   case ((paired, excluded), (ref @ ColumnRef(selector, CLong | CDouble | CNum), col)) => 
                     val numEq = for {
-                                  ctype <- CLong :: CDouble :: CNum :: Nil
+                                  ctype <- List(CLong, CDouble, CNum)
                                   col0  <- sr.columns.get(ColumnRef(selector, ctype)) 
                                   boolc <- cf.std.Eq(col, col0)
                                 } yield boolc
@@ -354,7 +354,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
                 val excluded = excludedLeft ++ sr.columns.collect({
                   case (ColumnRef(selector, CLong | CDouble | CNum), col) 
-                    if !(CLong :: CDouble :: CNum :: Nil).exists(ctype => sl.columns.contains(ColumnRef(selector, ctype))) => col
+                    if !List(CLong, CDouble, CNum).exists(ctype => sl.columns.contains(ColumnRef(selector, ctype))) => col
 
                   case (ref, col) if !sl.columns.contains(ref) => col
                 })
