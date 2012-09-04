@@ -110,7 +110,7 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
             case _ => Some(SNull)
           }
         } else {
-          Some(back.toSValue)
+          Some(SValue.fromCValue(back))
         }
       }
     

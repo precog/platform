@@ -1,0 +1,13 @@
+{
+  "columns":[{
+    "descriptor":{
+      "path":"/transaction/",
+      "selector":".quantity",
+      "valueType":"Long",
+      "authorities":{
+        "uids":["C18ED787-BF07-4097-B819-0415C759C8D5"]
+      }
+    },
+    "index":1
+  }]
+}

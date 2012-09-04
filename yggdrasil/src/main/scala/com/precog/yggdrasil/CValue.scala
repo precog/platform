@@ -38,106 +38,98 @@ import scalaz.std.AllInstances._
 import _root_.java.io.{Externalizable,ObjectInput,ObjectOutput}
 import _root_.java.math.MathContext
 
-sealed trait CValue extends Serializable {
-  @inline private[CValue] final def typeIndex: Int = (this : @unchecked) match {
-    case CString(v)  => 0
-    case CBoolean(v) => 1
-    case CLong(v)    => 3
-    case CDouble(v)  => 5
-    case CNum(v)     => 6
-  }
-
-  @inline final def toSValue: SValue = (this : @unchecked) match {
-    case CString(v)  => SString(v)
-    case CBoolean(v) => if (v) STrue else SFalse
-    case CLong(v)    => SDecimal(v)
-    case CDouble(v)  => SDecimal(v)
-    case CNum(v)     => SDecimal(v)
-  }
+sealed trait CValue {
+  def cType: CType
 
   def toJValue: JValue
 }
 
+sealed trait CNullValue extends CValue { self: CNullType =>
+  def cType: CNullType = self
+}
+
+sealed trait CWrappedValue[@specialized(Boolean, Long, Double) A] extends CValue {
+  def cType: CValueType[A]
+  def value: A
+  def toJValue = cType.jValueFor(value)
+}
+
+sealed trait CNumericValue[A] extends CWrappedValue[A] {
+  def cType: CNumericType[A]
+  def toCNum: CNum = CNum(cType.bigDecimalFor(value))
+}
+
 object CValue {
-  @transient
-  implicit object order extends Order[CValue] {
-    def order(v1: CValue, v2: CValue) = (v1, v2) match {
-      case (CString(a), CString(b)) => Order[String].order(a, b)
-      case (CBoolean(a), CBoolean(b)) => Order[Boolean].order(a, b)
-      case (CLong(a), CLong(b)) => Order[Long].order(a, b)
-      case (CDouble(a), CDouble(b)) => Order[Double].order(a, b)
-      case (CNum(a), CNum(b)) => Order[BigDecimal].order(a, b)
-      case (vx, vy) => Order[Int].order(vx.typeIndex, vy.typeIndex)
-    }
+  def compareValues(a: CValue, b: CValue): Int = (a,b) match {
+    case (CString(as), CString(bs)) => as.compareTo(bs)
+    case (CBoolean(ab), CBoolean(bb)) => ab.compareTo(bb)
+    case (CLong(al), CLong(bl)) => al.compareTo(bl)
+    case (CDouble(ad), CDouble(bd)) => ad.compareTo(bd)
+    case (CNum(an), CNum(bn)) => an.compareTo(bn)
+    case (CDate(ad), CDate(bd)) => ad.compareTo(bd)
+
+    // The only safe way to compare any mix of the 3 types.
+    case (a: CNumericValue[_], b: CNumericValue[_]) =>
+      compareValues(a.toCNum, b.toCNum)
+        
+    case (a: CNullValue, b: CNullValue) if a.cType == b.cType => 0
+
+    case invalid                      => sys.error("Invalid comparison for SortingKey of " + invalid)
   }
 
-  def compareValues(a: CValue, b: CValue): Int = (a,b) match {
-    case (CString(as), CString(bs))   => as.compareTo(bs)
-    case (CBoolean(ab), CBoolean(bb)) => ab.compareTo(bb)
-    case (CLong(al), CLong(bl))       => al.compareTo(bl)
-    case (CLong(al), CDouble(bd))     => al.toDouble.compareTo(bd)
-    case (CLong(al), CNum(bn))        => BigDecimal(al, MathContext.UNLIMITED).compareTo(bn)
-    case (CDouble(ad), CLong(bl))     => ad.compareTo(bl.toDouble)
-    case (CDouble(ad), CDouble(bd))   => ad.compareTo(bd)
-    case (CDouble(ad), CNum(bn))      => BigDecimal(ad, MathContext.UNLIMITED).compareTo(bn)
-    case (CNum(an), CLong(bl))        => an.compareTo(BigDecimal(bl, MathContext.UNLIMITED))
-    case (CNum(an), CDouble(bd))      => an.compareTo(BigDecimal(bd, MathContext.UNLIMITED))
-    case (CNum(an), CNum(bn))         => an.compareTo(bn)
-    case (CDate(ad), CDate(bd))       => ad.compareTo(bd)
-    case (CNull, CNull)               => 0
-    case (CEmptyObject, CEmptyObject) => 0
-    case (CEmptyArray, CEmptyArray)   => 0
-    case invalid                      => sys.error("Invalid comparison for SortingKey of " + invalid)
+  implicit object CValueOrder extends Order[CValue] {
+    def order(a: CValue, b: CValue): Ordering = if (a.cType == b.cType) {
+      Ordering.fromInt(compareValues(a, b))
+    } else {
+      CType.CTypeOrder.order(a.cType, b.cType)
+    }
   }
 }
 
-sealed abstract class CType(val format: StorageFormat, val stype: SType) extends Serializable {
-  type CA
 
-  val CC: Class[CA]
-
-  implicit val manifest: Manifest[CA]
-
+sealed trait CType extends Serializable {
+  def readResolve(): CType
+  def format: StorageFormat
   def isNumeric: Boolean = false
-
-  def order(a: CA, b: CA): Ordering
-
-  def jvalueFor(a: CA): JValue
 
   @inline 
   private[CType] final def typeIndex = this match {
-    case CBoolean     => 0
+    case CBoolean      => 0
 
-    case CString      => 2
+    case CString       => 2
     
-    case CLong        => 4
-    case CDouble      => 6
-    case CNum         => 7
+    case CLong         => 4
+    case CDouble       => 6
+    case CNum          => 7
     
-    case CEmptyObject => 8
-    case CEmptyArray  => 9
-    case CNull        => 10
+    case CEmptyObject  => 8
 
-    case CDate        => 11
+    case CEmptyArray   => 9
 
-    case CUndefined   => 12
+    // FYI: CArrayType is 10.
+
+    case CNull         => 11
+
+    case CDate         => 12
+
+    case CUndefined    => 13
   }
-  
-  def =~(tpe: SType): Boolean = (this, tpe) match {
-    case (CBoolean, SBoolean)    => true  
+}
 
-    case (CString, SString)      => true
-    
-    case (CLong, SDecimal)       => true
-    case (CDouble, SDecimal)     => true
-    case (CNum, SDecimal)        => true
-    
-    case (CEmptyObject, SObject) => true
-    case (CEmptyArray, SArray)   => true
-    case (CNull, SNull)          => true
+sealed trait CNullType extends CType with CNullValue {
+  val format = FixedWidth(0)
+}
 
-    case _ => false
-  }  
+sealed abstract class CValueType[A](val format: StorageFormat) extends CType { self =>
+  def readResolve(): CValueType[A]
+  def apply(a: A): CWrappedValue[A]
+  def order(a: A, b: A): Ordering
+  def jValueFor(a: A): JValue
+}
+
+sealed abstract class CNumericType[A](format: StorageFormat) extends CValueType[A](format) {
+  override def isNumeric: Boolean = true
+  def bigDecimalFor(a: A): BigDecimal
 }
 
 trait CTypeSerialization {
@@ -154,6 +146,8 @@ trait CTypeSerialization {
     case CUndefined             => sys.error("CUndefined cannot be serialized")
   } 
 
+  val ArrayName = """Array[(.*)]""".r
+
   def fromName(n: String): Option[CType] = n match {
     case "String"        => Some(CString)
     case "Boolean"       => Some(CBoolean)
@@ -167,11 +161,11 @@ trait CTypeSerialization {
     case _ => None
   }
     
-  implicit val PrimtitiveTypeDecomposer : Decomposer[CType] = new Decomposer[CType] {
+  implicit val CTypeDecomposer : Decomposer[CType] = new Decomposer[CType] {
     def decompose(ctype : CType) : JValue = JString(nameOf(ctype))
   }
 
-  implicit val STypeExtractor : Extractor[CType] = new Extractor[CType] with ValidatedExtraction[CType] {
+  implicit val CTypeExtractor : Extractor[CType] = new Extractor[CType] with ValidatedExtraction[CType] {
     override def validated(obj : JValue) : Validation[Extractor.Error,CType] = 
       obj.validated[String].map( fromName _ ) match {
         case Success(Some(t)) => Success(t)
@@ -181,43 +175,20 @@ trait CTypeSerialization {
   }
 }
 
-object CType extends CTypeSerialization {
+case object CType extends CTypeSerialization {
   def readResolve() = CType
 
-  // CString
-  // CBoolean
-  // CLong
-  // CDouble
-  // CNum
-  // CNull
-  // CEmptyObject
-  // CEmptyArray
+  def of(v: CValue): CType = v.cType
 
-  def of(v: CValue): CType = v match {
-    case c: CString    => CString
-    case c: CBoolean   => CBoolean
-    case c: CLong      => CLong
-    case c: CDouble    => CDouble
-    case c: CNum       => CNum
-    case c: CDate       => CDate
-    case CNull         => CNull
-    case CEmptyObject  => CEmptyObject
-    case CEmptyArray   => CEmptyArray
-    case CUndefined    => CUndefined
-  }
-
-  def canCompare(t1: CType, t2: CType): Boolean = (t1, t2) match {
-    case (n1: CNumeric, n2: CNumeric) => true
-    case (a, b) if a.getClass() == b.getClass() => true
-    case _ => false
-  }
+  def canCompare(t1: CType, t2: CType): Boolean =
+    (t1 == t2) || (t1.isNumeric && t2.isNumeric)
 
   def unify(t1: CType, t2: CType): Option[CType] = {
     (t1, t2) match {
       case (CLong, CLong)     => Some(CLong)
       case (CLong, CDouble)   => Some(CDouble)
       case (CLong, CNum)      => Some(CNum)
-      case (CDouble, CLong)   => Some(CDouble)
+      case (CDouble, CLong)   => Some(CNum)
       case (CDouble, CDouble) => Some(CDouble)
       case (CDouble, CNum)    => Some(CNum)
       case (CNum, CLong)      => Some(CNum)
@@ -229,6 +200,9 @@ object CType extends CTypeSerialization {
       case _ => None
     }
   }
+
+  // TODO Should return Option[CValue]... is this even used?
+  // Yes; it is used only in RoutingTable.scala
   @inline
   final def toCValue(jval: JValue): CValue = (jval: @unchecked) match {
     case JString(s) => CString(s)
@@ -246,6 +220,8 @@ object CType extends CTypeSerialization {
     case JNull      => CNull
     case JObject(Nil) => CEmptyObject
     case JArray(Nil) => CEmptyArray
+    case JArray(values) =>
+      sys.error("TODO: Allow for homogeneous JArrays -> CArray.")
   }
 
   @inline
@@ -278,147 +254,131 @@ object CType extends CTypeSerialization {
     case JNull        => Some(CNull)
     case JArray(Nil)  => Some(CEmptyArray)
     case JObject(Nil) => Some(CEmptyObject)
+    case JArray(_)    => None // TODO Allow homogeneous JArrays -> CType
     case _            => None
   }
 
   implicit object CTypeOrder extends Order[CType] {
-    def order(t1: CType, t2: CType): Ordering = Order[Int].order(t1.typeIndex, t2.typeIndex)
+    def order(t1: CType, t2: CType): Ordering = (t1, t2) match {
+      // case (CArrayType(t1), CArrayType(t2)) => order(t1, t2)
+      case (_, _) => Order[Int].order(t1.typeIndex, t2.typeIndex)
+    }
   }
 }
+
+object CValueType {
+  def apply[A](implicit A: CValueType[A]): CValueType[A] = A
+  def apply[A](a: A)(implicit A: CValueType[A]): CWrappedValue[A] = A(a)
+
+  // These let us do, def const[A: CValueType](a: A): CValue = CValueType[A](a)
+
+  implicit def string: CValueType[String] = CString
+  implicit def boolean: CValueType[Boolean] = CBoolean
+  implicit def long: CValueType[Long] = CLong
+  implicit def double: CValueType[Double] = CDouble
+  implicit def bigDecimal: CValueType[BigDecimal] = CNum
+  implicit def dateTime: CValueType[DateTime] = CDate
+}
+
 
 //
 // Strings
 //
-case class CString(value: String) extends CValue {
-  def toJValue = JString(value)
+case class CString(value: String) extends CWrappedValue[String] {
+  val cType = CString
 }
 
-case object CString extends CType(LengthEncoded, SString) {
+case object CString extends CValueType[String](LengthEncoded) {
   def readResolve() = CString
-  type CA = String
-  val CC = classOf[String]
   def order(s1: String, s2: String) = stringInstance.order(s1, s2)
-  def jvalueFor(s: String) = JString(s)
-  implicit val manifest = implicitly[Manifest[String]]
+  def jValueFor(s: String) = JString(s)
 }
 
 //
 // Booleans
 //
-case class CBoolean(value: Boolean) extends CValue {
-  def toJValue = JBool(value)
+case class CBoolean(value: Boolean) extends CWrappedValue[Boolean] {
+  val cType = CBoolean
 }
 
-case object CBoolean extends CType(FixedWidth(1), SBoolean) {
+case object CBoolean extends CValueType[Boolean](FixedWidth(1)) {
   def readResolve() = CBoolean
-  type CA = Boolean
-  val CC = classOf[Boolean]
   def order(v1: Boolean, v2: Boolean) = booleanInstance.order(v1, v2)
-  def jvalueFor(v: Boolean) = JBool(v)
-  implicit val manifest = implicitly[Manifest[Boolean]]
+  def jValueFor(v: Boolean) = JBool(v)
 }
 
 //
 // Numerics
 //
-sealed abstract class CNumeric(format: StorageFormat, stype: SType) extends CType(format, stype)
-
-case class CLong(value: Long) extends CValue {
-  def toJValue = JNum(value)
+case class CLong(value: Long) extends CNumericValue[Long] {
+  val cType = CLong
 }
-case object CLong extends CNumeric(FixedWidth(8), SDecimal) {
+
+case object CLong extends CNumericType[Long](FixedWidth(8)) {
   def readResolve() = CLong
-  type CA = Long
-  val CC = classOf[Long]
-  override def isNumeric: Boolean = true
   def order(v1: Long, v2: Long) = longInstance.order(v1, v2)
-  def jvalueFor(v: Long) = JNum(v)
-  implicit val manifest = implicitly[Manifest[Long]]
+  def jValueFor(v: Long): JValue = JNum(BigDecimal(v, MathContext.UNLIMITED))
+  def bigDecimalFor(v: Long) = BigDecimal(v, MathContext.UNLIMITED)
 }
 
-case class CDouble(value: Double) extends CValue {
-  def toJValue = JNum(value)
+case class CDouble(value: Double) extends CNumericValue[Double] {
+  val cType = CDouble
 }
-case object CDouble extends CNumeric(FixedWidth(8), SDecimal) {
+
+case object CDouble extends CNumericType[Double](FixedWidth(8)) {
   def readResolve() = CDouble
-  type CA = Double
-  val CC = classOf[Double]
-  override def isNumeric: Boolean = true
   def order(v1: Double, v2: Double) = doubleInstance.order(v1, v2)
-  def jvalueFor(v: Double) = JNum(v)
-  implicit val manifest = implicitly[Manifest[Double]]
+  def jValueFor(v: Double) = JNum(BigDecimal(v.toString, MathContext.UNLIMITED))
+  def bigDecimalFor(v: Double) = BigDecimal(v, MathContext.UNLIMITED)
 }
 
-case class CNum(value: BigDecimal) extends CValue {
-  def toJValue = JNum(value)
+case class CNum(value: BigDecimal) extends CNumericValue[BigDecimal] {
+  val cType = CNum
 }
-case object CNum extends CNumeric(LengthEncoded, SDecimal) {
+
+case object CNum extends CNumericType[BigDecimal](LengthEncoded) {
   def readResolve() = CNum
-  type CA = BigDecimal
-  val CC = classOf[BigDecimal]
-  override def isNumeric: Boolean = true
   def order(v1: BigDecimal, v2: BigDecimal) = bigDecimalInstance.order(v1, v2)
-  def jvalueFor(v: BigDecimal) = JNum(v)
-  implicit val manifest = implicitly[Manifest[BigDecimal]]
+  def jValueFor(v: BigDecimal) = JNum(v)
+  def bigDecimalFor(v: BigDecimal) = v
 }
 
-case class CDate(value: DateTime) extends CValue {
-  def toJValue = JString(value.toString)
+//
+// Dates
+//
+case class CDate(value: DateTime) extends CWrappedValue[DateTime] {
+  val cType = CDate
 }
 
-case object CDate extends CType(FixedWidth(8), SString) {
+case object CDate extends CValueType[DateTime](FixedWidth(8)) {
   def readResolve() = CDate
-  type CA = DateTime
-  val CC = classOf[DateTime]
   def order(v1: DateTime, v2: DateTime) = sys.error("todo")
-  def jvalueFor(v: DateTime) = JString(v.toString)
-  implicit val manifest = implicitly[Manifest[DateTime]]
+  def jValueFor(v: DateTime) = JString(v.toString)
 }
-
-sealed trait CNullType extends CType 
 
 //
 // Nulls
 //
-case object CNull extends CType(FixedWidth(0), SNull) with CNullType with CValue {
+case object CNull extends CNullType with CNullValue {
   def readResolve() = CNull
-  type CA = Null
-  val CC = classOf[Null]
-  def order(v1: Null, v2: Null) = EQ
-  def jvalueFor(v: Null) = JNull
   def toJValue = JNull
-  implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
-case object CUndefined extends CType(FixedWidth(0), SUndefined) with CNullType with CValue {
-  def readResolve() = CUndefined
-  type CA = Nothing
-  val CC = classOf[Nothing]
-  def order(v1: Nothing, v2: Nothing) = EQ
-  def jvalueFor(v: Nothing) = JNothing
-  def toJValue = JNothing
-  implicit val manifest: Manifest[Nothing] = implicitly[Manifest[Nothing]]
-
-}
-
-case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType with CValue {
+case object CEmptyObject extends CNullType with CNullValue {
   def readResolve() = CEmptyObject
-  type CA = Null
-  val CC = classOf[Null]
-  def order(v1: Null, v2: Null) = EQ
-  def jvalueFor(v: Null) = JObject(Nil)
   def toJValue = JObject(Nil)
-  implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
-case object CEmptyArray extends CType(FixedWidth(0), SArray) with CNullType with CValue {
+case object CEmptyArray extends CNullType with CNullValue {
   def readResolve() = CEmptyArray
-  type CA = Null
-  val CC = classOf[Null]
-  def order(v1: Null, v2: Null) = EQ
-  def jvalueFor(v: Null) = JArray(Nil)
   def toJValue = JArray(Nil)
-  implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
-// vim: set ts=4 sw=4 et:
+//
+// Undefined - cannot ever exist as a value.
+//
+case object CUndefined extends CNullType with CNullValue {
+  def readResolve() = CUndefined
+  def toJValue = JNothing
+}
+

@@ -35,6 +35,7 @@ object TableModule {
     val Value = JPathField("value")
     val Group = JPathField("group")
     val SortKey = JPathField("sortkey")
+    val SortGlobalId = JPathField("globalid")
   }  
 
   sealed trait Definedness
@@ -315,8 +316,8 @@ trait TableModule[M[+_]] extends FNModule {
     def intersect(identitySpec: TransSpec1, sources: Table*): M[Table]
   }
   
-  def ops: TableCompanion
-  def grouper: Grouper
+  val ops: TableCompanion
+  val grouper: Grouper
   
   type Table <: TableLike
   type TableCompanion <: TableCompanionLike
