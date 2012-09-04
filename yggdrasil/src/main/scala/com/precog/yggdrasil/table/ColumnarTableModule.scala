@@ -1099,7 +1099,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       sys.error("todo")
     }
 
-
     final case class BorgTraversalModel private (ioCost: Long, size: Long, ordering: OrderingConstraint) { self =>
       lazy val ticVars: Set[TicVar] = ordering.ordering.toSet.flatten
 
@@ -1112,7 +1111,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           val uniqueTicVars = unionTicVars -- commonTicVars
 
           // TODO: Highly questionable, like this whole model!
-          val newSize = (size + rightSize) * (uniqueTicVars.size + 1)
+          val newSize = (self.size.max(rightSize)) * (uniqueTicVars.size + 1)
 
           (ordering & OrderingConstraint(Seq(rightTicVars))) match {
             case Some(newConstraint) =>
@@ -1122,7 +1121,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             case None =>
               // We have to resort this one:
               ({                
-                val inputCost = size + rightSize
+                val inputCost = self.size + rightSize
                 val outputCost = newSize
 
                 inputCost + outputCost
@@ -1130,7 +1129,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           }
         }
 
-        BorgTraversalModel(self.ioCost + ioCost, newSize, newOrdering)
+        BorgTraversalModel(self.ioCost + newIoCost, newSize, newOrdering)
       }
     }
     object BorgTraversalModel {
@@ -1145,6 +1144,29 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           orderings      = orderings :+ cogroupModel.ordering,
           model          = cogroupModel
         )
+      }
+
+      // TODO: Backpropagate constraints and fix all unfixed orderings:
+      def fixedOrderings: Vector[Seq[TicVar]] = {
+        def fix0(unfixed: Vector[OrderingConstraint], fixed: Vector[Seq[TicVar]] = Vector.empty): Vector[Seq[TicVar]] = {
+          unfixed.lastOption match {
+            case None => fixed
+
+            case Some(unfixedHead) =>
+              fixed.headOption match {
+                case None =>
+                  // We've met all constraints, just pick any fixed ordering:
+                  fix0(unfixed.tail, Vector(unfixedHead.fixed))
+
+                case Some(fixedHead) =>
+                  val newFixed = (OrderingConstraint(fixedHead.map(v => Set(v))) & unfixedHead).get.fixed
+
+                  fix0(unfixed.tail, newFixed +: fixed)
+              }
+          }
+        }
+
+        fix0(orderings)
       }
     }
     object BorgTraversalPlan {
@@ -1201,6 +1223,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       // case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, 
       //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
       val plan = findBorgTraversalOrder(spanningGraph, connectedSubgraph)
+
+      val orderings = plan.fixedOrderings
 
       val x =  plan.traversalOrder.head
       val xs = plan.traversalOrder.tail
