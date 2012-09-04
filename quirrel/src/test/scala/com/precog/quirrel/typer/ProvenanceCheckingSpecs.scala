@@ -92,53 +92,55 @@ object ProvenanceCheckingSpecs extends Specification
     }
     
     "reject dispatch on different loads" in {
-      val tree = compile("fun('a, 'b) := 'a + 'b fun(//foo, //bar)")
+      val tree = compile("fun(a, b) := a + b fun(//foo, //bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject dispatch on static and dynamic provenances" in {
-      val tree = compile("fun('a, 'b) := 'a + 'b fun(//foo, new 1)")
+      val tree = compile("fun(a, b) := a + b fun(//foo, new 1)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject dispatch on differing dynamic provenances" in {
-      val tree = compile("fun('a, 'b) := 'a + 'b fun(new 1, new 1)")
+      val tree = compile("fun(a, b) := a + b fun(new 1, new 1)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject dispatch to new-modified identity function with dynamic provenance" in {
-      val tree = compile("fun('a) := 'a + new 42 fun(new 24)")
+      val tree = compile("fun(a) := a + new 42 fun(new 24)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(SetFunctionAppliedToSet)
     }
     
     "reject dispatch to new-modified identity function with static provenance" in {
-      val tree = compile("fun('a) := 'a + new 42 fun(//foo)")
+      val tree = compile("fun(a) := a + new 42 fun(//foo)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(SetFunctionAppliedToSet)
     }
     
     "reject dispatch to load-modified identity function with dynamic provenance" in {
-      val tree = compile("fun('a) := 'a + //foo fun(new 24)")
+      val tree = compile("fun(a) := a + //foo fun(new 24)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(SetFunctionAppliedToSet)
     }
     
+    // TODO
     "reject dispatch to load-modified identity function with static provenance" in {
-      val tree = compile("fun('a) := 'a + //foo fun(//foo)")
+      val tree = compile("fun(a) := a + //foo fun(//foo)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(SetFunctionAppliedToSet)
     }
     
+    // TODO
     "reject dispatch to load-modified identity function with union provenance" in {
       val input = """
         | foo := //foo
         | bar := //bar
         |
-        | id('a, 'b) := 'a + 'b + foo
+        | id(a, b) := a + b + foo
         |
         | foo ~ bar
         |   id(foo, bar)
@@ -149,19 +151,19 @@ object ProvenanceCheckingSpecs extends Specification
     }
     
     "reject dispatch to where-less value function with too few parameters" in {
-      val tree = compile("fun('a) := 'a + 5 fun")
+      val tree = compile("fun(a) := a + 5 fun")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(UnspecifiedRequiredParams(Vector("'a")))
     }
     
     "reject dispatch to where-less static function with too few parameters" in {
-      val tree = compile("fun('a) := 'a + //foo fun")
+      val tree = compile("fun(a) := a + //foo fun")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(UnspecifiedRequiredParams(Vector("'a")))
     }
     
     "reject dispatch to where-less dynamic function with too few parameters" in {
-      val tree = compile("fun('a) := 'a + new 42 fun")
+      val tree = compile("fun(a) := a + new 42 fun")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(UnspecifiedRequiredParams(Vector("'a")))
     }
@@ -186,25 +188,25 @@ object ProvenanceCheckingSpecs extends Specification
       }
       
       {
-        val tree = compile("a('b) := 'b a(1, 2)")
+        val tree = compile("a(b) := b a(1, 2)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(IncorrectArity(1, 2))
       }
       
       {
-        val tree = compile("a('b) := 'b + //foo a(1, 2)")
+        val tree = compile("a(b) := b + //foo a(1, 2)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(IncorrectArity(1, 2))
       }
       
       {
-        val tree = compile("a('b, 'c, 'd) := 'b + 'c + 'd a(1, 2, 3, 4, 5)")
+        val tree = compile("a(b, c, d) := b + c + d a(1, 2, 3, 4, 5)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(IncorrectArity(3, 5))
       }
       
       {
-        val tree = compile("a('b, 'c, 'd) := 'b + 'c + 'd + //foo a(1, 2, 3, 4, 5)")
+        val tree = compile("a(b, c, d) := b + c + d + //foo a(1, 2, 3, 4, 5)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(IncorrectArity(3, 5))
       }
@@ -472,63 +474,64 @@ object ProvenanceCheckingSpecs extends Specification
       }
     }
     
+    // TODO
     "reject dispatch to a set function with set parameters" in {
       {
-        val tree = compile("a('b) := 'b + //foo a(//foo)")
+        val tree = compile("a(b) := b + //foo a(//foo)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b) := 'b + //foo a(//bar)")
+        val tree = compile("a(b) := b + //foo a(//bar)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + //foo a(//foo, //foo)")
+        val tree = compile("a(b, c) := b + c + //foo a(//foo, //foo)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + //foo a(//bar, //bar)")
+        val tree = compile("a(b, c) := b + c + //foo a(//bar, //bar)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + //foo a(new 2, 42)")
+        val tree = compile("a(b, c) := b + c + //foo a(new 2, 42)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b) := 'b + new 1 a(//foo)")
+        val tree = compile("a(b) := b + new 1 a(//foo)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b) := 'b + new 1 a(//bar)")
+        val tree = compile("a(b) := b + new 1 a(//bar)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(//foo, //foo)")
+        val tree = compile("a(b, c) := b + c + new 1 a(//foo, //foo)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(//bar, //bar)")
+        val tree = compile("a(b, c) := b + c + new 1 a(//bar, //bar)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(new 2, 42)")
+        val tree = compile("a(b, c) := b + c + new 1 a(new 2, 42)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
