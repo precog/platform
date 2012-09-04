@@ -16,6 +16,7 @@ object TableModule {
     val Value = JPathField("value")
     val Group = JPathField("group")
     val SortKey = JPathField("sortkey")
+    val SortGlobalId = JPathField("globalid")
   }  
 
   sealed trait Definedness
