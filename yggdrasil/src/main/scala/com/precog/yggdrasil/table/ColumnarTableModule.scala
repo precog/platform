@@ -831,6 +831,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     object OrderingConstraints {
       val Zero = OrderingConstraint(Vector.empty)
 
+      def apply(order: Seq[TicVar]): OrderingConstraint = OrderingConstraint(order.map(v => Set(v)))
+
       /**
        * Compute a new constraint that can replace both input constraints
        */
@@ -1162,7 +1164,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   // TODO: Should not include "new" tic vars in backpropagated constraint:
                   val newTicVars = fixedHead.toSet -- unfixedHead.fixed.toSet
 
-                  val newFixed = (OrderingConstraint(fixedHead.map(v => Set(v))) & unfixedHead).map { isect =>
+                  val newFixed = (OrderingConstraint(fixedHead) & unfixedHead).map { isect =>
                     // Get rid of tic variables that should not exist:
                     isect.fixed.filterNot(newTicVars.contains)
                   }.getOrElse {
