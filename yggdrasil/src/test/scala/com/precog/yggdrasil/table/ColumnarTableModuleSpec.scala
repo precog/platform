@@ -208,16 +208,18 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       //"concatenate dissimilar objects" in checkObjectConcat
       //"concatenate dissimilar arrays" in checkArrayConcat
       //"delete elements according to a JType" in checkObjectDelete
-      //"perform a trivial type-based filter" in checkTypedTrivial
-      //"perform a trivial heterogeneous type-based filter" in checkTypedHeterogeneous
-      //"perform a trivial object type-based filter" in checkTypedObject
+      "perform a trivial type-based filter" in checkTypedTrivial
+      "perform a trivial heterogeneous type-based filter" in checkTypedHeterogeneous
+      "perform a trivial object type-based filter" in checkTypedObject
       "perform another trivial object type-based filter" in checkTypedObject2
-      //"perform a trivial array type-based filter" in checkTypedArray
+      "perform a trivial array type-based filter" in checkTypedArray
       "perform another trivial array type-based filter" in checkTypedArray2
-      //"perform a trivial number type-based filter" in checkTypedNumber
-      //"perform another trivial number type-based filter" in checkTypedNumber2
-      //"perform a filter returning the empty set" in checkTypedEmpty
-      //"perform a less trivial type-based filter" in checkTyped
+      "perform yet another trivial array type-based filter" in checkTypedArray3
+      "perform a fourth trivial array type-based filter" in checkTypedArray4
+      "perform a trivial number type-based filter" in checkTypedNumber
+      "perform another trivial number type-based filter" in checkTypedNumber2
+      "perform a filter returning the empty set" in checkTypedEmpty
+      "perform a less trivial type-based filter" in checkTyped
       //"perform a summation scan case 1" in testTrivialScan
       //"perform a summation scan" in checkScan
       //"perform dynamic object deref" in testDerefObjectDynamic

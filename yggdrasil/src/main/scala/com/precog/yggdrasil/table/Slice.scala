@@ -168,7 +168,7 @@ trait Slice { source =>
 
   def typed(jtpe: JType): Slice = new Slice {  //TODO use logicalColumns
     val size = source.size
-
+    val sub = Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)
     val columns = {
       if (size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)) {
         val filteredCols = source.columns.filter { case (ColumnRef(path, ctpe), _) => {
@@ -186,7 +186,7 @@ trait Slice { source =>
           case CEmptyArray => JArrayFixedT(Map.empty[Int, JType])
         })}
 
-        val values = grouped.values map { seq => seq.flatMap { case (path, ctpe) => filteredCols.get(ColumnRef(path, ctpe)) } }  //TODO bug could be here
+        val values = grouped.values map { seq => seq.flatMap { case (path, ctpe) => filteredCols.get(ColumnRef(path, ctpe)) } }
         
         def defined(row: Int, values: Iterable[Seq[Column]]): Boolean = values.forall { _.exists { _.isDefinedAt(row) }}
 

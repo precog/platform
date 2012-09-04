@@ -611,10 +611,50 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
 
     val results = toJson(table.transform {
       Typed(Leaf(Source), 
-        JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JNumberT)), "key" -> JArrayUnfixedT)))
+        JObjectFixedT(Map("value" -> JArrayFixedT(Map(1 -> JBooleanT)), "key" -> JArrayUnfixedT)))
     })
 
-    results.copoint must_== Stream()
+    val expected = Stream(JObject(List(JField("value", JArray(List(JNothing, JBool(true)))), JField("key", JArray(List(JNum(1)))))))
+    results.copoint must_== expected
+  }
+
+  def checkTypedArray4 = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JArray(List(JNum(2.4), JNum(12), JBool(true), JArray(List())))), JField("key", JArray(List(JNum(1)))))),
+        JObject(List(JField("value", JArray(List(JNum(3.5), JNull, JBool(false)))), JField("key", JArray(List(JNum(2)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), 
+          JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JNumberT, 1 -> JNumberT, 2 -> JBooleanT, 3 -> JArrayFixedT(Map()))), "key" -> JArrayUnfixedT)))
+    })
+
+    val expected = Stream(
+      JObject(List(JField("value", JArray(List(JNum(2.4), JNum(12), JBool(true), JArray(List())))), JField("key", JArray(List(JNum(1)))))))
+    results.copoint must_== expected
+  }
+
+  def checkTypedArray3 = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JArray(List(JArray(List()), JArray(List())))), JField("key", JArray(List(JNum(1)))))),
+        JObject(List(JField("value", JArray(List(JArray(List()), JArray(List()), JNull))), JField("key", JArray(List(JNum(1)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val jtpe = JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JArrayFixedT(Map()), 1 -> JArrayFixedT(Map()), 2 -> JNullT)), "key" -> JArrayUnfixedT))
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), jtpe)
+    })
+      
+    val included: Map[JPath, CType] = Map(JPath(List(JPathIndex(0))) -> CEmptyArray, JPath(List(JPathIndex(1))) -> CEmptyArray)
+    val subsumes: Boolean = Schema.subsumes(included.toSeq, jtpe)
+    println("subsumes: %s\n".format(subsumes))
+
+    results.copoint must_== expected(data, included, subsumes)
   }
 
   def checkTypedObject2 = {
@@ -629,7 +669,8 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         JObjectFixedT(Map("value" -> JObjectFixedT(Map("bar" -> JNumberT)), "key" -> JArrayUnfixedT)))
     })
 
-    results.copoint must_== Stream()
+    val expected = Stream(JObject(List(JField("value", JObject(List(JField("bar", JNum(77))))), JField("key", JArray(List(JNum(1)))))))
+    results.copoint must_== expected
   }  
   
   def checkTypedNumber = {
@@ -687,8 +728,8 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
       val schema = sample.schema.getOrElse(0 -> List())._2
-      val reducedSchema = schema.zipWithIndex.collect { case (ctpe, i) if i%2 == 0 => ctpe }
-      val valuejtpe = Schema.mkType(reducedSchema).getOrElse(JObjectFixedT(Map()))
+      //val reducedSchema = schema.zipWithIndex.collect { case (ctpe, i) if i%2 == 0 => ctpe }
+      val valuejtpe = Schema.mkType(schema).getOrElse(JObjectFixedT(Map()))  //reducedSchema
       val jtpe = JObjectFixedT(Map(
         "value" -> valuejtpe,
         "key" -> JArrayUnfixedT
@@ -698,33 +739,44 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       val results = toJson(table.transform(
         Typed(Leaf(Source), jtpe)))
 
-      val included = reducedSchema.toMap
+      val included = schema.toMap  //reducedSchema
 
-      val expected = sample.data flatMap { jv =>
-        val back = JValue.unflatten(jv.flattenWithPath.filter {
-          case (path @ JPath(JPathField("key"), _*), _) => true
-          case (path @ JPath(JPathField("value"), tail @ _*), value) if included.contains(JPath(tail : _*)) => {
-            (included(JPath(tail : _*)), value) match {
-              case (CBoolean, JBool(_)) => true
-              case (CString, JString(_)) => true
-              case (CLong | CDouble | CNum, JNum(_)) => true
-              case (CEmptyObject, JObject.empty) => true
-              case (CEmptyArray, JArray.empty) => true
-              case (CNull, JNull) => true
-              case _ => false
-            }
-          }
-          case _ => false
-        })
-        
-        if (back \ "value" == JNothing)
-          None
-        else
-          Some(back)
-      }
+      val sampleSchema = inferSchema(sample.data.toSeq)
+      val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
 
-      results.copoint must_== expected
-    }.set(minTestsOk -> 1000)
+      //val expected = {
+      //  if (subsumes) {
+      //    sample.data flatMap { jv =>
+      //      val back = JValue.unflatten(jv.flattenWithPath.filter {
+      //        case (path @ JPath(JPathField("key"), _*), _) => true
+      //        case (path @ JPath(JPathField("value"), tail @ _*), value) if included.contains(JPath(tail : _*)) => {
+      //          (included(JPath(tail : _*)), value) match {
+      //            case (CBoolean, JBool(_)) => true
+      //            case (CString, JString(_)) => true
+      //            case (CLong | CDouble | CNum, JNum(_)) => true
+      //            case (CEmptyObject, JObject.empty) => true
+      //            case (CEmptyArray, JArray.empty) => true
+      //            case (CNull, JNull) => true
+      //            case _ => false
+      //          }
+      //        }
+      //        case _ => false
+      //      })
+      //      
+      //      if (back \ "value" == JNothing)
+      //        None
+      //      else
+      //        Some(back)
+      //    }
+      //  } else {
+      //    Stream()
+      //  }
+      //}
+      
+      val exp = expected(sample.data, included, subsumes)
+
+      results.copoint must_== exp
+    }.set(minTestsOk -> 10000)
   }
   
   def testTrivialScan = {
@@ -835,6 +887,35 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       }
 
       results.copoint must_== expected
+    }
+  }
+
+  def expected(data: Stream[JValue], included: Map[JPath, CType], subsumes: Boolean): Stream[JValue] = {
+    if (subsumes) { 
+      data flatMap { jv =>
+        val back = JValue.unflatten(jv.flattenWithPath.filter {
+          case (path @ JPath(JPathField("key"), _*), _) => true
+          case (path @ JPath(JPathField("value"), tail @ _*), value) if included.contains(JPath(tail : _*)) => {
+            (included(JPath(tail : _*)), value) match {
+              case (CBoolean, JBool(_)) => true
+              case (CString, JString(_)) => true
+              case (CLong | CDouble | CNum, JNum(_)) => true
+              case (CEmptyObject, JObject.empty) => true
+              case (CEmptyArray, JArray.empty) => true
+              case (CNull, JNull) => true
+              case _ => false
+            }
+          }
+          case _ => false
+        })
+        
+        if (back \ "value" == JNothing)
+          None
+        else
+          Some(back)
+      }
+    } else {
+      Stream()
     }
   }
 }
