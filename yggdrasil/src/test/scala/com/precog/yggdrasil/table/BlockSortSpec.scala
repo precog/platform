@@ -219,7 +219,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
         }
       )
 
-      def deleteSortKeySpec: TransSpec1 = TransSpec.ArrayDeref1
+      def deleteSortKeySpec: TransSpec1 = TransSpec1.DerefArray1
     }
 
     val module = new Module

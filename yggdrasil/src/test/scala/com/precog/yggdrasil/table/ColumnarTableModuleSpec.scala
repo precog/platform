@@ -98,29 +98,29 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "sum" -> new CScanner {
         type A = BigDecimal
         val init = BigDecimal(0)
-        def scan(a: BigDecimal, col: Column, range: Range): (A, Option[Column]) = {
-          col match {
-            case lc: LongColumn => 
-              val (a0, acc) = range.foldLeft((a, new Array[BigDecimal](range.end))) {
+        def scan(a: BigDecimal, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          cols.foldLeft((a, Map.empty[ColumnRef, Column])) {
+            case ((sumAcc, colAcc), (ref, lc: LongColumn)) => 
+              val (a0, acc) = range.foldLeft((sumAcc, new Array[BigDecimal](range.end))) {
                 case ((a0, acc), i) => 
                   val intermediate = a0 + lc(i)
                   acc(i) = intermediate
                   (intermediate, acc)
               }
 
-              (a0, Some(ArrayNumColumn(BitSet(range: _*), acc)))
+              (a0, colAcc + (ref -> ArrayNumColumn(BitSet(range: _*), acc)))
               
-            case lc: DoubleColumn =>
-              val (a0, acc) = range.foldLeft((a, new Array[BigDecimal](range.end))) {
+            case ((sumAcc, colAcc), (ref, lc: DoubleColumn)) => 
+              val (a0, acc) = range.foldLeft((sumAcc, new Array[BigDecimal](range.end))) {
                 case ((a0, acc), i) => 
                   val intermediate = a0 + lc(i)
                   acc(i) = intermediate
                   (intermediate, acc)
               }
 
-              (a0, Some(ArrayNumColumn(BitSet(range: _*), acc)))
+              (a0, colAcc + (ref -> ArrayNumColumn(BitSet(range: _*), acc)))
               
-            case lc: NumColumn =>
+            case ((sumAcc, colAcc), (ref, lc: NumColumn)) => 
               val (a0, acc) = range.foldLeft((a, new Array[BigDecimal](range.end))) {
                 case ((a0, acc), i) => 
                   val intermediate = a0 + lc(i)
@@ -128,9 +128,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
                   (intermediate, acc)
               }
 
-              (a0, Some(ArrayNumColumn(BitSet(range: _*), acc)))
+              (a0, colAcc + (ref -> ArrayNumColumn(BitSet(range: _*), acc)))
 
-            case _ => (a, None)
+            case ((sumAcc, colAcc), _) => (sumAcc, colAcc)
           }
         }
       }
