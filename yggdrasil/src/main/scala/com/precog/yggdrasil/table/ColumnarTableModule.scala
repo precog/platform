@@ -1246,6 +1246,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       lazy val fixed = ordering.flatten
 
       def & (that: OrderingConstraint): Option[OrderingConstraint] = OrderingConstraints.replacementFor(self, that)
+
+      def - (ticVars: Set[TicVar]): OrderingConstraint = OrderingConstraint(ordering.map(_.filterNot(ticVars.contains)).filterNot(_.isEmpty))
     }
     object OrderingConstraint {
       val Zero = OrderingConstraint(Vector.empty)
@@ -1522,57 +1524,101 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       sys.error("todo")
     }
 
-    final case class BorgTraversalModel private (ioCost: Long, size: Long, ordering: OrderingConstraint) { self =>
-      lazy val ticVars: Set[TicVar] = ordering.ordering.toSet.flatten
+    final case class BorgTraversalModel private (ioCost: Long, size: Long, ticVars: Set[TicVar]) { self =>
+      def cogroup(rightSize: Long, rightTicVars: Set[TicVar], resort: Boolean): BorgTraversalModel = {
+        val commonTicVars = self.ticVars intersect rightTicVars
 
-      def cogroup(rightSize: Long, rightTicVars: Set[TicVar]): BorgTraversalModel = {
-        val (newIoCost, newSize, newOrdering) = {
-          val commonTicVars = self.ticVars intersect rightTicVars
+        val unionTicVars = self.ticVars ++ rightTicVars
 
-          val unionTicVars = self.ticVars ++ rightTicVars
+        val uniqueTicVars = unionTicVars -- commonTicVars
 
-          val uniqueTicVars = unionTicVars -- commonTicVars
+        // TODO: Highly questionable, like this whole model!
+        val newSize = (self.size.max(rightSize)) * (uniqueTicVars.size + 1)
 
-          // TODO: Highly questionable, like this whole model!
-          val newSize = (self.size.max(rightSize)) * (uniqueTicVars.size + 1)
+        val newIoCost = if (resort) {
+          2 * rightSize
+        } else {
+          val inputCost = self.size + rightSize
+          val outputCost = newSize
 
-          (ordering & OrderingConstraint(Seq(rightTicVars))) match {
-            case Some(newConstraint) =>
-              // Don't need to resort this one, just the next one:
-              (2 * rightSize, newSize, newConstraint)
-
-            case None =>
-              // We have to resort this one:
-              ({                
-                val inputCost = self.size + rightSize
-                val outputCost = newSize
-
-                inputCost + outputCost
-              }, newSize, OrderingConstraint(Seq(commonTicVars, uniqueTicVars)))
-          }
+          inputCost + outputCost
         }
 
-        BorgTraversalModel(self.ioCost + newIoCost, newSize, newOrdering)
+        BorgTraversalModel(self.ioCost + newIoCost, newSize, self.ticVars ++ rightTicVars)
       }
     }
     object BorgTraversalModel {
-      val Zero = new BorgTraversalModel(0, 0, OrderingConstraint.Zero)
+      val Zero = new BorgTraversalModel(0, 0, Set.empty)
     }
 
-    case class BorgTraversalPlan(traversalOrder: Vector[MergeNode], orderings: Vector[OrderingConstraint], model: BorgTraversalModel) {
+    case class BorgTraversalPlanStep(accOrderPre: OrderingConstraint, node: MergeNode, nodeTicVars: Set[TicVar]) { self =>
+      // Do we have to resort the accumulator during this step?
+      lazy val accResort: Boolean = !(accOrderPre & accOrderPost).isEmpty
+
+      // Tic variables before the step is executed:
+      lazy val preTicVars = accOrderPre.ordering.toSet.flatten
+
+      // Tic variables after the step is executed:
+      lazy val postTicVars = accOrderPost.ordering.toSet.flatten
+
+      // New tic variables gained during the step:
+      lazy val newTicVars = postTicVars -- preTicVars
+
+      // The order after the step:
+      lazy val accOrderPost: OrderingConstraint = accOrderPre & OrderingConstraint(Seq(nodeTicVars)) match {
+        case Some(constraint) => 
+          // No resort necessary:
+          constraint
+
+        case None => 
+          // Have to resort:
+          val commonTicVars = preTicVars intersect nodeTicVars
+          val unionTicVars = preTicVars union nodeTicVars
+
+          OrderingConstraint(Seq(commonTicVars, unionTicVars -- commonTicVars))
+      }
+
+      // The order the node must be sorted by in order to perform the step:
+      lazy val nodeOrder: OrderingConstraint = {
+        val uniqueAccTicVars = preTicVars -- nodeTicVars
+
+        accOrderPost - uniqueAccTicVars
+      }
+
+      // Choses an arbitrary order:
+      def fixed: BorgTraversalPlanStep = copy(accOrderPre = OrderingConstraint.fromFixed(accOrderPost.fixed) - newTicVars)
+
+      def fixedBefore(next: BorgTraversalPlanStep): BorgTraversalPlanStep = {
+        accOrderPost & next.accOrderPre match {
+          case Some(newAccOrderPost) => 
+            copy(accOrderPre = newAccOrderPost - newTicVars)
+
+          case None => self.fixed
+        }
+      }
+    }
+
+    case class BorgTraversalPlan(steps: Vector[BorgTraversalPlanStep], model: BorgTraversalModel) {
+      def ticVars = steps.lastOption.map(_.postTicVars).getOrElse(Set.empty)
+
       def cogroup(rightNode: MergeNode, rightSize: Long, rightTicVars: Set[TicVar]) = {
-        val cogroupModel = model.cogroup(rightSize, rightTicVars)
+        val accOrderPre = steps.lastOption match {
+          case Some(last) => last.accOrderPost
+          case None => OrderingConstraint.Zero
+        }
+
+        val newStep = BorgTraversalPlanStep(accOrderPre, rightNode, rightTicVars)
+
+        val newModel = model.cogroup(rightSize, rightTicVars, newStep.accResort)
 
         copy(
-          traversalOrder = traversalOrder :+ rightNode,
-          orderings      = orderings :+ cogroupModel.ordering,
-          model          = cogroupModel
+          steps = steps :+ newStep,
+          model = newModel
         )
       }
 
-      // TODO: Backpropagate constraints and fix all unfixed orderings:
-      def fixedOrderings: Vector[Seq[TicVar]] = {
-        def fix0(unfixed: Vector[OrderingConstraint], fixed: Vector[Seq[TicVar]] = Vector.empty): Vector[Seq[TicVar]] = {
+      def fixedSteps: Vector[BorgTraversalPlanStep] = {
+        def fix0(unfixed: Vector[BorgTraversalPlanStep], fixed: Vector[BorgTraversalPlanStep] = Vector.empty): Vector[BorgTraversalPlanStep] = {
           unfixed.lastOption match {
             case None => fixed
 
@@ -1580,31 +1626,23 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               fixed.headOption match {
                 case None =>
                   // We've met all constraints, just pick any fixed ordering:
-                  fix0(unfixed.tail, Vector(unfixedHead.fixed))
+                  val fixedHead = unfixedHead.fixed
+
+                  fix0(unfixed.tail, Vector(fixedHead))
 
                 case Some(fixedHead) =>
-                  // TODO: Should not include "new" tic vars in backpropagated constraint:
-                  val newTicVars = fixedHead.toSet -- unfixedHead.fixed.toSet
-
-                  val newFixed = (OrderingConstraint.fromFixed(fixedHead) & unfixedHead).map { isect =>
-                    // Get rid of tic variables that should not exist:
-                    isect.fixed.filterNot(newTicVars.contains)
-                  }.getOrElse {
-                    // There is no compatible constraint. This is a resort.
-                    // Simply pick any fixed ordering:
-                    unfixedHead.fixed
-                  }
+                  val newFixed = unfixedHead.fixedBefore(fixedHead)
 
                   fix0(unfixed.tail, newFixed +: fixed)
               }
           }
         }
 
-        fix0(orderings)
+        fix0(steps)
       }
     }
     object BorgTraversalPlan {
-      val Zero = BorgTraversalPlan(Vector.empty, Vector.empty, BorgTraversalModel.Zero) 
+      val Zero = BorgTraversalPlan(Vector.empty, BorgTraversalModel.Zero) 
     }
 
     def findBorgTraversalOrder(spanningGraph: MergeGraph, connectedSubgraph: ConnectedSubgraph): BorgTraversalPlan = {
@@ -1660,34 +1698,29 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
       val plan = findBorgTraversalOrder(spanningGraph, connectedSubgraph)
 
-      val fixedOrderings = plan.fixedOrderings
+      val planSteps = plan.fixedSteps
 
-      val zipped = plan.traversalOrder.zip(fixedOrderings)
+      val x =  planSteps.head
+      val xs = planSteps.tail
 
-      val x =  zipped.head
-      val xs = zipped.tail
-
-      val node = subsetForNode(x._1)
+      val node = subsetForNode(x.node)
 
       val initial = (BorgResult(
                       table         = node.table, 
                       groupKeyTrans = node.groupKeyTrans.spec,
                       idTrans       = Map(node.node.binding.groupId -> node.idTrans),
                       rowTrans      = node.targetTrans.map(node.node.binding.groupId -> _).toMap
-                    ), x._2).point[M]
+                    ), x).point[M]
 
       // TODO: Sort initial according to x._2
 
       (xs.foldLeft(initial) { 
-        case (accM, (mergeNode, newOrdering)) => 
+        case (accM, newStep) => 
           accM.map {
-            case ((acc, curOrdering)) =>
-              val node = subsetForNode(mergeNode)
-              val nodeTicVars = node.groupKeyTrans.keyOrder.toSet
+            case ((acc, lastStep)) =>
+              val node = subsetForNode(newStep.node)
 
-              val commonTicVars = curOrdering.toSet intersect nodeTicVars
-
-              (acc, newOrdering)
+              (acc, newStep)
           }
       }).map(_._1)
     }
