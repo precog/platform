@@ -199,7 +199,7 @@ object CType extends CTypeSerialization {
     case c: CLong      => CLong
     case c: CDouble    => CDouble
     case c: CNum       => CNum
-    case c: CDate       => CDate
+    case c: CDate      => CDate
     case CNull         => CNull
     case CEmptyObject  => CEmptyObject
     case CEmptyArray   => CEmptyArray

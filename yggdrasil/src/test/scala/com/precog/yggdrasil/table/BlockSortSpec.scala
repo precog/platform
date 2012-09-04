@@ -210,9 +210,11 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
                   val vpath = JPath(JPathField("value") :: jpath.nodes)
                   val valueAtPath = jv.get(vpath)
                   
-                  if (compliesWithSchema(valueAtPath, ctype))
-                    obj.set(vpath, valueAtPath)
-                  else
+                  if (compliesWithSchema(valueAtPath, ctype)) {
+                    val result = obj.set(vpath, valueAtPath)
+                    println("result in compliesWithSchema: %s\n".format(result))
+                    result
+                  } else
                     obj
                 }
               }

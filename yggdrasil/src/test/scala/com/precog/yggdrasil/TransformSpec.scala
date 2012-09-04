@@ -306,6 +306,14 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
   def checkArrayConcat = {
     implicit val gen = sample(_ => Seq(JPath("[0]") -> CLong, JPath("[1]") -> CLong))
     check { (sample0: SampleData) =>
+      /***
+      important note:
+      `sample` is excluding the cases when we have JArrays of size 1
+      this is because then the concat array would return
+      array.concat(undefined) = array
+      which is incorrect but is what the code currently does
+      */
+      
       val sample = SampleData(sample0.data flatMap { jv =>
         (jv \ "value") match {
           case JArray(x :: Nil) => None
@@ -538,6 +546,143 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
     }
   }
 
+  def checkTypedHeterogeneous = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JString("value1")), JField("key", JArray(List(JNum(1)))))), 
+        JObject(List(JField("value", JNum(23)), JField("key", JArray(List(JNum(2)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), 
+        JObjectFixedT(Map("value" -> JTextT, "key" -> JArrayUnfixedT)))
+    })
+
+    val expected = Stream(JObject(List(JField("value", JString("value1")), JField("key", JArray(List(JNum(1)))))))
+
+    results.copoint must_== expected
+  }
+
+  def checkTypedObject = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JObject(List(JField("foo", JNum(23))))), JField("key", JArray(List(JNum(1), JNum(3)))))),
+        JObject(List(JField("value", JObject(Nil)), JField("key", JArray(List(JNum(2), JNum(4)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), 
+        JObjectFixedT(Map("value" -> JObjectFixedT(Map("foo" -> JNumberT)), "key" -> JArrayUnfixedT)))
+    })
+
+    val expected = Stream(JObject(List(JField("value", JObject(List(JField("foo", JNum(23))))), JField("key", JArray(List(JNum(1), JNum(3)))))))
+
+    results.copoint must_== expected
+  } 
+
+  def checkTypedArray = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JArray(List(JNum(2), JBool(true)))), JField("key", JArray(List(JNum(1), JNum(2)))))),
+        JObject(List(JField("value", JObject(List())), JField("key", JArray(List(JNum(3), JNum(4)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), 
+        JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JNumberT, 1 -> JBooleanT)), "key" -> JArrayUnfixedT)))
+    })
+
+    val expected = Stream(JObject(List(JField("value", JArray(List(JNum(2), JBool(true)))), JField("key", JArray(List(JNum(1), JNum(2)))))))
+
+    val resultStream = results.copoint
+    resultStream must haveSize(1)
+    resultStream must_== expected
+  } 
+
+  def checkTypedArray2 = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JArray(List(JNum(2), JBool(true)))), JField("key", JArray(List(JNum(1)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), 
+        JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JNumberT)), "key" -> JArrayUnfixedT)))
+    })
+
+    results.copoint must_== Stream()
+  }
+
+  def checkTypedObject2 = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JObject(List(JField("foo", JBool(true)), JField("bar", JNum(77))))), JField("key", JArray(List(JNum(1)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), 
+        JObjectFixedT(Map("value" -> JObjectFixedT(Map("bar" -> JNumberT)), "key" -> JArrayUnfixedT)))
+    })
+
+    results.copoint must_== Stream()
+  }  
+  
+  def checkTypedNumber = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JNum(23)), JField("key", JArray(List(JNum(1), JNum(3)))))),
+        JObject(List(JField("value", JString("foo")), JField("key", JArray(List(JNum(2), JNum(4)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), 
+        JObjectFixedT(Map("value" -> JNumberT, "key" -> JArrayUnfixedT)))
+    })
+
+    val expected = Stream(JObject(List(JField("value", JNum(23)), JField("key", JArray(List(JNum(1), JNum(3)))))))
+
+    results.copoint must_== expected
+  }  
+
+  def checkTypedNumber2 = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JNum(23)), JField("key", JArray(List(JNum(1), JNum(3)))))),
+        JObject(List(JField("value", JNum(12.5)), JField("key", JArray(List(JNum(2), JNum(4)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), 
+        JObjectFixedT(Map("value" -> JNumberT, "key" -> JArrayUnfixedT)))
+    })
+
+    val expected = data
+
+    results.copoint must_== expected
+  }
+
+  def checkTypedEmpty = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JField("foo", JArray(List()))), JField("key", JArray(List(JNum(1)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), 
+        JObjectFixedT(Map("value" -> JArrayFixedT(Map()), "key" -> JArrayUnfixedT)))
+    })
+
+    results.copoint must beEmpty
+  }
+
   def checkTyped = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
@@ -551,8 +696,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
 
       val table = fromSample(sample)
       val results = toJson(table.transform(
-        Typed(Leaf(Source), jtpe)
-      ))
+        Typed(Leaf(Source), jtpe)))
 
       val included = reducedSchema.toMap
 
@@ -580,7 +724,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       }
 
       results.copoint must_== expected
-    }
+    }.set(minTestsOk -> 1000)
   }
   
   def testTrivialScan = {

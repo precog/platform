@@ -56,6 +56,10 @@ class IntersectColumn[T <: Column](c1: T, c2: T) { this: T =>
   def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
 }
 
+class IntersectLotsColumn[T <: Column](cols: Set[Column]) { this: T =>
+  def isDefinedAt(row: Int) = cols.toList(0).isDefinedAt(row) && cols.toList(1).isDefinedAt(row)
+}
+
 class ConcatColumn[T <: Column](at: Int, c1: T, c2: T) { this: T =>
   def isDefinedAt(row: Int) = row >= 0 && ((row < at && c1.isDefinedAt(row)) || (row >= at && c2.isDefinedAt(row - at)))
 }

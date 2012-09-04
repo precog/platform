@@ -1037,7 +1037,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
               
               val next = cur.distinct(prevFilter, curFilter)
               
-              StreamT.Yield(next, stream((if(next.size > 0) Some(curFilter) else prevFilter, nextT), sx))
+              StreamT.Yield(next, stream((if (next.size > 0) Some(curFilter) else prevFilter, nextT), sx))
             } getOrElse {
               StreamT.Done
             }
@@ -1046,7 +1046,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
         table(stream((id.initial, filter.initial), slices))
       }
 
-      distinct0(SliceTransform1.identity(None : Option[Slice]), composeSliceTransform(spec))
+      distinct0(SliceTransform1.identity(None: Option[Slice]), composeSliceTransform(spec))
     }
     
     def takeRange(startIndex: Long, numberToTake: Long): Table = {  //in slice.takeRange, need to numberToTake to not be larger than the slice. 

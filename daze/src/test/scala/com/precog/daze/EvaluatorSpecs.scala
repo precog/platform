@@ -2479,7 +2479,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(42, 12, 77, 1, 13)
       }
-    }.pendingUntilFixed
+    }
     
     "distinct heterogenous sets" in {
       val line = Line(0, "")
@@ -2500,7 +2500,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(42, 12, 77, 1, 13, true, false, "daniel", Map("test" -> SString("fubar")), Vector())
       }
-    }.pendingUntilFixed
+    }
     
     "join two sets according to a value sort" in {
       val line = Line(0, "")
