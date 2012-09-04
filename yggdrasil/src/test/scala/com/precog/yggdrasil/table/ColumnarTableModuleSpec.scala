@@ -62,6 +62,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   BlockLoadSpec[M] with
   BlockSortSpec[M] with
   CompactSpec[M] with 
+  IntersectSpec[M] with
   DistinctSpec[M] { spec => //with
   //GrouperSpec[M] { spec =>
 
@@ -248,6 +249,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "data with undefined sort keys" in partiallyUndefinedSortSample.pendingUntilFixed
       "heterogeneous sort keys"       in heterogeneousSortSample.pendingUntilFixed
       "arbitrary datasets"            in checkSortDense.pendingUntilFixed
+    }
+
+    "intersect by identity" >> {
+      "simple data" in testSimpleIntersect
     }
     
     "in compact" >> {
