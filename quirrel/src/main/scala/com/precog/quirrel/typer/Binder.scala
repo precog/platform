@@ -48,8 +48,15 @@ trait Binder extends parser.AST with Library {
       }
 
       case b @ Solve(_, constraints, child) => {
-        // val ids: Set[TicId] = constraints.flatMap(listFreeVars(env))(collection.breakOut)
-        sys.error("TODO")
+        val ids: Set[TicId] = constraints.flatMap(listFreeVars(env))(collection.breakOut)
+        
+        val errors = if (ids.isEmpty)
+          Set(Error(b, SolveLackingFreeVariables))
+        else
+          Set[Error]()
+        
+        val bindings = ids map { id => id -> SolveBinding(b) }
+        loop(child, env.copy(vars = env.vars ++ bindings)) ++ errors
       }
       
       case Import(_, spec, child) => { //todo see scalaz's Boolean.option
@@ -233,6 +240,44 @@ trait Binder extends parser.AST with Library {
     val env = Env(Map(), builtIns.map({ b => b.name -> b })(collection.breakOut))
 
     loop(tree, env)
+  }
+  
+  private def listFreeVars(env: Env)(expr: Expr): Set[TicId] = expr match {
+    case Let(_, _, _, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Solve(_, _, _) => Set()
+    case Import(_, _, child) => listFreeVars(env)(child)
+    case New(_, child) => listFreeVars(env)(child)
+    case Relate(_, from, to, in) => listFreeVars(env)(from) ++ listFreeVars(env)(to) ++ listFreeVars(env)(in)
+    case TicVar(_, name) if env.vars contains name => Set()
+    case TicVar(_, name) if !(env.vars contains name) => Set(name)
+    case StrLit(_, _) => Set()
+    case NumLit(_, _) => Set()
+    case BoolLit(_, _) => Set()
+    case NullLit(_) => Set()
+    case ObjectDef(_, props) => props map { _._2 } map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()
+    case ArrayDef(_, values) => values map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()
+    case Descent(_, child, _) => listFreeVars(env)(child)
+    case Dispatch(_, _, actuals) => actuals map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()
+    case Where(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case With(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Union(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Intersect(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Difference(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Add(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Sub(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Mul(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Div(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Lt(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case LtEq(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Gt(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case GtEq(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Eq(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case NotEq(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case And(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Or(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Comp(_, child) => listFreeVars(env)(child)
+    case Neg(_, child) => listFreeVars(env)(child)
+    case Paren(_, child) => listFreeVars(env)(child)
   }
   
   

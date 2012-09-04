@@ -33,8 +33,8 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
   
   "uncomposed expression parsing" should {
     "accept parameterized bind with one parameter" in {
-      parse("x('a) := 1 2") must beLike {
-        case Let(_, Identifier(Vector(), "x"), Vector("'a"), NumLit(_, "1"), NumLit(_, "2")) => ok
+      parse("x(a) := 1 2") must beLike {
+        case Let(_, Identifier(Vector(), "x"), Vector("a"), NumLit(_, "1"), NumLit(_, "2")) => ok
       }
     }
     
@@ -43,16 +43,16 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     }
     
     "reject parameterized bind with one missing expression" in {
-      parse("x('a) := 1") must throwA[ParseException]
+      parse("x(a) := 1") must throwA[ParseException]
     }
     
     "reject parameterized bind with two missing expressions" in {
-      parse("x('a) :=") must throwA[ParseException]
+      parse("x(a) :=") must throwA[ParseException]
     }
     
     "accept parameterized bind with multiple parameter" in {
-      parse("x('a, 'b, 'c) := 1 2") must beLike {
-        case Let(_, Identifier(Vector(), "x"), Vector("'a", "'b", "'c"), NumLit(_, "1"), NumLit(_, "2")) => ok
+      parse("x(a, b, c) := 1 2") must beLike {
+        case Let(_, Identifier(Vector(), "x"), Vector("a", "b", "c"), NumLit(_, "1"), NumLit(_, "2")) => ok
       }
     }
     
@@ -178,8 +178,8 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     }
     
     "accept a solve expression followed by a let" in {
-      parse("solve 'a foo('b) := 'b + 'a foo") must beLike {
-        case Solve(_, Vector(TicVar(_, "'a")), Let(_, Identifier(Vector(), "foo"), Vector("'b"), Add(_, TicVar(_, "'b"), TicVar(_, "'a")), Dispatch(_, Identifier(Vector(), "foo"), Vector()))) => ok
+      parse("solve 'a foo(b) := 1 + 'a foo") must beLike {
+        case Solve(_, Vector(TicVar(_, "'a")), Let(_, Identifier(Vector(), "foo"), Vector("b"), Add(_, NumLit(_, "1"), TicVar(_, "'a")), Dispatch(_, Identifier(Vector(), "foo"), Vector()))) => ok
       }
     }
     
@@ -190,8 +190,8 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     }
     
     "accept a let expression with a parameter followed by a solve" in {
-      parse("foo('a) := (solve 'b 'a + 'b )foo") must beLike {
-        case Let(_, Identifier(Vector(), "foo"), Vector("'a"), Paren(_, Solve(_, Vector(TicVar(_, "'b")), Add(_, TicVar(_, "'a"), TicVar(_, "'b")))), Dispatch(_, Identifier(Vector(), "foo"), Vector())) => ok
+      parse("foo(a) := (solve 'b 'a + 'b )foo") must beLike {
+        case Let(_, Identifier(Vector(), "foo"), Vector("a"), Paren(_, Solve(_, Vector(TicVar(_, "'b")), Add(_, TicVar(_, "'a"), TicVar(_, "'b")))), Dispatch(_, Identifier(Vector(), "foo"), Vector())) => ok
       }
     }
         
@@ -202,8 +202,8 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     }
     
     "disambiguate solve and let" in {
-      parse("solve 'a foo('b) := (solve 'c 'b + 'c) foo + 'a") must beLike {
-        case Solve(_, Vector(TicVar(_, "'a")), Let(_, Identifier(Vector(), "foo"), Vector("'b"), Paren(_, Solve(_, Vector(TicVar(_, "'c")), Add(_, TicVar(_, "'b"), TicVar(_, "'c")))), Add(_, Dispatch(_, Identifier(Vector(), "foo"), Vector()), TicVar(_, "'a")))) => ok
+      parse("solve 'a foo(b) := (solve 'c 'b + 'c) foo + 'a") must beLike {
+        case Solve(_, Vector(TicVar(_, "'a")), Let(_, Identifier(Vector(), "foo"), Vector("b"), Paren(_, Solve(_, Vector(TicVar(_, "'c")), Add(_, TicVar(_, "'b"), TicVar(_, "'c")))), Add(_, Dispatch(_, Identifier(Vector(), "foo"), Vector()), TicVar(_, "'a")))) => ok
       }
     }
 
@@ -1110,8 +1110,8 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     }
     
     "parse a no param function containing a 1 param function" in {
-      parse("a := 1 c('d) := 2 3") must beLike {
-        case Let(_, Identifier(Vector(), "a"), Vector(), NumLit(_, "1"), Let(_, Identifier(Vector(), "c"), Vector("'d"), NumLit(_, "2"), NumLit(_, "3"))) => ok
+      parse("a := 1 c(d) := 2 3") must beLike {
+        case Let(_, Identifier(Vector(), "a"), Vector(), NumLit(_, "1"), Let(_, Identifier(Vector(), "c"), Vector("d"), NumLit(_, "2"), NumLit(_, "3"))) => ok
       }
     }
     

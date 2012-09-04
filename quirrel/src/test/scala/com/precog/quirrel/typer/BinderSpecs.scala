@@ -48,19 +48,19 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       left.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "a")))
     }
     
-    "bind all tic-variables in expression scope" in {
+    "bind all formals in expression scope" in {
       {
-        val e @ Let(_, _, _, t: TicVar, _) = parse("a('b) := 'b a")
-        t.binding mustEqual LetBinding(e)
+        val e @ Let(_, _, _, t: Dispatch, _) = parse("a(b) := b a")
+        t.binding mustEqual FormalBinding(e)
         t.errors must beEmpty
       }
       
       {
-        val e @ Let(_, _, _, Add(_, Add(_, tb: TicVar, tc: TicVar), td: TicVar), _) = parse("a('b, 'c, 'd) := 'b + 'c + 'd a")
+        val e @ Let(_, _, _, Add(_, Add(_, tb: Dispatch, tc: Dispatch), td: Dispatch), _) = parse("a(b, c, d) := b + c + d a")
         
-        tb.binding mustEqual LetBinding(e)
-        tc.binding mustEqual LetBinding(e)
-        td.binding mustEqual LetBinding(e)
+        tb.binding mustEqual FormalBinding(e)
+        tc.binding mustEqual FormalBinding(e)
+        td.binding mustEqual FormalBinding(e)
         
         tb.errors must beEmpty
         tc.errors must beEmpty
@@ -68,10 +68,30 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
     }
     
-    "not bind tic-variable in resulting scope" in {
-      val Let(_, _, _, _, t: TicVar) = parse("a('b) := 42 'b")
+    "not bind formal in resulting scope" in {
+      val Let(_, _, _, _, t: Dispatch) = parse("a(b) := 42 b")
       t.binding mustEqual NullBinding
-      t.errors mustEqual Set(UndefinedTicVariable("'b"))
+      t.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "b")))
+    }
+    
+    "bind all tic-variables in expression scope" in {
+      {
+        val e @ Solve(_, _, t: TicVar) = parse("solve 'b 'b")
+        t.binding mustEqual SolveBinding(e)
+        t.errors must beEmpty
+      }
+      
+      {
+        val e @ Solve(_, _, Add(_, Add(_, tb: TicVar, tc: TicVar), td: TicVar)) = parse("solve 'b, 'c, 'd 'b + 'c + 'd")
+        
+        tb.binding mustEqual SolveBinding(e)
+        tc.binding mustEqual SolveBinding(e)
+        td.binding mustEqual SolveBinding(e)
+        
+        tb.errors must beEmpty
+        tc.errors must beEmpty
+        td.errors must beEmpty
+      }
     }
     
     "bind name in inner scope" in {
@@ -82,10 +102,10 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.errors must beEmpty
     }
     
-    "bind tic-variable in inner scope" in {
-      val e1 @ Let(_, _, _, _, e2 @ Let(_, _, _, t: TicVar, _)) = parse("a := 42 b('b) := 'b 24")
+    "bind formal in inner scope" in {
+      val e1 @ Let(_, _, _, _, e2 @ Let(_, _, _, t: Dispatch, _)) = parse("a := 42 b(b) := b 24")
       
-      t.binding mustEqual LetBinding(e2)
+      t.binding mustEqual FormalBinding(e2)
       t.errors must beEmpty
     }
     
@@ -144,31 +164,30 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "allow a case when a tic variable is not solvable in all cases" in {
       {
         val tree = parse("""
-        | a('b) :=
+        | solve 'b
         |   k := //clicks.time where //clicks.time = 'b
         |   j := //views.time where //views.time > 'b
         |   k ~ j
-        |   {kay: k, jay: j}
-        | a""".stripMargin)
+        |   {kay: k, jay: j}""".stripMargin)
 
         tree.errors must beEmpty
       }
     }
     
-    "reject multiple definitions of tic-variables" in {
+    "accept multiple definitions of tic-variables" in {
       {
-        val tree = parse("f('a, 'a) := 1 2")
-        tree.errors mustEqual Set(MultiplyDefinedTicVariable("'a"))
+        val tree = parse("solve 'a, 'a 1")
+        tree.errors must beEmpty
       }
       
       {
-        val tree = parse("f('a, 'b, 'c, 'a) := 1 2")
-        tree.errors mustEqual Set(MultiplyDefinedTicVariable("'a"))
+        val tree = parse("solve 'a, 'b, 'c, 'a 1")
+        tree.errors must beEmpty
       }
       
       {
-        val tree = parse("f('a, 'b, 'c, 'a, 'b, 'a) := 1 2")
-        tree.errors mustEqual Set(MultiplyDefinedTicVariable("'a"), MultiplyDefinedTicVariable("'b"))
+        val tree = parse("solve 'a, 'b, 'c, 'a, 'b, 'a 1")
+        tree.errors must beEmpty
       }
     }
     
@@ -179,10 +198,10 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "a")))
     }
     
-    "not leak tic-variable into an adjacent scope" in {
-      val Add(_, _, t: TicVar) = parse("(a('b) := 1 2) + 'b")
+    "not leak formal into an adjacent scope" in {
+      val Add(_, _, t: Dispatch) = parse("(a(b) := 1 2) + b")
       t.binding mustEqual NullBinding
-      t.errors mustEqual Set(UndefinedTicVariable("'b"))
+      t.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "b")))
     }
     
     "allow shadowing of user-defined bindings" in {
@@ -192,9 +211,9 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.errors must beEmpty
     }
     
-    "allow shadowing of tic-variables" in {
-      val Let(_, _, _, _, e @ Let(_, _, _, t: TicVar, _)) = parse("a('c) := 1 b('c) := 'c 2")
-      t.binding mustEqual LetBinding(e)
+    "allow shadowing of formals" in {
+      val Let(_, _, _, _, e @ Let(_, _, _, t: Dispatch, _)) = parse("a(c) := 1 b(c) := c 2")
+      t.binding mustEqual FormalBinding(e)
       t.errors must beEmpty
     }
     
