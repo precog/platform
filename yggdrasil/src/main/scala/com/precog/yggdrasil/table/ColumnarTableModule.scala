@@ -1162,7 +1162,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   // TODO: Should not include "new" tic vars in backpropagated constraint:
                   val newTicVars = fixedHead.toSet -- unfixedHead.fixed.toSet
 
-                  val newFixed = (OrderingConstraint(fixedHead.map(v => Set(v))) & unfixedHead).get.fixed.filterNot(newTicVars.contains)
+                  val newFixed = (OrderingConstraint(fixedHead.map(v => Set(v))) & unfixedHead).map { isect =>
+                    // Get rid of tic variables that should not exist:
+                    isect.fixed.filterNot(newTicVars.contains)
+                  }.getOrElse {
+                    // There is no compatible constraint. This is a resort.
+                    // Simply pick any fixed ordering:
+                    unfixedHead.fixed
+                  }
 
                   fix0(unfixed.tail, newFixed +: fixed)
               }
@@ -1197,6 +1204,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               val newUnfixed = unfixed - choice
               val newOptions = (options - choice) ++ connections(choice)
 
+              // TODO: This is broken (wrong way flow of information), fix tomorrow
               val newPlan = optimalPlans(fixed).cogroup(choice, node.size, node.groupKeyTrans.keyOrder.toSet)
 
               val bestPlan = optimalPlans.get(newFixed).map { oldPlan =>
