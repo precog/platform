@@ -35,7 +35,8 @@ object TableModule {
     val Value = CPathField("value")
     val Group = CPathField("group")
     val SortKey = CPathField("sortkey")
-  }  
+    val SortGlobalId = CPathField("globalid")
+  }
 }
 
 trait TableModule[M[+_]] extends FNModule {

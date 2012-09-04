@@ -113,12 +113,14 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     logger.debug("Closed column index files")
   }
 
-  implicit private val rowCodec = Codec.RowCodec(descriptor.columns map (_.valueType))
+  val rowFormat: RowFormat = RowFormat.ValueRowFormatV1(descriptor.columns map {
+    case ColumnDescriptor(_, cPath, cType, _) => ColumnRef(cPath, cType)
+  })
 
   def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
     logger.trace("Inserting %s => %s".format(ids, v))
 
-    treeMap.put(ids, Codec.writeToArray(v.toList))
+    treeMap.put(ids, rowFormat.encode(v.toList))
 
     if (shouldSync) {
       idIndexFile.commit()
@@ -127,8 +129,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
   def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = new IterableDataset(descriptor.identities, new Iterable[(Identities,Seq[CValue])] {
     def iterator = treeMap.entrySet.iterator.asScala.map { case kvEntry =>
-      println(kvEntry.getValue)
-      (kvEntry.getKey, rowCodec.read(ByteBuffer.wrap(kvEntry.getValue)))
+      (kvEntry.getKey, rowFormat.decode(kvEntry.getValue))
     }
   })
 
@@ -151,16 +152,16 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
         val source = constrainedMap.entrySet.iterator.asScala
         val requestedSize = DEFAULT_SLICE_SIZE
 
-        val rowCodec = projection.rowCodec
+        // val rowCodec = projection.rowCodec
 
         val keyColumns = (0 until descriptor.identities).map {
           idx: Int => (ColumnRef(CPath(Key :: CPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) 
         }.toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
 
-        val valColumns: Array[(ColumnRef, ColCodec[_])] = descriptor.columns.map {
-          case ColumnDescriptor(_, selector, cType, _) =>
-            (ColumnRef(CPath(Value) \ selector, cType), ColCodec.forCType(cType, sliceSize))
-        }(collection.breakOut)
+        val valColumns: Array[(ColumnRef, ArrayColumn[_])] =
+          rowFormat.columnRefs.map(JDBMSlice.columnFor(CPath(Value), sliceSize))(collection.breakOut)
+
+        val columnDecoder = rowFormat.ColumnDecoder(valColumns map (_._2))
 
         def loadRowFromKey(row: Int, rowKey: Identities) {
           if (row == 0) { firstKey = rowKey }

@@ -47,9 +47,9 @@ trait JDBMSlice[Key] extends Slice with Logging {
   protected def requestedSize: Int
 
   protected def keyColumns: Array[(ColumnRef, ArrayColumn[_])]
-  protected def valColumns: Array[(ColumnRef, ColCodec[_])]
+  protected def valColumns: Array[(ColumnRef, ArrayColumn[_])]
 
-  private lazy val colCodecs: Seq[ColCodec[_]] = valColumns map (_._2)
+  def columnDecoder: ColumnDecoder
 
   // This method is responsible for loading the data from the key at the given row,
   // most likely into one or more of the key columns defined above
@@ -57,40 +57,35 @@ trait JDBMSlice[Key] extends Slice with Logging {
 
   private var row = 0
 
-  protected def rowCodec: Codec.RowCodec
-
   protected def load() {
     source.take(requestedSize).foreach {
       entry => {
         loadRowFromKey(row, entry.getKey)
-        rowCodec.readIntoColumns(ByteBuffer.wrap(entry.getValue), row, colCodecs)
+        columnDecoder.decodeToRow(row, entry.getValue)
         row += 1
       }
     }
   }
 
-  // load()
-
   def size = row
 
-  def columns: Map[ColumnRef, Column] = (keyColumns ++ valColumns.map { case (ref, codec) =>
-    (ref, codec.column)
-  })(collection.breakOut)
+  def columns: Map[ColumnRef, Column] = keyColumns.++(valColumns)(collection.breakOut)
 }
 
 object JDBMSlice {
-  def columnFor(prefix: CPath, sliceSize: Int)(ref: ColumnRef) = (ref.copy(selector = (prefix \ ref.selector)), (ref.ctype match {
-    case CString      => ArrayStrColumn.empty(sliceSize)
-    case CBoolean     => ArrayBoolColumn.empty()
-    case CLong        => ArrayLongColumn.empty(sliceSize)
-    case CDouble      => ArrayDoubleColumn.empty(sliceSize)
-    case CNum         => ArrayNumColumn.empty(sliceSize)
-    case CDate        => ArrayDateColumn.empty(sliceSize)
-    case CNull        => MutableNullColumn.empty()
-    case CEmptyObject => MutableEmptyObjectColumn.empty()
-    case CEmptyArray  => MutableEmptyArrayColumn.empty()
-    case CArrayType(elemType) => ArrayHomogeneousArrayColumn.empty(sliceSize)(elemType)
-    case CUndefined   => sys.error("CUndefined cannot be serialized")
-  }))
+  def columnFor(prefix: CPath, sliceSize: Int)(ref: ColumnRef): (ColumnRef, ArrayColumn[_]) =
+    (ref.copy(selector = (prefix \ ref.selector)), (ref.ctype match {
+      case CString      => ArrayStrColumn.empty(sliceSize)
+      case CBoolean     => ArrayBoolColumn.empty()
+      case CLong        => ArrayLongColumn.empty(sliceSize)
+      case CDouble      => ArrayDoubleColumn.empty(sliceSize)
+      case CNum         => ArrayNumColumn.empty(sliceSize)
+      case CDate        => ArrayDateColumn.empty(sliceSize)
+      case CNull        => MutableNullColumn.empty()
+      case CEmptyObject => MutableEmptyObjectColumn.empty()
+      case CEmptyArray  => MutableEmptyArrayColumn.empty()
+      case CArrayType(elemType) => ArrayHomogeneousArrayColumn.empty(sliceSize)(elemType)
+      case CUndefined   => sys.error("CUndefined cannot be serialized")
+    }))
 }
 

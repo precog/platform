@@ -92,6 +92,7 @@ object CValue {
 
 
 sealed trait CType extends Serializable {
+  def readResolve(): CType
   def format: StorageFormat
   def isNumeric: Boolean = false
 
@@ -124,6 +125,7 @@ sealed trait CNullType extends CType with CNullValue {
 }
 
 sealed abstract class CValueType[A](val format: StorageFormat) extends CType { self =>
+  def readResolve(): CValueType[A]
   def apply(a: A): CWrappedValue[A]
   def order(a: A, b: A): Ordering
   def jValueFor(a: A): JValue
@@ -182,7 +184,7 @@ trait CTypeSerialization {
   }
 }
 
-object CType extends CTypeSerialization {
+case object CType extends CTypeSerialization {
   def readResolve() = CType
 
   def of(v: CValue): CType = v.cType
@@ -302,6 +304,8 @@ object CValueType {
 case class CArray[A](value: IndexedSeq[A], cType: CArrayType[A]) extends CWrappedValue[IndexedSeq[A]]
 
 case class CArrayType[A](elemType: CValueType[A]) extends CValueType[IndexedSeq[A]](LengthEncoded) {
+  def readResolve() = CArrayType(elemType.readResolve())
+
   def apply(value: IndexedSeq[A]) = CArray(value, this)
 
   def order(as: IndexedSeq[A], bs: IndexedSeq[A]) =
