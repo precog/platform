@@ -48,7 +48,7 @@ case class MultiplyDefinedTicVariable(name: TicId) extends ErrorType {
 }
 
 case class UndefinedFunction(name: Identifier) extends ErrorType {
-  override def toString = "undefined function: %s".format(name)
+  override def toString = "undefined name: %s".format(name)
 }
 
 case object OperationOnUnrelatedSets extends ErrorType {
@@ -89,6 +89,10 @@ case object SetFunctionAppliedToSet extends ErrorType {
 
 case object FunctionArgsInapplicable extends ErrorType {
   override def toString = "cannot apply function to specified arguments"
+}
+
+case object SolveLackingFreeVariables extends ErrorType {
+  override def toString = "nothing to solve"
 }
 
 // intended to be a warning
