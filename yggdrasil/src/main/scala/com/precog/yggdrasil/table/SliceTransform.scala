@@ -64,6 +64,8 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
     def identity[A](initial: A) = SliceTransform1[A](initial, (a: A, s: Slice) => (a, s))
     def left[A](initial: A)  = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sl))
     def right[A](initial: A) = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sr))
+
+    def lift(f: Slice => Slice): SliceTransform1[Unit] = SliceTransform1[Unit]((), Function.untupled(f.second[Unit]))
  
     def composeSliceTransform(spec: TransSpec1): SliceTransform1[_] = {
       composeSliceTransform2(spec).parallel
@@ -137,7 +139,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                 val (paired, excludedLeft) = sl.columns.foldLeft((Map.empty[JPath, Column], Set.empty[Column])) {
                   case ((paired, excluded), (ref @ ColumnRef(selector, CLong | CDouble | CNum), col)) => 
                     val numEq = for {
-                                  ctype <- CLong :: CDouble :: CNum :: Nil
+                                  ctype <- List(CLong, CDouble, CNum)
                                   col0  <- sr.columns.get(ColumnRef(selector, ctype)) 
                                   boolc <- cf.std.Eq(col, col0)
                                 } yield boolc
@@ -174,7 +176,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
 
                 val excluded = excludedLeft ++ sr.columns.collect({
                   case (ColumnRef(selector, CLong | CDouble | CNum), col) 
-                    if !(CLong :: CDouble :: CNum :: Nil).exists(ctype => sl.columns.contains(ColumnRef(selector, ctype))) => col
+                    if !(List(CLong, CDouble, CNum)).exists(ctype => sl.columns.contains(ColumnRef(selector, ctype))) => col
 
                   case (ref, col) if !sl.columns.contains(ref) => col
                 })
@@ -334,21 +336,13 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
             SliceTransform1[scanner.A](
               scanner.init,
               (state: scanner.A, slice: Slice) => {
-                assert(slice.columns.size <= 1)
-                slice.columns.headOption flatMap {
-                  case (ColumnRef(selector, ctype), col) =>
-                    val (nextState, nextCol) = scanner.scan(state, col, 0 until slice.size)
-                    nextCol map { c =>
-                      ( nextState, 
-                        new Slice { 
-                          val size = slice.size; 
-                          val columns = Map(ColumnRef(selector, c.tpe) -> c)
-                        }
-                      )
-                    }
-                } getOrElse {
-                  (state, slice)
-                } 
+                val (newState, newCols) = scanner.scan(state, slice.columns, 0 until slice.size)
+                val newSlice = new Slice {
+                  val size = slice.size
+                  val columns = newCols
+                }
+
+                (newState, newSlice)
               }
             )
           }

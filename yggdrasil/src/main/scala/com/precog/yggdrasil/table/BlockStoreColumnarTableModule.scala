@@ -53,14 +53,14 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 
 import TableModule._
-import SliceTransform._
-
 trait BlockStoreColumnarTableModule[M[+_]] extends
   ColumnarTableModule[M] with
   StorageModule[M] with
   IdSourceScannerModule[M] { self =>
 
   import trans._
+  import TransSpec.deepMap
+  import SliceTransform._
     
   override type UserId = String
   type Key
@@ -782,23 +782,20 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           _ map {
             case (slice, tail) => {
               val (valueTrans0, vslice) = valueTrans.advance(slice)
-              val vColumns = vslice.columns.toSeq.sortBy(_._1).toArray
-              val vColumnRefs = vColumns.map(_._1)
+              val (vColumnRefs, vColumns) = vslice.columns.toSeq.sortBy(_._1).unzip
               val dataRowFormat = RowFormat.forValues(vColumnRefs)
-              val dataColumnEncoder = dataRowFormat.ColumnEncoder(dataColumns)
+              val dataColumnEncoder = dataRowFormat.ColumnEncoder(vColumns)
 
               val newState = state.transforms.foldLeft(state.copy(transforms = Nil)) { 
                 case (DumpState(db, indices, insertCount, newTransforms), (i, keyTransform)) =>
                   val (nextKeyTransform, keySlice) = keyTransform.advance(slice)
                   
-                  val keyColumns = keySlice.columns.toSeq.sortBy(_._1).toArray
-                  val keyColumnRefs = keyColumns.map(_._1)
-
+                  val (keyColumnRefs, keyColumns) = keySlice.columns.toSeq.sortBy(_._1).unzip
                   val keyRowFormat = RowFormat.forValues(keyColumnRefs)
                   val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
                   val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
 
-                  val indexMapKey = (i, keyColumnRefs, vColumnRefs)
+                  val indexMapKey = (i, keyColumnRefs.toArray, vColumnRefs.toArray)
 
                   val (index, newIndices) = indices.get(indexMapKey) map { (_, indices) } getOrElse {
                     val indexName = i + "-" + indexMapKey.toString
@@ -847,8 +844,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         WrapArray(Leaf(Source)), 
         new CScanner {
           type A = Long
-          val init = 0
-          def scan(a: A, cols: Set[(ColumnRef, Column)], range: Range): (A, Set[(ColumnRef, Column)]) = {
+          val init = 0l
+          def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
             val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
             (a + range.end + 1, cols + (ColumnRef(JPath(JPathIndex(1)), CLong) -> globalIdColumn))
           }
@@ -857,13 +854,14 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
       val groupKeysWithGlobal = groupKeys map { kt => ArrayConcat(WrapArray(deepMap(kt) { case Leaf(_) => TransSpec1.DerefArray0 }), TransSpec1.DerefArray1) }
 
-      dumpTables(
-        composeSliceTransform(deepMap(valueSpec) { case Leaf(_) => TransSpec1.DerefArray0),
-        slices.transform(sliceGlobalIdTrans),
-        DumpState(DBMaker.openFile(dbFile.getCanonicalPath).make(), Map.empty, 0l, (groupKeysWithGlobal map composeSliceTransform).zipWithIndex.map(_.swap).toList)
-      ) flatMap { indices => 
-        (indices.groupBy(_._1._1).map {
-          case (_, backingIndices) => 
+      for {
+        indices <-  dumpTables(
+                      composeSliceTransform(deepMap(valueSpec) { case Leaf(_) => TransSpec1.DerefArray0 }),
+                      this.transform(sliceGlobalIdTrans).slices,
+                      DumpState(DBMaker.openFile(dbFile.getCanonicalPath).make(), Map.empty, 0l, (groupKeysWithGlobal map composeSliceTransform).zipWithIndex.map(_.swap).toList))
+
+        mergedProjections <- {
+          val mergedProjectionMs = indices.groupBy(_._1._1).values map { backingIndices =>
             // Map the distinct indices into SortProjections/Cells, then merge them
             val cells: Set[M[Option[Cell]]] = backingIndices.zipWithIndex.map {
               case ((_, SliceIndex(name, _, keyComparator, keyColumns, valColumns)), index) => 
@@ -882,8 +880,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               // only need to compare on the group keys (0th element of resulting table) between projections
               slice.columns.keys.collect({ case ref @ ColumnRef(JPath(JPathIndex(0), _ @ _*), _) => ref}).toList.sorted
             }
-        }).toStream.sequence
-      }
+          }
+          
+          mergedProjectionMs.toStream.sequence
+        }
+      } yield mergedProjections
     }
   }
 
