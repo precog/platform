@@ -1159,7 +1159,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   fix0(unfixed.tail, Vector(unfixedHead.fixed))
 
                 case Some(fixedHead) =>
-                  val newFixed = (OrderingConstraint(fixedHead.map(v => Set(v))) & unfixedHead).get.fixed
+                  // TODO: Should not include "new" tic vars in backpropagated constraint:
+                  val newTicVars = fixedHead.toSet -- unfixedHead.fixed.toSet
+
+                  val newFixed = (OrderingConstraint(fixedHead.map(v => Set(v))) & unfixedHead).get.fixed.filterNot(newTicVars.contains)
 
                   fix0(unfixed.tail, newFixed +: fixed)
               }
