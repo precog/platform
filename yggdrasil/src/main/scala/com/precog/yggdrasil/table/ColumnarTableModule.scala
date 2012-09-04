@@ -1182,9 +1182,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           }
         }
 
-        if (unfixed.isEmpty) optimalPlans
-        else if (options.isEmpty) chooseFrom(unfixed)
-        else chooseFrom(options)
+        if (unfixed.isEmpty) optimalPlans             // Nothing to traverse, return plans
+        else if (options.isEmpty) chooseFrom(unfixed) // First pass through, choose any node
+        else chooseFrom(options)                      // Can only choose from those merged into collective
       }
       
       pick0(spanningGraph.nodes)(spanningGraph.nodes)
