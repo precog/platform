@@ -567,6 +567,73 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   leftBackingState, rightBackingState)
     }
 
+    def dumpTables[A](db: DB, slices: StreamT[M, Slice], valueTrans: SliceTransform1[A], keyTrans: Seq[SliceTransform1[_]], sortOrder: DesiredSortOrder): M[IndexMap] = {
+      case class DumpState(indices: IndexMap, insertCount: Long, keyTransforms: Seq[(Int, SliceTransform1[_])])
+
+      def dump0(slices: StreamT[M, Slice], valueTrans: SliceTransform1[A], state: DumpState): M[IndexMap] = {
+        slices.uncons flatMap {
+          case Some((slice, tail)) => 
+            val (valueTrans0, vslice) = valueTrans.advance(slice)
+            val (vColumnRefs, vColumns) = vslice.columns.toSeq.sortBy(_._1).unzip
+            val dataRowFormat = RowFormat.forValues(vColumnRefs)
+            val dataColumnEncoder = dataRowFormat.ColumnEncoder(vColumns)
+
+            val newState = state.keyTransforms.foldLeft(state.copy(keyTransforms = Nil)) { 
+              case (DumpState(indices, insertCount, newTransforms), (i, keyTransform)) =>
+                val (nextKeyTransform, keySlice) = keyTransform.advance(slice)
+                
+                val (keyColumnRefs, keyColumns) = keySlice.columns.toSeq.sortBy(_._1).unzip
+                val keyRowFormat = RowFormat.forValues(keyColumnRefs)
+                val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
+                val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
+
+                val indexMapKey = (i, keyColumnRefs.toArray, vColumnRefs.toArray)
+
+                val (index, newIndices) = indices.get(indexMapKey) map { (_, indices) } getOrElse {
+                  val indexName = i + "-" + indexMapKey.toString
+                  val newIndex = SliceIndex(indexName,
+                                            db.createTreeMap(indexName, keyComparator, null, null), // nulls indicate to use default serialization for Array[Byte] 
+                                            keyComparator,
+                                            keyColumnRefs,
+                                            vColumnRefs)
+
+                  (newIndex, indices + (indexMapKey -> newIndex))
+                }
+
+                // Iterate over the slice, storing each row
+                @tailrec
+                // FIXME: This may not actually be tail recursive!
+                // FIXME: Determine whether undefined sort keys are valid
+                def storeRow(storage: IndexStore, row: Int, insertCount: Long): Long = {
+                  if (row < vslice.size) {
+                    if (vslice.isDefinedAt(row)) {
+                      storage.put(keyColumnEncoder.encodeFromRow(row), dataColumnEncoder.encodeFromRow(row))
+
+                      if (insertCount % jdbmCommitInterval == 0 && insertCount > 0) db.commit()
+                      storeRow(storage, row + 1, insertCount + 1)
+                    } else {
+                      storeRow(storage, row + 1, insertCount)
+                    }
+                  } else {
+                    insertCount
+                  }
+                }
+
+                DumpState(newIndices, storeRow(index.storage, 0, insertCount), (i, nextKeyTransform) +: newTransforms)
+            }
+
+            dump0(tail, valueTrans0, newState)
+
+          case None => 
+            M.point {
+              db.close() // No more slices, close out the JDBM database
+              state.indices
+            }
+        }
+      }
+
+      dump0(slices, valueTrans, DumpState(Map.empty, 0l, keyTrans.zipWithIndex.map(_.swap)))
+    }
     def emitSlice(state: BackingState, slice: Slice): M[BackingState] = {
       sys.error("todo")
     }
@@ -636,74 +703,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       // Open a JDBM3 DB for use in sorting under a temp directory
       val dbFile = new File(newScratchDir(), "groupByNSpace")
 
-      def dumpTables[A](db: DB, slices: StreamT[M, Slice], valueTrans: SliceTransform1[A], keyTrans: Seq[SliceTransform1[_]]): M[IndexMap] = {
-        case class DumpState(indices: IndexMap, insertCount: Long, keyTransforms: Seq[(Int, SliceTransform1[_])])
-
-        def dump0(slices: StreamT[M, Slice], valueTrans: SliceTransform1[A], state: DumpState): M[IndexMap] = {
-          slices.uncons flatMap {
-            case Some((slice, tail)) => 
-              val (valueTrans0, vslice) = valueTrans.advance(slice)
-              val (vColumnRefs, vColumns) = vslice.columns.toSeq.sortBy(_._1).unzip
-              val dataRowFormat = RowFormat.forValues(vColumnRefs)
-              val dataColumnEncoder = dataRowFormat.ColumnEncoder(vColumns)
-
-              val newState = state.keyTransforms.foldLeft(state.copy(keyTransforms = Nil)) { 
-                case (DumpState(indices, insertCount, newTransforms), (i, keyTransform)) =>
-                  val (nextKeyTransform, keySlice) = keyTransform.advance(slice)
-                  
-                  val (keyColumnRefs, keyColumns) = keySlice.columns.toSeq.sortBy(_._1).unzip
-                  val keyRowFormat = RowFormat.forValues(keyColumnRefs)
-                  val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
-                  val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
-
-                  val indexMapKey = (i, keyColumnRefs.toArray, vColumnRefs.toArray)
-
-                  val (index, newIndices) = indices.get(indexMapKey) map { (_, indices) } getOrElse {
-                    val indexName = i + "-" + indexMapKey.toString
-                    val newIndex = SliceIndex(indexName,
-                                              db.createTreeMap(indexName, keyComparator, null, null), /* nulls indicate we should use default serialization for Array[Byte] */
-                                              keyComparator,
-                                              keyColumnRefs,
-                                              vColumnRefs)
-
-                    (newIndex, indices + (indexMapKey -> newIndex))
-                  }
-
-                  // Iterate over the slice, storing each row
-                  @tailrec
-                  // FIXME: This may not actually be tail recursive!
-                  // FIXME: Determine whether undefined sort keys are valid
-                  def storeRow(storage: IndexStore, row: Int, insertCount: Long): Long = {
-                    if (row < vslice.size) {
-                      if (vslice.isDefinedAt(row)) {
-                        storage.put(keyColumnEncoder.encodeFromRow(row), dataColumnEncoder.encodeFromRow(row))
-
-                        if (insertCount % jdbmCommitInterval == 0 && insertCount > 0) db.commit()
-                        storeRow(storage, row + 1, insertCount + 1)
-                      } else {
-                        storeRow(storage, row + 1, insertCount)
-                      }
-                    } else {
-                      insertCount
-                    }
-                  }
-
-                  DumpState(newIndices, storeRow(index.storage, 0, insertCount), (i, nextKeyTransform) +: newTransforms)
-              }
-
-              dump0(tail, valueTrans0, newState)
-
-            case None => 
-              M.point {
-                db.close() // No more slices, close out the JDBM database
-                state.indices
-              }
-          }
-        }
-
-        dump0(slices, valueTrans, DumpState(Map.empty, 0l, keyTrans.zipWithIndex.map(_.swap)))
-      }
-
       val sliceGlobalIdTrans = Scan(
         WrapArray(Leaf(Source)), 
         new CScanner {
@@ -723,7 +722,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                       DBMaker.openFile(dbFile.getCanonicalPath).make(), 
                       this.transform(sliceGlobalIdTrans).slices,
                       composeSliceTransform(deepMap(valueSpec) { case Leaf(_) => TransSpec1.DerefArray0 }),
-                      groupKeysWithGlobal map composeSliceTransform)
+                      groupKeysWithGlobal map composeSliceTransform,
+                      sortOrder)
 
         mergedProjections <- {
           val mergedProjectionMs = indices.groupBy(_._1._1).values map { backingIndices =>
