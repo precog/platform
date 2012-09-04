@@ -40,6 +40,28 @@ object TableModule {
   sealed trait Definedness
   case object AnyDefined extends Definedness
   case object AllDefined extends Definedness
+
+  sealed trait GroupKeyAlign
+  object GroupKeyAlign {
+    case object Eq extends GroupKeyAlign
+  
+    /*
+    case object Neq extends GroupKeyAlign
+    case object Lte extends GroupKeyAlign
+    case object Lt extends GroupKeyAlign
+    case object Gt extends GroupKeyAlign
+    case object Gte extends GroupKeyAlign
+    */
+  }
+  
+  sealed trait SortOrder
+  sealed trait DesiredSortOrder extends SortOrder {
+    def isAscending: Boolean
+  }
+
+  case object SortAscending extends DesiredSortOrder { val isAscending = true }
+  case object SortDescending extends DesiredSortOrder { val isAscending = false }
+  case object SortUnknown extends SortOrder
 }
 
 trait TableModule[M[+_]] extends FNModule {
@@ -240,29 +262,6 @@ trait TableModule[M[+_]] extends FNModule {
     final case class GroupingAlignment(groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec, right: GroupingSpec) extends GroupingSpec {
       def sources: Vector[GroupingSource] = left.sources ++ right.sources
     }
-
-    
-    sealed trait GroupKeyAlign
-    object GroupKeyAlign {
-      case object Eq extends GroupKeyAlign
-    
-      /*
-      case object Neq extends GroupKeyAlign
-      case object Lte extends GroupKeyAlign
-      case object Lt extends GroupKeyAlign
-      case object Gt extends GroupKeyAlign
-      case object Gte extends GroupKeyAlign
-      */
-    }
-    
-    sealed trait SortOrder
-    sealed trait DesiredSortOrder extends SortOrder {
-      def isAscending: Boolean
-    }
-    case object SortAscending extends DesiredSortOrder { val isAscending = true }
-    case object SortDescending extends DesiredSortOrder { val isAscending = false }
-    case object SortUnknown extends SortOrder
-    
     object constants {
       import TableModule.paths._
 

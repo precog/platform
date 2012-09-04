@@ -55,24 +55,28 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 
-trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModule[M] {
-  import TableModule._
-  import trans._
-  import trans.constants._
-
+trait ColumnarTableTypes {
   type F1 = CF1
   type F2 = CF2
   type Scanner = CScanner
   type Reducer[α] = CReducer[α]
   type RowId = Int
+}
+
+trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes with IdSourceScannerModule[M] with SliceTransforms[M] {
+  import TableModule._
+  import trans._
+  import trans.constants._
+
   type Table <: ColumnarTable
-  type TableCompanion = ColumnarTableCompanion
+  type TableCompanion <: ColumnarTableCompanion
 
   def newScratchDir(): File = Files.createTempDir()
   def jdbmCommitInterval: Long = 200000l
 
   trait ColumnarTableCompanion extends TableCompanionLike {
     import scala.collection.Set
+
     def empty: Table = table(StreamT.empty[M, Slice])
     
     def constBoolean(v: Set[CBoolean]): Table = {
@@ -223,98 +227,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
     def andThen(f1: F1) = new CF2((c1, c2) => f(c1, c2) flatMap f1.apply)
   }
 
-  protected object SliceTransform {
-    def identity[A](initial: A) = SliceTransform1[A](initial, (a: A, s: Slice) => (a, s))
-    def left[A](initial: A)  = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sl))
-    def right[A](initial: A) = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sr))
-  }
-
-  protected case class SliceTransform1[A](initial: A, f: (A, Slice) => (A, Slice)) {
-    def apply(s: Slice) = f(initial, s)
-
-    def advance(s: Slice): (SliceTransform1[A], Slice)  = {
-      val (a0, s0) = f(initial, s)
-      (this.copy(initial = a0), s0)
-    }
-
-    def andThen[B](t: SliceTransform1[B]): SliceTransform1[(A, B)] = {
-      SliceTransform1(
-        (initial, t.initial),
-        { case ((a, b), s) => 
-            val (a0, sa) = f(a, s) 
-            val (b0, sb) = t.f(b, sa)
-            ((a0, b0), sb)
-        }
-      )
-    }
-
-    def zip[B](t: SliceTransform1[B])(combine: (Slice, Slice) => Slice): SliceTransform1[(A, B)] = {
-      SliceTransform1(
-        (initial, t.initial),
-        { case ((a, b), s) =>
-            val (a0, sa) = f(a, s)
-            val (b0, sb) = t.f(b, s)
-            assert(sa.size == sb.size)
-            ((a0, b0), combine(sa, sb))
-        }
-      )
-    }
-
-    def map(mapFunc: Slice => Slice): SliceTransform1[A] = {
-      SliceTransform1(
-        initial,
-        { case (a, s) =>
-            val (a0, sa) = f(a, s)
-            (a0, mapFunc(sa))
-        }
-      )
-    }
-  }
-
-  protected case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => (A, Slice), source: Option[TransSpec[SourceType]] = None) {
-    def apply(s1: Slice, s2: Slice) = f(initial, s1, s2)
-
-    def andThen[B](t: SliceTransform1[B]): SliceTransform2[(A, B)] = {
-      SliceTransform2(
-        (initial, t.initial),
-        { case ((a, b), sl, sr) => 
-            val (a0, sa) = f(a, sl, sr) 
-            val (b0, sb) = t.f(b, sa)
-            ((a0, b0), sb)
-        }
-      )
-    }
-
-    def zip[B](t: SliceTransform2[B])(combine: (Slice, Slice) => Slice): SliceTransform2[(A, B)] = {
-      SliceTransform2(
-        (initial, t.initial),
-        { case ((a, b), sl, sr) =>
-            val (a0, sa) = f(a, sl, sr)
-            val (b0, sb) = t.f(b, sl, sr)
-            assert(sa.size == sb.size) 
-            ((a0, b0), combine(sa, sb))
-        }
-      )
-    }
-
-    def map(mapFunc: Slice => Slice): SliceTransform2[A] = {
-      SliceTransform2(
-        initial,
-        { case (a, sl, sr) =>
-            val (a0, s0) = f(a, sl, sr)
-            (a0, mapFunc(s0))
-        }
-      )
-    }
-
-    def parallel: SliceTransform1[A] = SliceTransform1[A](initial, (a: A, s: Slice) => f(a,s,s))
-
-    def withSource(ts: TransSpec[SourceType]) = copy(source = Some(ts))
-  }
-
   def table(slices: StreamT[M, Slice]): Table
 
   abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike { self: Table =>
+    import SliceTransform._
+
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
@@ -1246,6 +1163,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       }
     }
 
+    type ConnectedSubgraph = Set[NodeSubset]
+
+    case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
+
     object Universe {
       def allEdges(nodes: collection.Set[MergeNode]): collection.Set[MergeEdge] = {
         for {
@@ -1319,10 +1240,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       }
     }
 
-    case class OrderingConstraint(ordering: Seq[Set[TicVar]]) {
+    case class OrderingConstraint(ordering: Seq[Set[TicVar]]) { self =>
       // Fix this binding constraint into a sort order. Any non-singleton TicVar sets will simply
       // be convered into an arbitrary sequence
       lazy val fixed = ordering.flatten
+
+      def & (that: OrderingConstraint): Option[OrderingConstraint] = OrderingConstraints.replacementFor(self, that)
+    }
+    object OrderingConstraint {
+      val Zero = OrderingConstraint(Vector.empty)
+
+      def fromFixed(order: Seq[TicVar]): OrderingConstraint = OrderingConstraint(order.map(v => Set(v)))
     }
 
     object OrderingConstraints {
@@ -1424,7 +1352,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       }
     }
 
-    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
+    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], size: Long = 1) {
       def sortedOn = groupKeyTrans.alignTo(groupKeyPrefix).prefixTrans(groupKeyPrefix.size)
     }
 
@@ -1508,12 +1436,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       // post the initial sort separate from the values that it was derived from. 
       val (payloadTrans, idTrans, targetTrans, groupKeyTrans) = node.binding.targetTrans match {
         case Some(targetSetTrans) => 
-          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(targetSetTrans), WrapArray(protoGroupKeyTrans.spec))
+          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec), WrapArray(targetSetTrans))
 
           (payloadTrans,
            TransSpec1.DerefArray0, 
-           Some(TransSpec1.DerefArray1), 
-           GroupKeyTrans(TransSpec1.DerefArray2, protoGroupKeyTrans.keyOrder))
+           Some(TransSpec1.DerefArray2), 
+           GroupKeyTrans(TransSpec1.DerefArray1, protoGroupKeyTrans.keyOrder))
 
         case None =>
           val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec))
@@ -1588,16 +1516,168 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       }
     }
 
-    type ConnectedSubgraph = Set[NodeSubset]
-
+    // TODO: This should NOT return NodeSubset, but rather, something like it, without
+    //        groupKeyPrefix (which is MEANINGELSS for the return value)
     def intersect(set: Set[NodeSubset]): M[NodeSubset] = {
       sys.error("todo")
     }
 
-    case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
+    final case class BorgTraversalModel private (ioCost: Long, size: Long, ordering: OrderingConstraint) { self =>
+      lazy val ticVars: Set[TicVar] = ordering.ordering.toSet.flatten
+
+      def cogroup(rightSize: Long, rightTicVars: Set[TicVar]): BorgTraversalModel = {
+        val (newIoCost, newSize, newOrdering) = {
+          val commonTicVars = self.ticVars intersect rightTicVars
+
+          val unionTicVars = self.ticVars ++ rightTicVars
+
+          val uniqueTicVars = unionTicVars -- commonTicVars
+
+          // TODO: Highly questionable, like this whole model!
+          val newSize = (self.size.max(rightSize)) * (uniqueTicVars.size + 1)
+
+          (ordering & OrderingConstraint(Seq(rightTicVars))) match {
+            case Some(newConstraint) =>
+              // Don't need to resort this one, just the next one:
+              (2 * rightSize, newSize, newConstraint)
+
+            case None =>
+              // We have to resort this one:
+              ({                
+                val inputCost = self.size + rightSize
+                val outputCost = newSize
+
+                inputCost + outputCost
+              }, newSize, OrderingConstraint(Seq(commonTicVars, uniqueTicVars)))
+          }
+        }
+
+        BorgTraversalModel(self.ioCost + newIoCost, newSize, newOrdering)
+      }
+    }
+    object BorgTraversalModel {
+      val Zero = new BorgTraversalModel(0, 0, OrderingConstraint.Zero)
+    }
+    case class BorgTraversalPlan(traversalOrder: Vector[MergeNode], orderings: Vector[OrderingConstraint], model: BorgTraversalModel) {
+      def cogroup(rightNode: MergeNode, rightSize: Long, rightTicVars: Set[TicVar]) = {
+        val cogroupModel = model.cogroup(rightSize, rightTicVars)
+
+        copy(
+          traversalOrder = traversalOrder :+ rightNode,
+          orderings      = orderings :+ cogroupModel.ordering,
+          model          = cogroupModel
+        )
+      }
+
+      // TODO: Backpropagate constraints and fix all unfixed orderings:
+      def fixedOrderings: Vector[Seq[TicVar]] = {
+        def fix0(unfixed: Vector[OrderingConstraint], fixed: Vector[Seq[TicVar]] = Vector.empty): Vector[Seq[TicVar]] = {
+          unfixed.lastOption match {
+            case None => fixed
+
+            case Some(unfixedHead) =>
+              fixed.headOption match {
+                case None =>
+                  // We've met all constraints, just pick any fixed ordering:
+                  fix0(unfixed.tail, Vector(unfixedHead.fixed))
+
+                case Some(fixedHead) =>
+                  // TODO: Should not include "new" tic vars in backpropagated constraint:
+                  val newTicVars = fixedHead.toSet -- unfixedHead.fixed.toSet
+
+                  val newFixed = (OrderingConstraint.fromFixed(fixedHead) & unfixedHead).map { isect =>
+                    // Get rid of tic variables that should not exist:
+                    isect.fixed.filterNot(newTicVars.contains)
+                  }.getOrElse {
+                    // There is no compatible constraint. This is a resort.
+                    // Simply pick any fixed ordering:
+                    unfixedHead.fixed
+                  }
+
+                  fix0(unfixed.tail, newFixed +: fixed)
+              }
+          }
+        }
+
+        fix0(orderings)
+      }
+    }
+    object BorgTraversalPlan {
+      val Zero = BorgTraversalPlan(Vector.empty, Vector.empty, BorgTraversalModel.Zero) 
+    }
+
+    def findBorgTraversalOrder(spanningGraph: MergeGraph, connectedSubgraph: ConnectedSubgraph): BorgTraversalPlan = {
+      val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
+
+      // Find all the nodes accessible from the specified node (through edges):
+      def connections(node: MergeNode): Set[MergeNode] = spanningGraph.edgesFor(node).flatMap(e => Set(e.a, e.b)) - node
+
+      def pick0(fixed: Set[MergeNode], unfixed: Set[MergeNode] = Set.empty, options: Set[MergeNode] = Set.empty, 
+                optimalPlans: Map[Set[MergeNode], BorgTraversalPlan] = Map(Set.empty -> BorgTraversalPlan.Zero)): Map[Set[MergeNode], BorgTraversalPlan] = {
+        // Normally, the choices are constrained to those nodes that are connected to those 
+        // already merged into the Borg collective. However, initially, any node can be chosen
+        // as the starting node. So this helper function factors out the duplication:
+        def chooseFrom(choices: Set[MergeNode]): Map[Set[MergeNode], BorgTraversalPlan] = {
+          // We have lots of choices, let's try each one and see what happens!
+          choices.foldLeft(optimalPlans) {
+            case (optimalPlans, choice) =>
+              val node = subsetForNode(choice)
+
+              val newFixed   = fixed + choice
+              val newUnfixed = unfixed - choice
+              val newOptions = (options - choice) ++ connections(choice)
+
+              // TODO: This is broken (wrong way flow of information), fix tomorrow
+              val newPlan = optimalPlans(fixed).cogroup(choice, node.size, node.groupKeyTrans.keyOrder.toSet)
+
+              val bestPlan = optimalPlans.get(newFixed).map { oldPlan =>
+                if (oldPlan.model.ioCost < newPlan.model.ioCost) oldPlan else newPlan
+              }.getOrElse(newPlan)
+
+              pick0(newFixed, newUnfixed, newOptions, optimalPlans + (newFixed -> bestPlan))
+          }
+        }
+
+        if (unfixed.isEmpty) optimalPlans             // Nothing to traverse, return plans
+        else if (options.isEmpty) chooseFrom(unfixed) // First pass through, choose any node
+        else chooseFrom(options)                      // Can only choose from those merged into collective
+      }
+      
+      pick0(spanningGraph.nodes)(spanningGraph.nodes)
+    }
+
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
-    def borg(connectedGraph: ConnectedSubgraph): M[BorgResult] = {
-      sys.error("todo")
+    def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {
+      val (spanningGraph, connectedSubgraph) = tuple
+
+      val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
+
+
+      // case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
+      // case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, 
+      //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
+      val plan = findBorgTraversalOrder(spanningGraph, connectedSubgraph)
+
+      val orderings = plan.fixedOrderings
+
+      val x =  plan.traversalOrder.head
+      val xs = plan.traversalOrder.tail
+
+      val node = subsetForNode(x)
+
+      val initial = BorgResult(
+                      table         = node.table, 
+                      groupKeyTrans = node.groupKeyTrans.spec,
+                      idTrans       = Map(node.node.binding.groupId -> node.idTrans),
+                      rowTrans      = node.targetTrans.map(node.node.binding.groupId -> _).toMap
+                    ).point[M]
+
+      xs.foldLeft(initial) {
+        case (acc, x) => 
+          val node = subsetForNode(x)
+
+          acc
+      }
     }
 
     def crossAll(borgResults: Set[BorgResult]): M[BorgResult] = {
@@ -1616,11 +1696,20 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       // all of the universes will be unioned together.
       val universes = findBindingUniverses(grouping)
       val borgedUniverses: M[Stream[BorgResult]] = universes.toStream.map { universe =>
-        val alignedSpanningGraphsM: M[Set[Map[GroupId, Set[NodeSubset]]]] = universe.spanningGraphs.map(alignOnEdges).sequence
-        val minimizedSpanningGraphsM: M[Set[ConnectedSubgraph]] = for {
-          spanningGraphs <- alignedSpanningGraphsM
-          intersected    <- spanningGraphs.map(_.values.toStream.map(intersect).sequence).sequence
-        } yield intersected.map(_.toSet)
+        val alignedSpanningGraphsM: M[Set[(MergeGraph, Map[GroupId, Set[NodeSubset]])]] = 
+          universe.spanningGraphs.map { spanningGraph =>
+            for (aligned <- alignOnEdges(spanningGraph))
+              yield (spanningGraph, aligned)
+          }.sequence
+
+        val minimizedSpanningGraphsM: M[Set[(MergeGraph, ConnectedSubgraph)]] = for {
+          aligned      <- alignedSpanningGraphsM
+          intersected  <- aligned.map { 
+                            case (spanningGraph, alignment) => 
+                              for (intersected <- alignment.values.toStream.map(intersect).sequence)
+                                yield (spanningGraph, intersected.toSet)
+                          }.sequence
+        } yield intersected
 
         for {
           spanningGraphs <- minimizedSpanningGraphsM

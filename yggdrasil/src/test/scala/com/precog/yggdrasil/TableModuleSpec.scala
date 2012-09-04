@@ -208,7 +208,7 @@ trait TestLib[M[+_]] extends TableModule[M] {
 }
 
 trait TableModuleTestSupport[M[+_]] extends TableModule[M] {
-  implicit def coM : Copointed[M]
+  implicit def M: Monad[M] with Copointed[M]
 
   def fromJson(data: Stream[JValue], maxBlockSize: Option[Int] = None): Table
   def toJson(dataset: Table): M[Stream[JValue]] = dataset.toJson.map(_.toStream)

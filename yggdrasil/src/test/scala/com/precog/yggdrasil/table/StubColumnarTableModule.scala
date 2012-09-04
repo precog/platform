@@ -40,8 +40,10 @@ import scalaz.syntax.monad._
 import scalaz.syntax.std.boolean._
 import scalaz.std.anyVal._
 
+import TableModule._
+
 trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
-  implicit def coM: Copointed[M]
+  implicit def M: Monad[M] with Copointed[M]
 
   type GroupId = Int
   object grouper extends Grouper {
