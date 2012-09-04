@@ -77,7 +77,7 @@ trait ValueRowFormat extends RowFormat { self: StdCodecs =>
 
   def pool: ByteBufferPool
 
-  def encode(cValues: List[CValue]) = getBytesFrom(RowCodec.writeAll(cValues)(pool.acquire _))
+  def encode(cValues: List[CValue]) = getBytesFrom(RowCodec.writeAll(cValues)(pool.acquire _).reverse)
 
   def decode(bytes: Array[Byte], offset: Int): List[CValue] =
     RowCodec.read(ByteBuffer.wrap(bytes, offset, bytes.length - offset))

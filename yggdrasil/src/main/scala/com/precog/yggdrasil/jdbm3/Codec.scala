@@ -397,7 +397,7 @@ object Codec {
       val size = as.foldLeft(0) { (acc, a) =>
         acc + elemCodec.encodedSize(a)
       }
-      size + sizePackedInt(size)
+      size + sizePackedInt(as.size)
     }
 
     def writeUnsafe(as: IndexedSeq[A], sink: ByteBuffer) {
@@ -479,8 +479,8 @@ object Codec {
 
   case class SparseBitSetCodec(size: Int) extends Codec[BitSet] {
 
-    // The maxBytes is max. bits / 8 = (highestOneBit(size) << 2) / 8
-    private val maxBytes = (java.lang.Integer.highestOneBit(size) >>> 1) max 1
+    // The maxBytes is max. bits / 8 = (highestOneBit(size) << 3) / 8
+    private val maxBytes = java.lang.Integer.highestOneBit(size) max 1
 
     type S = (Array[Byte], Int)
 

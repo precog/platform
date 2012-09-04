@@ -66,8 +66,8 @@ trait RowFormatCodecs extends StdCodecs { self: RowFormat =>
   implicit def StringCodec: Codec[String] = Codec.Utf8Codec
   implicit def BooleanCodec: Codec[Boolean] = Codec.BooleanCodec
   implicit def DateTimeCodec: Codec[DateTime] = Codec.DateCodec
-  implicit def BitSetCodec: Codec[BitSet] = Codec.BitSetCodec
-  // @transient implicit lazy val BitSetCodec: Codec[BitSet] = Codec.SparseBitSetCodec(columnRefs.size)
+  // implicit def BitSetCodec: Codec[BitSet] = Codec.BitSetCodec
+  @transient implicit lazy val BitSetCodec: Codec[BitSet] = Codec.SparseBitSetCodec(columnRefs.size)
   implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]): Codec[IndexedSeq[A]] = Codec.IndexedSeqCodec(elemCodec)
 }
 
