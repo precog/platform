@@ -402,6 +402,15 @@ trait AST extends Phases {
 
     def tree: Tree[Expr] = Tree.node(this, subForest)
     
+    override def toString: String = {
+      val result = productIterator map {
+        case ls: LineStream => "<%d:%d>".format(ls.lineNum, ls.colNum)
+        case x => x.toString
+      }
+      
+      productPrefix + "(%s)".format(result mkString ",")
+    }
+    
     def equalsIgnoreLoc(that: Expr): Boolean = (this, that) match {
       case (Let(_, id1, params1, left1, right1), Let(_, id2, params2, left2, right2)) =>
         (id1 == id2) &&
