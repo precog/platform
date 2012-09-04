@@ -280,12 +280,14 @@ trait Emitter extends AST
         
         case t @ ast.TicVar(loc, name) => { 
           t.binding match {
-            case LetBinding(let) => {
-              emitOrDup(MarkTicVar(let, name)) {
-                StateT.apply[Id, Emission, Unit] { e =>
-                  e.ticVars((let, name))(e)     // assert: this will work iff lexical scoping is working
-                }
-              }
+            case SolveBinding(solve) => {
+              notImpl(expr)
+              // TODO
+              // emitOrDup(MarkTicVar(let, name)) {
+                // StateT.apply[Id, Emission, Unit] { e =>
+                  // e.ticVars((let, name))(e)     // assert: this will work iff lexical scoping is working
+                // }
+              // }
             }
             
             case _ => notImpl(expr)
@@ -388,10 +390,10 @@ trait Emitter extends AST
         
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
-            case LoadBinding(_) =>
+            case LoadBinding =>
               emitExpr(actuals.head) >> emitInstr(LoadLocal)
 
-            case DistinctBinding(_) =>
+            case DistinctBinding =>
               emitExpr(actuals.head) >> emitInstr(Distinct)
 
             case Morphism1Binding(m) => 

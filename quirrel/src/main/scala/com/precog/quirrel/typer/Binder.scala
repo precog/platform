@@ -30,7 +30,7 @@ trait Binder extends parser.AST with Library {
   protected override lazy val DistinctId = Identifier(Vector(), "distinct")
 
   override def bindNames(tree: Expr) = {
-    def loop(tree: Expr, env: Map[Either[TicId, Identifier], Binding]): Set[Error] = tree match {
+    def loop(tree: Expr, env: Env): Set[Error] = tree match {
       case b @ Let(_, id, formals, left, right) => {
         val (_, dups) = formals.foldLeft((Set[TicId](), Set[TicId]())) {
           case ((acc, dup), id) if acc(id) => (acc, dup + id)
@@ -40,28 +40,32 @@ trait Binder extends parser.AST with Library {
         if (!dups.isEmpty) {
           dups map { id => Error(b, MultiplyDefinedTicVariable(id)) }
         } else {
-          val env2 = formals.foldLeft(env) { (m, s) => m + (Left(s) -> LetBinding(b)) }
-          loop(left, env2) ++ loop(right, env + (Right(id) -> LetBinding(b)))
+          val ids = formals map { Identifier(Vector(), _) }
+          val names2 = ids.foldLeft(env.names) { (m, s) => m + (s -> FormalBinding(b)) }
+          val env2 = env.copy(names = names2)
+          loop(left, env2) ++ loop(right, env.copy(names = env.names + (id -> LetBinding(b))))
         }
       }
 
-      case b @ Solve(_, constraints, child) => 
-        sys.error("todo")
+      case b @ Solve(_, constraints, child) => {
+        // val ids: Set[TicId] = constraints.flatMap(listFreeVars(env))(collection.breakOut)
+        sys.error("TODO")
+      }
       
       case Import(_, spec, child) => { //todo see scalaz's Boolean.option
         val addend = spec match {
           case SpecificImport(prefix) => {
-            env flatMap {
-              case (Right(Identifier(ns, name)), b) => {
+            env.names flatMap {
+              case (Identifier(ns, name), b) => {
                 if (ns.length >= prefix.length) {
                   if (ns zip prefix forall { case (a, b) => a == b })
-                    Some(Right(Identifier(ns drop (prefix.length - 1), name)) -> b)
+                    Some(Identifier(ns drop (prefix.length - 1), name) -> b)
                   else
                     None
                 } else if (ns.length == prefix.length - 1) {
                   if (ns zip prefix forall { case (a, b) => a == b }) {
                     if (name == prefix.last)
-                      Some(Right(Identifier(Vector(), name)) -> b) 
+                      Some(Identifier(Vector(), name) -> b) 
                     else
                       None
                   } else {
@@ -77,16 +81,16 @@ trait Binder extends parser.AST with Library {
           }
           
           case WildcardImport(prefix) => {
-            env flatMap {
-              case (Right(Identifier(ns, name)), b) => {
+            env.names flatMap {
+              case (Identifier(ns, name), b) => {
                 if (ns.length >= prefix.length + 1) {
                   if (ns zip prefix forall { case (a, b) => a == b })
-                    Some(Right(Identifier(ns drop prefix.length, name)) -> b)
+                    Some(Identifier(ns drop prefix.length, name) -> b)
                   else
                     None
                 } else if (ns.length == prefix.length) {
                   if (ns zip prefix forall { case (a, b) => a == b })
-                    Some(Right(Identifier(Vector(), name)) -> b)
+                    Some(Identifier(Vector(), name) -> b)
                   else
                     None
                 } else {
@@ -99,7 +103,7 @@ trait Binder extends parser.AST with Library {
           }
         }
         
-        loop(child, env ++ addend)
+        loop(child, env.copy(names = env.names ++ addend))
       }
       
       case New(_, child) => loop(child, env)
@@ -108,8 +112,8 @@ trait Binder extends parser.AST with Library {
         loop(from, env) ++ loop(to, env) ++ loop(in, env)
       
       case t @ TicVar(_, name) => {
-        env get Left(name) match {
-          case Some(b @ LetBinding(_)) => {
+        env.vars get name match {
+          case Some(b) => {
             t.binding = b
             Set()
           }
@@ -117,8 +121,6 @@ trait Binder extends parser.AST with Library {
             t.binding = NullBinding
             Set(Error(t, UndefinedTicVariable(name)))
           }
-          
-          case _ => throw new AssertionError("Cannot reach this point")
         }
       }
         
@@ -147,10 +149,10 @@ trait Binder extends parser.AST with Library {
       
       case d @ Dispatch(_, name, actuals) => {
         val recursive = (actuals map { loop(_, env) }).fold(Set()) { _ ++ _ }
-        if (env contains Right(name)) {
-          d.binding = env(Right(name))
+        if (env.names contains name) {
+          d.binding = env.names(name)
           
-          d.isReduction = env(Right(name)) match {
+          d.isReduction = env.names(name) match {
             case ReductionBinding(_) => true
             case _ => false
           }
@@ -220,57 +222,78 @@ trait Binder extends parser.AST with Library {
       
       case Paren(_, child) => loop(child, env)
     }
+    
+    val builtIns = lib1.map(Op1Binding) ++
+      lib2.map(Op2Binding) ++
+      libReduction.map(ReductionBinding) ++
+      libMorphism1.map(Morphism1Binding) ++
+      libMorphism2.map(Morphism2Binding) ++
+      Set(LoadBinding, DistinctBinding)
+      
+    val env = Env(Map(), builtIns.map({ b => b.name -> b })(collection.breakOut))
 
-    loop(tree, (lib1.map(Op1Binding) ++ lib2.map(Op2Binding) ++ libReduction.map(ReductionBinding) ++ libMorphism1.map(Morphism1Binding) ++ libMorphism2.map(Morphism2Binding) ++ Set(LoadBinding(LoadId), DistinctBinding(DistinctId))).map({ b => Right(b.name) -> b})(collection.breakOut))
-  } 
+    loop(tree, env)
+  }
+  
+  
+  private case class Env(vars: Map[TicId, VarBinding], names: Map[Identifier, NameBinding])
 
-  sealed trait Binding
-  sealed trait FormalBinding extends Binding
-  sealed trait FunctionBinding extends Binding {
+  sealed trait NameBinding
+  sealed trait VarBinding
+  
+  case class LetBinding(b: Let) extends NameBinding {
+    override val toString = "@%d".format(b.nodeId)
+  }
+  
+  case class FormalBinding(b: Let) extends NameBinding {
+    override val toString = "@%d".format(b.nodeId)
+  }
+  
+  sealed trait BuiltInBinding extends NameBinding {
     def name: Identifier
   }
-
+  
   // TODO arity and types
-  case class ReductionBinding(red: Reduction) extends FunctionBinding {
+  case class ReductionBinding(red: Reduction) extends BuiltInBinding {
     val name = Identifier(red.namespace, red.name)
     override val toString = "<native: %s(%d)>".format(red.name, 1)   //assumes all reductions are arity 1
   }  
   
-  case class DistinctBinding(id: Identifier) extends FunctionBinding {  //TODO do we need the `id` parameter? for `name`?
-    val name = Identifier(id.namespace, id.id)
-    override val toString = "<native: %s(%d)>".format(id.id, 1)
+  case object DistinctBinding extends BuiltInBinding {
+    val name = DistinctId
+    override val toString = "<native: distinct(1)>"
   }  
 
-  case class LoadBinding(id: Identifier) extends FunctionBinding {  //TODO do we need the `id` parameter? for `name`?
-    val name = Identifier(id.namespace, id.id)
-    override val toString = "<native: %s(%d)>".format(id.id, 1)
+  case object LoadBinding extends BuiltInBinding {
+    val name = LoadId
+    override val toString = "<native: load(1)>"
   }
 
-  case class Morphism1Binding(mor: Morphism1) extends FunctionBinding {
+  case class Morphism1Binding(mor: Morphism1) extends BuiltInBinding {
     val name = Identifier(mor.namespace, mor.name)
     override val toString = "<native: %s(%d)>".format(mor.name, 1)
   }
 
-  case class Morphism2Binding(mor: Morphism2) extends FunctionBinding {
+  case class Morphism2Binding(mor: Morphism2) extends BuiltInBinding {
     val name = Identifier(mor.namespace, mor.name)
     override val toString = "<native: %s(%d)>".format(mor.name, 1)
   }
 
-  case class Op1Binding(op1: Op1) extends FunctionBinding {
+  case class Op1Binding(op1: Op1) extends BuiltInBinding {
     val name = Identifier(op1.namespace, op1.name)
     override val toString = "<native: %s(%d)>".format(op1.name, 1)
   }
   
-  case class Op2Binding(op2: Op2) extends FunctionBinding {
+  case class Op2Binding(op2: Op2) extends BuiltInBinding {
     val name = Identifier(op2.namespace, op2.name)
     override val toString = "<native: %s(%d)>".format(op2.name, 2)
   }
   
-  case class LetBinding(b: Let) extends Binding with FormalBinding {
-    override val toString = "@%d".format(b.nodeId)
-  }  
+  case class SolveBinding(solve: Solve) extends VarBinding {
+    override val toString = "@%d".format(solve.nodeId)
+  }
 
-  case object NullBinding extends Binding with FormalBinding {
+  case object NullBinding extends NameBinding with VarBinding {
     override val toString = "<null>"
   }
 }

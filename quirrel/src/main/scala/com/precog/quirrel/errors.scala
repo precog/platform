@@ -115,6 +115,10 @@ case class UnusedLetBinding(id: Identifier) extends ErrorType {
   override def toString = "binding '%s' defined but not referenced in scope".format(id)
 }
 
+case class UnusedFormalBinding(id: Identifier) extends ErrorType {
+  override def toString = "binding '%s' defined but not referenced in scope".format(id)
+}
+
 case class UnusedTicVariable(id: TicId) extends ErrorType {
   override def toString = "function parameter %s defined but not referenced or constrained".format(id)
 }

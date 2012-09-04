@@ -352,7 +352,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         }
         
         val (prov, errors) = expr.binding match {
-          case LoadBinding(_) => {
+          case LoadBinding => {
             if (exprs.length == 1) {
               lazy val prov = DynamicProvenance(provenanceId(expr))
 
@@ -364,7 +364,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             }
           }
 
-          case DistinctBinding(_) => {
+          case DistinctBinding => {
             if (exprs.length == 1) {
               val prov = DynamicProvenance(currentId.incrementAndGet())
               expr.accumulatedProvenance = Some(Vector(prov))
@@ -860,7 +860,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     }
     
     case t @ TicVar(_, id) => t.binding match {
-      case LetBinding(lt) => varAssumptions get (id -> lt) getOrElse t.provenance
+      // TODO
+      // case SolveBinding(lt) => varAssumptions get (id -> lt) getOrElse t.provenance
       case _ => t.provenance
     }
     
@@ -1035,7 +1036,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => Some(Vector())
 
     case t @ TicVar(_, id) => t.binding match {
-      case LetBinding(lt) => varAccumulatedAssumptions get (id -> lt) getOrElse Some(Vector())
+      // TODO
+      // case LetBinding(lt) => varAccumulatedAssuemptions get (id -> lt) getOrElse Some(Vector())
       case _ => Some(Vector())
     }
 

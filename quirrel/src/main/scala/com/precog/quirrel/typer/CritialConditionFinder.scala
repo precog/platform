@@ -42,7 +42,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       }
       
       case t @ TicVar(_, id) => t.binding match {
-        case LetBinding(`root`) => currentWhere map { where => Map(id -> Set(Condition(where): ConditionTree)) } getOrElse Map()
+        // TODO
+        // case SolveBinding(`root`) => currentWhere map { where => Map(id -> Set(Condition(where): ConditionTree)) } getOrElse Map()
         case _ => Map()
       }
       
@@ -187,7 +188,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       referencesTicVar(root)(from) || referencesTicVar(root)(to) || referencesTicVar(root)(in)
     
     case t @ TicVar(_, _) => t.binding match {
-      case LetBinding(`root`) => true
+      // TODO
+      // case SolveBinding(`root`) => true
       case _ => false
     }
     

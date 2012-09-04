@@ -690,14 +690,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
   "pre-binding of load and distinct" should {
     "bind load" in {
       val d @ Dispatch(_, _, _) = parse("load")
-      d.binding mustEqual LoadBinding(Identifier(Vector(), "load"))
+      d.binding mustEqual LoadBinding
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
     
     "bind distinct" in {
       val d @ Dispatch(_, _, _) = parse("distinct")
-      d.binding mustEqual DistinctBinding(Identifier(Vector(), "distinct"))
+      d.binding mustEqual DistinctBinding
       d.isReduction mustEqual false
       d.errors must beEmpty
     }

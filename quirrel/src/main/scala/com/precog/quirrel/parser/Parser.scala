@@ -145,8 +145,8 @@ trait Parser extends RegexParsers with Filters with AST {
   )
 
   private lazy val formals: Parser[Vector[String]] = (
-      formals ~ "," ~ ticId ^^ { (fs, _, f) => fs :+ f }
-    | ticId                 ^^ { Vector(_) }
+      formals ~ "," ~ id ^^ { (fs, _, f) => fs :+ f }
+    | id                 ^^ { Vector(_) }
   )
   
   private lazy val relations: Parser[Vector[Expr]] = (

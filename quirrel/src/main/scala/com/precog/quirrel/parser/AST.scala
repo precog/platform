@@ -37,8 +37,8 @@ trait AST extends Phases {
   
   type BucketSpec
 
-  type Binding
-  type FormalBinding
+  type NameBinding
+  type VarBinding
   type Provenance
   
   def printSExp(tree: Expr, indent: String = ""): String = tree match {
@@ -666,7 +666,7 @@ trait AST extends Phases {
       override def children = List(child)
     }
     
-    final case class Let(loc: LineStream, name: Identifier, params: Vector[TicId], left: Expr, right: Expr) extends ExprUnaryNode {
+    final case class Let(loc: LineStream, name: Identifier, params: Vector[String], left: Expr, right: Expr) extends ExprUnaryNode {
       val sym = 'let
       
       val isPrefix = true
@@ -726,9 +726,9 @@ trait AST extends Phases {
     final case class TicVar(loc: LineStream, name: TicId) extends ExprLeafNode {
       val sym = 'ticvar
       
-      private val _binding = attribute[FormalBinding](bindNames)
+      private val _binding = attribute[VarBinding](bindNames)
       def binding = _binding()
-      private[quirrel] def binding_=(b: FormalBinding) = _binding() = b
+      private[quirrel] def binding_=(b: VarBinding) = _binding() = b
     }
     
     final case class StrLit(loc: LineStream, value: String) extends ExprLeafNode {
@@ -791,9 +791,9 @@ trait AST extends Phases {
       def isReduction = _isReduction()
       private[quirrel] def isReduction_=(b: Boolean) = _isReduction() = b
       
-      private val _binding = attribute[Binding](bindNames)
+      private val _binding = attribute[NameBinding](bindNames)
       def binding = _binding()
-      private[quirrel] def binding_=(b: Binding) = _binding() = b
+      private[quirrel] def binding_=(b: NameBinding) = _binding() = b
       
       def form = {
         val opt = (actuals map { _ ~ 'comma } reduceOption { _ ~ _ })

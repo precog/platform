@@ -42,7 +42,8 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
       }
       
       case t @ TicVar(_, id) => t.binding match {
-        case LetBinding(`root`) => currentWhere map { where => Set(GroupCondition(where): GroupTree) } getOrElse Set()
+        // TODO
+        // case SolveBinding(`root`) => currentWhere map { where => Set(GroupCondition(where): GroupTree) } getOrElse Set()
         case _ => Set()
       }
       

@@ -1574,7 +1574,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
   }
   
   "name binding after tree shake" should {
-    "re-bind tic variables from let" in {
+    "re-bind formals" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("'a"), Paren(LineStream(), TicVar(LineStream(), "'a")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
       bindRoot(tree, tree)
       
@@ -1582,7 +1582,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors must beEmpty
       
       result must beLike {
-        case Let(LineStream(), Identifier(Vector(), "a"), Vector("'a"), t @ TicVar(LineStream(), "'a"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())) =>
+        case Let(LineStream(), Identifier(Vector(), "a"), Vector("b"), t @ Dispatch(LineStream(), Identifier(Vector(), "b"), Vector()), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())) =>
           t.binding must beLike { case LetBinding(`result`) => ok }
       }
     }
