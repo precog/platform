@@ -1524,8 +1524,16 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       sys.error("todo")
     }
 
-    final case class BorgTraversalModel private (ioCost: Long, size: Long, ticVars: Set[TicVar]) { self =>
-      def cogroup(rightSize: Long, rightTicVars: Set[TicVar], resort: Boolean): BorgTraversalModel = {
+    /**
+     * Represents the cost of a particular borg traversal plan, measured in terms of IO.
+     * Computational complexity of algorithms occurring in memory is neglected. 
+     * This should be thought of as a rough approximation that eliminates stupid choices.
+     */
+    final case class BorgTraversalCostModel private (ioCost: Long, size: Long, ticVars: Set[TicVar]) { self =>
+      /**
+       * Computes a new model derived from this one by cogroup with the specified set.
+       */
+      def cogroup(rightSize: Long, rightTicVars: Set[TicVar], accResort: Boolean): BorgTraversalCostModel = {
         val commonTicVars = self.ticVars intersect rightTicVars
 
         val unionTicVars = self.ticVars ++ rightTicVars
@@ -1535,7 +1543,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         // TODO: Highly questionable, like this whole model!
         val newSize = (self.size.max(rightSize)) * (uniqueTicVars.size + 1)
 
-        val newIoCost = if (resort) {
+        val newIoCost = if (!accResort) {
           2 * rightSize
         } else {
           val inputCost = self.size + rightSize
@@ -1544,13 +1552,23 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           inputCost + outputCost
         }
 
-        BorgTraversalModel(self.ioCost + newIoCost, newSize, self.ticVars ++ rightTicVars)
+        BorgTraversalCostModel(self.ioCost + newIoCost, newSize, self.ticVars ++ rightTicVars)
       }
     }
-    object BorgTraversalModel {
-      val Zero = new BorgTraversalModel(0, 0, Set.empty)
+    object BorgTraversalCostModel {
+      val Zero = new BorgTraversalCostModel(0, 0, Set.empty)
     }
 
+    /**
+     * Represents a step in a borg traversal plan. The step is defined by the following elements:
+     * 
+     *  1. The order of the accumulator prior to executing the step.
+     *  2. The order of the accumulator after executing the step.
+     *  3. The node being incorporated into the accumulator during this step.
+     *  4. The tic variables of the node being incorporated into this step.
+     *  5. The ordering of the node required for cogroup.
+     * 
+     */
     case class BorgTraversalPlanStep(accOrderPre: OrderingConstraint, node: MergeNode, nodeTicVars: Set[TicVar]) { self =>
       // Do we have to resort the accumulator during this step?
       lazy val accResort: Boolean = !(accOrderPre & accOrderPost).isEmpty
@@ -1598,9 +1616,19 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
-    case class BorgTraversalPlan(steps: Vector[BorgTraversalPlanStep], model: BorgTraversalModel) {
+    /**
+     * Represents a (perhaps partial) traversal plan for applying the borg algorithm,
+     * together with the cost of the plan.
+     */
+    case class BorgTraversalPlan(steps: Vector[BorgTraversalPlanStep], costModel: BorgTraversalCostModel) {
+      /**
+       * The set of all tic variables after the plan has been executed.
+       */
       def ticVars = steps.lastOption.map(_.postTicVars).getOrElse(Set.empty)
 
+      /**
+       * Generates a new plan by cogrouping the result of this plan with the specified node.
+       */
       def cogroup(rightNode: MergeNode, rightSize: Long, rightTicVars: Set[TicVar]) = {
         val accOrderPre = steps.lastOption match {
           case Some(last) => last.accOrderPost
@@ -1609,11 +1637,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
         val newStep = BorgTraversalPlanStep(accOrderPre, rightNode, rightTicVars)
 
-        val newModel = model.cogroup(rightSize, rightTicVars, newStep.accResort)
+        val newCostModel = costModel.cogroup(rightSize, rightTicVars, newStep.accResort)
 
         copy(
           steps = steps :+ newStep,
-          model = newModel
+          costModel = newCostModel
         )
       }
 
@@ -1642,9 +1670,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
     object BorgTraversalPlan {
-      val Zero = BorgTraversalPlan(Vector.empty, BorgTraversalModel.Zero) 
+      val Zero = BorgTraversalPlan(Vector.empty, BorgTraversalCostModel.Zero) 
     }
 
+    /**
+     * Finds a traversal order for the borg algorithm which minimizes the number of resorts 
+     * required.
+     */
     def findBorgTraversalOrder(spanningGraph: MergeGraph, connectedSubgraph: ConnectedSubgraph): BorgTraversalPlan = {
       val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
 
@@ -1683,7 +1715,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
       
       pick0(spanningGraph.nodes, 
-        Set.empty, Set.empty, Map(Set.empty -> Set(BorgTraversalPlan.Zero)))(spanningGraph.nodes).toSeq.sortBy(_.model.ioCost).head
+        Set.empty, Set.empty, Map(Set.empty -> Set(BorgTraversalPlan.Zero)))(spanningGraph.nodes).toSeq.sortBy(_.costModel.ioCost).head
     }
 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
