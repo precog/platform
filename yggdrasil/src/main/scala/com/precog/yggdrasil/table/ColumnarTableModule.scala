@@ -1101,14 +1101,18 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
 
     final case class BorgTraversalModel private (ioCost: Long, size: Long, ordering: OrderingConstraint) { self =>
-      def ticVars: Set[TicVar] = ordering.ordering.toSet.flatten
+      lazy val ticVars: Set[TicVar] = ordering.ordering.toSet.flatten
 
       def cogroup(rightSize: Long, rightTicVars: Set[TicVar]): BorgTraversalModel = {
         val (newIoCost, newSize, newOrdering) = {
-          // We have to resort this one:
-          val uniqueTicVars = ((ticVars diff rightTicVars) union (rightTicVars diff ticVars)).size
+          val commonTicVars = self.ticVars intersect rightTicVars
 
-          val newSize = (size + rightSize) * (uniqueTicVars + 1)
+          val unionTicVars = self.ticVars ++ rightTicVars
+
+          val uniqueTicVars = unionTicVars -- commonTicVars
+
+          // TODO: Highly questionable, like this whole model!
+          val newSize = (size + rightSize) * (uniqueTicVars.size + 1)
 
           (ordering & OrderingConstraint(Seq(rightTicVars))) match {
             case Some(newConstraint) =>
@@ -1116,12 +1120,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               (2 * rightSize, newSize, newConstraint)
 
             case None =>
+              // We have to resort this one:
               ({                
                 val inputCost = size + rightSize
                 val outputCost = newSize
 
                 inputCost + outputCost
-              }, newSize, OrderingConstraint(Seq(rightTicVars, self.ticVars -- rightTicVars)))
+              }, newSize, OrderingConstraint(Seq(commonTicVars, uniqueTicVars)))
           }
         }
 
@@ -1130,10 +1135,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
     object BorgTraversalModel {
       val Zero = new BorgTraversalModel(0, 0, OrderingConstraint(Vector.empty))
-
-      implicit val OrderingBorgTraversalModel = new scala.math.Ordering[BorgTraversalModel] {
-        def compare(a: BorgTraversalModel, b: BorgTraversalModel): Int = (a.ioCost - b.ioCost).toInt
-      }
     }
     case class BorgTraversalPlan(traversalOrder: Vector[MergeNode], orderings: Vector[OrderingConstraint], model: BorgTraversalModel) {
       def cogroup(rightNode: MergeNode, rightSize: Long, rightTicVars: Set[TicVar]) = {
@@ -1153,12 +1154,16 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def findBorgTraversalOrder(spanningGraph: MergeGraph, connectedSubgraph: ConnectedSubgraph): BorgTraversalPlan = {
       val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
 
+      // Find all the nodes accessible from the specified node (through edges):
       def connections(node: MergeNode): Set[MergeNode] = spanningGraph.edgesFor(node).flatMap(e => Set(e.a, e.b)) - node
 
       def pick0(fixed: Set[MergeNode], unfixed: Set[MergeNode] = Set.empty, options: Set[MergeNode] = Set.empty, 
                 optimalPlans: Map[Set[MergeNode], BorgTraversalPlan] = Map(Set.empty -> BorgTraversalPlan.Zero)): Map[Set[MergeNode], BorgTraversalPlan] = {
-
+        // Normally, the choices are constrained to those nodes that are connected to those 
+        // already merged into the Borg collective. However, initially, any node can be chosen
+        // as the starting node. So this helper function factors out the duplication:
         def chooseFrom(choices: Set[MergeNode]): Map[Set[MergeNode], BorgTraversalPlan] = {
+          // We have lots of choices, let's try each one and see what happens!
           choices.foldLeft(optimalPlans) {
             case (optimalPlans, choice) =>
               val node = subsetForNode(choice)
