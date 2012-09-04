@@ -827,12 +827,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       def & (that: OrderingConstraint): Option[OrderingConstraint] = OrderingConstraints.replacementFor(self, that)
     }
-
-    object OrderingConstraints {
+    object OrderingConstraint {
       val Zero = OrderingConstraint(Vector.empty)
 
-      def apply(order: Seq[TicVar]): OrderingConstraint = OrderingConstraint(order.map(v => Set(v)))
+      def fromFixed(order: Seq[TicVar]): OrderingConstraint = OrderingConstraint(order.map(v => Set(v)))
+    }
 
+    object OrderingConstraints {
       /**
        * Compute a new constraint that can replace both input constraints
        */
@@ -1135,7 +1136,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
     object BorgTraversalModel {
-      val Zero = new BorgTraversalModel(0, 0, OrderingConstraint(Vector.empty))
+      val Zero = new BorgTraversalModel(0, 0, OrderingConstraint.Zero)
     }
     case class BorgTraversalPlan(traversalOrder: Vector[MergeNode], orderings: Vector[OrderingConstraint], model: BorgTraversalModel) {
       def cogroup(rightNode: MergeNode, rightSize: Long, rightTicVars: Set[TicVar]) = {
@@ -1164,7 +1165,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   // TODO: Should not include "new" tic vars in backpropagated constraint:
                   val newTicVars = fixedHead.toSet -- unfixedHead.fixed.toSet
 
-                  val newFixed = (OrderingConstraint(fixedHead) & unfixedHead).map { isect =>
+                  val newFixed = (OrderingConstraint.fromFixed(fixedHead) & unfixedHead).map { isect =>
                     // Get rid of tic variables that should not exist:
                     isect.fixed.filterNot(newTicVars.contains)
                   }.getOrElse {
