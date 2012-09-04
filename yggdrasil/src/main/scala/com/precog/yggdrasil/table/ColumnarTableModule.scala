@@ -1558,6 +1558,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     object BorgTraversalModel {
       val Zero = new BorgTraversalModel(0, 0, OrderingConstraint.Zero)
     }
+
     case class BorgTraversalPlan(traversalOrder: Vector[MergeNode], orderings: Vector[OrderingConstraint], model: BorgTraversalModel) {
       def cogroup(rightNode: MergeNode, rightSize: Long, rightTicVars: Set[TicVar]) = {
         val cogroupModel = model.cogroup(rightSize, rightTicVars)
@@ -1659,26 +1660,36 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
       val plan = findBorgTraversalOrder(spanningGraph, connectedSubgraph)
 
-      val orderings = plan.fixedOrderings
+      val fixedOrderings = plan.fixedOrderings
 
-      val x =  plan.traversalOrder.head
-      val xs = plan.traversalOrder.tail
+      val zipped = plan.traversalOrder.zip(fixedOrderings)
 
-      val node = subsetForNode(x)
+      val x =  zipped.head
+      val xs = zipped.tail
 
-      val initial = BorgResult(
+      val node = subsetForNode(x._1)
+
+      val initial = (BorgResult(
                       table         = node.table, 
                       groupKeyTrans = node.groupKeyTrans.spec,
                       idTrans       = Map(node.node.binding.groupId -> node.idTrans),
                       rowTrans      = node.targetTrans.map(node.node.binding.groupId -> _).toMap
-                    ).point[M]
+                    ), x._2).point[M]
 
-      xs.foldLeft(initial) {
-        case (acc, x) => 
-          val node = subsetForNode(x)
+      // TODO: Sort initial according to x._2
 
-          acc
-      }
+      (xs.foldLeft(initial) { 
+        case (accM, (mergeNode, newOrdering)) => 
+          accM.map {
+            case ((acc, curOrdering)) =>
+              val node = subsetForNode(mergeNode)
+              val nodeTicVars = node.groupKeyTrans.keyOrder.toSet
+
+              val commonTicVars = curOrdering.toSet intersect nodeTicVars
+
+              (acc, newOrdering)
+          }
+      }).map(_._1)
     }
 
     def crossAll(borgResults: Set[BorgResult]): M[BorgResult] = {
