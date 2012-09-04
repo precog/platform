@@ -1555,9 +1555,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         BorgTraversalModel(self.ioCost + newIoCost, newSize, newOrdering)
       }
     }
+
     object BorgTraversalModel {
       val Zero = new BorgTraversalModel(0, 0, OrderingConstraint.Zero)
     }
+
     case class BorgTraversalPlan(traversalOrder: Vector[MergeNode], orderings: Vector[OrderingConstraint], model: BorgTraversalModel) {
       def cogroup(rightNode: MergeNode, rightSize: Long, rightTicVars: Set[TicVar]) = {
         val cogroupModel = model.cogroup(rightSize, rightTicVars)
@@ -1602,6 +1604,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         fix0(orderings)
       }
     }
+
     object BorgTraversalPlan {
       val Zero = BorgTraversalPlan(Vector.empty, Vector.empty, BorgTraversalModel.Zero) 
     }
