@@ -94,6 +94,60 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
     }
     
+    "bind all tic-variables determined from free set on constraint exprs" in {
+      {
+        val e @ Solve(_, _, t: TicVar) = parse("solve 'a 'a")
+        t.binding mustEqual SolveBinding(e)
+        t.errors must beEmpty
+      }
+      
+      {
+        val e @ Solve(_, _, t: TicVar) = parse("solve 'a = foo.a 'a")
+        t.binding mustEqual SolveBinding(e)
+        t.errors must beEmpty
+      }
+      
+      {
+        val e @ Solve(_, _, Add(_, Add(_, ta: TicVar, tb: TicVar), tc: TicVar)) = parse("solve 'a, 'b, 'c 'a + 'b + 'c")
+        
+        ta.binding mustEqual SolveBinding(e)
+        tb.binding mustEqual SolveBinding(e)
+        tc.binding mustEqual SolveBinding(e)
+        
+        ta.errors must beEmpty
+        tb.errors must beEmpty
+        tc.errors must beEmpty
+      }
+      
+      {
+        val e @ Solve(_, _, Add(_, Add(_, ta: TicVar, tb: TicVar), tc: TicVar)) = parse("solve 'a * foo.a, 'b = baz where count('c) 'a + 'b + 'c")
+        
+        ta.binding mustEqual SolveBinding(e)
+        tb.binding mustEqual SolveBinding(e)
+        tc.binding mustEqual SolveBinding(e)
+        
+        ta.errors must beEmpty
+        tb.errors must beEmpty
+        tc.errors must beEmpty
+      }
+    }
+    
+    "reject unbound tic-variables" in {
+      val e @ Solve(_, _, t: TicVar) = parse("solve 'a 'b")
+      t.binding mustEqual NullBinding
+      t.errors mustEqual Set(UndefinedTicVariable("'b"))
+    }
+    
+    "reject solve lacking free variables" in {
+      val e @ Solve(_, _, _) = parse("solve 42 12")
+      e.errors mustEqual Set(SolveLackingFreeVariables)
+    }
+    
+    "reject solve lacking free variables in one of many constraints" in {
+      val e @ Solve(_, _, _) = parse("solve 42, 'a, 'b, 'c 12")
+      e.errors mustEqual Set(SolveLackingFreeVariables)
+    }
+    
     "bind name in inner scope" in {
       val e1 @ Let(_, _, _, _, e2 @ Let(_, _, _, _, d: Dispatch)) = parse("a := 42 b := 24 b")
       

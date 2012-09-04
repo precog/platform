@@ -48,12 +48,14 @@ trait Binder extends parser.AST with Library {
       }
 
       case b @ Solve(_, constraints, child) => {
-        val ids: Set[TicId] = constraints.flatMap(listFreeVars(env))(collection.breakOut)
+        val varVector = constraints map listFreeVars(env)
         
-        val errors = if (ids.isEmpty)
+        val errors = if (varVector exists { _.isEmpty })
           Set(Error(b, SolveLackingFreeVariables))
         else
           Set[Error]()
+        
+        val ids = varVector reduce { _ ++ _ }
         
         val bindings = ids map { id => id -> SolveBinding(b) }
         loop(child, env.copy(vars = env.vars ++ bindings)) ++ errors
