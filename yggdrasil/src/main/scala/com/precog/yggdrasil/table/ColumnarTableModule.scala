@@ -372,7 +372,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                         // if any excluded column exists for the row, unequal
                         excluded.exists(_.isDefinedAt(row)) || 
                          // if any paired column compares unequal, unequal
-                        paired.exists({ case (_, equal: BoolColumn) => equal.isDefinedAt(row) && !equal(row) })
+                        paired.exists({ case (_, equal: BoolColumn) => equal.isDefinedAt(row) && !equal(row); case _ => false })
                       )
                     }
                   }
@@ -1692,7 +1692,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
 
-
       // case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
       // case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, 
       //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
@@ -1712,7 +1711,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                       rowTrans      = node.targetTrans.map(node.node.binding.groupId -> _).toMap
                     ), x).point[M]
 
-      // TODO: Sort initial according to x._2
+      // TODO: Sort initial according to x
 
       (xs.foldLeft(initial) { 
         case (accM, newStep) => 
