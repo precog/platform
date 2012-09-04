@@ -441,7 +441,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               val (va0, vslice) = valueTrans(slice)
               val vColumns = vslice.columns.toSeq.sortBy(_._1).toArray
               val vColumnRefs = vColumns.map(_._1)
-
+              
               val newState = state.transforms.foldLeft(state.copy(transforms = Nil)) { 
                 case (DumpState(db, indices, firstGlobalRowId, newTransforms), (i, SliceTransform1(a, f))) =>
                   val (a0, slice0) = f(a, slice)

@@ -313,7 +313,7 @@ trait TableModule[M[+_]] extends FNModule {
     def constEmptyArray: Table
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)]
-    def intersect(sources: (Table, trans.TransSpec1)*): M[Table]
+    def intersect(identitySpec: TransSpec1, sources: Table*): M[Table]
   }
   
   def ops: TableCompanion

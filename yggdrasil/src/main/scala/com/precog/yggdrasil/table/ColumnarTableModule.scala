@@ -114,7 +114,101 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
     def constEmptyArray: Table = 
       table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice])
 
-    def intersect(sources: (Table, trans.TransSpec1)*): M[Table] = sys.error("todo")
+    def transformStream[A](sliceTransform: SliceTransform1[A], slices: StreamT[M, Slice]): StreamT[M, Slice] = {
+      def stream(state: A, slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT(
+        for {
+          head <- slices.uncons
+        } yield {
+          head map { case (s, sx) =>
+            val (nextState, s0) = sliceTransform.f(state, s)
+            StreamT.Yield(s0, stream(nextState, sx))
+          } getOrElse {
+            StreamT.Done
+          }
+        }
+      )
+
+      stream(sliceTransform.initial, slices)
+    }
+
+    /**
+     * Intersects the given tables on identity, where identity is defined by the provided TransSpecs
+     */
+    def intersect(identitySpec: TransSpec1, tables: Table*): M[Table] = {
+      val inputCount = tables.size
+      val mergedSlices: StreamT[M, Slice] = tables.map(_.slices).reduce( _ ++ _ )
+      table(mergedSlices).sort(identitySpec).map {
+        sortedTable => {
+          sealed trait CollapseState
+          case class Boundary(prevSlice: Slice, prevStartIdx: Int) extends CollapseState
+          case object InitialCollapse extends CollapseState
+
+          // Collapse the slices, returning the BitSet for which the rows are defined as well as the end of the
+          // last span 
+          def collapse0(sl1: Slice, sl1Idx: Int, sl2: Slice, sl2Idx: Int, defined: BitSet, boundary: Boolean): (BitSet, Int) = {
+            val comparator = Slice.rowComparatorFor(sl1, sl2) {
+              // only need to compare identities (0th element of the sorted table) between projections
+              slice => slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(JPathIndex(0) :: Nil) }).toList.sorted
+            }
+
+            var retain = defined
+
+            // We'll collect spans of EQ rows in chunks, retainin the start row of completed spans with the correct
+            // count and then inchworming over it
+            var spanStart = sl1Idx
+            var spanEnd   = sl2Idx
+            
+            while (spanEnd < sl2.size && (!boundary || spanEnd == sl2Idx)) {
+              while (spanEnd < sl2.size && comparator.compare(spanStart, spanEnd) == EQ) {
+                spanEnd += 1
+              }
+
+              val count = if (boundary) {
+                (sl1.size - spanStart) + spanEnd
+              } else {
+                spanEnd - spanStart
+              }
+
+              // If the count is correct, we retain, unless we're on a
+              // boundary compare and we haven't compared EQ on any rows
+              // of the next slice. In that case, a row was already
+              // retained on the previous slice prior to transitioning
+              // the slice transform. That retention, however, doesn't
+              // prevent us from erroring if we see more EQ rows (too many)
+              if (count == inputCount && !(boundary && spanEnd == sl2Idx)) {
+                retain += (spanEnd - 1)
+              } else if (count > inputCount) {
+                sys.error("Found too many EQ identities in intersect. This indicates a bug in the graph processing algorithm.")
+              }
+
+              spanStart = spanEnd
+            }
+
+            (retain, spanEnd)
+          }
+
+          val collapse = SliceTransform1[CollapseState](InitialCollapse, {
+            case (InitialCollapse, slice) => {
+              val (retain, spanEnd) = collapse0(slice, 0, slice, 0, BitSet.empty, false)
+              
+              // Pass on the remainder, if any, of this slice to the next slice for continued comparison
+              (Boundary(slice, spanEnd), slice.redefineWith(retain))
+            }
+
+            case (Boundary(prevSlice, prevStart), slice) => {
+              // First, do a boundary comparison on the previous slice to see if we need to retain lead elements in the new slice
+              val (boundaryRetain, boundaryEnd) = collapse0(prevSlice, prevStart, slice, 0, BitSet.empty, true)
+
+              val (retain, spanEnd) = collapse0(slice, boundaryEnd, slice, boundaryEnd, boundaryRetain, false)
+
+              (Boundary(slice, spanEnd), slice.redefineWith(retain))
+            }
+          })
+
+          table(transformStream(collapse, sortedTable.slices))
+        }
+      }
+    }
   }
   
   implicit def liftF1(f: F1) = new F1Like {
@@ -233,23 +327,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
     }
 
     private def map0(f: Slice => Slice): SliceTransform1[Unit] = SliceTransform1[Unit]((), Function.untupled(f.second[Unit]))
-
-    private def transformStream[A](sliceTransform: SliceTransform1[A], slices: StreamT[M, Slice]): StreamT[M, Slice] = {
-      def stream(state: A, slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT(
-        for {
-          head <- slices.uncons
-        } yield {
-          head map { case (s, sx) =>
-            val (nextState, s0) = sliceTransform.f(state, s)
-            StreamT.Yield(s0, stream(nextState, sx))
-          } getOrElse {
-            StreamT.Done
-          }
-        }
-      )
-
-      stream(sliceTransform.initial, slices)
-    }
 
     protected def composeSliceTransform(spec: TransSpec1): SliceTransform1[_] = {
       composeSliceTransform2(spec).parallel
@@ -602,7 +679,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
      * unknown sort order.
      */
     def transform(spec: TransSpec1): Table = {
-      table(transformStream(composeSliceTransform(spec), slices))
+      table(ops.transformStream(composeSliceTransform(spec), slices))
     }
     
     /**

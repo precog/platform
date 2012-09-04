@@ -28,7 +28,7 @@ import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 
 import scala.annotation.tailrec
-import scala.collection.breakOut
+import scala.collection.{breakOut, BitSet}
 import scalaz._
 import scalaz.Ordering._
 import scalaz.Validation._
@@ -44,15 +44,16 @@ trait RowComparator { self =>
   }
 
   @tailrec
-  def nextLeftIndex(lidx: Int, lsize: Int, ridx: Int, step: Int): Int = {
+  final def nextLeftIndex(lidx: Int, lsize: Int, ridx: Int, step: Int): Int = {
     if (lidx < lsize) {
       compare(lidx, ridx) match {
         case EQ | GT =>
           if (step <= 1) lidx -1
-          nextLeftIndex(compare, lidx - (step / 2), lsize, ridx, step / 2)
+          nextLeftIndex(lidx - (step / 2), lsize, ridx, step / 2)
 
         case LT => 
-          nextLeftIndex(compare, lidx + step, lsize, ridx, step)
+          nextLeftIndex(lidx + step, lsize, ridx, step)
+      }
     } else {
       lsize
     }
@@ -78,6 +79,7 @@ trait Slice { source =>
   
   def isDefinedAt(row: Int) = columns.values.exists(_.isDefinedAt(row))
 
+  // FIXME: rename to mapRoot
   def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {
@@ -87,12 +89,19 @@ trait Slice { source =>
     }
   }
 
+  // FIXME: rename to mapColumns
   def filterColumns(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {
       case (ref, col) => f(col) map { (ref, _ ) }  
     }
   }
+
+  /**
+   * Transform this slice such that its columns are only defined for row indices
+   * in the given BitSet.
+   */
+  def redefineWith(s: BitSet): Slice = filterColumns(cf.util.filter(0, size - 1, s))
   
   def definedConst(value: CValue): Slice = new Slice {
     val size = source.size
