@@ -1615,38 +1615,39 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       // Find all the nodes accessible from the specified node (through edges):
       def connections(node: MergeNode): Set[MergeNode] = spanningGraph.edgesFor(node).flatMap(e => Set(e.a, e.b)) - node
 
-      def pick0(fixed: Set[MergeNode], unfixed: Set[MergeNode] = Set.empty, options: Set[MergeNode] = Set.empty, 
-                optimalPlans: Map[Set[MergeNode], BorgTraversalPlan] = Map(Set.empty -> BorgTraversalPlan.Zero)): Map[Set[MergeNode], BorgTraversalPlan] = {
+      def pick0(fixed: Set[MergeNode], unfixed: Set[MergeNode], options: Set[MergeNode], 
+                plans: Map[Set[MergeNode], Set[BorgTraversalPlan]]): Map[Set[MergeNode], Set[BorgTraversalPlan]] = {
         // Normally, the choices are constrained to those nodes that are connected to those 
         // already merged into the Borg collective. However, initially, any node can be chosen
         // as the starting node. So this helper function factors out the duplication:
-        def chooseFrom(choices: Set[MergeNode]): Map[Set[MergeNode], BorgTraversalPlan] = {
+        def chooseFrom(choices: Set[MergeNode]): Map[Set[MergeNode], Set[BorgTraversalPlan]] = {
           // We have lots of choices, let's try each one and see what happens!
-          choices.foldLeft(optimalPlans) {
-            case (optimalPlans, choice) =>
+          choices.foldLeft(plans) {
+            case (plans, choice) =>
               val node = subsetForNode(choice)
 
               val newFixed   = fixed + choice
               val newUnfixed = unfixed - choice
               val newOptions = (options - choice) ++ connections(choice)
 
-              // TODO: This is broken (wrong way flow of information), fix tomorrow
-              val newPlan = optimalPlans(fixed).cogroup(choice, node.size, node.groupKeyTrans.keyOrder.toSet)
+              plans(fixed).foldLeft(plans) {
+                case (plans, fixedPlan) =>
+                  val newPlan = fixedPlan.cogroup(choice, node.size, node.groupKeyTrans.keyOrder.toSet)
 
-              val bestPlan = optimalPlans.get(newFixed).map { oldPlan =>
-                if (oldPlan.model.ioCost < newPlan.model.ioCost) oldPlan else newPlan
-              }.getOrElse(newPlan)
+                  val newSet = plans.getOrElse(newFixed, Set.empty) + newPlan
 
-              pick0(newFixed, newUnfixed, newOptions, optimalPlans + (newFixed -> bestPlan))
+                  pick0(newFixed, newUnfixed, newOptions, plans + (newFixed -> newSet))
+              }
           }
         }
 
-        if (unfixed.isEmpty) optimalPlans             // Nothing to traverse, return plans
+        if (unfixed.isEmpty) plans             // Nothing to traverse, return plans
         else if (options.isEmpty) chooseFrom(unfixed) // First pass through, choose any node
         else chooseFrom(options)                      // Can only choose from those merged into collective
       }
       
-      pick0(spanningGraph.nodes)(spanningGraph.nodes)
+      pick0(spanningGraph.nodes, 
+        Set.empty, Set.empty, Map(Set.empty -> Set(BorgTraversalPlan.Zero)))(spanningGraph.nodes).toSeq.sortBy(_.model.ioCost).head
     }
 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
@@ -1661,26 +1662,36 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
       val plan = findBorgTraversalOrder(spanningGraph, connectedSubgraph)
 
-      val orderings = plan.fixedOrderings
+      val fixedOrderings = plan.fixedOrderings
 
-      val x =  plan.traversalOrder.head
-      val xs = plan.traversalOrder.tail
+      val zipped = plan.traversalOrder.zip(fixedOrderings)
 
-      val node = subsetForNode(x)
+      val x =  zipped.head
+      val xs = zipped.tail
 
-      val initial = BorgResult(
+      val node = subsetForNode(x._1)
+
+      val initial = (BorgResult(
                       table         = node.table, 
                       groupKeyTrans = node.groupKeyTrans.spec,
                       idTrans       = Map(node.node.binding.groupId -> node.idTrans),
                       rowTrans      = node.targetTrans.map(node.node.binding.groupId -> _).toMap
-                    ).point[M]
+                    ), x._2).point[M]
 
-      xs.foldLeft(initial) {
-        case (acc, x) => 
-          val node = subsetForNode(x)
+      // TODO: Sort initial according to x._2
 
-          acc
-      }
+      (xs.foldLeft(initial) { 
+        case (accM, (mergeNode, newOrdering)) => 
+          accM.map {
+            case ((acc, curOrdering)) =>
+              val node = subsetForNode(mergeNode)
+              val nodeTicVars = node.groupKeyTrans.keyOrder.toSet
+
+              val commonTicVars = curOrdering.toSet intersect nodeTicVars
+
+              (acc, newOrdering)
+          }
+      }).map(_._1)
     }
 
     def crossAll(borgResults: Set[BorgResult]): M[BorgResult] = {
