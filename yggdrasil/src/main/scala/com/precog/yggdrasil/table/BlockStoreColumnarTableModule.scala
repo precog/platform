@@ -32,6 +32,7 @@ import blueeyes.json.{JPath,JPathField,JPathIndex}
 
 import java.io.File
 import java.util.SortedMap
+import java.util.Comparator
 
 import org.apache.jdbm.DBMaker
 
@@ -406,6 +407,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       } yield result
     }
 
+    private type SortingKey = Array[Byte]
     private type SortBlockData = BlockProjectionData[SortingKey,Slice]
     private object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
 
@@ -419,7 +421,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
       // Bookkeeping types/case classes
       type IndexStore = SortedMap[SortingKey,Array[Byte]]
-      case class SliceIndex(name: String, storage: IndexStore, sortRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef])
+      case class SliceIndex(name: String, storage: IndexStore, keyComparator: Comparator[SortingKey], sortRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef])
 
       // Map a set of slice columns to a given JDBM DB index, since each slice could vary in column formats, names, etc
       type IndexMap = Map[Seq[ColumnRef], SliceIndex]
@@ -434,70 +436,81 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       val dbFile = new File(newScratchDir(), "sortspace")
       val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
 
-      val codec = new ColumnCodec()
-      
       // Insert slice data based on columndescriptors
       val inputOp: M[SortOutput] = tableWithSortKey.slices.foldLeft(SortOutput(Map.empty, 0, 0l)) { case (SortOutput(indices, _, nextId), slice) => {
-        def columnsByPrefix(prefix: JPath): List[(ColumnRef,Column)] = slice.columns.collect {
+        def columnsByPrefix(prefix: JPath, dropPrefix: Boolean): List[(ColumnRef,Column)] = slice.columns.collect {
           // The conditional guarantees that dropPrefix will return Some
-          case (ColumnRef(selector, tpe), col) if selector.hasPrefix(prefix) => (ColumnRef(selector.dropPrefix(prefix).get, tpe), col)
+          case pair @ (ColumnRef(selector, tpe), col) if selector.hasPrefix(prefix) =>
+            if (dropPrefix) {
+              (ColumnRef(selector.dropPrefix(prefix).get, tpe), col)
+            } else pair
         }.toList
 
-        val dataColumns = columnsByPrefix(JPath(Value))
-        val idColumns   = columnsByPrefix(JPath(Key))
-        val sortColumns = columnsByPrefix(JPath(SortKey))
+        val dataColumns = columnsByPrefix(JPath(Value), true)
+        val idColumns   = columnsByPrefix(JPath(Key), false)
+        val sortColumns = columnsByPrefix(JPath(SortKey), false)
+        val ids = new Array[Long](slice.size)
+        val nextAvailGlobalId = (0 until slice.size).foldLeft(nextId) { (nextId, row) =>
+          if (dataColumns.exists(_._2.isDefinedAt(row))) {
+            ids(row) = nextId
+            nextId + 1
+          } else {
+            ids(row) = -1L
+            nextId
+          }
+        }
+        val globalIdColumn = ColumnRef(JPath(SortGlobalId), CLong) -> new LongColumn {
+          def apply(row: Int) = ids(row)
+          def isDefinedAt(row: Int) = ids(row) >= 0
+        }
+        val keyColumns = sortColumns ++ (idColumns :+ globalIdColumn)
+
         val indexMapKey = (sortColumns ++ dataColumns).map(_._1).toSeq
+
+        val dataRowFormat = RowFormat.forValues(dataColumns map (_._1))
+        val dataColumnEncoder = dataRowFormat.ColumnEncoder(dataColumns map (_._2))
+
+        val keyRowFormat = RowFormat.forValues(keyColumns map (_._1))
+        val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns map (_._2))
+        val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
 
         val (index, newIndices) = indices.get(indexMapKey).map((_,indices)).getOrElse {
           val newIndex = SliceIndex(indexMapKey.toString,
-                                    DB.createTreeMap(indexMapKey.toString, 
-                                                     SortingKeyComparator(sortOrder.isAscending),
-                                                     SortingKeySerializer(idColumns.size),
-                                                     null /* Use default serialization */),
-                                    sortColumns.map(_._1),
+                                    DB.createTreeMap(indexMapKey.toString, keyComparator, null, null),
+                                    keyComparator,
+                                    keyColumns.map(_._1),
                                     dataColumns.map(_._1))
 
           (newIndex, indices + (indexMapKey -> newIndex))
         }
         
         // Iterate over the slice
-        //TODO why doesn't this work with a tailrec?
+        // TODO why doesn't this work with a tailrec?
         var row = 0
-        var globalId = nextId
 
         while (row < slice.size) {
-          val identities = VectorCase(idColumns.map(_._2.asInstanceOf[LongColumn].apply(row)) : _*)
-
-          if (dataColumns.exists(_._2.isDefinedAt(row))) {
+          if (globalIdColumn._2.isDefinedAt(row)) {
             try {
-              index.storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
+              index.storage.put(keyColumnEncoder.encodeFromRow(row), dataColumnEncoder.encodeFromRow(row))
             } catch {
               case t: Throwable => println("Error on storeRow: " + t); throw t
             }
 
+            val globalId = globalIdColumn._2(row)
             if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
               DB.commit()
             }
-            globalId += 1
           }
           row += 1
         }
 
-        SortOutput(newIndices, idColumns.size, globalId)
+        SortOutput(newIndices, idColumns.size, nextAvailGlobalId)
       }}.map {
         case output @ SortOutput(indices, idCount, lastId) => {
           DB.close()
           output
         }
       }
-
-      // A little ugly, but getting this implicitly seemed a little crazy
-      val sortingKeyOrder: Order[SortingKey] = scalaz.Order.fromScalaOrdering(
-        scala.math.Ordering.comparatorToOrdering(
-          SortingKeyComparator(sortOrder.isAscending)
-        )
-      )
-
 
       // Merge the resulting slice indices back together
       inputOp.flatMap { 
@@ -508,9 +521,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         case SortOutput(indices, idCount, _) => {
           // Map the distinct indices into SortProjections/Cells, then merge them
           val cells: Set[M[Option[Cell]]] = indices.zipWithIndex.map {
-            case ((_, SliceIndex(name, _, sortColumns, valColumns)), index) => {
+            case ((_, SliceIndex(name, _, keyComparator, sortColumns, valColumns)), index) => {
+
               val sortProjection = new JDBMRawSortProjection(dbFile, name, idCount, sortColumns, valColumns) {
-                def keyOrder: Order[SortingKey] = sortingKeyOrder
+                // A little ugly, but getting this implicitly seemed a little crazy
+                val keyOrder: Order[SortingKey] =
+                  scalaz.Order.fromScalaOrdering(scala.math.Ordering.comparatorToOrdering(keyComparator))
               }
 
               val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
@@ -524,7 +540,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           mergeProjections(cells, sortOrder.isAscending) { slice => {
             // ensure that sort keys compare before identities
             slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(SortKey :: Nil) }).toList.sorted :::
-            slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(Key :: Nil) }).toList.sorted
+            slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(Key :: Nil) }).toList.sorted :::
+            slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(SortGlobalId :: Nil) }).toList.sorted
           }}
         }
       }

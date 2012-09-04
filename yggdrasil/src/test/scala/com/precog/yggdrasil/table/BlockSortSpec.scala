@@ -231,7 +231,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
         _.sort(sortTransspec, SortAscending)
       }.flatMap {
         // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
-        table => M.point(table.transform(ObjectDelete(Leaf(Source), Set(SortKey))))
+        table => M.point(table.transform(ObjectDelete(Leaf(Source), Set(SortKey, SortGlobalId))))
       }.flatMap {
         _.toJson
       }.copoint.toList
