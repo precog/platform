@@ -1299,6 +1299,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         )
       }
 
+      def fixed: BorgTraversalPlan = copy(steps = fixedSteps)
+
       def fixedSteps: Vector[BorgTraversalPlanStep] = {
         def fix0(unfixed: Vector[BorgTraversalPlanStep], fixed: Vector[BorgTraversalPlanStep] = Vector.empty): Vector[BorgTraversalPlanStep] = {
           unfixed.lastOption match {
