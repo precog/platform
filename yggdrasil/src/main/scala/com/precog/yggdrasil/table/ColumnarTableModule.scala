@@ -1208,16 +1208,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
         val uniqueTicVars = unionTicVars -- commonTicVars
 
-        // TODO: Highly questionable, like this whole model!
-        val newSize = (self.size.max(rightSize)) * (uniqueTicVars.size + 1)
+        // TODO: Develop a better model!
+        val newSize = self.size.max(rightSize) * (uniqueTicVars.size + 1)
 
         val newIoCost = if (!accResort) {
           2 * rightSize
         } else {
           val inputCost = self.size + rightSize
+          val resortCost = self.size * 2
           val outputCost = newSize
 
-          inputCost + outputCost
+          inputCost + resortCost + outputCost
         }
 
         BorgTraversalCostModel(self.ioCost + newIoCost, newSize, self.ticVars ++ rightTicVars)
