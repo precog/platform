@@ -988,8 +988,23 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
-    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], size: Long = 1) {
+    sealed trait NodeMetadata {
+      def size: Long
+
+      def ticVars: Set[TicVar]
+    }
+
+    object NodeMetadata {
+      def apply(size0: Long, ticVars0: Set[TicVar]) = new NodeMetadata {
+        def size = size0
+        def ticVars = ticVars
+      }
+    }
+
+    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], size: Long = 1) extends NodeMetadata {
       def sortedOn = groupKeyTrans.alignTo(groupKeyPrefix).prefixTrans(groupKeyPrefix.size)
+
+      def ticVars = groupKeyTrans.keyOrder.toSet
     }
 
     /////////////////
@@ -1315,9 +1330,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
      * Finds a traversal order for the borg algorithm which minimizes the number of resorts 
      * required.
      */
-    def findBorgTraversalOrder(spanningGraph: MergeGraph, connectedSubgraph: ConnectedSubgraph): BorgTraversalPlan = {
-      val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
-
+    def findBorgTraversalOrder(spanningGraph: MergeGraph, nodeOracle: MergeNode => NodeMetadata): BorgTraversalPlan = {
       // Find all the nodes accessible from the specified node (through edges):
       def connections(node: MergeNode): Set[MergeNode] = spanningGraph.edgesFor(node).flatMap(e => Set(e.a, e.b)) - node
 
@@ -1330,7 +1343,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           // We have lots of choices, let's try each one and see what happens!
           choices.foldLeft(plans) {
             case (plans, choice) =>
-              val node = subsetForNode(choice)
+              val nodeMetadata = nodeOracle(choice)
 
               val newFixed   = fixed + choice
               val newUnfixed = unfixed - choice
@@ -1338,7 +1351,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
               plans(fixed).foldLeft(plans) {
                 case (plans, fixedPlan) =>
-                  val newPlan = fixedPlan.cogroup(choice, node.size, node.groupKeyTrans.keyOrder.toSet)
+                  val newPlan = fixedPlan.cogroup(choice, nodeMetadata.size, nodeMetadata.ticVars)
 
                   val newSet = plans.getOrElse(newFixed, Set.empty) + newPlan
 
@@ -1360,19 +1373,19 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {
       val (spanningGraph, connectedSubgraph) = tuple
 
-      val subsetForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
+      val metaForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
 
       // case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
       // case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, 
       //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
-      val plan = findBorgTraversalOrder(spanningGraph, connectedSubgraph)
+      val plan = findBorgTraversalOrder(spanningGraph, metaForNode)
 
       val planSteps = plan.fixedSteps
 
       val x =  planSteps.head
       val xs = planSteps.tail
 
-      val node = subsetForNode(x.node)
+      val node = metaForNode(x.node)
 
       val initial = (BorgResult(
                       table         = node.table, 
@@ -1387,7 +1400,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         case (accM, newStep) => 
           accM.map {
             case ((acc, lastStep)) =>
-              val node = subsetForNode(newStep.node)
+              val node = metaForNode(newStep.node)
 
               (acc, newStep)
           }
