@@ -550,11 +550,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                 } yield (ltable, rtable)
 
               case None =>
-                (ops.empty, ops.empty).point[M]
+                (Table.empty, Table.empty).point[M]
             }
 
           case None =>
-            (ops.empty, ops.empty).point[M]
+            (Table.empty, Table.empty).point[M]
         }
       }
 
@@ -672,7 +672,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   }
 
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
-    import ops._
+    import Table._
     import SliceTransform._
     import trans._
 

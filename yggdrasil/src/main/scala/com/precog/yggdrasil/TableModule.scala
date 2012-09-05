@@ -42,18 +42,18 @@ object TableModule {
   case object AnyDefined extends Definedness
   case object AllDefined extends Definedness
 
+    /*
   sealed trait GroupKeyAlign
   object GroupKeyAlign {
     case object Eq extends GroupKeyAlign
   
-    /*
     case object Neq extends GroupKeyAlign
     case object Lte extends GroupKeyAlign
     case object Lt extends GroupKeyAlign
     case object Gt extends GroupKeyAlign
     case object Gte extends GroupKeyAlign
-    */
   }
+    */
   
   sealed trait SortOrder
   sealed trait DesiredSortOrder extends SortOrder {
@@ -139,7 +139,7 @@ trait TableModule[M[+_]] extends FNModule {
 
     case class FilterDefined[+A <: SourceType](source: TransSpec[A], definedFor: TransSpec[A], definedness: Definedness) extends TransSpec[A]
   
-    type TransSpec1 = TransSpec[Source.type]
+    type TransSpec1 = TransSpec[Source1]
 
     object TransSpec {
       def mapSources[A <: SourceType, B <: SourceType](spec: TransSpec[A])(f: A => B): TransSpec[B] = {
@@ -249,6 +249,12 @@ trait TableModule[M[+_]] extends FNModule {
       def sources: Vector[GroupingSource] 
     }
 
+    object GroupingSpec {
+      sealed trait Alignment
+      case object Union extends Alignment
+      case object Intersection extends Alignment
+    }
+
     /**
      * Definition for a single group set and its associated composite key part.
      *
@@ -260,9 +266,10 @@ trait TableModule[M[+_]] extends FNModule {
       def sources: Vector[GroupingSource] = Vector(this)
     }
     
-    final case class GroupingAlignment(groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec, right: GroupingSpec) extends GroupingSpec {
+    final case class GroupingAlignment(groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec, right: GroupingSpec, alignment: GroupingSpec.Alignment) extends GroupingSpec {
       def sources: Vector[GroupingSource] = left.sources ++ right.sources
     }
+
     object constants {
       import TableModule.paths._
 
@@ -297,8 +304,15 @@ trait TableModule[M[+_]] extends FNModule {
     }
   }
   
+  type Table <: TableLike
+  type TableCompanion <: TableCompanionLike
+
+  val Table: TableCompanion
+  
   trait TableCompanionLike {
     import trans._
+
+    implicit val geq: scalaz.Equal[GroupId]
 
     def empty: Table
     
@@ -312,29 +326,11 @@ trait TableModule[M[+_]] extends FNModule {
     def constEmptyObject: Table
     def constEmptyArray: Table
 
+    def merge(grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => M[Table]): M[Table]
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)]
     def intersect(identitySpec: TransSpec1, sources: Table*): M[Table]
   }
   
-  val ops: TableCompanion
-  val grouper: Grouper
-  
-  type Table <: TableLike
-  type TableCompanion <: TableCompanionLike
-  type Grouper <: GrouperLike
-
-  trait GrouperLike {
-    import trans._
-
-    implicit val geq: scalaz.Equal[GroupId]
-
-    /**
-     * @param grouping The group spec
-     * @param body The evaluator, taking a ''map'' from a key to some table (representing a tic variable or group set)
-     */
-    def merge(grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => M[Table]): M[Table]
-  }
-    
   trait TableLike { this: Table =>
     import trans._
 

@@ -245,10 +245,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     }                           
 
     "sort" >> {
-      "fully homogeneous data"        in homogeneousSortSample.pendingUntilFixed
-      "data with undefined sort keys" in partiallyUndefinedSortSample.pendingUntilFixed
-      "heterogeneous sort keys"       in heterogeneousSortSample.pendingUntilFixed
-      "arbitrary datasets"            in checkSortDense.pendingUntilFixed
+      "fully homogeneous data"        in homogeneousSortSample
+      "data with undefined sort keys" in partiallyUndefinedSortSample
+      "heterogeneous sort keys"       in heterogeneousSortSample
+      "arbitrary datasets"            in checkSortDense
     }
 
     "intersect by identity" >> {

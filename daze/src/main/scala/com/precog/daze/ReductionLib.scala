@@ -58,7 +58,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
       }
     }
 
-    def extract(res: Result): Table = ops.constDecimal(Set(CNum(res)))
+    def extract(res: Result): Table = Table.constDecimal(Set(CNum(res)))
   }
 
   object Max extends Reduction(ReductionNamespace, "max") {
@@ -104,7 +104,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     }
 
     def extract(res: Result): Table =
-      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+      res map { r => Table.constDecimal(Set(CNum(r))) } getOrElse Table.empty
   }
 
   object Min extends Reduction(ReductionNamespace, "min") {
@@ -147,7 +147,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     }
 
     def extract(res: Result): Table =
-      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+      res map { r => Table.constDecimal(Set(CNum(r))) } getOrElse Table.empty
   }
 
   val SumMonoid = implicitly[Monoid[Sum.Result]]
@@ -192,7 +192,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     }
 
     def extract(res: Result): Table =
-      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+      res map { r => Table.constDecimal(Set(CNum(r))) } getOrElse Table.empty
   }
   
   val MeanMonoid = implicitly[Monoid[Mean.Result]]
@@ -251,7 +251,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def extract(res: Result): Table = {
       val filteredResult = res filter { case (_, count) => count != 0 }
-      filteredResult map { case (sum, count) => ops.constDecimal(Set(CNum(sum / count))) } getOrElse ops.empty
+      filteredResult map { case (sum, count) => Table.constDecimal(Set(CNum(sum / count))) } getOrElse Table.empty
     }
   }
   
@@ -316,7 +316,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def extract(res: Result): Table = { //TODO division by zero
       val filteredResult = res filter { case (_, count) => count != 0 }
-      filteredResult map { case (prod, count) => ops.constDecimal(Set(CNum(math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse ops.empty
+      filteredResult map { case (prod, count) => Table.constDecimal(Set(CNum(math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse Table.empty
     }
   }
   
@@ -374,7 +374,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     }
 
     def extract(res: Result): Table =
-      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+      res map { r => Table.constDecimal(Set(CNum(r))) } getOrElse Table.empty
   }
   
   val VarianceMonoid = implicitly[Monoid[Variance.Result]]
@@ -432,7 +432,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def extract(res: Result): Table = {
       val filteredResult = res filter { case (count, _, _) => count != 0 }
-      filteredResult map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum((sumsq - (sum * (sum / count))) / count))) } getOrElse ops.empty //todo using toDouble is BAD
+      filteredResult map { case (count, sum, sumsq) => Table.constDecimal(Set(CNum((sumsq - (sum * (sum / count))) / count))) } getOrElse Table.empty //todo using toDouble is BAD
     }
   }
   
@@ -491,7 +491,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def extract(res: Result): Table = {
       val filteredResult = res filter { case (count, _, _) => count != 0 }
-      filteredResult map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum(sqrt(count * sumsq - sum * sum) / count))) } getOrElse ops.empty //todo using toDouble is BAD
+      filteredResult map { case (count, sum, sumsq) => Table.constDecimal(Set(CNum(sqrt(count * sumsq - sum * sum) / count))) } getOrElse Table.empty //todo using toDouble is BAD
     }
   }
 }

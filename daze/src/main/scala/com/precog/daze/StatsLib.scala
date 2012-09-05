@@ -29,6 +29,8 @@ import yggdrasil.table._
 import com.precog.util.IdGen
 import com.precog.util._
 
+import org.apache.commons.collections.primitives.ArrayIntList
+
 import scala.collection.BitSet
 
 import scalaz._
@@ -41,7 +43,7 @@ import scalaz.syntax.monad._
 import scalaz.syntax.std.option._
 import scalaz.syntax.std.boolean._
 
-import org.apache.commons.collections.primitives.ArrayIntList
+import TableModule._
 
 trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalOperations with Evaluator[M] {
   import trans._
@@ -76,7 +78,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           middleValue map { _.transform(trans.DerefObjectStatic(Leaf(Source), paths.Value)) }
         }
       } yield {
-        val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+        val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
         val valueTable = median.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
         
         valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
@@ -164,7 +166,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
     def extract(res: Result): Table = {
       val setC = res map CNum.apply
-      ops.constDecimal(setC)
+      Table.constDecimal(setC)
     }
 
     def apply(table: Table) = {
@@ -311,13 +313,13 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           val stdDev1 = sqrt(count * sumsq1 - sum1 * sum1) / count
           val stdDev2 = sqrt(count * sumsq2 - sum2 * sum2) / count
 
-          val resultTable = ops.constDecimal(Set(CNum(cov / (stdDev1 * stdDev2))))  //TODO the following lines are used throughout. refactor! 
+          val resultTable = Table.constDecimal(Set(CNum(cov / (stdDev1 * stdDev2))))  //TODO the following lines are used throughout. refactor! 
           val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
-          val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+          val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
-      } getOrElse ops.empty
+      } getOrElse Table.empty
     }
 
     def apply(table: Table) = table.reduce(reducer) map extract
@@ -459,13 +461,13 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         case (count, sum1, sum2, productSum) => {
           val cov = (productSum - ((sum1 * sum2) / count)) / count
 
-          val resultTable = ops.constDecimal(Set(CNum(cov)))
+          val resultTable = Table.constDecimal(Set(CNum(cov)))
           val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
-          val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+          val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
-      } getOrElse ops.empty
+      } getOrElse Table.empty
     }
 
     def apply(table: Table) = table.reduce(reducer) map extract
@@ -611,19 +613,19 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           val slope = cov / vari
           val yint = (sum2 / count) - (slope * (sum1 / count))
 
-          val constSlope = ops.constDecimal(Set(CNum(slope)))
-          val constIntercept = ops.constDecimal(Set(CNum(yint)))
+          val constSlope = Table.constDecimal(Set(CNum(slope)))
+          val constIntercept = Table.constDecimal(Set(CNum(yint)))
 
           val slopeSpec = trans.WrapObject(Leaf(SourceLeft), "slope")
           val yintSpec = trans.WrapObject(Leaf(SourceRight), "intercept")
           val concatSpec = trans.ObjectConcat(slopeSpec, yintSpec)
 
           val valueTable = constSlope.cross(constIntercept)(trans.WrapObject(concatSpec, paths.Value.name))
-          val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+          val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
-      } getOrElse ops.empty
+      } getOrElse Table.empty
     }
 
     def apply(table: Table) = {
@@ -816,19 +818,19 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           val slope = cov / vari
           val yint = (sum2 / count) - (slope * (sum1 / count))
 
-          val constSlope = ops.constDecimal(Set(CNum(slope)))
-          val constIntercept = ops.constDecimal(Set(CNum(yint)))
+          val constSlope = Table.constDecimal(Set(CNum(slope)))
+          val constIntercept = Table.constDecimal(Set(CNum(yint)))
 
           val slopeSpec = trans.WrapObject(Leaf(SourceLeft), "slope")
           val yintSpec = trans.WrapObject(Leaf(SourceRight), "intercept")
           val concatSpec = trans.ObjectConcat(slopeSpec, yintSpec)
 
           val valueTable = constSlope.cross(constIntercept)(trans.WrapObject(concatSpec, paths.Value.name))
-          val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+          val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
-      } getOrElse ops.empty
+      } getOrElse Table.empty
     }
 
     def apply(table: Table) = {
