@@ -36,6 +36,7 @@ import scala.collection.mutable
 import scala.annotation.tailrec
 import scala.{ specialized => spec }
 
+import java.math.{ BigDecimal => BigDec }
 import java.math.MathContext
 
 
@@ -147,19 +148,20 @@ object Codec {
   private final val FALSE_VALUE = 0.toByte
   private final val TRUE_VALUE = 1.toByte
 
-  def forCType(cType: CType): Codec[_] = cType match {
-    case cType: CValueType[_] => forCValueType(cType)
-    case _: CNullType => ConstCodec(true)
-  }
+  // def forCType(cType: CType): Codec[_] = cType match {
+  //   case cType: CValueType[_] => forCValueType(cType)
+  //   case _: CNullType => ConstCodec(true)
+  // }
 
-  def forCValueType[A](cType: CValueType[A]): Codec[A] = cType match {
-    case CBoolean => BooleanCodec
-    case CString => Utf8Codec
-    case CLong => LongCodec
-    case CDouble => DoubleCodec
-    case CNum => BigDecimalCodec
-    case CDate => DateCodec
-  }
+  // def forCValueType[A](cType: CValueType[A]): Codec[A] = cType match {
+  //   case CBoolean => BooleanCodec
+  //   case CString => Utf8Codec
+  //   case CLong => LongCodec
+  //   case CDouble => DoubleCodec
+  //   case CNum => BigDecimalCodec
+  //   case CDate => DateCodec
+  //   case CArrayType(elemType) => IndexedSeqCodec(Codec.forCValueType(elemType))
+  // }
 
 
   @tailrec
@@ -187,6 +189,39 @@ object Codec {
     sizePackedInt(n >>> 7, size + 1)
   } else size
 
+  case class CompositeCodec[A, B, C](codecA: Codec[A], codecB: Codec[B], from: C => (A, B), to: (A, B) => C) extends Codec[C] {
+    type S = Either[(codecA.S, B), codecB.S]
+
+    def encodedSize(c: C) = {
+      val (a, b) = from(c)
+      codecA.encodedSize(a) + codecB.encodedSize(b)
+    }
+
+    override def minSize(c: C) = codecA.minSize(from(c)._1) max codecB.minSize(from(c)._2)
+    override def maxSize(c: C) = {
+      val (a, b) = from(c)
+      codecA.maxSize(a) + codecB.maxSize(b)
+    }
+
+    def writeUnsafe(c: C, buf: ByteBuffer) {
+      val (a, b) = from(c)
+      codecA.writeUnsafe(a, buf)
+      codecB.writeUnsafe(b, buf)
+    }
+
+    def writeInit(c: C, buf: ByteBuffer): Option[S] = {
+      val (a, b) = from(c)
+      (codecA.writeInit(a, buf) map (s => Left((s, b)))) orElse (codecB.writeInit(b, buf) map (Right(_)))
+    }
+
+    def writeMore(more: S, buf: ByteBuffer) = more match {
+      case Left((s, b)) => (codecA.writeMore(s, buf) map (s => Left((s, b)))) orElse (codecB.writeInit(b, buf) map (Right(_)))
+      case Right(s) => codecB.writeMore(s, buf) map (Right(_))
+    }
+
+    def read(buf: ByteBuffer): C = to(codecA.read(buf), codecB.read(buf))
+  }
+
   trait FixedWidthCodec[@spec(Boolean, Long, Double) A] extends Codec[A] {
     type S = A
 
@@ -213,6 +248,12 @@ object Codec {
     def read(buffer: ByteBuffer): A = a
   }
 
+
+  implicit case object ByteCodec extends FixedWidthCodec[Byte] {
+    val size = 1
+    def writeUnsafe(x: Byte, sink: ByteBuffer) { sink.put(x) }
+    def read(src: ByteBuffer): Byte = src.get()
+  }
 
   implicit case object BooleanCodec extends FixedWidthCodec[Boolean] {
     val size = 1
@@ -379,9 +420,12 @@ object Codec {
   }
 
 
-  // TODO Create a proper codec for BigDecimals.
-  implicit val BigDecimalCodec = Utf8Codec.as[BigDecimal](_.toString, BigDecimal(_, MathContext.UNLIMITED))
+  implicit val JBigDecimalCodec = CompositeCodec[Array[Byte], Long, BigDec](ArrayCodec[Byte], PackedLongCodec,
+    x => (x.unscaledValue.toByteArray, x.scale.toLong),
+    (u, s) => new BigDec(new java.math.BigInteger(u), s.toInt))
 
+  //implicit val BigDecimalCodec = Utf8Codec.as[BigDecimal](_.toString, BigDecimal(_, MathContext.UNLIMITED))
+  implicit val BigDecimalCodec = JBigDecimalCodec.as[BigDecimal](_.underlying, BigDecimal(_, MathContext.UNLIMITED))
 
   final class IndexedSeqCodec[A](val elemCodec: Codec[A]) extends Codec[IndexedSeq[A]] {
 
@@ -431,7 +475,7 @@ object Codec {
 
   implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]) = new IndexedSeqCodec(elemCodec)
 
-  implicit def ArrayCodec[A: Codec: Manifest] = Codec[IndexedSeq[A]].as[Array[A]](_.toIndexedSeq, _.toArray)
+  implicit def ArrayCodec[A: Codec: Manifest]: Codec[Array[A]] = Codec[IndexedSeq[A]].as[Array[A]](_.toIndexedSeq, _.toArray)
 
 
   /** A Codec that can (un)wrap CValues of type CValueType. */
