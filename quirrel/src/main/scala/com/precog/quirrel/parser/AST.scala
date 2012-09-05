@@ -686,7 +686,6 @@ trait AST extends Phases {
       def buckets = _buckets()
       private[quirrel] def buckets_=(spec: Option[BucketSpec]) = _buckets() = spec
       
-      lazy val criticalConditions = findCriticalConditions(this)
       lazy val groups = findGroups(this)
       
       private val _assumptions = attribute[Map[String, Provenance]](checkProvenance)
@@ -712,6 +711,8 @@ trait AST extends Phases {
       def form = 'solve ~ (constraints.init map { _ ~ 'comma } reduceOption { _ ~ _ } map { _ ~ constraints.last ~ child } getOrElse (constraints.last ~ child))
       
       def children = child +: constraints toList
+      
+      lazy val criticalConditions = findCriticalConditions(this)
     }
 
     final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends ExprUnaryNode {

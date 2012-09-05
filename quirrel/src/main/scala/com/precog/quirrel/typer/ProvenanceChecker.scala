@@ -41,16 +41,17 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val leftErrors = loop(left, relations, constraints)
 
         if (!params.isEmpty && left.provenance != NullProvenance) {
-          val assumptions: Map[String, Provenance] = expr.criticalConditions map {
+          /* val assumptions: Map[String, Provenance] = expr.criticalConditions map {
             case (id, exprs) => {
               val provenances = flattenForest(exprs) map { _.provenance }
               val unified = provenances reduce unifyProvenanceAssumingRelated
 
               (id -> unified)
             }
-          }
+           } */
+          val assumptions: Map[String, Provenance] = Map()
 
-          val accumulatedAssumptions: Map[String, Option[Vector[Provenance]]] = expr.criticalConditions map {
+          /* val accumulatedAssumptions: Map[String, Option[Vector[Provenance]]] = expr.criticalConditions map {
             case (id, exprs) => {
               val allExprs: Set[Set[Provenance]] = flattenForest(exprs) map { e => e.provenance.possibilities }
 
@@ -70,7 +71,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
 
               (id -> unified)
             }
-          }
+          } */
+          val accumulatedAssumptions: Map[String, Option[Vector[Provenance]]] = Map()
           
           val unconstrained = params filterNot (assumptions contains)
           val required = unconstrained.lastOption map { params indexOf _ } map (1 +) getOrElse 0
