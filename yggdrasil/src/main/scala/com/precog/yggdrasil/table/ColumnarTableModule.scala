@@ -1315,30 +1315,35 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         )
       }
 
-      def fixed: BorgTraversalPlan = copy(steps = fixedSteps)
+      /** 
+       * Fixes all unfixed orderings to produce a concrete, step-by-step traversal plan.
+       */
+      def fixed: BorgTraversalPlan = {
+        val fixedSteps: Vector[BorgTraversalPlanStep] = {
+          def fix0(unfixed: Vector[BorgTraversalPlanStep], fixed: Vector[BorgTraversalPlanStep] = Vector.empty): Vector[BorgTraversalPlanStep] = {
+            unfixed.lastOption match {
+              case None => fixed
 
-      def fixedSteps: Vector[BorgTraversalPlanStep] = {
-        def fix0(unfixed: Vector[BorgTraversalPlanStep], fixed: Vector[BorgTraversalPlanStep] = Vector.empty): Vector[BorgTraversalPlanStep] = {
-          unfixed.lastOption match {
-            case None => fixed
+              case Some(unfixedHead) =>
+                fixed.headOption match {
+                  case None =>
+                    // We've met all constraints, just pick any fixed ordering:
+                    val fixedHead = unfixedHead.fixed
 
-            case Some(unfixedHead) =>
-              fixed.headOption match {
-                case None =>
-                  // We've met all constraints, just pick any fixed ordering:
-                  val fixedHead = unfixedHead.fixed
+                    fix0(unfixed.tail, Vector(fixedHead))
 
-                  fix0(unfixed.tail, Vector(fixedHead))
+                  case Some(fixedHead) =>
+                    val newFixed = unfixedHead.fixedBefore(fixedHead)
 
-                case Some(fixedHead) =>
-                  val newFixed = unfixedHead.fixedBefore(fixedHead)
-
-                  fix0(unfixed.tail, newFixed +: fixed)
-              }
+                    fix0(unfixed.tail, newFixed +: fixed)
+                }
+            }
           }
+
+          fix0(steps)
         }
 
-        fix0(steps)
+        copy(steps = fixedSteps)
       }
     }
 
@@ -1398,9 +1403,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       // case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
       // case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, 
       //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) {
-      val plan = findBorgTraversalOrder(spanningGraph, metaForNode)
+      val plan = findBorgTraversalOrder(spanningGraph, metaForNode).fixed
 
-      val planSteps = plan.fixedSteps
+      val planSteps = plan.steps
 
       val x =  planSteps.head
       val xs = planSteps.tail
