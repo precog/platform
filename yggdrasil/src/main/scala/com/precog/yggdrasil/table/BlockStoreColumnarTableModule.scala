@@ -214,7 +214,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       for (cells <- cellsM.sequence.map(_.flatten)) yield {
         val cellMatrix = CellMatrix(cells)(keyf)
 
-        table(
+        Table(
           StreamT.unfoldM[M, Slice, mutable.PriorityQueue[Cell]](mutable.PriorityQueue(cells.toSeq: _*)(if (invert) cellMatrix.ordering.reverse else cellMatrix.ordering)) { queue =>
 
             // dequeues all equal elements from the head of the queue
@@ -295,6 +295,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     private[BlockStoreColumnarTableModule] object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
 
     case class SliceIndex(name: String, storage: IndexStore, keyComparator: Comparator[SortingKey], sortRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef])
+
+    def apply(slices: StreamT[M, Slice]) = new Table(slices)
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = {
       sealed trait AlignState
@@ -735,8 +737,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       } yield mergedProjections
     }
   }
-
-  def table(slices: StreamT[M, Slice]) = new Table(slices)
 } 
 
 object BlockStoreColumnarTableModule {
