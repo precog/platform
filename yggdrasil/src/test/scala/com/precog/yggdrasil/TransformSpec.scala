@@ -639,8 +639,8 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
   def checkTypedArray3 = {
     val data: Stream[JValue] = 
       Stream(
-        JObject(List(JField("value", JArray(List(JArray(List()), JArray(List())))), JField("key", JArray(List(JNum(1)))))),
-        JObject(List(JField("value", JArray(List(JArray(List()), JArray(List()), JNull))), JField("key", JArray(List(JNum(1)))))))
+        JObject(List(JField("value", JArray(List(JArray(List()), JNum(23), JNull))), JField("key", JArray(List(JNum(1)))))),
+        JObject(List(JField("value", JArray(List(JArray(List()), JArray(List()), JNull))), JField("key", JArray(List(JNum(2)))))))  //TODO remove JNull for another test?  //will expected function keep the key around without any values matching??
     val sample = SampleData(data)
     val table = fromSample(sample)
 
@@ -650,8 +650,10 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       Typed(Leaf(Source), jtpe)
     })
       
-    val included: Map[JPath, CType] = Map(JPath(List(JPathIndex(0))) -> CEmptyArray, JPath(List(JPathIndex(1))) -> CEmptyArray)
-    val subsumes: Boolean = Schema.subsumes(included.toSeq, jtpe)
+    val included: Map[JPath, CType] = Map(JPath(List(JPathIndex(0))) -> CEmptyArray, JPath(List(JPathIndex(1))) -> CEmptyArray, JPath(List(JPathIndex(2))) -> CNull)
+
+    val sampleSchema = inferSchema(data.toSeq)
+    val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
     println("subsumes: %s\n".format(subsumes))
 
     results.copoint must_== expected(data, included, subsumes)
@@ -744,38 +746,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       val sampleSchema = inferSchema(sample.data.toSeq)
       val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
 
-      //val expected = {
-      //  if (subsumes) {
-      //    sample.data flatMap { jv =>
-      //      val back = JValue.unflatten(jv.flattenWithPath.filter {
-      //        case (path @ JPath(JPathField("key"), _*), _) => true
-      //        case (path @ JPath(JPathField("value"), tail @ _*), value) if included.contains(JPath(tail : _*)) => {
-      //          (included(JPath(tail : _*)), value) match {
-      //            case (CBoolean, JBool(_)) => true
-      //            case (CString, JString(_)) => true
-      //            case (CLong | CDouble | CNum, JNum(_)) => true
-      //            case (CEmptyObject, JObject.empty) => true
-      //            case (CEmptyArray, JArray.empty) => true
-      //            case (CNull, JNull) => true
-      //            case _ => false
-      //          }
-      //        }
-      //        case _ => false
-      //      })
-      //      
-      //      if (back \ "value" == JNothing)
-      //        None
-      //      else
-      //        Some(back)
-      //    }
-      //  } else {
-      //    Stream()
-      //  }
-      //}
-      
-      val exp = expected(sample.data, included, subsumes)
-
-      results.copoint must_== exp
+      results.copoint must_== expected(sample.data, included, subsumes)
     }.set(minTestsOk -> 10000)
   }
   
@@ -892,22 +863,28 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
 
   def expected(data: Stream[JValue], included: Map[JPath, CType], subsumes: Boolean): Stream[JValue] = {
     if (subsumes) { 
+      //println("data stream of JValue: %s\n".format(data.toSeq))
+      //println("included: %s\n".format(included))
       data flatMap { jv =>
-        val back = JValue.unflatten(jv.flattenWithPath.filter {
-          case (path @ JPath(JPathField("key"), _*), _) => true
-          case (path @ JPath(JPathField("value"), tail @ _*), value) if included.contains(JPath(tail : _*)) => {
-            (included(JPath(tail : _*)), value) match {
-              case (CBoolean, JBool(_)) => true
-              case (CString, JString(_)) => true
-              case (CLong | CDouble | CNum, JNum(_)) => true
-              case (CEmptyObject, JObject.empty) => true
-              case (CEmptyArray, JArray.empty) => true
-              case (CNull, JNull) => true
-              case _ => false
+        //println("jvalue in the flatMap: %s\n".format(jv.flattenWithPath))
+        val back = JValue.unflatten(
+          if (jv.flattenWithPath.forall {
+            case (path @ JPath(JPathField("key"), _*), _) => true
+            case (path @ JPath(JPathField("value"), tail @ _*), value) if included.contains(JPath(tail : _*)) => {
+              val (inc, vau) = (included(JPath(tail : _*)), value) 
+              //println("included called: %s\nvalue: %s\n".format(inc, vau))
+              (inc, vau) match {
+                case (CBoolean, JBool(_)) => true
+                case (CString, JString(_)) => true
+                case (CLong | CDouble | CNum, JNum(_)) => true
+                case (CEmptyObject, JObject.empty) => true
+                case (CEmptyArray, JArray.empty) => true
+                case (CNull, JNull) => true
+                case _ => false
+              }
             }
-          }
-          case _ => false
-        })
+            case _ => false
+          }) jv.flattenWithPath else List())
         
         if (back \ "value" == JNothing)
           None

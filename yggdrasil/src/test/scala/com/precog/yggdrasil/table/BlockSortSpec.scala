@@ -212,7 +212,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
                   
                   if (compliesWithSchema(valueAtPath, ctype)) {
                     val result = obj.set(vpath, valueAtPath)
-                    println("result in compliesWithSchema: %s\n".format(result))
+                    //println("result in compliesWithSchema: %s\n".format(result))
                     result
                   } else
                     obj
