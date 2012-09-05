@@ -328,7 +328,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pending <- loop(parent, splits)
           } yield {
-            val back = pending.table map { _ transform liftToValues(pending.trans) distinct(Leaf(Source)) }
+            val back = pending.table map { _ transform liftToValues(pending.trans) distinct(DerefObjectStatic(Leaf(Source), paths.Value)) }
             PendingTable(back, graph, TransSpec1.Id)
           }
         }

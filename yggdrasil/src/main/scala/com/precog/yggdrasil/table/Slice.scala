@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.VectorCase
-import com.precog.bytecode.JType
+import com.precog.bytecode._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -195,11 +195,88 @@ trait Slice { source =>
     }
   }
 
-  def typed(jtpe : JType) : Slice = new Slice {
+  def typed(jtpe: JType): Slice = new Slice {  //TODO use logicalColumns
     val size = source.size
+    val sub = Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)
     val columns = {
-      if(size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe))
-        source.columns.filter { case (ColumnRef(path, ctpe), _) => Schema.includes(jtpe, path, ctpe) }
+      if (size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)) {
+        val filteredCols = source.columns.filter { case (ColumnRef(path, ctpe), _) => {
+          Schema.includes(jtpe, path, ctpe)
+        }} 
+
+        val next: Seq[(JPath, CType)] = filteredCols.keys.toList map { case ColumnRef(path, ctpe) => (path, ctpe) }
+
+        val grouped: Map[(JPath, JType), Seq[(JPath, CType)]] = next.groupBy { case (path, ctpe) => (path, ctpe match {
+          case CString => JTextT
+          case CBoolean => JBooleanT
+          case CLong | CDouble | CNum => JNumberT
+          case CNull => JNullT
+          case CEmptyObject => JObjectFixedT(Map.empty[String, JType])
+          case CEmptyArray => JArrayFixedT(Map.empty[Int, JType])
+        })}
+
+        val values = grouped.values map { seq => seq.flatMap { case (path, ctpe) => filteredCols.get(ColumnRef(path, ctpe)) } }
+        
+        def defined(row: Int, values: Iterable[Seq[Column]]): Boolean = values.forall { _.exists { _.isDefinedAt(row) }}
+
+        def sdflsd(values: Iterable[Seq[Column]], col: Column): Column = {
+          col match {
+            case c: StrColumn => {
+              new StrColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: LongColumn => {
+              new LongColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: NumColumn => {
+              new NumColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: DoubleColumn => {
+              new DoubleColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: BoolColumn => {
+              new BoolColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: NullColumn => {
+              new NullColumn {
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: EmptyArrayColumn => {
+              new EmptyArrayColumn {
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: EmptyObjectColumn => {
+              new EmptyObjectColumn {
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: DateColumn => {
+              new DateColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+          }
+        }
+
+        filteredCols map { case (cref, col) => (cref, sdflsd(values, col)) }
+      }
       else
         Map.empty[ColumnRef, Column]
     }
@@ -219,7 +296,7 @@ trait Slice { source =>
       case (ColumnRef(JPath(JPathIndex(`index`), xs @ _*), ctype), col) => 
         (ColumnRef(JPath(JPathIndex(0) +: xs : _*), ctype), col)
 
-      case unchanged => unchanged
+      case c @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), ctype), col) => c
     }
   }
 
@@ -419,9 +496,8 @@ trait Slice { source =>
 
   def toJson(row: Int): Option[JValue] = {
     columns.foldLeft[JValue](JNothing) {
-      case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => {
+      case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
         jv.unsafeInsert(selector, col.jValue(row))
-      }
 
       case (jv, _) => jv
     } match {
@@ -498,7 +574,7 @@ object Slice {
 
   def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): RowComparator = {
     def compare0(cols: (Column, Column)): RowComparator = {
-      (cols: @unchecked) match {
+      cols match {
         case (c1: BoolColumn, c2: BoolColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow) 
@@ -603,6 +679,14 @@ object Slice {
         case (c1: NullColumn, c2: NullColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = EQ
         }
+        
+        case (c1, c2) => {
+          val ordering = implicitly[Order[CType]].apply(c1.tpe, c2.tpe)
+          
+          new RowComparator {
+            def compare(thisRow: Int, thatRow: Int) = ordering
+          }
+        }
       }
     }
 
@@ -635,9 +719,9 @@ object Slice {
           if (first1 == -1 && first2 == -1) {
             EQ
           } else if (first1 == -1) {
-            LT
-          } else if (first2 == -1) {
             GT
+          } else if (first2 == -1) {
+            LT
           } else {
             // We have the indices, so use it to look up the comparator for the rows
             comparators(first1 * array2.length + first2).compare(i, j)

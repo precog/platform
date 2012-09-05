@@ -1440,7 +1440,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               
               val next = cur.distinct(prevFilter, curFilter)
               
-              StreamT.Yield(next, stream((if(next.size > 0) Some(curFilter) else prevFilter, nextT), sx))
+              StreamT.Yield(next, stream((if (next.size > 0) Some(curFilter) else prevFilter, nextT), sx))
             } getOrElse {
               StreamT.Done
             }

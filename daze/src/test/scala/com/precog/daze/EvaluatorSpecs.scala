@@ -1872,7 +1872,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "equal with an array" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))
         
         val input = Filter(line, IdentitySort,
           numbers,
@@ -1894,11 +1894,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
           result2 must contain(Vector(8, 9, 10))
         }
-      }.pendingUntilFixed  
+      }.pendingUntilFixed
       
       "equal with an object" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))
         
         val input = Filter(line, IdentitySort,
           numbers,
@@ -1920,7 +1920,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             }
           }
         }
-      }.pendingUntilFixed 
+      }.pendingUntilFixed
 
       "equal without a filter" >> {
         val line = Line(0, "")
@@ -2479,7 +2479,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(42, 12, 77, 1, 13)
       }
-    }.pendingUntilFixed
+    }
     
     "distinct heterogenous sets" in {
       val line = Line(0, "")
@@ -2500,7 +2500,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(42, 12, 77, 1, 13, true, false, "daniel", Map("test" -> SString("fubar")), Vector())
       }
-    }.pendingUntilFixed
+    }
     
     "join two sets according to a value sort" in {
       val line = Line(0, "")

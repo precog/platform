@@ -66,7 +66,6 @@ trait EvalStackSpecs extends Specification {
     "reduce the obnoxiously large dataset" >> {
       "<root>" >> {
         eval("mean(//obnoxious.v)", true) mustEqual Set(SDecimal(50000.5))
-        //failure //TODO: the above fails with an NPE, not sure of the origin.
       }
     }
 
