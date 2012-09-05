@@ -95,7 +95,7 @@ trait CompactSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTest
         }
       }
       
-      table(StreamT.fromStream(M.point(maskedSlices)))
+      Table(StreamT.fromStream(M.point(maskedSlices)))
   }
 
   def undefineColumn(fullTable: Table, path: JPath): Table = fullTable match {
@@ -122,7 +122,7 @@ trait CompactSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTest
         maskedSlice.getOrElse(slice)
       }
       
-      table(StreamT.fromStream(M.point(maskedSlices)))
+      Table(StreamT.fromStream(M.point(maskedSlices)))
   }
 
   def testCompactIdentity = {

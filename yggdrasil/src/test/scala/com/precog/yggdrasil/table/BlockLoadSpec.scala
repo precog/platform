@@ -34,6 +34,7 @@ import scala.annotation.tailrec
 import scala.util.Random
 import scalaz._
 import scalaz.effect._
+import scalaz.std.anyVal._
 import scalaz.std.list._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
@@ -346,10 +347,14 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
     val actualSchema = inferSchema(sample.data map { _ \ "value" })
 
     val module = new BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
+      type GroupId = Int
       def M = self.M
 
-      trait TableCompanion extends BlockStoreColumnarTableCompanion
-      object ops extends TableCompanion
+      trait TableCompanion extends BlockStoreColumnarTableCompanion {
+        implicit val geq: scalaz.Equal[Int] = intInstance
+      }
+
+      object Table extends TableCompanion
 
       val projections = {
         actualSchema.grouped(1) map { subschema =>
@@ -410,7 +415,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         Some(back)
     }
 
-    module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap(_.toJson).copoint.toStream must_== expected
+    module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap(_.toJson).copoint.toStream must_== expected
   }
 }
 

@@ -33,6 +33,8 @@ import org.apache.commons.collections.primitives.ArrayIntList
 
 import scala.collection.BitSet
 
+import blueeyes.json._
+
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.std.option._
@@ -847,8 +849,8 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         type A = (Option[BigDecimal], BigDecimal)  // (value, count)
         val init = (None, BigDecimal(0))
 
-        def scan(a: A, cols: Set[Column], range: Range): (A, Set[Column]) = {
-          val prioritized = cols.toSeq filter {
+        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          val prioritized = cols.values filter {
             case _: LongColumn | _: DoubleColumn | _: NumColumn => true
             case _ => false
           }
@@ -902,7 +904,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
             }
           }
           
-          ((finalValue, finalCount), Set(ArrayNumColumn(defined, acc)))
+          ((finalValue, finalCount), Map(ColumnRef(JPath.Identity, CNum) -> ArrayNumColumn(defined, acc)))
         }
       }
     }
@@ -930,8 +932,8 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         type A = (Option[BigDecimal], BigDecimal, BigDecimal)  // (value, countEach, countTotal)
         val init = (None, BigDecimal(0), BigDecimal(0))
 
-        def scan(a: A, cols: Set[Column], range: Range): (A, Set[Column]) = {
-          val prioritized = cols.toSeq filter {
+        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          val prioritized = cols.values filter {
             case _: LongColumn | _: DoubleColumn | _: NumColumn => true
             case _ => false
           }
@@ -985,7 +987,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
             }
           }
 
-          ((finalValue, finalCountEach, finalCountTotal), Set(ArrayNumColumn(defined, acc)))
+          ((finalValue, finalCountEach, finalCountTotal), Map(ColumnRef(JPath.Identity, CNum) -> ArrayNumColumn(defined, acc)))
         }
       }
     }

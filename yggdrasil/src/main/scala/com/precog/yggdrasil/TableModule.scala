@@ -328,7 +328,7 @@ trait TableModule[M[+_]] extends FNModule {
 
     def merge(grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => M[Table]): M[Table]
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)]
-    def intersect(identitySpec: TransSpec1, sources: Table*): M[Table]
+    def intersect(identitySpec: TransSpec1, tables: Table*): M[Table] 
   }
   
   trait TableLike { this: Table =>

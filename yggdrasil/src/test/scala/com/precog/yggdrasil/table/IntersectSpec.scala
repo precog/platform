@@ -32,7 +32,7 @@ trait IntersectSpec[M[+_]] extends TableModuleSpec[M] {
   import trans._
   import trans.constants._
 
-  def testIntersect(l: SampleData, r: SampleData) {
+  def testIntersect(l: SampleData, r: SampleData) = {
     val ltable = fromSample(l)
     val rtable = fromSample(r)
 
@@ -42,7 +42,7 @@ trait IntersectSpec[M[+_]] extends TableModuleSpec[M] {
       if (lv \ "key") == (rv \ "key")
     } yield lv
 
-    val result = ops.intersect(DerefObjectStatic(Leaf(Source), JPathField("key")), ltable, rtable)
+    val result = Table.intersect(DerefObjectStatic(Leaf(Source), JPathField("key")), ltable, rtable)
 
     val jsonResult: M[Stream[JValue]] = result.flatMap { table => toJson(table) }
 

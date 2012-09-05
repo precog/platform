@@ -67,6 +67,13 @@ object SBTConsole {
         extends BaseConfig 
         with DatasetConsumersConfig 
         with StandaloneShardSystemConfig
+
+    trait TableCompanion extends BlockStoreColumnarTableCompanion {
+      import scalaz.std.anyVal._
+      implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
+    }
+
+    object Table extends TableCompanion
   }
 
   val controlTimeout = Duration(30, "seconds")
@@ -100,11 +107,6 @@ object SBTConsole {
       val maxEvalDuration = controlTimeout
       val clock = blueeyes.util.Clock.System
 
-      object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-
       //TODO: Get a producer ID
       val idSource = new IdSource {
         private val source = new java.util.concurrent.atomic.AtomicLong
@@ -112,9 +114,7 @@ object SBTConsole {
       }
     }
 
-    implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
-    implicit val coM = new Copointed[Future] {
-      def map[A, B](m: Future[A])(f: A => B) = m map f
+    implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
       def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
     }
 

@@ -50,7 +50,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         SourceKey.Single, Some(TransSpec1.Id), 2, 
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
-      val result = grouper.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
+      val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
         for {
           keyIter <- key.toJson
           group2  <- map(2)
@@ -93,7 +93,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         SourceKey.Single, Some(Map1(TransSpec1.Id, doubleF1)), 2, 
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
-      val result = grouper.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
+      val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
         for {
           keyIter <- key.toJson
           group2  <- map(2)
@@ -139,7 +139,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         SourceKey.Single, Some(TransSpec1.Id), 2, 
         GroupKeySpecSource(JPathField("1"), Map1(Leaf(Source), mod2)))
         
-      val result = grouper.merge(spec) { (key: Table, map: Int => M[Table]) =>
+      val result = Table.merge(spec) { (key: Table, map: Int => M[Table]) =>
         for {
           keyIter <- key.toJson
           group2  <- map(2)
@@ -208,7 +208,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
             GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
             
-        val result = grouper.merge(spec) { (key, map) =>
+        val result = Table.merge(spec) { (key, map) =>
           for {
             keyJson <- key.toJson
             group3  <- map(3)
@@ -263,7 +263,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
             GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
             
-        val result = grouper.merge(spec) { (key, map) =>
+        val result = Table.merge(spec) { (key, map) =>
           for {
             keyJson <- key.toJson
             group3  <- map(3)
@@ -343,7 +343,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
               Filter(Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1), Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1))),
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
             
-        val result = grouper.merge(spec) { (key, map) =>
+        val result = Table.merge(spec) { (key, map) =>
           for {
             keyJson <- key.toJson
             group3  <- map(3)
@@ -388,7 +388,7 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
               Filter(Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1), Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1))),
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
             
-        val result = grouper.merge(spec) { (key, map) =>
+        val result = Table.merge(spec) { (key, map) =>
           for {
             group3  <- map(3)
             gs1Json <- group3.toJson
@@ -460,9 +460,9 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         DerefObjectStatic(Leaf(Source), JPathField("1")),
         DerefObjectStatic(Leaf(Source), JPathField("1")),
         spec1,
-        spec2)
+        spec2, GroupingSpec.Union)
           
-      val result = grouper.merge(union) { (key, map) =>
+      val result = Table.merge(union) { (key, map) =>
         for {
           keyJson <- key.toJson
           group2  <- map(2)
@@ -539,13 +539,13 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
         SourceKey.Single, Some(TransSpec1.Id), 3,
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
-      val union = GroupingAlignment(
+      val intersect = GroupingAlignment(
         DerefObjectStatic(Leaf(Source), JPathField("1")),
         DerefObjectStatic(Leaf(Source), JPathField("1")),
         spec1,
-        spec2)
+        spec2, GroupingSpec.Intersection)
           
-      val result = grouper.merge(union) { (key, map) =>
+      val result = Table.merge(intersect) { (key, map) =>
         for {
           keyJson <- key.toJson
           group2  <- map(2)
@@ -644,9 +644,9 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           spec1,
-          spec2)
+          spec2, GroupingSpec.Union)
             
-        val result = grouper.merge(union) { (key, map) =>
+        val result = Table.merge(union) { (key, map) =>
           for {
             keyJson <- key.toJson
             group2  <- map(2)
@@ -754,9 +754,9 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           spec1,
-          spec2)
+          spec2, GroupingSpec.Union)
             
-        val result = grouper.merge(union) { (key, map) =>
+        val result = Table.merge(union) { (key, map) =>
           for {
             keyJson <- key.toJson
             group2  <- map(2)
@@ -863,13 +863,13 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           GroupKeySpecSource(JPathField("1"),
             DerefObjectStatic(Leaf(Source), JPathField("a"))))
           
-        val union = GroupingAlignment(
+        val intersect = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           spec1,
-          spec2)
+          spec2, GroupingSpec.Intersection)
             
-        val result = grouper.merge(union) { (key, map) =>
+        val result = Table.merge(intersect) { (key, map) =>
           for {
             keyJson <- key.toJson
             group2  <- map(2)
@@ -980,9 +980,9 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           DerefObjectStatic(Leaf(Source), JPathField("1")),
           spec1,
-          spec2)
+          spec2, GroupingSpec.Union)
             
-        val result = grouper.merge(union) { (key, map) =>
+        val result = Table.merge(union) { (key, map) =>
           for {
             keyJson <- key.toJson
             group2  <- map(2)
@@ -1193,10 +1193,10 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
             DerefObjectStatic(Leaf(Source), JPathField("1")),
             DerefObjectStatic(Leaf(Source), JPathField("1")),
             fooSpec,
-            barSpec),
-          bazSpec)
+            barSpec, GroupingSpec.Intersection),
+          bazSpec, GroupingSpec.Intersection)
           
-        val forallResult = grouper.merge(spec) { (key, map) =>
+        val forallResult = Table.merge(spec) { (key, map) =>
           val keyJson = key.toJson.copoint
           
           keyJson must not(beEmpty)
@@ -1281,10 +1281,10 @@ trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] 
             DerefObjectStatic(Leaf(Source), JPathField("1")),
             DerefObjectStatic(Leaf(Source), JPathField("1")),
             fooSpec,
-            barSpec),
-          bazSpec)
+            barSpec, GroupingSpec.Union),
+          bazSpec, GroupingSpec.Union)
           
-        val forallResult = grouper.merge(spec) { (key, map) =>
+        val forallResult = Table.merge(spec) { (key, map) =>
           val keyJson = key.toJson.copoint
           
           keyJson must not(beEmpty)

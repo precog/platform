@@ -33,6 +33,7 @@ import scala.annotation.tailrec
 import scala.util.Random
 import scalaz._
 import scalaz.effect._
+import scalaz.std.anyVal._
 import scalaz.std.list._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
@@ -186,19 +187,20 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     
     val actualSchema = inferSchema(sample.data map { _ \ "value" })
 
-    val module = new Module {
     class Module extends  BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
       import trans._
       import TableModule.paths._
 
-      def M = self.M
-
-      trait TableCompanion extends BlockStoreColumnarTableCompanion
-      object ops extends TableCompanion
-      
       type MemoId = Int
+      type GroupId = Int
+
+      trait TableCompanion extends BlockStoreColumnarTableCompanion {
+        implicit val geq: scalaz.Equal[Int] = intInstance
+      }
+
+      object Table extends TableCompanion
+      
       def M = self.M
-      def coM = self.coM
 
       val projections = {
         actualSchema.grouped(1) map { subschema =>
@@ -264,7 +266,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
 
     try {
       val resultM = for {
-        table  <- module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get)
+        table  <- module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get)
         sorted <- table.sort(module.sortTransspec(sortKey), SortAscending)
         // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
         withoutSortKey = sorted.transform(module.deleteSortKeySpec)

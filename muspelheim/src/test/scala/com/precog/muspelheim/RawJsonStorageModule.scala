@@ -55,6 +55,8 @@ import scalaz.syntax.traverse._
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
+import TableModule._
+
 trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
   implicit def M: Monad[M]
 
@@ -130,6 +132,14 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 }
 
 trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModule[M] with TestColumnarTableModule[M] {
+  import trans._
+  import TableModule._
+
+  trait TableCompanion extends ColumnarTableCompanion {
+    def apply(slices: StreamT[M, Slice]) = new Table(slices)
+    def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = sys.error("todo")
+  }
+  
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import trans._
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
@@ -152,7 +162,7 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
         table <- path map { 
                    case (descriptor, _) => storage.projection(descriptor) map { projection => fromJson(projection._1.data.toStream) }
                  } getOrElse {
-                   M.point(ops.empty)
+                   M.point(Table.empty)
                  }
       } yield table
     }
@@ -168,8 +178,6 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
 
   type MemoContext = DummyMemoizationContext
   def newMemoContext = new DummyMemoizationContext
-  
-  def table(slices: StreamT[M, Slice]) = new Table(slices)
 
   object storage extends Storage
 }

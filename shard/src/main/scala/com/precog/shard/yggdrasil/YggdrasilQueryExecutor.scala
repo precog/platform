@@ -100,9 +100,7 @@ trait YggdrasilQueryExecutorComponent {
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
       val yggConfig = yConfig
       
-      implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
-      implicit val coM = new Copointed[Future] {
-        def map[A, B](m: Future[A])(f: A => B) = m map f
+      implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
         def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
       }
 
@@ -116,6 +114,13 @@ trait YggdrasilQueryExecutorComponent {
         val fileOps = FilesystemFileOps
         def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
       }
+
+      trait TableCompanion extends BlockStoreColumnarTableCompanion {
+        import scalaz.std.anyVal._
+        implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
+      }
+
+      object Table extends TableCompanion
     }
   }
 }

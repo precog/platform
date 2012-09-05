@@ -45,10 +45,6 @@ import TableModule._
 trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
   implicit def M: Monad[M] with Copointed[M]
 
-  type GroupId = Int
-  object grouper extends Grouper {
-    implicit val geq: scalaz.Equal[GroupId] = intInstance
-  }
 
   def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
     val sliceSize = maxSliceSize.getOrElse(10)
@@ -139,7 +135,7 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
       (slice, suffix)
     }
     
-    table(
+    Table(
       StreamT.unfoldM(values) { events =>
         M.point {
           (!events.isEmpty) option {
@@ -159,9 +155,7 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
 }
 
 trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
-  type Table = StubTable
-
-  def table(slices: StreamT[M, Slice]): StubTable = new StubTable(slices)
+  import trans._
 
   type MemoContext = DummyMemoizationContext
   def newMemoContext = new DummyMemoizationContext
@@ -169,10 +163,13 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
   private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
   private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
   private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
-  
-  class StubTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) { self: Table => 
 
-    import trans._
+  trait TableCompanion extends ColumnarTableCompanion {
+    def apply(slices: StreamT[M, Slice]): Table = new Table(slices)
+    def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = sys.error("todo")
+  }
+
+  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) { self: Table => 
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = {
       // We use the sort transspec1 to compute a new table with a combination of the 
       // original data and the new sort columns, referenced under the sortkey namespace

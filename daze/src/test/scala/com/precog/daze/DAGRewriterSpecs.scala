@@ -43,7 +43,8 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
   }
 }
 
-object DAGRewriterSpecs extends DAGRewriterSpecs[test.YId] {
-  val M = test.YId.M
-  val coM = test.YId.M
+object DAGRewriterSpecs extends DAGRewriterSpecs[test.YId] with test.YIdInstances {
+  object Table extends TableCompanion {
+    val geq: scalaz.Equal[GroupId] = scalaz.std.anyVal.intInstance
+  }
 }

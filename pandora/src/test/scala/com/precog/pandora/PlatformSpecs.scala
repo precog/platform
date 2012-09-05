@@ -53,6 +53,7 @@ import akka.util.duration._
 import java.io.File
 
 import scalaz._
+import scalaz.std.anyVal._
 import scalaz.effect.IO
 
 import org.streum.configrity.Configuration
@@ -68,10 +69,13 @@ class PlatformSpecs
   class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig 
   object yggConfig  extends YggConfig
 
-  implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
-  implicit val coM = new Copointed[Future] {
-    def map[A, B](m: Future[A])(f: A => B) = m map f
+  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
+  }
+
+  type TableCompanion = BlockStoreColumnarTableCompanion
+  object Table extends BlockStoreColumnarTableCompanion {
+    implicit val geq: scalaz.Equal[Int] = intInstance
   }
 
   val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO

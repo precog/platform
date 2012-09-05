@@ -54,10 +54,6 @@ import scalaz.syntax.traverse._
 import com.weiglewilczek.slf4s.Logging
 
 trait EvaluatorConfig extends IdSourceConfig {
-  implicit def valueSerialization: SortSerialization[SValue]
-  implicit def eventSerialization: SortSerialization[(Identities, SValue)]
-  implicit def groupSerialization: SortSerialization[(SValue, Identities, SValue)]
-  implicit def memoSerialization: IncrementalSerialization[(Identities, SValue)]
   def maxEvalDuration: akka.util.Duration
 }
 
