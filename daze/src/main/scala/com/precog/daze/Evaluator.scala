@@ -1010,22 +1010,13 @@ trait Evaluator[M[+_]] extends DAG
     val newIdentitySpec = ArrayConcat(leftIdentitySpec, rightIdentitySpec)
     
     val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, paths.Key.name)
-    
+
     val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), paths.Value)
     val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
     
     val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
-      
-    ObjectConcat(
-      ObjectConcat(
-        ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)),
-        wrappedIdentitySpec),
-      wrappedValueSpec)
 
-    /** TODO
     ObjectConcat(wrappedIdentitySpec, wrappedValueSpec)
-    this uses all of permgen in EvaluatorSpecs!?
-    */
   }
   
   private def buildIdShuffleSpec(indexes: Vector[Int]): TransSpec1 = {

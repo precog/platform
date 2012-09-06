@@ -125,7 +125,7 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
   "Ingest service" should {
     "track event with valid token" in {
       track(testValue) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, None, _) => ok 
+        case HttpResponse(HttpStatus(OK, _), _, None, _) => ok
       }}
     }
     "reject track request when token not found" in {

@@ -55,7 +55,7 @@ import scalaz.syntax.monoid._
 // MESSAGES //
 //////////////
 
-case class ProjectionInsertsExpected(projections: Int)
+case class ProjectionUpdatesExpected(projections: Int)
 
 ////////////
 // ACTORS //
@@ -81,7 +81,7 @@ abstract class KafkaShardIngestActor(shardId: String,
   private var lastCheckpoint: YggCheckpoint = initialCheckpoint
 
   private var totalConsecutiveFailures = 0
-  private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[EventMessage]] 
+  private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[IngestMessage]] 
   private var pendingCompletes = Vector.empty[BatchComplete]
 
   def receive = {
@@ -165,18 +165,20 @@ abstract class KafkaShardIngestActor(shardId: String,
    */
   protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint, metadata: Map[ProjectionDescriptor, ColumnMetadata]): Unit
 
-  private def readRemote(fromCheckpoint: YggCheckpoint): Validation[Throwable, (Vector[EventMessage], YggCheckpoint)] = {
+  private def readRemote(fromCheckpoint: YggCheckpoint): Validation[Throwable, (Vector[IngestMessage], YggCheckpoint)] = {
     Validation.fromTryCatch {
       val messageSet = consumer.fetch(new FetchRequest(topic, partition = 0, offset = lastCheckpoint.offset, maxSize = fetchBufferSize))
 
       // The shard ingest actor needs to compute the maximum offset, so it has to traverse the full 
       // message set in process; to avoid traversing it twice, we simply read the payload into 
       // event messages at this point.
-      messageSet.foldLeft((Vector.empty[EventMessage], fromCheckpoint)) {
+      messageSet.foldLeft((Vector.empty[IngestMessage], fromCheckpoint)) {
         case ((acc, YggCheckpoint(offset, clock)), msgAndOffset) => 
           IngestMessageSerialization.read(msgAndOffset.message.payload) match {
             case em @ EventMessage(EventId(pid, sid), _) =>
               (acc :+ em, YggCheckpoint(offset max msgAndOffset.offset, clock.update(pid, sid)))
+            case am @ ArchiveMessage(ArchiveId(pid, sid), _) =>
+              (acc :+ am, YggCheckpoint(offset max msgAndOffset.offset, clock.update(pid, sid)))
           }
       }
     }

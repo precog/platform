@@ -187,10 +187,6 @@ case class NewGrantRequest(accessTypeString: String, path: Path, owner: Option[S
         owner.map { o => Success(ReadPermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
       case Some(ReducePermission) =>
         owner.map { o => Success(ReducePermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
-      case Some(ModifyPermission) =>
-        owner.map { o => Success(ModifyPermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
-      case Some(TransformPermission) =>
-        owner.map { o => Success(TransformPermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
       case None => Failure("Unknown access type: " + accessType)
     } 
   }

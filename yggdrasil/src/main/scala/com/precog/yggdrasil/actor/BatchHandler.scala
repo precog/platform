@@ -66,7 +66,7 @@ class BatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCh
   }
 
   def receive = {
-    case ProjectionInsertsExpected(count) => 
+    case ProjectionUpdatesExpected(count) => 
       remaining += (count + 1)
       logger.debug("Should expect %d more inserts (total %d)".format(count, remaining))
       if (remaining == 0) self ! PoisonPill
@@ -74,6 +74,12 @@ class BatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCh
     case InsertMetadata(descriptor, columnMetadata) =>
       logger.debug("Insert meta complete for " + descriptor)
       projectionMetadata += (descriptor -> (projectionMetadata.getOrElse(descriptor, ColumnMetadata.Empty) |+| columnMetadata))
+      remaining -= 1
+      if (remaining == 0) self ! PoisonPill
+
+    case ArchiveMetadata(descriptor) =>
+      logger.debug("Archive complete for " + descriptor)
+      projectionMetadata -= descriptor
       remaining -= 1
       if (remaining == 0) self ! PoisonPill
 

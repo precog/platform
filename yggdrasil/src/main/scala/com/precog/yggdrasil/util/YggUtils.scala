@@ -522,9 +522,14 @@ object ZookeeperTools extends Command {
       case (path, data) =>
         JsonParser.parse(data).validated[YggCheckpoint] match {
           case Success(_) =>
+            if (! client.exists(path)) {
+              client.createPersistent(path, true)
+            }
+
             client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
               def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
             })  
+
             println("Checkpoint updated: %s with %s".format(path, data))
           case Failure(e) => println("Invalid json for checkpoint: %s".format(e))
       }
@@ -685,7 +690,8 @@ object ImportTools extends Command with Logging {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
       opt("t", "token", "<token>", "token to insert data under", { s: String => config.token = s })
-      opt("s", "storage", "<storage root>", "directory containing leveldb data files", { s: String => config.storageRoot = new File(s) })
+      opt("s", "storage", "<storage root>", "directory containing data files", { s: String => config.storageRoot = new File(s) })
+      opt("a", "archive", "<archive root>", "directory containing archived data files", { s: String => config.archiveRoot = new File(s) })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
         val parts = s.split("=")
         val t = (parts(0) -> parts(1))
@@ -705,11 +711,12 @@ object ImportTools extends Command with Logging {
 
   def process(config: Config) {
     config.storageRoot.mkdirs
+    config.archiveRoot.mkdirs
 
     val stopTimeout = Duration(310, "seconds")
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
-    val io = for (ms <- FileMetadataStorage.load(config.storageRoot, FilesystemFileOps)) yield {
+    val io = for (ms <- FileMetadataStorage.load(config.storageRoot, config.archiveRoot, FilesystemFileOps)) yield {
       object shardModule extends SystemActorStorageModule
                             with JDBMProjectionModule
                             with StandaloneShardSystemActorModule {
@@ -723,6 +730,7 @@ object ImportTools extends Command with Logging {
         object Projection extends JDBMProjectionCompanion {
           def fileOps = FilesystemFileOps
           def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
+          def archiveDir(descriptor: ProjectionDescriptor): File = ms.findArchiveRoot(descriptor).unsafePerformIO.get
         }
 
         class Storage extends SystemActorStorageLike(ms) {
@@ -774,7 +782,8 @@ object ImportTools extends Command with Logging {
     val batchSize: Int = 1000, 
     var token: TokenID = "root",
     var verbose: Boolean = false ,
-    var storageRoot: File = new File("./data")
+    var storageRoot: File = new File("./data"),
+    var archiveRoot: File = new File("./archive")
   )
 }
 

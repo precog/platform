@@ -45,9 +45,12 @@ import org.streum.configrity.{Configuration, JProperties}
 class KafkaEventStore(router: EventRouter, producerId: Int, firstEventId: Int = 0)(implicit dispatcher: MessageDispatcher) extends EventStore {
   private val nextEventId = new AtomicInteger(firstEventId)
   
-  def save(event: Event, timeout: Timeout) = {
-    val eventId = nextEventId.incrementAndGet
-    router.route(EventMessage(producerId, eventId, event)) map { _ => () }
+  def save(action: Action, timeout: Timeout) = {
+    val actionId = nextEventId.incrementAndGet
+    action match {
+      case event : Event => router.route(EventMessage(producerId, actionId, event)) map { _ => () }
+      case archive : Archive => router.route(ArchiveMessage(producerId, actionId, archive)) map { _ => () }
+    }
   }
 
   def start(): Future[Unit] = Future { () }
@@ -65,15 +68,14 @@ class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDi
     props
   }
 
-  private val producer = new Producer[String, Event](new ProducerConfig(localProperties))
+  private val producer = new Producer[String, Action](new ProducerConfig(localProperties))
 
   def start(): Future[Unit] = Future { () } 
 
-  def save(event: Event, timeout: Timeout) = Future {
-    val data = new ProducerData[String, Event](localTopic, event)
+  def save(action: Action, timeout: Timeout) = Future {
+    val data = new ProducerData[String, Action](localTopic, action)
     producer.send(data)
   }
 
   def stop(): Future[Unit] = Future { producer.close } 
 }
-
