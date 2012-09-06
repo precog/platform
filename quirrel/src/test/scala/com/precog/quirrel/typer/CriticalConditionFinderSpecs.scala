@@ -34,6 +34,18 @@ object CriticalConditionFinderSpecs extends Specification
   import condition._  
   
   "critical condition finding" should {
+    "detect solve constraints as a critical condition" in {
+      val tree @ Solve(_, _, _) = compile("solve 'a = 1 2")
+      
+      tree.criticalConditions must haveSize(1)
+      tree.criticalConditions must haveKey("'a")
+      
+      tree.criticalConditions("'a") must haveSize(1)
+      tree.criticalConditions("'a").head must beLike {
+        case Condition(Eq(_, TicVar(_, "'a"), NumLit(_, "1"))) => ok
+      }
+    }
+    
     "detect critical conditions in a simple where" in {
       val tree @ Solve(_, _, _) = compile("solve 'b 42 where 'b + 24")
       

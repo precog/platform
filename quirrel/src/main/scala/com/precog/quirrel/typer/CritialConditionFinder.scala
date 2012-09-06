@@ -152,7 +152,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
         case Solve(_, _, _) => Set()
         case Import(_, _, child) => listVars(child)
         case Relate(_, from, to, in) => listVars(from) ++ listVars(to) ++ listVars(in)
-        case tv @ TicVar(_, name) if tv.binding == SolveBinding(root) => Set(name)
+        case tv @ TicVar(_, name) if tv.binding == FreeBinding(root) => Set(name)
         case TicVar(_, _) => Set()
         case StrLit(_, _) => Set()
         case NumLit(_, _) => Set()
@@ -184,7 +184,13 @@ trait CriticalConditionFinder extends parser.AST with Binder {
         case Paren(_, child) => listVars(child)
       }
       
-      Map(listVars(expr).toSeq map { _ -> Set[ConditionTree](Condition(expr)) }: _*)
+      expr match {
+        case tv @ TicVar(_, _) if tv.binding == FreeBinding(root) =>
+          Map()
+        
+        case _ =>
+          Map(listVars(expr).toSeq map { _ -> Set[ConditionTree](Condition(expr)) }: _*)
+      }
     }
     
     expr match {
@@ -230,6 +236,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
     
     case t @ TicVar(_, _) => t.binding match {
       case SolveBinding(`root`) => true
+      case FreeBinding(`root`) => true
       case _ => false
     }
     
