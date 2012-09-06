@@ -56,6 +56,7 @@ trait Binder extends parser.AST with Library {
           Set[Error]()
         
         val ids = varVector reduce { _ ++ _ }
+        b.vars = ids
         
         val freeBindings = ids map { _ -> FreeBinding(b) }
         val constEnv = env.copy(vars = env.vars ++ freeBindings)

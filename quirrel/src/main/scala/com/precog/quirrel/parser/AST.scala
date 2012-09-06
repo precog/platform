@@ -712,6 +712,10 @@ trait AST extends Phases {
       
       def children = child +: constraints toList
       
+      private val _vars = attribute[Set[TicId]](bindNames)
+      def vars: Set[TicId] = _vars()
+      private[quirrel] def vars_=(vars: Set[TicId]) = _vars() = vars
+      
       lazy val criticalConditions = findCriticalConditions(this)
     }
 
