@@ -35,10 +35,6 @@ import scalaz.syntax.traverse._
 import com.weiglewilczek.slf4s.Logging
 
 trait EvaluatorConfig extends IdSourceConfig {
-  implicit def valueSerialization: SortSerialization[SValue]
-  implicit def eventSerialization: SortSerialization[(Identities, SValue)]
-  implicit def groupSerialization: SortSerialization[(SValue, Identities, SValue)]
-  implicit def memoSerialization: IncrementalSerialization[(Identities, SValue)]
   def maxEvalDuration: akka.util.Duration
 }
 
@@ -58,13 +54,15 @@ trait Evaluator[M[+_]] extends DAG
   type UserId = String
   
   type MemoId = Int
+  type GroupId = Int
   
   import Function._
   
   import instructions._
   import dag._
   import trans._
-  import TableModule.paths
+  import constants._
+  import TableModule._
 
   type YggConfig <: EvaluatorConfig
   
@@ -94,7 +92,7 @@ trait Evaluator[M[+_]] extends DAG
   def eval(userUID: UserId, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean): M[Table] = {
     logger.debug("Eval for %s = %s".format(userUID.toString, graph))
   
-    def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, M[GroupingSpec[Int]]] = spec match {
+    def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, M[GroupingSpec]] = spec match {
       case UnionBucketSpec(left, right) => {
         for {
           leftSpec <- resolveTopLevelGroup(left, splits) 
@@ -106,7 +104,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             leftRes <- leftSpec
             rightRes <- rightSpec
-          } yield GroupingUnion(keySpec, keySpec, leftRes, rightRes, GroupKeyAlign.Eq)
+          } yield GroupingAlignment(keySpec, keySpec, leftRes, rightRes, GroupingSpec.Union)
         }
       }
       
@@ -121,7 +119,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             leftRes <- leftSpec
             rightRes <- rightSpec
-          } yield GroupingIntersect(keySpec, keySpec, leftRes, rightRes, GroupKeyAlign.Eq)
+          } yield GroupingAlignment(keySpec, keySpec, leftRes, rightRes, GroupingSpec.Intersection)
         }
       }
       
@@ -143,7 +141,7 @@ trait Evaluator[M[+_]] extends DAG
               trans = loop(target, splits).eval(state.copy(assume = state.assume + (reducedTarget -> resultTargetTable))).trans
               subSpec <- resolveLowLevelGroup(resultTargetTable, reducedTarget, forest, splits)
             } yield {
-              resultTargetTable map { resultTargetTable => resultTargetTable.group(trans, id, subSpec) }
+              resultTargetTable map { GroupingSource(_, SourceKey.Single, Some(trans), id, subSpec) }
             }
           }
           
@@ -155,7 +153,7 @@ trait Evaluator[M[+_]] extends DAG
     }
 
     //** only used in resolveTopLevelGroup **/
-    def resolveLowLevelGroup(commonTable: M[Table], commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, GroupKeySpec] = forest match {
+    def resolveLowLevelGroup(commonTable: M[Table], commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, GroupKeySpec] = forest match {
       case UnionBucketSpec(left, right) => {
         for {
           leftRes <- resolveLowLevelGroup(commonTable, commonGraph, left, splits)
@@ -196,7 +194,7 @@ trait Evaluator[M[+_]] extends DAG
 
     lazy val reductions: Map[DepGraph, NEL[dag.Reduce]] = findReductions(graph)
 
-    def loop(graph: DepGraph, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, PendingTable] = {
+    def loop(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, PendingTable] = {
       logger.trace("Loop on %s".format(graph))
       
       val assumptionCheck: StateT[Id, EvaluatorState, Option[M[Table]]] = for {
@@ -215,17 +213,17 @@ trait Evaluator[M[+_]] extends DAG
         
         case s @ SplitGroup(_, index, _) => {
           val (_, f) = splits(s.parent)
-          state(PendingTable(M.point(f(index)), graph, TransSpec1.Id))
+          state(PendingTable(f(index), graph, TransSpec1.Id))
         }
         
         case Root(_, instr) => {
           val table = graph.value collect {
-            case SString(str) => ops.constString(Set(CString(str)))
-            case SDecimal(d) => ops.constDecimal(Set(CNum(d)))
-            case SBoolean(b) => ops.constBoolean(Set(CBoolean(b)))
-            case SNull => ops.constNull
-            case SObject(map) if map.isEmpty => ops.constEmptyObject
-            case SArray(Vector()) => ops.constEmptyArray
+            case SString(str) => Table.constString(Set(CString(str)))
+            case SDecimal(d) => Table.constDecimal(Set(CNum(d)))
+            case SBoolean(b) => Table.constBoolean(Set(CBoolean(b)))
+            case SNull => Table.constNull
+            case SObject(map) if map.isEmpty => Table.constEmptyObject
+            case SArray(Vector()) => Table.constEmptyArray
           }
           
           val spec = buildConstantWrapSpec(Leaf(Source))
@@ -307,7 +305,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pending <- loop(parent, splits)
           } yield {
-            val back = pending.table map { _ transform liftToValues(pending.trans) distinct(Leaf(Source)) }
+            val back = pending.table map { _ transform liftToValues(pending.trans) distinct(DerefObjectStatic(Leaf(Source), paths.Value)) }
             PendingTable(back, graph, TransSpec1.Id)
           }
         }
@@ -363,9 +361,9 @@ trait Evaluator[M[+_]] extends DAG
             for {
               grouping2 <- grouping
             
-              result <- grouper.merge(grouping2) { (key: Table, map: Int => Table) =>
+              result <- Table.merge(grouping2) { (key: Table, map: Int => M[Table]) =>
                 val back = for {
-                  pending <- loop(child, splits + (s -> (key, map)))
+                  pending <- loop(child, splits + (s -> (key -> map)))
                 } yield {
                   for {
                     pendingTable <- pending.table
@@ -490,7 +488,7 @@ trait Evaluator[M[+_]] extends DAG
             }
             
             case _ =>
-              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
           }
         }
         
@@ -503,7 +501,7 @@ trait Evaluator[M[+_]] extends DAG
             }
             
             case _ =>
-              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
           }
         }
         
@@ -518,7 +516,7 @@ trait Evaluator[M[+_]] extends DAG
             // TODO other numeric types
             
             case _ =>
-              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
           }
         }
         
@@ -531,7 +529,7 @@ trait Evaluator[M[+_]] extends DAG
             }
             
             case _ =>
-              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
           }
         }
   
@@ -1019,38 +1017,16 @@ trait Evaluator[M[+_]] extends DAG
   object TableTransSpec {
     def makeTransSpec(tableTrans: TableTransSpec1): TransSpec1 = {
       val wrapped = for ((key @ JPathField(fieldName), value) <- tableTrans) yield {
-        val mapped = deepMap(value) {
-          case lf @ Leaf(_) =>
-            DerefObjectStatic(lf, key)
+        val mapped = TransSpec.deepMap(value) {
+          case Leaf(_) => DerefObjectStatic(Leaf(Source), key)
         }
         
         trans.WrapObject(mapped, fieldName)
       }
       
-      wrapped.foldLeft(ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*)): TransSpec1) { (acc, ts) =>
+      wrapped.foldLeft[TransSpec1](ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*))) { (acc, ts) =>
         trans.ObjectConcat(acc, ts)
       }
-    }
-    
-    private def deepMap(spec: TransSpec1)(f: PartialFunction[TransSpec1, TransSpec1]): TransSpec1 = spec match {
-      case x if f isDefinedAt x => f(x)
-      case x @ Leaf(_) => x
-      case trans.Filter(source, pred) => trans.Filter(deepMap(source)(f), deepMap(pred)(f))
-      case Scan(source, scanner) => Scan(deepMap(source)(f), scanner)
-      case trans.Map1(source, f1) => trans.Map1(deepMap(source)(f), f1)
-      case trans.Map2(left, right, f2) => trans.Map2(deepMap(left)(f), deepMap(right)(f), f2)
-      case trans.ObjectConcat(left, right) => trans.ObjectConcat(deepMap(left)(f), deepMap(right)(f))
-      case trans.ArrayConcat(left, right) => trans.ArrayConcat(deepMap(left)(f), deepMap(right)(f))
-      case trans.WrapObject(source, field) => trans.WrapObject(deepMap(source)(f), field)
-      case trans.WrapArray(source) => trans.WrapArray(deepMap(source)(f))
-      case DerefObjectStatic(source, field) => DerefObjectStatic(deepMap(source)(f), field)
-      case DerefObjectDynamic(left, right) => DerefObjectDynamic(deepMap(left)(f), deepMap(right)(f))
-      case DerefArrayStatic(source, element) => DerefArrayStatic(deepMap(source)(f), element)
-      case DerefArrayDynamic(left, right) => DerefArrayDynamic(deepMap(left)(f), deepMap(right)(f))
-      case trans.ArraySwap(source, index) => trans.ArraySwap(deepMap(source)(f), index)
-      case Typed(source, tpe) => Typed(deepMap(source)(f), tpe)
-      case trans.Equal(left, right) => trans.Equal(deepMap(left)(f), deepMap(right)(f))
-      case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(deepMap(source)(f), value, invert)
     }
   }
 
