@@ -109,13 +109,13 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
 
       val expected = sample.data flatMap { jv =>
         (jv \ "value") match { 
-          case JNum(x) if x.longValue % 2 == 0 => Some(jv)
+          case JNum(x) if x % 2 == 0 => Some(jv)
           case _ => None
         }
       }
 
       results.copoint must_== expected
-    }
+    }.set(minTestsOk -> 200)
   }
 
   def checkObjectDeref = {

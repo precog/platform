@@ -180,7 +180,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       )
 
       val dataset = fromJson(sample.toStream)
-      //dataset.slices.foreach(println)
       val results = dataset.toJson
       results.copoint must containAllOf(sample).only 
     }
@@ -206,17 +205,17 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     "in cross" >> {
       "perform a simple cartesian" in testSimpleCross
       "cross across slice boundaries on one side" in testCrossSingles
-      //"survive scalacheck" in { //TODO
-      //  check { cogroupData: (SampleData, SampleData) => testCross(cogroupData._1, cogroupData._2) } 
-      //}
+      "survive scalacheck" in {
+        check { cogroupData: (SampleData, SampleData) => testCross(cogroupData._1, cogroupData._2) } 
+      }.pendingUntilFixed
     }
 
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
       "perform a trivial map1" in testMap1IntLeaf
-      //"give the identity transform for the trivial filter" in checkTrivialFilter
+      //"give the identity transform for the trivial filter" in checkTrivialFilter  //why is this commented out?
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
-      //"give the identity transform for a nontrivial filter" in checkFilter  //TODO
+      "give the identity transform for a nontrivial filter" in checkFilter
       "perform an object dereference" in checkObjectDeref
       "perform an array dereference" in checkArrayDeref
       "perform a trivial map2" in checkMap2
@@ -239,7 +238,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "perform a trivial number type-based filter" in checkTypedNumber
       "perform another trivial number type-based filter" in checkTypedNumber2
       "perform a filter returning the empty set" in checkTypedEmpty
-      //"perform a less trivial type-based filter" in checkTyped  //TODO
+      "perform a less trivial type-based filter" in checkTyped.pendingUntilFixed
       "perform a summation scan case 1" in testTrivialScan
       "perform a summation scan" in checkScan.pendingUntilFixed
       "perform dynamic object deref" in testDerefObjectDynamic
@@ -260,7 +259,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "fully homogeneous data"        in homogeneousSortSample.pendingUntilFixed
       //"data with undefined sort keys" in partiallyUndefinedSortSample.pendingUntilFixed // throwing nasties that pendingUntilFixed doesn't catch
       "heterogeneous sort keys"       in heterogeneousSortSample.pendingUntilFixed
-      //"arbitrary datasets"            in checkSortDense  //TODO
+      "arbitrary datasets"            in checkSortDense.pendingUntilFixed
     }
 
     "intersect by identity" >> {
@@ -279,7 +278,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     
     "in distinct" >> {
       "be the identity on tables with no duplicate rows" in testDistinctIdentity
-      //"have no duplicate rows" in testDistinct  //TODO
+      "have no duplicate rows" in testDistinct.pendingUntilFixed
     }
   }
 
