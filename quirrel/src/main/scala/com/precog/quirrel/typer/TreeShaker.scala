@@ -55,8 +55,28 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       }
     }
 
-    case b @ Solve(loc, constraints, child) =>
-      sys.error("todo")
+    case b @ Solve(loc, constraints, child) => {
+      val mapped = constraints map performShake
+      
+      val constraints2 = mapped map { _._1 }
+      
+      val (constNameVector, constVarVector) = mapped map {
+        case (_, names, vars, _) => (names, vars)
+      } unzip
+      
+      val constNames = constNameVector reduce { _ ++ _ }
+      val constVars = constVarVector reduce { _ ++ _ }
+      
+      val constErrors = mapped map { _._4 } reduce { _ ++ _ }
+      
+      val (child2, childNames, childVars, childErrors) = performShake(child)
+      
+      val unusedBindings = Set(b.vars.toSeq zip (Stream continually (SolveBinding(b): VarBinding)): _*) &~ childVars
+      
+      val errors = unusedBindings map { case (id, _) => Error(b, UnusedTicVariable(id)) }
+      
+      (Solve(loc, constraints2, child2), constNames ++ childNames, constVars ++ childVars, constErrors ++ childErrors ++ errors)
+    }
     
     case Import(loc, spec, child) => {
       val (child2, names, vars, errors) = performShake(child)
