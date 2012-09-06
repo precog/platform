@@ -143,7 +143,7 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
             def extract(r: Result): Table = {
               val left = x.extract(r._1)
               val right = acc.extract(r._2)
-              table(Apply[({ type λ[α] = StreamT[M, α] })#λ].zip.zip(left.slices, right.slices) map { 
+              Table(Apply[({ type λ[α] = StreamT[M, α] })#λ].zip.zip(left.slices, right.slices) map { 
                 case (sl, sr) => new Slice { 
                   val size = sl.size max sr.size
                   val columns = {

@@ -88,8 +88,11 @@ object Schema {
     case (JObjectUnfixedT, (JPath.Identity, CEmptyObject)) => true
     case (JObjectUnfixedT, (JPath(JPathField(_), _*), _)) => true
     case (JObjectFixedT(fields), (JPath.Identity, CEmptyObject)) if fields.isEmpty => true
-    case (JObjectFixedT(fields), (JPath(JPathField(head), tail @ _*), ctpe)) =>
+
+    case (JObjectFixedT(fields), (JPath(JPathField(head), tail @ _*), ctpe)) => {
+      val fieldHead = fields.get(head)
       fields.get(head).map(includes(_, JPath(tail: _*), ctpe)).getOrElse(false)
+    }
 
     case (JArrayUnfixedT, (JPath.Identity, CEmptyArray)) => true
     case (JArrayUnfixedT, (JPath(JPathIndex(_), _*), _)) => true
@@ -121,7 +124,7 @@ object Schema {
 
     case (JNullT, ctpes) => ctpes.contains(JPath.Identity, CNull)
 
-    case (JObjectUnfixedT, ctpes) if ctpes.contains(JPath.Identity, CEmptyObject) => true
+    case (JObjectFixedT(fields), ctpes) if fields.isEmpty => ctpes.contains(JPath.Identity, CEmptyObject)
     case (JObjectUnfixedT, ctpes) => ctpes.exists {
       case (JPath(JPathField(_), _*), _) => true
       case _ => false
@@ -135,7 +138,7 @@ object Schema {
       }
     }
 
-    case (JArrayUnfixedT, ctpes) if ctpes.contains(JPath.Identity, CEmptyArray) => true
+    case (JArrayFixedT(elements), ctpes) if elements.isEmpty => ctpes.contains(JPath.Identity, CEmptyArray)
     case (JArrayUnfixedT, ctpes) => ctpes.exists {
       case (JPath(JPathIndex(_), _*), _) => true
       case _ => false

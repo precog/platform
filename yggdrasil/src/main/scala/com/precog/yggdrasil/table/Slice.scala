@@ -21,14 +21,14 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.VectorCase
-import com.precog.bytecode.JType
+import com.precog.bytecode._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 
 import scala.annotation.tailrec
-import scala.collection.breakOut
+import scala.collection.{breakOut, BitSet}
 import scalaz._
 import scalaz.Ordering._
 import scalaz.Validation._
@@ -36,12 +36,33 @@ import scalaz.syntax.foldable._
 import scalaz.syntax.semigroup._
 import scalaz.std.iterable._
 
-trait RowComparator {
+trait RowComparator { self =>
   def compare(i1: Int, i2: Int): Ordering
+
+  def swap: RowComparator = new RowComparator {
+    def compare(i1: Int, i2: Int) = self.compare(i2, i1)
+  }
+
+  @tailrec
+  final def nextLeftIndex(lidx: Int, lsize: Int, ridx: Int, step: Int): Int = {
+    if (lidx < lsize) {
+      compare(lidx, ridx) match {
+        case EQ | GT =>
+          if (step <= 1) lidx -1
+          nextLeftIndex(lidx - (step / 2), lsize, ridx, step / 2)
+
+        case LT => 
+          nextLeftIndex(lidx + step, lsize, ridx, step)
+      }
+    } else {
+      lsize
+    }
+  }
 }
 
 trait Slice { source =>
   import Slice._
+  import TableModule._
 
   def size: Int
   def isEmpty: Boolean = size == 0
@@ -58,6 +79,7 @@ trait Slice { source =>
   
   def isDefinedAt(row: Int) = columns.values.exists(_.isDefinedAt(row))
 
+  // FIXME: rename to mapRoot
   def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {
@@ -67,12 +89,19 @@ trait Slice { source =>
     }
   }
 
+  // FIXME: rename to mapColumns
   def filterColumns(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {
       case (ref, col) => f(col) map { (ref, _ ) }  
     }
   }
+
+  /**
+   * Transform this slice such that its columns are only defined for row indices
+   * in the given BitSet.
+   */
+  def redefineWith(s: BitSet): Slice = filterColumns(cf.util.filter(0, size - 1, s))
   
   def definedConst(value: CValue): Slice = new Slice {
     val size = source.size
@@ -166,11 +195,88 @@ trait Slice { source =>
     }
   }
 
-  def typed(jtpe : JType) : Slice = new Slice {
+  def typed(jtpe: JType): Slice = new Slice {  //TODO use logicalColumns
     val size = source.size
+    val sub = Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)
     val columns = {
-      if(size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe))
-        source.columns.filter { case (ColumnRef(path, ctpe), _) => Schema.includes(jtpe, path, ctpe) }
+      if (size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)) {
+        val filteredCols = source.columns.filter { case (ColumnRef(path, ctpe), _) => {
+          Schema.includes(jtpe, path, ctpe)
+        }} 
+
+        val next: Seq[(JPath, CType)] = filteredCols.keys.toList map { case ColumnRef(path, ctpe) => (path, ctpe) }
+
+        val grouped: Map[(JPath, JType), Seq[(JPath, CType)]] = next.groupBy { case (path, ctpe) => (path, ctpe match {
+          case CString => JTextT
+          case CBoolean => JBooleanT
+          case CLong | CDouble | CNum => JNumberT
+          case CNull => JNullT
+          case CEmptyObject => JObjectFixedT(Map.empty[String, JType])
+          case CEmptyArray => JArrayFixedT(Map.empty[Int, JType])
+        })}
+
+        val values = grouped.values map { seq => seq.flatMap { case (path, ctpe) => filteredCols.get(ColumnRef(path, ctpe)) } }
+        
+        def defined(row: Int, values: Iterable[Seq[Column]]): Boolean = values.forall { _.exists { _.isDefinedAt(row) }}
+
+        def sdflsd(values: Iterable[Seq[Column]], col: Column): Column = {
+          col match {
+            case c: StrColumn => {
+              new StrColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: LongColumn => {
+              new LongColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: NumColumn => {
+              new NumColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: DoubleColumn => {
+              new DoubleColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: BoolColumn => {
+              new BoolColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: NullColumn => {
+              new NullColumn {
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: EmptyArrayColumn => {
+              new EmptyArrayColumn {
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: EmptyObjectColumn => {
+              new EmptyObjectColumn {
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: DateColumn => {
+              new DateColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+          }
+        }
+
+        filteredCols map { case (cref, col) => (cref, sdflsd(values, col)) }
+      }
       else
         Map.empty[ColumnRef, Column]
     }
@@ -190,7 +296,7 @@ trait Slice { source =>
       case (ColumnRef(JPath(JPathIndex(`index`), xs @ _*), ctype), col) => 
         (ColumnRef(JPath(JPathIndex(0) +: xs : _*), ctype), col)
 
-      case unchanged => unchanged
+      case c @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), ctype), col) => c
     }
   }
 
@@ -232,12 +338,19 @@ trait Slice { source =>
     }
   }
 
-  def compact(filter: Slice): Slice = {
+  def compact(filter: Slice, definedness: Definedness): Slice = {
     new Slice {
-      lazy val retained =
-        (0 until filter.size).foldLeft(new ArrayIntList) {
-          case (acc, i) => if(filter.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
-        }
+      lazy val retained = definedness match {
+        case AnyDefined =>
+          (0 until filter.size).foldLeft(new ArrayIntList) {
+            case (acc, i) => if (filter.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
+          }
+
+        case AllDefined =>
+          (0 until filter.size).foldLeft(new ArrayIntList) {
+            case (acc, i) => if (filter.columns.values.forall(_.isDefinedAt(i))) acc.add(i) ; acc
+          }
+      }
 
       lazy val size = retained.size
       lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }
@@ -383,9 +496,8 @@ trait Slice { source =>
 
   def toJson(row: Int): Option[JValue] = {
     columns.foldLeft[JValue](JNothing) {
-      case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => {
+      case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
         jv.unsafeInsert(selector, col.jValue(row))
-      }
 
       case (jv, _) => jv
     } match {
@@ -462,7 +574,7 @@ object Slice {
 
   def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): RowComparator = {
     def compare0(cols: (Column, Column)): RowComparator = {
-      (cols: @unchecked) match {
+      cols match {
         case (c1: BoolColumn, c2: BoolColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow) 
@@ -567,6 +679,14 @@ object Slice {
         case (c1: NullColumn, c2: NullColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = EQ
         }
+        
+        case (c1, c2) => {
+          val ordering = implicitly[Order[CType]].apply(c1.tpe, c2.tpe)
+          
+          new RowComparator {
+            def compare(thisRow: Int, thatRow: Int) = ordering
+          }
+        }
       }
     }
 
@@ -581,16 +701,16 @@ object Slice {
     }
 
     @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): RowComparator = {
-      val array1 = l1.map(s1.columns).toArray
-      val array2 = l2.map(s2.columns).toArray
-
-      // Build an array of pairwise comparator functions for later use
-      val comparators: Array[RowComparator] = (for {
-        i1 <- 0 until array1.length
-        i2 <- 0 until array2.length
-      } yield compare0(array1(i1), array2(i2))).toArray
-
       new RowComparator {
+        private val array1 = l1.map(s1.columns).toArray
+        private val array2 = l2.map(s2.columns).toArray
+
+        // Build an array of pairwise comparator functions for later use
+        private val comparators: Array[RowComparator] = (for {
+          i1 <- 0 until array1.length
+          i2 <- 0 until array2.length
+        } yield compare0(array1(i1), array2(i2))).toArray
+
         def compare(i: Int, j: Int) = {
           val first1 = firstDefinedIndexFor(array1, i)
           val first2 = firstDefinedIndexFor(array2, j)
@@ -599,9 +719,9 @@ object Slice {
           if (first1 == -1 && first2 == -1) {
             EQ
           } else if (first1 == -1) {
-            LT
-          } else if (first2 == -1) {
             GT
+          } else if (first2 == -1) {
+            LT
           } else {
             // We have the indices, so use it to look up the comparator for the rows
             comparators(first1 * array2.length + first2).compare(i, j)

@@ -1174,6 +1174,10 @@ trait MathLibSpec[M[+_]] extends Specification
   }
 }
 
-object MathLibSpec extends MathLibSpec[test.YId] with test.YIdInstances
+object MathLibSpec extends MathLibSpec[test.YId] with test.YIdInstances {
+  object Table extends TableCompanion {
+    val geq: scalaz.Equal[GroupId] = scalaz.std.anyVal.intInstance
+  }
+}
 
 // vim: set ts=4 sw=4 et:

@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 package jdbm3
 
-import com.precog.common.json._
 import com.weiglewilczek.slf4s.Logging
 
 import org.joda.time.DateTime

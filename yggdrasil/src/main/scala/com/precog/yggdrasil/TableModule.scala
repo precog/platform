@@ -37,10 +37,39 @@ object TableModule {
     val SortKey = JPathField("sortkey")
     val SortGlobalId = JPathField("globalid")
   }  
+
+  sealed trait Definedness
+  case object AnyDefined extends Definedness
+  case object AllDefined extends Definedness
+
+    /*
+  sealed trait GroupKeyAlign
+  object GroupKeyAlign {
+    case object Eq extends GroupKeyAlign
+  
+    case object Neq extends GroupKeyAlign
+    case object Lte extends GroupKeyAlign
+    case object Lt extends GroupKeyAlign
+    case object Gt extends GroupKeyAlign
+    case object Gte extends GroupKeyAlign
+  }
+    */
+  
+  sealed trait SortOrder
+  sealed trait DesiredSortOrder extends SortOrder {
+    def isAscending: Boolean
+  }
+
+  case object SortAscending extends DesiredSortOrder { val isAscending = true }
+  case object SortDescending extends DesiredSortOrder { val isAscending = false }
+  case object SortUnknown extends SortOrder
 }
 
 trait TableModule[M[+_]] extends FNModule {
+  import TableModule._
+
   type UserId
+  type GroupId
   type Scanner
   type Reducer[α]
 
@@ -103,12 +132,66 @@ trait TableModule[M[+_]] extends FNModule {
 
     case class EqualLiteral[+A <: SourceType](left: TransSpec[A], right: CValue, invert: Boolean) extends TransSpec[A]
     
+    // target is the transspec that provides defineedness information. The resulting table will be defined
+    // and have the constant value wherever a row provided by the target transspec has at least one member
+    // that is not undefined
     case class ConstLiteral[+A <: SourceType](value: CValue, target: TransSpec[A]) extends TransSpec[A]
+
+    case class FilterDefined[+A <: SourceType](source: TransSpec[A], definedFor: TransSpec[A], definedness: Definedness) extends TransSpec[A]
   
     type TransSpec1 = TransSpec[Source1]
+
+    object TransSpec {
+      def mapSources[A <: SourceType, B <: SourceType](spec: TransSpec[A])(f: A => B): TransSpec[B] = {
+        spec match {
+          case Leaf(source) => Leaf(f(source))
+          case trans.Filter(source, pred) => trans.Filter(mapSources(source)(f), mapSources(pred)(f))
+          case Scan(source, scanner) => Scan(mapSources(source)(f), scanner)
+          case trans.Map1(source, f1) => trans.Map1(mapSources(source)(f), f1)
+          case trans.Map2(left, right, f2) => trans.Map2(mapSources(left)(f), mapSources(right)(f), f2)
+          case trans.ObjectConcat(objects @ _*) => trans.ObjectConcat(objects.map(mapSources(_)(f)): _*)
+          case trans.ArrayConcat(arrays @ _*) => trans.ArrayConcat(arrays.map(mapSources(_)(f)): _*)
+          case trans.WrapObject(source, field) => trans.WrapObject(mapSources(source)(f), field)
+          case trans.WrapArray(source) => trans.WrapArray(mapSources(source)(f))
+          case DerefObjectStatic(source, field) => DerefObjectStatic(mapSources(source)(f), field)
+          case DerefObjectDynamic(left, right) => DerefObjectDynamic(mapSources(left)(f), mapSources(right)(f))
+          case DerefArrayStatic(source, element) => DerefArrayStatic(mapSources(source)(f), element)
+          case DerefArrayDynamic(left, right) => DerefArrayDynamic(mapSources(left)(f), mapSources(right)(f))
+          case trans.ArraySwap(source, index) => trans.ArraySwap(mapSources(source)(f), index)
+          case Typed(source, tpe) => Typed(mapSources(source)(f), tpe)
+          case trans.Equal(left, right) => trans.Equal(mapSources(left)(f), mapSources(right)(f))
+          case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(mapSources(source)(f), value, invert)
+        }
+      }
+
+      def deepMap[A <: SourceType](spec: TransSpec[A])(f: PartialFunction[TransSpec[A], TransSpec[A]]): TransSpec[A] = spec match {
+        case x if f isDefinedAt x => f(x)
+        case x @ Leaf(source) => x
+        case trans.Filter(source, pred) => trans.Filter(deepMap(source)(f), deepMap(pred)(f))
+        case Scan(source, scanner) => Scan(deepMap(source)(f), scanner)
+        case trans.Map1(source, f1) => trans.Map1(deepMap(source)(f), f1)
+        case trans.Map2(left, right, f2) => trans.Map2(deepMap(left)(f), deepMap(right)(f), f2)
+        case trans.ObjectConcat(objects @ _*) => trans.ObjectConcat(objects.map(deepMap(_)(f)): _*)
+        case trans.ArrayConcat(arrays @ _*) => trans.ArrayConcat(arrays.map(deepMap(_)(f)): _*)
+        case trans.WrapObject(source, field) => trans.WrapObject(deepMap(source)(f), field)
+        case trans.WrapArray(source) => trans.WrapArray(deepMap(source)(f))
+        case DerefObjectStatic(source, field) => DerefObjectStatic(deepMap(source)(f), field)
+        case DerefObjectDynamic(left, right) => DerefObjectDynamic(deepMap(left)(f), deepMap(right)(f))
+        case DerefArrayStatic(source, element) => DerefArrayStatic(deepMap(source)(f), element)
+        case DerefArrayDynamic(left, right) => DerefArrayDynamic(deepMap(left)(f), deepMap(right)(f))
+        case trans.ArraySwap(source, index) => trans.ArraySwap(deepMap(source)(f), index)
+        case Typed(source, tpe) => Typed(deepMap(source)(f), tpe)
+        case trans.Equal(left, right) => trans.Equal(deepMap(left)(f), deepMap(right)(f))
+        case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(deepMap(source)(f), value, invert)
+      }
+    }
     
     object TransSpec1 {
       val Id = Leaf(Source)
+
+      val DerefArray0 = DerefArrayStatic(Leaf(Source), JPathIndex(0))
+      val DerefArray1 = DerefArrayStatic(Leaf(Source), JPathIndex(1))
+      val DerefArray2 = DerefArrayStatic(Leaf(Source), JPathIndex(2))
     }
     
     type TransSpec2 = TransSpec[Source2]
@@ -116,10 +199,14 @@ trait TableModule[M[+_]] extends FNModule {
     object TransSpec2 {
       val LeftId = Leaf(SourceLeft)
       val RightId = Leaf(SourceRight)
+
+      def DerefArray0(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(0))
+      def DerefArray1(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(1))
+      def DerefArray2(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(2))
     }
   
-    sealed trait GroupKeySpec
-    
+    sealed trait GroupKeySpec 
+
     /**
      * Definition for a single (non-composite) key part.
      *
@@ -130,9 +217,44 @@ trait TableModule[M[+_]] extends FNModule {
     
     case class GroupKeySpecAnd(left: GroupKeySpec, right: GroupKeySpec) extends GroupKeySpec
     case class GroupKeySpecOr(left: GroupKeySpec, right: GroupKeySpec) extends GroupKeySpec
+
+    object GroupKeySpec {
+      def dnf(keySpec: GroupKeySpec): GroupKeySpec = {
+        keySpec match {
+          case GroupKeySpecSource(key, spec) => GroupKeySpecSource(key, spec)
+          case GroupKeySpecAnd(GroupKeySpecOr(ol, or), right) => GroupKeySpecOr(dnf(GroupKeySpecAnd(ol, right)), dnf(GroupKeySpecAnd(or, right)))
+          case GroupKeySpecAnd(left, GroupKeySpecOr(ol, or)) => GroupKeySpecOr(dnf(GroupKeySpecAnd(left, ol)), dnf(GroupKeySpecAnd(left, or)))
+
+          case gand @ GroupKeySpecAnd(left, right) => 
+            val leftdnf = dnf(left)
+            val rightdnf = dnf(right)
+            if (leftdnf == left && rightdnf == right) gand else dnf(GroupKeySpecAnd(leftdnf, rightdnf))
+
+          case gor @ GroupKeySpecOr(left, right) => 
+            val leftdnf = dnf(left)
+            val rightdnf = dnf(right)
+            if (leftdnf == left && rightdnf == right) gor else dnf(GroupKeySpecOr(leftdnf, rightdnf))
+        }
+      }
     
-    sealed trait GroupingSpec[GroupId]
+      def toVector(keySpec: GroupKeySpec): Vector[GroupKeySpec] = {
+        keySpec match {
+          case GroupKeySpecOr(left, right) => toVector(left) ++ toVector(right)
+          case x => Vector(x)
+        }
+      }
+    }
     
+    sealed trait GroupingSpec {
+      def sources: Vector[GroupingSource] 
+    }
+
+    object GroupingSpec {
+      sealed trait Alignment
+      case object Union extends Alignment
+      case object Intersection extends Alignment
+    }
+
     /**
      * Definition for a single group set and its associated composite key part.
      *
@@ -140,33 +262,14 @@ trait TableModule[M[+_]] extends FNModule {
      * @param targetTrans The key which will be used by `merge` to access a particular subset of the target
      * @param groupKeySpec A composite union/intersect overlay on top of transspec indicating the composite key for this target set
      */
-    final case class GroupingSource[GroupId: scalaz.Equal](table: Table, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec) extends GroupingSpec[GroupId]
-    
-    final case class GroupingUnion[GroupId: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[GroupId], right: GroupingSpec[GroupId], align: GroupKeyAlign) extends GroupingSpec[GroupId]
-    final case class GroupingIntersect[GroupId: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[GroupId], right: GroupingSpec[GroupId], align: GroupKeyAlign) extends GroupingSpec[GroupId]
-    
-    sealed trait GroupKeyAlign
-    
-    object GroupKeyAlign {
-      case object Eq extends GroupKeyAlign
-    
-      /*
-      case object Neq extends GroupKeyAlign
-      case object Lte extends GroupKeyAlign
-      case object Lt extends GroupKeyAlign
-      case object Gt extends GroupKeyAlign
-      case object Gte extends GroupKeyAlign
-      */
+    final case class GroupingSource(table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupId: GroupId, groupKeySpec: GroupKeySpec) extends GroupingSpec {
+      def sources: Vector[GroupingSource] = Vector(this)
     }
     
-    sealed trait SortOrder
-    sealed trait DesiredSortOrder extends SortOrder {
-      def isAscending: Boolean
+    final case class GroupingAlignment(groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec, right: GroupingSpec, alignment: GroupingSpec.Alignment) extends GroupingSpec {
+      def sources: Vector[GroupingSource] = left.sources ++ right.sources
     }
-    case object SortAscending extends DesiredSortOrder { val isAscending = true }
-    case object SortDescending extends DesiredSortOrder { val isAscending = false }
-    case object SortUnknown extends SortOrder
-    
+
     object constants {
       import TableModule.paths._
 
@@ -201,7 +304,16 @@ trait TableModule[M[+_]] extends FNModule {
     }
   }
   
-  trait TableOps {
+  type Table <: TableLike
+  type TableCompanion <: TableCompanionLike
+
+  val Table: TableCompanion
+  
+  trait TableCompanionLike {
+    import trans._
+
+    implicit val geq: scalaz.Equal[GroupId]
+
     def empty: Table
     
     def constString(v: Set[CString]): Table
@@ -213,23 +325,12 @@ trait TableModule[M[+_]] extends FNModule {
     
     def constEmptyObject: Table
     def constEmptyArray: Table
-  }
-  
-  def ops: TableOps
-  def grouper: Grouper
-  
-  type Table <: TableLike
-  
-  trait Grouper {
-    import trans._
 
-    /**
-     * @param grouping The group spec
-     * @param body The evaluator, taking a ''map'' from a key to some table (representing a tic variable or group set)
-     */
-    def merge[GroupId: scalaz.Equal](grouping: GroupingSpec[GroupId])(body: (Table, GroupId => Table) => M[Table]): M[Table]
+    def merge(grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => M[Table]): M[Table]
+    def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)]
+    def intersect(identitySpec: TransSpec1, tables: Table*): M[Table] 
   }
-    
+  
   trait TableLike { this: Table =>
     import trans._
 
@@ -274,11 +375,13 @@ trait TableModule[M[+_]] extends FNModule {
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table]
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Table]
     
     def distinct(spec: TransSpec1): Table
-    
-    def group[GroupId: scalaz.Equal](trans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec): GroupingSpec[GroupId] = GroupingSource[GroupId](this, trans, groupId, groupKeySpec)
+
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = sys.error("override me")
+
+    def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = sys.error("override me")
     
     def takeRange(startIndex: Long, numberToTake: Long): Table
     

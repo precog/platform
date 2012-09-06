@@ -566,9 +566,10 @@ trait TypeInferencerSpec[M[+_]] extends Specification
   }
 }
 
-object TypeInferencerSpec extends TypeInferencerSpec[test.YId] {
-  val M = test.YId.M
-  val coM = test.YId.M
+object TypeInferencerSpec extends TypeInferencerSpec[test.YId] with test.YIdInstances {
+  object Table extends TableCompanion {
+    val geq: scalaz.Equal[GroupId] = scalaz.std.anyVal.intInstance
+  }
 }
 
 // vim: set ts=4 sw=4 et:

@@ -17,34 +17,43 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.daze
+package com.precog.yggdrasil
 
-import org.specs2.mutable._
+import com.precog.common.VectorCase
+import blueeyes.json.JsonAST._
+import blueeyes.json.JsonParser.parse
+import blueeyes.json.JPathField
 
-import com.precog.yggdrasil._
+import scalaz.syntax.bind._
+import scalaz.syntax.copointed._
 
-trait DAGRewriterSpecs[M[+_]] extends Specification 
-    with Evaluator[M]
-    with TestConfigComponent[M] {
+trait IntersectSpec[M[+_]] extends TableModuleSpec[M] {
+  import SampleData._
+  import trans._
+  import trans.constants._
 
-  import dag._
-  import instructions._
+  def testIntersect(l: SampleData, r: SampleData) = {
+    val ltable = fromSample(l)
+    val rtable = fromSample(r)
 
-  "DAG rewriting" should {
-    "compute identities given a relative path" in {
-      val line = Line(0, "")
+    val expected: Stream[JValue] = for {
+      lv <- l.data
+      rv <- r.data
+      if (lv \ "key") == (rv \ "key")
+    } yield lv
 
-      val input = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+    val result = Table.intersect(DerefObjectStatic(Leaf(Source), JPathField("key")), ltable, rtable)
 
-      val result = rewriteDAG(true)(input)
+    val jsonResult: M[Stream[JValue]] = result.flatMap { table => toJson(table) }
 
-      result.identities mustEqual Vector(LoadIds("/numbers"))
-    }
+    jsonResult.copoint must_== expected
+  }
+
+  def testSimpleIntersect = {
+    val s1 = SampleData(Stream(toRecord(VectorCase(1), parse("""{"a":[]}""")), toRecord(VectorCase(2), parse("""{"b":[]}"""))))
+    val s2 = SampleData(Stream(toRecord(VectorCase(2), parse("""{"b":[]}"""))))
+
+    testIntersect(s1, s2)
   }
 }
-
-object DAGRewriterSpecs extends DAGRewriterSpecs[test.YId] with test.YIdInstances {
-  object Table extends TableCompanion {
-    val geq: scalaz.Equal[GroupId] = scalaz.std.anyVal.intInstance
-  }
-}
+    

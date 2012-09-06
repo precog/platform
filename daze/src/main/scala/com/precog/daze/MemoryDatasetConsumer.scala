@@ -52,7 +52,7 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with
   type YggConfig <: DatasetConsumersConfig
   type SEvent = (VectorCase[Long], SValue)
 
-  implicit def coM: Copointed[M]
+  implicit def M: Monad[M] with Copointed[M]
   
   def consumeEval(userUID: String, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
     Validation.fromTryCatch {

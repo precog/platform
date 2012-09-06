@@ -33,6 +33,7 @@ import scalaz.effect.IO
 
 import java.io.File
 import java.util.SortedMap
+import java.nio.ByteBuffer
 
 import scala.collection.JavaConverters._
 
@@ -40,14 +41,13 @@ import scala.collection.JavaConverters._
  * A Projection wrapping a raw JDBM TreeMap index used for sorting. It's assumed that
  * the index has been created and filled prior to creating this wrapper.
  */
-abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, idCount: Int, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte],Slice] with Logging { projection =>
-  import TableModule.paths._
+abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte],Slice] with Logging {
 
   // These should not actually be used in sorting
   def descriptor: ProjectionDescriptor = sys.error("Sort projections do not have full ProjectionDescriptors")
   def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("Insertion on sort projections is unsupported")
 
-  def foreach(f : java.util.Map.Entry[Array[Byte],Array[Byte]] => Unit) {
+  def foreach(f : java.util.Map.Entry[Array[Byte], Array[Byte]] => Unit) {
     val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
     val index: SortedMap[Array[Byte],Array[Byte]] = DB.getTreeMap(indexName)
 
@@ -86,7 +86,7 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
       throw new IllegalArgumentException("No such index in DB: %s:%s".format(dbFile, indexName))
     }
 
-    var constrainedMap = id.map { idKey => index.tailMap(keyAfter(idKey)) }.getOrElse(index)
+    val constrainedMap = id.map { idKey => index.tailMap(keyAfter(idKey)) }.getOrElse(index)
     constrainedMap.lastKey() // should throw an exception if the map is empty, but...
 
     var firstKey: Array[Byte] = null
@@ -96,11 +96,8 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
       def source = constrainedMap.entrySet.iterator.asScala
       def requestedSize = sliceSize
 
-      lazy val keyColumns: Array[(ColumnRef, ArrayColumn[_])] =
-        sortKeyRefs.map(JDBMSlice.columnFor(JPath.Identity, sliceSize))(collection.breakOut)
-
-      lazy val valColumns: Array[(ColumnRef, ArrayColumn[_])] =
-        valRefs.map(JDBMSlice.columnFor(JPath(Value), sliceSize))(collection.breakOut)
+      lazy val keyColumns: Array[(ColumnRef, ArrayColumn[_])] = sortKeyRefs.map(JDBMSlice.columnFor(JPath("[0]"), sliceSize))(collection.breakOut)
+      lazy val valColumns: Array[(ColumnRef, ArrayColumn[_])] = valRefs.map(JDBMSlice.columnFor(JPath("[1]"), sliceSize))(collection.breakOut)
 
       val columnDecoder = rowFormat.ColumnDecoder(valColumns map (_._2))
       val keyColumnDecoder = keyFormat.ColumnDecoder(keyColumns map (_._2))

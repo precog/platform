@@ -53,6 +53,7 @@ trait BoolColumn extends Column with (Int => Boolean) {
   override def jValue(row: Int) = JBool(this(row))
   override def cValue(row: Int) = CBoolean(this(row))
   override def strValue(row: Int): String = String.valueOf(this(row))
+  override def toString = "BoolColumn"
 }
 
 trait LongColumn extends Column with (Int => Long) {
@@ -62,6 +63,7 @@ trait LongColumn extends Column with (Int => Long) {
   override def jValue(row: Int) = JNum(BigDecimal(this(row), MathContext.UNLIMITED))
   override def cValue(row: Int) = CLong(this(row))
   override def strValue(row: Int): String = String.valueOf(this(row))
+  override def toString = "LongColumn"
 }
 
 trait DoubleColumn extends Column with (Int => Double) {
@@ -71,6 +73,7 @@ trait DoubleColumn extends Column with (Int => Double) {
   override def jValue(row: Int) = JNum(BigDecimal(this(row).toString, MathContext.UNLIMITED))
   override def cValue(row: Int) = CDouble(this(row))
   override def strValue(row: Int): String = String.valueOf(this(row))
+  override def toString = "DoubleColumn"
 }
 
 trait NumColumn extends Column with (Int => BigDecimal) {
@@ -80,6 +83,7 @@ trait NumColumn extends Column with (Int => BigDecimal) {
   override def jValue(row: Int) = JNum(this(row))
   override def cValue(row: Int) = CNum(this(row))
   override def strValue(row: Int): String = this(row).toString
+  override def toString = "NumColumn"
 }
 
 trait StrColumn extends Column with (Int => String) {
@@ -89,6 +93,7 @@ trait StrColumn extends Column with (Int => String) {
   override def jValue(row: Int) = JString(this(row))
   override def cValue(row: Int) = CString(this(row))
   override def strValue(row: Int): String = this(row)
+  override def toString = "StrColumn"
 }
 
 trait DateColumn extends Column with (Int => DateTime) {
@@ -98,6 +103,7 @@ trait DateColumn extends Column with (Int => DateTime) {
   override def jValue(row: Int) = JString(this(row).toString)
   override def cValue(row: Int) = CDate(this(row))
   override def strValue(row: Int): String = this(row).toString
+  override def toString = "DateColumn"
 }
 
 
@@ -106,6 +112,7 @@ trait EmptyArrayColumn extends Column {
   override def jValue(row: Int) = JArray(Nil)
   override def cValue(row: Int) = CEmptyArray
   override def strValue(row: Int): String = "[]"
+  override def toString = "EmptyArrayColumn"
 }
 object EmptyArrayColumn {
   def apply(definedAt: BitSet) = new BitsetColumn(definedAt) with EmptyArrayColumn
@@ -116,6 +123,7 @@ trait EmptyObjectColumn extends Column {
   override def jValue(row: Int) = JObject(Nil)
   override def cValue(row: Int) = CEmptyObject
   override def strValue(row: Int): String = "{}"
+  override def toString = "EmptyObjectColumn"
 }
 
 object EmptyObjectColumn {
@@ -127,6 +135,7 @@ trait NullColumn extends Column {
   override def jValue(row: Int) = JNull
   override def cValue(row: Int) = CNull
   override def strValue(row: Int): String = "null"
+  override def toString = "NullColumn"
 }
 object NullColumn {
   def apply(definedAt: BitSet) = new BitsetColumn(definedAt) with NullColumn
