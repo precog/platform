@@ -133,6 +133,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
   def shutdown() = ()
 }
 
+/*
 object RawJsonStackSpecs extends ParseEvalStackSpecs[Free.Trampoline] with RawJsonColumnarTableStorageModule[Free.Trampoline] {
   implicit val M = Trampoline.trampolineMonad
   type YggConfig = ParseEvalStackSpecConfig
@@ -142,4 +143,5 @@ object RawJsonStackSpecs extends ParseEvalStackSpecs[Free.Trampoline] with RawJs
     implicit val geq: scalaz.Equal[Int] = intInstance
   }
 }
+*/
 // vim: set ts=4 sw=4 et:
