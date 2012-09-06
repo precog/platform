@@ -102,7 +102,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
       
       {
-        val e @ Solve(_, _, t: TicVar) = parse("solve 'a = foo.a 'a")
+        val e @ Solve(_, _, t: TicVar) = parse("solve 'a = 42 'a")
         t.binding mustEqual SolveBinding(e)
         t.errors must beEmpty
       }
@@ -120,7 +120,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
       
       {
-        val e @ Solve(_, _, Add(_, Add(_, ta: TicVar, tb: TicVar), tc: TicVar)) = parse("solve 'a * foo.a, 'b = baz where count('c) 'a + 'b + 'c")
+        val e @ Solve(_, _, Add(_, Add(_, ta: TicVar, tb: TicVar), tc: TicVar)) = parse("solve 'a * 42, 'b = false where count('c) 'a + 'b + 'c")
         
         ta.binding mustEqual SolveBinding(e)
         tb.binding mustEqual SolveBinding(e)
@@ -130,6 +130,30 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         tb.errors must beEmpty
         tc.errors must beEmpty
       }
+    }
+    
+    "bind tic-variables in the constraint set" in {
+      val e @ Solve(_, Vector(t: TicVar), _) = parse("solve 'a 'a")
+      t.binding mustEqual FreeBinding(e)
+      t.errors must beEmpty
+    }
+    
+    "bind formals in the constraint set" in {
+      val e @ Let(_, _, _, Solve(_, Vector(Add(_, _, d: Dispatch)), _), _) = parse("f(x) := solve 'a + x 'a 42")
+      d.binding mustEqual FormalBinding(e)
+      d.errors must beEmpty
+    }
+    
+    "bind names in the constraint set" in {
+      val e @ Let(_, _, _, _, Solve(_, Vector(Add(_, _, d: Dispatch)), _)) = parse("f := 42 solve 'a + f 'a")
+      d.binding mustEqual LetBinding(e)
+      d.errors must beEmpty
+    }
+    
+    "reject unbound name in the constraint set" in {
+      val e @ Let(_, _, _, _, Solve(_, Vector(Add(_, _, d: Dispatch)), _)) = parse("f := 42 solve 'a + g 'a")
+      d.binding mustEqual NullBinding
+      d.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "g")))
     }
     
     "reject unbound tic-variables" in {

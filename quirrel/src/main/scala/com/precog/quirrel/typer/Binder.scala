@@ -57,8 +57,12 @@ trait Binder extends parser.AST with Library {
         
         val ids = varVector reduce { _ ++ _ }
         
+        val freeBindings = ids map { _ -> FreeBinding(b) }
+        val constEnv = env.copy(vars = env.vars ++ freeBindings)
+        val constErrors = constraints map { loop(_, constEnv) } reduce { _ ++ _ }
+        
         val bindings = ids map { id => id -> SolveBinding(b) }
-        loop(child, env.copy(vars = env.vars ++ bindings)) ++ errors
+        loop(child, env.copy(vars = env.vars ++ bindings)) ++ constErrors ++ errors
       }
       
       case Import(_, spec, child) => { //todo see scalaz's Boolean.option
@@ -337,6 +341,10 @@ trait Binder extends parser.AST with Library {
   }
   
   case class SolveBinding(solve: Solve) extends VarBinding {
+    override val toString = "@%d".format(solve.nodeId)
+  }
+  
+  case class FreeBinding(solve: Solve) extends VarBinding {
     override val toString = "@%d".format(solve.nodeId)
   }
 
