@@ -26,9 +26,14 @@ if [[ $# != 1 ]]; then
 fi
 
 SRCDIR=muspelheim/src/test/resources/test_data
-DATADIR=$1
+DATADIR=$(cd $1; pwd)
 
 cd `dirname $0`
+
+if [ ! -d $SRCDIR -o ! -d $DATADIR ]; then
+    echo "Source or dest dir does not exist!"
+    exit 2
+fi
 
 pushd $SRCDIR > /dev/null
 SOURCES=""
