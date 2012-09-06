@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.bytecode._
 import com.precog.common._
 import com.precog.util._
 import com.precog.yggdrasil.util._
@@ -48,12 +47,56 @@ import org.scalacheck.Gen
 import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
+
 import SampleData._
+import CValueGenerators._
 
 
 trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
+  class BlockStoreLoadTestModule(sampleData: SampleData) extends BlockStoreTestModule{
+    val Some((idCount, schema)) = sampleData.schema
+    val actualSchema = inferSchema(sampleData.data map { _ \ "value" })
+
+    val projections = actualSchema.grouped(1) map { subschema =>
+      val descriptor = ProjectionDescriptor(
+        idCount, 
+        subschema flatMap {
+          case (jpath, CNum | CLong | CDouble) =>
+            List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), jpath, _, Authorities.None) }
+          
+          case (jpath, ctype) =>
+            List(ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None))
+        } toList
+      )
+
+      descriptor -> Projection( 
+        descriptor, 
+        sampleData.data flatMap { jv =>
+          val back = subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
+            case (obj, (jpath, ctype)) => { 
+              val vpath = JPath(JPathField("value") :: jpath.nodes)
+              val valueAtPath = jv.get(vpath)
+              
+              if (compliesWithSchema(valueAtPath, ctype)) {
+                val result = obj.set(vpath, valueAtPath)
+                //println("result in compliesWithSchema: %s\n".format(result))
+                result
+              } else
+                obj
+            }
+          }
+          
+          if (back \ "value" == JNothing)
+            None
+          else
+            Some(back)
+        }
+      )
+    } toMap
+  }
+
   def testLoadDense(sample: SampleData) = {
-    val module = new BlockStoreTestModule(sample)
+    val module = new BlockStoreLoadTestModule(sample)
     
     val expected = sample.data flatMap { jv =>
       val back = module.schema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {

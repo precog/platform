@@ -62,7 +62,6 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
   type MemoId = Int
   type GroupId = Int
 
-
   "a block store columnar table" should {
     "load" >> {
       "a problem sample" in testLoadSample1.pendingUntilFixed
@@ -78,6 +77,9 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
       //"data with undefined sort keys" in partiallyUndefinedSortSample.pendingUntilFixed // throwing nasties that pendingUntilFixed doesn't catch
       "heterogeneous sort keys"       in heterogeneousSortSample.pendingUntilFixed
       //"arbitrary datasets"            in checkSortDense  //TODO
+    }
+
+    "align" >> {
     }
   }
 }

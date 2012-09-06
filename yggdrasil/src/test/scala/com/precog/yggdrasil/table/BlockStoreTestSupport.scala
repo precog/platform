@@ -57,7 +57,7 @@ import TableModule._
 trait BlockStoreTestSupport[M[+_]] { self =>
   implicit def M: Monad[M] with Copointed[M]
 
-  class BlockStoreTestModule(sampleData: SampleData) extends 
+  abstract class BlockStoreTestModule extends 
       BlockStoreColumnarTableModule[M] with
       ColumnarTableModuleTestSupport[M] with 
       StubStorageModule[M] {
@@ -70,6 +70,8 @@ trait BlockStoreTestSupport[M[+_]] { self =>
     type GroupId = Int
 
     implicit def M = self.M
+
+    object storage extends Storage
 
     case class Projection(descriptor: ProjectionDescriptor, data: Stream[JValue]) extends BlockProjectionLike[JArray, Slice] {
       val slices = fromJson(data).slices.toStream.copoint
@@ -116,8 +118,6 @@ trait BlockStoreTestSupport[M[+_]] { self =>
 
     object Table extends TableCompanion
     
-    object storage extends Storage
-
     val yggConfig = new IdSourceConfig {
       val idSource = new IdSource {
         private val source = new java.util.concurrent.atomic.AtomicLong
@@ -125,46 +125,6 @@ trait BlockStoreTestSupport[M[+_]] { self =>
       }
     }
     
-    val Some((idCount, schema)) = sampleData.schema
-    val actualSchema = inferSchema(sampleData.data map { _ \ "value" })
-
-    val projections = actualSchema.grouped(1) map { subschema =>
-      val descriptor = ProjectionDescriptor(
-        idCount, 
-        subschema flatMap {
-          case (jpath, CNum | CLong | CDouble) =>
-            List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), jpath, _, Authorities.None) }
-          
-          case (jpath, ctype) =>
-            List(ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None))
-        } toList
-      )
-
-      descriptor -> Projection( 
-        descriptor, 
-        sampleData.data flatMap { jv =>
-          val back = subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
-            case (obj, (jpath, ctype)) => { 
-              val vpath = JPath(JPathField("value") :: jpath.nodes)
-              val valueAtPath = jv.get(vpath)
-              
-              if (compliesWithSchema(valueAtPath, ctype)) {
-                val result = obj.set(vpath, valueAtPath)
-                //println("result in compliesWithSchema: %s\n".format(result))
-                result
-              } else
-                obj
-            }
-          }
-          
-          if (back \ "value" == JNothing)
-            None
-          else
-            Some(back)
-        }
-      )
-    } toMap
-
     def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
       case (_: JNum, CNum | CLong | CDouble) => true
       case (JNothing, CUndefined) => true
