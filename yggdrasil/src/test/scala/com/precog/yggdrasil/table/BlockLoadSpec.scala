@@ -38,6 +38,7 @@ import scalaz.std.anyVal._
 import scalaz.std.list._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
+import scalaz.syntax.std.boolean._
 
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
@@ -49,64 +50,29 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 import SampleData._
 
-trait BlockLoadTestSupport[M[+_]] extends
-  TestColumnarTableModule[M] with
-  StubStorageModule[M] with
-  IdSourceScannerModule[M] with
-  TableModuleTestSupport[M] {
-  
-  type YggConfig = IdSourceConfig
-  val yggConfig = new IdSourceConfig {
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
-  }
-  
-  type Key = JArray
-  case class Projection(descriptor: ProjectionDescriptor, data: Stream[JValue]) extends BlockProjectionLike[JArray, Slice] {
-    val slices = fromJson(data).slices.toStream.copoint
 
-    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO(sys.error("Insert not supported."))
-
-    implicit val keyOrder: Order[JArray] = Order[List[JValue]].contramap((_: JArray).elements)
-
-    def getBlockAfter(id: Option[JArray], colSelection: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[JArray, Slice]] = {
-      @tailrec def findBlockAfter(id: JArray, blocks: Stream[Slice]): Option[Slice] = {
-        blocks.filterNot(_.isEmpty) match {
-          case x #:: xs =>
-            if ((x.toJson(x.size - 1).getOrElse(JNothing) \ "key") > id) Some(x) else findBlockAfter(id, xs)
-
-          case _ => None
+trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
+  def testLoadDense(sample: SampleData) = {
+    val module = new BlockStoreTestModule(sample)
+    
+    val expected = sample.data flatMap { jv =>
+      val back = module.schema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
+        case (obj, (jpath, ctype)) => { 
+          val vpath = JPath(JPathField("value") :: jpath.nodes)
+          val valueAtPath = jv.get(vpath)
+          
+          if (module.compliesWithSchema(valueAtPath, ctype))
+            obj.set(vpath, valueAtPath)
+          else
+            obj
         }
-      }
-
-      val slice = id map { key =>
-        findBlockAfter(key, slices)
-      } getOrElse {
-        slices.headOption
       }
       
-      slice map { s => 
-        val s0 = new Slice {
-          val size = s.size
-          val columns = s.columns filter {
-            case (ColumnRef(jpath, ctype), _) =>
-              colSelection.isEmpty || 
-              jpath.nodes.head == JPathField("key") ||
-              colSelection.exists { desc => (JPathField("value") \ desc.selector) == jpath && desc.valueType == ctype }
-          }
-        }
-
-        BlockProjectionData[JArray, Slice](s0.toJson(0).getOrElse(JNothing) \ "key" --> classOf[JArray], s0.toJson(s0.size - 1).getOrElse(JNothing) \ "key" --> classOf[JArray], s0)
-      }
+      (back \ "value" == JNothing).option(back)
     }
+
+    module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(module.schema).get).flatMap(_.toJson).copoint.toStream must_== expected
   }
-}
-
-
-trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
-  implicit def M: Monad[M] with Copointed[M]
 
   def checkLoadDense = {
     implicit val gen = sample(objectSchema(_, 3))
@@ -329,94 +295,6 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
     testLoadDense(sampleData)
   }
 
-  def testLoadDense(sample: SampleData) = {
-    //println("testing for sample: " + sample)
-    val Some((idCount, schema)) = sample.schema
-    
-    def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
-      case (_: JNum, CNum | CLong | CDouble) => true
-      case (JNothing, CUndefined) => true
-      case (JNull, CNull) => true
-      case (_: JBool, CBoolean) => true
-      case (_: JString, CString) => true
-      case (JObject(Nil), CEmptyObject) => true
-      case (JArray(Nil), CEmptyArray) => true
-      case _ => false
-    }
-    
-    val actualSchema = inferSchema(sample.data map { _ \ "value" })
-
-    val module = new BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
-      type GroupId = Int
-      def M = self.M
-
-      trait TableCompanion extends BlockStoreColumnarTableCompanion {
-        implicit val geq: scalaz.Equal[Int] = intInstance
-      }
-
-      object Table extends TableCompanion
-
-      val projections = {
-        actualSchema.grouped(1) map { subschema =>
-          val descriptor = ProjectionDescriptor(
-            idCount, 
-            subschema flatMap {
-              case (jpath, CNum | CLong | CDouble) =>
-                List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), jpath, _, Authorities.None) }
-              
-              case (jpath, ctype) =>
-                List(ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None))
-            } toList
-          )
-
-          descriptor -> Projection( 
-            descriptor, 
-            sample.data flatMap { jv =>
-              val back = subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
-                case (obj, (jpath, ctype)) => { 
-                  val vpath = JPath(JPathField("value") :: jpath.nodes)
-                  val valueAtPath = jv.get(vpath)
-                  
-                  if (compliesWithSchema(valueAtPath, ctype))
-                    obj.set(vpath, valueAtPath)
-                  else
-                    obj
-                }
-              }
-              
-              if (back \ "value" == JNothing)
-                None
-              else
-                Some(back)
-            }
-          )
-        } toMap
-      }
-
-      object storage extends Storage
-    }
-    
-    val expected = sample.data flatMap { jv =>
-      val back = schema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
-        case (obj, (jpath, ctype)) => { 
-          val vpath = JPath(JPathField("value") :: jpath.nodes)
-          val valueAtPath = jv.get(vpath)
-          
-          if (compliesWithSchema(valueAtPath, ctype))
-            obj.set(vpath, valueAtPath)
-          else
-            obj
-        }
-      }
-      
-      if (back \ "value" == JNothing)
-        None
-      else
-        Some(back)
-    }
-
-    module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap(_.toJson).copoint.toStream must_== expected
-  }
 }
 
 // vim: set ts=4 sw=4 et:

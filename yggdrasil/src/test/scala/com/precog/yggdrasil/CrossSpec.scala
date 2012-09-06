@@ -24,7 +24,11 @@ import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser.parse
 import scalaz.syntax.copointed._
 
-trait CrossSpec[M[+_]] extends TableModuleSpec[M] {
+import org.specs2.ScalaCheck
+import org.specs2.mutable._
+
+
+trait CrossSpec[M[+_]] extends TableModuleTestSupport[M] with Specification with ScalaCheck {
   import SampleData._
   import trans._
   import trans.constants._

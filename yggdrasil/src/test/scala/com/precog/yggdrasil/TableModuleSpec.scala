@@ -209,7 +209,7 @@ trait TestLib[M[+_]] extends TableModule[M] {
   def lookupScanner(namespace: List[String], name: String): Scanner 
 }
 
-trait TableModuleTestSupport[M[+_]] extends TableModule[M] {
+trait TableModuleTestSupport[M[+_]] extends TableModule[M] with TestLib[M] {
   implicit def M: Monad[M] with Copointed[M]
 
   def fromJson(data: Stream[JValue], maxBlockSize: Option[Int] = None): Table
@@ -220,15 +220,17 @@ trait TableModuleTestSupport[M[+_]] extends TableModule[M] {
   def debugPrint(dataset: Table): Unit
 }
 
-trait TableModuleSpec[M[+_]] extends Specification with ScalaCheck with TableModuleTestSupport[M] with TestLib[M]{
+trait TableModuleSpec[M[+_]] extends Specification with ScalaCheck {
   import SampleData._
   override val defaultPrettyParams = Pretty.Params(2)
 
-  def checkMappings = {
+  implicit def M: Monad[M] with Copointed[M]
+
+  def checkMappings(testSupport: TableModuleTestSupport[M]) = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
-      val dataset = fromSample(sample)
-      toJson(dataset).copoint must containAllOf(sample.data.toList).only
+      val dataset = testSupport.fromSample(sample)
+      testSupport.toJson(dataset).copoint must containAllOf(sample.data.toList).only
     }
   }
 }

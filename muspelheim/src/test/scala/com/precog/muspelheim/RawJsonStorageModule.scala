@@ -131,7 +131,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
   }
 }
 
-trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModule[M] with TestColumnarTableModule[M] {
+trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModuleTestSupport[M] {
   import trans._
   import TableModule._
 

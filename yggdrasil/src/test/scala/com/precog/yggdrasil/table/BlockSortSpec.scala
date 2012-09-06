@@ -50,8 +50,43 @@ import SampleData._
 
 import TableModule._
 
-trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
+trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
   implicit def M: Monad[M] with Copointed[M]
+
+  def testSortDense(sample: SampleData, sortKey: JPath) = {
+    val module = new BlockStoreTestModule(sample)
+
+    //println("testing for sample: " + sample)
+    val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
+      import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
+
+      def compare(a: JValue, b: JValue): Int = (a,b) match {
+        case (JNum(ai), JNum(bd)) => ai.compare(bd)
+        case _                    => JValueOrdering.compare(a, b)
+      } 
+    }
+
+    val resultM = for {
+      table  <- module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(module.schema).get)
+      sorted <- table.sort(module.sortTransspec(sortKey), SortAscending)
+      // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
+      withoutSortKey = sorted.transform(module.deleteSortKeySpec)
+      json <- withoutSortKey.toJson
+    } yield json
+
+    val result = resultM.copoint.toList
+
+    val original = sample.data.sortBy({
+      v => sortKey.extract(v \ "value")
+    })(jvalueOrdering).toList
+
+    if (result != original) {
+      println("Original = " + original)
+      println("Result   = " + result)
+    }
+
+    result must_== original
+  }
 
   def checkSortDense = {
     import TableModule.paths.Value
@@ -169,126 +204,6 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     testSortDense(sampleData, JPath(".uid"))
   }
 
-
-  def testSortDense(sample: SampleData, sortKey: JPath) = {
-    //println("testing for sample: " + sample)
-    val Some((idCount, schema)) = sample.schema
-
-    def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
-      case (_: JNum, CNum | CLong | CDouble) => true
-      case (JNothing, CUndefined) => true
-      case (JNull, CNull) => true
-      case (_: JBool, CBoolean) => true
-      case (_: JString, CString) => true
-      case (JObject(Nil), CEmptyObject) => true
-      case (JArray(Nil), CEmptyArray) => true
-      case _ => false
-    }
-    
-    val actualSchema = inferSchema(sample.data map { _ \ "value" })
-
-    class Module extends  BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
-      import trans._
-      import TableModule.paths._
-
-      type MemoId = Int
-      type GroupId = Int
-
-      trait TableCompanion extends BlockStoreColumnarTableCompanion {
-        implicit val geq: scalaz.Equal[Int] = intInstance
-      }
-
-      object Table extends TableCompanion
-      
-      def M = self.M
-
-      val projections = {
-        actualSchema.grouped(1) map { subschema =>
-          val descriptor = ProjectionDescriptor(
-            idCount, 
-            subschema flatMap {
-              case (jpath, CNum | CLong | CDouble) =>
-                List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), jpath, _, Authorities.None) }
-              
-              case (jpath, ctype) =>
-                List(ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None))
-            } toList
-          )
-
-          descriptor -> Projection( 
-            descriptor, 
-            sample.data flatMap { jv =>
-              val back = subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
-                case (obj, (jpath, ctype)) => { 
-                  val vpath = JPath(JPathField("value") :: jpath.nodes)
-                  val valueAtPath = jv.get(vpath)
-                  
-                  if (compliesWithSchema(valueAtPath, ctype)) {
-                    val result = obj.set(vpath, valueAtPath)
-                    //println("result in compliesWithSchema: %s\n".format(result))
-                    result
-                  } else
-                    obj
-                }
-              }
-              
-              if (back \ "value" == JNothing)
-                None
-              else
-                Some(back)
-            }
-          )
-        } toMap
-      }
-
-      object storage extends Storage
-
-      def sortTransspec(sortKey: JPath): TransSpec1 = WrapArray(
-        sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), JPathField("value"))) {
-          case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, field)
-          case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
-        }
-      )
-
-      def deleteSortKeySpec: TransSpec1 = TransSpec1.DerefArray1
-    }
-
-    val module = new Module
-
-    val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
-      import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
-
-      def compare(a: JValue, b: JValue): Int = (a,b) match {
-        case (JNum(ai), JNum(bd)) => ai.compare(bd)
-        case _                    => JValueOrdering.compare(a, b)
-      } 
-    }
-
-    try {
-      val resultM = for {
-        table  <- module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get)
-        sorted <- table.sort(module.sortTransspec(sortKey), SortAscending)
-        // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
-        withoutSortKey = sorted.transform(module.deleteSortKeySpec)
-        json <- withoutSortKey.toJson
-      } yield json
-
-      val result = resultM.copoint.toList
-
-      val original = sample.data.sortBy({
-        v => sortKey.extract(v \ "value")
-      })(jvalueOrdering).toList
-
-      if (result != original) {
-        println("Original = " + original)
-        println("Result   = " + result)
-      }
-
-      result must_== original
-    } catch {
-      case e: AssertionError => e.printStackTrace; true mustEqual false
-    }
-  }
 }
 
 // vim: set ts=4 sw=4 et:

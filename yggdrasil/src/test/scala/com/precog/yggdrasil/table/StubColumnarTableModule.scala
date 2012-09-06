@@ -42,10 +42,7 @@ import scalaz.std.anyVal._
 
 import TableModule._
 
-trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
-  implicit def M: Monad[M] with Copointed[M]
-
-
+trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] with ColumnarTableModule[M] {
   def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
     val sliceSize = maxSliceSize.getOrElse(10)
 
@@ -146,6 +143,66 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
     )
   }
 
+  def lookupF1(namespace: List[String], name: String): F1 = {
+    val lib = Map[String, CF1](
+      "negate" -> cf.math.Negate,
+      "true" -> new CF1P({ case _ => Column.const(true) })
+    )
+
+    lib(name)
+  }
+
+  def lookupF2(namespace: List[String], name: String): F2 = {
+    val lib  = Map[String, CF2](
+      "add" -> cf.math.Add,
+      "mod" -> cf.math.Mod,
+      "eq"  -> cf.std.Eq
+    )
+    lib(name)
+  }
+
+  def lookupScanner(namespace: List[String], name: String): CScanner = {
+    val lib = Map[String, CScanner](
+      "sum" -> new CScanner {
+        type A = BigDecimal
+        val init = BigDecimal(0)
+        def scan(a: BigDecimal, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          val prioritized = cols.values filter {
+            case _: LongColumn | _: DoubleColumn | _: NumColumn => true
+            case _ => false
+          }
+          
+          val mask = BitSet(range filter { i => prioritized exists { _ isDefinedAt i } }: _*)
+          
+          val (a2, arr) = mask.foldLeft((a, new Array[BigDecimal](range.end))) {
+            case ((acc, arr), i) => {
+              val col = prioritized find { _ isDefinedAt i }
+              
+              val acc2 = col map {
+                case lc: LongColumn =>
+                  acc + lc(i)
+                
+                case dc: DoubleColumn =>
+                  acc + dc(i)
+                
+                case nc: NumColumn =>
+                  acc + nc(i)
+              }
+              
+              acc2 foreach { arr(i) = _ }
+              
+              (acc2 getOrElse acc, arr)
+            }
+          }
+          
+          (a2, Map(ColumnRef(JPath.Identity, CNum) -> ArrayNumColumn(mask, arr)))
+        }
+      }
+    )
+
+    lib(name)
+  }
+
   def debugPrint(dataset: Table): Unit = {
     println("\n\n")
     dataset.slices.foreach { slice => {
@@ -154,12 +211,14 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
   }
 }
 
-trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
+trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
   import trans._
 
+  implicit def M: Monad[M] with Copointed[M]
+  
   type MemoContext = DummyMemoizationContext
   def newMemoContext = new DummyMemoizationContext
-  
+
   private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
   private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
   private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!

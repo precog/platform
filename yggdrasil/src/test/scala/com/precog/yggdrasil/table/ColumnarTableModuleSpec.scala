@@ -54,87 +54,21 @@ import org.scalacheck.Arbitrary._
 import TableModule._
 
 trait ColumnarTableModuleSpec[M[+_]] extends
-  TableModuleSpec[M] with
-  CogroupSpec[M] with
-  CrossSpec[M] with
-  TestColumnarTableModule[M] with
-  TransformSpec[M] with
-  BlockLoadSpec[M] with
-  BlockSortSpec[M] with
-  CompactSpec[M] with 
-  IntersectSpec[M] with
-  DistinctSpec[M] { spec => //with
-  //GrouperSpec[M] { spec =>
+    ColumnarTableModuleTestSupport[M] with
+    TableModuleSpec[M] with
+    CogroupSpec[M] with
+    CrossSpec[M] with
+    TransformSpec[M] with
+    CompactSpec[M] with 
+    IntersectSpec[M] with
+    DistinctSpec[M] { spec => //with
+    //GrouperSpec[M] { spec =>
 
   type GroupId = Int
   import trans._
   import constants._
     
   override val defaultPrettyParams = Pretty.Params(2)
-
-  val testPath = Path("/tableOpsSpec")
-  val actorSystem = ActorSystem("columnar-table-specs")
-  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-
-  def lookupF1(namespace: List[String], name: String): F1 = {
-    val lib = Map[String, CF1](
-      "negate" -> cf.math.Negate,
-      "true" -> new CF1P({ case _ => Column.const(true) })
-    )
-
-    lib(name)
-  }
-
-  def lookupF2(namespace: List[String], name: String): F2 = {
-    val lib  = Map[String, CF2](
-      "add" -> cf.math.Add,
-      "mod" -> cf.math.Mod,
-      "eq"  -> cf.std.Eq
-    )
-    lib(name)
-  }
-
-  def lookupScanner(namespace: List[String], name: String): CScanner = {
-    val lib = Map[String, CScanner](
-      "sum" -> new CScanner {
-        type A = BigDecimal
-        val init = BigDecimal(0)
-        def scan(a: BigDecimal, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-          val prioritized = cols.values filter {
-            case _: LongColumn | _: DoubleColumn | _: NumColumn => true
-            case _ => false
-          }
-          
-          val mask = BitSet(range filter { i => prioritized exists { _ isDefinedAt i } }: _*)
-          
-          val (a2, arr) = mask.foldLeft((a, new Array[BigDecimal](range.end))) {
-            case ((acc, arr), i) => {
-              val col = prioritized find { _ isDefinedAt i }
-              
-              val acc2 = col map {
-                case lc: LongColumn =>
-                  acc + lc(i)
-                
-                case dc: DoubleColumn =>
-                  acc + dc(i)
-                
-                case nc: NumColumn =>
-                  acc + nc(i)
-              }
-              
-              acc2 foreach { arr(i) = _ }
-              
-              (acc2 getOrElse acc, arr)
-            }
-          }
-          
-          (a2, Map(ColumnRef(JPath.Identity, CNum) -> ArrayNumColumn(mask, arr)))
-        }
-      }
-    )
-
-    lib(name)
-  }
 
   type Table = UnloadableTable
   class UnloadableTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
@@ -184,7 +118,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       results.copoint must containAllOf(sample).only 
     }
 
-    "verify bijection from JSON" in checkMappings
+    "verify bijection from JSON" in checkMappings(this)
 
     "in cogroup" >> {
       "perform a simple cogroup" in testSimpleCogroup
@@ -244,22 +178,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "perform dynamic object deref" in testDerefObjectDynamic
       "perform an array swap" in checkArraySwap
       "replace defined rows with a constant" in checkConst
-    }
-
-    "in load" >> {
-      "reconstruct a problem sample" in testLoadSample1
-      "reconstruct a problem sample" in testLoadSample2
-      "reconstruct a problem sample" in testLoadSample3
-      "reconstruct a problem sample" in testLoadSample4
-      //"reconstruct a problem sample" in testLoadSample5 //pathological sample in the case of duplicated ids.
-      "reconstruct a dense dataset" in checkLoadDense
-    }                           
-
-    "sort" >> {
-      "fully homogeneous data"        in homogeneousSortSample.pendingUntilFixed
-      //"data with undefined sort keys" in partiallyUndefinedSortSample.pendingUntilFixed // throwing nasties that pendingUntilFixed doesn't catch
-      "heterogeneous sort keys"       in heterogeneousSortSample.pendingUntilFixed
-      "arbitrary datasets"            in checkSortDense.pendingUntilFixed
     }
 
     "intersect by identity" >> {
@@ -591,184 +509,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
           }
         }
       }
-
-      /*
-      "fix ordering" >> {
-        "trivial case" in {
-          fix(Set(constraint("a,b,c,d"))).map(_.toList) must_== Set(ticvars("abcd"))
-        }
-
-        "case with prior restrictions" in {
-          val abc = constraint("ab,c")
-
-          fix(Set(abc), Some(ticvars("ab"))).map(_.toList) must_== Set(ticvars("abc"))
-        }
-
-        "nontrivial case with prior restrictions" in {
-          val minimized = Set(
-            constraint("c,a,b,d"),
-            constraint("ab")
-          )
-
-          val expected = Set(
-            ticvars("cabd"),
-            ticvars("ab")
-          )
-
-          fix(minimized, Some(ticvars("ab"))) must_== expected
-        }
-
-        "error if hint cannot be respected" in {
-          val minimized = Set(
-            constraint("c,a,b,d"),
-            constraint("ab")
-          )
-
-          fix(minimized, Some(ticvars("ac"))) must throwA[RuntimeException]
-        }
-      }
-      */
     }
-
-    "graph traversal" >> {
-      def norm(s: Set[OrderingConstraint]) = s.map(_.ordering.toList)
-
-      val abcd = MergeNode(ticvars("abcd").toSet, null)
-      val abc = MergeNode(ticvars("abc").toSet, null)
-      val ab = MergeNode(ticvars("ab").toSet, null)
-      val ac = MergeNode(ticvars("ac").toSet, null)
-      val a = MergeNode(ticvars("a").toSet, null)
-
-      /*
-      "find underconstrained binding constraints" >> {
-        "for a graph with a supernode" in {
-          val allNodes = Random.shuffle(Set(abcd, abc, ab, ac, a))
-
-          val spanningForest = findSpanningGraphs(edgeMap(allNodes))
-
-          spanningForest must haveSize(1)
-
-          val underconstrained = spanningForest.head.underconstrained
-
-          norm(underconstrained(a)) must_== norm(Set(constraint("a")))
-          norm(underconstrained(ab)) must_== norm(Set(constraint("ab")))
-          norm(underconstrained(ac)) must_== norm(Set(constraint("ac")))
-          norm(underconstrained(abc)) must_== norm(Set(constraint("abc")))
-          norm(underconstrained(abcd)) must_== norm(Set(constraint("a,bcd"), constraint("ab,cd"), constraint("ac,bd"), constraint("abc,d")))
-        }
-
-        "for a graph without a supernode" in {
-          val abd = MergeNode(ticvars("abd").toSet, null)
-          val allNodes = Random.shuffle(Set(abd, abc, ab))
-
-          val spanningForest = findSpanningGraphs(edgeMap(allNodes))
-
-          spanningForest must haveSize(1)
-
-          val underconstrained = spanningForest.head.underconstrained
-
-          norm(underconstrained(ab)) must_== norm(Set(constraint("ab")))
-          norm(underconstrained(abc)) must_== norm(Set(constraint("abc"), constraint("ab,c")))
-          norm(underconstrained(abd)) must_== norm(Set(constraint("abd"), constraint("ab,d")))
-        }
-      }
-      */
-    }
-
-/*
-    "select constraint matching a set of binding constraints" >> {
-      "a preferred match" in {
-        val preferred = Set(ticvars("abc"), ticvars("abd"))
-
-        val constraints = Set(
-          constraint("ab,c"),
-          constraint("a,c,b")
-        )
-
-        OrderingConstraints.select(preferred, constraints) must beSome(ticvars("abc"))
-      }
-
-      "error on no match" in {
-        val preferred = Set(ticvars("abce"), ticvars("abd"))
-
-        val constraints = Set(
-          constraint("ab,c"),
-          constraint("a,c,b")
-        )
-
-        OrderingConstraints.select(preferred, constraints) must beNone
-      }
-    }
-
-    "generate a trivial merge specification" in {
-      // Query:
-      // forall 'a 
-      //   foo' := foo where foo.a = 'a
-
-      val ticvar = JPathField("a")
-      val tree = MergeGraph(Set(node))
-      val binding = Binding(Table.empty, SourceKey.Single, Some(TransSpec1.Id), 1, GroupKeySpecSource(ticvar, DerefObjectStatic(SourceValue.Single, ticvar)))
-      val node = MergeNode(Set(ticvar), binding)
-
-      val result = buildMerges(Map(node -> List(binding)), tree)
-
-      val expected = NodeMergeSpec(
-        List(ticvar),
-        Set(
-          SourceMergeSpec(
-            binding,
-            ObjectConcat(WrapObject(DerefObjectStatic(SourceValue.Single, ticvar), "0")),
-            List(ticvar)
-          )))
-      
-      result must_== expected
-    }
-
-    "generate a merge specification" in {
-      // Query:
-      // forall 'a forall 'b
-      //   foo' := foo where foo.a = 'a
-      //   bar' := bar where bar.a = 'a & bar.b = 'b
-
-      val tica = JPathField("a")
-      val ticb = JPathField("b")
-      val foonode = MergeNode(Set(tica))
-      val barnode = MergeNode(Set(tica, ticb))
-      val tree = MergeGraph(Set(foonode, barnode), Set(MergeEdge(foonode, barnode, Set(tica))))
-      val foobinding = Binding(Table.empty, SourceKey.Single, TransSpec1.Id, 1, GroupKeySpecSource(tica, DerefObjectStatic(SourceValue.Single, tica)))
-      val barbinding = Binding(Table.empty, SourceKey.Single, TransSpec1.Id, 1, 
-        GroupKeySpecAnd(
-          GroupKeySpecSource(tica, DerefObjectStatic(SourceValue.Single, tica)),
-          GroupKeySpecSource(ticb, DerefObjectStatic(SourceValue.Single, ticb))))
-
-      val result = buildMerges(Map(foonode -> List(foobinding), barnode -> List(barbinding)), tree)
-
-      val expected = NodeMergeSpec(
-        Vector(tica),
-        Set(
-          LeftAlignMergeSpec(
-            MergeAlignment(
-              SourceMergeSpec(
-                foobinding, 
-                ObjectConcat(WrapObject(DerefObjectStatic(SourceValue.Single,tica), "0")),
-                List(tica)
-              ),
-              NodeMergeSpec(
-                List(tica, ticb),
-                Set(
-                  SourceMergeSpec(
-                    barbinding,
-                    ObjectConcat(
-                      WrapObject(DerefObjectStatic(SourceValue.Single,tica), "0"),
-                      WrapObject(DerefObjectStatic(SourceValue.Single,ticb), "1")),
-                    List(tica, ticb)
-                  ))),
-              Vector(tica)
-            ))))
-
-      result must_== expected
-    }
-    */
 
     "transform a group key transspec to use a desired sort key order" in {
       import GroupKeyTrans._
