@@ -35,7 +35,9 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   implicit def M: Monad[M] with Copointed[M]
 
   def testSortDense(sample: SampleData, sortKey: JPath) = {
-    val module = new BlockStoreTestModule(sample)
+    object module extends BlockStoreTestModule {
+      val projections = Map.empty[ProjectionDescriptor, Projection]
+    }
 
     //println("testing for sample: " + sample)
     val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
@@ -48,8 +50,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     }
 
     val resultM = for {
-      table  <- module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(module.schema).get)
-      sorted <- table.sort(module.sortTransspec(sortKey), SortAscending)
+      sorted <- module.fromSample(sample).sort(module.sortTransspec(sortKey), SortAscending)
       // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
       withoutSortKey = sorted.transform(module.deleteSortKeySpec)
       json <- withoutSortKey.toJson
