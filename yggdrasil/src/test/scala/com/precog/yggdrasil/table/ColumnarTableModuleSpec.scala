@@ -207,7 +207,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     def ticvars(str: String) = str.toSeq.map((c: Char) => JPathField(c.toString))
 
     "traversal order" >> {
-      "choose correct node order for ab-bc-ad" in {
+      "choose correct node order for ab-abc-ad" in {
         val ab = MergeNode(ticvars("ab").toSet, null)
         val abc = MergeNode(ticvars("bc").toSet, null)
         val ad = MergeNode(ticvars("ad").toSet, null)
