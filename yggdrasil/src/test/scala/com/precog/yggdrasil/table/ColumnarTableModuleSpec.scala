@@ -196,7 +196,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     
     "in distinct" >> {
       "be the identity on tables with no duplicate rows" in testDistinctIdentity
-      "have no duplicate rows" in testDistinct.pendingUntilFixed
+      "perform properly when the same row appears in two different slices" in testDistinctAcrossSlices
+      "perform properly again when the same row appears in two different slices" in testDistinctAcrossSlices2
+      "have no duplicate rows" in testDistinct
     }
   }
 
@@ -205,14 +207,12 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     import Table.Universe._
     def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
     def ticvars(str: String) = str.toSeq.map((c: Char) => JPathField(c.toString))
-    def order(str: String) = OrderingConstraint.fromFixed(ticvars(str))
-    def mergeNode(str: String) = MergeNode(ticvars(str).toSet, null)
 
     "traversal order" >> {
-      "for ab-abc-ad" should {
-        val ab = mergeNode("ab")
-        val abc = mergeNode("abc")
-        val ad = mergeNode("ad")
+      "choose correct node order for ab-bc-ad" in {
+        val ab = MergeNode(ticvars("ab").toSet, null)
+        val abc = MergeNode(ticvars("bc").toSet, null)
+        val ad = MergeNode(ticvars("ad").toSet, null)
 
         val connectedNodes = Set(ab, abc, ad)
 
@@ -224,85 +224,12 @@ trait ColumnarTableModuleSpec[M[+_]] extends
           ad -> NodeMetadata(10)
         )
 
-        val plan = findBorgTraversalOrder(spanningGraph, oracle).fixed
+        val plan = findBorgTraversalOrder(spanningGraph, oracle)
 
         val nodes = plan.steps.map(_.node)
 
-        val accOrdersPre = plan.steps.map(_.accOrderPre)
-        val accOrdersPost = plan.steps.map(_.accOrderPost)
-        val nodeOrders = plan.steps.map(_.nodeOrder)
-        val resorts = plan.steps.map(_.accResort)
-
-        val ad_abc_ab = Vector(ad, abc, ab)
-        val ad_ab_abc = Vector(ad, ab, abc)
-        val ab_abc_ad = Vector(ab, abc, ad)
-        val abc_ab_ad = Vector(abc, ab, ad)
-        val abc_ad_ab = Vector(abc, ad, ab)
-        val ab_ad_abc = Vector(ab, ad, abc)
-
-        println(nodes)
-
-        "choose correct node order" in {
-          ((nodes == ad_abc_ab) ||
-           (nodes == ad_ab_abc) ||
-           (nodes == ab_abc_ad) ||
-           (nodes == ab_ad_abc) ||
-           (nodes == abc_ad_ab) ||
-           (nodes == abc_ab_ad)) must beTrue
-        }
-
-        "not require any acc resorts" in {
-          forall(resorts) { resort =>
-            resort must beFalse
-          }
-        }
-
-        "correctly order acc post and pre" in {
-          nodes match {
-            case `ad_abc_ab` => 
-              accOrdersPre must_==  Vector(OrderingConstraint.Zero, order("ad"), order("abdc"))
-              accOrdersPost must_== Vector(order("ad"), order("abdc"), order("abdc"))
-
-            case `ad_ab_abc` => 
-              accOrdersPre must_==  Vector(OrderingConstraint.Zero, order("ad"), order("abd"))
-              accOrdersPost must_== Vector(order("ad"), order("abd"), order("abcd"))
-
-            case `ab_abc_ad` => 
-              accOrdersPre must_==  Vector(OrderingConstraint.Zero, order("ab"), order("abc"))
-              accOrdersPost must_== Vector(order("ab"), order("abc"), order("abcd"))
-
-            case `ab_ad_abc` =>
-              accOrdersPre must_==  Vector(OrderingConstraint.Zero, order("ab"), order("abd"))
-              accOrdersPost must_== Vector(order("ab"), order("abd"), order("abcd"))
-
-            case `abc_ab_ad` => 
-              accOrdersPre must_==  Vector(OrderingConstraint.Zero, order("abc"), order("abc"))
-              accOrdersPost must_== Vector(order("abc"), order("abc"), order("abcd"))
-
-            case `abc_ad_ab` => 
-              accOrdersPre must_== Vector(OrderingConstraint.Zero, order("abc"), order("abcd"))
-              accOrdersPost must_== Vector(order("abc"), order("abcd"), order("abcd"))
-          }
-        }
-
-        "correctly order nodes" in {
-          nodes match {
-            case `ad_abc_ab` => 
-              nodeOrders must_== Vector(order("ad"), order("abc"), order("ab"))
-
-            case `ab_abc_ad` => 
-              nodeOrders must_== Vector(order("ab"), order("abc"), order("ad"))
-              
-            case `abc_ab_ad` => 
-              nodeOrders must_== Vector(order("abc"), order("ab"), order("ad"))
-
-            case `abc_ad_ab` =>
-              nodeOrders must_== Vector(order("abc"), order("ad"), order("ab"))
-
-            case `ab_ad_abc` => 
-              nodeOrders must_== Vector(order("ab"), order("ad"), order("abc"))
-          }
-        }
+        (nodes must_== Vector(ab, abc, ad)) or
+        (nodes must_== Vector(abc, ab, ad))
       }
     }
 
