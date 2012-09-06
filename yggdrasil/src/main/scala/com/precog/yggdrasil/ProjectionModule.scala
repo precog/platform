@@ -12,6 +12,8 @@ trait ProjectionModule {
     def open(descriptor: ProjectionDescriptor): IO[Projection]
 
     def close(p: Projection): IO[Unit]
+
+    def archive(p: Projection): IO[Boolean]
   }
 }
 

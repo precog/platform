@@ -99,7 +99,7 @@ object SBTConsole {
       def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
     }
 
-    class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
+    class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
       val accessControl = new UnlimitedAccessControl[Future]()
     }
 
@@ -108,6 +108,7 @@ object SBTConsole {
     object Projection extends JDBMProjectionCompanion {
       val fileOps = FilesystemFileOps
       def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+      def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
     }
 
     def eval(str: String): Set[SValue] = evalE(str)  match {

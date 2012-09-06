@@ -599,7 +599,7 @@ trait EvalStackSpecs extends Specification {
       val results = eval(input)
 
       results must haveSize(0)
-    }.pendingUntilFixed
+    }
 
     "deref an object with a where" in {
       val input = """
@@ -609,7 +609,7 @@ trait EvalStackSpecs extends Specification {
       val results = eval(input)
 
       results must haveSize(0)
-    }.pendingUntilFixed
+    }
 
     "evaluate rank" >> {
       "of the product of two sets" >> {
@@ -1069,7 +1069,7 @@ trait EvalStackSpecs extends Specification {
 
           val result = eval(input)
           result must haveSize(5)
-      }.pendingUntilFixed
+      }
       
       "should merge objects without timing out" >> {
         val input = """
