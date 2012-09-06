@@ -29,7 +29,11 @@ import yggdrasil.table._
 import com.precog.util.IdGen
 import com.precog.util._
 
+import org.apache.commons.collections.primitives.ArrayIntList
+
 import scala.collection.BitSet
+
+import blueeyes.json._
 
 import scalaz._
 import scalaz.std.anyVal._
@@ -41,7 +45,7 @@ import scalaz.syntax.monad._
 import scalaz.syntax.std.option._
 import scalaz.syntax.std.boolean._
 
-import org.apache.commons.collections.primitives.ArrayIntList
+import TableModule._
 
 trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalOperations with Evaluator[M] {
   import trans._
@@ -76,7 +80,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           middleValue map { _.transform(trans.DerefObjectStatic(Leaf(Source), paths.Value)) }
         }
       } yield {
-        val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+        val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
         val valueTable = median.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
         
         valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
@@ -164,7 +168,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
     def extract(res: Result): Table = {
       val setC = res map CNum.apply
-      ops.constDecimal(setC)
+      Table.constDecimal(setC)
     }
 
     def apply(table: Table) = {
@@ -311,13 +315,13 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           val stdDev1 = sqrt(count * sumsq1 - sum1 * sum1) / count
           val stdDev2 = sqrt(count * sumsq2 - sum2 * sum2) / count
 
-          val resultTable = ops.constDecimal(Set(CNum(cov / (stdDev1 * stdDev2))))  //TODO the following lines are used throughout. refactor! 
+          val resultTable = Table.constDecimal(Set(CNum(cov / (stdDev1 * stdDev2))))  //TODO the following lines are used throughout. refactor! 
           val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
-          val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+          val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
-      } getOrElse ops.empty
+      } getOrElse Table.empty
     }
 
     def apply(table: Table) = table.reduce(reducer) map extract
@@ -459,13 +463,13 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         case (count, sum1, sum2, productSum) => {
           val cov = (productSum - ((sum1 * sum2) / count)) / count
 
-          val resultTable = ops.constDecimal(Set(CNum(cov)))
+          val resultTable = Table.constDecimal(Set(CNum(cov)))
           val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
-          val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+          val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
-      } getOrElse ops.empty
+      } getOrElse Table.empty
     }
 
     def apply(table: Table) = table.reduce(reducer) map extract
@@ -611,19 +615,19 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           val slope = cov / vari
           val yint = (sum2 / count) - (slope * (sum1 / count))
 
-          val constSlope = ops.constDecimal(Set(CNum(slope)))
-          val constIntercept = ops.constDecimal(Set(CNum(yint)))
+          val constSlope = Table.constDecimal(Set(CNum(slope)))
+          val constIntercept = Table.constDecimal(Set(CNum(yint)))
 
           val slopeSpec = trans.WrapObject(Leaf(SourceLeft), "slope")
           val yintSpec = trans.WrapObject(Leaf(SourceRight), "intercept")
           val concatSpec = trans.ObjectConcat(slopeSpec, yintSpec)
 
           val valueTable = constSlope.cross(constIntercept)(trans.WrapObject(concatSpec, paths.Value.name))
-          val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+          val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
-      } getOrElse ops.empty
+      } getOrElse Table.empty
     }
 
     def apply(table: Table) = {
@@ -816,19 +820,19 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           val slope = cov / vari
           val yint = (sum2 / count) - (slope * (sum1 / count))
 
-          val constSlope = ops.constDecimal(Set(CNum(slope)))
-          val constIntercept = ops.constDecimal(Set(CNum(yint)))
+          val constSlope = Table.constDecimal(Set(CNum(slope)))
+          val constIntercept = Table.constDecimal(Set(CNum(yint)))
 
           val slopeSpec = trans.WrapObject(Leaf(SourceLeft), "slope")
           val yintSpec = trans.WrapObject(Leaf(SourceRight), "intercept")
           val concatSpec = trans.ObjectConcat(slopeSpec, yintSpec)
 
           val valueTable = constSlope.cross(constIntercept)(trans.WrapObject(concatSpec, paths.Value.name))
-          val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+          val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
-      } getOrElse ops.empty
+      } getOrElse Table.empty
     }
 
     def apply(table: Table) = {
@@ -845,17 +849,24 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         type A = (Option[BigDecimal], BigDecimal)  // (value, count)
         val init = (None, BigDecimal(0))
 
-        def scan(a: A, col: Column, range: Range): (A, Option[Column]) = {
-          col match {
-            case lc: LongColumn => {
-              val filteredRange = range filter lc.isDefinedAt
-              val defined: BitSet = BitSet(filteredRange: _*)
+        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          val prioritized = cols.values filter {
+            case _: LongColumn | _: DoubleColumn | _: NumColumn => true
+            case _ => false
+          }
 
-              val ((finalValue, finalCount), acc) = filteredRange.foldLeft((a, new Array[BigDecimal](range.end))) {
-                case (((value, count), acc), i) => {
-                  if (value == None) {  //TODO best way to deal with the None case, which occurs only on the first fold
+          val filteredRange = range filter { i => prioritized exists { _ isDefinedAt i }}
+          val defined = BitSet(filteredRange: _*)
+          
+          val ((finalValue, finalCount), acc) = filteredRange.foldLeft((a, new Array[BigDecimal](range.end))) {
+            case (((value, count), acc), i) => {
+              val col = prioritized find { _ isDefinedAt i }
+
+              val acc2 = col map {
+                case lc: LongColumn => {
+                  if (value == None) {
                     acc(i) = 1
-                    ((Some(BigDecimal(lc(i))), 1), acc)
+                    ((Some(BigDecimal(lc(i))), BigDecimal(1)), acc)
                   } else if (Some(BigDecimal(lc(i))) == value) {
                     acc(i) = count
                     ((Some(BigDecimal(lc(i))), count), acc)
@@ -864,13 +875,36 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
                     ((Some(BigDecimal(lc(i))), count + 1), acc)
                   }
                 }
+                case nc: NumColumn => {
+                  if (value == None) {
+                    acc(i) = 1
+                    ((Some(nc(i)), BigDecimal(1)), acc)
+                  } else if (Some(nc(i)) == value) {
+                    acc(i) = count
+                    ((Some(nc(i)), count), acc)
+                  } else  {
+                    acc(i) = count + 1
+                    ((Some(nc(i)), count + 1), acc)
+                  }
+                }
+                case dc: DoubleColumn => {
+                  if (value == None) {
+                    acc(i) = 1
+                    ((Some(BigDecimal(dc(i))), BigDecimal(1)), acc)
+                  } else if (Some(BigDecimal(dc(i))) == value) {
+                    acc(i) = count
+                    ((Some(BigDecimal(dc(i))), count), acc)
+                  } else  {
+                    acc(i) = count + 1
+                    ((Some(BigDecimal(dc(i))), count + 1), acc)
+                  }
+                }
               }
-
-              ((finalValue, finalCount), Some(ArrayNumColumn(defined, acc)))
+              acc2 getOrElse ((value, count), acc)
             }
-
-          case _ => (a, None)
           }
+          
+          ((finalValue, finalCount), Map(ColumnRef(JPath.Identity, CNum) -> ArrayNumColumn(defined, acc)))
         }
       }
     }
@@ -898,32 +932,62 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         type A = (Option[BigDecimal], BigDecimal, BigDecimal)  // (value, countEach, countTotal)
         val init = (None, BigDecimal(0), BigDecimal(0))
 
-        def scan(a: A, col: Column, range: Range): (A, Option[Column]) = {
-          col match {
-            case lc: LongColumn => {
-              val filteredRange = range filter lc.isDefinedAt
-              val defined: BitSet = BitSet(filteredRange: _*)
+        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          val prioritized = cols.values filter {
+            case _: LongColumn | _: DoubleColumn | _: NumColumn => true
+            case _ => false
+          }
 
-              val ((finalValue, finalCountEach, finalCountTotal), acc) = filteredRange.foldLeft((a, new Array[BigDecimal](range.end))) {
-                case (((value, countEach, countTotal), acc), i) => {
-                  if (value == None) {  //TODO best way to deal with the None case, which occurs only on the first fold
+          val filteredRange = range filter { i => prioritized exists { _ isDefinedAt i }}
+          val defined = BitSet(filteredRange: _*)
+
+          val ((finalValue, finalCountEach, finalCountTotal), acc) = filteredRange.foldLeft((a, new Array[BigDecimal](range.end))) {
+            case (((value, countEach, countTotal), acc), i) => {
+              val col = prioritized find { _ isDefinedAt i }
+             
+              val acc2 = col map {
+                case lc: LongColumn => {
+                  if (value == None) {
                     acc(i) = 1
-                    ((Some(BigDecimal(lc(i))), 1, 1), acc)
+                    ((Some(BigDecimal(lc(i))), BigDecimal(1), BigDecimal(1)), acc)
                   } else if (Some(BigDecimal(lc(i))) == value) {
                     acc(i) = countTotal
                     ((Some(BigDecimal(lc(i))), countEach + 1, countTotal), acc)
                   } else  {
                     acc(i) = countEach + countTotal
-                    ((Some(BigDecimal(lc(i))), 1, countEach + countTotal), acc)
+                    ((Some(BigDecimal(lc(i))), BigDecimal(1), countEach + countTotal), acc)
+                  }
+                }
+                case nc: NumColumn => {
+                  if (value == None) {
+                    acc(i) = 1
+                    ((Some(nc(i)), BigDecimal(1), BigDecimal(1)), acc)
+                  } else if (Some(nc(i)) == value) {
+                    acc(i) = countTotal
+                    ((Some(nc(i)), countEach + 1, countTotal), acc)
+                  } else  {
+                    acc(i) = countEach + countTotal
+                    ((Some(nc(i)), BigDecimal(1), countEach + countTotal), acc)
+                  }
+                }
+                case dc: DoubleColumn => {
+                  if (value == None) {
+                    acc(i) = 1
+                    ((Some(BigDecimal(dc(i))), BigDecimal(1), BigDecimal(1)), acc)
+                  } else if (Some(BigDecimal(dc(i))) == value) {
+                    acc(i) = countTotal
+                    ((Some(BigDecimal(dc(i))), countEach + 1, countTotal), acc)
+                  } else  {
+                    acc(i) = countEach + countTotal
+                    ((Some(BigDecimal(dc(i))), BigDecimal(1), countEach + countTotal), acc)
                   }
                 }
               }
-
-              ((finalValue, finalCountEach, finalCountTotal), Some(ArrayNumColumn(defined, acc)))
+              acc2 getOrElse ((value, countEach, countTotal), acc)
             }
-
-          case _ => (a, None)
           }
+
+          ((finalValue, finalCountEach, finalCountTotal), Map(ColumnRef(JPath.Identity, CNum) -> ArrayNumColumn(defined, acc)))
         }
       }
     }

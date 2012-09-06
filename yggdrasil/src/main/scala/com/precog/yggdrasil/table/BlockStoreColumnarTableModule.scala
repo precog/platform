@@ -32,8 +32,10 @@ import blueeyes.json.{JPath,JPathField,JPathIndex}
 
 import java.io.File
 import java.util.SortedMap
+import java.util.Comparator
 
 import org.apache.jdbm.DBMaker
+import org.apache.jdbm.DB
 
 import com.weiglewilczek.slf4s.Logger
 
@@ -45,23 +47,32 @@ import scalaz.std.stream._
 import scalaz.syntax.monad._
 import scalaz.syntax.monoid._
 import scalaz.syntax.traverse._
+import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.stream._
 import scala.annotation.tailrec
 import scala.collection.mutable
 
+import TableModule._
 trait BlockStoreColumnarTableModule[M[+_]] extends
   ColumnarTableModule[M] with
   StorageModule[M] with
   IdSourceScannerModule[M] { self =>
+
+  import trans._
+  import TransSpec.deepMap
+  import SliceTransform._
+  import BlockStoreColumnarTableModule._
     
   override type UserId = String
   type Key
   type Projection <: BlockProjectionLike[Key, Slice]
+  type TableCompanion <: BlockStoreColumnarTableCompanion
+
   type BD = BlockProjectionData[Key,Slice]
   
   def newMemoContext = new MemoContext
   
-  class MemoContext extends MemoizationContext{
+  class MemoContext extends MemoizationContext {
     import trans._
     
     private val memoCache = mutable.HashMap.empty[MemoId, M[Table]]
@@ -113,258 +124,559 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       }
   }
 
-  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
-    import trans._
-
-    /** 
-     * Determine the set of all projections that could potentially provide columns
-     * representing the requested dataset.
-     */
-    def loadable(metadataView: StorageMetadata[M], path: Path, prefix: JPath, jtpe: JType): M[Set[ProjectionDescriptor]] = {
-      jtpe match {
-        case p: JPrimitiveType => ctypes(p).map(metadataView.findProjections(path, prefix, _)).sequence map {
-          sources => 
-            sources flatMap { source => source.keySet }
-        }
-
-        case JArrayFixedT(elements) =>
-          if (elements.isEmpty) {
-            metadataView.findProjections(path, prefix, CEmptyArray) map { _.keySet }
-          } else {
-            (elements map { case (i, jtpe) => loadable(metadataView, path, prefix \ i, jtpe) } toSet).sequence map { _.flatten }
-          }
-
-        case JArrayUnfixedT =>
-          metadataView.findProjections(path, prefix) map { sources =>
-            sources.keySet filter { 
-              _.columns exists { 
-                case ColumnDescriptor(`path`, selector, _, _) => 
-                  (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathIndex])
-              }
-            }
-          }
-
-        case JObjectFixedT(fields) =>
-          if (fields.isEmpty) {
-            metadataView.findProjections(path, prefix, CEmptyObject) map { _.keySet }
-          } else {
-            (fields map { case (n, jtpe) => loadable(metadataView, path, prefix \ n, jtpe) } toSet).sequence map { _.flatten }
-          }
-
-        case JObjectUnfixedT =>
-          metadataView.findProjections(path, prefix) map { sources =>
-            sources.keySet filter { 
-              _.columns exists { 
-                case ColumnDescriptor(`path`, selector, _, _) => 
-                  (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathField])
-              }
-            }
-          }
-
-        case JUnionT(tpe1, tpe2) =>
-          (Set(loadable(metadataView, path, prefix, tpe1), loadable(metadataView, path, prefix, tpe2))).sequence map { _.flatten }
-      }
-    }
-
+  private class MergeEngine[KeyType, BlockData <: BlockProjectionData[KeyType, Slice]] {
     /**
-     * Find the minimal set of projections (and the relevant columns from each projection) that
-     * will be loaded to provide a dataset of the specified type.
+     * A wrapper for a slice, and the function required to get the subsequent
+     * block of data.
      */
-    def minimalCover(tpe: JType, descriptors: Set[ProjectionDescriptor]): Map[ProjectionDescriptor, Set[ColumnDescriptor]] = {
-      @inline @tailrec
-      def cover0(uncovered: Set[ColumnDescriptor], unused: Map[ProjectionDescriptor, Set[ColumnDescriptor]], covers: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Map[ProjectionDescriptor, Set[ColumnDescriptor]] = {
-        if (uncovered.isEmpty) {
-          covers
+    case class Cell(index: Int, maxKey: KeyType, slice0: Slice)(succ0: KeyType => M[Option[BlockData]]) {
+      val uuid = java.util.UUID.randomUUID()
+      private val remap = new Array[Int](slice0.size)
+      var position: Int = 0
+
+      def succ: M[Option[Cell]] = {
+        for (blockOpt <- succ0(maxKey)) yield {
+          blockOpt map { block => 
+            Cell(index, block.maxKey, block.data)(succ0) 
+          }
+        }
+      }
+
+      def advance(i: Int): Boolean = {
+        if (position < slice0.size) {
+          remap(position) = i
+          position += 1
+        }
+        
+        position < slice0.size
+      }
+
+      def slice = {
+        slice0.sparsen(remap, if (position > 0) remap(position - 1) + 1 else 0)
+      }
+
+      def split: (Slice, Cell) = {
+        val (finished, continuing) = slice0.split(position)
+        if (position == 0) {
+          // If we never read from the slice, just return an empty slice and ourself 
+          (finished, Cell(index, maxKey, continuing)(succ0))
         } else {
-          val (b0, covered) = unused map { case (b, dcols) => (b, dcols & uncovered) } maxBy { _._2.size } 
-          cover0(uncovered &~ covered, unused - b0, covers + (b0 -> covered))
+          (finished.sparsen(remap, remap(position - 1) + 1), Cell(index, maxKey, continuing)(succ0)) 
         }
       }
-
-      cover0(
-        descriptors.flatMap(_.columns.toSet) filter { cd => includes(tpe, cd.selector, cd.valueType) }, 
-        descriptors map { b => (b, b.columns.toSet) } toMap, 
-        Map.empty)
     }
 
-    class MergeEngine[KeyType,BlockData <: BlockProjectionData[KeyType,Slice]] {
-      /**
-       * A wrapper for a slice, and the function required to get the subsequent
-       * block of data.
-       */
-      case class Cell(index: Int, maxKey: KeyType, slice0: Slice)(succ0: KeyType => M[Option[BlockData]]) {
-        val uuid = java.util.UUID.randomUUID()
-        private val remap = new Array[Int](slice0.size)
-        var position: Int = 0
+    sealed trait CellMatrix { self => 
+      def cells: Iterable[Cell]
+      def compare(cl: Cell, cr: Cell): Ordering
+      def refresh(index: Int, succ: M[Option[Cell]]): M[CellMatrix]
 
-        def succ: M[Option[Cell]] = {
-          for (blockOpt <- succ0(maxKey)) yield {
-            blockOpt map { block => 
-              Cell(index, block.maxKey, block.data)(succ0) 
-            }
+      implicit lazy val ordering = new scala.math.Ordering[Cell] {
+        def compare(c1: Cell, c2: Cell) = self.compare(c1, c2).toInt
+      }
+    }
+
+    object CellMatrix {
+      def apply(initialCells: Set[Cell])(keyf: Slice => List[ColumnRef]): CellMatrix = {
+        val size = initialCells.size
+
+        type ComparatorMatrix = Array[Array[RowComparator]]
+        def fillMatrix(initialCells: Set[Cell]): ComparatorMatrix = {
+          val comparatorMatrix = Array.ofDim[RowComparator](initialCells.size, initialCells.size)
+
+          for (Cell(i, _, s) <- initialCells; Cell(i0, _, s0) <- initialCells if i != i0) { 
+            comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf) 
           }
+
+          comparatorMatrix
         }
 
-        def advance(i: Int): Boolean = {
-          if (position < slice0.size) {
-            remap(position) = i
-            position += 1
-          }
-          
-          position < slice0.size
-        }
-  
-        def slice = {
-          slice0.sparsen(remap, if (position > 0) remap(position - 1) + 1 else 0)
-        }
-  
-        def split: (Slice, Cell) = {
-          val (finished, continuing) = slice0.split(position)
-          if (position == 0) {
-            // If we never read from the slice, just return an empty slice and ourself 
-            (finished, Cell(index, maxKey, continuing)(succ0))
-          } else {
-            (finished.sparsen(remap, remap(position - 1) + 1), Cell(index, maxKey, continuing)(succ0)) 
-          }
-        }
-      }
-  
-      sealed trait CellMatrix { self => 
-        def cells: Iterable[Cell]
-        def compare(cl: Cell, cr: Cell): Ordering
-        def refresh(index: Int, succ: M[Option[Cell]]): M[CellMatrix]
-  
-        implicit lazy val ordering = new scala.math.Ordering[Cell] {
-          def compare(c1: Cell, c2: Cell) = self.compare(c1, c2).toInt
-        }
-      }
-  
-      object CellMatrix {
-        def apply(initialCells: Set[Cell])(keyf: Slice => List[ColumnRef]): CellMatrix = {
-          val size = initialCells.size
-  
-          type ComparatorMatrix = Array[Array[RowComparator]]
-          def fillMatrix(initialCells: Set[Cell]): ComparatorMatrix = {
-            val comparatorMatrix = Array.ofDim[RowComparator](initialCells.size, initialCells.size)
-  
-            for (Cell(i, _, s) <- initialCells; Cell(i0, _, s0) <- initialCells if i != i0) { 
-              comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf) 
-            }
-  
-            comparatorMatrix
-          }
-  
-          new CellMatrix { self =>
-            private[this] val allCells: mutable.Map[Int, Cell] = initialCells.map(c => (c.index, c))(collection.breakOut)
-            private[this] val comparatorMatrix = fillMatrix(initialCells)
-  
-            def cells = allCells.values
-  
-            def compare(cl: Cell, cr: Cell): Ordering = {
-              comparatorMatrix(cl.index)(cr.index).compare(cl.position, cr.position)
-            }
-  
-            def refresh(index: Int, succ: M[Option[Cell]]): M[CellMatrix] = {
-              succ map {
-                case Some(c @ Cell(i, _, s)) => 
-                  allCells += (i -> c)
-  
-                  for ((_, Cell(i0, _, s0)) <- allCells if i0 != i) {
-                    comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf) 
-                    comparatorMatrix(i0)(i) = Slice.rowComparatorFor(s0, s)(keyf)
-                  }
-  
-                  self
-                  
-                case None => 
-                  allCells -= index
-  
-                  // this is basically so that we'll fail fast if something screwy happens
-                  for ((_, Cell(i0, _, s0)) <- allCells if i0 != index) {
-                    comparatorMatrix(index)(i0) = null
-                    comparatorMatrix(i0)(index) = null
-                  }
-  
-                  self
-              }
-            }
-          }
-        }
-      }
+        new CellMatrix { self =>
+          private[this] val allCells: mutable.Map[Int, Cell] = initialCells.map(c => (c.index, c))(collection.breakOut)
+          private[this] val comparatorMatrix = fillMatrix(initialCells)
 
-      def mergeProjections(cellsM: Set[M[Option[Cell]]], invert: Boolean = false)(keyf: Slice => List[ColumnRef]): M[Table] = {
-        for (cells <- cellsM.sequence.map(_.flatten)) yield {
-          val cellMatrix = CellMatrix(cells)(keyf)
-  
-          table(
-            StreamT.unfoldM[M, Slice, mutable.PriorityQueue[Cell]](mutable.PriorityQueue(cells.toSeq: _*)(if (invert) cellMatrix.ordering.reverse else cellMatrix.ordering)) { queue =>
-  
-              // dequeues all equal elements from the head of the queue
-              @inline @tailrec def dequeueEqual(cells: List[Cell]): List[Cell] = {
-                if (queue.isEmpty) cells
-                else if (cells.isEmpty || cellMatrix.compare(queue.head, cells.head) == EQ) dequeueEqual(queue.dequeue() :: cells)
-                else cells
-              }
-  
-              // consume as many records as possible
-              @inline @tailrec def consumeToBoundary(idx: Int): (Int, List[Cell]) = {
-                val cellBlock = dequeueEqual(Nil)
+          def cells = allCells.values
+
+          def compare(cl: Cell, cr: Cell): Ordering = {
+            comparatorMatrix(cl.index)(cr.index).compare(cl.position, cr.position)
+          }
+
+          def refresh(index: Int, succ: M[Option[Cell]]): M[CellMatrix] = {
+            succ map {
+              case Some(c @ Cell(i, _, s)) => 
+                allCells += (i -> c)
+
+                for ((_, Cell(i0, _, s0)) <- allCells if i0 != i) {
+                  comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf) 
+                  comparatorMatrix(i0)(i) = Slice.rowComparatorFor(s0, s)(keyf)
+                }
+
+                self
                 
-                if (cellBlock.isEmpty) {
-                  // At the end of data, since this will only occur if nothing remains in the priority queue
-                  (idx, Nil)
-                } else {
-                  val (continuing, expired) = cellBlock partition { _.advance(idx) }
-                  queue.enqueue(continuing: _*)
-  
-                  if (expired.isEmpty) consumeToBoundary(idx + 1) else (idx + 1, expired)
-                }
-              }
-  
-              val (finishedSize, expired) = consumeToBoundary(0)
-              if (expired.isEmpty) {
-                M.point(None)
-              } else {
-                val completeSlices = expired.map(_.slice)
+              case None => 
+                allCells -= index
 
-                val (prefixes, suffixes) = queue.dequeueAll.map(_.split).unzip
-
-                val emission = new Slice {
-                  val size = finishedSize
-                  val columns: Map[ColumnRef, Column] = {
-                    (completeSlices.flatMap(_.columns) ++ prefixes.flatMap(_.columns)).groupBy(_._1).map {
-                      case (ref, columns) => {
-                        val cp: Pair[ColumnRef, Column] = if (columns.size == 1) {
-                          columns.head
-                        } else {
-                          (ref, ArraySetColumn(ref.ctype, columns.map(_._2).toArray))
-                        }
-                        cp
-                      }
-                    }
-                  } 
+                // this is basically so that we'll fail fast if something screwy happens
+                for ((_, Cell(i0, _, s0)) <- allCells if i0 != index) {
+                  comparatorMatrix(index)(i0) = null
+                  comparatorMatrix(i0)(index) = null
                 }
 
-                val updatedMatrix = expired.foldLeft(M.point(cellMatrix)) {
-                  case (matrixM, cell) => matrixM.flatMap(_.refresh(cell.index, cell.succ))
-                }
-  
-                val updatedMatrix0 = suffixes.foldLeft(updatedMatrix) {
-                  case (matrixM, cell) => matrixM.flatMap(_.refresh(cell.index, M.point(Some(cell))))
-                }
-  
-                updatedMatrix0 map { matrix => 
-                  val queue0 = mutable.PriorityQueue(matrix.cells.toSeq: _*)(matrix.ordering)
-                  Some((emission, queue0))
-                }
-              }
+                self
             }
-          )
+          }
         }
       }
     }
 
-    private object loadMergeEngine extends MergeEngine[Key,BD]
+    def mergeProjections(cellsM: Set[M[Option[Cell]]], invert: Boolean = false)(keyf: Slice => List[ColumnRef]): M[Table] = {
+      for (cells <- cellsM.sequence.map(_.flatten)) yield {
+        val cellMatrix = CellMatrix(cells)(keyf)
+
+        Table(
+          StreamT.unfoldM[M, Slice, mutable.PriorityQueue[Cell]](mutable.PriorityQueue(cells.toSeq: _*)(if (invert) cellMatrix.ordering.reverse else cellMatrix.ordering)) { queue =>
+
+            // dequeues all equal elements from the head of the queue
+            @inline @tailrec def dequeueEqual(cells: List[Cell]): List[Cell] = {
+              if (queue.isEmpty) cells
+              else if (cells.isEmpty || cellMatrix.compare(queue.head, cells.head) == EQ) dequeueEqual(queue.dequeue() :: cells)
+              else cells
+            }
+
+            // consume as many records as possible
+            @inline @tailrec def consumeToBoundary(idx: Int): (Int, List[Cell]) = {
+              val cellBlock = dequeueEqual(Nil)
+              
+              if (cellBlock.isEmpty) {
+                // At the end of data, since this will only occur if nothing remains in the priority queue
+                (idx, Nil)
+              } else {
+                val (continuing, expired) = cellBlock partition { _.advance(idx) }
+                queue.enqueue(continuing: _*)
+
+                if (expired.isEmpty) consumeToBoundary(idx + 1) else (idx + 1, expired)
+              }
+            }
+
+            val (finishedSize, expired) = consumeToBoundary(0)
+            if (expired.isEmpty) {
+              M.point(None)
+            } else {
+              val completeSlices = expired.map(_.slice)
+
+              val (prefixes, suffixes) = queue.dequeueAll.map(_.split).unzip
+
+              val emission = new Slice {
+                val size = finishedSize
+                val columns: Map[ColumnRef, Column] = {
+                  (completeSlices.flatMap(_.columns) ++ prefixes.flatMap(_.columns)).groupBy(_._1).map {
+                    case (ref, columns) => {
+                      val cp: Pair[ColumnRef, Column] = if (columns.size == 1) {
+                        columns.head
+                      } else {
+                        (ref, ArraySetColumn(ref.ctype, columns.map(_._2).toArray))
+                      }
+                      cp
+                    }
+                  }
+                } 
+              }
+
+              val updatedMatrix = expired.foldLeft(M.point(cellMatrix)) {
+                case (matrixM, cell) => matrixM.flatMap(_.refresh(cell.index, cell.succ))
+              }
+
+              val updatedMatrix0 = suffixes.foldLeft(updatedMatrix) {
+                case (matrixM, cell) => matrixM.flatMap(_.refresh(cell.index, M.point(Some(cell))))
+              }
+
+              updatedMatrix0 map { matrix => 
+                val queue0 = mutable.PriorityQueue(matrix.cells.toSeq: _*)(matrix.ordering)
+                Some((emission, queue0))
+              }
+            }
+          }
+        )
+      }
+    }
+  }
+
+  trait BlockStoreColumnarTableCompanion extends ColumnarTableCompanion {
+    import SliceTransform._
+
+    type SortingKey = Array[Byte]
+    type SortBlockData = BlockProjectionData[SortingKey,Slice]
+
+    type IndexStore = SortedMap[SortingKey, Array[Byte]]
+    type IndexMap = Map[(Int, Array[ColumnRef], Array[ColumnRef]), SliceIndex]
+
+    private[BlockStoreColumnarTableModule] object loadMergeEngine extends MergeEngine[Key, BD]
+    private[BlockStoreColumnarTableModule] object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
+
+    case class SliceIndex(name: String, storage: IndexStore, keyComparator: Comparator[SortingKey], sortRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef])
+
+    def apply(slices: StreamT[M, Slice]) = new Table(slices)
+
+    def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = {
+      sealed trait AlignState
+      case class RunLeft(rightRow: Int, rightKey: Slice) extends AlignState
+      case class RunRight(leftRow: Int, leftKey: Slice) extends AlignState
+      case class FindEqualAdvancingRight(leftRow: Int, leftKey: Slice) extends AlignState
+      case class FindEqualAdvancingLeft(rightRow: Int, rightKey: Slice) extends AlignState
+
+      sealed trait Span
+      case object LeftSpan extends Span
+      case object RightSpan extends Span
+      case object NoSpan extends Span
+
+
+      sealed trait NextStep
+      case class MoreLeft(span: Span, leq: mutable.BitSet, ridx: Int, req: mutable.BitSet) extends NextStep
+      case class MoreRight(span: Span, lidx: Int, leq: mutable.BitSet, req: mutable.BitSet) extends NextStep
+
+
+      def writeStreams[A, B](dbFile: File, db: DB, 
+                             left: StreamT[M, Slice], leftKeyTrans: SliceTransform1[A],
+                             right: StreamT[M, Slice], rightKeyTrans: SliceTransform1[B],
+                             leftWriteState: WriteState, rightWriteState: WriteState): M[(Table, Table)] = {
+
+        // We will *always* have a lhead and rhead, because if at any point we run out of data,
+        // we'll still be hanging on to the last slice on the other side to use as the authority
+        // for equality comparisons
+        def step(state: AlignState, lhead: Slice, ltail: StreamT[M, Slice], leq: mutable.BitSet,
+                                    rhead: Slice, rtail: StreamT[M, Slice], req: mutable.BitSet,
+                                    lstate: A, rstate: B, 
+                                    leftWriteState: WriteState, rightWriteState: WriteState): M[(WriteState, WriteState)] = {
+
+          @tailrec def buildFilters(comparator: RowComparator, 
+                                    lidx: Int, lsize: Int, lacc: mutable.BitSet, 
+                                    ridx: Int, rsize: Int, racc: mutable.BitSet,
+                                    span: Span): NextStep = {
+
+            // todo: This is optimized for sparse alignments; if you get into an alignment
+            // where every pair is distinct and equal, you'll do 2*n comparisons.
+            // This should instead be optimized for dense alignments, using an algorithm that
+            // advances both sides after an equal, then backtracks on inequality
+            if (span eq LeftSpan) {
+              // We don't need to compare the index on the right, since it will be left unchanged
+              // throughout the time that we're advancing left, and even if it's beyond the end of
+              // input we can use the next-to-last element for comparison
+              
+              if (lidx < lsize) {
+                comparator.compare(lidx, ridx - 1) match {
+                  case EQ => 
+                    buildFilters(comparator, lidx + 1, lsize, lacc + lidx, ridx, rsize, racc, LeftSpan)
+                  case LT => 
+                    sys.error("Inputs to align are not correctly sorted.")
+                  case GT =>
+                    buildFilters(comparator, lidx, lsize, lacc, ridx, rsize, racc, NoSpan)
+                }
+              } else {
+                // left is exhausted in the midst of a span
+                MoreLeft(LeftSpan, lacc, ridx, racc)
+              }
+            } else {
+              if (lidx < lsize && ridx < rsize) {
+                comparator.compare(lidx, ridx) match {
+                  case EQ => 
+                    buildFilters(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc + ridx, RightSpan)
+                  case LT => 
+                    if (span eq RightSpan) {
+                      // drop into left spanning of equal
+                      buildFilters(comparator, lidx, lsize, lacc, ridx, rsize, racc, LeftSpan)
+                    } else {
+                      // advance the left in the not-left-spanning state
+                      buildFilters(comparator, lidx + 1, lsize, lacc, ridx, rsize, racc, NoSpan)
+                    }
+                  case GT =>
+                    if (span eq RightSpan) sys.error("Inputs to align are not correctly sorted")
+                    else buildFilters(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc, NoSpan)
+                }
+              } else if (lidx < lsize) {
+                // right is exhausted; span will be RightSpan or NoSpan
+                MoreRight(span, lidx, lacc, racc)
+              } else {
+                MoreLeft(NoSpan, lacc, ridx, racc)
+              }
+            }
+          }
+
+          def continue(nextStep: NextStep, comparator: RowComparator, lstate: A, lkey: Slice, rstate: B, rkey: Slice): M[(WriteState, WriteState)] = nextStep match {
+            case MoreLeft(span, leq, ridx, req) =>
+              val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size - 1, leq)))
+
+              @inline def next(lbs: WriteState, rbs: WriteState): M[(WriteState, WriteState)] = ltail.uncons flatMap {
+                case Some((lhead0, ltail0)) =>
+                  val nextState = (span: @unchecked) match {
+                    case NoSpan => FindEqualAdvancingLeft(ridx, rkey)
+                    case LeftSpan => RunLeft(ridx, rkey)
+                  }
+
+                  step(nextState, lhead0, ltail0, new mutable.BitSet(), rhead, rtail, req, lstate, rstate, lbs, rbs)
+                case None =>
+                  // done on left, and we're not in an equal span on the right (since LeftSpan can only
+                  // be emitted if we're not in a right span) so we're entirely done.
+                  val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size - 1, req))) 
+                  (remission map { e => writeSlice(db, e, rbs, SortAscending) } getOrElse rbs.point[M]) map { (lbs, _) }
+              }
+
+              lemission map { e => 
+                writeSlice(db, e, leftWriteState, SortAscending) flatMap { next(_: WriteState, rightWriteState) }
+              } getOrElse {
+                next(leftWriteState, rightWriteState)
+              }
+
+            case MoreRight(span, lidx, lex, req) =>
+              // if span == RightSpan and no more data exists on the right, we need to 
+              // continue in buildFilters spanning on the left.
+              val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size - 1, req)))
+
+              @inline def next(lbs: WriteState, rbs: WriteState): M[(WriteState, WriteState)] = rtail.uncons flatMap {
+                case Some((rhead0, rtail0)) => 
+                  val nextState = (span: @unchecked) match {
+                    case NoSpan => FindEqualAdvancingRight(lidx, lkey)
+                    case RightSpan => RunRight(lidx, lkey)
+                  }
+
+                  step(nextState, lhead, ltail, leq, rhead0, rtail0, new mutable.BitSet(), lstate, rstate, lbs, rbs)
+
+                case None =>
+                  // no need here to check for LeftSpan by the contract of buildFilters
+                  (span: @unchecked) match {
+                    case NoSpan => 
+                      // entirely done; just emit both 
+                      val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size -1, leq)))
+                      (lemission map { e => writeSlice(db, e, lbs, SortAscending) } getOrElse lbs.point[M]) map { (_, rbs) }
+
+                    case RightSpan => 
+                      // need to switch to left spanning in buildFilters
+                      val nextState = buildFilters(comparator, lidx, lhead.size, leq, rhead.size, rhead.size, req, LeftSpan)
+                      continue(nextState, comparator, lstate, lkey, rstate, rkey)
+                  }
+              }
+
+              remission map { e => 
+                writeSlice(db, e, rightWriteState, SortAscending) flatMap { next(leftWriteState, _: WriteState) }
+              } getOrElse {
+                next(leftWriteState, rightWriteState)
+              }
+          }
+
+
+          // this is an optimization that uses a preemptory comparison and a binary
+          // search to skip over big chunks of (or entire) slices if possible.
+          def findEqual(comparator: RowComparator, leftRow: Int, rightRow: Int): NextStep = {
+            comparator.compare(leftRow, rightRow) match {
+              case EQ => 
+                buildFilters(comparator, leftRow, lhead.size, leq, rightRow, rhead.size, req, NoSpan)
+
+              case LT => 
+                val leftIdx = comparator.nextLeftIndex(lhead.size - 1, lhead.size, 0, lhead.size - leftRow - 1)
+                if (leftIdx == lhead.size) {
+                  MoreLeft(NoSpan, leq, rightRow, req)
+                } else {
+                  buildFilters(comparator, leftIdx, lhead.size, leq, rightRow, rhead.size, req, NoSpan)
+                }
+            
+              case GT => 
+                val rightIdx = comparator.swap.nextLeftIndex(rhead.size - 1, rhead.size, 0, rhead.size - rightRow - 1)
+                if (rightIdx == rhead.size) {
+                  MoreRight(NoSpan, leftRow, leq, req)
+                } else {
+                  // do a binary search to find the indices where the comparison becomse LT or EQ
+                  buildFilters(comparator, leftRow, lhead.size, leq, rightIdx, rhead.size, req, NoSpan)
+                }
+            }
+          }
+
+          state match {
+            case FindEqualAdvancingRight(leftRow, lkey) => 
+              // whenever we drop into buildFilters in this case, we know that we will be neither
+              // in a left span nor a right span because we didn't have an equal case at the
+              // last iteration.
+
+              val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
+              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
+              
+              // do some preliminary comparisons to figure out if we even need to look at the current slice
+              val nextState = findEqual(comparator, leftRow, 0)
+              continue(nextState, comparator, lstate, lkey, nextB, rkey)    
+            
+            case FindEqualAdvancingLeft(rightRow, rkey) => 
+              // whenever we drop into buildFilters in this case, we know that we will be neither
+              // in a left span nor a right span because we didn't have an equal case at the
+              // last iteration.
+
+              val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
+              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
+              
+              // do some preliminary comparisons to figure out if we even need to look at the current slice
+              val nextState = findEqual(comparator, 0, rightRow)
+              continue(nextState, comparator, nextA, lkey, rstate, rkey)    
+            
+            case RunRight(leftRow, lkey) =>
+              val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
+              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }               
+
+              val nextState = buildFilters(comparator, leftRow, lhead.size, leq, 
+                                                       0, rhead.size, new mutable.BitSet(), RightSpan)
+
+              continue(nextState, comparator, lstate, lkey, nextB, rkey)
+            
+            case RunLeft(rightRow, rkey) =>
+              val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
+              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
+
+              val nextState = buildFilters(comparator, 0, lhead.size, new mutable.BitSet(), 
+                                                       rightRow, rhead.size, req, LeftSpan)
+
+              continue(nextState, comparator, nextA, lkey, rstate, rkey)
+          }
+        }
+        
+        left.uncons flatMap {
+          case Some((lhead, ltail)) =>
+            right.uncons.flatMap {
+              case Some((rhead, rtail)) =>
+                val (lstate, lkey) = leftKeyTrans(lhead)
+                val stepResult  = step(FindEqualAdvancingRight(0, lkey), 
+                                       lhead, ltail, new mutable.BitSet(),
+                                       rhead, rtail, new mutable.BitSet(),
+                                       lstate, rightKeyTrans.initial, 
+                                       leftWriteState, rightWriteState)
+
+                for {
+                  backingStates <- stepResult
+                  ltable <- loadTable(dbFile, sortMergeEngine, backingStates._1.indices, SortAscending)
+                  rtable <- loadTable(dbFile, sortMergeEngine, backingStates._2.indices, SortAscending)
+                } yield (ltable, rtable)
+
+              case None =>
+                (Table.empty, Table.empty).point[M]
+            }
+
+          case None =>
+            (Table.empty, Table.empty).point[M]
+        }
+      }
+
+      val dbFile = new File(newScratchDir(), "alignSpace")
+      val backingDb = DBMaker.openFile(dbFile.getCanonicalPath).make()
+      val sourceTrans = composeSliceTransform(Leaf(Source))
+
+      // We need some id that can be used to memoize then load table for each side.
+      // FIXME: Add correct key trans.
+      val leftWriteState = WriteState(Map(), 0, sourceTrans, List())
+      val rightWriteState = WriteState(Map(), 0, sourceTrans, List())
+
+      writeStreams(dbFile, backingDb, 
+                   sourceLeft.slices, composeSliceTransform(alignOnL), 
+                   sourceRight.slices, composeSliceTransform(alignOnR), 
+                   leftWriteState, rightWriteState)
+    }
+
+    case class WriteState(indices: IndexMap, insertCount: Long, valueTrans: SliceTransform1[_], keyTransforms: Seq[SliceTransform1[_]])
+
+    def writeTables(db: DB, slices: StreamT[M, Slice], valueTrans: SliceTransform1[_], keyTrans: Seq[SliceTransform1[_]], sortOrder: DesiredSortOrder): M[IndexMap] = {
+      def write0(slices: StreamT[M, Slice], state: WriteState): M[IndexMap] = {
+        slices.uncons flatMap {
+          case Some((slice, tail)) => 
+            writeSlice(db, slice, state, sortOrder) flatMap { write0(tail, _) }
+
+          case None => 
+            M.point {
+              db.close() // No more slices, close out the JDBM database
+              state.indices
+            }
+        }
+      }
+
+      write0(slices, WriteState(Map.empty, 0l, valueTrans, keyTrans))
+    }
+
+    def writeSlice(db: DB, slice: Slice, state: WriteState, sortOrder: DesiredSortOrder): M[WriteState] = M.point {
+      val WriteState(indices, insertCount, valueTrans, keyTrans) = state
+
+      val (valueTrans0, vslice) = valueTrans.advance(slice)
+      val (vColumnRefs, vColumns) = vslice.columns.toSeq.sortBy(_._1).unzip
+      val dataRowFormat = RowFormat.forValues(vColumnRefs)
+      val dataColumnEncoder = dataRowFormat.ColumnEncoder(vColumns)
+
+      val (indices0, insertCount0, keyTrans0) = keyTrans.zipWithIndex.foldLeft((indices, insertCount, List.empty[SliceTransform1[_]])) { 
+        case ((indices, insertCount, newTransforms), (keyTransform, i)) =>
+          val (nextKeyTransform, keySlice) = keyTransform.advance(slice)
+          
+          val (keyColumnRefs, keyColumns) = keySlice.columns.toSeq.sortBy(_._1).unzip
+          val keyRowFormat = RowFormat.forValues(keyColumnRefs)
+          val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
+          val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
+
+          val indexMapKey = (i, keyColumnRefs.toArray, vColumnRefs.toArray)
+
+          val (index, newIndices) = indices.get(indexMapKey) map { (_, indices) } getOrElse {
+            val indexName = i + "-" + indexMapKey.toString
+            val newIndex = SliceIndex(indexName,
+                                      db.createTreeMap(indexName, keyComparator, null, null), // nulls indicate to use default serialization for Array[Byte] 
+                                      keyComparator,
+                                      keyColumnRefs,
+                                      vColumnRefs)
+
+            (newIndex, indices + (indexMapKey -> newIndex))
+          }
+
+          // Iterate over the slice, storing each row
+          @tailrec
+          // FIXME: This may not actually be tail recursive!
+          // FIXME: Determine whether undefined sort keys are valid
+          def storeRow(storage: IndexStore, row: Int, insertCount: Long): Long = {
+            if (row < vslice.size) {
+              if (vslice.isDefinedAt(row)) {
+                storage.put(keyColumnEncoder.encodeFromRow(row), dataColumnEncoder.encodeFromRow(row))
+
+                if (insertCount % jdbmCommitInterval == 0 && insertCount > 0) db.commit()
+                storeRow(storage, row + 1, insertCount + 1)
+              } else {
+                storeRow(storage, row + 1, insertCount)
+              }
+            } else {
+              insertCount
+            }
+          }
+
+          (newIndices, storeRow(index.storage, 0, insertCount), nextKeyTransform +: newTransforms)
+      }
+
+      WriteState(indices0, insertCount0, valueTrans0, keyTrans0)
+    }
+
+    def loadTable(dbFile: File, mergeEngine: MergeEngine[SortingKey, SortBlockData], indices: IndexMap, sortOrder: DesiredSortOrder): M[Table] = {
+      import mergeEngine._
+
+      // Map the distinct indices into SortProjections/Cells, then merge them
+      val cells: Set[M[Option[Cell]]] = (indices.values.zipWithIndex map {
+        case (SliceIndex(name, _, keyComparator, keyColumns, valColumns), index) => 
+          val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns) {
+            def keyOrder: Order[SortingKey] = 
+              scalaz.Order.fromScalaOrdering(scala.math.Ordering.comparatorToOrdering(keyComparator))
+          }
+
+          val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
+          succ(None) map { 
+            _ map { nextBlock => Cell(index, nextBlock.maxKey, nextBlock.data) { k => succ(Some(k)) } }
+          }
+      })(collection.breakOut)
+
+      mergeProjections(cells, sortOrder.isAscending) { slice => 
+        // only need to compare on the group keys (0th element of resulting table) between projections
+        slice.columns.keys.collect({ case ref @ ColumnRef(JPath(JPathIndex(0), _ @ _*), _) => ref}).toList.sorted
+      }
+    }
+  }
+
+  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+    import Table._
+    import SliceTransform._
+    import trans._
 
     def load(uid: UserId, tpe: JType): M[Table] = {
       import loadMergeEngine._
@@ -406,132 +718,117 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       } yield result
     }
 
-    private type SortBlockData = BlockProjectionData[SortingKey,Slice]
-    private object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
-
     /**
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = {
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder).map(_.head)
+
+    override def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = {
       import sortMergeEngine._
-      import TableModule.paths._
-
-      // Bookkeeping types/case classes
-      type IndexStore = SortedMap[SortingKey,Array[Byte]]
-      case class SliceIndex(name: String, storage: IndexStore, sortRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef])
-
-      // Map a set of slice columns to a given JDBM DB index, since each slice could vary in column formats, names, etc
-      type IndexMap = Map[Seq[ColumnRef], SliceIndex]
-
-      case class SortOutput(indices: IndexMap, idCount: Int, globalId: Long)
-
-      // We use the sort transspec1 to compute a new table with a combination of the 
-      // original data and the new sort columns, referenced under the sortkey namespace
-      val tableWithSortKey = transform(ObjectConcat(Leaf(Source), WrapObject(sortKey, SortKey.name)))
 
       // Open a JDBM3 DB for use in sorting under a temp directory
-      val dbFile = new File(newScratchDir(), "sortspace")
-      val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
+      val dbFile = new File(newScratchDir(), "groupByNSpace")
 
-      val codec = new ColumnCodec()
-      
-      // Insert slice data based on columndescriptors
-      val inputOp: M[SortOutput] = tableWithSortKey.slices.foldLeft(SortOutput(Map.empty, 0, 0l)) { case (SortOutput(indices, _, nextId), slice) => {
-        def columnsByPrefix(prefix: JPath): List[(ColumnRef,Column)] = slice.columns.collect {
-          // The conditional guarantees that dropPrefix will return Some
-          case (ColumnRef(selector, tpe), col) if selector.hasPrefix(prefix) => (ColumnRef(selector.dropPrefix(prefix).get, tpe), col)
-        }.toList
-
-        val dataColumns = columnsByPrefix(JPath(Value))
-        val idColumns   = columnsByPrefix(JPath(Key))
-        val sortColumns = columnsByPrefix(JPath(SortKey))
-        val indexMapKey = (sortColumns ++ dataColumns).map(_._1).toSeq
-
-        val (index, newIndices) = indices.get(indexMapKey).map((_,indices)).getOrElse {
-          val newIndex = SliceIndex(indexMapKey.toString,
-                                    DB.createTreeMap(indexMapKey.toString, 
-                                                     SortingKeyComparator(sortOrder.isAscending),
-                                                     SortingKeySerializer(idColumns.size),
-                                                     null /* Use default serialization */),
-                                    sortColumns.map(_._1),
-                                    dataColumns.map(_._1))
-
-          (newIndex, indices + (indexMapKey -> newIndex))
-        }
-        
-        // Iterate over the slice
-        //TODO why doesn't this work with a tailrec?
-        var row = 0
-        var globalId = nextId
-
-        while (row < slice.size) {
-          val identities = VectorCase(idColumns.map(_._2.asInstanceOf[LongColumn].apply(row)) : _*)
-
-          if (dataColumns.exists(_._2.isDefinedAt(row))) {
-            try {
-              index.storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
-            } catch {
-              case t: Throwable => println("Error on storeRow: " + t); throw t
-            }
-
-            if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
-              DB.commit()
-            }
-            globalId += 1
+      val sliceGlobalIdTrans = Scan(
+        WrapArray(Leaf(Source)), 
+        new CScanner {
+          type A = Long
+          val init = 0l
+          def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+            val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
+            (a + range.end + 1, cols + (ColumnRef(JPath(JPathIndex(1)), CLong) -> globalIdColumn))
           }
-          row += 1
         }
-
-        SortOutput(newIndices, idColumns.size, globalId)
-      }}.map {
-        case output @ SortOutput(indices, idCount, lastId) => {
-          DB.close()
-          output
-        }
-      }
-
-      // A little ugly, but getting this implicitly seemed a little crazy
-      val sortingKeyOrder: Order[SortingKey] = scalaz.Order.fromScalaOrdering(
-        scala.math.Ordering.comparatorToOrdering(
-          SortingKeyComparator(sortOrder.isAscending)
-        )
       )
 
+      val groupKeysWithGlobal = groupKeys map { kt => ArrayConcat(WrapArray(deepMap(kt) { case Leaf(_) => TransSpec1.DerefArray0 }), TransSpec1.DerefArray1) }
 
-      // Merge the resulting slice indices back together
-      inputOp.flatMap { 
-        case SortOutput(_, _, 0l) => {
-          // We've been asked to sort an empty table. Return the input
-          M.point(this)
-        }
-        case SortOutput(indices, idCount, _) => {
-          // Map the distinct indices into SortProjections/Cells, then merge them
-          val cells: Set[M[Option[Cell]]] = indices.zipWithIndex.map {
-            case ((_, SliceIndex(name, _, sortColumns, valColumns)), index) => {
-              val sortProjection = new JDBMRawSortProjection(dbFile, name, idCount, sortColumns, valColumns) {
-                def keyOrder: Order[SortingKey] = sortingKeyOrder
-              }
+      for {
+        indices <-  writeTables(
+                      DBMaker.openFile(dbFile.getCanonicalPath).make(), 
+                      this.transform(sliceGlobalIdTrans).slices,
+                      composeSliceTransform(deepMap(valueSpec) { case Leaf(_) => TransSpec1.DerefArray0 }),
+                      groupKeysWithGlobal map composeSliceTransform,
+                      sortOrder)
 
-              val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
-
-              succ(None) map { 
-                _ map { nextBlock => Cell(index, nextBlock.maxKey, nextBlock.data) { k => succ(Some(k)) } }
-              }
-            }
-          }.toSet
-
-          mergeProjections(cells, sortOrder.isAscending) { slice => {
-            // ensure that sort keys compare before identities
-            slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(SortKey :: Nil) }).toList.sorted :::
-            slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(Key :: Nil) }).toList.sorted
-          }}
-        }
-      }
+        mergedProjections <- indices.groupBy(_._1._1).values.map(loadTable(dbFile, sortMergeEngine, _, sortOrder)).toStream.sequence
+      } yield mergedProjections
     }
   }
+} 
 
-  def table(slices: StreamT[M, Slice]) = new Table(slices)
+object BlockStoreColumnarTableModule {
+  /**
+   * Find the minimal set of projections (and the relevant columns from each projection) that
+   * will be loaded to provide a dataset of the specified type.
+   */
+  protected def minimalCover(tpe: JType, descriptors: Set[ProjectionDescriptor]): Map[ProjectionDescriptor, Set[ColumnDescriptor]] = {
+    @inline @tailrec
+    def cover0(uncovered: Set[ColumnDescriptor], unused: Map[ProjectionDescriptor, Set[ColumnDescriptor]], covers: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Map[ProjectionDescriptor, Set[ColumnDescriptor]] = {
+      if (uncovered.isEmpty) {
+        covers
+      } else {
+        val (b0, covered) = unused map { case (b, dcols) => (b, dcols & uncovered) } maxBy { _._2.size } 
+        cover0(uncovered &~ covered, unused - b0, covers + (b0 -> covered))
+      }
+    }
+
+    cover0(
+      descriptors.flatMap(_.columns.toSet) filter { cd => includes(tpe, cd.selector, cd.valueType) }, 
+      descriptors map { b => (b, b.columns.toSet) } toMap, 
+      Map.empty)
+  }
+
+  /** 
+   * Determine the set of all projections that could potentially provide columns
+   * representing the requested dataset.
+   */
+  protected def loadable[M[+_]: Monad](metadataView: StorageMetadata[M], path: Path, prefix: JPath, jtpe: JType): M[Set[ProjectionDescriptor]] = {
+    jtpe match {
+      case p: JPrimitiveType => ctypes(p).map(metadataView.findProjections(path, prefix, _)).sequence map {
+        sources => 
+          sources flatMap { source => source.keySet }
+      }
+
+      case JArrayFixedT(elements) =>
+        if (elements.isEmpty) {
+          metadataView.findProjections(path, prefix, CEmptyArray) map { _.keySet }
+        } else {
+          (elements map { case (i, jtpe) => loadable(metadataView, path, prefix \ i, jtpe) } toSet).sequence map { _.flatten }
+        }
+
+      case JArrayUnfixedT =>
+        metadataView.findProjections(path, prefix) map { sources =>
+          sources.keySet filter { 
+            _.columns exists { 
+              case ColumnDescriptor(`path`, selector, _, _) => 
+                (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathIndex])
+            }
+          }
+        }
+
+      case JObjectFixedT(fields) =>
+        if (fields.isEmpty) {
+          metadataView.findProjections(path, prefix, CEmptyObject) map { _.keySet }
+        } else {
+          (fields map { case (n, jtpe) => loadable(metadataView, path, prefix \ n, jtpe) } toSet).sequence map { _.flatten }
+        }
+
+      case JObjectUnfixedT =>
+        metadataView.findProjections(path, prefix) map { sources =>
+          sources.keySet filter { 
+            _.columns exists { 
+              case ColumnDescriptor(`path`, selector, _, _) => 
+                (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathField])
+            }
+          }
+        }
+
+      case JUnionT(tpe1, tpe2) =>
+        (Set(loadable(metadataView, path, prefix, tpe1), loadable(metadataView, path, prefix, tpe2))).sequence map { _.flatten }
+    }
+  }
 }
 
 // vim: set ts=4 sw=4 et:

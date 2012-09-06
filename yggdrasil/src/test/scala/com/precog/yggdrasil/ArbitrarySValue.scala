@@ -45,12 +45,25 @@ object CValueGenerators {
 
 trait CValueGenerators extends ArbitraryBigDecimal {
   import CValueGenerators._
+  
+  def inferSchema(data: Seq[JValue]): JSchema = {
+    if (data.isEmpty) {
+      Seq.empty
+    } else {
+      val current = data.head.flattenWithPath flatMap {
+        case (path, jv) =>
+          CType.forJValue(jv) map { ct => (path, ct) }
+      }
+      
+      (current ++ inferSchema(data.tail)).distinct
+    }
+  }
 
   def schema(depth: Int): Gen[JSchema] = {
     if (depth <= 0) leafSchema
     else oneOf(1, 2, 3) flatMap {
       case 1 => objectSchema(depth, choose(1, 3))
-      case 2 => arraySchema(depth, choose(1, 3))
+      case 2 => arraySchema(depth, choose(1, 5))
       case 3 => leafSchema
     }
   }
@@ -128,8 +141,16 @@ trait CValueGenerators extends ArbitraryBigDecimal {
       dataSize <- choose(0, 20)
       ids      <- containerOfN[Set, Identities](dataSize, containerOfN[List, Long](idCount, posNum[Long]) map { i => VectorCase(i: _*) })
       values   <- containerOfN[List, Seq[(JPath, JValue)]](dataSize, Gen.sequence[List, (JPath, JValue)](jschema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
+      
+      falseDepth  <- choose(1, 3)
+      falseSchema <- schema(falseDepth)
+      falseSize   <- choose(0, 5)
+      falseIds    <- containerOfN[Set, Identities](falseSize, containerOfN[List, Long](idCount, posNum[Long]) map { i => VectorCase(i: _*) })
+      falseValues <- containerOfN[List, Seq[(JPath, JValue)]](falseSize, Gen.sequence[List, (JPath, JValue)](falseSchema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
+      
+      falseIds2 = falseIds -- ids     // distinct ids
     } yield {
-      (idCount, (ids zip values).toStream)
+      (idCount, (ids zip values).toStream ++ (falseIds2 zip falseValues).toStream)
     }
 
   def assemble(parts: Seq[(JPath, JValue)]): JValue = {

@@ -160,6 +160,66 @@ trait CogroupSpec[M[+_]] extends TableModuleSpec[M] {
     jsonResult.copoint must containAllOf(expected).only
   }
 
+  def testAnotherSimpleCogroup = {
+    def recl(i: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JString(i.toString)))))
+    def recr(i: Int) = toRecord(VectorCase(i), JObject(List(JField("right", JString(i.toString)))))
+    def recBoth(i: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JString(i.toString)), JField("right", JString(i.toString)))))
+
+    val ltable  = fromSample(SampleData(Stream(recl(2), recl(3), recl(4), recl(6), recl(7))))
+    val rtable  = fromSample(SampleData(Stream(recr(0), recr(1), recr(5), recr(6), recr(7))))
+
+    val expected = Vector(
+      recr(0),
+      recr(1),
+      recl(2),
+      recl(3),
+      recl(4),
+      recr(5),
+      recBoth(6),
+      recBoth(7)
+    )
+
+    val result: Table = ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
+      Leaf(Source),
+      Leaf(Source),
+      ObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(ObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
+    )
+
+    val jsonResult = toJson(result)
+    println("jsonResult: %s\n".format(jsonResult.copoint.toList))
+    jsonResult.copoint must containAllOf(expected).only
+  }
+
+  def testAnotherSimpleCogroupSwitched = {
+    def recl(i: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JString(i.toString)))))
+    def recr(i: Int) = toRecord(VectorCase(i), JObject(List(JField("right", JString(i.toString)))))
+    def recBoth(i: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JString(i.toString)), JField("right", JString(i.toString)))))
+
+    val rtable  = fromSample(SampleData(Stream(recr(2), recr(3), recr(4), recr(6), recr(7))))
+    val ltable  = fromSample(SampleData(Stream(recl(0), recl(1), recl(5), recl(6), recl(7))))
+
+    val expected = Vector(
+      recl(0),
+      recl(1),
+      recr(2),
+      recr(3),
+      recr(4),
+      recl(5),
+      recBoth(6),
+      recBoth(7)
+    )
+
+    val result: Table = ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
+      Leaf(Source),
+      Leaf(Source),
+      ObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(ObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
+    )
+
+    val jsonResult = toJson(result)
+    println("jsonResult: %s\n".format(jsonResult.copoint.toList))
+    jsonResult.copoint must containAllOf(expected).only
+  }
+
   def testUnsortedInputs = {
     def recl(i: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JString(i.toString)))))
     def recr(i: Int) = toRecord(VectorCase(i), JObject(List(JField("right", JString(i.toString)))))

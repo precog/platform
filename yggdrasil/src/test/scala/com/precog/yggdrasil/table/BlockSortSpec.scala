@@ -33,6 +33,7 @@ import scala.annotation.tailrec
 import scala.util.Random
 import scalaz._
 import scalaz.effect._
+import scalaz.std.anyVal._
 import scalaz.std.list._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
@@ -47,9 +48,10 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 import SampleData._
 
+import TableModule._
+
 trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
-  implicit def M: Monad[M]
-  implicit def coM: Copointed[M]
+  implicit def M: Monad[M] with Copointed[M]
 
   def checkSortDense = {
     import TableModule.paths.Value
@@ -150,7 +152,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
              "jmy":-2.612503123965922E307
            },
            "key":[2,1,1]
-         ]
+         }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
         (3, List(JPath(".uid") -> CLong,
@@ -172,14 +174,36 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     //println("testing for sample: " + sample)
     val Some((idCount, schema)) = sample.schema
 
-    val module = new BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
-      def M = self.M
-      def coM = self.coM
-      
+    def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
+      case (_: JNum, CNum | CLong | CDouble) => true
+      case (JNothing, CUndefined) => true
+      case (JNull, CNull) => true
+      case (_: JBool, CBoolean) => true
+      case (_: JString, CString) => true
+      case (JObject(Nil), CEmptyObject) => true
+      case (JArray(Nil), CEmptyArray) => true
+      case _ => false
+    }
+    
+    val actualSchema = inferSchema(sample.data map { _ \ "value" })
+
+    class Module extends  BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
+      import trans._
+      import TableModule.paths._
+
       type MemoId = Int
+      type GroupId = Int
+
+      trait TableCompanion extends BlockStoreColumnarTableCompanion {
+        implicit val geq: scalaz.Equal[Int] = intInstance
+      }
+
+      object Table extends TableCompanion
+      
+      def M = self.M
 
       val projections = {
-        schema.grouped(2) map { subschema =>
+        actualSchema.grouped(1) map { subschema =>
           val descriptor = ProjectionDescriptor(
             idCount, 
             subschema flatMap {
@@ -193,29 +217,43 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
 
           descriptor -> Projection( 
             descriptor, 
-            sample.data map { jv =>
-              subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
-                case (obj, (jpath, _)) => 
+            sample.data flatMap { jv =>
+              val back = subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
+                case (obj, (jpath, ctype)) => { 
                   val vpath = JPath(JPathField("value") :: jpath.nodes)
-                  obj.set(vpath, jv.get(vpath))
+                  val valueAtPath = jv.get(vpath)
+                  
+                  if (compliesWithSchema(valueAtPath, ctype)) {
+                    val result = obj.set(vpath, valueAtPath)
+                    //println("result in compliesWithSchema: %s\n".format(result))
+                    result
+                  } else
+                    obj
+                }
               }
+              
+              if (back \ "value" == JNothing)
+                None
+              else
+                Some(back)
             }
           )
         } toMap
       }
 
       object storage extends Storage
+
+      def sortTransspec(sortKey: JPath): TransSpec1 = WrapArray(
+        sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), JPathField("value"))) {
+          case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, field)
+          case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
+        }
+      )
+
+      def deleteSortKeySpec: TransSpec1 = TransSpec1.DerefArray1
     }
 
-    import module.trans._
-    import TableModule.paths._
-
-    val derefTransspec: TransSpec1 = sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), JPathField("value"))) {
-      case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, field)
-      case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
-    }
-
-    val sortTransspec = WrapArray(derefTransspec)
+    val module = new Module
 
     val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
       import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
@@ -227,23 +265,24 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     }
 
     try {
-      val result = module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {
-        _.sort(sortTransspec, SortAscending)
-      }.flatMap {
+      val resultM = for {
+        table  <- module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get)
+        sorted <- table.sort(module.sortTransspec(sortKey), SortAscending)
         // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
-        table => M.point(table.transform(ObjectDelete(Leaf(Source), Set(SortKey))))
-      }.flatMap {
-        _.toJson
-      }.copoint.toList
+        withoutSortKey = sorted.transform(module.deleteSortKeySpec)
+        json <- withoutSortKey.toJson
+      } yield json
+
+      val result = resultM.copoint.toList
 
       val original = sample.data.sortBy({
         v => sortKey.extract(v \ "value")
       })(jvalueOrdering).toList
 
-      //if (result != original) {
-      //  println("Original = " + original)
-      //  println("Result   = " + result)
-      //}
+      if (result != original) {
+        println("Original = " + original)
+        println("Result   = " + result)
+      }
 
       result must_== original
     } catch {

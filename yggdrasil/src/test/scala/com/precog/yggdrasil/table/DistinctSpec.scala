@@ -59,6 +59,6 @@ trait DistinctSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTes
       val result = toJson(distinctTable).copoint
       
       result must_== result.distinct
-    }
+    }.set(minTestsOk -> 500)
   }
 }

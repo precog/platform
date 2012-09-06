@@ -44,6 +44,7 @@ import java.util.concurrent.Executors
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
+import scalaz.std.anyVal._
 import scalaz.std.list._
 import scalaz.{NonEmptyList => NEL, _}
 import Iteratee._
@@ -66,11 +67,6 @@ trait TestConfigComponent[M[+_]] extends table.StubColumnarTableModule[M] with I
     val memoizationWorkDir: File = null //no filesystem storage in test!
     val flatMapTimeout = intToDurationInt(30).seconds
     val maxEvalDuration = intToDurationInt(30).seconds
-
-    object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
 
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
@@ -1872,7 +1868,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "equal with an array" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))
         
         val input = Filter(line, IdentitySort,
           numbers,
@@ -1894,11 +1890,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
           result2 must contain(Vector(8, 9, 10))
         }
-      }.pendingUntilFixed  
+      }.pendingUntilFixed
       
       "equal with an object" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))
         
         val input = Filter(line, IdentitySort,
           numbers,
@@ -1920,7 +1916,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             }
           }
         }
-      }.pendingUntilFixed 
+      }.pendingUntilFixed
 
       "equal without a filter" >> {
         val line = Line(0, "")
@@ -2500,7 +2496,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(42, 12, 77, 1, 13, true, false, "daniel", Map("test" -> SString("fubar")), Vector())
       }
-    }.pendingUntilFixed
+    }
     
     "join two sets according to a value sort" in {
       val line = Line(0, "")
@@ -2571,8 +2567,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
   }
 }
 
-object EvaluatorSpecs extends EvaluatorSpecs[YId] {
-  val M = test.YId.M
-  val coM = test.YId.M
+object EvaluatorSpecs extends EvaluatorSpecs[YId] with test.YIdInstances {
+  object Table extends TableCompanion {
+    val geq: scalaz.Equal[GroupId] = scalaz.std.anyVal.intInstance
+  }
 }
 

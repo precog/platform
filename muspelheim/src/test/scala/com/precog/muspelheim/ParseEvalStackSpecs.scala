@@ -50,6 +50,7 @@ import akka.util.Duration
 import java.io.File
 
 import scalaz._
+import scalaz.std.anyVal._
 import scalaz.effect.IO
 
 import org.streum.configrity.Configuration
@@ -92,12 +93,6 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
 
-    object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-
-    //TODO: Get a producer ID
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
       def nextId() = source.getAndIncrement
@@ -140,8 +135,11 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
 
 object RawJsonStackSpecs extends ParseEvalStackSpecs[Free.Trampoline] with RawJsonColumnarTableStorageModule[Free.Trampoline] {
   implicit val M = Trampoline.trampolineMonad
-  implicit val coM = Trampoline.trampolineMonad
   type YggConfig = ParseEvalStackSpecConfig
   object yggConfig extends ParseEvalStackSpecConfig
+
+  object Table extends TableCompanion {
+    implicit val geq: scalaz.Equal[Int] = intInstance
+  }
 }
 // vim: set ts=4 sw=4 et:
