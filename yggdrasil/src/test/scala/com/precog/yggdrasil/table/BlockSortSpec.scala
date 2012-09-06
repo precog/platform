@@ -81,10 +81,10 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       v => sortKey.extract(v \ "value")
     })(jvalueOrdering).toList
 
-    if (result != original) {
-      println("Original = " + original)
-      println("Result   = " + result)
-    }
+    //if (result != original) {
+    //  println("Original = " + original)
+    //  println("Result   = " + result)
+    //}
 
     result must_== original
   }
