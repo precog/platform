@@ -58,17 +58,23 @@ run <<= inputTask { argTask =>
 }
 
 extractData <<= (dataDir, streams) map { (dir, s) =>
-  val target = new File(dir, "data")
-  target.mkdirs()
-  s.log.info("Extracting sample projection data into %s".format(target.getCanonicalPath))
-
-  try {
-    val result = Process("./regen-jdbm-data.sh", Seq(target.getCanonicalPath)).!!
-    s.log.info("Extraction complete.")
-  } catch {
-    case t: Throwable => s.log.error("Extraction failed")
+  val target = new File(dir)
+  val dataTarget = new File(target, "data")
+  if (!dataTarget.mkdirs()) {
+    if (!dataTarget.isDirectory) {
+      throw new Exception("Failed to make temp projection directory")
+    } else {
+      s.log.info("Using data in " + target.getCanonicalPath())
+    }
+  } else {
+    s.log.info("Extracting sample projection data into " + target.getCanonicalPath())
+    try {
+      val result = Process("./regen-jdbm-data.sh", Seq(dataTarget.getCanonicalPath)).!!
+      s.log.info("Extraction complete.")
+    } catch {
+      case t: Throwable => s.log.error("Extraction failed")
+    }
   }
-  //IO.copyDirectory(new File("pandora/dist/data-jdbm/"), target, true, false)
   target.getCanonicalPath
 }
 
