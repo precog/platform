@@ -251,7 +251,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     // MergeTrees describe intersections as edges in a graph, where the nodes correspond
     // to sets of bindings
-    case class MergeNode(keys: Set[TicVar], binding: Binding)
+    case class MergeNode(keys: Set[TicVar], binding: Binding) {
+      def ticVars = keys
+    }
     object MergeNode {
       def apply(binding: Binding): MergeNode = MergeNode(Universe.sources(binding.groupKeySpec).map(_.key).toSet, binding)
     }
@@ -512,21 +514,16 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     sealed trait NodeMetadata {
       def size: Long
-
-      def ticVars: Set[TicVar]
     }
 
     object NodeMetadata {
-      def apply(size0: Long, ticVars0: Set[TicVar]) = new NodeMetadata {
+      def apply(size0: Long) = new NodeMetadata {
         def size = size0
-        def ticVars = ticVars
       }
     }
 
     case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], size: Long = 1) extends NodeMetadata {
       def sortedOn = groupKeyTrans.alignTo(groupKeyPrefix).prefixTrans(groupKeyPrefix.size)
-
-      def ticVars = groupKeyTrans.keyOrder.toSet
     }
 
     /////////////////
@@ -870,11 +867,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
               val newFixed   = fixed + choice
               val newUnfixed = unfixed - choice
-              val newOptions = (options - choice) ++ connections(choice)
+              val newOptions = options ++ connections(choice) -- newFixed
 
               plans(fixed).foldLeft(plans) {
                 case (plans, fixedPlan) =>
-                  val newPlan = fixedPlan.cogroup(choice, nodeMetadata.size, nodeMetadata.ticVars)
+                  val newPlan = fixedPlan.cogroup(choice, nodeMetadata.size, choice.ticVars)
 
                   val newSet = plans.getOrElse(newFixed, Set.empty) + newPlan
 
@@ -888,8 +885,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         else chooseFrom(options)                      // Can only choose from those merged into collective
       }
       
-      pick0(spanningGraph.nodes, 
-        Set.empty, Set.empty, Map(Set.empty -> Set(BorgTraversalPlan.Zero)))(spanningGraph.nodes).toSeq.sortBy(_.costModel.ioCost).head
+      val plans = pick0(Set.empty, spanningGraph.nodes, Set.empty, Map(Set.empty -> Set(BorgTraversalPlan.Zero)))
+
+      plans(spanningGraph.nodes).toSeq.sortBy(_.costModel.ioCost).head
     }
 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */

@@ -289,6 +289,31 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
     def ticvars(str: String) = str.toSeq.map((c: Char) => JPathField(c.toString))
 
+    "traversal order" >> {
+      "choose correct node order for ab-bc-ad" in {
+        val ab = MergeNode(ticvars("ab").toSet, null)
+        val abc = MergeNode(ticvars("bc").toSet, null)
+        val ad = MergeNode(ticvars("ad").toSet, null)
+
+        val connectedNodes = Set(ab, abc, ad)
+
+        val spanningGraph = findSpanningGraphs(edgeMap(connectedNodes)).head
+
+        val oracle = Map(
+          ab -> NodeMetadata(10),
+          abc -> NodeMetadata(10),
+          ad -> NodeMetadata(10)
+        )
+
+        val plan = findBorgTraversalOrder(spanningGraph, oracle)
+
+        val nodes = plan.steps.map(_.node)
+
+        (nodes must_== Vector(ab, abc, ad)) or
+        (nodes must_== Vector(abc, ab, ad))
+      }
+    }
+
     "derive the universes of binding constraints" >> {
       "single-source groupings should generate single binding universes" in {
         val spec = GroupingSource(
