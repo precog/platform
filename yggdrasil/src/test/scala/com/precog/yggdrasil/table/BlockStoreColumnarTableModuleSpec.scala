@@ -38,7 +38,8 @@ import TableModule.paths._
 trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
     TableModuleSpec[M] with 
     BlockLoadSpec[M] with
-    BlockSortSpec[M] { self =>
+    BlockSortSpec[M] with 
+    BlockAlignSpec[M] { self =>
 
   type MemoId = Int
   type GroupId = Int
@@ -61,6 +62,7 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
     }
 
     "align" >> {
+      "survive a trivial scalacheck" in checkAlign.pendingUntilFixed
     }
   }
 }
