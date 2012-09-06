@@ -1084,4 +1084,8 @@ trait StatsLibSpec[M[+_]] extends Specification
   }
 }
 
-object StatsLibSpec extends StatsLibSpec[test.YId] with test.YIdInstances
+object StatsLibSpec extends StatsLibSpec[test.YId] with test.YIdInstances  {
+  object Table extends TableCompanion {
+    val geq: scalaz.Equal[GroupId] = scalaz.std.anyVal.intInstance
+  }
+}

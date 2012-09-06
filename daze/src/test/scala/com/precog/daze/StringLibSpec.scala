@@ -784,4 +784,8 @@ trait StringLibSpec[M[+_]] extends Specification
   }
 }
 
-object StringLibSpec extends StringLibSpec[test.YId] with test.YIdInstances
+object StringLibSpec extends StringLibSpec[test.YId] with test.YIdInstances {
+  object Table extends TableCompanion {
+    val geq: scalaz.Equal[GroupId] = scalaz.std.anyVal.intInstance
+  }
+}
