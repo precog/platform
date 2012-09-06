@@ -207,7 +207,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "cross across slice boundaries on one side" in testCrossSingles
       "survive scalacheck" in {
         check { cogroupData: (SampleData, SampleData) => testCross(cogroupData._1, cogroupData._2) } 
-      }.pendingUntilFixed
+      }
     }
 
     "in transform" >> {

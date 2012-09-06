@@ -227,7 +227,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
 
     ///////////////////////
-    // Groupting Support //
+    // Grouping Support //
     ///////////////////////
   
     type TicVar = JPathField

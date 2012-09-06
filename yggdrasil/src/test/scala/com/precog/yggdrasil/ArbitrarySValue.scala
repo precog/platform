@@ -110,7 +110,7 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     CEmptyArray
   )
 
-  // FIXME: Should this provide some form for CDate?
+  // FIXME: TODO Should this provide some form for CDate?
   def jvalue(ctype: CType): Gen[JValue] = ctype match {
     case CString => alphaStr map (JString(_))
     case CBoolean => arbitrary[Boolean] map (JBool(_))
