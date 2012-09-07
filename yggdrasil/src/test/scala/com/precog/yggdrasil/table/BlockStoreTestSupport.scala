@@ -136,12 +136,15 @@ trait BlockStoreTestSupport[M[+_]] { self =>
       case _ => false
     }
 
-    def sortTransspec(sortKey: JPath): TransSpec1 = WrapArray(
-      sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), JPathField("value"))) {
-        case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, field)
-        case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
-      }
-    )
+    def sortTransspec(sortKeys: JPath*): TransSpec1 = ObjectConcat(sortKeys.zipWithIndex.map {
+      case (sortKey, idx) => WrapObject(
+        sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), JPathField("value"))) {
+          case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, field)
+          case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
+        },
+        "%09d".format(idx)
+      )
+    }: _*)
 
     def deleteSortKeySpec: TransSpec1 = TransSpec1.DerefArray1
   }

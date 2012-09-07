@@ -74,10 +74,14 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
     }                           
 
     "sort" >> {
-      "fully homogeneous data"        in homogeneousSortSample.pendingUntilFixed
-      //"data with undefined sort keys" in partiallyUndefinedSortSample.pendingUntilFixed // throwing nasties that pendingUntilFixed doesn't catch
-      "heterogeneous sort keys"       in heterogeneousSortSample.pendingUntilFixed
-      //"arbitrary datasets"            in checkSortDense  //TODO
+      "fully homogeneous data"        in homogeneousSortSample
+      "data with undefined sort keys" in partiallyUndefinedSortSample
+      "heterogeneous sort keys"       in heterogeneousSortSample
+      "top-level hetereogeneous values" in heterogeneousBaseValueTypeSample
+      "sort with a bad schema"        in badSchemaSortSample
+      "merges over three cells"       in threeCellMerge
+      "empty input"                   in emptySort
+      "arbitrary datasets"            in checkSortDense
     }
 
     "align" >> {
