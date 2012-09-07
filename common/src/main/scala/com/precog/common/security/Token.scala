@@ -41,19 +41,11 @@ case class Token(tid: TokenID, name: String, grants: Set[GrantID]) {
 }
 
 trait TokenSerialization {
-  val UnsafeTokenDecomposer: Decomposer[Token] = new Decomposer[Token] {
+  implicit val TokenDecomposer: Decomposer[Token] = new Decomposer[Token] {
     override def decompose(t: Token): JValue = JObject(List(
       JField("name", t.name),
       JField("tid", t.tid),
       JField("gids", t.grants.serialize)
-    )) 
-  }
-
-  implicit val SafeTokenDecomposer: Decomposer[Token] = new Decomposer[Token] {
-    override def decompose(t: Token): JValue = JObject(List(
-      JField("name", t.name),
-      JField("tid_prefix", safeTokenID(t.tid)),
-      JField("gid_prefixes", t.grants.map{ safeGrantID }.serialize)
     )) 
   }
 
@@ -67,24 +59,15 @@ trait TokenSerialization {
 
 object Token extends TokenSerialization
 
-
 case class Grant(gid: GrantID, issuer: Option[GrantID], permission: Permission)
 
 trait GrantSerialization {
-  val UnsafeGrantDecomposer: Decomposer[Grant] = new Decomposer[Grant] {
+  implicit val GrantDecomposer: Decomposer[Grant] = new Decomposer[Grant] {
     override def decompose(g: Grant): JValue = JObject(List(
       Some(JField("gid", g.gid)),
       g.issuer.map { issuer => JField("issuer", issuer.serialize) },
-      Some(JField("permission", g.permission.serialize(Permission.UnsafePermissionDecomposer)))
+      Some(JField("permission", g.permission.serialize(Permission.PermissionDecomposer)))
     ).flatten)
-  }
-
-  implicit val SafeGrantDecomposer: Decomposer[Grant] = new Decomposer[Grant] {
-    override def decompose(g: Grant): JValue = JObject(List(
-      JField("gid_prefix", safeGrantID(g.gid)),
-      JField("issuer_prefix", g.issuer.map { safeGrantID }.serialize),
-      JField("permission", g.permission.serialize)
-    ))
   }
 
   implicit val GrantExtractor: Extractor[Grant] = new Extractor[Grant] with ValidatedExtraction[Grant] {    
@@ -108,21 +91,12 @@ trait Permission {
 }
 
 trait PermissionSerialization {
-  val UnsafePermissionDecomposer: Decomposer[Permission] = new Decomposer[Permission] {
+  implicit val PermissionDecomposer: Decomposer[Permission] = new Decomposer[Permission] {
     override def decompose(p: Permission): JValue = p match { 
-      case p @ WritePermission(_, _) => p.serialize(WritePermission.UnsafeWritePermissionDecomposer)
-      case p @ OwnerPermission(_, _) => p.serialize(OwnerPermission.UnsafeOwnerPermissionDecomposer)
-      case p @ ReadPermission(_, _, _) => p.serialize(ReadPermission.UnsafeReadPermissionDecomposer)
-      case p @ ReducePermission(_, _, _) => p.serialize(ReducePermission.UnsafeReducePermissionDecomposer)
-    }
-  }
-
-  implicit val SafePermissionDecomposer: Decomposer[Permission] = new Decomposer[Permission] {
-    override def decompose(p: Permission): JValue = p match { 
-      case p @ WritePermission(_, _) => p.serialize(WritePermission.SafeWritePermissionDecomposer)
-      case p @ OwnerPermission(_, _) => p.serialize(OwnerPermission.SafeOwnerPermissionDecomposer)
-      case p @ ReadPermission(_, _, _) => p.serialize(ReadPermission.SafeReadPermissionDecomposer)
-      case p @ ReducePermission(_, _, _) => p.serialize(ReducePermission.SafeReducePermissionDecomposer)
+      case p @ WritePermission(_, _) => p.serialize(WritePermission.WritePermissionDecomposer)
+      case p @ OwnerPermission(_, _) => p.serialize(OwnerPermission.OwnerPermissionDecomposer)
+      case p @ ReadPermission(_, _, _) => p.serialize(ReadPermission.ReadPermissionDecomposer)
+      case p @ ReducePermission(_, _, _) => p.serialize(ReducePermission.ReducePermissionDecomposer)
     }
   }
 
@@ -157,6 +131,13 @@ object Permission extends PermissionSerialization {
     case ReducePermission => ReducePermission(path, owner, expiration)
   }
 
+  def unapply(permission: Permission) = {
+    val owner = permission match {
+      case withOwner : OwnerAwarePermission => Some(withOwner.owner)
+      case _ => None
+    }
+    Some((permission.accessType, permission.path, owner, permission.expiration))
+  }
 }
 
 sealed trait OwnerIgnorantPermission extends Permission {
@@ -190,31 +171,23 @@ case class WritePermission(path: Path, expiration: Option[DateTime]) extends Own
 
 trait WritePermissionSerialization {
 
-  val UnsafeWritePermissionDecomposer: Decomposer[WritePermission] = new Decomposer[WritePermission] {
+  implicit val WritePermissionDecomposer: Decomposer[WritePermission] = new Decomposer[WritePermission] {
     override def decompose(g: WritePermission): JValue = JObject(List(
       JField("type", WritePermission.name),
-      JField("path", g.path),
-      JField("expiration", g.expiration.serialize)
-    )) 
-  }
-
-  implicit val SafeWritePermissionDecomposer: Decomposer[WritePermission] = new Decomposer[WritePermission] {
-    override def decompose(g: WritePermission): JValue = JObject(List(
-      JField("type", WritePermission.name),
-      JField("path", g.path),
-      JField("expiration", g.expiration.serialize)
+      JField("directory", g.path),
+      JField("expires", g.expiration.serialize)
     )) 
   }
 
   implicit val WritePermissionExtractor: Extractor[WritePermission] = new Extractor[WritePermission] with ValidatedExtraction[WritePermission] {    
     override def validated(obj: JValue): Validation[Error, WritePermission] = 
-      ((obj \ "path").validated[Path] |@|
-       (obj \ "expiration").validated[Option[DateTime]]).apply(WritePermission(_,_))
+      ((obj \ "directory").validated[Path] |@|
+       (obj \ "expires").validated[Option[DateTime]]).apply(WritePermission(_,_))
   }
 }
 
 object WritePermission extends AccessType with WritePermissionSerialization {
-  val name = "write_grant" 
+  val name = "write" 
   override def toString = "WritePermission"
 }
 
@@ -226,32 +199,24 @@ case class OwnerPermission(path: Path, expiration: Option[DateTime]) extends Own
 
 trait OwnerPermissionSerialization {
   
-  val UnsafeOwnerPermissionDecomposer: Decomposer[OwnerPermission] = new Decomposer[OwnerPermission] {
+  implicit val OwnerPermissionDecomposer: Decomposer[OwnerPermission] = new Decomposer[OwnerPermission] {
     override def decompose(g: OwnerPermission): JValue = JObject(List(
       JField("type", OwnerPermission.name),
-      JField("path", g.path),
-      JField("expiration", g.expiration.serialize)
-    )) 
-  }
-
-  implicit val SafeOwnerPermissionDecomposer: Decomposer[OwnerPermission] = new Decomposer[OwnerPermission] {
-    override def decompose(g: OwnerPermission): JValue = JObject(List(
-      JField("type", OwnerPermission.name),
-      JField("path", g.path),
-      JField("expiration", g.expiration.serialize)
+      JField("directory", g.path),
+      JField("expires", g.expiration.serialize)
     )) 
   }
 
   implicit val OwnerPermissionExtractor: Extractor[OwnerPermission] = new Extractor[OwnerPermission] with ValidatedExtraction[OwnerPermission] {    
     override def validated(obj: JValue): Validation[Error, OwnerPermission] = 
-      ((obj \ "path").validated[Path] |@|
-       (obj \ "expiration").validated[Option[DateTime]]).apply(OwnerPermission(_,_))
+      ((obj \ "directory").validated[Path] |@|
+       (obj \ "expires").validated[Option[DateTime]]).apply(OwnerPermission(_,_))
   }
 
 }
 
 object OwnerPermission extends AccessType with OwnerPermissionSerialization {
-  val name = "owner_grant"
+  val name = "owner"
 }
 
 case class ReadPermission(path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwarePermission {
@@ -262,35 +227,26 @@ case class ReadPermission(path: Path, owner: TokenID, expiration: Option[DateTim
 
 trait ReadPermissionSerialization {
   
-  val UnsafeReadPermissionDecomposer: Decomposer[ReadPermission] = new Decomposer[ReadPermission] {
+  implicit val ReadPermissionDecomposer: Decomposer[ReadPermission] = new Decomposer[ReadPermission] {
     override def decompose(g: ReadPermission): JValue = JObject(List(
       JField("type", ReadPermission.name),
-      JField("path", g.path),
+      JField("directory", g.path),
       JField("owner", g.owner),
-      JField("expiration", g.expiration.serialize)
-    )) 
-  }
-
-  implicit val SafeReadPermissionDecomposer: Decomposer[ReadPermission] = new Decomposer[ReadPermission] {
-    override def decompose(g: ReadPermission): JValue = JObject(List(
-      JField("type", ReadPermission.name),
-      JField("path", g.path),
-      JField("owner_prefix", safeTokenID(g.owner)),
-      JField("expiration", g.expiration.serialize)
+      JField("expires", g.expiration.serialize)
     )) 
   }
 
   implicit val ReadPermissionExtractor: Extractor[ReadPermission] = new Extractor[ReadPermission] with ValidatedExtraction[ReadPermission] {    
     override def validated(obj: JValue): Validation[Error, ReadPermission] = 
-      ((obj \ "path").validated[Path] |@|
+      ((obj \ "directory").validated[Path] |@|
        (obj \ "owner").validated[TokenID] |@|
-       (obj \ "expiration").validated[Option[DateTime]]).apply(ReadPermission(_,_,_))
+       (obj \ "expires").validated[Option[DateTime]]).apply(ReadPermission(_,_,_))
   }
 
 }
 
 object ReadPermission extends AccessType with ReadPermissionSerialization {
-  val name = "read_grant"
+  val name = "read"
   override def toString = "ReadPermission"
 }
 
@@ -302,35 +258,26 @@ case class ReducePermission(path: Path, owner: TokenID, expiration: Option[DateT
 
 trait ReducePermissionSerialization {
   
-  val UnsafeReducePermissionDecomposer: Decomposer[ReducePermission] = new Decomposer[ReducePermission] {
+  implicit val ReducePermissionDecomposer: Decomposer[ReducePermission] = new Decomposer[ReducePermission] {
     override def decompose(g: ReducePermission): JValue = JObject(List(
       JField("type", ReducePermission.name),
-      JField("path", g.path),
+      JField("directory", g.path),
       JField("owner", g.owner),
-      JField("expiration", g.expiration.serialize)
-    )) 
-  }
-
-  implicit val SafeReducePermissionDecomposer: Decomposer[ReducePermission] = new Decomposer[ReducePermission] {
-    override def decompose(g: ReducePermission): JValue = JObject(List(
-      JField("type", ReducePermission.name),
-      JField("path", g.path),
-      JField("owner_prefix", safeTokenID(g.owner)),
-      JField("expiration", g.expiration.serialize)
+      JField("expires", g.expiration.serialize)
     )) 
   }
 
   implicit val ReducePermissionExtractor: Extractor[ReducePermission] = new Extractor[ReducePermission] with ValidatedExtraction[ReducePermission] {    
     override def validated(obj: JValue): Validation[Error, ReducePermission] = 
-      ((obj \ "path").validated[Path] |@|
+      ((obj \ "directory").validated[Path] |@|
        (obj \ "owner").validated[TokenID] |@|
-       (obj \ "expiration").validated[Option[DateTime]]).apply(ReducePermission(_,_,_))
+       (obj \ "expires").validated[Option[DateTime]]).apply(ReducePermission(_,_,_))
   }
 
 }
 
 object ReducePermission extends AccessType with ReducePermissionSerialization {
-  val name = "reduce_grant"
+  val name = "reduce"
 }
 
 // vim: set ts=4 sw=4 et:

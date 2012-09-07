@@ -34,7 +34,7 @@ import blueeyes.health.metrics.{eternity}
 
 import org.streum.configrity.Configuration
 
-case class TokenServiceState(tokenManager: TokenManager[Future], tokenManagement: TokenManagement)
+case class TokenServiceState(tokenManagement: TokenManagement)
 
 trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenServiceCombinators {
   import BijectionsChunkJson._
@@ -51,28 +51,37 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
-          val tokenManager = tokenManagerFactory(config.detach("security"))
+          val securityConfig = config.detach("security")
+          val tokenManager = tokenManagerFactory(securityConfig)
 
-          Future(TokenServiceState(tokenManager, new TokenManagement(tokenManager)))
+          Future(TokenServiceState(new TokenManagement(tokenManager)))
         } ->
         request { (state: TokenServiceState) =>
           jsonp[ByteChunk] {
-            token(state.tokenManager) {
-              path("/token") {
-                get(new GetTokenHandler(state.tokenManagement)) ~
-                post(new AddTokenHandler(state.tokenManagement)) ~
-                path("/grants") {
-                  get(new GetGrantsHandler(state.tokenManagement)) ~
-                  post(new AddGrantHandler(state.tokenManagement)) ~
-                  path("/'grantId") {
-                    delete(new RemoveGrantHandler(state.tokenManagement)) ~
-                    path("/children") {
-                      get(new GetGrantChildrenHandler(state.tokenManagement)) ~
-                      post(new AddGrantChildrenHandler(state.tokenManagement)) ~
-                      path("/'childGrantId") {
-                        get(new GetGrantChildHandler(state.tokenManagement)) ~
-                        delete(new RemoveGrantChildHandler(state.tokenManagement))
+            token(state.tokenManagement.tokenManager) {
+              path("/auth") {
+                path("/apikeys/") {
+                  post(new CreateTokenHandler(state.tokenManagement)) ~
+                  path("'apikey") {
+                    get(new GetTokenDetailsHandler(state.tokenManagement)) ~
+                    delete(new DeleteTokenHandler(state.tokenManagement)) ~
+                    path("/grants/") {
+                      get(new GetTokenGrantsHandler(state.tokenManagement)) ~
+                      post(new AddTokenGrantHandler(state.tokenManagement)) ~
+                      path("'grantId") {
+                        delete(new RemoveTokenGrantHandler(state.tokenManagement))
                       }
+                    }
+                  }
+                } ~
+                path("/grants/") {
+                  post(new CreateGrantHandler(state.tokenManagement)) ~
+                  path("'grantId") {
+                    get(new GetGrantDetailsHandler(state.tokenManagement)) ~
+                    delete(new DeleteGrantHandler(state.tokenManagement)) ~
+                    path("/children/") {
+                      get(new GetGrantChildrenHandler(state.tokenManagement)) ~
+                      post(new AddGrantChildHandler(state.tokenManagement))
                     }
                   }
                 }

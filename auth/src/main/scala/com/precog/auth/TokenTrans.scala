@@ -47,10 +47,10 @@ object TokenTrans {
       val grants = output.values.flatten
 
       for (token <- tokens) {
-        tokenOutput.write(compact(render(token.serialize(Token.UnsafeTokenDecomposer))) + "\n")
+        tokenOutput.write(compact(render(token.serialize(Token.TokenDecomposer))) + "\n")
       }
       for (grant <- grants) {
-        grantOutput.write(compact(render(grant.serialize(Grant.UnsafeGrantDecomposer))) + "\n")
+        grantOutput.write(compact(render(grant.serialize(Grant.GrantDecomposer))) + "\n")
       }
     } finally {
       source.close()

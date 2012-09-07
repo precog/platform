@@ -60,6 +60,8 @@ import blueeyes.util.Clock
 
 trait TestTokenService extends BlueEyesServiceSpecification with TokenService with AkkaDefaults with MongoTokenManagerComponent {
 
+  val asyncContext = defaultFutureDispatch
+
   import BijectionsChunkJson._
 
   val config = """ 
@@ -75,154 +77,177 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
 
   override val configuration = "services { auth { v1 { " + config + " } } }"
 
-  lazy val client = service.contentType[JValue](application/(MimeTypes.json)).path("/tokens")
+  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
 
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
+  lazy val authService = service.contentType[JValue](application/(MimeTypes.json)).path("/auth")
+
+  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(0, Duration(1, "second"))
+
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
-
-  val asyncContext = defaultFutureDispatch
 }
 
 class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
   import TestTokenManager._
 
-  def get(tokenId: String) = 
-    client.query("tokenId", tokenId).get("")
+  def createToken(authAPIKey: String, request: NewTokenRequest) =
+    createTokenRaw(authAPIKey, request.serialize)
 
-//  def create(tokenId: String, create: TokenCreate) =
-//    createRaw(tokenId, create.serialize)
- 
-  def createRaw(tokenId: String, create: JValue) = 
-    client.query("tokenId", tokenId).post("")(create)
+  def createTokenRaw(authAPIKey: String, request: JValue) = 
+    authService.query("tokenId", authAPIKey).post("/apikeys/")(request)
 
-  def delete(tokenId: String, target: String) =
-    client.query("tokenId", tokenId).query("delete", target).delete("")
+  def getTokenDetails(authAPIKey: String, queryKey: String) = 
+    authService.query("tokenId", authAPIKey).get("/apikeys/"+queryKey)
 
-//  def update(tokenId: String, target: String, update: TokenUpdate) =
-//    updateRaw(tokenId, target, update.serialize)
+  def getTokenGrants(authAPIKey: String, queryKey: String) = 
+    authService.query("tokenId", authAPIKey).get("/apikeys/"+queryKey+"/grants/")
 
-  def updateRaw(tokenId: String, target: String, update: JValue) =
-    client.query("tokenId", tokenId).query("update", target).post("")(update)
+  def addTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
+    authService.query("tokenId", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(JString(grantId) : JValue)
+
+  def removeTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
+    authService.query("tokenId", authAPIKey).delete("/apikeys/"+updateKey+"/grants/"+grantId)
+
+  def getGrantDetails(authAPIKey: String, grantId: String) = 
+    authService.query("tokenId", authAPIKey).get("/grants/"+grantId)
+
+  def getGrantChildren(authAPIKey: String, grantId: String) = 
+    authService.query("tokenId", authAPIKey).get("/grants/"+grantId+"/children/")
+
+  def addGrantChild(authAPIKey: String, grantId: String, permission: Permission) =
+    addGrantChildRaw(authAPIKey, grantId, permission.serialize)
+    
+  def addGrantChildRaw(authAPIKey: String, grantId: String, permission: JValue) = 
+    authService.query("tokenId", authAPIKey).post("/grants/"+grantId+"/children/")(permission)
 
   "Token service" should {
     "get existing token" in {
-      get(rootUID) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(jt), _) => ok
+      getTokenDetails(rootUID, rootUID) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jtd), _) =>
+          val td = jtd.deserialize[TokenDetails]
+          td must beLike {
+            case TokenDetails(token, grants) if (token.tid == rootUID) && (grants sameElements grantList(0)) => ok
+          }
       }}
-    }.pendingUntilFixed
+    }
+
     "return error on get and token not found" in {
-      get("not-gonna-find-it") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified token does not exist")), _) => ok
+      getTokenDetails(rootUID, "not-gonna-find-it") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(NotFound, _), _, Some(JString("Unable to find token not-gonna-find-it")), _) => ok
       }}
-    }.pendingUntilFixed
-    "create token with defaults" in {
-//      val createToken = TokenCreate(None, None, None)
-//      create(rootUID, createToken) must whenDelivered { beLike {
-//        case HttpResponse(HttpStatus(OK, _), _, Some(jdl), _) => 
-//          val dl = jdl.deserialize[Token]
-//          dl must beLike {
-//            case Token(_, Some(rootUID), perms, grants, false) => 
-//              grants must haveSize(0)
-//              tokenMap(rootUID).permissions.sharable must_== perms
-//          }
-//      }}
-      todo
     }
-    "create token with overrides" in {
-//      val perms = standardAccountPerms("/overrides/")
-//      val createToken = TokenCreate(Some(perms), Some(Set(publicUID)), Some(true))
-//      create(rootUID, createToken) must whenDelivered { beLike {
-//        case HttpResponse(HttpStatus(OK, _), _, Some(jdl), _) => 
-//          val dl = jdl.deserialize[Token]
-//          dl must beLike {
-//            case Token(_, Some(rootUID), tperms, grants, true) =>
-//              grants must haveSize(1)
-//              grants.head must_== publicUID 
-//              perms must_== perms 
-//          }
-//      }}
-      todo
+    
+    "create root token with defaults" in {
+      val request = NewTokenRequest(grantList(0).map(_.permission))
+      createToken(rootUID, request) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
+          val id = jid.deserialize[String]
+          id.length must be_>(0)
+      }}
     }
+
+    "create non-root token with overrides" in {
+      val request = NewTokenRequest(grantList(1).map(_.permission))
+      createToken(testUID, request) flatMap {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => ok 
+          val id = jid.deserialize[String]
+          getTokenDetails(rootUID, id) map ((Some(id), _))
+        case other => Future((None, other))
+      } must whenDelivered { beLike {
+        case (Some(id), HttpResponse(HttpStatus(OK, _), _, Some(jtd), _)) =>
+          val td = jtd.deserialize[TokenDetails]
+          td must beLike {
+            case TokenDetails(token, grants) if (token.tid == id) && grantList(1).map(_.permission).forall {
+              case Permission(accessType, path, _, expiration) =>
+                grants.map(_.permission).exists {
+                  case Permission(`accessType`, `path`, _, `expiration`) => true
+                  case _ => false
+                }} => ok
+          }
+      }}
+    }
+
     "don't create when new token is invalid" in {
-      val createToken = JObject(List(JField("create", JString("invalid")))) 
-      createRaw(rootUID, createToken) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("Unexpected fields in token create object.")), _) => ok
+      val request = JObject(List(JField("create", JString("invalid")))) 
+      createTokenRaw(rootUID, request) must whenDelivered { beLike {
+        case
+          HttpResponse(HttpStatus(BadRequest, _), _,
+            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Invalid new token request body" => ok
       }}
-    }.pendingUntilFixed
+    }
+
     "don't create if token is expired" in {
-//      val createToken = TokenCreate(None, None, Some(true))
-//      create(expiredUID, createToken) must whenDelivered { beLike {
-//        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("The specified token has expired")), _) => ok
-//      }}
-      todo
+      val request = NewTokenRequest(grantList(5).map(_.permission))
+      createToken(expiredUID, request) must whenDelivered { beLike {
+        case
+          HttpResponse(HttpStatus(BadRequest, _), _,
+            Some(JObject(List(JField("error", JString("Unable to create token with expired permission"))))), _) => ok
+      }}
     }
+
     "don't create if token cannot grant permissions" in {
-//      val perms = standardAccountPerms("/")
-//      val createToken = TokenCreate(Some(perms), None, None)
-//      create(cust1UID, createToken) must whenDelivered { beLike {
-//        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("The specified token may not grant the requested permissions")), _) => ok
-//      }}
-      todo
+      val request = NewTokenRequest(grantList(0).map(_.permission))
+      createToken(cust1UID, request) must whenDelivered { beLike {
+        case
+          HttpResponse(HttpStatus(BadRequest, _), _,
+            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new token: Unable to assign given grants to token" => ok
+      }}
     }
-    "delete token" in {
-      delete(rootUID, cust2UID) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(jdl), _) => 
-          val dl = jdl.deserialize[List[String]]
-          dl must beLike {
-            case List(cust2UID) => ok
+    
+    "retrieve the grants associated with a given token" in {
+      getTokenGrants(rootUID, rootUID) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jgs), _) =>
+          val gs = jgs.deserialize[GrantSet]
+          gs must beLike {
+            case GrantSet(grants) if grants sameElements grantList(0) => ok
           }
       }}
-    }.pendingUntilFixed
-    "return error if no permission to delete" in {
-      delete(cust1UID, rootUID) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(jdl), _) => 
-          val dl = jdl.deserialize[List[String]]
-          dl must beLike {
-            case List() => ok
+    }
+    
+    "add a specified grant to a token" in {
+      addTokenGrant(cust1UID, testUID, "user1_read") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Created, _), _, None, _) => ok
+      }}
+    }
+
+    "get existing grant" in {
+      getGrantDetails(cust1UID, "user2_read") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jgd), _) =>
+          val gd = jgd.deserialize[GrantDetails]
+          gd must beLike {
+            case GrantDetails(grant) if (grant == grants("user2_read"))=> ok
           }
       }}
-    }.pendingUntilFixed
-    "return error if token to delete doesn't exist" in {
-      delete(rootUID, "not-going-to-be-there") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(jdl), _) => 
-          val dl = jdl.deserialize[List[String]]
-          dl must beLike {
-            case List() => ok
+    }
+
+    "report an error on get and grant not found" in {
+      getGrantDetails(cust1UID, "not-gonna-find-it") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(NotFound, _), _, Some(JString("Unable to find grant not-gonna-find-it")), _) => ok
+      }}
+    }
+
+    "remove a specified grant from a token" in {
+      removeTokenGrant(cust1UID, cust1UID, "user1_read") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(NoContent, _), _, None, _) => ok
+      }}
+    }
+    
+    "retrieve the child grants of the given grant" in {
+      getGrantChildren(rootUID, "root_read") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jgs), _) =>
+          val gs = jgs.deserialize[GrantSet]
+          gs must beLike {
+            case GrantSet(grants) if grants sameElements rootReadChildren => ok
           }
       }}
-    }.pendingUntilFixed
-    "with parent token update child token" in {
-//      val updateToken = TokenUpdate(Set(otherPublicUID), Set(publicUID), None)
-//      update(rootUID, cust1UID, updateToken) must whenDelivered { beLike {
-//        case HttpResponse(HttpStatus(OK, _), _, Some(jdl), _) => 
-//          val dl = jdl.deserialize[Token]
-//          dl must beLike {
-//            case Token(_, Some(rootUID), _, grants, _) =>
-//              grants.contains(otherPublicUID) must beTrue 
-//              grants.contains(publicUID) must beFalse 
-//          }
-//      }}
-      todo
     }
-    "as self update token" in {
-//      val updateToken = TokenUpdate(Set(otherPublicUID), Set(publicUID), None)
-//      update(cust1UID, cust1UID, updateToken) must whenDelivered { beLike {
-//        case HttpResponse(HttpStatus(OK, _), _, Some(jdl), _) => 
-//          val dl = jdl.deserialize[Token]
-//          dl must beLike {
-//            case Token(_, Some(rootUID), _, grants, _) =>
-//              grants.contains(otherPublicUID) must beTrue 
-//              grants.contains(publicUID) must beFalse 
-//          }
-//      }}
-      todo
-    }
-    "reject updates to non-child token" in {
-//      val updateToken = TokenUpdate(Set.empty, Set.empty, None)
-//      update(cust1UID, rootUID, updateToken) must whenDelivered { beLike {
-//        case HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("Unable to update the specified token.")), _) => ok
-//      }}
-      todo
+    
+    "add a child grant to the given grant" in {
+      val permission = WritePermission(Path("/user1"), None)
+      addGrantChild(rootUID, "root_read", permission) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) =>
+          val id = jid.deserialize[String]
+          id.length must be_>(0)
+      }}
     }
   }
 }
