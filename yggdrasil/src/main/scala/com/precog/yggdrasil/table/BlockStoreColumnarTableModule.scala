@@ -401,7 +401,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             }
           }
 
-          def continue(nextStep: NextStep, comparator: RowComparator, lstate: A, lkey: Slice, rstate: B, rkey: Slice): M[(WriteState, WriteState)] = nextStep match {
+          def continue(nextStep: NextStep, comparator: RowComparator, lstate: A, lkey: Slice, rstate: B, rkey: Slice, leftWriteState: WriteState, rightWriteState: WriteState): M[(WriteState, WriteState)] = nextStep match {
             case MoreLeft(span, leq, ridx, req) =>
               val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size, leq)))
 
@@ -417,11 +417,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   // done on left, and we're not in an equal span on the right (since LeftSpan can only
                   // be emitted if we're not in a right span) so we're entirely done.
                   val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size, req))) 
-                  (remission map { e => writeSlice(db, e, rbs, SortAscending) } getOrElse rbs.point[M]) map { (lbs, _) }
+                  (remission map { e => writeSlice(db, e, rbs, SortAscending, "moreLeft Done: " + e) } getOrElse rbs.point[M]) map { (lbs, _) }
               }
 
               lemission map { e => 
-                writeSlice(db, e, leftWriteState, SortAscending) flatMap { next(_: WriteState, rightWriteState) }
+                writeSlice(db, e, leftWriteState, SortAscending, "moreLeft: " + e) flatMap { next(_: WriteState, rightWriteState) }
               } getOrElse {
                 next(leftWriteState, rightWriteState)
               }
@@ -446,17 +446,17 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                     case NoSpan => 
                       // entirely done; just emit both 
                       val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size, leq)))
-                      (lemission map { e => writeSlice(db, e, lbs, SortAscending) } getOrElse lbs.point[M]) map { (_, rbs) }
+                      (lemission map { e => writeSlice(db, e, lbs, SortAscending, "moreRight Done: " + e) } getOrElse lbs.point[M]) map { (_, rbs) }
 
                     case RightSpan => 
                       // need to switch to left spanning in buildFilters
                       val nextState = buildFilters(comparator, lidx, lhead.size, leq, rhead.size, rhead.size, new mutable.BitSet(), LeftSpan)
-                      continue(nextState, comparator, lstate, lkey, rstate, rkey)
+                      continue(nextState, comparator, lstate, lkey, rstate, rkey, leftWriteState, rightWriteState)
                   }
               }
 
               remission map { e => 
-                writeSlice(db, e, rightWriteState, SortAscending) flatMap { next(leftWriteState, _: WriteState) }
+                writeSlice(db, e, rightWriteState, SortAscending, "moreRight: " + e) flatMap { next(leftWriteState, _: WriteState) }
               } getOrElse {
                 next(leftWriteState, rightWriteState)
               }
@@ -500,7 +500,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               
               // do some preliminary comparisons to figure out if we even need to look at the current slice
               val nextState = findEqual(comparator, leftRow, 0)
-              continue(nextState, comparator, lstate, lkey, nextB, rkey)    
+              continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)    
             
             case FindEqualAdvancingLeft(rightRow, rkey) => 
               // whenever we drop into buildFilters in this case, we know that we will be neither
@@ -512,7 +512,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               
               // do some preliminary comparisons to figure out if we even need to look at the current slice
               val nextState = findEqual(comparator, 0, rightRow)
-              continue(nextState, comparator, nextA, lkey, rstate, rkey)    
+              continue(nextState, comparator, nextA, lkey, rstate, rkey, leftWriteState, rightWriteState)    
             
             case RunRight(leftRow, lkey) =>
               val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
@@ -521,7 +521,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               val nextState = buildFilters(comparator, leftRow, lhead.size, leq, 
                                                        0, rhead.size, new mutable.BitSet(), RightSpan)
 
-              continue(nextState, comparator, lstate, lkey, nextB, rkey)
+              continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)
             
             case RunLeft(rightRow, rkey) =>
               val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
@@ -530,7 +530,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               val nextState = buildFilters(comparator, 0, lhead.size, new mutable.BitSet(), 
                                                        rightRow, rhead.size, req, LeftSpan)
 
-              continue(nextState, comparator, nextA, lkey, rstate, rkey)
+              continue(nextState, comparator, nextA, lkey, rstate, rkey, leftWriteState, rightWriteState)
           }
         }
         
@@ -594,7 +594,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       write0(slices, WriteState(Map.empty, 0l, valueTrans, keyTrans))
     }
 
-    def writeSlice(db: DB, slice: Slice, state: WriteState, sortOrder: DesiredSortOrder): M[WriteState] = M.point {
+    def writeSlice(db: DB, slice: Slice, state: WriteState, sortOrder: DesiredSortOrder, source: String = ""): M[WriteState] = M.point {
       val WriteState(indices, insertCount, valueTrans, keyTrans) = state
 
       val (valueTrans0, vslice) = valueTrans.advance(slice)
@@ -659,8 +659,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       }
 
       val result = WriteState(indices0, insertCount0, valueTrans0, keyTrans0)
-      println(result)
-      Thread.dumpStack
+      println("wrote from " + source + " resulting in new state " + result)
       result
     }
 
