@@ -403,7 +403,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
           def continue(nextStep: NextStep, comparator: RowComparator, lstate: A, lkey: Slice, rstate: B, rkey: Slice): M[(WriteState, WriteState)] = nextStep match {
             case MoreLeft(span, leq, ridx, req) =>
-              val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size - 1, leq)))
+              val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size, leq)))
 
               @inline def next(lbs: WriteState, rbs: WriteState): M[(WriteState, WriteState)] = ltail.uncons flatMap {
                 case Some((lhead0, ltail0)) =>
@@ -416,7 +416,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                 case None =>
                   // done on left, and we're not in an equal span on the right (since LeftSpan can only
                   // be emitted if we're not in a right span) so we're entirely done.
-                  val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size - 1, req))) 
+                  val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size, req))) 
                   (remission map { e => writeSlice(db, e, rbs, SortAscending) } getOrElse rbs.point[M]) map { (lbs, _) }
               }
 
@@ -429,7 +429,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             case MoreRight(span, lidx, lex, req) =>
               // if span == RightSpan and no more data exists on the right, we need to 
               // continue in buildFilters spanning on the left.
-              val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size - 1, req)))
+              val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size, req)))
 
               @inline def next(lbs: WriteState, rbs: WriteState): M[(WriteState, WriteState)] = rtail.uncons flatMap {
                 case Some((rhead0, rtail0)) => 
@@ -445,12 +445,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   (span: @unchecked) match {
                     case NoSpan => 
                       // entirely done; just emit both 
-                      val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size -1, leq)))
+                      val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size, leq)))
                       (lemission map { e => writeSlice(db, e, lbs, SortAscending) } getOrElse lbs.point[M]) map { (_, rbs) }
 
                     case RightSpan => 
                       // need to switch to left spanning in buildFilters
-                      val nextState = buildFilters(comparator, lidx, lhead.size, leq, rhead.size, rhead.size, req, LeftSpan)
+                      val nextState = buildFilters(comparator, lidx, lhead.size, leq, rhead.size, rhead.size, new mutable.BitSet(), LeftSpan)
                       continue(nextState, comparator, lstate, lkey, rstate, rkey)
                   }
               }
