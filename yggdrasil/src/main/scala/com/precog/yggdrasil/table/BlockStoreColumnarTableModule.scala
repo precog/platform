@@ -291,7 +291,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               }
 
               updatedMatrix0 map { matrix => 
-                val queue0 = mutable.PriorityQueue(matrix.cells.toSeq: _*)(matrix.ordering)
+                val queue0 = mutable.PriorityQueue(matrix.cells.toSeq: _*)(if (invert) matrix.ordering.reverse else matrix.ordering)
                 Some((emission, queue0))
               }
             }
@@ -602,11 +602,21 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       val dataRowFormat = RowFormat.forValues(vColumnRefs)
       val dataColumnEncoder = dataRowFormat.ColumnEncoder(vColumns)
 
+//      println("Slice of size (%d):%s" format (slice.size,
+//        (0 until slice.size) map { row =>
+//          vColumnRefs zip dataRowFormat.decode(dataColumnEncoder.encodeFromRow(row))
+//        } mkString ("\n\t", ",\n\t", "\n")))
+
       val (indices0, insertCount0, keyTrans0) = keyTrans.zipWithIndex.foldLeft((indices, insertCount, List.empty[SliceTransform1[_]])) { 
         case ((indices, insertCount, newTransforms), (keyTransform, i)) =>
           val (nextKeyTransform, keySlice) = keyTransform.advance(slice)
           
           val (keyColumnRefs, keyColumns) = keySlice.columns.toSeq.sortBy(_._1).unzip
+
+          if (keyColumnRefs.size < 1) {
+            sys.error("Invalid key TransSpec (%s) for sort results in zero sort key columns: %s".format(keyTransform, keyColumnRefs))
+          }
+
           val keyRowFormat = RowFormat.forValues(keyColumnRefs)
           val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
           val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
@@ -631,6 +641,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           def storeRow(storage: IndexStore, row: Int, insertCount: Long): Long = {
             if (row < vslice.size) {
               if (vslice.isDefinedAt(row)) {
+                //println("Storing key: " + keySlice.toJson(row))
                 storage.put(keyColumnEncoder.encodeFromRow(row), dataColumnEncoder.encodeFromRow(row))
 
                 if (insertCount % jdbmCommitInterval == 0 && insertCount > 0) db.commit()
@@ -643,7 +654,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             }
           }
 
-          (newIndices, storeRow(index.storage, 0, insertCount), nextKeyTransform +: newTransforms)
+          val newInsertCount = storeRow(index.storage, 0, insertCount) 
+          (newIndices, newInsertCount, nextKeyTransform +: newTransforms)
       }
 
       WriteState(indices0, insertCount0, valueTrans0, keyTrans0)
@@ -722,7 +734,9 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder).map(_.head)
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder).map {
+      _.headOption getOrElse this // If we start with an empty table, we always end with an empty table
+    }
 
     override def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = {
       import sortMergeEngine._
@@ -742,7 +756,9 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         }
       )
 
-      val groupKeysWithGlobal = groupKeys map { kt => ArrayConcat(WrapArray(deepMap(kt) { case Leaf(_) => TransSpec1.DerefArray0 }), TransSpec1.DerefArray1) }
+      val groupKeysWithGlobal = groupKeys map { kt => 
+        ObjectConcat(WrapObject(deepMap(kt) { case Leaf(_) => TransSpec1.DerefArray0 }, "0"), WrapObject(TransSpec1.DerefArray1, "1")) 
+      }
 
       for {
         indices <-  writeTables(

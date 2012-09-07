@@ -281,7 +281,16 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                     case (ref @ ColumnRef(jpath, ctype), col) => (ref, logicalFilters.get(jpath).flatMap(c => cf.util.FilterComplement(c)(col)).getOrElse(col))
                   }
 
-                  remapped ++ sr.columns
+                  val finalCols = remapped ++ sr.columns
+
+                  // We should never return a slice with zero columns
+                  if (finalCols.size == 0) {
+                    Map(ColumnRef(JPath.Identity, CEmptyObject) -> new EmptyObjectColumn {
+                      def isDefinedAt(row: Int) = sl.isDefinedAt(row) || sr.isDefinedAt(row)
+                    })
+                  } else {
+                    finalCols
+                  }
                 }
               }
             }
@@ -311,7 +320,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                              (s2cols.isEmpty && !s2.columns.keys.exists(_.ctype == CEmptyArray))) {
                     Map.empty[ColumnRef, Column]
                   } else {
-                    val maxId = accCols.map(_._1).max
+                    val maxId = if (accCols.isEmpty) -1 else accCols.map(_._1).max
                     val newCols = (accCols map { case (_, ref, col) => ref -> col }) ++ 
                                   (s2cols  map { case (i, xs, ref, col) => ColumnRef(JPath(JPathIndex(i + maxId + 1) :: xs.toList), ref.ctype) -> col })
 

@@ -149,7 +149,6 @@ trait Slice { source =>
   def deref(node: JPathNode): Slice = new Slice {
     val size = source.size
     val columns = source.columns.collect {
-      // case (ColumnRef(JPath(`node` :: rest), ctype), col) => (ColumnRef(JPath(rest), ctype), col) // TODO: why won't this work?
       case (ColumnRef(JPath(`node`, xs @ _*), ctype), col) => (ColumnRef(JPath(xs: _*), ctype), col)
     }
   }
@@ -719,9 +718,9 @@ object Slice {
           if (first1 == -1 && first2 == -1) {
             EQ
           } else if (first1 == -1) {
-            GT
-          } else if (first2 == -1) {
             LT
+          } else if (first2 == -1) {
+            GT
           } else {
             // We have the indices, so use it to look up the comparator for the rows
             comparators(first1 * array2.length + first2).compare(i, j)
