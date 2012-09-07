@@ -400,12 +400,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     case class OrderingConstraint(ordering: Seq[Set[TicVar]]) { self =>
       // Fix this binding constraint into a sort order. Any non-singleton TicVar sets will simply
-      // be convered into an arbitrary sequence
+      // be converted into an arbitrary sequence
       lazy val fixed = ordering.flatten
 
       def & (that: OrderingConstraint): Option[OrderingConstraint] = OrderingConstraints.replacementFor(self, that)
 
       def - (ticVars: Set[TicVar]): OrderingConstraint = OrderingConstraint(ordering.map(_.filterNot(ticVars.contains)).filterNot(_.isEmpty))
+
+      override def toString = ordering.map(_.map(_.toString.substring(1)).mkString("{", ", ", "}")).mkString("OrderingConstraint(", ",", ")")
     }
     object OrderingConstraint {
       val Zero = OrderingConstraint(Vector.empty)
@@ -739,10 +741,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
      *  5. The ordering of the node required for cogroup.
      * 
      */
-    case class BorgTraversalPlanStep(accOrderPre: OrderingConstraint, node: MergeNode) { self =>
-      // Do we have to resort the accumulator during this step?
-      lazy val accResort: Boolean = !(accOrderPre & accOrderPost).isEmpty
-
+    case class BorgTraversalPlanStep(accOrderPre: OrderingConstraint, node: MergeNode, accOrderPost: OrderingConstraint) { self =>
       // Tic variables before the step is executed:
       lazy val preTicVars = accOrderPre.ordering.toSet.flatten
 
@@ -754,18 +753,19 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       def nodeTicVars: Set[TicVar] = node.ticVars
 
-      // The order after the step:
-      lazy val accOrderPost: OrderingConstraint = accOrderPre & OrderingConstraint(Seq(nodeTicVars)) match {
-        case Some(constraint) => 
-          // No resort necessary:
-          constraint
+      // Whether or not the accumulator needs to be resorted for this step.
+      lazy val accResort: Boolean = {
+        val leftUniqueTicVars = preTicVars -- nodeTicVars
+        val rightUniqueTicVars = nodeTicVars -- preTicVars
 
-        case None => 
-          // Have to resort:
-          val commonTicVars = preTicVars intersect nodeTicVars
-          val unionTicVars = preTicVars union nodeTicVars
+        val leftCommon = (accOrderPre - leftUniqueTicVars)
+        val rightCommon = (nodeOrder - rightUniqueTicVars)
 
-          OrderingConstraint(Seq(commonTicVars, unionTicVars -- commonTicVars))
+        val resortNeeded = (leftCommon & rightCommon).isEmpty
+
+        //if (resortNeeded) println("RESORT NEEDED!!!!!!!!!!!!!!!")
+
+        resortNeeded
       }
 
       // The order the node must be sorted by in order to perform the step:
@@ -776,15 +776,52 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
 
       // Choses an arbitrary order:
-      def fixed: BorgTraversalPlanStep = copy(accOrderPre = OrderingConstraint.fromFixed(accOrderPost.fixed) - newTicVars)
+      def fixed: BorgTraversalPlanStep = BorgTraversalPlanStep.fromAccOrderPost(preTicVars, OrderingConstraint.fromFixed(accOrderPost.fixed), node)
 
       def fixedBefore(next: BorgTraversalPlanStep): BorgTraversalPlanStep = {
         accOrderPost & next.accOrderPre match {
           case Some(newAccOrderPost) => 
-            copy(accOrderPre = newAccOrderPost - newTicVars)
+            BorgTraversalPlanStep.fromAccOrderPost(preTicVars, newAccOrderPost, node)
 
-          case None => self.fixed
+          case None => 
+            self.fixed
         }
+      }
+    }
+
+    object BorgTraversalPlanStep {
+      def fromAccOrderPre(accOrderPre: OrderingConstraint, node: MergeNode): BorgTraversalPlanStep = {
+        val preTicVars  = accOrderPre.ordering.toSet.flatten
+        val nodeTicVars = node.ticVars
+
+        val commonNodeTicVars = preTicVars intersect nodeTicVars
+        val uniqueNodeTicVars = nodeTicVars -- preTicVars
+
+        val nodeOrderConstraint = OrderingConstraint(Seq(commonNodeTicVars, uniqueNodeTicVars))
+
+        val accOrderPost: OrderingConstraint = accOrderPre & nodeOrderConstraint match {
+          case Some(constraint) => 
+            // No resort necessary:
+            constraint
+
+          case None => 
+            // Have to resort:
+            val commonTicVars = preTicVars intersect nodeTicVars
+            val unionTicVars = preTicVars union nodeTicVars
+
+            OrderingConstraint(Seq(commonTicVars, unionTicVars -- commonTicVars))
+        }
+
+        BorgTraversalPlanStep(accOrderPre, node, accOrderPost)
+      }
+
+      def fromAccOrderPost(preTicVars: Set[TicVar], accOrderPost: OrderingConstraint, node: MergeNode): BorgTraversalPlanStep = {
+        val postTicVars = accOrderPost.ordering.toSet.flatten
+        val newTicVars = postTicVars -- preTicVars
+
+        val accOrderPre = accOrderPost - newTicVars
+
+        BorgTraversalPlanStep(accOrderPre, node, accOrderPost)
       }
     }
 
@@ -809,7 +846,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           case None => OrderingConstraint.Zero
         }
 
-        val newStep = BorgTraversalPlanStep(accOrderPre, rightNode)
+        val newStep = BorgTraversalPlanStep.fromAccOrderPre(accOrderPre, rightNode)
 
         val newCostModel = costModel.consume(rightSize, rightTicVars, newStep.accResort)
 
@@ -819,10 +856,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         )
       }
 
+      /**
+       * Generates a completely fixed plan (a totally defined sort order for the accumulate and nodes being consumed).
+       */
       def fixed: BorgTraversalPlan = {
-        // Backpropagate constraints to fix everything:
-        def fixedSteps: Vector[BorgTraversalPlanStep] = {
-          def fix0(unfixed: Vector[BorgTraversalPlanStep], fixed: Vector[BorgTraversalPlanStep] = Vector.empty): Vector[BorgTraversalPlanStep] = {
+        // Back-propagate constraints to fix everything:
+        val fixedSteps = {
+          def fix0(unfixed: Vector[BorgTraversalPlanStep], fixed: Vector[BorgTraversalPlanStep]): Vector[BorgTraversalPlanStep] = {
             unfixed.lastOption match {
               case None => fixed
 
@@ -830,19 +870,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 fixed.headOption match {
                   case None =>
                     // We've met all constraints, just pick any fixed ordering:
-                    val fixedHead = unfixedHead.fixed
-
-                    fix0(unfixed.tail, Vector(fixedHead))
+                    fix0(unfixed.init, Vector(unfixedHead.fixed))
 
                   case Some(fixedHead) =>
                     val newFixed = unfixedHead.fixedBefore(fixedHead)
 
-                    fix0(unfixed.tail, newFixed +: fixed)
+                    fix0(unfixed.init, newFixed +: fixed)
                 }
             }
           }
 
-          fix0(steps)
+          fix0(steps, Vector.empty)
         }
 
         copy(steps = fixedSteps)
