@@ -310,13 +310,17 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     type IndexStore = SortedMap[SortingKey, Array[Byte]]
     case class SliceIndex(name: String, storage: IndexStore, keyComparator: Comparator[SortingKey], sortRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef])
 
-    case class IndexKey(name: String, keyRefs: Array[ColumnRef], valueRefs: Array[ColumnRef])
+    case class IndexKey(namePrefix: String, keyRefs: Array[ColumnRef], valueRefs: Array[ColumnRef]) {
+      val name = namePrefix + ";krefs=" + keyRefs.mkString("[", ",", "]") + ";vrefs=" + valueRefs.mkString("[", ",", "]")
+    }
+
     type IndexMap = Map[IndexKey, SliceIndex]
 
     case class JDBMState(indices: IndexMap, insertCount: Long)
     object JDBMState {
       val empty = JDBMState(Map(), 0l)
     }
+
     case class WriteState(jdbmState: JDBMState, valueTrans: SliceTransform1[_], keyTransforms: Seq[SliceTransform1[_]])
 
     private[BlockStoreColumnarTableModule] object loadMergeEngine extends MergeEngine[Key, BD]
