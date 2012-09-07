@@ -98,7 +98,7 @@ trait TableModule[M[+_]] extends FNModule {
     // apply a function to the cartesian product of the transformed left and right subsets of columns
     case class Map2[+A <: SourceType](left: TransSpec[A], right: TransSpec[A], f: F2) extends TransSpec[A] //done
     
-    // Perform the specified transformation on the left and right sides, and then create a new set of columns
+    // Perform the specified transformation on the all sources, and then create a new set of columns
     // containing all the resulting columns.
     case class ObjectConcat[+A <: SourceType](objects: TransSpec[A]*) extends TransSpec[A] //done
 

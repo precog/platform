@@ -60,7 +60,8 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     check { (sample: SampleData) => {
       val Some((_, schema)) = sample.schema
 
-      testSortDense(sample, schema.map(_._1).head) 
+      println("Sorting on " + schema.map(_._1).head)
+      testSortDense(sample, schema.map(_._1).head)
     }}
   }
 
@@ -111,7 +112,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
         {
           "value":{
             "rzp":{ },
-            "hW":1.0,
+            "hW":2.0,
             "fa":null
           },
           "key":[1]
@@ -122,7 +123,66 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
       )
     )
 
+    testSortDense(sampleData, JPath(".uid"), JPath(".hW"))
+  }
+
+  def heterogeneousBaseValueTypeSample = {
+    val sampleData = SampleData(
+      (JsonParser.parse("""[
+        {
+          "value": [0, 1],
+          "key":[1]
+        },
+        {
+          "value":{
+            "uid": "tom",
+            "abc": 2
+          },
+          "key":[2]
+        }
+      ]""") --> classOf[JArray]).elements.toStream,
+      Some(
+        (2, List(JPath("[0]") -> CLong, JPath("[1]") -> CLong, JPath(".uid") -> CString, JPath("abc") -> CLong))
+      )
+    )
+
     testSortDense(sampleData, JPath(".uid"))
+  }
+
+  def badSchemaSortSample = {
+    val sampleData = SampleData(
+      (JsonParser.parse("""[
+        {
+          "value":{
+            "vxu":[],
+            "q":-103811160446995821.5,
+            "u":5.548109504404496E+307
+          },
+          "key":[1.0,1.0]
+        },
+        {
+          "value":{
+            "vxu":[],
+            "q":-8.40213736307813554E+18,
+            "u":8.988465674311579E+307
+          },
+          "key":[1.0,2.0]
+        },
+        {
+          "value":{
+            "m":[],
+            "f":false
+          },
+          "key":[2.0,1.0]
+        }
+      ]""") --> classOf[JArray]).elements.toStream,
+      Some((2,List(
+        JPath(".m") -> CEmptyArray,
+        JPath(".f") -> CBoolean,
+        JPath(".u") -> CDouble,
+        JPath(".q") -> CNum,
+        JPath(".vxu") -> CEmptyArray))))
+    testSortDense(sampleData, JPath("q"))
   }
 
   // Simple test of heterogeneous sort keys
@@ -169,9 +229,43 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     testSortDense(sampleData, JPath(".uid"))
   }
 
+  def secondHetSortSample = {
+    val sampleData = SampleData(
+      (JsonParser.parse("""[
+      {
+        "value":[1.0,0,{
+          
+        }],
+        "key":[3.0]
+      }, {
+        "value":{
+          "e":null,
+          "chl":-1.0,
+          "zw1":-4.611686018427387904E-27271
+        },
+        "key":[1.0]
+      }, {
+        "value":{
+          "e":null,
+          "chl":-8.988465674311579E+307,
+          "zw1":81740903825956729.9
+        },
+        "key":[2.0]
+      }]""") --> classOf[JArray]).elements.toStream,
+      Some(
+        (1, List(JPath(".e") -> CNull,
+                 JPath(".chl") -> CNum,
+                 JPath(".zw1") -> CNum,
+                 JPath("[0]") -> CLong,
+                 JPath("[1]") -> CLong,
+                 JPath("[2]") -> CEmptyObject))
+      )
+    )
 
-  def testSortDense(sample: SampleData, sortKey: JPath) = {
-    //println("testing for sample: " + sample)
+    testSortDense(sampleData, JPath(".zw1"))
+  }
+
+  def testSortDense(sample: SampleData, sortKeys: JPath*) = {
     val Some((idCount, schema)) = sample.schema
 
     def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
@@ -243,12 +337,15 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
 
       object storage extends Storage
 
-      def sortTransspec(sortKey: JPath): TransSpec1 = WrapArray(
-        sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), JPathField("value"))) {
-          case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, field)
-          case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
-        }
-      )
+      def sortTransspec(sortKeys: JPath*): TransSpec1 = ObjectConcat(sortKeys.zipWithIndex.map {
+        case (sortKey, idx) => WrapObject(
+          sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), JPathField("value"))) {
+            case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, field)
+            case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
+          },
+          "%09d".format(idx)
+        )
+      }: _*)
 
       def deleteSortKeySpec: TransSpec1 = TransSpec1.DerefArray1
     }
@@ -266,8 +363,8 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
 
     try {
       val resultM = for {
-        table  <- module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get)
-        sorted <- table.sort(module.sortTransspec(sortKey), SortAscending)
+        table  <- module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(actualSchema).get)
+        sorted <- table.sort(module.sortTransspec(sortKeys: _*), SortAscending)
         // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
         withoutSortKey = sorted.transform(module.deleteSortKeySpec)
         json <- withoutSortKey.toJson
@@ -276,7 +373,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
       val result = resultM.copoint.toList
 
       val original = sample.data.sortBy({
-        v => sortKey.extract(v \ "value")
+        v => JArray(sortKeys.map(_.extract(v \ "value")).toList).asInstanceOf[JValue]
       })(jvalueOrdering).toList
 
       if (result != original) {

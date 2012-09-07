@@ -80,7 +80,11 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
     }
 
     val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
-    val index: SortedMap[Array[Byte],Array[Byte]] = DB.getTreeMap(indexName)
+    val index: SortedMap[Array[Byte],Array[Byte]] = try {
+      DB.getTreeMap(indexName)
+    } catch {
+      case t: Throwable => println(t.getCause); throw t
+    }
 
     if (index == null) {
       throw new IllegalArgumentException("No such index in DB: %s:%s".format(dbFile, indexName))
