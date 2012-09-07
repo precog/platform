@@ -81,11 +81,6 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       v => JArray(sortKeys.map(_.extract(v \ "value")).toList).asInstanceOf[JValue]
     })(jvalueOrdering).toList
 
-    //if (result != original) {
-    //  println("Original = " + original)
-    //  println("Result   = " + result)
-    //}
-
     result must_== original
   }
 
@@ -96,7 +91,6 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     check { (sample: SampleData) => {
       val Some((_, schema)) = sample.schema
 
-      println("Sorting on " + schema.map(_._1).head)
       testSortDense(sample, schema.map(_._1).head)
     }}
   }
@@ -300,6 +294,169 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
     testSortDense(sampleData, JPath(".zw1"))
   }
-}
 
+  /* The following data set results in three separate JDBM
+   * indices due to formats. This exposed a bug in mergeProjections
+   * where we weren't properly inverting the cell matrix reorder
+   * once one of the index slices expired. See commit
+   * a253d47f3f6d09fd39afc2986c529e84e5443e7f for details
+   */
+  def threeCellMerge = {
+    val sampleData = SampleData(
+      (JsonParser.parse("""[
+{
+  "value":-2355162409801206381,
+  "key":[1.0,1.0,11.0]
+}, {
+  "value":416748368221569769,
+  "key":[12.0,10.0,5.0]
+}, {
+  "value":1,
+  "key":[9.0,13.0,2.0]
+}, {
+  "value":4220813543874929309,
+  "key":[13.0,10.0,11.0]
+}, {
+  "value":{
+    "viip":8.988465674311579E+307,
+    "ohvhwN":-1.911181119089705905E+11774,
+    "zbtQhnpnun":-4364598680493823671
+  },
+  "key":[8.0,12.0,6.0]
+}, {
+  "value":{
+    "viip":-8.610170336058498E+307,
+    "ohvhwN":0.0,
+    "zbtQhnpnun":-3072439692643750408
+  },
+  "key":[3.0,1.0,12.0]
+}, {
+  "value":{
+    "viip":1.0,
+    "ohvhwN":1.255850949484045134E-25873,
+    "zbtQhnpnun":-2192537798839555684
+  },
+  "key":[12.0,10.0,4.0]
+}, {
+  "value":{
+    "viip":-1.0,
+    "ohvhwN":1E-18888,
+    "zbtQhnpnun":-1
+  },
+  "key":[2.0,4.0,11.0]
+}, {
+  "value":{
+    "viip":1.955487389945603E+307,
+    "ohvhwN":-2.220603033978414186E+19,
+    "zbtQhnpnun":-1
+  },
+  "key":[6.0,11.0,5.0]
+}, {
+  "value":{
+    "viip":-4.022335964233546E+307,
+    "ohvhwN":0E+1,
+    "zbtQhnpnun":-1
+  },
+  "key":[8.0,7.0,13.0]
+}, {
+  "value":{
+    "viip":1.0,
+    "ohvhwN":-4.611686018427387904E+50018,
+    "zbtQhnpnun":0
+  },
+  "key":[1.0,13.0,12.0]
+}, {
+  "value":{
+    "viip":0.0,
+    "ohvhwN":4.611686018427387903E+26350,
+    "zbtQhnpnun":0
+  },
+  "key":[2.0,7.0,7.0]
+}, {
+  "value":{
+    "viip":-6.043665565176412E+307,
+    "ohvhwN":-4.611686018427387904E+27769,
+    "zbtQhnpnun":0
+  },
+  "key":[2.0,11.0,6.0]
+}, {
+  "value":{
+    "viip":-1.0,
+    "ohvhwN":-1E+36684,
+    "zbtQhnpnun":0
+  },
+  "key":[6.0,4.0,8.0]
+}, {
+  "value":{
+    "viip":-1.105552122908816E+307,
+    "ohvhwN":6.78980055408249814E-41821,
+    "zbtQhnpnun":1
+  },
+  "key":[13.0,6.0,11.0]
+}, {
+  "value":{
+    "viip":1.0,
+    "ohvhwN":3.514965842146513368E-43185,
+    "zbtQhnpnun":1133522166006977485
+  },
+  "key":[13.0,11.0,13.0]
+}, {
+  "value":{
+    "viip":8.988465674311579E+307,
+    "ohvhwN":2.129060503704072469E+45099,
+    "zbtQhnpnun":1232928328066014683
+  },
+  "key":[11.0,3.0,6.0]
+}, {
+  "value":{
+    "viip":6.651090528711015E+307,
+    "ohvhwN":-1.177821034245149979E-49982,
+    "zbtQhnpnun":2406980638624125853
+  },
+  "key":[4.0,5.0,7.0]
+}, {
+  "value":{
+    "viip":4.648002254349813E+307,
+    "ohvhwN":4.611686018427387903E-42682,
+    "zbtQhnpnun":2658995085512919727
+  },
+  "key":[12.0,2.0,8.0]
+}, {
+  "value":{
+    "viip":0.0,
+    "ohvhwN":4.611686018427387903E-33300,
+    "zbtQhnpnun":3464601040437655780
+  },
+  "key":[8.0,10.0,4.0]
+}, {
+  "value":{
+    "viip":-8.988465674311579E+307,
+    "ohvhwN":1E-42830,
+    "zbtQhnpnun":3709226396529427859
+  },
+  "key":[10.0,1.0,4.0]
+}
+      ]""") --> classOf[JArray]).elements.toStream,
+      Some(
+        (3, List(JPath(".zbtQhnpnun") -> CLong,
+                 JPath(".ohvhwN") -> CNum,
+                 JPath(".viip") -> CNum))
+      )
+    )
+
+    testSortDense(sampleData, JPath(".zbtQhnpnun"))
+  }
+
+  def emptySort = {
+    val sampleData = SampleData(
+      (JsonParser.parse("""[]""") --> classOf[JArray]).elements.toStream,
+      Some(
+        (1 , List())
+      )
+    )
+
+    testSortDense(sampleData, JPath(".foo"))
+  }
+
+}
 // vim: set ts=4 sw=4 et:
