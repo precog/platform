@@ -64,6 +64,7 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
   type GroupId = Int
 
   "a block store columnar table" should {
+    /*
     "load" >> {
       "a problem sample" in testLoadSample1.pendingUntilFixed
       "a problem sample" in testLoadSample2.pendingUntilFixed
@@ -83,6 +84,7 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
       "empty input"                   in emptySort
       "arbitrary datasets"            in checkSortDense
     }
+    */
 
     "align" >> {
       "survive a trivial scalacheck" in checkAlign
