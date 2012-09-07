@@ -546,9 +546,9 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                                        leftWriteState, rightWriteState)
 
                 for {
-                  backingStates <- stepResult
-                  ltable <- loadTable(dbFile, sortMergeEngine, backingStates._1.indices, SortAscending)
-                  rtable <- loadTable(dbFile, sortMergeEngine, backingStates._2.indices, SortAscending)
+                  writeStates <- stepResult
+                  ltable <- loadTable(dbFile, sortMergeEngine, writeStates._1.indices, SortAscending, "left")
+                  rtable <- loadTable(dbFile, sortMergeEngine, writeStates._2.indices, SortAscending, "right")
                 } yield (ltable, rtable)
 
               case None =>
@@ -658,11 +658,16 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           (newIndices, newInsertCount, nextKeyTransform +: newTransforms)
       }
 
-      WriteState(indices0, insertCount0, valueTrans0, keyTrans0)
+      val result = WriteState(indices0, insertCount0, valueTrans0, keyTrans0)
+      println(result)
+      Thread.dumpStack
+      result
     }
 
-    def loadTable(dbFile: File, mergeEngine: MergeEngine[SortingKey, SortBlockData], indices: IndexMap, sortOrder: DesiredSortOrder): M[Table] = {
+    def loadTable(dbFile: File, mergeEngine: MergeEngine[SortingKey, SortBlockData], indices: IndexMap, sortOrder: DesiredSortOrder, notes: String = ""): M[Table] = {
       import mergeEngine._
+
+      println("Loading based on indices for " + notes + ": "  + indices)
 
       // Map the distinct indices into SortProjections/Cells, then merge them
       val cells: Set[M[Option[Cell]]] = (indices.values.zipWithIndex map {
