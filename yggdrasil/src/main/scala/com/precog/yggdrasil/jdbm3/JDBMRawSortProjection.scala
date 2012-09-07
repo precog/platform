@@ -125,5 +125,6 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
     }
   } catch {
     case e: java.util.NoSuchElementException => None
+    case ioe: java.io.IOException => ioe.getCause.printStackTrace; None
   }
 }

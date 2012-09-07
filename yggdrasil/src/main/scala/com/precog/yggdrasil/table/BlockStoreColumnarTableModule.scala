@@ -663,7 +663,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       val indexMapKey = IndexKey(indexNamePrefix, krefs, vrefs)
 
       val (index, newIndices) = jdbmState.indices.get(indexMapKey) map { sliceIndex => (sliceIndex, jdbmState.indices) } getOrElse {
-        val indexName = indexMapKey.toString
+        val indexName = indexMapKey.name
         val newSliceIndex = SliceIndex(indexName,
                                   db.createTreeMap(indexName, keyComparator, null, null), // nulls indicate to use default serialization for Array[Byte] 
                                   keyComparator,
