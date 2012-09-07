@@ -567,7 +567,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           case None => 
             M.point {
               db.close() // No more slices, close out the JDBM database
-              println("DB SHOULD BE CLOSED NOW")
               state.indices
             }
         }
@@ -716,7 +715,9 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder).map(_.head)
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder).map {
+      _.headOption getOrElse this // If we start with an empty table, we always end with an empty table
+    }
 
     override def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = {
       import sortMergeEngine._
