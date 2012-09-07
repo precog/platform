@@ -291,7 +291,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               }
 
               updatedMatrix0 map { matrix => 
-                val queue0 = mutable.PriorityQueue(matrix.cells.toSeq: _*)(matrix.ordering)
+                val queue0 = mutable.PriorityQueue(matrix.cells.toSeq: _*)(if (invert) matrix.ordering.reverse else matrix.ordering)
                 Some((emission, queue0))
               }
             }
