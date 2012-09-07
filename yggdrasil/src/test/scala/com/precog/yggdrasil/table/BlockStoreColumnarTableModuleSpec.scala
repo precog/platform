@@ -66,7 +66,7 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
     }
 
     "align" >> {
-      "survive a trivial scalacheck" in checkAlign.pendingUntilFixed
+      "survive a trivial scalacheck" in checkAlign
     }
   }
 }
