@@ -24,7 +24,11 @@ import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser.parse
 import scalaz.syntax.copointed._
 
-trait CrossSpec[M[+_]] extends TableModuleSpec[M] {
+import org.specs2.ScalaCheck
+import org.specs2.mutable._
+
+
+trait CrossSpec[M[+_]] extends TableModuleTestSupport[M] with Specification with ScalaCheck {
   import SampleData._
   import trans._
   import trans.constants._
@@ -33,11 +37,17 @@ trait CrossSpec[M[+_]] extends TableModuleSpec[M] {
     val ltable = fromSample(l)
     val rtable = fromSample(r)
 
+    def removeUndefined(jv: JValue): JValue = jv match {
+      case JObject(jfields) => JObject(jfields collect { case JField(s, v) if v != JNothing => JField(s, removeUndefined(v)) })
+      case JArray(jvs) => JArray(jvs map { jv => removeUndefined(jv) })
+      case v => v
+    }
+
     val expected: Stream[JValue] = for {
       lv <- l.data
       rv <- r.data
     } yield {
-      JObject(JField("left", lv) :: JField("right", rv) :: Nil)
+      JObject(JField("left", removeUndefined(lv)) :: JField("right", removeUndefined(rv)) :: Nil)
     }
 
     val result = ltable.cross(rtable)(

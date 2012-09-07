@@ -32,7 +32,7 @@ import scalaz.syntax.copointed._
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
-trait DistinctSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTestSupport[M] with Specification with ScalaCheck {
+trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specification with ScalaCheck {
   import SampleData._
   import trans._
 
@@ -59,6 +59,6 @@ trait DistinctSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTes
       val result = toJson(distinctTable).copoint
       
       result must_== result.distinct
-    }.set(minTestsOk -> 500)
+    }.set(minTestsOk -> 2000)
   }
 }

@@ -25,6 +25,7 @@ import akka.util.Duration
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 
+import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
 import org.scalacheck._
@@ -37,7 +38,8 @@ import com.precog.bytecode._
 import scala.util.Random
 import scalaz.syntax.copointed._
 
-trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
+trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification with ScalaCheck {
+  import CValueGenerators._
   import SampleData._
   import trans._
 
@@ -109,13 +111,13 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
 
       val expected = sample.data flatMap { jv =>
         (jv \ "value") match { 
-          case JNum(x) if x.longValue % 2 == 0 => Some(jv)
+          case JNum(x) if x % 2 == 0 => Some(jv)
           case _ => None
         }
       }
 
       results.copoint must_== expected
-    }
+    }.set(minTestsOk -> 200)
   }
 
   def checkObjectDeref = {

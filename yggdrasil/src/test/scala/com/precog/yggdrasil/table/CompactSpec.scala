@@ -32,7 +32,7 @@ import scalaz.syntax.copointed._
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
-trait CompactSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTestSupport[M] with Specification with ScalaCheck {
+trait CompactSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specification with ScalaCheck {
   import SampleData._
   import trans._
   

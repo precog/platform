@@ -26,16 +26,15 @@ import blueeyes.json.JsonDSL._
 
 import java.util.concurrent.Executors
 
-import org.specs2._
-import org.specs2.mutable.Specification
 import org.specs2.ScalaCheck
+import org.specs2.mutable._
 
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 
-trait GrouperSpec[M[+_]] extends TableModuleSpec[M] with ColumnarTableModule[M] {
+trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specification with ScalaCheck {
   import trans._
   import constants._
 

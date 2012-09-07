@@ -19,7 +19,6 @@
  */
 package com.precog.yggdrasil
 
-import table._
 import com.precog.common.VectorCase
 
 import akka.dispatch.Future
@@ -203,34 +202,6 @@ object SampleData extends CValueGenerators {
   }
 }
 
-trait TestLib[M[+_]] extends TableModule[M] {
-  def lookupF1(namespace: List[String], name: String): F1 
-  def lookupF2(namespace: List[String], name: String): F2
-  def lookupScanner(namespace: List[String], name: String): Scanner 
-}
 
-trait TableModuleTestSupport[M[+_]] extends TableModule[M] {
-  implicit def M: Monad[M] with Copointed[M]
-
-  def fromJson(data: Stream[JValue], maxBlockSize: Option[Int] = None): Table
-  def toJson(dataset: Table): M[Stream[JValue]] = dataset.toJson.map(_.toStream)
-
-  def fromSample(sampleData: SampleData, maxBlockSize: Option[Int] = None): Table = fromJson(sampleData.data, maxBlockSize)
-
-  def debugPrint(dataset: Table): Unit
-}
-
-trait TableModuleSpec[M[+_]] extends Specification with ScalaCheck with TableModuleTestSupport[M] with TestLib[M]{
-  import SampleData._
-  override val defaultPrettyParams = Pretty.Params(2)
-
-  def checkMappings = {
-    implicit val gen = sample(schema)
-    check { (sample: SampleData) =>
-      val dataset = fromSample(sample)
-      toJson(dataset).copoint must containAllOf(sample.data.toList).only
-    }
-  }
-}
 
 // vim: set ts=4 sw=4 et:

@@ -41,11 +41,7 @@ import scalaz.std.anyVal._
 
 object CValueGenerators {
   type JSchema = Seq[(JPath, CType)]
-}
 
-trait CValueGenerators extends ArbitraryBigDecimal {
-  import CValueGenerators._
-  
   def inferSchema(data: Seq[JValue]): JSchema = {
     if (data.isEmpty) {
       Seq.empty
@@ -58,7 +54,11 @@ trait CValueGenerators extends ArbitraryBigDecimal {
       (current ++ inferSchema(data.tail)).distinct
     }
   }
+}
 
+trait CValueGenerators extends ArbitraryBigDecimal {
+  import CValueGenerators._
+  
   def schema(depth: Int): Gen[JSchema] = {
     if (depth <= 0) leafSchema
     else oneOf(1, 2, 3) flatMap {
@@ -110,7 +110,7 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     CEmptyArray
   )
 
-  // FIXME: Should this provide some form for CDate?
+  // FIXME: TODO Should this provide some form for CDate?
   def jvalue(ctype: CType): Gen[JValue] = ctype match {
     case CString => alphaStr map (JString(_))
     case CBoolean => arbitrary[Boolean] map (JBool(_))

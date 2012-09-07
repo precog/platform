@@ -27,7 +27,11 @@ import blueeyes.json.JPathField
 import scalaz.syntax.bind._
 import scalaz.syntax.copointed._
 
-trait IntersectSpec[M[+_]] extends TableModuleSpec[M] {
+import org.specs2.ScalaCheck
+import org.specs2.mutable._
+
+
+trait IntersectSpec[M[+_]] extends TableModuleTestSupport[M] with Specification with ScalaCheck {
   import SampleData._
   import trans._
   import trans.constants._

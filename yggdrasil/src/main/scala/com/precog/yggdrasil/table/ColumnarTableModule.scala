@@ -227,7 +227,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
 
     ///////////////////////
-    // Groupting Support //
+    // Grouping Support //
     ///////////////////////
   
     type TicVar = JPathField
@@ -701,7 +701,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       /**
        * Computes a new model derived from this one by cogroup with the specified set.
        */
-      def cogroup(rightSize: Long, rightTicVars: Set[TicVar], accResort: Boolean): BorgTraversalCostModel = {
+      def consume(rightSize: Long, rightTicVars: Set[TicVar], accResort: Boolean): BorgTraversalCostModel = {
         val commonTicVars = self.ticVars intersect rightTicVars
 
         val unionTicVars = self.ticVars ++ rightTicVars
@@ -712,7 +712,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         val newSize = self.size.max(rightSize) * (uniqueTicVars.size + 1)
 
         val newIoCost = if (!accResort) {
-          2 * rightSize
+          3 * rightSize
         } else {
           val inputCost = self.size + rightSize
           val resortCost = self.size * 2
@@ -739,7 +739,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
      *  5. The ordering of the node required for cogroup.
      * 
      */
-    case class BorgTraversalPlanStep(accOrderPre: OrderingConstraint, node: MergeNode, nodeTicVars: Set[TicVar]) { self =>
+    case class BorgTraversalPlanStep(accOrderPre: OrderingConstraint, node: MergeNode) { self =>
       // Do we have to resort the accumulator during this step?
       lazy val accResort: Boolean = !(accOrderPre & accOrderPost).isEmpty
 
@@ -751,6 +751,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       // New tic variables gained during the step:
       lazy val newTicVars = postTicVars -- preTicVars
+
+      def nodeTicVars: Set[TicVar] = node.ticVars
 
       // The order after the step:
       lazy val accOrderPost: OrderingConstraint = accOrderPre & OrderingConstraint(Seq(nodeTicVars)) match {
@@ -799,15 +801,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       /**
        * Generates a new plan by cogrouping the result of this plan with the specified node.
        */
-      def cogroup(rightNode: MergeNode, rightSize: Long, rightTicVars: Set[TicVar]) = {
+      def consume(rightNode: MergeNode, rightSize: Long) = {
+        val rightTicVars: Set[TicVar] = rightNode.ticVars
+
         val accOrderPre = steps.lastOption match {
           case Some(last) => last.accOrderPost
           case None => OrderingConstraint.Zero
         }
 
-        val newStep = BorgTraversalPlanStep(accOrderPre, rightNode, rightTicVars)
+        val newStep = BorgTraversalPlanStep(accOrderPre, rightNode)
 
-        val newCostModel = costModel.cogroup(rightSize, rightTicVars, newStep.accResort)
+        val newCostModel = costModel.consume(rightSize, rightTicVars, newStep.accResort)
 
         copy(
           steps = steps :+ newStep,
@@ -815,30 +819,33 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         )
       }
 
-      def fixed: BorgTraversalPlan = copy(steps = fixedSteps)
+      def fixed: BorgTraversalPlan = {
+        // Backpropagate constraints to fix everything:
+        def fixedSteps: Vector[BorgTraversalPlanStep] = {
+          def fix0(unfixed: Vector[BorgTraversalPlanStep], fixed: Vector[BorgTraversalPlanStep] = Vector.empty): Vector[BorgTraversalPlanStep] = {
+            unfixed.lastOption match {
+              case None => fixed
 
-      def fixedSteps: Vector[BorgTraversalPlanStep] = {
-        def fix0(unfixed: Vector[BorgTraversalPlanStep], fixed: Vector[BorgTraversalPlanStep] = Vector.empty): Vector[BorgTraversalPlanStep] = {
-          unfixed.lastOption match {
-            case None => fixed
+              case Some(unfixedHead) =>
+                fixed.headOption match {
+                  case None =>
+                    // We've met all constraints, just pick any fixed ordering:
+                    val fixedHead = unfixedHead.fixed
 
-            case Some(unfixedHead) =>
-              fixed.headOption match {
-                case None =>
-                  // We've met all constraints, just pick any fixed ordering:
-                  val fixedHead = unfixedHead.fixed
+                    fix0(unfixed.tail, Vector(fixedHead))
 
-                  fix0(unfixed.tail, Vector(fixedHead))
+                  case Some(fixedHead) =>
+                    val newFixed = unfixedHead.fixedBefore(fixedHead)
 
-                case Some(fixedHead) =>
-                  val newFixed = unfixedHead.fixedBefore(fixedHead)
-
-                  fix0(unfixed.tail, newFixed +: fixed)
-              }
+                    fix0(unfixed.tail, newFixed +: fixed)
+                }
+            }
           }
+
+          fix0(steps)
         }
 
-        fix0(steps)
+        copy(steps = fixedSteps)
       }
     }
 
@@ -853,6 +860,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def findBorgTraversalOrder(spanningGraph: MergeGraph, nodeOracle: MergeNode => NodeMetadata): BorgTraversalPlan = {
       // Find all the nodes accessible from the specified node (through edges):
       def connections(node: MergeNode): Set[MergeNode] = spanningGraph.edgesFor(node).flatMap(e => Set(e.a, e.b)) - node
+
+      // TODO: Discard junk in the Map[Set[MergeNode], Set[BorgTraversalPlan]]
 
       def pick0(fixed: Set[MergeNode], unfixed: Set[MergeNode], options: Set[MergeNode], 
                 plans: Map[Set[MergeNode], Set[BorgTraversalPlan]]): Map[Set[MergeNode], Set[BorgTraversalPlan]] = {
@@ -871,7 +880,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
               plans(fixed).foldLeft(plans) {
                 case (plans, fixedPlan) =>
-                  val newPlan = fixedPlan.cogroup(choice, nodeMetadata.size, choice.ticVars)
+                  val newPlan = fixedPlan.consume(choice, nodeMetadata.size)
 
                   val newSet = plans.getOrElse(newFixed, Set.empty) + newPlan
 
@@ -901,7 +910,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) 
       val plan = findBorgTraversalOrder(spanningGraph, metaForNode)
 
-      val planSteps = plan.fixedSteps
+      val planSteps = plan.fixed.steps
 
       val x =  planSteps.head
       val xs = planSteps.tail
@@ -922,6 +931,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           accM.map {
             case ((acc, lastStep)) =>
               val node = metaForNode(newStep.node)
+
+              // Cogroup on acc data and node data:
 
               (acc, newStep)
           }
