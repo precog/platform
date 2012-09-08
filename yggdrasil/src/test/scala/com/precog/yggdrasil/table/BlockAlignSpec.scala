@@ -51,6 +51,7 @@ import SampleData._
 
 trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
   def testAlign(sample: SampleData) = {
+    println("===========================================================================")
     object module extends BlockStoreTestModule {
       val projections = Map.empty[ProjectionDescriptor, Projection]
     }
@@ -80,6 +81,63 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
   def checkAlign = {
     implicit val gen = sample(objectSchema(_, 3))
     check { (sample: SampleData) => testAlign(sample.sortBy(_ \ "key")) }
+  }
+
+  def alignAcrossBoundaries = {
+    val JArray(elements) = JsonParser.parse("""[
+        {
+          "value":{
+            "fr8y":-2.761198250953116839E+14037,
+            "hw":[],
+            "q":2.429467767811669098E+50018
+          },
+          "key":[1.0,2.0]
+        },
+        {
+          "value":{
+            "fr8y":8862932465119160.0,
+            "hw":[],
+            "q":-7.06989214308545856E+34226
+          },
+          "key":[2.0,1.0]
+        },
+        {
+          "value":{
+            "fr8y":3.754645750547307163E-38452,
+            "hw":[],
+            "q":-2.097582685805979759E+29344
+          },
+          "key":[2.0,4.0]
+        },
+        {
+          "value":{
+            "fr8y":0.0,
+            "hw":[],
+            "q":2.839669248714535100E+14955
+          },
+          "key":[3.0,4.0]
+        },
+        {
+          "value":{
+            "fr8y":-1E+8908,
+            "hw":[],
+            "q":6.56825624988914593E-49983
+          },
+          "key":[4.0,2.0]
+        },
+        {
+          "value":{
+            "fr8y":123473018907070400.0,
+            "hw":[],
+            "q":0E+35485
+          },
+          "key":[4.0,4.0]
+        }]
+    """)
+
+    val sample = SampleData(elements.toStream, Some((2,List((JPath(".q"),CNum), (JPath(".hw"),CEmptyArray), (JPath(".fr8y"),CNum)))))
+
+    testAlign(sample.sortBy(_ \ "key"))
   }
 }
 

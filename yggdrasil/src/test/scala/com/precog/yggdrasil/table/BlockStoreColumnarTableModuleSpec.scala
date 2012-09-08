@@ -86,6 +86,7 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
 
     "align" >> {
       "survive a trivial scalacheck" in checkAlign
+      "across slice boundaries" in alignAcrossBoundaries
     }
   }
 }
