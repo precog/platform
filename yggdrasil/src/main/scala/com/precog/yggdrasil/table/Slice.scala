@@ -509,7 +509,7 @@ trait Slice { source =>
   }
 
   def toString(row: Int): Option[String] = {
-    (columns collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }) match {
+    (columns.toList.sortBy(_._1) collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }) match {
       case Nil => None
       case l   => Some(l.mkString("[", ", ", "]")) 
     }

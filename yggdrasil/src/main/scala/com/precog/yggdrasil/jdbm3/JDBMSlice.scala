@@ -44,7 +44,6 @@ import JDBMProjection._
  * @param size How many entries to retrieve in this slice
  */
 trait JDBMSlice[Key] extends Slice with Logging {
-  protected def source: Iterator[java.util.Map.Entry[Key,Array[Byte]]]
   protected def requestedSize: Int
 
   protected def keyColumns: Array[(ColumnRef, ArrayColumn[_])]
@@ -58,7 +57,7 @@ trait JDBMSlice[Key] extends Slice with Logging {
 
   private var row = 0
 
-  protected def load() {
+  protected def load(source: Iterator[java.util.Map.Entry[Key,Array[Byte]]]) {
     source.take(requestedSize).foreach {
       entry => {
         loadRowFromKey(row, entry.getKey)

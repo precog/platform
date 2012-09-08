@@ -78,11 +78,10 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
               val valueAtPath = jv.get(vpath)
               
               if (compliesWithSchema(valueAtPath, ctype)) {
-                val result = obj.set(vpath, valueAtPath)
-                //println("result in compliesWithSchema: %s\n".format(result))
-                result
-              } else
+                obj.set(vpath, valueAtPath)
+              } else { 
                 obj
+              }
             }
           }
           
@@ -104,14 +103,15 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
           val vpath = JPath(JPathField("value") :: jpath.nodes)
           val valueAtPath = jv.get(vpath)
           
-          if (module.compliesWithSchema(valueAtPath, ctype))
+          if (module.compliesWithSchema(valueAtPath, ctype)) {
             obj.set(vpath, valueAtPath)
-          else
+          } else {
             obj
+          }
         }
       }
       
-      (back \ "value" == JNothing).option(back)
+      (back \ "value" != JNothing).option(back)
     }
 
     module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(module.schema).get).flatMap(_.toJson).copoint.toStream must_== expected

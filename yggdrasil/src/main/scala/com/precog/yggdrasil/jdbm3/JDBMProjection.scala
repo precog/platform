@@ -149,7 +149,6 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
       var lastKey: Identities  = null
 
       val slice = new JDBMSlice[Identities] {
-        val source = constrainedMap.entrySet.iterator.asScala
         val requestedSize = DEFAULT_SLICE_SIZE
 
         val keyColumns = (0 until descriptor.identities).map {
@@ -173,7 +172,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
           }
         }
 
-        load()
+        load(constrainedMap.entrySet.iterator.asScala)
 
         val desiredRefs: Set[ColumnRef] = desiredColumns.map { case ColumnDescriptor(_, selector, tpe, _) => ColumnRef(JPath(Value) \ selector, tpe) }
 

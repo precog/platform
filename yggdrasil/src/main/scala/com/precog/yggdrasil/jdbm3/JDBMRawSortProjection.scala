@@ -41,7 +41,7 @@ import scala.collection.JavaConverters._
  * A Projection wrapping a raw JDBM TreeMap index used for sorting. It's assumed that
  * the index has been created and filled prior to creating this wrapper.
  */
-abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte],Slice] with Logging {
+class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte],Slice] with Logging {
 
   // These should not actually be used in sorting
   def descriptor: ProjectionDescriptor = sys.error("Sort projections do not have full ProjectionDescriptors")
@@ -79,7 +79,7 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
       throw new IllegalArgumentException("JDBM Sort Projections may not be constrained by column descriptor")
     }
 
-    val db = DBMaker.openFile(dbFile.getCanonicalPath).make()
+    val db = DBMaker.openFile(dbFile.getCanonicalPath).readonly().make()
     try {
       val index: SortedMap[Array[Byte],Array[Byte]] = db.getTreeMap(indexName)
 
@@ -95,7 +95,6 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
         var lastKey: Array[Byte]  = null
 
         val slice = new JDBMSlice[Array[Byte]] {
-          def source = constrainedMap.entrySet.iterator.asScala
           def requestedSize = sliceSize
 
           val keyColumns: Array[(ColumnRef, ArrayColumn[_])] = sortKeyRefs.map(JDBMSlice.columnFor(JPath("[0]"), sliceSize))(collection.breakOut)
@@ -112,7 +111,7 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
             keyColumnDecoder.decodeToRow(row, rowKey)
           }
 
-          load()
+          load(constrainedMap.entrySet.iterator.asScala)
         }
 
         if (firstKey == null) { // Just guard against an empty slice

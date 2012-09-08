@@ -64,29 +64,30 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
   type GroupId = Int
 
   "a block store columnar table" should {
-//    "load" >> {
-//      "a problem sample" in testLoadSample1.pendingUntilFixed
-//      "a problem sample" in testLoadSample2.pendingUntilFixed
-//      "a problem sample" in testLoadSample3.pendingUntilFixed
-//      "a problem sample" in testLoadSample4.pendingUntilFixed
-//      //"a problem sample" in testLoadSample5 //pathological sample in the case of duplicated ids.
-//      "a dense dataset" in checkLoadDense.pendingUntilFixed
-//    }                           
-//
-//    "sort" >> {
-//      "fully homogeneous data"        in homogeneousSortSample
-//      "data with undefined sort keys" in partiallyUndefinedSortSample
-//      "heterogeneous sort keys"       in heterogeneousSortSample
-//      "top-level hetereogeneous values" in heterogeneousBaseValueTypeSample
-//      "sort with a bad schema"        in badSchemaSortSample
-//      "merges over three cells"       in threeCellMerge
-//      "empty input"                   in emptySort
-//      "arbitrary datasets"            in checkSortDense
-//    }
+    "load" >> {
+      "a problem sample" in testLoadSample1
+      "a problem sample" in testLoadSample2
+      "a problem sample" in testLoadSample3
+      "a problem sample" in testLoadSample4
+      //"a problem sample" in testLoadSample5 //pathological sample in the case of duplicated ids.
+      "a dense dataset" in checkLoadDense
+    }                           
+
+    "sort" >> {
+      "fully homogeneous data"        in homogeneousSortSample
+      "data with undefined sort keys" in partiallyUndefinedSortSample
+      "heterogeneous sort keys"       in heterogeneousSortSample
+      "top-level hetereogeneous values" in heterogeneousBaseValueTypeSample
+      "sort with a bad schema"        in badSchemaSortSample
+      "merges over three cells"       in threeCellMerge
+      "empty input"                   in emptySort
+      "arbitrary datasets"            in checkSortDense
+    }
 
     "align" >> {
-      "survive a trivial scalacheck" in checkAlign
+      "a simple example" in alignSimple
       "across slice boundaries" in alignAcrossBoundaries
+      "survive a trivial scalacheck" in checkAlign
     }
   }
 }

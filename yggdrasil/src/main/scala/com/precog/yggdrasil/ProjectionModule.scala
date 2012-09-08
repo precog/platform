@@ -48,7 +48,7 @@ trait BlockProjectionLike[Key, Block] extends ProjectionLike {
   //TODO: make the following type member work instead of having a type parameter
   // type Key
 
-  implicit def keyOrder: Order[Key]
+  //implicit def keyOrder: Order[Key]
 
   /** 
    * Get a block of data beginning with the first record with a key greater than
