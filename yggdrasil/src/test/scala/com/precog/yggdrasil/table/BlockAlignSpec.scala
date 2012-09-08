@@ -56,6 +56,7 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
     }
 
     import module._
+    import module.trans._
     import module.trans.constants._
 
     val lstream = sample.data.zipWithIndex collect { case (v, i) if i % 2 == 0 => v }
