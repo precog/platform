@@ -335,8 +335,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         // We will *always* have a lhead and rhead, because if at any point we run out of data,
         // we'll still be hanging on to the last slice on the other side to use as the authority
         // for equality comparisons
-        def step(state: AlignState, lhead: Slice, ltail: StreamT[M, Slice], leq: mutable.BitSet,
-                                    rhead: Slice, rtail: StreamT[M, Slice], req: mutable.BitSet,
+        def step(state: AlignState, lhead: Slice, ltail: StreamT[M, Slice], stepleq: mutable.BitSet,
+                                    rhead: Slice, rtail: StreamT[M, Slice], stepreq: mutable.BitSet,
                                     lstate: A, rstate: B, 
                                     leftWriteState: JDBMState, rightWriteState: JDBMState): M[(JDBMState, JDBMState)] = {
 
@@ -344,6 +344,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                                     lidx: Int, lsize: Int, lacc: mutable.BitSet, 
                                     ridx: Int, rsize: Int, racc: mutable.BitSet,
                                     span: Span): NextStep = {
+
+            println(span)
 
             // todo: This is optimized for sparse alignments; if you get into an alignment
             // where every pair is distinct and equal, you'll do 2*n comparisons.
@@ -357,6 +359,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               if (lidx < lsize) {
                 comparator.compare(lidx, ridx - 1) match {
                   case EQ => 
+                    println("Found equal on left.")
                     buildFilters(comparator, lidx + 1, lsize, lacc + lidx, ridx, rsize, racc, LeftSpan)
                   case LT => 
                     sys.error("Inputs to align are not correctly sorted.")
@@ -365,12 +368,14 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                 }
               } else {
                 // left is exhausted in the midst of a span
+                println("Left exhausted in the middle of a span.")
                 MoreLeft(LeftSpan, lacc, ridx, racc)
               }
             } else {
               if (lidx < lsize && ridx < rsize) {
                 comparator.compare(lidx, ridx) match {
                   case EQ => 
+                    println("Found equal on right.")
                     buildFilters(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc + ridx, RightSpan)
                   case LT => 
                     if (span eq RightSpan) {
@@ -386,8 +391,10 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                 }
               } else if (lidx < lsize) {
                 // right is exhausted; span will be RightSpan or NoSpan
+                println("Right exhausted, left is not; asking for more right with " + lacc.mkString("[", ",", "]") + ";" + racc.mkString("[", ",", "]") )
                 MoreRight(span, lidx, lacc, racc)
               } else {
+                println("Both sides exhausted, so emitting with " + lacc.mkString("[", ",", "]") + ";" + racc.mkString("[", ",", "]") )
                 MoreLeft(NoSpan, lacc, ridx, racc)
               }
             }
@@ -395,10 +402,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
           def continue(nextStep: NextStep, comparator: RowComparator, lstate: A, lkey: Slice, rstate: B, rkey: Slice, leftWriteState: JDBMState, rightWriteState: JDBMState): M[(JDBMState, JDBMState)] = nextStep match {
             case MoreLeft(span, leq, ridx, req) =>
+              println("Requested more left; emitting left based on bitset " + leq.mkString("[", ",", "]"))
               val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size, leq)))
 
               @inline def next(lbs: JDBMState, rbs: JDBMState): M[(JDBMState, JDBMState)] = ltail.uncons flatMap {
                 case Some((lhead0, ltail0)) =>
+                  println("Continuing on left; not emitting right.")
                   val nextState = (span: @unchecked) match {
                     case NoSpan => FindEqualAdvancingLeft(ridx, rkey)
                     case LeftSpan => RunLeft(ridx, rkey)
@@ -406,6 +415,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
                   step(nextState, lhead0, ltail0, new mutable.BitSet(), rhead, rtail, req, lstate, rstate, lbs, rbs)
                 case None =>
+                  println("No more data on left; emitting right based on bitset " + req.mkString("[", ",", "]"))
                   // done on left, and we're not in an equal span on the right (since LeftSpan can only
                   // be emitted if we're not in a right span) so we're entirely done.
                   val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size, req))) 
@@ -418,13 +428,15 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                 next(leftWriteState, rightWriteState)
               }
 
-            case MoreRight(span, lidx, lex, req) =>
+            case MoreRight(span, lidx, leq, req) =>
+              println("Requested more right; emitting right based on bitset " + req.mkString("[", ",", "]"))
               // if span == RightSpan and no more data exists on the right, we need to 
               // continue in buildFilters spanning on the left.
               val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size, req)))
 
               @inline def next(lbs: JDBMState, rbs: JDBMState): M[(JDBMState, JDBMState)] = rtail.uncons flatMap {
                 case Some((rhead0, rtail0)) => 
+                  println("Continuing on right.")
                   val nextState = (span: @unchecked) match {
                     case NoSpan => FindEqualAdvancingRight(lidx, lkey)
                     case RightSpan => RunRight(lidx, lkey)
@@ -436,12 +448,14 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   // no need here to check for LeftSpan by the contract of buildFilters
                   (span: @unchecked) match {
                     case NoSpan => 
+                      println("No more data on right and not in a span; emitting left based on bitset " + leq.mkString("[", ",", "]"))
                       // entirely done; just emit both 
                       val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size, leq)))
                       (lemission map { e => writeAlignedSlices(db, lkey, e, lbs, "alignLeft", SortAscending) } getOrElse lbs.point[M]) map { (_, rbs) }
 
                     case RightSpan => 
                       // need to switch to left spanning in buildFilters
+                      println("No more data on right, but in a span so continuing on left.")
                       val nextState = buildFilters(comparator, lidx, lhead.size, leq, rhead.size, rhead.size, new mutable.BitSet(), LeftSpan)
                       continue(nextState, comparator, lstate, lkey, rstate, rkey, lbs, rbs)
                   }
@@ -457,7 +471,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
           // this is an optimization that uses a preemptory comparison and a binary
           // search to skip over big chunks of (or entire) slices if possible.
-          def findEqual(comparator: RowComparator, leftRow: Int, rightRow: Int): NextStep = {
+          def findEqual(comparator: RowComparator, leftRow: Int, leq: mutable.BitSet, rightRow: Int, req: mutable.BitSet): NextStep = {
             comparator.compare(leftRow, rightRow) match {
               case EQ => 
                 buildFilters(comparator, leftRow, lhead.size, leq, rightRow, rhead.size, req, NoSpan)
@@ -491,7 +505,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
               
               // do some preliminary comparisons to figure out if we even need to look at the current slice
-              val nextState = findEqual(comparator, leftRow, 0)
+              val nextState = findEqual(comparator, leftRow, stepleq, 0, stepreq)
               continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)    
             
             case FindEqualAdvancingLeft(rightRow, rkey) => 
@@ -503,14 +517,14 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
               
               // do some preliminary comparisons to figure out if we even need to look at the current slice
-              val nextState = findEqual(comparator, 0, rightRow)
+              val nextState = findEqual(comparator, 0, stepleq, rightRow, stepreq)
               continue(nextState, comparator, nextA, lkey, rstate, rkey, leftWriteState, rightWriteState)    
             
             case RunRight(leftRow, lkey) =>
               val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
               val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }               
 
-              val nextState = buildFilters(comparator, leftRow, lhead.size, leq, 
+              val nextState = buildFilters(comparator, leftRow, lhead.size, stepleq, 
                                                        0, rhead.size, new mutable.BitSet(), RightSpan)
 
               continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)
@@ -520,7 +534,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
 
               val nextState = buildFilters(comparator, 0, lhead.size, new mutable.BitSet(), 
-                                                       rightRow, rhead.size, req, LeftSpan)
+                                                       rightRow, rhead.size, stepreq, LeftSpan)
 
               continue(nextState, comparator, nextA, lkey, rstate, rkey, leftWriteState, rightWriteState)
           }
@@ -675,6 +689,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     }
 
     def loadTable(dbFile: File, mergeEngine: MergeEngine[SortingKey, SortBlockData], indices: IndexMap, sortOrder: DesiredSortOrder, notes: String = ""): M[Table] = {
+      println("Losding using indices: " + indices.keys.map(_.name).mkString("\n  ", "\n  ", "\n"))
       import mergeEngine._
 
       // Map the distinct indices into SortProjections/Cells, then merge them
