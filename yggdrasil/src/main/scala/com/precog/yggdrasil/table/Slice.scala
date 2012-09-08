@@ -141,6 +141,7 @@ trait Slice { source =>
           case CEmptyArray => (ColumnRef(JPath.Identity, CEmptyArray), new EmptyArrayColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
+          case CUndefined => sys.error("Cannot define a constant undefined value")
         }
       )
     }
@@ -212,6 +213,7 @@ trait Slice { source =>
           case CNull => JNullT
           case CEmptyObject => JObjectFixedT(Map.empty[String, JType])
           case CEmptyArray => JArrayFixedT(Map.empty[Int, JType])
+          case invalid => sys.error("Cannot group on CType: " + invalid)
         })}
 
         val values = grouped.values map { seq => seq.flatMap { case (path, ctpe) => filteredCols.get(ColumnRef(path, ctpe)) } }
@@ -271,6 +273,7 @@ trait Slice { source =>
                 def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
               }
             }
+            case invalid => sys.error("sdflsd on invalid column: " + invalid)
           }
         }
 

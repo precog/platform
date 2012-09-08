@@ -70,9 +70,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
     val resultM = for {
       sorted <- module.fromSample(sample).sort(module.sortTransspec(sortKeys: _*), SortAscending)
-      // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
-      withoutSortKey = sorted.transform(module.deleteSortKeySpec)
-      json <- withoutSortKey.toJson
+      json <- sorted.toJson
     } yield json
 
     val result = resultM.copoint.toList

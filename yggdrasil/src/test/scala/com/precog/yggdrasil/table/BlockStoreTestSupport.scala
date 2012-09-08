@@ -145,8 +145,6 @@ trait BlockStoreTestSupport[M[+_]] { self =>
         "%09d".format(idx)
       )
     }: _*)
-
-    def deleteSortKeySpec: TransSpec1 = TransSpec1.DerefArray1
   }
 }
 

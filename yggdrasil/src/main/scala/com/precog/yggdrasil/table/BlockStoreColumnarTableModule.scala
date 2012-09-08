@@ -462,7 +462,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                     case RightSpan => 
                       // need to switch to left spanning in buildFilters
                       val nextState = buildFilters(comparator, lidx, lhead.size, leq, rhead.size, rhead.size, new mutable.BitSet(), LeftSpan)
-                      continue(nextState, comparator, lstate, lkey, rstate, rkey, leftWriteState, rightWriteState)
+                      continue(nextState, comparator, lstate, lkey, rstate, rkey, lbs, rbs)
                   }
               }
 
@@ -713,6 +713,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       mergeProjections(cells, sortOrder.isAscending) { slice => 
         // only need to compare on the group keys (0th element of resulting table) between projections
         slice.columns.keys.collect({ case ref @ ColumnRef(JPath(JPathIndex(0), _ @ _*), _) => ref}).toList.sorted
+      }.flatMap { 
+        merged => {
+          val slicePrintM = merged.slices.toStream.map { slices => println("\n\nFinal %s merge slices (%d):".format(notes, slices.size)); slices.foreach(println) }
+          slicePrintM.map { _ => merged.transform(TransSpec1.DerefArray1) }
+        }
       }
     }
   }
