@@ -415,6 +415,201 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def fromFixed(order: Seq[TicVar]): OrderingConstraint = OrderingConstraint(order.map(v => Set(v)))
     }
 
+    sealed trait OrderingConstraint2 { self =>
+      def fixed: Seq[TicVar]
+
+      def fixedConstraint = OrderingConstraint2.orderedVars(fixed: _*)
+
+      def variables: Set[TicVar] = fixed.toSet
+
+      def normalize: OrderingConstraint2
+
+      def flatten: OrderingConstraint2
+
+      def render: String
+
+      def filter(pf: PartialFunction[OrderingConstraint2, Boolean]): OrderingConstraint2
+
+      def - (that: OrderingConstraint2): OrderingConstraint2 = {
+        val thatVars = that.variables
+
+        (filter {
+          case OrderingConstraint2.Variable(x) => !thatVars.contains(x)
+
+          case x => true
+        }).normalize
+      }
+
+      import OrderingConstraint2._
+
+      def join(that: OrderingConstraint2): Join = {
+        def join2(left: OrderingConstraint2, right: OrderingConstraint2): Join = {
+          (left, right) match {
+            case (left, Zero) => Join(left)
+
+            case (Zero, right) => Join(right)
+
+            case (l @ Ordered(left), r @ Ordered(right)) => 
+              val joinedHeads = left.head.join(right.head)
+
+              if (joinedHeads.join == Zero) Join.unjoined(l, r)
+              else {
+                val leftTail = ordered(joinedHeads.leftRem, Ordered(left.tail))
+                val rightTail = ordered(joinedHeads.rightRem, Ordered(right.tail))
+
+                val joinedTails = leftTail.join(rightTail)
+
+                if (joinedTails.join == Zero) Join.unjoined(l, r)
+                else {
+                  Join(ordered(joinedHeads.join, joinedTails.join), joinedTails.leftRem, joinedTails.rightRem)
+                }
+              }
+
+            case (l @ Ordered(left), r @ Variable(right)) => 
+              if (left.head == r) Join(r, leftRem = Ordered(left.tail), rightRem = Zero) else Join.unjoined(l, r)
+
+            case (Ordered(left), Unordered(right)) => 
+              sys.error("todo")
+
+            case (l @ Variable(left), r @ Variable(right)) => 
+              if (left == right) Join(l) else Join.unjoined(l, r)
+
+            case (l @ Variable(left), r @ Ordered(right)) => 
+              join2(l, r).flip
+
+            case (l @ Variable(left), r @ Unordered(right)) => 
+              if (right.contains(l)) Join(l, leftRem = Zero, rightRem = Unordered(right - l)) else Join.unjoined(l, r)
+
+            case (Unordered(left), Unordered(right)) =>  
+              val common = left intersect right
+              val leftUnique = left -- common
+              val rightUnique = right -- common
+
+              Join(Unordered(common), leftRem = Unordered(leftUnique), rightRem = Unordered(rightUnique))
+
+            case (l @ Unordered(left), r @ Ordered(right)) => 
+              join2(l, r).flip
+
+            case (l @ Unordered(left), r @ Variable(right)) => 
+              join2(l, r).flip
+          }
+        }
+
+        join2(self.normalize, that.normalize).normalize
+      }
+    }
+    object OrderingConstraint2 {
+      case class Join(join: OrderingConstraint2, leftRem: OrderingConstraint2 = Zero, rightRem: OrderingConstraint2 = Zero) {
+        def normalize = copy(join = join.normalize, leftRem = leftRem.normalize, rightRem = rightRem.normalize)
+
+        def flip = copy(leftRem = rightRem, rightRem = leftRem)
+      }
+
+      object Join {
+        def unjoined(left: OrderingConstraint2, right: OrderingConstraint2): Join = Join(Zero, left, right)
+      }
+
+      object ConstraintParser extends scala.util.parsing.combinator.JavaTokenParsers {
+        lazy val ticVar: Parser[OrderingConstraint2] = "'" ~> ident ^^ (s => Variable(JPathField(s)))
+
+        lazy val ordered: Parser[OrderingConstraint2] = ("[" ~> repsep(constraint, ",") <~ "]") ^^ (v => Ordered(v.toSeq))
+
+        lazy val unordered: Parser[OrderingConstraint2] = ("{" ~> repsep(constraint, ",") <~ "}") ^^  (v => Unordered(v.toSet))
+
+        lazy val zero: Parser[OrderingConstraint2] = "*" ^^^ Zero
+
+        lazy val constraint: Parser[OrderingConstraint2] = ticVar | ordered | unordered | zero
+
+        def parse(input: String): OrderingConstraint2 = parseAll(constraint, input).getOrElse(Zero)
+      }
+
+      def parse(input: String): OrderingConstraint2 = ConstraintParser.parse(input)
+
+      def ordered(values: OrderingConstraint2*) = Ordered(Vector(values: _*))
+
+      def orderedVars(values: TicVar*) = Ordered(Vector(values: _*).map(Variable.apply))
+
+      def unordered(values: OrderingConstraint2*) = Unordered(values.toSet)
+
+      def unorderedVars(values: TicVar*) = Unordered(values.toSet.map(Variable.apply))
+
+      case object Zero extends OrderingConstraint2 { self =>
+        def fixed = Vector.empty
+
+        def flatten = self
+
+        def normalize = self
+
+        def render = "*"
+
+        def filter(pf: PartialFunction[OrderingConstraint2, Boolean]): OrderingConstraint2 = Zero
+      }
+
+      case class Variable(value: TicVar) extends OrderingConstraint2 { self =>
+        def fixed = Vector(value)
+
+        def flatten: Variable = self
+
+        def normalize = self
+
+        def render = "'" + value.toString.substring(1)
+
+        def filter(pf: PartialFunction[OrderingConstraint2, Boolean]): OrderingConstraint2 = pf.lift(self).filter(_ == true).map(Function.const(self)).getOrElse(Zero)
+      }
+      case class Ordered(value: Seq[OrderingConstraint2]) extends OrderingConstraint2 { self =>
+        def fixed = value.map(_.fixed).flatten
+
+        def normalize = {
+          val f = Ordered(value.map(_.normalize)).flatten
+          val fv = f.value
+
+          if (fv.length == 0) Zero
+          else if (fv.length == 1) fv.head 
+          else f
+        }
+
+        def flatten: Ordered = Ordered(value.map(_.flatten).flatMap {
+          case x: Ordered => x.value
+          case Zero => Vector.empty
+          case x => Vector(x)
+        })
+
+        def render = value.map(_.render).mkString("[", ", ", "]")
+
+        def filter(pf: PartialFunction[OrderingConstraint2, Boolean]): OrderingConstraint2 = {
+          val self2 = Ordered(value.map(_.filter(pf)))
+
+          pf.lift(self2).filter(_ == true).map(Function.const(self2)).getOrElse(Zero)
+        }
+      }
+      case class Unordered(value: Set[OrderingConstraint2]) extends OrderingConstraint2 { self =>
+        def fixed = value.toSeq.map(_.fixed).flatten
+
+        def flatten: Unordered = Unordered(value.map(_.flatten).flatMap {
+          case x: Unordered => x.value
+          case Zero => Set.empty[OrderingConstraint2]
+          case x => Set(x)
+        })
+
+        def normalize = {
+          val f = Unordered(value.map(_.normalize)).flatten
+          val fv = f.value
+
+          if (fv.size == 0) Zero
+          else if (fv.size == 1) fv.head 
+          else f
+        }
+
+        def render = value.toSeq.sortBy(_.render).map(_.render).mkString("{", ", ", "}")
+
+        def filter(pf: PartialFunction[OrderingConstraint2, Boolean]): OrderingConstraint2 = {
+          val self2 = Unordered(value.map(_.filter(pf)))
+
+          pf.lift(self2).filter(_ == true).map(Function.const(self2)).getOrElse(Zero)
+        }
+      }
+    }
+
     object OrderingConstraints {
       /**
        * Compute a new constraint that can replace both input constraints
