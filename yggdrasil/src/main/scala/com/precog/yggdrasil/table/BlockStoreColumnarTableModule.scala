@@ -125,23 +125,27 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   }
 
   private class MergeEngine[KeyType, BlockData <: BlockProjectionData[KeyType, Slice]] {
+    case class CellState(index: Int, maxKey: KeyType, slice0: Slice, succf: KeyType => M[Option[BlockData]], remap: Array[Int], position: Int) {
+      def toCell = {
+        new Cell(index, maxKey, slice0)(succf, remap.clone, position)
+      }
+    }
+  
+
+    object CellState {
+      def apply(index: Int, maxKey: KeyType, slice0: Slice, succf: KeyType => M[Option[BlockData]]) = {
+        val remap = new Array[Int](slice0.size)
+        new CellState(index, maxKey, slice0, succf, remap, 0)
+      }
+    }
+
+
     /**
      * A wrapper for a slice, and the function required to get the subsequent
      * block of data.
      */
-    case class Cell(index: Int, maxKey: KeyType, slice0: Slice)(succ0: KeyType => M[Option[BlockData]]) {
-      val uuid = java.util.UUID.randomUUID()
-      private val remap = new Array[Int](slice0.size)
-      var position: Int = 0
-
-      def succ: M[Option[Cell]] = {
-        for (blockOpt <- succ0(maxKey)) yield {
-          blockOpt map { block => 
-            Cell(index, block.maxKey, block.data)(succ0) 
-          }
-        }
-      }
-
+    case class Cell private[MergeEngine] (index: Int, maxKey: KeyType, slice0: Slice)(succf: KeyType => M[Option[BlockData]], remap: Array[Int], var position: Int) {
+                     
       def advance(i: Int): Boolean = {
         if (position < slice0.size) {
           remap(position) = i
@@ -155,21 +159,30 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         slice0.sparsen(remap, if (position > 0) remap(position - 1) + 1 else 0)
       }
 
-      def split: (Slice, Cell) = {
-        val (finished, continuing) = slice0.split(position)
-        if (position == 0) {
-          // If we never read from the slice, just return an empty slice and ourself 
-          (finished, Cell(index, maxKey, continuing)(succ0))
-        } else {
-          (finished.sparsen(remap, remap(position - 1) + 1), Cell(index, maxKey, continuing)(succ0)) 
+      def succ: M[Option[CellState]] = {
+        for (blockOpt <- succf(maxKey)) yield {
+          blockOpt map { block => CellState(index, block.maxKey, block.data, succf) }
         }
+      }
+
+      def split: (Slice, CellState) = {
+        val (finished, continuing) = slice0.split(position)
+        val nextState = CellState(index, maxKey, continuing, succf)
+        (if (position == 0) finished else finished.sparsen(remap, remap(position - 1) + 1), nextState)
+      }
+
+      // Freeze the state of this cell. Used to ensure restartability from any point in a stream of slices derived
+      // from mergeProjections.
+      def state: CellState = {
+        val remap0 = new Array[Int](slice0.size)
+        System.arraycopy(remap, 0, remap0, 0, slice0.size) 
+        new CellState(index, maxKey, slice0, succf, remap0, position)
       }
     }
 
     sealed trait CellMatrix { self => 
       def cells: Iterable[Cell]
       def compare(cl: Cell, cr: Cell): Ordering
-      def refresh(index: Int, succ: M[Option[Cell]]): M[CellMatrix]
 
       implicit lazy val ordering = new scala.math.Ordering[Cell] {
         def compare(c1: Cell, c2: Cell) = self.compare(c1, c2).toInt
@@ -177,12 +190,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     }
 
     object CellMatrix {
-      def apply(initialCells: Set[Cell])(keyf: Slice => List[ColumnRef]): CellMatrix = {
-        val size = initialCells.size
-
+      def apply(initialCells: Vector[Cell])(keyf: Slice => List[ColumnRef]): CellMatrix = {
+        val size = if (initialCells.isEmpty) 0 else initialCells.map(_.index).max + 1
+        
         type ComparatorMatrix = Array[Array[RowComparator]]
-        def fillMatrix(initialCells: Set[Cell]): ComparatorMatrix = {
-          val comparatorMatrix = Array.ofDim[RowComparator](initialCells.size, initialCells.size)
+        def fillMatrix(initialCells: Vector[Cell]): ComparatorMatrix = {
+          val comparatorMatrix = Array.ofDim[RowComparator](size, size)
 
           for (Cell(i, _, s) <- initialCells; Cell(i0, _, s0) <- initialCells if i != i0) { 
             comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf) 
@@ -200,40 +213,20 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           def compare(cl: Cell, cr: Cell): Ordering = {
             comparatorMatrix(cl.index)(cr.index).compare(cl.position, cr.position)
           }
-
-          def refresh(index: Int, succ: M[Option[Cell]]): M[CellMatrix] = {
-            succ map {
-              case Some(c @ Cell(i, _, s)) => 
-                allCells += (i -> c)
-
-                for ((_, Cell(i0, _, s0)) <- allCells if i0 != i) {
-                  comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf) 
-                  comparatorMatrix(i0)(i) = Slice.rowComparatorFor(s0, s)(keyf)
-                }
-
-                self
-                
-              case None => 
-                allCells -= index
-
-                // this is basically so that we'll fail fast if something screwy happens
-                for ((_, Cell(i0, _, s0)) <- allCells if i0 != index) {
-                  comparatorMatrix(index)(i0) = null
-                  comparatorMatrix(i0)(index) = null
-                }
-
-                self
-            }
-          }
         }
       }
     }
 
-    def mergeProjections(cells: Set[Cell], invert: Boolean = false)(keyf: Slice => List[ColumnRef]): StreamT[M, Slice] = {
-      val cellMatrix = CellMatrix(cells)(keyf)
+    def mergeProjections(cellStates: Stream[CellState], invert: Boolean)(keyf: Slice => List[ColumnRef]): StreamT[M, Slice] = {
+      StreamT.unfoldM[M, Slice, Stream[CellState]](cellStates) { cellStates => 
+        val cells: Vector[Cell] = cellStates.map(_.toCell)(collection.breakOut)
 
-      StreamT.unfoldM[M, Slice, mutable.PriorityQueue[Cell]](mutable.PriorityQueue(cells.toSeq: _*)(if (invert) cellMatrix.ordering.reverse else cellMatrix.ordering)) { queue =>
-
+        // TODO: We should not recompute all of the row comparators every time, since all but one will
+        // still be valid and usable. However, getting to this requires more significant rework than can be
+        // undertaken right now.
+        val cellMatrix = CellMatrix(cells)(keyf)
+        val queue = mutable.PriorityQueue(cells.toSeq: _*)(if (invert) cellMatrix.ordering.reverse else cellMatrix.ordering)
+        
         // dequeues all equal elements from the head of the queue
         @inline @tailrec def dequeueEqual(cells: List[Cell]): List[Cell] = {
           if (queue.isEmpty) cells
@@ -280,17 +273,10 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             } 
           }
 
-          val updatedMatrix = expired.foldLeft(M.point(cellMatrix)) {
-            case (matrixM, cell) => matrixM.flatMap(_.refresh(cell.index, cell.succ))
-          }
+          val successorStatesM = expired.map(_.succ).sequence.map(_.toStream.collect({case Some(cs) => cs}))
 
-          val updatedMatrix0 = suffixes.foldLeft(updatedMatrix) {
-            case (matrixM, cell) => matrixM.flatMap(_.refresh(cell.index, M.point(Some(cell))))
-          }
-
-          updatedMatrix0 map { matrix => 
-            val queue0 = mutable.PriorityQueue(matrix.cells.toSeq: _*)(if (invert) matrix.ordering.reverse else matrix.ordering)
-            Some((emission, queue0))
+          successorStatesM map { successorStates => 
+            Some((emission, successorStates ++ suffixes))
           }
         }
       }
@@ -714,20 +700,22 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       import mergeEngine._
 
       // Map the distinct indices into SortProjections/Cells, then merge them
-      def cellsMs: Stream[M[Option[Cell]]] = indices.values.toStream.zipWithIndex map {
-        case (SliceIndex(name, _, keyComparator, keyColumns, valColumns), index) => 
+      def cellsMs: Stream[M[Option[CellState]]] = indices.values.toStream.zipWithIndex map {
+        case (SliceIndex(name, _, _, keyColumns, valColumns), index) => 
           val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns)
-
           val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
+          
           succ(None) map { 
-            _ map { nextBlock => Cell(index, nextBlock.maxKey, nextBlock.data) { k => succ(Some(k)) } }
+            _ map { nextBlock => 
+              CellState(index, nextBlock.maxKey, nextBlock.data, (k: SortingKey) => succ(Some(k))) 
+            }
           }
       }
 
       val head = StreamT.Skip(
         StreamT.wrapEffect(
           for (cellOptions <- cellsMs.sequence) yield {
-            mergeProjections(cellOptions.flatMap(a => a)(collection.breakOut), sortOrder.isAscending) { slice => 
+            mergeProjections(cellOptions.flatMap(a => a), sortOrder.isAscending) { slice => 
               // only need to compare on the group keys (0th element of resulting table) between projections
               slice.columns.keys.collect({ case ref @ ColumnRef(JPath(JPathIndex(0), _ @ _*), _) => ref}).toList.sorted
             }
@@ -761,16 +749,18 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         }
       }
 
-      def cellsM(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Set[M[Option[Cell]]] = for (((desc, cols), i) <- projections.toSeq.zipWithIndex.toSet) yield {
-        val succ: Option[Key] => M[Option[BD]] = (key: Option[Key]) => storage.projection(desc) map {
-          case (projection, release) => 
-            val result = projection.getBlockAfter(key, cols)  
-            release.release.unsafePerformIO
-            result
-        }
+      def cellsM(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Stream[M[Option[CellState]]] = {
+        for (((desc, cols), i) <- projections.toStream.zipWithIndex) yield {
+          val succ: Option[Key] => M[Option[BD]] = (key: Option[Key]) => storage.projection(desc) map {
+            case (projection, release) => 
+              val result = projection.getBlockAfter(key, cols)  
+              release.release.unsafePerformIO
+              result
+          }
 
-        succ(None) map { 
-          _ map { nextBlock => Cell(i, nextBlock.maxKey, nextBlock.data) { k => succ(Some(k)) } }
+          succ(None) map { 
+            _ map { nextBlock => CellState(i, nextBlock.maxKey, nextBlock.data, (k: Key) => succ(Some(k))) }
+          }
         }
       }
 
@@ -781,7 +771,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             coveringProjections <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
             cellOptions         <- cellsM(minimalCover(tpe, coveringProjections)).sequence
           } yield {
-            mergeProjections(cellOptions.flatMap(a => a)) { slice => 
+            mergeProjections(cellOptions.flatMap(a => a), false) { slice => 
               //todo: How do we actually determine the correct function for retrieving the key?
               slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(JPathField("key") :: Nil) }).toList.sorted
             }
@@ -801,7 +791,14 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       _.headOption getOrElse this // If we start with an empty table, we always end with an empty table
     }
 
-    override def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = {
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = {
+      writeSorted(groupKeys, valueSpec, sortOrder) map {
+        case (dbFile, indices) => 
+          indices.groupBy(_._1.streamId).values.toStream.map(loadTable(dbFile, sortMergeEngine, _, sortOrder))
+      }
+    }
+
+    protected def writeSorted(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[(File, IndexMap)] = {
       import sortMergeEngine._
 
       // Open a JDBM3 DB for use in sorting under a temp directory
@@ -830,9 +827,29 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                       composeSliceTransform(deepMap(valueSpec) { case Leaf(_) => TransSpec1.DerefArray0 }),
                       groupKeysWithGlobal map composeSliceTransform,
                       sortOrder)
+      } yield (dbFile, indices)
+    }
 
-      } yield {
-        indices.groupBy(_._1.streamId).values.toStream.map(loadTable(dbFile, sortMergeEngine, _, sortOrder))
+    def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = {
+      writeSorted(List(partitionBy), Leaf(Source), SortAscending) map {
+        case (dbFile, indices) =>
+          // we should have only created a single index group in the write operation
+          assert(indices.keySet.map(_.streamId).size == 1)
+
+          // For each iteration of the function, we're going to need to track the actual key
+          // employed. This is going to require a slightly different version of getBlockAfter
+          // that is able to return a "block" that stops when the value of the key changes.
+          // This implies that getBlockAfter needs to be globalId aware, so that it can detect when
+          // anything *but* the globalId changes. 
+
+          val sortProjections = indices.values.map {
+              case SliceIndex(name, _, _, keyColumns, valColumns) => 
+                new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns)
+          }
+
+          //val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
+
+          sys.error("todo")
       }
     }
   }
