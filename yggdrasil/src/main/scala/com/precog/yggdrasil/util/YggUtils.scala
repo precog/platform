@@ -22,7 +22,6 @@ package util
 
 import actor._
 import iterable._
-import leveldb._
 import jdbm3._
 import metadata.MetadataStorage
 import metadata.FileMetadataStorage
@@ -40,9 +39,6 @@ import akka.util.Duration
 import akka.pattern.gracefulStop
 
 import org.joda.time._
-
-import org.iq80.leveldb._
-import org.fusesource.leveldbjni.JniDBFactory._
 
 import java.io.File
 import java.nio.ByteBuffer
