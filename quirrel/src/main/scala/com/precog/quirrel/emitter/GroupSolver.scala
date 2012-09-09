@@ -17,7 +17,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
   import buckets._
   
   override def inferBuckets(tree: Expr): Set[Error] = tree match {
-    case expr @ Let(_, _, params, left, right) => {
+    /* case expr @ Let(_, _, params, left, right) => {
       val leftErrors = inferBuckets(left)
       
       val (spec, errors) = solveForest(expr, expr.groups)(IntersectBucketSpec)
@@ -36,7 +36,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
       expr.buckets = spec
       
       leftErrors ++ errors ++ finalErrors ++ inferBuckets(right)
-    }
+    } */
     
     case Import(_, _, child) => inferBuckets(child)
     
