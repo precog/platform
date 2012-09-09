@@ -60,6 +60,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     CrossSpec[M] with
     TransformSpec[M] with
     CompactSpec[M] with 
+    PartitionMergeSpec[M] with
     DistinctSpec[M] { spec => //with
     //GrouperSpec[M] { spec =>
 
@@ -85,7 +86,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = true) = sys.error("todo")
     def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Seq[Table]] = sys.error("todo")
-    def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = sys.error("todo")
   }
   
   trait TableCompanion extends ColumnarTableCompanion {
@@ -372,7 +372,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
           val abc_ad_ab = Vector(abc, ad, ab)
           val ab_ad_abc = Vector(ab, ad, abc)
 
-          println(nodes)
+          //println(nodes)
 
           "choose correct node order" in {
             ((nodes == ad_abc_ab) ||
@@ -746,6 +746,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       val alignedSpec = trans.alignTo(ticvars("ca")).spec
       fromJson(data.toStream).transform(alignedSpec).toJson.copoint must_== expected
     }
+  }
+
+  "partitionMerge" should {
+    "concatenate reductions of subsequences" in testPartitionMerge
   }
 }
 
