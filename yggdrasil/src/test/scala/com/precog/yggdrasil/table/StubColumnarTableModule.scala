@@ -101,6 +101,9 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
       }
     }
 
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = sys.error("todo")
+    def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = sys.error("todo")
+
     override def toString = toStrings.copoint.mkString("\n")
   }
 }

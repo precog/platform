@@ -69,16 +69,18 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     
   override val defaultPrettyParams = Pretty.Params(2)
 
+  type MemoContext = DummyMemoizationContext
+  def newMemoContext = new DummyMemoizationContext
+
   type Table = UnloadableTable
   class UnloadableTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import trans._
     def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = sys.error("todo")
+    def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = sys.error("todo")
   }
   
-  type MemoContext = DummyMemoizationContext
-  def newMemoContext = new DummyMemoizationContext
-
   trait TableCompanion extends ColumnarTableCompanion {
     implicit val geq: scalaz.Equal[Int] = intInstance
 
