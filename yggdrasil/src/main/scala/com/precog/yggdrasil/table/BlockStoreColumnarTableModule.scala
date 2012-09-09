@@ -836,20 +836,88 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       } yield (dbFile, indices)
     }
 
+    /**
+     * In order to call partitionMerge, the table must be sorted according to 
+     * the values specified by the partitionBy transspec.
+     */
     def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = {
-      writeSorted(List(partitionBy), Leaf(Source), SortAscending) map {
-        case (dbFile, indices) =>
-          // we should have only created a single index group in the write operation
-          assert(indices.keySet.map(_.streamId).size == 1)
+      @tailrec
+      def findEnd(index: Int, size: Int, step: Int, compare: Int => Ordering): Int = {
+        if (index < size) {
+          compare(index) match {
+            case GT =>
+              if (step <= 1) index else findEnd(index - (step / 2), size, step / 2, compare)
 
-          val sortProjections = indices.values.map {
-              case SliceIndex(name, _, _, keyColumns, valColumns) => 
-                new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns)
+            case EQ => 
+              findEnd(index + step, size, step, compare)
+
+            case LT =>
+              sys.error("Inputs to partitionMerge not sorted.")
+          }
+        } else {
+          size
+        }
+      }
+
+      def subTable(comparatorGen: Slice => (Int => Ordering), slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT.wrapEffect {
+        slices.uncons map {
+          case Some((head, tail)) =>
+            val headComparator = comparatorGen(head)
+            val spanEnd = findEnd(0, head.size, head.size - 1, headComparator)
+            if (spanEnd < head.size) {
+              val (prefix, _) = head.split(spanEnd) 
+              prefix :: StreamT.empty[M, Slice]
+            } else {
+              head :: subTable(comparatorGen, tail)
+            }
+            
+          case None =>
+            StreamT.empty[M, Slice]
+        }
+      }
+
+      def dropAndSplit(comparatorGen: Slice => (Int => Ordering), slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT.wrapEffect {
+        slices.uncons map {
+          case Some((head, tail)) =>
+            val headComparator = comparatorGen(head)
+            val spanEnd = findEnd(0, head.size, head.size - 1, headComparator)
+            if (spanEnd < head.size) {
+              val (_, suffix) = head.split(spanEnd) 
+              stepPartition(suffix, tail)
+            } else {
+              dropAndSplit(comparatorGen, tail)
+            }
+            
+          case None =>
+            StreamT.empty[M, Slice]
+        }
+      }
+
+      def stepPartition(head: Slice, tail: StreamT[M, Slice]): StreamT[M, Slice] = {
+        val comparatorGen = (s: Slice) => {
+          val rowComparator = Slice.rowComparatorFor(head, s) {
+            (s0: Slice) => s0.columns.keys.collect({ case ref @ ColumnRef(JPath(JPathField("0"), _ @ _*), _) => ref }).toList.sorted
           }
 
-          //val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
+          (i: Int) => rowComparator.compare(0, i)
+        }
 
-          sys.error("todo")
+        val groupedM = f(Table(subTable(comparatorGen, head :: tail)).transform(DerefObjectStatic(Leaf(Source), JPathField("1"))))
+        val groupedStream: StreamT[M, Slice] = StreamT.wrapEffect(groupedM.map(_.slices))
+
+        groupedStream ++ dropAndSplit(comparatorGen, head :: tail)
+      }
+
+      val keyTrans = ObjectConcat(
+        WrapObject(partitionBy, "0"),
+        WrapObject(Leaf(Source), "1")
+      )
+
+      this.transform(keyTrans).slices.uncons map {
+        case Some((head, tail)) =>
+          Table(stepPartition(head, tail))
+        case None =>
+          Table.empty
       }
     }
   }
