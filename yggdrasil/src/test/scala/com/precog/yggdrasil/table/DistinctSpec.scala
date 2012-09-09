@@ -21,9 +21,9 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
     implicit val gen = sort(distinct(sample(schema)))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
-      
+
       val distinctTable = table.distinct(Leaf(Source))
-      
+
       val result = toJson(distinctTable)
 
       result.copoint must_== sample.data
@@ -34,25 +34,25 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
     val array: JValue = JsonParser.parse("""
       [{
         "value":{
-          
+
         },
         "key":[1.0,1.0]
       },
       {
         "value":{
-          
+
         },
         "key":[1.0,1.0]
       },
       {
         "value":{
-          
+
         },
         "key":[2.0,1.0]
       },
       {
         "value":{
-          
+
         },
         "key":[2.0,2.0]
       },
@@ -69,7 +69,7 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
             "o":[]
           },{
             "sry":{
-              
+
             },
             "in0":[]
           }]
@@ -89,7 +89,7 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
             "o":[]
           },{
             "sry":{
-              
+
             },
             "in0":[]
           }]
@@ -97,7 +97,10 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
         "key":[1.0,2.0]
       }]""")
 
-    val data: Stream[JValue] = (array match { case JArray(li) => li }).toStream
+    val data: Stream[JValue] = (array match {
+      case JArray(li) => li
+      case _ => sys.error("Expected a JArray")
+    }).toStream
 
     val sample = SampleData(data)
     val table = fromSample(sample, Some(5))
@@ -174,7 +177,10 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
         "key":[8.0,4.0]
       }]""")
 
-    val data: Stream[JValue] = (array match { case JArray(li) => li }).toStream
+    val data: Stream[JValue] = (array match {
+      case JArray(li) => li
+      case _ => sys.error("Expected JArray")
+    }).toStream
 
     val sample = SampleData(data)
     val table = fromSample(sample, Some(5))
@@ -183,7 +189,7 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
 
     result.copoint must_== sample.data.toSeq.distinct
   }
-  
+
   def removeUndefined(jv: JValue): JValue = jv match {
       case JObject(jfields) => JObject(jfields collect { case JField(s, v) if v != JNothing => JField(s, removeUndefined(v)) })
       case JArray(jvs) => JArray(jvs map { jv => removeUndefined(jv) })
@@ -194,10 +200,10 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
     implicit val gen = sort(duplicateRows(sample(schema)))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
-      
+
       val distinctTable = table.distinct(Leaf(Source))
-      
-      val result = toJson(distinctTable).copoint      
+
+      val result = toJson(distinctTable).copoint
       val expected = sample.data.toSeq.distinct
 
       result must_== expected
