@@ -69,7 +69,7 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
   } else {
     s.log.info("Extracting sample projection data into " + target.getCanonicalPath())
     try {
-      val result = Process("./regen-jdbm-data.sh", Seq(dataTarget.getCanonicalPath)).!!
+      val result = Process("./regen-jdbm-data.sh", Seq(dataTarget.getCanonicalPath, System.getProperty("java.class.path"))).!!
       s.log.info("Extraction complete.")
     } catch {
       case t: Throwable => s.log.error("Extraction failed")
