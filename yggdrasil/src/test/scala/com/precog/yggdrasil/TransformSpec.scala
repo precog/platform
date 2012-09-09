@@ -775,6 +775,30 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     results.copoint must_== expected.toStream
   }
 
+  def testHetScan = {
+    val data = JObject(JField("value", JNum(12)) :: JField("key", JArray(JNum(1) :: Nil)) :: Nil) #::
+               JObject(JField("value", JNum(10)) :: JField("key", JArray(JNum(2) :: Nil)) :: Nil) #::
+               JObject(JField("value", JArray(JNum(13) :: Nil)) :: JField("key", JArray(JNum(3) :: Nil)) :: Nil) #::
+               Stream.empty
+
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+    val results = toJson(table.transform {
+      Scan(DerefObjectStatic(Leaf(Source), JPathField("value")), lookupScanner(Nil, "sum"))
+    })
+
+    val (_, expected) = sample.data.foldLeft((BigDecimal(0), Vector.empty[JValue])) { 
+      case ((a, s), jv) => { 
+        (jv \ "value") match {
+          case JNum(i) => (a + i, s :+ JNum(a + i))
+          case _ => (a, s)
+        }
+      }
+    }
+
+    results.copoint must_== expected.toStream
+  }
+
   def checkScan = {
     implicit val gen = sample(_ => Seq(JPath.Identity -> CLong))
     check { (sample: SampleData) =>
