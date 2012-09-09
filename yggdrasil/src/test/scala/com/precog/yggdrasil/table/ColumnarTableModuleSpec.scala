@@ -69,28 +69,36 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     
   override val defaultPrettyParams = Pretty.Params(2)
 
-  type MemoContext = DummyMemoizationContext
-  def newMemoContext = new DummyMemoizationContext
+  class MemoContext extends MemoizationContext {
+    import trans._
+    
+    def memoize(table: Table, memoId: MemoId): M[Table] = M.point(table)
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table] =
+      table.sort(sortKey, sortOrder)
+    
+    def expire(memoId: MemoId): Unit = ()
+    def purge(): Unit = ()
+  }
 
-  type Table = UnloadableTable
-  class UnloadableTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import trans._
     def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = sys.error("todo")
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = true) = sys.error("todo")
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Seq[Table]] = sys.error("todo")
     def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = sys.error("todo")
   }
   
   trait TableCompanion extends ColumnarTableCompanion {
     implicit val geq: scalaz.Equal[Int] = intInstance
 
-    def apply(slices: StreamT[M, Slice]) = new UnloadableTable(slices)
+    def apply(slices: StreamT[M, Slice]) = new Table(slices)
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = 
       sys.error("not implemented here")
   }
 
   object Table extends TableCompanion
+  def newMemoContext = new MemoContext
 
   "a table dataset" should {
     "verify bijection from static JSON" in {

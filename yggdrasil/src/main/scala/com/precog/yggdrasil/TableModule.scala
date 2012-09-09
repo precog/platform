@@ -375,11 +375,11 @@ trait TableModule[M[+_]] extends FNModule {
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Table]
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Table]
     
     def distinct(spec: TransSpec1): Table
 
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]]
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Seq[Table]]
 
     def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table]
     
@@ -406,20 +406,9 @@ trait TableModule[M[+_]] extends FNModule {
     import trans._
     
     def memoize(table: Table, memoId: MemoId): M[Table]
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId): M[Table]
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table]
     
     def expire(memoId: MemoId): Unit
     def purge(): Unit
-  }
-
-  class DummyMemoizationContext extends MemoizationContext {
-    import trans._
-    
-    def memoize(table: Table, memoId: MemoId): M[Table] = M.point(table)
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId): M[Table] =
-      table.sort(sortKey, sortOrder)
-    
-    def expire(memoId: MemoId): Unit = ()
-    def purge(): Unit = ()
   }
 }

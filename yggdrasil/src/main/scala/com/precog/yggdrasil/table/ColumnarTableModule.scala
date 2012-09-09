@@ -1242,8 +1242,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                              val recordTrans = ArrayConcat(WrapArray(omniverse.idTrans(groupId)), WrapArray(rowTrans))
                              val sortByTrans = TransSpec.deepMap(omniverse.idTrans(groupId)) { 
                                                  case Leaf(_) => TransSpec1.DerefArray1 
-                                                }
+                                               }
 
+                             // TODO: This sort should not include the globalId so that it can dedup on the id.
                              partition.transform(recordTrans).sort(sortByTrans) map {
                                t => (groupId -> t.transform(DerefArrayStatic(TransSpec1.DerefArray1, JPathIndex(1))))
                              }

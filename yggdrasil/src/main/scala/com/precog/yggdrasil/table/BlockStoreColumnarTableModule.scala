@@ -100,13 +100,13 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       M.map(memoTable) { _.transform(DerefObjectStatic(Leaf(Source), JPathField(memoValue))) }
     }
     
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId): M[Table] = {
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table] = {
       // yup, we still block the whole world. Yay.
       memoCache.synchronized {
         memoCache.get(memoId) match {
           case Some(memoTable) => memoTable
           case None =>
-            val memoTable = table.sort(sortKey, sortOrder)
+            val memoTable = table.sort(sortKey, sortOrder, unique)
             memoCache += (memoId -> memoTable)
             memoTable
         }
@@ -787,45 +787,51 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder).map {
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = true): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder, unique).map {
       _.headOption getOrElse this // If we start with an empty table, we always end with an empty table
     }
 
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = {
-      writeSorted(groupKeys, valueSpec, sortOrder) map {
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Seq[Table]] = {
+      writeSorted(groupKeys, valueSpec, sortOrder, unique) map {
         case (dbFile, indices) => 
           indices.groupBy(_._1.streamId).values.toStream.map(loadTable(dbFile, sortMergeEngine, _, sortOrder))
       }
     }
 
-    protected def writeSorted(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[(File, IndexMap)] = {
+    protected def writeSorted(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[(File, IndexMap)] = {
       import sortMergeEngine._
 
       // Open a JDBM3 DB for use in sorting under a temp directory
-      val dbFile = new File(newScratchDir(), "groupByNSpace")
+      val dbFile = new File(newScratchDir(), "writeSortedSpace")
 
-      val sliceGlobalIdTrans = Scan(
-        WrapArray(Leaf(Source)), 
-        new CScanner {
-          type A = Long
-          val init = 0l
-          def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-            val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
-            (a + range.end + 1, cols + (ColumnRef(JPath(JPathIndex(1)), CLong) -> globalIdColumn))
-          }
-        }
-      )
-
-      val groupKeysWithGlobal = groupKeys map { kt => 
-        ObjectConcat(WrapObject(deepMap(kt) { case Leaf(_) => TransSpec1.DerefArray0 }, "0"), WrapObject(TransSpec1.DerefArray1, "1")) 
+      val (sourceTrans0, keyTrans0, valueTrans0) = if (unique) {
+        (
+          Scan(
+            WrapArray(Leaf(Source)), 
+            new CScanner {
+              type A = Long
+              val init = 0l
+              def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+                val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
+                (a + range.end + 1, cols + (ColumnRef(JPath(JPathIndex(1)), CLong) -> globalIdColumn))
+              }
+            }
+          ),
+          groupKeys map { kt => 
+            ObjectConcat(WrapObject(deepMap(kt) { case Leaf(_) => TransSpec1.DerefArray0 }, "0"), WrapObject(TransSpec1.DerefArray1, "1")) 
+          },
+          deepMap(valueSpec) { case Leaf(_) => TransSpec1.DerefArray0 }
+        )
+      } else {
+        (Leaf(Source), groupKeys, valueSpec)
       }
 
       for {
         indices <-  writeTables(
                       DBMaker.openFile(dbFile.getCanonicalPath).make(), 
-                      this.transform(sliceGlobalIdTrans).slices,
-                      composeSliceTransform(deepMap(valueSpec) { case Leaf(_) => TransSpec1.DerefArray0 }),
-                      groupKeysWithGlobal map composeSliceTransform,
+                      this.transform(sourceTrans0).slices,
+                      composeSliceTransform(valueTrans0),
+                      keyTrans0 map composeSliceTransform,
                       sortOrder)
       } yield (dbFile, indices)
     }
@@ -835,12 +841,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         case (dbFile, indices) =>
           // we should have only created a single index group in the write operation
           assert(indices.keySet.map(_.streamId).size == 1)
-
-          // For each iteration of the function, we're going to need to track the actual key
-          // employed. This is going to require a slightly different version of getBlockAfter
-          // that is able to return a "block" that stops when the value of the key changes.
-          // This implies that getBlockAfter needs to be globalId aware, so that it can detect when
-          // anything *but* the globalId changes. 
 
           val sortProjections = indices.values.map {
               case SliceIndex(name, _, _, keyColumns, valColumns) => 
