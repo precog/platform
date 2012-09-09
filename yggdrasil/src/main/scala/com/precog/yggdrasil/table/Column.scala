@@ -149,6 +149,14 @@ object UndefinedColumn {
     def cValue(row: Int) = CUndefined
     def strValue(row: Int) = sys.error("Values in undefined columns SHOULD NOT BE ACCESSED")
   }
+
+  val raw = new Column {
+    def isDefinedAt(row: Int) = false
+    val tpe = CUndefined
+    def jValue(row: Int) = sys.error("Values in undefined columns SHOULD NOT BE ACCESSED")
+    def cValue(row: Int) = CUndefined
+    def strValue(row: Int) = sys.error("Values in undefined columns SHOULD NOT BE ACCESSED")
+  }
 }
 
 object Column {
@@ -162,6 +170,7 @@ object Column {
     case CEmptyObject => new InfiniteColumn with EmptyObjectColumn 
     case CEmptyArray  => new InfiniteColumn with EmptyArrayColumn 
     case CNull        => new InfiniteColumn with NullColumn 
+    case CUndefined   => UndefinedColumn.raw
   }
 
   @inline def const(v: Boolean) = new InfiniteColumn with BoolColumn {

@@ -101,6 +101,7 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
           keyIter must haveSize(1)
           keyIter.head must beLike {
             case JNum(i) => set must contain(i)
+            case _ => sys.error("Expected a JNum")
           }
           
           setIter must not(beEmpty)
@@ -109,6 +110,7 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
               val JNum(v2) = keyIter.head
               v1 mustEqual (v2 * 2)
             }
+            case _ => sys.error("Expected a JNum")
           }
           
           fromJson(JNum(setIter.size) #:: Stream.empty)
@@ -147,6 +149,7 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
           keyIter must haveSize(1)
           keyIter.head must beLike {
             case JNum(i) => set must contain(i)
+            case _ => sys.error("Expected a JNum")
           }
           
           
@@ -156,6 +159,7 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
               val JNum(v2) = keyIter.head
               (v1 % 2) mustEqual v2
             }
+            case _ => sys.error("Expected a JNum")
           }
           
           fromJson(JNum(setIter.size) #:: Stream.empty)
