@@ -60,7 +60,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     CrossSpec[M] with
     TransformSpec[M] with
     CompactSpec[M] with 
-    IntersectSpec[M] with
     DistinctSpec[M] { spec => //with
     //GrouperSpec[M] { spec =>
 
@@ -180,10 +179,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "replace defined rows with a constant" in checkConst
     }
 
-    "intersect by identity" >> {
-      "simple data" in testSimpleIntersect.pendingUntilFixed
-    }
-    
     "in compact" >> {
       "be the identity on fully defined tables"  in testCompactIdentity
       "preserve all defined rows"                in testCompactPreserve

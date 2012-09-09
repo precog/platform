@@ -101,7 +101,7 @@ trait Slice { source =>
    * Transform this slice such that its columns are only defined for row indices
    * in the given BitSet.
    */
-  def redefineWith(s: BitSet): Slice = filterColumns(cf.util.filter(0, size - 1, s))
+  def redefineWith(s: BitSet): Slice = filterColumns(cf.util.filter(0, size, s))
   
   def definedConst(value: CValue): Slice = new Slice {
     val size = source.size

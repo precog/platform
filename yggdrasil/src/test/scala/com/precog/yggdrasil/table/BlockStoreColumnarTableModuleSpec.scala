@@ -58,6 +58,7 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
     TableModuleSpec[M] with 
     BlockLoadSpec[M] with
     BlockSortSpec[M] with 
+    IntersectSpec[M] with
     BlockAlignSpec[M] { self =>
 
   type MemoId = Int
@@ -88,6 +89,11 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
       "a simple example" in alignSimple
       "across slice boundaries" in alignAcrossBoundaries
       "survive a trivial scalacheck" in checkAlign
+    }
+
+    "intersect by identity" >> {
+      "simple data" in testSimpleIntersect
+      "survive a trivial scalacheck" in checkIntersect
     }
   }
 }
