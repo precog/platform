@@ -101,7 +101,7 @@ trait Slice { source =>
    * Transform this slice such that its columns are only defined for row indices
    * in the given BitSet.
    */
-  def redefineWith(s: BitSet): Slice = filterColumns(cf.util.filter(0, size - 1, s))
+  def redefineWith(s: BitSet): Slice = filterColumns(cf.util.filter(0, size, s))
   
   def definedConst(value: CValue): Slice = new Slice {
     val size = source.size
@@ -141,6 +141,7 @@ trait Slice { source =>
           case CEmptyArray => (ColumnRef(JPath.Identity, CEmptyArray), new EmptyArrayColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
+          case CUndefined => sys.error("Cannot define a constant undefined value")
         }
       )
     }
@@ -212,6 +213,7 @@ trait Slice { source =>
           case CNull => JNullT
           case CEmptyObject => JObjectFixedT(Map.empty[String, JType])
           case CEmptyArray => JArrayFixedT(Map.empty[Int, JType])
+          case invalid => sys.error("Cannot group on CType: " + invalid)
         })}
 
         val values = grouped.values map { seq => seq.flatMap { case (path, ctpe) => filteredCols.get(ColumnRef(path, ctpe)) } }
@@ -271,6 +273,7 @@ trait Slice { source =>
                 def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
               }
             }
+            case invalid => sys.error("sdflsd on invalid column: " + invalid)
           }
         }
 
@@ -506,7 +509,7 @@ trait Slice { source =>
   }
 
   def toString(row: Int): Option[String] = {
-    (columns collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }) match {
+    (columns.toList.sortBy(_._1) collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }) match {
       case Nil => None
       case l   => Some(l.mkString("[", ", ", "]")) 
     }
@@ -730,41 +733,45 @@ object Slice {
     }
 
     @inline @tailrec
-    def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[RowComparator]): List[RowComparator] = (l1, l2) match {
-      case (h1 :: t1, h2 :: t2) if h1.selector == h2.selector => {
-        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+    def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[RowComparator]): List[RowComparator] = {
+      import scalaz.syntax.order._
 
-        pairColumns(l1Rest, l2Rest, genComparatorFor(l1Equal, l2Equal) :: comparators)
+      (l1, l2) match {
+        case (h1 :: t1, h2 :: t2) if h1.selector == h2.selector => {
+          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+          pairColumns(l1Rest, l2Rest, genComparatorFor(l1Equal, l2Equal) :: comparators)
+        }
+
+        case (h1 :: t1, h2 :: t2) if h1 ?|? h2 == LT => {
+          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+
+          pairColumns(l1Rest, l2, genComparatorFor(l1Equal, Nil) :: comparators)
+        }
+
+        case (h1 :: t1, h2 :: t2) if h1 ?|? h2 == GT => {
+          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+          pairColumns(l1, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
+        }
+
+        case (h1 :: t1, Nil) => {
+          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+
+          pairColumns(l1Rest, Nil, genComparatorFor(l1Equal, Nil) :: comparators)
+        }
+
+        case (Nil, h2 :: t2) => {
+          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+          pairColumns(Nil, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
+        }
+
+        case (Nil, Nil) => comparators.reverse
+
+        case (h1 :: t1, h2 :: t2) => sys.error("selector guard failure in pairColumns")
       }
-
-      case (h1 :: t1, h2 :: t2) if h1.selector < h2.selector => {
-        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-
-        pairColumns(l1Rest, l2, genComparatorFor(l1Equal, Nil) :: comparators)
-      }
-
-      case (h1 :: t1, h2 :: t2) if h1.selector > h2.selector => {
-        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
-
-        pairColumns(l1, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
-      }
-
-      case (h1 :: t1, Nil) => {
-        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-
-        pairColumns(l1Rest, Nil, genComparatorFor(l1Equal, Nil) :: comparators)
-      }
-
-      case (Nil, h2 :: t2) => {
-        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
-
-        pairColumns(Nil, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
-      }
-
-      case (Nil, Nil) => comparators.reverse
-
-      case (h1 :: t1, h2 :: t2) => sys.error("selector guard failure in pairColumns")
     }
 
     val comparators: Array[RowComparator] = pairColumns(refs1, refs2, Nil).toArray

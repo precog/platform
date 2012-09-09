@@ -58,6 +58,7 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
     TableModuleSpec[M] with 
     BlockLoadSpec[M] with
     BlockSortSpec[M] with 
+    IntersectSpec[M] with
     BlockAlignSpec[M] { self =>
 
   type MemoId = Int
@@ -65,12 +66,12 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
 
   "a block store columnar table" should {
     "load" >> {
-      "a problem sample" in testLoadSample1.pendingUntilFixed
-      "a problem sample" in testLoadSample2.pendingUntilFixed
-      "a problem sample" in testLoadSample3.pendingUntilFixed
-      "a problem sample" in testLoadSample4.pendingUntilFixed
+      "a problem sample" in testLoadSample1
+      "a problem sample" in testLoadSample2
+      "a problem sample" in testLoadSample3
+      "a problem sample" in testLoadSample4
       //"a problem sample" in testLoadSample5 //pathological sample in the case of duplicated ids.
-      "a dense dataset" in checkLoadDense.pendingUntilFixed
+      "a dense dataset" in checkLoadDense
     }                           
 
     "sort" >> {
@@ -85,7 +86,14 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
     }
 
     "align" >> {
-      "survive a trivial scalacheck" in checkAlign.pendingUntilFixed
+      "a simple example" in alignSimple
+      "across slice boundaries" in alignAcrossBoundaries
+      "survive a trivial scalacheck" in checkAlign
+    }
+
+    "intersect by identity" >> {
+      "simple data" in testSimpleIntersect
+      "survive a trivial scalacheck" in checkIntersect
     }
   }
 }

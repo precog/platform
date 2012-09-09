@@ -379,9 +379,9 @@ trait TableModule[M[+_]] extends FNModule {
     
     def distinct(spec: TransSpec1): Table
 
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = sys.error("override me")
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]]
 
-    def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = sys.error("override me")
+    def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table]
     
     def takeRange(startIndex: Long, numberToTake: Long): Table
     

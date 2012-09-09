@@ -19,8 +19,8 @@
 ## 
 #!/bin/bash
 
-if [[ $# != 1 ]]; then
-    echo "Usage: `basename $0` <target data directory>"
+if [[ $# != 2 ]]; then
+    echo "Usage: `basename $0` <target data directory> <sbt launcher JAR>"
     echo "  For now target is normally pandora/dist/data-jdbm/data/"
     exit
 fi
@@ -44,7 +44,11 @@ for source in `find . -name '*.json'`; do
 done
 popd > /dev/null
 
-[ -f yggdrasil/target/yggdrasil-assembly-2.0.0-SNAPSHOT.jar ] || sbt yggdrasil/assembly
+[ -f yggdrasil/target/yggdrasil-assembly-2.0.0-SNAPSHOT.jar ] || {
+    for target in "yggdrasil/compile" "yggdrasil/assembly"; do
+        java -jar $2 "$target"
+    done
+}
 
 rm -rf $DATADIR/*
 

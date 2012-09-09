@@ -159,69 +159,91 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           case class Boundary(prevSlice: Slice, prevStartIdx: Int) extends CollapseState
           case object InitialCollapse extends CollapseState
 
-          // Collapse the slices, returning the BitSet for which the rows are defined as well as the end of the
-          // last span 
-          def collapse0(sl1: Slice, sl1Idx: Int, sl2: Slice, sl2Idx: Int, defined: BitSet, boundary: Boolean): (BitSet, Int) = {
-            val comparator = Slice.rowComparatorFor(sl1, sl2) {
-              // only need to compare identities (0th element of the sorted table) between projections
-              slice => slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(JPathIndex(0) :: Nil) }).toList.sorted
+          def genComparator(sl1: Slice, sl2: Slice) = Slice.rowComparatorFor(sl1, sl2) {
+            // only need to compare identities (field "0" of the sorted table) between projections
+            // TODO: Figure out how we might do this directly with the identitySpec
+            slice => slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(JPathField("0") :: Nil) }).toList.sorted
+          }
+          
+          def boundaryCollapse(prevSlice: Slice, prevStart: Int, curSlice: Slice): (BitSet, Int) = {
+            val comparator = genComparator(prevSlice, curSlice)
+
+            var curIndex = 0
+
+            while (curIndex < curSlice.size && comparator.compare(prevStart, curIndex) == EQ) {
+              curIndex += 1
             }
+
+            if (curIndex == 0) {
+              // First element is unequal...
+              // We either marked the span to retain in the previous slice, or 
+              // we don't have enough here to mark the new slice to retain
+              (BitSet.empty, curIndex)
+            } else {
+              val count = (prevSlice.size - prevStart) + curIndex
+
+              if (count == inputCount) {
+                (BitSet(curIndex - 1), curIndex)
+              } else if (count > inputCount) {
+                sys.error("Found too many EQ identities in intersect. This indicates a bug in the graph processing algorithm.")
+              } else {
+                (BitSet.empty, curIndex)
+              }
+            }
+          } 
+
+          // Collapse the slices, returning the BitSet for which the rows are defined as well as the start of the
+          // last span 
+          def selfCollapse(slice: Slice, startIndex: Int, defined: BitSet): (BitSet, Int) = {
+            val comparator = genComparator(slice, slice)
 
             var retain = defined
 
             // We'll collect spans of EQ rows in chunks, retainin the start row of completed spans with the correct
             // count and then inchworming over it
-            var spanStart = sl1Idx
-            var spanEnd   = sl2Idx
+            var spanStart = startIndex
+            var spanEnd   = startIndex
             
-            while (spanEnd < sl2.size && (!boundary || spanEnd == sl2Idx)) {
-              while (spanEnd < sl2.size && comparator.compare(spanStart, spanEnd) == EQ) {
+            while (spanEnd < slice.size) {
+              while (spanEnd < slice.size && comparator.compare(spanStart, spanEnd) == EQ) {
                 spanEnd += 1
               }
 
-              val count = if (boundary) {
-                (sl1.size - spanStart) + spanEnd
-              } else {
-                spanEnd - spanStart
-              }
+              val count = spanEnd - spanStart
 
-              // If the count is correct, we retain, unless we're on a
-              // boundary compare and we haven't compared EQ on any rows
-              // of the next slice. In that case, a row was already
-              // retained on the previous slice prior to transitioning
-              // the slice transform. That retention, however, doesn't
-              // prevent us from erroring if we see more EQ rows (too many)
-              if (count == inputCount && !(boundary && spanEnd == sl2Idx)) {
+              if (count == inputCount) {
                 retain += (spanEnd - 1)
               } else if (count > inputCount) {
                 sys.error("Found too many EQ identities in intersect. This indicates a bug in the graph processing algorithm.")
               }
 
-              spanStart = spanEnd
+              if (spanEnd < slice.size) {
+                spanStart = spanEnd
+              }
             }
 
-            (retain, spanEnd)
+            (retain, spanStart)
           }
 
           val collapse = SliceTransform1[CollapseState](InitialCollapse, {
             case (InitialCollapse, slice) => {
-              val (retain, spanEnd) = collapse0(slice, 0, slice, 0, BitSet.empty, false)
-              
+              val (retain, spanStart) = selfCollapse(slice, 0, BitSet.empty)
               // Pass on the remainder, if any, of this slice to the next slice for continued comparison
-              (Boundary(slice, spanEnd), slice.redefineWith(retain))
+              (Boundary(slice, spanStart), slice.redefineWith(retain))
             }
 
             case (Boundary(prevSlice, prevStart), slice) => {
               // First, do a boundary comparison on the previous slice to see if we need to retain lead elements in the new slice
-              val (boundaryRetain, boundaryEnd) = collapse0(prevSlice, prevStart, slice, 0, BitSet.empty, true)
-
-              val (retain, spanEnd) = collapse0(slice, boundaryEnd, slice, boundaryEnd, boundaryRetain, false)
-
-              (Boundary(slice, spanEnd), slice.redefineWith(retain))
+              val (boundaryRetain, boundaryEnd) = boundaryCollapse(prevSlice, prevStart, slice)
+              val (retain, spanStart) = selfCollapse(slice, boundaryEnd, boundaryRetain)
+              (Boundary(slice, spanStart), slice.redefineWith(retain))
             }
           })
 
-          Table(transformStream(collapse, sortedTable.slices))
+          // Break the idents out into field "0", original data in "1"
+          val splitIdentsTransSpec = ObjectConcat(WrapObject(identitySpec, "0"), WrapObject(Leaf(Source), "1"))
+
+          Table(transformStream(collapse, sortedTable.transform(splitIdentsTransSpec).slices)).transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
         }
       }
     }

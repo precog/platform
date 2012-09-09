@@ -18,46 +18,58 @@
  *
  */
 package com.precog.yggdrasil
+package table
 
 import com.precog.common.VectorCase
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser.parse
 import blueeyes.json.JPathField
 
+import scalaz._
 import scalaz.syntax.bind._
 import scalaz.syntax.copointed._
 
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
+import SampleData._
 
-trait IntersectSpec[M[+_]] extends TableModuleTestSupport[M] with Specification with ScalaCheck {
-  import SampleData._
-  import trans._
-  import trans.constants._
+trait IntersectSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
+  implicit def M: Monad[M] with Copointed[M]
 
-  def testIntersect(l: SampleData, r: SampleData) = {
-    val ltable = fromSample(l)
-    val rtable = fromSample(r)
+  object module extends BlockStoreTestModule {
+    val projections = Map.empty[ProjectionDescriptor, Projection]
+  }
 
-    val expected: Stream[JValue] = for {
-      lv <- l.data
-      rv <- r.data
-      if (lv \ "key") == (rv \ "key")
-    } yield lv
+  def testIntersect(sample: SampleData) = {
+    import module._
+    import module.trans._
+    import module.trans.constants._
 
-    val result = Table.intersect(DerefObjectStatic(Leaf(Source), JPathField("key")), ltable, rtable)
+    val lstream = sample.data.zipWithIndex collect { case (v, i) if i % 2 == 0 => v }
+    val rstream = sample.data.zipWithIndex collect { case (v, i) if i % 3 == 0 => v }
 
-    val jsonResult: M[Stream[JValue]] = result.flatMap { table => toJson(table) }
+    val expected = sample.data.zipWithIndex collect { case (v, i) if i % 2 == 0 && i % 3 == 0 => v }
 
-    jsonResult.copoint must_== expected
+    val finalResults = for {
+      results     <- Table.intersect(SourceKey.Single, fromJson(lstream), fromJson(rstream))
+      jsonResult  <- results.toJson
+    } yield jsonResult
+
+    val jsonResult = finalResults.copoint
+
+    jsonResult must_== expected
   }
 
   def testSimpleIntersect = {
     val s1 = SampleData(Stream(toRecord(VectorCase(1), parse("""{"a":[]}""")), toRecord(VectorCase(2), parse("""{"b":[]}"""))))
-    val s2 = SampleData(Stream(toRecord(VectorCase(2), parse("""{"b":[]}"""))))
 
-    testIntersect(s1, s2)
+    testIntersect(s1)
+  }
+
+  def checkIntersect = {
+    implicit val gen = sample(objectSchema(_, 3))
+    check { (sample: SampleData) => testIntersect(sample.sortBy(_ \ "key")) }
   }
 }
     

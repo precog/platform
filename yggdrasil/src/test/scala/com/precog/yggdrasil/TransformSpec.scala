@@ -656,7 +656,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
     val sampleSchema = inferSchema(data.toSeq)
     val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
-    println("subsumes: %s\n".format(subsumes))
+    //println("subsumes: %s\n".format(subsumes))
 
     results.copoint must_== expected(data, included, subsumes)
   }

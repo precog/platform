@@ -60,7 +60,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     CrossSpec[M] with
     TransformSpec[M] with
     CompactSpec[M] with 
-    IntersectSpec[M] with
     DistinctSpec[M] { spec => //with
     //GrouperSpec[M] { spec =>
 
@@ -70,16 +69,18 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     
   override val defaultPrettyParams = Pretty.Params(2)
 
+  type MemoContext = DummyMemoizationContext
+  def newMemoContext = new DummyMemoizationContext
+
   type Table = UnloadableTable
   class UnloadableTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import trans._
     def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = sys.error("todo")
+    def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = sys.error("todo")
   }
   
-  type MemoContext = DummyMemoizationContext
-  def newMemoContext = new DummyMemoizationContext
-
   trait TableCompanion extends ColumnarTableCompanion {
     implicit val geq: scalaz.Equal[Int] = intInstance
 
@@ -180,10 +181,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "replace defined rows with a constant" in checkConst
     }
 
-    "intersect by identity" >> {
-      "simple data" in testSimpleIntersect.pendingUntilFixed
-    }
-    
     "in compact" >> {
       "be the identity on fully defined tables"  in testCompactIdentity
       "preserve all defined rows"                in testCompactPreserve
@@ -196,7 +193,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     
     "in distinct" >> {
       "be the identity on tables with no duplicate rows" in testDistinctIdentity
-      "have no duplicate rows" in testDistinct.pendingUntilFixed
+      "peform properly when the same row appears in two different slices" in testDistinctAcrossSlices
+      "peform properly again when the same row appears in two different slices" in testDistinctAcrossSlices2
+      "have no duplicate rows" in testDistinct
     }
   }
 

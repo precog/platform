@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 package actor
 
-import leveldb._
 import metadata._
 import com.precog.common._
 
