@@ -24,6 +24,7 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
   import Utils._
   import ast._
   
+  // TODO
   override def findGroups(expr: Expr): Set[GroupTree] = {
     import group._
     
@@ -89,7 +90,7 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
       case op @ Where(_, left, right) => {
         val leftSet = loop(root, left, currentWhere)
         
-        val rightSet = op.provenance match {
+        /* val rightSet = op.provenance match {
           case UnionProvenance(_, _) =>
             loop(root, right, currentWhere)
           
@@ -97,7 +98,8 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
             loop(root, right, Some(op))
         }
         
-        leftSet ++ rightSet
+        leftSet ++ rightSet */
+        sys.error("TODO")
       }
       
       case With(_, left, right) =>

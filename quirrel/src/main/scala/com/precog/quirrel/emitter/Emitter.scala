@@ -201,7 +201,8 @@ trait Emitter extends AST
     }
 
     def emitMap(left: Expr, right: Expr, op: BinaryOperation): EmitterState = {
-      emitMapState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, op)
+      // emitMapState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, op)
+      notImpl(left)
     }
 
     def emitUnary(expr: Expr, op: UnaryOperation): EmitterState = {
@@ -216,7 +217,8 @@ trait Emitter extends AST
     }
 
     def emitFilter(left: Expr, right: Expr): EmitterState = {
-      emitFilterState(emitExpr(left), left.provenance, emitExpr(right), right.provenance)
+      // emitFilterState(emitExpr(left), left.provenance, emitExpr(right), right.provenance)
+      notImpl(left)
     }
     
     def emitWhere(where: ast.Where): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
@@ -310,7 +312,7 @@ trait Emitter extends AST
           emitInstr(PushNull)
         
         case ast.ObjectDef(loc, props) => 
-          def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2) >> emitInstr(Map2Cross(WrapObject))
+          /* def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2) >> emitInstr(Map2Cross(WrapObject))
 
           val provToField = props.groupBy(_._2.provenance)
 
@@ -328,10 +330,11 @@ trait Emitter extends AST
 
           val joins = Vector.fill(provToField.size - 1)(emitInstr(Map2Cross(JoinObject)))
 
-          reduce(groups ++ joins)
+          reduce(groups ++ joins) */
+          notImpl(expr)
 
         case ast.ArrayDef(loc, values) => 
-          val indexedValues = values.zipWithIndex
+          /* val indexedValues = values.zipWithIndex
 
           val provToElements = indexedValues.groupBy(_._1.provenance)
 
@@ -380,10 +383,12 @@ trait Emitter extends AST
 
           val fixedState = fixAll.foldLeft[StateT[Id, (Seq[Int], EmitterState), Unit]](StateT.stateT(()))(_ >> _).exec((indices, mzero[EmitterState]))._2
 
-          joined >> fixedState
+          joined >> fixedState */
+          notImpl(expr)
         
         case ast.Descent(loc, child, property) => 
-          emitMapState(emitExpr(child), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefObject)
+          // emitMapState(emitExpr(child), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefObject)
+          notImpl(expr)
         
         case ast.Deref(loc, left, right) => 
           emitMap(left, right, DerefArray)
@@ -425,7 +430,7 @@ trait Emitter extends AST
                   val body = if (actuals.length == n) {
                     emitExpr(left)
                   } else {
-                    val spec = {
+                    /* val spec = {
                       val init: BucketSpec = let.buckets.get         // assuming no errors
                       (params zip actuals).foldLeft(init) {
                         case (spec, (id, expr)) => spec.derive(id, expr)
@@ -435,7 +440,8 @@ trait Emitter extends AST
                     emitBucketSpec(let, spec) >> 
                       emitInstr(Split) >>
                       emitExpr(left) >>
-                      emitInstr(Merge)
+                      emitInstr(Merge) */
+                    notImpl(expr)
                   }
                   
                   reduce(actualStates) >> body

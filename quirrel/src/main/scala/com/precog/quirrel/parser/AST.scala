@@ -39,7 +39,9 @@ trait AST extends Phases {
 
   type NameBinding
   type VarBinding
+  
   type Provenance
+  type ProvConstraint
   
   def printSExp(tree: Expr, indent: String = ""): String = tree match {
     case Add(_, left, right) => "%s(+\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
@@ -72,26 +74,11 @@ trait AST extends Phases {
       case e @ Let(loc, id, params, left, right) => {
         val paramStr = params map { indent + "  - " + _ } mkString "\n"
         
-        val assumptionStr = e.assumptions map {
-          case (name, prov) => {
-            indent + "  -\n" +
-              indent + "    name: " + name + "\n" +
-              indent + "    provenance: " + prov.toString
-          }
-        } mkString "\n"
-        
-        val unconstrainedStr = e.unconstrainedParams map { name =>
-          indent + "  - " + name
-        } mkString "\n"
-        
         indent + "type: let\n" +
           indent + "id: " + id + "\n" +
           indent + "params:\n" + paramStr + "\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
-          indent + "right:\n" + prettyPrint(right, level + 2) + "\n" +
-          indent + "assumptions:\n" + assumptionStr + "\n" +
-          indent + "unconstrained-params:\n" + unconstrainedStr + "\n" +
-          indent + "required-params: " + e.requiredParams
+          indent + "right:\n" + prettyPrint(right, level + 2)
       }
 
       case Solve(loc, constraints, child) => {
@@ -363,14 +350,13 @@ trait AST extends Phases {
     def constrainingExpr = _constrainingExpr()
     private[quirrel] def constrainingExpr_=(expr: Option[Expr]) = _constrainingExpr() = expr
 
+    // TODO set
     private val _accumulatedProvenance = attribute[Option[Vector[Provenance]]](checkProvenance)
     def accumulatedProvenance = _accumulatedProvenance()
     def accumulatedProvenance_=(acc: Option[Vector[Provenance]]) = _accumulatedProvenance() = acc
     
-    lazy val cardinality: Option[Int] = {
-      if (accumulatedProvenance.isDefined) accumulatedProvenance map { _.length }
-      else None
-    }
+    lazy val cardinality: Option[Int] =
+      accumulatedProvenance map { _.size }
     
     private[quirrel] final lazy val _errors: Atom[Set[Error]] = {
       if (this eq root) {
@@ -682,27 +668,13 @@ trait AST extends Phases {
       
       def child = right
       
-      private val _buckets = attribute[Option[BucketSpec]](inferBuckets)
-      def buckets = _buckets()
-      private[quirrel] def buckets_=(spec: Option[BucketSpec]) = _buckets() = spec
+      private val _constraints = attribute[Set[ProvConstraint]](checkProvenance)
+      def constraints = _constraints()
+      private[quirrel] def constraints_=(constraints: Set[ProvConstraint]) = _constraints() = constraints
       
-      lazy val groups = findGroups(this)
-      
-      private val _assumptions = attribute[Map[String, Provenance]](checkProvenance)
-      def assumptions = _assumptions()
-      private[quirrel] def assumptions_=(map: Map[String, Provenance]) = _assumptions() = map
-      
-      private val _accumulatedAssumptions = attribute[Map[String, Option[Vector[Provenance]]]](checkProvenance)
-      def accumulatedAssumptions = _accumulatedAssumptions()
-      private[quirrel] def accumulatedAssumptions_=(map: Map[String, Option[Vector[Provenance]]]) = _accumulatedAssumptions() = map
-      
-      private val _unconstrainedParams = attribute[Set[String]](checkProvenance)
-      def unconstrainedParams = _unconstrainedParams()
-      private[quirrel] def unconstrainedParams_=(up: Set[String]) = _unconstrainedParams() = up
-      
-      private val _requiredParams = attribute[Int](checkProvenance)
-      def requiredParams = _requiredParams()
-      private[quirrel] def requiredParams_=(req: Int) = _requiredParams() = req
+      private val _resultProvenance = attribute[Provenance](checkProvenance)
+      def resultProvenance = _resultProvenance()
+      private[quirrel] def resultProvenance_=(prov: Provenance) = _resultProvenance() = prov
     }
 
     final case class Solve(loc: LineStream, constraints: Vector[Expr], child: Expr) extends Expr with Node {
@@ -717,6 +689,11 @@ trait AST extends Phases {
       private[quirrel] def vars_=(vars: Set[TicId]) = _vars() = vars
       
       lazy val criticalConditions = findCriticalConditions(this)
+      lazy val groups = findGroups(this)
+      
+      private val _buckets = attribute[Option[BucketSpec]](inferBuckets)
+      def buckets = _buckets()
+      private[quirrel] def buckets_=(spec: Option[BucketSpec]) = _buckets() = spec
     }
 
     final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends ExprUnaryNode {

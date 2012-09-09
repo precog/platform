@@ -328,7 +328,7 @@ trait Binder extends parser.AST with Library {
 
   case class Morphism2Binding(mor: Morphism2) extends BuiltInBinding {
     val name = Identifier(mor.namespace, mor.name)
-    override val toString = "<native: %s(%d)>".format(mor.name, 1)
+    override val toString = "<native: %s(%d)>".format(mor.name, 2)
   }
 
   case class Op1Binding(op1: Op1) extends BuiltInBinding {

@@ -35,1258 +35,336 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   private val currentId = new AtomicInteger(0)
   private val commonIds = new AtomicReference[Map[ExprWrapper, Int]](Map())
   
-  override def checkProvenance(expr: Expr) = {
-    def loop(expr: Expr, relations: Map[Provenance, Set[Provenance]], constraints: Map[Provenance, Expr]): Set[Error] = expr match {
-      case expr @ Let(_, _, params, left, right) => {
-        val leftErrors = loop(left, relations, constraints)
-
-        if (!params.isEmpty && left.provenance != NullProvenance) {
-          /* val assumptions: Map[String, Provenance] = expr.criticalConditions map {
-            case (id, exprs) => {
-              val provenances = flattenForest(exprs) map { _.provenance }
-              val unified = provenances reduce unifyProvenanceAssumingRelated
-
-              (id -> unified)
-            }
-           } */
-          val assumptions: Map[String, Provenance] = Map()
-
-          /* val accumulatedAssumptions: Map[String, Option[Vector[Provenance]]] = expr.criticalConditions map {
-            case (id, exprs) => {
-              val allExprs: Set[Set[Provenance]] = flattenForest(exprs) map { e => e.provenance.possibilities }
-
-              val isMatch = allExprs.reduceOption { 
-                (left, right) => left intersect right 
-              } exists(p => p != ValueProvenance && p != NullProvenance)  
-
-              val accumulatedProvenances = flattenForest(exprs) map { _.accumulatedProvenance }
-              val accProv = accumulatedProvenances.reduceOption {
-                (left, right) => (left <**> right) { _ ++ _ } 
-              } getOrElse Some(Vector())
-
-              val unified = {
-                if (isMatch) accProv map { _.distinct }
-                else accProv
-              }
-
-              (id -> unified)
-            }
-          } */
-          val accumulatedAssumptions: Map[String, Option[Vector[Provenance]]] = Map()
+  override def checkProvenance(expr: Expr): Set[Error] = {
+    def handleBinary(expr: Expr, left: Expr, right: Expr, relations: Map[Provenance, Set[Provenance]]): (Set[Error], Set[ProvConstraint]) = {
+      val (leftErrors, leftConstr) = loop(left, relations)
+      val (rightErrors, rightConstr) = loop(right, relations)
+      
+      val unified = unifyProvenance(relations)(left.provenance, right.provenance)
+      
+      val (contribErrors, contribConstr) = if (left.provenance.isParametric || right.provenance.isParametric) {
+        expr.provenance = UnifiedProvenance(left.provenance, right.provenance)
+        
+        if (unified.isDefined)
+          (Set(), Set())
+        else
+          (Set(), Set(Related(left.provenance, right.provenance)))
+      } else {
+        expr.provenance = unified getOrElse NullProvenance
+        (if (unified.isDefined) Set() else Set(Error(expr, OperationOnUnrelatedSets)), Set())
+      }
+      
+      (leftErrors ++ rightErrors ++ contribErrors, leftConstr ++ rightConstr ++ contribConstr)
+    }
+    
+    def handleNary(expr: Expr, values: Vector[Expr], relations: Map[Provenance, Set[Provenance]]): (Set[Error], Set[ProvConstraint]) = {
+      val (errorsVec, constrVec) = values map { loop(_, relations) } unzip
+      
+      val errors = errorsVec reduce { _ ++ _ }
+      val constr = constrVec reduce { _ ++ _ }
+      
+      if (values.isEmpty) {
+        expr.provenance = ValueProvenance
+        (Set(), Set())
+      } else {
+        val provenances: Vector[(Provenance, Set[ProvConstraint], Boolean)] = values map { expr => (expr.provenance, Set[ProvConstraint](), true) }
+        
+        val (prov, constrContrib, isError) = provenances reduce { (pair1, pair2) =>
+          val (prov1, constr1, error1) = pair1
+          val (prov2, constr2, error2) = pair2
           
-          val unconstrained = params filterNot (assumptions contains)
-          val required = unconstrained.lastOption map { params indexOf _ } map (1 +) getOrElse 0
+          val unified = unifyProvenance(relations)(prov1, prov2)
           
-          expr.assumptions = assumptions
-          expr.accumulatedAssumptions = accumulatedAssumptions
-          expr.unconstrainedParams = Set(unconstrained: _*)
-          expr.requiredParams = required
-        } else {
-          expr.assumptions = Map()
-          expr.accumulatedAssumptions = Map()
-          expr.unconstrainedParams = Set()
-          expr.requiredParams = 0
+          if (prov1.isParametric || prov2.isParametric) {
+            val prov = UnifiedProvenance(prov1, prov2)
+            
+            if (unified.isDefined)
+              (unified.get, Set(), false): (Provenance, Set[ProvConstraint], Boolean)
+            else
+              (prov, Set(Related(prov1, prov2)) ++ constr1 ++ constr2, error1 || error2): (Provenance, Set[ProvConstraint], Boolean)
+          } else {
+            val prov = unified getOrElse NullProvenance
+            
+            (prov, constr1 ++ constr2, error1 || error2 || unified.isDefined): (Provenance, Set[ProvConstraint], Boolean)
+          }
         }
         
-        val rightErrors = loop(right, relations, constraints)
-        expr.provenance = right.provenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = right.accumulatedProvenance 
+        if (isError) {
+          expr.provenance = NullProvenance
+          (errors ++ Set(Error(expr, OperationOnUnrelatedSets)), constr ++ constrContrib)
+        } else {
+          expr.provenance = prov
+          (errors, constr ++ constrContrib)
+        }
+      }
+    }
+    
+    def loop(expr: Expr, relations: Map[Provenance, Set[Provenance]]): (Set[Error], Set[ProvConstraint]) = expr match {
+      case expr @ Let(_, _, _, left, right) => {
+        val (leftErrors, leftConst) = loop(left, relations)
+        expr.constraints = leftConst
+        expr.resultProvenance = left.provenance
         
-        leftErrors ++ rightErrors
+        val (rightErrors, rightConst) = loop(right, relations)
+        
+        expr.provenance = right.provenance
+        
+        (leftErrors ++ rightErrors, rightConst)
+      }
+      
+      case Solve(_, constraints, child) => {
+        val (errorsVec, constrVec) = constraints map { loop(_, relations) } unzip
+        
+        val constrErrors = errorsVec reduce { _ ++ _ }
+        val constrConstr = constrVec reduce { _ ++ _ }
+        
+        val (errors, constr) = loop(child, relations)
+        expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+        
+        (constrErrors ++ errors, constrConstr ++ constr)
       }
       
       case Import(_, _, child) => {
-        val back = loop(child, relations, constraints)
+        val (errors, constr) = loop(child, relations)
         expr.provenance = child.provenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = child.accumulatedProvenance
-
-        back
+        (errors, constr)
       }
       
       case New(_, child) => {
-        val back = loop(child, relations, constraints)
-        expr.provenance = DynamicProvenance(currentId.incrementAndGet())
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = Some(Vector(expr.provenance))
-
-        back
+        val (errors, constr) = loop(child, relations)
+        expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+        (errors, constr)
       }
       
-      case expr @ Relate(_, from, to, in) => { 
-        val back = loop(from, relations, constraints) ++ loop(to, relations, constraints)
+      case Relate(_, from, to, in) => {
+        val (fromErrors, fromConstr) = loop(from, relations)
+        val (toErrors, toConstr) = loop(to, relations)
         
-        val recursive = if (from.provenance == NullProvenance || to.provenance == NullProvenance) {
-          expr.accumulatedProvenance = None
-          expr.provenance = NullProvenance
-          Set()
-        } else if (from.provenance == ValueProvenance || to.provenance == ValueProvenance) {
-          expr.accumulatedProvenance = None
-          expr.provenance = NullProvenance
-          Set(Error(expr, AlreadyRelatedSets))
-        } else if (pathExists(relations, from.provenance, to.provenance)) {
-          expr.accumulatedProvenance = None
-          expr.provenance = NullProvenance
-          Set(Error(expr, AlreadyRelatedSets))
+        val (contribErrors, contribConstr) = if (from.provenance.isParametric || to.provenance.isParametric) {
+          (Set(), Set(NotRelated(from.provenance, to.provenance)))
         } else {
-          val fromExisting = relations.getOrElse(from.provenance, Set())
-          val toExisting = relations.getOrElse(to.provenance, Set())
+          val unified = unifyProvenance(relations)(from.provenance, to.provenance)
           
-          val relations2 = relations.updated(from.provenance, fromExisting + to.provenance)
-          val relations3 = relations2.updated(to.provenance, toExisting + from.provenance)
-          
-          val constraints2 = if (from.provenance != NullProvenance)
-            constraints + (from.provenance -> from)
+          if (unified.isDefined && unified != Some(NullProvenance))
+            (Set(Error(expr, AlreadyRelatedSets)), Set())
           else
-            constraints
-          
-          val constraints3 = if (to.provenance != NullProvenance)
-            constraints2 + (to.provenance -> to)
-          else
-            constraints2
-          
-          val back = loop(in, relations3, constraints3)
-          val possibilities = in.provenance.possibilities
-          
-          if (possibilities.contains(from.provenance) || possibilities.contains(to.provenance)) {
-            expr.accumulatedProvenance = in.accumulatedProvenance
-            expr.provenance = DynamicProvenance(currentId.incrementAndGet()) 
-          } else {
-            expr.accumulatedProvenance = in.accumulatedProvenance
-            expr.provenance = in.provenance
-          }
-          
-          back
+            (Set(), Set())
         }
-
-        expr.constrainingExpr = constraints get expr.provenance
         
-        back ++ recursive
+        val relations2 = relations + (from.provenance -> (relations.getOrElse(from.provenance, Set()) + to.provenance))
+        val relations3 = relations2 + (to.provenance -> (relations.getOrElse(to.provenance, Set()) + from.provenance))
+        
+        val (inErrors, inConstr) = loop(in, relations3)
+        
+        expr.provenance = in.provenance
+        
+        (fromErrors ++ toErrors ++ inErrors ++ contribErrors, fromConstr ++ toConstr ++ inConstr ++ contribConstr)
       }
       
       case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => {
         expr.provenance = ValueProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = Some(Vector())
-
-        Set()
-      }      
-      
-      case ObjectDef(_, props) => { 
-        val exprs: Vector[Expr] = props map { case (_, e) => e }
-        val errorSets = exprs map { loop(_, relations, constraints) }
-        val provenances = exprs map { _.provenance }
-        val back = errorSets.fold(Set()) { _ ++ _ }
-        
-        val result = provenances.foldLeft(Some(ValueProvenance): Option[Provenance]) { (left, right) =>
-          left flatMap { unifyProvenance(relations)(_, right) }
-        }
-        
-        val allExprs: Vector[Set[Provenance]] = exprs map { e => e.provenance.possibilities } 
-
-        val isMatch = allExprs.reduceOption { 
-          (left, right) => left intersect right 
-        } exists(p => p != ValueProvenance && p != NullProvenance)  
-        
-        val accProv: Option[Vector[Provenance]] = {
-          exprs.map(_.accumulatedProvenance).reduceOption { 
-            (left, right) => (left <**> right) { _ ++ _ } 
-          } getOrElse Some(Vector())
-        }
-
-        expr.accumulatedProvenance = {
-          if (isMatch) accProv map { _.distinct }
-          else accProv
-        }
-
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
+        (Set(), Set())
       }
       
-      case ArrayDef(_, exprs) => {  
-        val errorSets = exprs map { loop(_, relations, constraints) }
-        val provenances = exprs map { _.provenance }
-        val back = errorSets.fold(Set()) { _ ++ _ }
-        
-        val result = provenances.foldLeft(Some(ValueProvenance): Option[Provenance]) { (left, right) =>
-          left flatMap { unifyProvenance(relations)(_, right) }
-        }
-
-        val allExprs = exprs map { e => e.provenance.possibilities }
-
-        val isMatch = allExprs.reduceOption { 
-          (left, right) => left intersect right 
-        } exists(p => p != ValueProvenance && p != NullProvenance)  
-        
-        val accProv: Option[Vector[Provenance]] = {
-          exprs.map(_.accumulatedProvenance).reduceOption { 
-            (left, right) => (left <**> right) { _ ++ _ } 
-          } getOrElse Some(Vector())
-        }
-
-        expr.accumulatedProvenance = {
-          if (isMatch) accProv map { _.distinct }
-          else accProv
-        }
-
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
+      case ObjectDef(_, props) => handleNary(expr, props map { _._2 }, relations)
+      case ArrayDef(_, values) => handleNary(expr, values, relations)
       
       case Descent(_, child, _) => {
-        val back = loop(child, relations, constraints)
+        val (errors, constr) = loop(child, relations)
         expr.provenance = child.provenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = child.accumulatedProvenance
-
-        back
+        (errors, constr)
       }
       
-      case Deref(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance) 
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        val leftP = left.provenance.possibilities
-        val rightP = right.provenance.possibilities
-
-        val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
-        
-        val accProv = for {
-          leftAcc <- left.accumulatedProvenance
-          rightAcc <- right.accumulatedProvenance
-        } yield {
-          leftAcc ++ rightAcc
-        }
-
-        expr.accumulatedProvenance = {
-          if (isMatch) accProv map { _.distinct }
-          else accProv
-        }
-
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
+      case Deref(_, left, right) => handleBinary(expr, left, right, relations)
       
-      case expr @ Dispatch(_, _, exprs) => {  
-        val errorSets = exprs map { loop(_, relations, constraints) }
-        val back = errorSets.fold(Set()) { _ ++ _ }
-        
-        lazy val pathParam = exprs.headOption collect {
-          case StrLit(_, value) => value
-        }
-
-        def checkMappedMorphism(arity: Int) = { //TODO IS THIS CORRECT?????????????????????????????????????????????????????????????????????????????????????????
-          if (exprs.length == arity) {
-            expr.accumulatedProvenance = Some(Vector())
-            (ValueProvenance, Set())  
-          } else {
-            expr.accumulatedProvenance = None
-            (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
-          }
-        }
-        
-        def checkMappedFunction(arity: Int) = {
-          if (exprs.length == arity) {
-            arity match {
-              case 1 => {
-                expr.accumulatedProvenance = exprs(0).accumulatedProvenance
-                (exprs(0).provenance, Set.empty[Error])
+      case expr @ Dispatch(_, name, actuals) => {
+        expr.binding match {
+          case LetBinding(let) => {
+            val (errorsVec, constrVec) = actuals map { loop(_, relations) } unzip
+            
+            val actualErrors = errorsVec reduce { _ ++ _ }
+            val actualConstr = constrVec reduce { _ ++ _ }
+            
+            val ids = let.params map { Identifier(Vector(), _) }
+            val zipped = ids zip (actuals map { _.provenance })
+            
+            def sub(target: Provenance): Provenance = {
+              zipped.foldLeft(target) {
+                case (target, (id, sub)) => substituteParam(id, let, target, sub)
               }
-
-              case 2 => { 
-                val result = unifyProvenance(relations)(exprs(0).provenance, exprs(1).provenance)
-                val back = result getOrElse NullProvenance
+            }
+            
+            val (errorSet, constraintsSet) = let.constraints map {
+              case Related(left, right) => {
+                val optLeft2 = resolveUnifications(relations)(sub(left))
+                val optRight2 = resolveUnifications(relations)(sub(right))
                 
-                lazy val leftP = exprs(0).provenance.possibilities
-                lazy val rightP = exprs(1).provenance.possibilities 
-
-                lazy val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
-
-                lazy val accProv = for {
-                  firstAcc <- exprs(0).accumulatedProvenance
-                  secondAcc <- exprs(1).accumulatedProvenance
-                } yield {
-                  firstAcc ++ secondAcc
-                }
-
-                expr.accumulatedProvenance = {
-                  if (isMatch)  accProv map { _.distinct }
-                  else          accProv
-                }
-
-                val errors = {
-                  if (!result.isDefined)
-                    Set(Error(expr, OperationOnUnrelatedSets))
-                  else
-                    Set()
-                }
-
-                (back, errors)
-              }
-
-              case _ => 
-                sys.error("Not implemented yet!")
-            }
-          } else {
-            expr.accumulatedProvenance = None
-            (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
-          }
-        }
-        
-        val (prov, errors) = expr.binding match {
-          case LoadBinding => {
-            if (exprs.length == 1) {
-              lazy val prov = DynamicProvenance(provenanceId(expr))
-
-              expr.accumulatedProvenance = Some(Vector(pathParam map StaticProvenance getOrElse prov))
-              (pathParam map StaticProvenance getOrElse prov, Set())
-            } else {
-              expr.accumulatedProvenance = None
-              (NullProvenance, Set(Error(expr, IncorrectArity(1, exprs.length))))
-            }
-          }
-
-          case DistinctBinding => {
-            if (exprs.length == 1) {
-              val prov = DynamicProvenance(currentId.incrementAndGet())
-              expr.accumulatedProvenance = Some(Vector(prov))
-
-              (prov, Set())
-            } else {
-              expr.accumulatedProvenance = None
-              (NullProvenance, Set(Error(expr, IncorrectArity(1, exprs.length))))
-            }
-          }
-
-          case Morphism1Binding(_) => checkMappedMorphism(1)
-
-          case Morphism2Binding(_) => checkMappedMorphism(2)
-
-          //case MorphismBinding(m) => checkMappedFunction(m.arity.toInt)
-
-          case ReductionBinding(_) => { //assumes all reductions are arity 1
-            if (exprs.length == 1) {
-              expr.accumulatedProvenance = Some(Vector())
-              (ValueProvenance, Set())  
-            } else {
-              expr.accumulatedProvenance = None
-              (NullProvenance, Set(Error(expr, IncorrectArity(1, exprs.length))))
-            }
-          }
-
-          case Op1Binding(_) => checkMappedFunction(1)
-
-          case Op2Binding(_) => checkMappedFunction(2)
-          
-          case LetBinding(e) => {  
-            if (exprs.length > e.params.length) {
-              expr.accumulatedProvenance = None
-              (NullProvenance, Set(Error(expr, IncorrectArity(e.params.length, exprs.length))))
-            } else if (exprs.length < e.requiredParams) {
-              val required = e.params drop exprs.length filter e.unconstrainedParams
-              expr.accumulatedProvenance = None
-              (NullProvenance, Set(Error(expr, UnspecifiedRequiredParams(required))))
-            } else {
-              val errors = for ((id, pe) <- e.params zip exprs; assumed <- e.assumptions get id) yield {
-                (assumed, pe.provenance) match {
-                  case (StaticProvenance(_), ValueProvenance) => None
-                  case (DynamicProvenance(_), ValueProvenance) => None
-                  case (ValueProvenance, _) => None
-                  case (NullProvenance, _) => None
-                  case (_, NullProvenance) => None
-                  case _ => Some(Error(pe, SetFunctionAppliedToSet))
-                }
+                val related = for {
+                  left2 <- optLeft2
+                  right2 <- optRight2
+                } yield Related(left2, right2)
+                
+                val errors = if (related.isDefined)
+                  Set[Error]()
+                else
+                  Set(Error(expr, OperationOnUnrelatedSets))
+                
+                (errors, related)
               }
               
-              val errorSet = Set(errors.flatten: _*)
-              if (errorSet.isEmpty) {
-                val provenances = exprs map { _.provenance }
-                val accumulatedProvenances = exprs map { _.accumulatedProvenance }
+              case NotRelated(left, right) => {
+                val optLeft2 = resolveUnifications(relations)(sub(left))
+                val optRight2 = resolveUnifications(relations)(sub(right))
                 
-                val optUnified = provenances.foldLeft(Some(ValueProvenance): Option[Provenance]) { (left, right) =>
-                  left flatMap { unifyProvenance(relations)(_, right) }
-                }
+                val related = for {
+                  left2 <- optLeft2
+                  right2 <- optRight2
+                } yield NotRelated(left2, right2)
                 
-                optUnified match {
-                  case Some(unified) => {
-                    val resultPoss = e.left.provenance.possibilities
-                    val resultIsSet = resultPoss exists {
-                      case StaticProvenance(_) => true
-                      case DynamicProvenance(_) => true
-                      case _ => false
-                    }
-                    
-                    val paramPoss = unified.possibilities
-                    val paramsAreSet = paramPoss exists {
-                      case StaticProvenance(_) => true
-                      case DynamicProvenance(_) => true
-                      case _ => false
-                    }
-                    
-                    if (resultIsSet && paramsAreSet) {
-                      expr.accumulatedProvenance = None
-                      (NullProvenance, Set(Error(expr, SetFunctionAppliedToSet)))
-                    } else if (resultPoss.contains(NullProvenance) || paramPoss.contains(NullProvenance)) {
-                      expr.accumulatedProvenance = None
-                      (NullProvenance, Set())
-                    } else {
-                      lazy val varAssumptions: Map[(String, Let), Provenance] = {
-                        e.assumptions ++ Map(e.params zip provenances: _*) map {  
-                          case (id, prov) => ((id, e), prov)
-                        }
-                      }
-
-                      lazy val varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]] = {
-                        e.accumulatedAssumptions ++ Map(e.params zip accumulatedProvenances: _*) map {
-                          case (id, accProv) => ((id, e), accProv)
-                        }
-                      }
-                      
-                      lazy val resultProv = computeResultProvenance(e.left, relations, varAssumptions) 
-
-                      resultProv match {
-                        case NullProvenance => { //is this case reachable? 
-                          expr.accumulatedProvenance = None
-                          (NullProvenance, Set(Error(expr, FunctionArgsInapplicable)))
-                        }
-                        
-                        case _ if (e.params.length == exprs.length) => {  //fully-quantified case
-                          expr.accumulatedProvenance = resultProv match {
-                            case ValueProvenance => Some(Vector())
-                            case NullProvenance => None
-                            case _ => computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions) 
-                          }
-                          (resultProv, Set())
-                        }
-                        
-                        case _ /* if e.params.length != exprs.length */ => {   //partially-quantified case
-                          val prov = DynamicProvenance(provenanceId(expr))
-                          expr.accumulatedProvenance = Some(Vector(prov))
-                          (prov, Set())
-                        }
-                      }
-                    }
-                  }
-                  
-                  case None => {
-                    expr.accumulatedProvenance = None
-                    (NullProvenance, Set(Error(expr, OperationOnUnrelatedSets)))
-                  }
-                }
-              } else {
-                expr.accumulatedProvenance = None
-                (NullProvenance, errorSet)
+                val errors = if (related.isDefined)
+                  Set[Error]()
+                else
+                  Set(Error(expr, OperationOnUnrelatedSets))
+                
+                (errors, related)
               }
+            } unzip
+            
+            val resolutionErrors = errorSet.flatten
+            val constraints2 = constraintsSet.flatten
+            
+            val mapped = constraints2 flatMap {
+              case Related(left, right) if !left.isParametric && !right.isParametric => {
+                if (unifyProvenance(relations)(left, right).isDefined)
+                  Some(Left(Error(expr, OperationOnUnrelatedSets)))
+                else
+                  None
+              }
+              
+              case NotRelated(left, right) if !left.isParametric && !right.isParametric => {
+                if (!unifyProvenance(relations)(left, right).isDefined)
+                  Some(Left(Error(expr, AlreadyRelatedSets)))
+                else
+                  None
+              }
+              
+              case constr => Some(Right(constr))
             }
+            
+            val constrErrors = mapped collect { case Left(error) => error }
+            val constraints3 = mapped collect { case Right(constr) => constr }
+            
+            expr.provenance = sub(let.resultProvenance)
+            
+            (actualErrors ++ resolutionErrors ++ constrErrors, actualConstr ++ constraints3)
           }
           
+          case FormalBinding(let) => {
+            expr.provenance = ParamProvenance(name, let)
+            (Set(), Set())
+          }
+          
+          case ReductionBinding(_) => {
+            val (errors, constr) = loop(actuals.head, relations)
+            expr.provenance = ValueProvenance
+            (errors, constr)
+          }
+          
+          case DistinctBinding => {
+            val (errors, constr) = loop(actuals.head, relations)
+            expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+            (errors, constr)
+          }
+          
+          case LoadBinding => {
+            val (errors, constr) = loop(actuals.head, relations)
+            
+            expr.provenance = actuals.head match {
+              case StrLit(_, path) => StaticProvenance(path)
+              case param if param.provenance != NullProvenance => DynamicProvenance(currentId.getAndIncrement())
+              case _ => NullProvenance
+            }
+            
+            (errors, constr)
+          }
+          
+          case Morphism1Binding(morph1) => {
+            val (errors, constr) = loop(actuals.head, relations)
+            expr.provenance = if (morph1.retainIds) actuals.head.provenance else ValueProvenance
+            (errors, constr)
+          }
+          
+          case Morphism2Binding(morph2) => {
+            val pair = handleBinary(expr, actuals(0), actuals(1), relations)
+            
+            if (!morph2.retainIds) {
+              expr.provenance = ValueProvenance
+            }
+            
+            pair
+          }
+          
+          case Op1Binding(_) => {
+            val (errors, constr) = loop(actuals.head, relations)
+            expr.provenance = actuals.head.provenance
+            (errors, constr)
+          }
+          
+          case Op2Binding(_) => handleBinary(expr, actuals(0), actuals(1), relations)
+          
           case NullBinding => {
-            expr.accumulatedProvenance = None
-            (NullProvenance, Set())
+            val (errorsVec, constrVec) = actuals map { loop(_, relations) } unzip
+            
+            val errors = errorsVec reduce { _ ++ _ }
+            val constr = constrVec reduce { _ ++ _ }
+            
+            expr.provenance = NullProvenance
+            
+            (errors, constr)
           }
         }
-        
-        expr.provenance = prov
-        expr.constrainingExpr = constraints get expr.provenance
-
-        back ++ errors
       }
       
-      case Where(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        val leftP = left.provenance.possibilities
-        val rightP = right.provenance.possibilities
-
-        val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)
-
-        val accProv = for {
-          leftAcc <- left.accumulatedProvenance
-          rightAcc <- right.accumulatedProvenance
-        } yield {
-          leftAcc ++ rightAcc
-        }
-
-        expr.accumulatedProvenance = {
-          if (isMatch) accProv map { _.distinct }
-          else accProv
-        }
-
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }      
-
-      case With(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        val leftP = left.provenance.possibilities
-        val rightP = right.provenance.possibilities
-
-        val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
-
-        val accProv = for {
-          leftAcc <- left.accumulatedProvenance
-          rightAcc <- right.accumulatedProvenance
-        } yield {
-          leftAcc ++ rightAcc
-        }
-
-        expr.accumulatedProvenance = {
-          if (isMatch) accProv map { _.distinct }
-          else accProv
-        }
-
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      } 
-
-      case Union(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenanceUnionIntersect(relations)(left.provenance, right.provenance)
-
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-
-        if (left.cardinality.isDefined && right.cardinality.isDefined) {
-          if (left.cardinality == right.cardinality) {  
-            expr.accumulatedProvenance = left.cardinality map { card => Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take card: _*) }
-            back
-          } else {
-            expr.accumulatedProvenance = None
-            back + Error(expr, UnionProvenanceDifferentLength)
-          }
-        } else {
-          expr.accumulatedProvenance = None
-          back //assumes error generated in 'back'
-        }
-      }   
-
-      case Intersect(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenanceUnionIntersect(relations)(left.provenance, right.provenance)
-
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        if (left.cardinality.isDefined && right.cardinality.isDefined) {
-          if (left.cardinality == right.cardinality) {  
-            expr.accumulatedProvenance = left.cardinality map { card => Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take card: _*) }
-            back
-          } else {
-            expr.accumulatedProvenance = None
-            back + Error(expr, IntersectProvenanceDifferentLength)
-          }
-        } else {
-          expr.accumulatedProvenance = None
-          back //assumes error generated in 'back'
-        }
-      }
-
-      case Difference(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenanceDifference(relations)(left.provenance, right.provenance)
-
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        if (left.cardinality.isDefined && right.cardinality.isDefined) {
-          if (left.cardinality == Some(0) && right.cardinality == Some(0)) {
-            expr.accumulatedProvenance = None
-            back + Error(expr, DifferenceProvenanceValue)
-          } else if (left.cardinality == right.cardinality) {  
-            expr.accumulatedProvenance = left.accumulatedProvenance
-            back
-          } else {
-            expr.accumulatedProvenance = None
-            back + Error(expr, DifferenceProvenanceDifferentLength)
-          }
-        } else {
-          expr.accumulatedProvenance = None
-          back //assumes error generated in 'back'
-        }
-      }
+      case Where(_, left, right) => handleBinary(expr, left, right, relations)
+      case With(_, left, right) => handleBinary(expr, left, right, relations)
       
-      case expr @ Add(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
+      // TODO union/intersect/diff
       
-      case expr @ Sub(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case expr @ Mul(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case expr @ Div(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case expr @ Lt(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-                
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case expr @ LtEq(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case expr @ Gt(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-               
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case expr @ GtEq(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case expr @ Eq(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case expr @ NotEq(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case expr @ And(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case expr @ Or(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
+      case Add(_, left, right) => handleBinary(expr, left, right, relations)
+      case Sub(_, left, right) => handleBinary(expr, left, right, relations)
+      case Mul(_, left, right) => handleBinary(expr, left, right, relations)
+      case Div(_, left, right) => handleBinary(expr, left, right, relations)
+      case Lt(_, left, right) => handleBinary(expr, left, right, relations)
+      case LtEq(_, left, right) => handleBinary(expr, left, right, relations)
+      case Gt(_, left, right) => handleBinary(expr, left, right, relations)
+      case GtEq(_, left, right) => handleBinary(expr, left, right, relations)
+      case Eq(_, left, right) => handleBinary(expr, left, right, relations)
+      case NotEq(_, left, right) => handleBinary(expr, left, right, relations)
+      case And(_, left, right) => handleBinary(expr, left, right, relations)
+      case Or(_, left, right) => handleBinary(expr, left, right, relations)
       
       case Comp(_, child) => {
-        val back = loop(child, relations, constraints)
+        val (errors, constr) = loop(child, relations)
         expr.provenance = child.provenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = child.accumulatedProvenance
-
-        back
+        (errors, constr)
       }
       
       case Neg(_, child) => {
-        val back = loop(child, relations, constraints)
+        val (errors, constr) = loop(child, relations)
         expr.provenance = child.provenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = child.accumulatedProvenance
-
-        back
+        (errors, constr)
       }
       
       case Paren(_, child) => {
-        val back = loop(child, relations, constraints)
+        val (errors, constr) = loop(child, relations)
         expr.provenance = child.provenance
-        expr.constrainingExpr = constraints get expr.provenance
-
-        expr.accumulatedProvenance = child.accumulatedProvenance
-
-        back
+        (errors, constr)
       }
     }
     
-    loop(expr, Map(), Map())
+    loop(expr, Map())._1
   }
-
-  private def computeResultProvenance(body: Expr, relations: Map[Provenance, Set[Provenance]], varAssumptions: Map[(String, Let), Provenance]): Provenance = body match {
-    case body @ Let(_, _, _, left, right) =>
-      computeResultProvenance(right, relations, varAssumptions)
-
-    case Import(_, _, child) =>
-      computeResultProvenance(child, relations, varAssumptions)
-    
-    case Relate(_, from, to, in) => {
-      val fromExisting = relations.getOrElse(from.provenance, Set())
-      val toExisting = relations.getOrElse(to.provenance, Set())
-      
-      val relations2 = relations.updated(from.provenance, fromExisting + to.provenance)
-      val relations3 = relations2.updated(to.provenance, toExisting + from.provenance)
-      
-      val possibilities = in.provenance.possibilities
-      
-      if (possibilities.contains(from.provenance) || possibilities.contains(to.provenance))
-        DynamicProvenance(provenanceId(body))
-      else
-        computeResultProvenance(in, relations3, varAssumptions)
-    }
-    
-    case t @ TicVar(_, id) => t.binding match {
-      // TODO
-      // case SolveBinding(lt) => varAssumptions get (id -> lt) getOrElse t.provenance
-      case _ => t.provenance
-    }
-    
-    case ObjectDef(_, props) => {
-      val provenances = props map {
-        case (_, e) => computeResultProvenance(e, relations, varAssumptions)
-      }
-      
-      provenances.fold(ValueProvenance: Provenance) { (p1, p2) =>
-        unifyProvenance(relations)(p1, p2) getOrElse NullProvenance
-      }
-    }
-    
-    case ArrayDef(_, values) => {
-      val provenances = values map { e => computeResultProvenance(e, relations, varAssumptions) }
-      
-      provenances.fold(ValueProvenance: Provenance) { (p1, p2) =>
-        unifyProvenance(relations)(p1, p2) getOrElse NullProvenance
-      }
-    }
-    
-    case Descent(_, child, _) => computeResultProvenance(child, relations, varAssumptions)
-    
-    case Deref(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case d @ Dispatch(_, _, actuals) => {
-      val provenances = actuals map { ex => computeResultProvenance(ex, relations, varAssumptions) }
-      
-      if (d.isReduction) {
-        d.provenance
-      } else {
-        d.binding match {
-          case LetBinding(e) if (e.params.length == actuals.length) => { 
-            val varAssumptions2 = e.assumptions ++ Map(e.params zip provenances: _*) map {
-              case (id, prov) => ((id, e), prov)
-            }
-            computeResultProvenance(e.left, relations, varAssumptions ++ varAssumptions2)
-          }
-          case Op1Binding(f) => {
-            computeResultProvenance(actuals(0), relations, varAssumptions)
-          }
-          case Op2Binding(f) => {
-            val left = computeResultProvenance(actuals(0), relations, varAssumptions)
-            val right = computeResultProvenance(actuals(1), relations, varAssumptions)
-
-            unifyProvenance(relations)(left, right) getOrElse NullProvenance
-          }
-          case _ => d.provenance  
-        }
-      }
-    }
-    
-    case Where(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }    
-   
-    case With(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }    
-   
-    case Union(_, _, _) | Intersect(_, _, _) | Difference(_, _, _) => body.provenance
-
-    case Add(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case Sub(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case Mul(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case Div(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case Lt(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case LtEq(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case Gt(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case GtEq(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case Eq(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case NotEq(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case And(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case Or(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
-    
-    case Comp(_, child) => computeResultProvenance(child, relations, varAssumptions)
-    
-    case Neg(_, child) => computeResultProvenance(child, relations, varAssumptions)
-    
-    case Paren(_, child) => computeResultProvenance(child, relations, varAssumptions)
-    
-    case New(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => body.provenance   
-  }
-
-  private def computeResultAccumulatedProvenance(body: Expr, exprs: Vector[Expr], relations: Map[Provenance, Set[Provenance]], varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]]): Option[Vector[Provenance]] = body match {
-    case Let(_, _, params, left, right) => {
-      computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case Import(_, _, child) => 
-      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
-
-    case n @ New(_, child) => {
-      val prov = n.provenance
-      Some(Vector(prov))
-    }
-
-    case Relate(_, from, to, in) => {
-      if (from.provenance == NullProvenance || to.provenance == NullProvenance) None
-      else if (from.provenance == ValueProvenance || to.provenance == ValueProvenance) None
-      else if (pathExists(relations, from.provenance, to.provenance)) None
-      else computeResultAccumulatedProvenance(in, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => Some(Vector())
-
-    case t @ TicVar(_, id) => t.binding match {
-      // TODO
-      // case LetBinding(lt) => varAccumulatedAssuemptions get (id -> lt) getOrElse Some(Vector())
-      case _ => Some(Vector())
-    }
-
-    case ObjectDef(_, props) => {
-      val exprs: Vector[Expr] = props map { case (_, e) => e }
-      val allExprs: Vector[Set[Provenance]] = exprs map { e => e.provenance.possibilities }
-
-      val isMatch = allExprs.reduceOption { 
-        (left, right) => left intersect right 
-      } exists(p => p != ValueProvenance && p != NullProvenance)  
-      
-      val accProv: Option[Vector[Provenance]] = {
-        exprs.map(_.accumulatedProvenance).reduceOption { 
-          (left, right) => (left <**> right) { _ ++ _ } 
-        } getOrElse Some(Vector())
-      }
-
-      if (isMatch) accProv map { _.distinct }
-      else accProv
-    }
-
-    case ArrayDef(_, exprs2) => {
-      val allExprs = exprs2 map { e => e.provenance.possibilities }
-
-      val isMatch = allExprs.reduceOption { 
-        (left, right) => left intersect right 
-      } exists(p => p != ValueProvenance && p != NullProvenance)  
-      
-      val accProv: Option[Vector[Provenance]] = {
-        exprs2.map(_.accumulatedProvenance).reduceOption { 
-          (left, right) => (left <**> right) { _ ++ _ } 
-        } getOrElse Some(Vector())
-      }
-
-      if (isMatch) accProv map { _.distinct }
-      else accProv
-    }
-
-    case Descent(_, child, _) => computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
-
-    case Deref(_, left, right) => {
-      val leftP = left.provenance.possibilities
-      val rightP = right.provenance.possibilities
-
-      val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
-      
-      val accProv = for {
-        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
-        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
-      } yield {
-        leftAcc ++ rightAcc
-      }
-
-      if (isMatch) accProv map { _.distinct }
-      else accProv
-    }
-
-    case d @ Dispatch(_, _, actuals) => {
-      lazy val accProvenances = actuals map { e => computeResultAccumulatedProvenance(e, exprs, relations, varAccumulatedAssumptions) }
-
-      if (d.isReduction) {
-        Some(Vector())
-      } else {
-        d.binding match {
-          case LetBinding(e) if e.params.length == actuals.length => {
-            val varAccumulatedAssumptions2: Map[(String, Let), Option[Vector[Provenance]]] = {
-              e.accumulatedAssumptions ++ Map(e.params zip accProvenances: _*) map {
-                case (id, accProv) => ((id, e), accProv)
-              }
-            }
-            computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions ++ varAccumulatedAssumptions2)
-          }
-          case LetBinding(e) if e.params.length < actuals.length => {
-            val prov = DynamicProvenance(provenanceId(d))
-            Some(Vector(prov))
-          }
-          case _ => d.accumulatedProvenance
-        }
-      }
-    }
-
-    case Where(_, left, right) => {
-      val leftP = left.provenance.possibilities
-      val rightP = right.provenance.possibilities
-
-      val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
-      
-      val accProv = for {
-        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
-        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
-      } yield {
-        leftAcc ++ rightAcc
-      }
-
-      if (isMatch) accProv map { _.distinct }
-      else accProv
-    }
-
-    case With(_, left, right) => {
-      val leftP = left.provenance.possibilities
-      val rightP = right.provenance.possibilities
-
-      val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
-      
-      val accProv = for {
-        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
-        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
-      } yield {
-        leftAcc ++ rightAcc
-      }
-
-      if (isMatch) accProv map { _.distinct }
-      else accProv
-    }
-
-    case Union(_, left, right) => {
-      if (left.cardinality.isDefined && right.cardinality.isDefined) {
-        if (left.cardinality == right.cardinality) {  
-          left.cardinality map { card => Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take card: _*) }
-        } else {
-          None
-        }
-      } else {
-        None
-      }
-    }
-
-    case Intersect(_, left, right) => {
-      if (left.cardinality.isDefined && right.cardinality.isDefined) {
-        if (left.cardinality == right.cardinality) {  
-          left.cardinality map { card => Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take card: _*) }
-        } else {
-          None
-        }
-      } else {
-        None
-      }
-    }
-
-    case Difference(_, left, right) => {
-      if (left.cardinality.isDefined && right.cardinality.isDefined) {
-        if (left.cardinality == right.cardinality) {  
-          if (left.cardinality == Some(0)) None
-          else computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
-        } else {
-          None
-        }
-      } else {
-        None
-      }
-    }
-
-    case Add(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case Sub(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case Mul(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case Div(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case Lt(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case LtEq(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case Gt(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case GtEq(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case Eq(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case NotEq(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case And(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case Or(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case Comp(_, child) => {
-      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case Neg(_, child) => {
-      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
-    }
-
-    case Paren(_, child) => {
-      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
-    }
-  }
-
-  private def determineBinaryAccProv(left: Expr, right: Expr): Option[Vector[Provenance]] = {
-    val leftP = left.provenance.possibilities
-    val rightP = right.provenance.possibilities
-
-    val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
-    
-    val accProv = for {
-      leftAcc <- left.accumulatedProvenance
-      rightAcc <- right.accumulatedProvenance
-    } yield {
-      leftAcc ++ rightAcc
-    }
-    
-    if (isMatch) accProv map { _.distinct }
-    else accProv
-  }
-
-  private def determineResultBinaryAccProv(left: Expr, right: Expr, exprs: Vector[Expr], relations: Map[Provenance, Set[Provenance]], varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]]): Option[Vector[Provenance]] = {
-    val leftP = left.provenance.possibilities
-    val rightP = right.provenance.possibilities
-
-    val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
-    
-    val accProv = for {
-      leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
-      rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
-    } yield {
-      leftAcc ++ rightAcc
-    }
-    
-    if (isMatch) accProv map { _.distinct }
-    else accProv
-  }
-
+  
   private def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
     case (p1, p2) if pathExists(relations, p1, p2) || pathExists(relations, p2, p1) => 
       Some(p1 & p2)
@@ -1316,6 +394,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     
     case (DynamicProvenance(id1), DynamicProvenance(id2)) if id1 == id2 =>
       Some(DynamicProvenance(id1))
+    
+    case (ParamProvenance(id1, let1), ParamProvenance(id2, let2)) if id1 == id2 && let1 == let2 =>
+      Some(ParamProvenance(id1, let1))
     
     case (NullProvenance, p) => Some(NullProvenance)
     case (p, NullProvenance) => Some(NullProvenance)
@@ -1357,8 +438,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     dfs(Set())(from)
   }
   
-  // needed in the emitter
-  private[quirrel] def unifyProvenanceAssumingRelated(p1: Provenance, p2: Provenance) = (p1, p2) match {
+  private def unifyProvenanceAssumingRelated(p1: Provenance, p2: Provenance) = (p1, p2) match {
     case (StaticProvenance(path1), StaticProvenance(path2)) if path1 == path2 => 
       StaticProvenance(path1)
     
@@ -1374,26 +454,54 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case pair => DynamicProvenance(currentId.incrementAndGet())
   }
   
-  private def flattenForest(forest: Set[ConditionTree]): Set[Expr] = forest flatMap {
-    case Condition(expr) => Set(expr)
-    case Reduction(_, forest) => flattenForest(forest)
+  private def substituteParam(id: Identifier, let: ast.Let, target: Provenance, sub: Provenance): Provenance = target match {
+    case ParamProvenance(`id`, `let`) => sub
+    
+    case UnifiedProvenance(left, right) =>
+      UnifiedProvenance(substituteParam(id, let, left, sub), substituteParam(id, let, right, sub))
+    
+    case UnionProvenance(left, right) =>
+      UnionProvenance(substituteParam(id, let, left, sub), substituteParam(id, let, right, sub))
+    
+    case _ => target
   }
-
-  private def provenanceId(expr: Expr): Int = {
-    val wrapper = ExprWrapper(expr)
-
-    def loop(id: Int): Int = {
-      val orig = commonIds.get()
-      if (orig contains wrapper)
-        orig(wrapper)
-      else if (commonIds.compareAndSet(orig, orig + (wrapper -> id)))
-        id
-      else
-        loop(id)
+  
+  private def resolveUnifications(relations: Map[Provenance, Set[Provenance]])(prov: Provenance): Option[Provenance] = prov match {
+    case UnifiedProvenance(left, right) if !left.isParametric && !right.isParametric => {
+      val optLeft2 = resolveUnifications(relations)(left)
+      val optRight2 = resolveUnifications(relations)(left)
+      
+      for {
+        left2 <- optLeft2
+        right2 <- optRight2
+        result <- unifyProvenance(relations)(left2, right2)
+      } yield result
     }
     
-    loop(currentId.incrementAndGet())
+    case UnifiedProvenance(left, right) => {
+      val optLeft2 = resolveUnifications(relations)(left)
+      val optRight2 = resolveUnifications(relations)(left)
+      
+      for {
+        left2 <- optLeft2
+        right2 <- optRight2
+      } yield UnifiedProvenance(left2, right2)
+    }
+    
+    case UnionProvenance(left, right) => {
+      val optLeft2 = resolveUnifications(relations)(left)
+      val optRight2 = resolveUnifications(relations)(left)
+      
+      for {
+        left2 <- optLeft2
+        right2 <- optRight2
+      } yield left2 & right2
+    }
+    
+    case ParamProvenance(_, _) | StaticProvenance(_) | DynamicProvenance(_) | ValueProvenance | NullProvenance =>
+      Some(prov)
   }
+  
   
   sealed trait Provenance {
     def &(that: Provenance) = (this, that) match {
@@ -1403,30 +511,56 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       case _ => UnionProvenance(this, that)
     }
     
+    def isParametric: Boolean
+    
     def possibilities = Set(this)
+  }
+  
+  case class ParamProvenance(id: Identifier, let: ast.Let) extends Provenance {
+    override val toString = id.id
+    
+    val isParametric = true
+  }
+  
+  case class UnifiedProvenance(left: Provenance, right: Provenance) extends Provenance {
+    override val toString = "(%s >< %s)".format(left, right)
+    
+    val isParametric = left.isParametric || right.isParametric
   }
   
   case class UnionProvenance(left: Provenance, right: Provenance) extends Provenance {
     override val toString = "(%s & %s)".format(left, right)
+    
+    val isParametric = left.isParametric || right.isParametric
     
     override def possibilities = left.possibilities ++ right.possibilities + this
   }
   
   case class StaticProvenance(path: String) extends Provenance {
     override val toString = path
+    val isParametric = false
   }
   
   case class DynamicProvenance(id: Int) extends Provenance {
     override val toString = "@" + id
+    val isParametric = false
   }
   
   case object ValueProvenance extends Provenance {
     override val toString = "<value>"
+    val isParametric = false
   }
   
   case object NullProvenance extends Provenance {
     override val toString = "<null>"
+    val isParametric = false
   }
+  
+  
+  sealed trait ProvConstraint
+  
+  case class Related(left: Provenance, right: Provenance) extends ProvConstraint
+  case class NotRelated(left: Provenance, right: Provenance) extends ProvConstraint
 
 
   private case class ExprWrapper(expr: Expr) {
