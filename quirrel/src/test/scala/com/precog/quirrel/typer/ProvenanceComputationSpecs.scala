@@ -378,7 +378,7 @@ object ProvenanceComputationSpecs extends Specification
       }
     }
 
-    "determine provenance coming out of a forall" in {
+    "determine provenance coming out of a solve" in {
       {
         val tree = compile("""
           | foo := //foo
@@ -390,7 +390,7 @@ object ProvenanceComputationSpecs extends Specification
       {
         val tree = compile("""
           | foo := //foo
-          | obj := forall 'a {bar: sum(foo where foo.a = 'a)}
+          | obj := solve 'a {bar: sum(foo where foo.a = 'a)}
           | obj
           """.stripMargin)
         tree.provenance must beLike { case DynamicProvenance(_) => ok }
@@ -1144,7 +1144,7 @@ object ProvenanceComputationSpecs extends Specification
 
     "check provenance of partially-quantified function" in {
       val tree = compile("""
-        foo('a) :=
+        foo := solve 'a
           //clicks where //clicks.a = 'a
         foo""")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
@@ -1154,19 +1154,19 @@ object ProvenanceComputationSpecs extends Specification
     "identify intersect according to its children" in {
       {
         val tree = compile("1 intersect 2")
-        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
         val tree = compile("//foo intersect 2")
-        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.provenance mustEqual NullProvenance
         tree.errors must contain(IntersectProvenanceDifferentLength)
       }
       
       {
         val tree = compile("1 intersect //foo")        
-        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.provenance mustEqual NullProvenance
         tree.errors must contain(IntersectProvenanceDifferentLength)
 
       }
@@ -1179,7 +1179,7 @@ object ProvenanceComputationSpecs extends Specification
       
       {
         val tree = compile("1 intersect new 2")
-        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.provenance mustEqual NullProvenance
         tree.errors must contain(IntersectProvenanceDifferentLength)
       }
       
@@ -1190,7 +1190,6 @@ object ProvenanceComputationSpecs extends Specification
       }
     }  
 
-    
     "identify addition according to its children" in {
       {
         val tree = compile("1 + 2")
