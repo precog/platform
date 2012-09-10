@@ -114,13 +114,13 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           val card = leftCard orElse rightCard
           
           expr.provenance = card map { cardinality =>
-            Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take cardinality reduce UnionProvenance
+            Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take cardinality reduceOption UnionProvenance getOrElse ValueProvenance
           } getOrElse DynamicDerivedProvenance(left.provenance)
           
           (Set(), Set(SameCard(left.provenance, right.provenance)))
         } else {
           if (leftCard == rightCard) {
-            expr.provenance = Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take leftCard.get reduce UnionProvenance
+            expr.provenance = Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take leftCard.get reduceOption UnionProvenance getOrElse ValueProvenance
             (Set(), Set())
           } else {
             expr.provenance = NullProvenance
@@ -565,7 +565,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       val source2 = substituteParam(id, let, source, sub)
       
       source2.cardinality map { cardinality =>
-        Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take cardinality reduce UnionProvenance
+        Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take cardinality reduceOption UnionProvenance getOrElse ValueProvenance
       } getOrElse DynamicDerivedProvenance(source2)
     }
     
