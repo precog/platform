@@ -987,7 +987,7 @@ object ProvenanceComputationSpecs extends Specification
         {
           val tree = compile("(//ack where //achoo.foo >= 3) union 12") 
           tree.provenance mustEqual NullProvenance
-          tree.errors mustEqual Set(OperationOnUnrelatedSets, UnionProvenanceDifferentLength)
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
         }
       }
 
