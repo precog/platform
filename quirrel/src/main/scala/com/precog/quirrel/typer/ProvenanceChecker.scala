@@ -67,7 +67,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         expr.provenance = ValueProvenance
         (Set(), Set())
       } else {
-        val provenances: Vector[(Provenance, Set[ProvConstraint], Boolean)] = values map { expr => (expr.provenance, Set[ProvConstraint](), true) }
+        val provenances: Vector[(Provenance, Set[ProvConstraint], Boolean)] = values map { expr => (expr.provenance, Set[ProvConstraint](), false) }
         
         val (prov, constrContrib, isError) = provenances reduce { (pair1, pair2) =>
           val (prov1, constr1, error1) = pair1
@@ -81,11 +81,11 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             if (unified.isDefined)
               (unified.get, Set(), false): (Provenance, Set[ProvConstraint], Boolean)
             else
-              (prov, Set(Related(prov1, prov2)) ++ constr1 ++ constr2, error1 || error2): (Provenance, Set[ProvConstraint], Boolean)
+              (prov, Set(Related(prov1, prov2)) ++ constr1 ++ constr2, true): (Provenance, Set[ProvConstraint], Boolean)
           } else {
             val prov = unified getOrElse NullProvenance
             
-            (prov, constr1 ++ constr2, error1 || error2 || unified.isDefined): (Provenance, Set[ProvConstraint], Boolean)
+            (prov, constr1 ++ constr2, error1 || error2 || !unified.isDefined): (Provenance, Set[ProvConstraint], Boolean)
           }
         }
         
