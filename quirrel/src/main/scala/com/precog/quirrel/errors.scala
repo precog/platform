@@ -102,10 +102,6 @@ case class UnspecifiedRequiredParams(missing: Seq[String]) extends ErrorType {
   override def toString = "unconstrained parameters on function invoked without specification: " + (missing mkString ", ")
 }
 
-case object SetFunctionAppliedToSet extends ErrorType {
-  override def toString = "cannot apply a set function to another set"
-}
-
 case object FunctionArgsInapplicable extends ErrorType {
   override def toString = "cannot apply function to specified arguments"
 }

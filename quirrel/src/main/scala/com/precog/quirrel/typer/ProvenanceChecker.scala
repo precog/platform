@@ -182,8 +182,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           case LetBinding(let) => {
             val (errorsVec, constrVec) = actuals map { loop(_, relations) } unzip
             
-            val actualErrors = errorsVec reduce { _ ++ _ }
-            val actualConstr = constrVec reduce { _ ++ _ }
+            val actualErrors = errorsVec.fold(Set[Error]()) { _ ++ _ }
+            val actualConstr = constrVec.fold(Set[ProvConstraint]()) { _ ++ _ }
             
             val ids = let.params map { Identifier(Vector(), _) }
             val zipped = ids zip (actuals map { _.provenance })
@@ -235,7 +235,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             
             val mapped = constraints2 flatMap {
               case Related(left, right) if !left.isParametric && !right.isParametric => {
-                if (unifyProvenance(relations)(left, right).isDefined)
+                if (!unifyProvenance(relations)(left, right).isDefined)
                   Some(Left(Error(expr, OperationOnUnrelatedSets)))
                 else
                   None
@@ -254,9 +254,24 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             val constrErrors = mapped collect { case Left(error) => error }
             val constraints3 = mapped collect { case Right(constr) => constr }
             
-            expr.provenance = sub(let.resultProvenance)
+            val errors = resolveUnifications(relations)(sub(let.resultProvenance)) match {
+              case Some(prov) => {
+                expr.provenance = prov
+                Set()
+              }
+              
+              case None => {
+                expr.provenance = NullProvenance
+                Set(Error(expr, OperationOnUnrelatedSets))
+              }
+            }
             
-            (actualErrors ++ resolutionErrors ++ constrErrors, actualConstr ++ constraints3)
+            val finalErrors = actualErrors ++ resolutionErrors ++ constrErrors ++ errors
+            if (!finalErrors.isEmpty) {
+              expr.provenance = NullProvenance
+            }
+            
+            (finalErrors, actualConstr ++ constraints3)
           }
           
           case FormalBinding(let) => {
@@ -315,8 +330,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           case NullBinding => {
             val (errorsVec, constrVec) = actuals map { loop(_, relations) } unzip
             
-            val errors = errorsVec reduce { _ ++ _ }
-            val constr = constrVec reduce { _ ++ _ }
+            val errors = errorsVec reduceOption { _ ++ _ } getOrElse Set()
+            val constr = constrVec reduceOption { _ ++ _ } getOrElse Set()
             
             expr.provenance = NullProvenance
             
@@ -366,6 +381,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   }
   
   private def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
+    case (p1, p2) if p1 == p2 => Some(p1)
+    
     case (p1, p2) if pathExists(relations, p1, p2) || pathExists(relations, p2, p1) => 
       Some(p1 & p2)
     
@@ -438,22 +455,6 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     dfs(Set())(from)
   }
   
-  private def unifyProvenanceAssumingRelated(p1: Provenance, p2: Provenance) = (p1, p2) match {
-    case (StaticProvenance(path1), StaticProvenance(path2)) if path1 == path2 => 
-      StaticProvenance(path1)
-    
-    case (DynamicProvenance(id1), DynamicProvenance(id2)) if id1 == id2 =>
-      DynamicProvenance(id1)
-    
-    case (NullProvenance, p) => NullProvenance
-    case (p, NullProvenance) => NullProvenance
-    
-    case (ValueProvenance, p) => p
-    case (p, ValueProvenance) => p
-    
-    case pair => DynamicProvenance(currentId.incrementAndGet())
-  }
-  
   private def substituteParam(id: Identifier, let: ast.Let, target: Provenance, sub: Provenance): Provenance = target match {
     case ParamProvenance(`id`, `let`) => sub
     
@@ -469,7 +470,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   private def resolveUnifications(relations: Map[Provenance, Set[Provenance]])(prov: Provenance): Option[Provenance] = prov match {
     case UnifiedProvenance(left, right) if !left.isParametric && !right.isParametric => {
       val optLeft2 = resolveUnifications(relations)(left)
-      val optRight2 = resolveUnifications(relations)(left)
+      val optRight2 = resolveUnifications(relations)(right)
       
       for {
         left2 <- optLeft2

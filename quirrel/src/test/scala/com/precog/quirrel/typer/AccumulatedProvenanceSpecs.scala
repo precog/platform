@@ -583,12 +583,12 @@ object AccumulatedProvenanceSpecs extends Specification
         {
           val tree = compile("f('a) := //foobar where //foobar.a = 'a f(//bam)")
           tree.accumulatedProvenance must beLike { case None => ok }
-          tree.errors mustEqual Set(SetFunctionAppliedToSet)
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
         }
         {
           val tree = compile("//foo ~ //bar f('a, 'b) := //foo + 'a where //foo.b = 'b f(//bar)")
           tree.accumulatedProvenance must beLike { case None => ok }
-          tree.errors mustEqual Set(SetFunctionAppliedToSet)
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
         }        
         {
           val tree = compile("f('a, 'b) := //foo + 'a + 'b where //foo.b = 'b f(10)")
