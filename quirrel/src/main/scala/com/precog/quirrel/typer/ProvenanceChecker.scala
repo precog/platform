@@ -384,10 +384,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           expr.provenance = NullProvenance
           (Set(), Set())
         } else {
-        // TODO DynamicDerivedProvenance?
-        val leftCard = left.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
-        
-        val rightCard = right.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
+          // TODO DynamicDerivedProvenance?
+          val leftCard = left.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
+          
+          val rightCard = right.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
           
           if (left.provenance.isParametric || right.provenance.isParametric) {
             expr.provenance = left.provenance
