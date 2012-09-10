@@ -52,6 +52,7 @@ import scalaz.std.set._
 import scalaz.std.stream._
 import scalaz.syntax.arrow._
 import scalaz.syntax.monad._
+import scalaz.syntax.show._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 
@@ -88,6 +89,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
   trait ColumnarTableCompanion extends TableCompanionLike {
     def apply(slices: StreamT[M, Slice]): Table
+
+    implicit def groupIdShow: Show[GroupId]
 
     def empty: Table = Table(StreamT.empty[M, Slice])
     
@@ -345,7 +348,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     type ConnectedSubgraph = Set[NodeSubset]
 
-    case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
+    // BorgResult tables must have the following structure with respect to the root:
+    // {
+    //   "groupKeys": { "000001": ..., "000002": ... },
+    //   "identities": { "<string value of groupId1>": <identities for groupId1>, "<string value of groupId2>": ... },
+    //   "values": { "<string value of groupId1>": <values for groupId1>, "<string value of groupId2>": ... },
+    // }
+    case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId])
 
     object Universe {
       def allEdges(nodes: collection.Set[MergeNode]): collection.Set[MergeEdge] = {
@@ -1160,9 +1169,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       val metaForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
 
-      // case class BorgResult(table: Table, groupKeyTrans: TransSpec1, idTrans: Map[GroupId, TransSpec1], rowTrans: Map[GroupId, TransSpec1])
-      // case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, 
-      //                       targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar]) 
       val plan = findBorgTraversalOrder(spanningGraph, metaForNode)
 
       val planSteps = plan.fixed.steps
@@ -1172,11 +1178,20 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       val node = metaForNode(x.node)
 
+      val nodeGroupId = node.node.binding.groupId
+
+      // we have to use an enforced structure for the keys and values, otherwise
+      // concatenation in crossAll gets way too complicated.
+      val brKeyTrans = WrapObject(node.groupKeyTrans.spec, "groupKeys")
+      val brIdTrans = WrapObject(WrapObject(node.idTrans, nodeGroupId.shows), "identities")
+      val brRowTrans = node.targetTrans.map(t => WrapObject(WrapObject(t, nodeGroupId.shows), "values"))
+
+      val borgResultsTrans = ObjectConcat(brKeyTrans :: brIdTrans :: brRowTrans.toList : _*)
+
       val initial = (BorgResult(
-                      table         = node.table, 
-                      groupKeyTrans = node.groupKeyTrans.spec,
-                      idTrans       = Map(node.node.binding.groupId -> node.idTrans),
-                      rowTrans      = node.targetTrans.map(node.node.binding.groupId -> _).toMap
+                      table       = node.table.transform(borgResultsTrans), 
+                      groupKeys   = node.groupKeyTrans.keyOrder,
+                      groups      = Set(nodeGroupId)
                     ), x).point[M]
 
       // TODO: Sort initial according to x
@@ -1194,8 +1209,52 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }).map(_._1)
     }
 
-    def crossAll(borgResults: Set[BorgResult]): M[BorgResult] = {
-      sys.error("todo")
+    def crossAll(borgResults: Set[BorgResult]): BorgResult = {
+      import TransSpec._
+      def cross2(left: BorgResult, right: BorgResult): BorgResult = {
+        val leftKeySize = left.groupKeys.size
+        val keyTransLeft = DerefObjectStatic(Leaf(SourceLeft), JPathField("groupKeys"))
+
+        // remap the group keys on the right so that they don't conflict with the left
+        // and respect the composite ordering of the left and right
+        val keyTransRight = ObjectConcat(
+          (0 until right.groupKeys.size) map { i =>
+            WrapObject(
+              DerefObjectStatic(
+                DerefObjectStatic(Leaf(SourceRight), JPathField("groupKeys")), 
+                JPathField(GroupKeyTrans.keyName(i))
+              ),
+              GroupKeyTrans.keyName(i + leftKeySize)
+            )
+          }: _*
+        )
+
+        val groupKeyTrans2 = WrapObject(ObjectConcat(keyTransLeft, keyTransRight), "groupKeys")
+
+        val idTrans2 = WrapObject(
+          ObjectConcat(
+            DerefObjectStatic(Leaf(SourceLeft), JPathField("identities")),
+            DerefObjectStatic(Leaf(SourceRight), JPathField("identities"))
+          ),
+          "identities"
+        )
+
+        val recordTrans2 = WrapObject(
+          ObjectConcat(
+            DerefObjectStatic(Leaf(SourceLeft), JPathField("values")),
+            DerefObjectStatic(Leaf(SourceRight), JPathField("values"))
+          ),
+          "values"
+        )
+
+        val omniverseTrans = ObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
+
+        BorgResult(left.table.cross(right.table)(omniverseTrans),
+                   left.groupKeys ++ right.groupKeys,
+                   left.groups ++ right.groups)
+      }
+
+      borgResults.reduceLeft(cross2)
     }
 
     // Create the omniverse
@@ -1228,31 +1287,55 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         for {
           spanningGraphs <- minimizedSpanningGraphsM
           borgedGraphs <- spanningGraphs.map(borg).sequence
-          crossed <- crossAll(borgedGraphs)
-        } yield crossed
+        } yield {
+          crossAll(borgedGraphs)
+        }
       }.sequence
 
       for {
         omniverse <- borgedUniverses.flatMap(s => unionAll(s.toSet))
-        result <- omniverse.table.partitionMerge(omniverse.groupKeyTrans) { partition =>
+        result <- omniverse.table.partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("groupKeys"))) { partition =>
+          val groupKeyTrans = ObjectConcat(
+            omniverse.groupKeys.zipWithIndex map { case (ticvar, i) =>
+              WrapObject(
+                DerefObjectStatic(
+                  DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
+                  JPathField(GroupKeyTrans.keyName(i))
+                ),
+                ticvar.name
+              )
+            } : _*
+          )
+
           val groups: M[Map[GroupId, Table]] = 
             for {
-              grouped <- omniverse.rowTrans.toStream.map{ 
-                           case (groupId, rowTrans) => 
-                             val recordTrans = ArrayConcat(WrapArray(omniverse.idTrans(groupId)), WrapArray(rowTrans))
-                             val sortByTrans = TransSpec.deepMap(omniverse.idTrans(groupId)) { 
-                                                 case Leaf(_) => TransSpec1.DerefArray1 
-                                               }
+              grouped <- omniverse.groups.map{ groupId =>
+                           val recordTrans = ArrayConcat(
+                             WrapArray(
+                               DerefObjectStatic(
+                                 DerefObjectStatic(Leaf(Source), JPathField("identities")),
+                                 JPathField(groupId.shows)
+                               )
+                             ),
+                             WrapArray(
+                               DerefObjectStatic(
+                                 DerefObjectStatic(Leaf(Source), JPathField("values")),
+                                 JPathField(groupId.shows)
+                               )
+                             )
+                           )
 
-                             // TODO: This sort should not include the globalId so that it can dedup on the id.
-                             partition.transform(recordTrans).sort(sortByTrans) map {
-                               t => (groupId -> t.transform(DerefArrayStatic(TransSpec1.DerefArray1, JPathIndex(1))))
-                             }
+                           val sortByTrans = TransSpec1.DerefArray0
+
+                           // transform to get just the information related to the particular groupId,
+                           partition.transform(recordTrans).sort(sortByTrans, unique = false) map {
+                             t => groupId -> t.transform(DerefArrayStatic(TransSpec1.DerefArray1, JPathIndex(1)))
+                           }
                          }.sequence
             } yield grouped.toMap
 
           body(
-            partition.takeRange(0, 1).transform(omniverse.groupKeyTrans), 
+            partition.takeRange(0, 1).transform(groupKeyTrans), 
             (groupId: GroupId) => groups.map(_(groupId))
           )
         }
