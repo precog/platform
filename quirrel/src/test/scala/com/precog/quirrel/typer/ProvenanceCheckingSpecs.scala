@@ -213,6 +213,8 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    // TODO null provenance unions
+    
     "accept union on different loads" in {
       val tree = compile("//foo union //bar")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }

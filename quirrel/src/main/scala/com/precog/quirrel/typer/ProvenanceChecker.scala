@@ -156,7 +156,11 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         
         val (inErrors, inConstr) = loop(in, relations3)
         
-        expr.provenance = in.provenance
+        if (from.provenance == NullProvenance || to.provenance == NullProvenance) {
+          expr.provenance = NullProvenance
+        } else {
+          expr.provenance = in.provenance
+        }
         
         (fromErrors ++ toErrors ++ inErrors ++ contribErrors, fromConstr ++ toConstr ++ inConstr ++ contribConstr)
       }

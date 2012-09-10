@@ -108,7 +108,7 @@ object NullProvenanceSpecs extends Specification
     }
     
     "propagate through dispatch" in {
-      val tree = compile("a('b) := 'b a(//a + //b)")
+      val tree = compile("a(b) := b a(//a + //b)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
