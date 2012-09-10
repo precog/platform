@@ -1734,19 +1734,19 @@ object ProvenanceComputationSpecs extends Specification
     "accept user-defined function within a user-defined function" in {
       {
         val tree = compile("""
-          foo('a) := 
-            bar('b) :=
-              //clicks where //clicks.a = 'b
-            bar('a)
+          foo(a) := 
+            bar(b) :=
+              //clicks where //clicks.baz = b
+            bar(a)
           foo(2)""")
         tree.provenance must beLike { case StaticProvenance("/clicks") => ok }
         tree.errors must beEmpty
       }      
       {
         val tree = compile("""
-          foo('a) := 
-            bar('b) :=
-              //clicks where //clicks.a = 'b + 'a
+          foo(a) := 
+            bar := solve 'b
+              //clicks where //clicks.baz = 'b + a
             bar
           foo(2)""")
         tree.provenance must beLike { case DynamicProvenance(_) => ok }
