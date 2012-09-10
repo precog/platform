@@ -111,19 +111,16 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val rightCard = right.provenance.cardinality
         
         if (left.provenance.isParametric || right.provenance.isParametric) {
-          expr.provenance = if (left.provenance.isParametric && right.provenance.isParametric)
-            DynamicDerivedProvenance(left.provenance)
-          else if (left.provenance.isParametric)
-            Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take rightCard reduce UnionProvenance
-          else if (right.provenance.isParametric)
-            Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take leftCard reduce UnionProvenance
-          else
-            sys.error("unreachable")
-            
+          val card = leftCard orElse rightCard
+          
+          expr.provenance = card map { cardinality =>
+            Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take cardinality reduce UnionProvenance
+          } getOrElse DynamicDerivedProvenance(left.provenance)
+          
           (Set(), Set(SameCard(left.provenance, right.provenance)))
         } else {
           if (leftCard == rightCard) {
-            expr.provenance = Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take leftCard reduce UnionProvenance
+            expr.provenance = Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take leftCard.get reduce UnionProvenance
             (Set(), Set())
           } else {
             expr.provenance = NullProvenance
@@ -566,10 +563,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     
     case DynamicDerivedProvenance(source) => {
       val source2 = substituteParam(id, let, source, sub)
-      if (source2.isParametric)
-        DynamicDerivedProvenance(source2)
-      else
-        Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take source2.cardinality reduce UnionProvenance
+      
+      source2.cardinality map { cardinality =>
+        Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take cardinality reduce UnionProvenance
+      } getOrElse DynamicDerivedProvenance(source2)
     }
     
     case _ => target
@@ -628,7 +625,22 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     def possibilities = Set(this)
     
     // TODO DynamicDerivedProvenance?
-    def cardinality = possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
+    def cardinality: Option[Int] = {
+      if (isParametric || this == NullProvenance) {
+        None
+      } else {
+        val back = possibilities filter {
+          case ValueProvenance => false
+          case _: UnionProvenance => false
+          
+          // should probably remove UnifiedProvenance, but it's never going to happen
+          
+          case _ => true
+        } size
+        
+        Some(back)
+      }
+    }
   }
   
   case class ParamProvenance(id: Identifier, let: ast.Let) extends Provenance {
