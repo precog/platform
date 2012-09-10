@@ -213,8 +213,6 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    // TODO null provenance unions
-    
     "accept union on different loads" in {
       val tree = compile("//foo union //bar")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
@@ -273,7 +271,276 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compile("(new 1) difference (new 1)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty
-    }    
+    }
+    
+    "accept union on union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo + bar
+        | bb := bar ~ baz bar + baz
+        | 
+        | fb union bb
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance must beLike {
+        case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+      }
+      
+      tree.errors must beEmpty
+    }
+    
+    "accept intersect on union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo + bar
+        | bb := bar ~ baz bar + baz
+        | 
+        | fb intersect bb
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance must beLike {
+        case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+      }
+      
+      tree.errors must beEmpty
+    }
+    
+    "accept difference on union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo + bar
+        | bb := bar ~ baz bar + baz
+        | 
+        | fb difference bb
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance must beLike {
+        case UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
+        case UnionProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
+      }
+      
+      tree.errors must beEmpty
+    }
+    
+    "accept union through a function on static provenances" in {
+      val input = """
+        | f(a, b) := a union b
+        | 
+        | f(//foo, //bar)
+        | """.stripMargin
+      
+      val tree = compile(input)
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty
+    }
+    
+    "accept intersect through a function on static provenance" in {
+      val input = """
+        | f(a, b) := a intersect b
+        | 
+        | f(//foo, //bar)
+        | """.stripMargin
+      
+      val tree = compile(input)
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty
+    }
+    
+    "accept difference through a function on static provenances" in {
+      val input = """
+        | f(a, b) := a difference b
+        | 
+        | f(//foo, //bar)
+        | """.stripMargin
+      
+      val tree = compile(input)
+      tree.provenance mustEqual StaticProvenance("/foo")
+      tree.errors must beEmpty
+    }
+    
+    "accept union through a function on union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo + bar
+        | bb := bar ~ baz bar + baz
+        | 
+        | f(a, b) := a union b
+        | f(fb, bb)
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance must beLike {
+        case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+      }
+      
+      tree.errors must beEmpty
+    }
+    
+    "accept intersect through a function on union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo + bar
+        | bb := bar ~ baz bar + baz
+        | 
+        | f(a, b) := a intersect b
+        | f(fb, bb)
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance must beLike {
+        case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+      }
+      
+      tree.errors must beEmpty
+    }
+    
+    "accept difference through a function on union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo + bar
+        | bb := bar ~ baz bar + baz
+        | 
+        | f(a, b) := a difference b
+        | f(fb, bb)
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance must beLike {
+        case UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
+        case UnionProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
+      }
+      
+      tree.errors must beEmpty
+    }
+    
+    "reject union on non-matching union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | 
+        | fb := foo ~ bar foo + bar
+        | 
+        | fb union //baz
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+    }
+    
+    "reject intersect on non-matching union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo + bar
+        | 
+        | fb intersect //baz
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+    }
+    
+    "reject difference on non-matching union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | 
+        | fb := foo ~ bar foo + bar
+        | 
+        | fb difference //baz
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+    }
+    
+    "accept union through a function on non-matching union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo + bar
+        | 
+        | f(a, b) := a union b
+        | f(fb, //baz)
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+    }
+    
+    "accept intersect through a function on union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | 
+        | fb := foo ~ bar foo + bar
+        | 
+        | f(a, b) := a intersect b
+        | f(fb, //baz)
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+    }
+    
+    "accept difference through a function on union provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo + bar
+        | 
+        | f(a, b) := a difference b
+        | f(fb, //baz)
+        | """.stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+    }
 
     "reject addition on different loads" in {
       val tree = compile("//foo + //bar")
