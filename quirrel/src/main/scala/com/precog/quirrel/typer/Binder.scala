@@ -164,14 +164,35 @@ trait Binder extends parser.AST with Library {
       case d @ Dispatch(_, name, actuals) => {
         val recursive = (actuals map { loop(_, env) }).fold(Set()) { _ ++ _ }
         if (env.names contains name) {
-          d.binding = env.names(name)
+          val binding = env.names(name)
+          
+          val arity = binding match {
+            case FormalBinding(_) => 0
+            case LetBinding(let) => let.params.length
+            case ReductionBinding(_) => 1
+            case LoadBinding => 1
+            case DistinctBinding => 1
+            case Morphism1Binding(_) => 1
+            case Morphism2Binding(_) => 2
+            case Op1Binding(_) => 1
+            case Op2Binding(_) => 2
+            case NullBinding => sys.error("unreachable code")
+          }
+          
+          val errors = if (actuals.length == arity) {
+            d.binding = binding
+            Set()
+          } else {
+            d.binding = NullBinding
+            Set(Error(d, IncorrectArity(arity, actuals.length)))
+          }
           
           d.isReduction = env.names(name) match {
             case ReductionBinding(_) => true
             case _ => false
           }
           
-          recursive
+          recursive ++ errors
         } else {
           d.binding = NullBinding
           d.isReduction = false
