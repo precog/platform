@@ -474,6 +474,28 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
 
       def join(that: OrderingConstraint2): Join = {
+        // Tries to join the maximal number of elements from "remaining" into lastJoin:
+        def joinSet(constructJoin: (OrderingConstraint2, OrderingConstraint2) => OrderingConstraint2)(lastJoin: Join, remaining: Set[OrderingConstraint2]): Vector[Join] = {
+          if (lastJoin.leftRem == Zero) Vector(lastJoin)
+          else if (remaining.size == 0) Vector(lastJoin)
+          else {
+            remaining.foldLeft(Vector.empty[Join]) {
+              case (acc, choice) => 
+                val nextChoices = remaining - choice
+
+                val newJoin = lastJoin.leftRem.join(choice)
+
+                if (newJoin.failure) acc
+                else {
+                  acc ++ joinSet(constructJoin)(
+                    Join(constructJoin(lastJoin.join, newJoin.join), leftRem = newJoin.leftRem, rightRem = unordered(lastJoin.rightRem, newJoin.rightRem)),
+                    nextChoices
+                  )
+                }
+            }
+          }
+        }
+
         def join2(left: OrderingConstraint2, right: OrderingConstraint2): Join = {
           (left, right) match {
             case (left, Zero) => Join(left)
@@ -497,46 +519,20 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             case (l @ Ordered(left), r @ Variable(right)) => 
               if (left.head == r) Join(r, leftRem = Ordered(left.tail), rightRem = Zero) else Join.unjoined(l, r)
 
+            case (l @ Variable(left), r @ Unordered(right)) => 
+              if (right.contains(l)) Join(l, leftRem = Zero, rightRem = Unordered(right - l)) else Join.unjoined(l, r)
+
             case (l @ Ordered(left), r @ Unordered(right)) => 
-              def foldSet(lastJoin: Join, remaining: Set[OrderingConstraint2]): Vector[Join] = {
-                if (lastJoin.leftRem == Zero) Vector(lastJoin)
-                else if (remaining.size == 0) Vector(lastJoin)
-                else {
-                  remaining.foldLeft(Vector.empty[Join]) {
-                    case (acc, choice) => 
-                      val nextChoices = remaining - choice
+              joinSet((a,b) => ordered(a, b))(Join(Zero, leftRem = l), right).filterNot(_.failure).sortBy(_.size).lastOption.getOrElse(Join.unjoined(l, r))
 
-                      val newJoin = lastJoin.leftRem.join(choice)
-
-                      if (newJoin.failure) acc
-                      else {
-                        acc ++ foldSet(
-                          Join(ordered(lastJoin.join, newJoin.join), leftRem = newJoin.leftRem, rightRem = unordered(lastJoin.rightRem, newJoin.rightRem)),
-                          nextChoices
-                        )
-                      }
-                  }
-                }
-              }
-              
-              foldSet(Join(Zero, leftRem = l), right).filterNot(_.failure).sortBy(_.size).last
+            case (l @ Unordered(left), r @ Unordered(right)) => 
+              joinSet((a,b) => unordered(a, b))(Join(Zero, leftRem = l), right).filterNot(_.failure).sortBy(_.size).lastOption.getOrElse(Join.unjoined(l, r))
 
             case (l @ Variable(left), r @ Variable(right)) => 
               if (left == right) Join(l) else Join.unjoined(l, r)
 
             case (l @ Variable(left), r @ Ordered(right)) => 
               join2(r, l).flip
-
-            case (l @ Variable(left), r @ Unordered(right)) => 
-              if (right.contains(l)) Join(l, leftRem = Zero, rightRem = Unordered(right - l)) else Join.unjoined(l, r)
-
-            case (Unordered(left), Unordered(right)) =>  
-              // TODO: This is not right
-              val common = left intersect right
-              val leftUnique = left -- common
-              val rightUnique = right -- common
-
-              Join(Unordered(common), leftRem = Unordered(leftUnique), rightRem = Unordered(rightUnique))
 
             case (l @ Unordered(left), r @ Ordered(right)) => 
               join2(r, l).flip
@@ -559,7 +555,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
         def success = join != Zero
 
-        def failure = join == Zero
+        def failure = !success
 
         def collapse: OrderingConstraint2 = ordered(join, unordered(leftRem, rightRem))
       }
@@ -579,7 +575,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
         lazy val constraint: Parser[OrderingConstraint2] = ticVar | ordered | unordered | zero
 
-        def parse(input: String): OrderingConstraint2 = parseAll(constraint, input).getOrElse(Zero)
+        def parse(input: String): OrderingConstraint2 = parseAll(constraint, input).getOrElse(sys.error("Could not parse " + input))
       }
 
       def parse(input: String): OrderingConstraint2 = ConstraintParser.parse(input)
