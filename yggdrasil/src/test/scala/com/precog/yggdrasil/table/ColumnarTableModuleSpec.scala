@@ -65,7 +65,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     DistinctSpec[M] { spec => //with
     //GrouperSpec[M] { spec =>
 
-  type GroupId = Int
+  //type GroupId = Int
   import trans._
   import constants._
     
