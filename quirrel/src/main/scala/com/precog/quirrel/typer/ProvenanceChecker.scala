@@ -107,9 +107,11 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         expr.provenance = NullProvenance
         (Set(), Set())
       } else {
-        val leftCard = left.provenance.possibilities.size
-        val rightCard = right.provenance.possibilities.size
-          
+        // TODO DynamicDerivedProvenance?
+        val leftCard = left.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
+        
+        val rightCard = right.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
+        
         if (left.provenance.isParametric || right.provenance.isParametric) {
           expr.provenance = if (left.provenance.isParametric && right.provenance.isParametric)
             DynamicDerivedProvenance(left.provenance)
@@ -131,7 +133,6 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             val errorType = expr match {
               case _: Union => UnionProvenanceDifferentLength
               case _: Intersect => IntersectProvenanceDifferentLength
-              case _: Difference => DifferenceProvenanceDifferentLength
               case _ => sys.error("unreachable")
             }
             
@@ -402,8 +403,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           expr.provenance = NullProvenance
           (Set(), Set())
         } else {
-          val leftCard = left.provenance.possibilities.size
-          val rightCard = right.provenance.possibilities.size
+        // TODO DynamicDerivedProvenance?
+        val leftCard = left.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
+        
+        val rightCard = right.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
           
           if (left.provenance.isParametric || right.provenance.isParametric) {
             expr.provenance = left.provenance
@@ -558,7 +561,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     
     case UnifiedProvenance(left, right) => {
       val optLeft2 = resolveUnifications(relations)(left)
-      val optRight2 = resolveUnifications(relations)(left)
+      val optRight2 = resolveUnifications(relations)(right)
       
       for {
         left2 <- optLeft2
@@ -568,7 +571,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     
     case UnionProvenance(left, right) => {
       val optLeft2 = resolveUnifications(relations)(left)
-      val optRight2 = resolveUnifications(relations)(left)
+      val optRight2 = resolveUnifications(relations)(right)
       
       for {
         left2 <- optLeft2
