@@ -296,6 +296,18 @@ trait ColumnarTableModuleSpec[M[+_]] extends
           c("['a, 'b]").join(c("['a]")) mustEqual Join(c("'a"), leftRem = c("'b"), rightRem = Zero)
         }
 
+        "succeed for ['a, 'b] join {'a}" in {
+          c("['a, 'b]").join(c("{'a}")) mustEqual Join(c("'a"), leftRem = c("'b"), rightRem = Zero)
+        }
+
+        "succeed for ['a, 'b] join {'a, 'b}" in {
+          c("['a, 'b]").join(c("{'a, 'b}")) mustEqual Join(c("['a, 'b]"), leftRem = Zero, rightRem = Zero)
+        }
+
+        "succeed for ['a, 'b, 'c] join [{'a, 'b}, 'c]" in {
+          c("['a, 'b]").join(c("[{'a, 'b}, 'c]")) mustEqual Join(c("['a, 'b, 'c']"), leftRem = Zero, rightRem = Zero)
+        }
+
         "fail for ['a, 'b] join ['b]" in {
           c("['a, 'b]").join(c("['b]")) mustEqual Join(Zero, c("['a, 'b]"), c("'b"))
         }

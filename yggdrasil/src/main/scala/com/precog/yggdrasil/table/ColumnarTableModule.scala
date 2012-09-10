@@ -440,10 +440,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     sealed trait OrderingConstraint2 { self =>
       def fixed: Seq[TicVar]
 
-      def fixedConstraint = OrderingConstraint2.orderedVars(fixed: _*)
-
-      def variables: Set[TicVar] = fixed.toSet
-
       def normalize: OrderingConstraint2
 
       def flatten: OrderingConstraint2
@@ -461,6 +457,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           case x => true
         }).normalize
       }
+
+      lazy val fixedConstraint = OrderingConstraint2.orderedVars(fixed: _*)
+
+      lazy val variables: Set[TicVar] = fixed.toSet
+
+      lazy val size = fixed.size      
 
       import OrderingConstraint2._
 
@@ -490,19 +492,41 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             case (l @ Ordered(left), r @ Variable(right)) => 
               if (left.head == r) Join(r, leftRem = Ordered(left.tail), rightRem = Zero) else Join.unjoined(l, r)
 
-            case (Ordered(left), Unordered(right)) => 
-              sys.error("todo")
+            case (l @ Ordered(left), r @ Unordered(right)) => 
+              def foldSet(lastJoin: Join, remaining: Set[OrderingConstraint2]): Vector[Join] = {
+                if (lastJoin.leftRem == Zero) Vector(lastJoin)
+                else if (remaining.size == 0) Vector(lastJoin)
+                else {
+                  remaining.foldLeft(Vector.empty[Join]) {
+                    case (acc, choice) => 
+                      val nextChoices = remaining - choice
+
+                      val newJoin = lastJoin.leftRem.join(choice)
+
+                      if (newJoin.join == Zero) acc
+                      else {
+                        acc ++ foldSet(
+                          Join(ordered(lastJoin.join, newJoin.join), leftRem = newJoin.leftRem, rightRem = unordered(lastJoin.rightRem, newJoin.rightRem)),
+                          nextChoices
+                        )
+                      }
+                  }
+                }
+              }
+              
+              foldSet(Join(Zero, leftRem = l), right).filterNot(_.join == Zero).sortBy(_.size).last
 
             case (l @ Variable(left), r @ Variable(right)) => 
               if (left == right) Join(l) else Join.unjoined(l, r)
 
             case (l @ Variable(left), r @ Ordered(right)) => 
-              join2(l, r).flip
+              join2(r, l).flip
 
             case (l @ Variable(left), r @ Unordered(right)) => 
               if (right.contains(l)) Join(l, leftRem = Zero, rightRem = Unordered(right - l)) else Join.unjoined(l, r)
 
             case (Unordered(left), Unordered(right)) =>  
+              // TODO: This is not right
               val common = left intersect right
               val leftUnique = left -- common
               val rightUnique = right -- common
@@ -510,10 +534,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               Join(Unordered(common), leftRem = Unordered(leftUnique), rightRem = Unordered(rightUnique))
 
             case (l @ Unordered(left), r @ Ordered(right)) => 
-              join2(l, r).flip
+              join2(r, l).flip
 
             case (l @ Unordered(left), r @ Variable(right)) => 
-              join2(l, r).flip
+              join2(r, l).flip
           }
         }
 
@@ -525,6 +549,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         def normalize = copy(join = join.normalize, leftRem = leftRem.normalize, rightRem = rightRem.normalize)
 
         def flip = copy(leftRem = rightRem, rightRem = leftRem)
+
+        def size = join.size
       }
 
       object Join {
