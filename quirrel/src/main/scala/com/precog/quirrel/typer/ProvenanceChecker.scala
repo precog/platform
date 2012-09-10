@@ -99,6 +99,50 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
     }
     
+    def handleIUI(expr: Expr, left: Expr, right: Expr, relations: Map[Provenance, Set[Provenance]]): (Set[Error], Set[ProvConstraint]) = {
+      val (leftErrors, leftConstr) = loop(left, relations)
+      val (rightErrors, rightConstr) = loop(right, relations)
+      
+      val (errors, constr) = if (left.provenance == NullProvenance || right.provenance == NullProvenance) {
+        expr.provenance = NullProvenance
+        (Set(), Set())
+      } else {
+        val leftCard = left.provenance.possibilities.size
+        val rightCard = right.provenance.possibilities.size
+          
+        if (left.provenance.isParametric || right.provenance.isParametric) {
+          expr.provenance = if (left.provenance.isParametric && right.provenance.isParametric)
+            DynamicDerivedProvenance(left.provenance)
+          else if (left.provenance.isParametric)
+            Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take rightCard reduce UnionProvenance
+          else if (right.provenance.isParametric)
+            Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take leftCard reduce UnionProvenance
+          else
+            sys.error("unreachable")
+            
+          (Set(), Set(SameCard(left.provenance, right.provenance)))
+        } else {
+          if (leftCard == rightCard) {
+            expr.provenance = Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take leftCard reduce UnionProvenance
+            (Set(), Set())
+          } else {
+            expr.provenance = NullProvenance
+            
+            val errorType = expr match {
+              case _: Union => UnionProvenanceDifferentLength
+              case _: Intersect => IntersectProvenanceDifferentLength
+              case _: Difference => DifferenceProvenanceDifferentLength
+              case _ => sys.error("unreachable")
+            }
+            
+            (Set(Error(expr, errorType)), Set())
+          }
+        }
+      }
+      
+      (leftErrors ++ rightErrors ++ errors, leftConstr ++ rightConstr ++ constr)
+    }
+    
     def loop(expr: Expr, relations: Map[Provenance, Set[Provenance]]): (Set[Error], Set[ProvConstraint]) = expr match {
       case expr @ Let(_, _, _, left, right) => {
         val (leftErrors, leftConst) = loop(left, relations)
@@ -347,7 +391,36 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       case Where(_, left, right) => handleBinary(expr, left, right, relations)
       case With(_, left, right) => handleBinary(expr, left, right, relations)
       
-      // TODO union/intersect/diff
+      case Union(_, left, right) => handleIUI(expr, left, right, relations)
+      case Intersect(_, left, right) => handleIUI(expr, left, right, relations)
+      
+      case Difference(_, left, right) => {
+        val (leftErrors, leftConstr) = loop(left, relations)
+        val (rightErrors, rightConstr) = loop(right, relations)
+        
+        val (errors, constr) = if (left.provenance == NullProvenance || right.provenance == NullProvenance) {
+          expr.provenance = NullProvenance
+          (Set(), Set())
+        } else {
+          val leftCard = left.provenance.possibilities.size
+          val rightCard = right.provenance.possibilities.size
+          
+          if (left.provenance.isParametric || right.provenance.isParametric) {
+            expr.provenance = left.provenance
+            (Set(), Set(SameCard(left.provenance, right.provenance)))
+          } else {
+            if (leftCard == rightCard) {
+              expr.provenance = left.provenance
+              (Set(), Set())
+            } else {
+              expr.provenance = NullProvenance
+              (Set(Error(expr, DifferenceProvenanceDifferentLength)), Set())
+            }
+          }
+        }
+        
+        (leftErrors ++ rightErrors ++ errors, leftConstr ++ rightConstr ++ constr)
+      }
       
       case Add(_, left, right) => handleBinary(expr, left, right, relations)
       case Sub(_, left, right) => handleBinary(expr, left, right, relations)
@@ -527,6 +600,14 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     val isParametric = true
   }
   
+  case class DynamicDerivedProvenance(source: Provenance) extends Provenance {
+    override val toString = "@@<" + source.toString + ">"
+    
+    val isParametric = source.isParametric
+    
+    override def possibilities = source.possibilities + this
+  }
+  
   case class UnifiedProvenance(left: Provenance, right: Provenance) extends Provenance {
     override val toString = "(%s >< %s)".format(left, right)
     
@@ -566,6 +647,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   
   case class Related(left: Provenance, right: Provenance) extends ProvConstraint
   case class NotRelated(left: Provenance, right: Provenance) extends ProvConstraint
+  case class SameCard(left: Provenance, right: Provenance) extends ProvConstraint
 
 
   private case class ExprWrapper(expr: Expr) {
