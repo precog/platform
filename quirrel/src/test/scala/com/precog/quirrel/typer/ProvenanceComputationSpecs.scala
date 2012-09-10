@@ -22,7 +22,7 @@ object ProvenanceComputationSpecs extends Specification
       forall(lib1) { f =>
         val tree = parse("""
           clicks := //clicks
-          foo('a) := %s('a) 
+          foo(a) := %s(a) 
           foo(clicks)""".format(f.fqn))
 
         tree.provenance mustEqual StaticProvenance("/clicks")
@@ -34,7 +34,7 @@ object ProvenanceComputationSpecs extends Specification
       forall(lib2) { f =>
         val tree = parse("""
           clicks := //clicks
-          foo('a, 'b) := %s('a, 'b) 
+          foo(a, b) := %s(a, b) 
           foo(clicks.a, clicks.b)""".format(f.fqn))
 
         tree.provenance mustEqual StaticProvenance("/clicks")
@@ -46,7 +46,7 @@ object ProvenanceComputationSpecs extends Specification
       forall(libReduction) { f =>
         val tree = parse("""
           clicks := //clicks
-          foo('a) := %s('a) 
+          foo(a) := %s(a) 
           foo(clicks.a)""".format(f.fqn))
 
         tree.provenance mustEqual ValueProvenance
@@ -423,7 +423,7 @@ object ProvenanceComputationSpecs extends Specification
     "identify op2 dispatch according to its children given set related by ~" in {
       forall(lib2) { f =>
         val tree = compile("""//foo ~ //bar %s(//foo, //bar)""".format(f.fqn))
-        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
         tree.errors must beEmpty
       }
     }
