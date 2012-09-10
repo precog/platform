@@ -254,6 +254,24 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors must beEmpty
     }
     
+    "propagate provenance through multiple let bindings" in {
+      val tree @ Let(_, _, _, _, _) = compile("back := //foo ~ //bar //foo + //bar back")
+      
+      tree.resultProvenance must beLike {
+        case UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
+        case UnionProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
+      }
+      
+      tree.resultProvenance.isParametric mustEqual false
+      
+      tree.provenance must beLike {
+        case UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
+        case UnionProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
+      }
+      
+      tree.errors must beEmpty
+    }
+    
     "accept union on union provenances" in {
       val input = """
         | foo := //foo
@@ -445,7 +463,7 @@ object ProvenanceCheckingSpecs extends Specification
         | 
         | fb := foo ~ bar foo + bar
         | 
-        | fb intersect //baz
+        | fb intersect baz
         | """.stripMargin
         
       val tree = compile(input)
