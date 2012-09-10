@@ -22,6 +22,22 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.errors must beEmpty
     }
     
+    "bind name with non-zero arity" in {
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("a(b) := 42 a(true)")
+        d.binding mustEqual LetBinding(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("a(b, c, d) := 42 a(true, false, 2)")
+        d.binding mustEqual LetBinding(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+    }
+    
     "not bind name in expression scope" in {
       val Let(_, _, _, left: Dispatch, _) = parse("a := a 42")
       left.binding mustEqual NullBinding
@@ -31,13 +47,13 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "bind all formals in expression scope" in {
       {
-        val e @ Let(_, _, _, t: Dispatch, _) = parse("a(b) := b a")
+        val e @ Let(_, _, _, t: Dispatch, _) = parse("a(b) := b a(1)")
         t.binding mustEqual FormalBinding(e)
         t.errors must beEmpty
       }
       
       {
-        val e @ Let(_, _, _, Add(_, Add(_, tb: Dispatch, tc: Dispatch), td: Dispatch), _) = parse("a(b, c, d) := b + c + d a")
+        val e @ Let(_, _, _, Add(_, Add(_, tb: Dispatch, tc: Dispatch), td: Dispatch), _) = parse("a(b, c, d) := b + c + d a(1, 2, 3)")
         
         tb.binding mustEqual FormalBinding(e)
         tc.binding mustEqual FormalBinding(e)
@@ -183,7 +199,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         d.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "foo")))
       }
     }
-
+    
     "reject unbound dispatch with a namespace" in {
       {
         val d @ Dispatch(_, _, _) = parse("foo::bar::baz")
@@ -198,7 +214,46 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         d.isReduction mustEqual false
         d.errors mustEqual Set(UndefinedFunction(Identifier(Vector("foo", "bar"), "baz")))
       }
-    } 
+    }
+    
+    "reject dispatch with lesser arity" in {
+      {
+        val Let(_, _, _, _, d: Dispatch) = parse("a(b) := 42 a")
+        d.binding mustEqual NullBinding
+        d.isReduction mustEqual false
+        d.errors mustEqual Set(IncorrectArity(1, 0))
+      }
+      
+      {
+        val Let(_, _, _, _, d: Dispatch) = parse("a(b, c, d) := 42 a")
+        d.binding mustEqual NullBinding
+        d.isReduction mustEqual false
+        d.errors mustEqual Set(IncorrectArity(3, 0))
+      }
+    }
+    
+    "reject dispatch with greater arity" in {
+      {
+        val Let(_, _, _, _, d: Dispatch) = parse("a(b) := 42 a(1, 2)")
+        d.binding mustEqual NullBinding
+        d.isReduction mustEqual false
+        d.errors mustEqual Set(IncorrectArity(1, 2))
+      }
+      
+      {
+        val Let(_, _, _, _, d: Dispatch) = parse("a(b, c, d) := 42 a(1, 2, 3, 4, 5, 6)")
+        d.binding mustEqual NullBinding
+        d.isReduction mustEqual false
+        d.errors mustEqual Set(IncorrectArity(3, 6))
+      }
+    }
+    
+    "reject formal with non-zero arity" in {
+      val Let(_, _, _, d: Dispatch, _) = parse("a(b) := b(1, 2) 42")
+      d.binding mustEqual NullBinding
+      d.isReduction mustEqual false
+      d.errors mustEqual Set(IncorrectArity(0, 2))
+    }
     
     "reject unbound tic-variables" in {
       {
@@ -767,14 +822,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
   
   "pre-binding of load and distinct" should {
     "bind load" in {
-      val d @ Dispatch(_, _, _) = parse("load")
+      val d @ Dispatch(_, _, _) = parse("load(42)")
       d.binding mustEqual LoadBinding
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
     
     "bind distinct" in {
-      val d @ Dispatch(_, _, _) = parse("distinct")
+      val d @ Dispatch(_, _, _) = parse("distinct(12)")
       d.binding mustEqual DistinctBinding
       d.isReduction mustEqual false
       d.errors must beEmpty
@@ -786,7 +841,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       libMorphism1 must not(beEmpty)
 
       forall(libMorphism1) { f =>
-        val d @ Dispatch(_, _, _) = parse(f.fqn)
+        val d @ Dispatch(_, _, _) = parse(f.fqn + "(1)")
         d.binding mustEqual Morphism1Binding(f)
         d.isReduction mustEqual false
         d.errors must beEmpty
@@ -797,7 +852,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       libMorphism2 must not(beEmpty)
 
       forall(libMorphism2) { f =>
-        val d @ Dispatch(_, _, _) = parse(f.fqn)
+        val d @ Dispatch(_, _, _) = parse(f.fqn + "(1, 2)")
         d.binding mustEqual Morphism2Binding(f)
         d.isReduction mustEqual false
         d.errors must beEmpty
@@ -808,7 +863,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       libReduction must not(beEmpty)
 
       forall(libReduction) { f =>
-        val d @ Dispatch(_, _, _) = parse(f.fqn)
+        val d @ Dispatch(_, _, _) = parse(f.fqn + "(1)")
         d.binding mustEqual ReductionBinding(f)
         d.isReduction mustEqual true
         d.errors must beEmpty
@@ -817,7 +872,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
 
     "bind unary functions" in {
       forall(lib1) { f =>
-        val d @ Dispatch(_, _, _) = parse(f.fqn)
+        val d @ Dispatch(_, _, _) = parse(f.fqn + "(1)")
         d.binding mustEqual Op1Binding(f)
         d.isReduction mustEqual false
         d.errors must beEmpty
@@ -826,7 +881,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
 
     "bind binary functions" in {
       forall(lib2) { f =>
-        val d @ Dispatch(_, _, _) = parse(f.fqn)
+        val d @ Dispatch(_, _, _) = parse(f.fqn + "(1, 2)")
         d.binding mustEqual Op2Binding(f)
         d.isReduction mustEqual false
         d.errors must beEmpty
@@ -838,7 +893,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "allow use of a unary function unqualified" in {
       val input = """
         | import std::lib::baz
-        | baz""".stripMargin
+        | baz(1)""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
       
@@ -850,7 +905,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       val input = """
         | import std::lib
         | import lib::baz
-        | baz""".stripMargin
+        | baz(1)""".stripMargin
         
       val Import(_, _, Import(_, _, d: Dispatch)) = parse(input)
       
@@ -861,7 +916,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "allow the use of a unary function partially-qualified" in {
       val input = """
         | import std::lib
-        | lib::baz""".stripMargin
+        | lib::baz(1)""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
       
@@ -873,7 +928,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       val input = """
         | import std
         | import lib
-        | lib::baz""".stripMargin
+        | lib::baz(1)""".stripMargin
         
       val Import(_, _, Import(_, _, d: Dispatch)) = parse(input)
       
@@ -883,7 +938,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "allow the use of a function that shadows a package" in {
       val input = """
         | import std::lib
-        | lib""".stripMargin
+        | lib(1)""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
       
@@ -894,7 +949,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "bind most specific import in case of shadowing" in {
       val input = """
         | import std::bin
-        | bin""".stripMargin
+        | bin(1)""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
       
@@ -904,9 +959,9 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "not affect outer scope" in {
       val input = """
-        | bin +
+        | bin(1) +
         | import std::bin
-        | bin""".stripMargin
+        | bin(1)""".stripMargin
         
       val Add(_, d1: Dispatch, Import(_, _, d2: Dispatch)) = parse(input)
       
@@ -922,7 +977,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "allow use of a unary function unqualified" in {
       val input = """
         | import std::lib::*
-        | baz""".stripMargin
+        | baz(1)""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
       
@@ -933,7 +988,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "allow use of more than one unary function unqualified" in {
       val input = """
         | import std::lib::*
-        | baz + baz2""".stripMargin
+        | baz(1) + baz2(1, 2)""".stripMargin
         
       val Import(_, _, Add(_, d1: Dispatch, d2: Dispatch)) = parse(input)
       
@@ -948,7 +1003,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       val input = """
         | import std::*
         | import lib::*
-        | baz""".stripMargin
+        | baz(1)""".stripMargin
         
       val Import(_, _, Import(_, _, d: Dispatch)) = parse(input)
       
@@ -959,7 +1014,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "allow the use of a unary function partially-qualified" in {
       val input = """
         | import std::*
-        | lib::baz""".stripMargin
+        | lib::baz(1)""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
       
@@ -970,7 +1025,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "allow the use of a function that shadows a package" in {
       val input = """
         | import std::*
-        | lib""".stripMargin
+        | lib(1)""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
       
@@ -981,7 +1036,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "bind most specific import in case of shadowing" in {
       val input = """
         | import std::*
-        | bin""".stripMargin
+        | bin(1)""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
       
@@ -991,9 +1046,9 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "not affect outer scope" in {
       val input = """
-        | bin +
+        | bin(1) +
         | import std::*
-        | bin""".stripMargin
+        | bin(1)""".stripMargin
         
       val Add(_, d1: Dispatch, Import(_, _, d2: Dispatch)) = parse(input)
       
