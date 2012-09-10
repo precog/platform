@@ -466,6 +466,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       import OrderingConstraint2._
 
+      def & (that: OrderingConstraint2): Option[OrderingConstraint2] = {
+        val joined = self.join(that)
+
+        if (joined.success && joined.leftRem == Zero && joined.rightRem == Zero) Some(joined.join)
+        else None
+      }
+
       def join(that: OrderingConstraint2): Join = {
         def join2(left: OrderingConstraint2, right: OrderingConstraint2): Join = {
           (left, right) match {
@@ -555,6 +562,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         def success = join != Zero
 
         def failure = join == Zero
+
+        def collapse: OrderingConstraint2 = ordered(join, unordered(leftRem, rightRem))
       }
 
       object Join {
