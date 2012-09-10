@@ -764,6 +764,12 @@ object ProvenanceComputationSpecs extends Specification
     } 
 
     "identify union according to its children" >> {
+      "Simple Union" >> {
+        val tree = compile("//clicks union 2")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+      }
+
       "Let" >> {
         {
           val tree = compile("foo := //clicks foo union 2")
