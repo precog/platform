@@ -106,7 +106,7 @@ object ProvenanceComputationSpecs extends Specification
     "preserve provenance through let for unquantified function" in {
       val input = """
         | interactions := //interactions
-        | bounds('it) :=
+        | bounds := solve 'it
         |   interactions.time where interactions = 'it
         | init := bounds
         | init + bounds""".stripMargin
@@ -127,7 +127,7 @@ object ProvenanceComputationSpecs extends Specification
     
     "identify new of unquantified function as distinct from the function" in {
       val input = """
-        | histogram('a) :=
+        | histogram := solve 'a
         |   'a + count(//foo where //foo = 'a)
         | 
         | histogram' := new histogram
@@ -166,7 +166,7 @@ object ProvenanceComputationSpecs extends Specification
     }
     
     "identify tic-var as value" in {
-      val tree @ Let(_, _, _, body, _) = parse("a('foo) := 'foo a(42)")    // uses raw tic-var
+      val tree @ Let(_, _, _, body, _) = parse("a(foo) := foo a(42)")    // uses raw tic-var
       body.provenance mustEqual ValueProvenance
       tree.errors must beEmpty
     }
@@ -382,7 +382,7 @@ object ProvenanceComputationSpecs extends Specification
       {
         val tree = compile("""
           | foo := //foo
-          | forall 'a {bar: sum(foo where foo.a = 'a)}
+          | solve 'a {bar: sum(foo where foo.a = 'a)}
           """.stripMargin)
         tree.provenance must beLike { case DynamicProvenance(_) => ok }
         tree.errors must beEmpty
@@ -508,13 +508,13 @@ object ProvenanceComputationSpecs extends Specification
     
     "identify dispatch to identity function by parameter" in {
       {
-        val tree = compile("id('a) := 'a id(42)")
+        val tree = compile("id(a) := a id(42)")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("id('a) := 'a id(new 42)")
+        val tree = compile("id(a) := a id(new 42)")
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }
@@ -522,7 +522,7 @@ object ProvenanceComputationSpecs extends Specification
       }
       
       {
-        val tree = compile("id('a) := 'a id(//foo)")
+        val tree = compile("id(a) := a id(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -531,13 +531,13 @@ object ProvenanceComputationSpecs extends Specification
     
     "identify dispatch to value-modified identity function by parameter" in {
       {
-        val tree = compile("id('a) := 'a + 5 id(42)")
+        val tree = compile("id(a) := a + 5 id(42)")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("id('a) := 'a + 5 id(new 42)")
+        val tree = compile("id(a) := a + 5 id(new 42)")
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }
@@ -545,14 +545,14 @@ object ProvenanceComputationSpecs extends Specification
       }
       
       {
-        val tree = compile("id('a) := 'a + 5 id(//foo)")
+        val tree = compile("id(a) := a + 5 id(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
     }
     
     "identify dispatch to new-modified identity function as dynamic" in {
-      val tree = compile("id('a) := 'a + new 42 id(24)")
+      val tree = compile("id(a) := a + new 42 id(24)")
       tree.provenance must beLike {
         case DynamicProvenance(_) => ok
       }
@@ -560,41 +560,39 @@ object ProvenanceComputationSpecs extends Specification
     }
     
     "identify dispatch to load-modified identity function as static" in {
-      val tree = compile("id('a) := 'a + //foo id(24)")
+      val tree = compile("id(a) := a + //foo id(24)")
       tree.provenance mustEqual StaticProvenance("/foo")
       tree.errors must beEmpty
     }
     
     "identify dispatch to simple operation function by unification of parameters" in {
       {
-        val tree = compile("fun('a, 'b) := 'a + 'b fun(1, 2)")
+        val tree = compile("fun(a, b) := a + b fun(1, 2)")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("fun('a, 'b) := 'a + 'b fun(//foo, 2)")
+        val tree = compile("fun(a, b) := a + b fun(//foo, 2)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("fun('a, 'b) := 'a + 'b fun(1, //foo)")
+        val tree = compile("fun(a, b) := a + b fun(1, //foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("fun('a, 'b) := 'a + 'b fun(//foo, //foo)")
+        val tree = compile("fun(a, b) := a + b fun(//foo, //foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("fun('a, 'b) := 'a + 'b //foo ~ //bar fun(//foo, //bar)")
-        tree.provenance must beLike {
-          case DynamicProvenance(_) => ok
-        }
+        val tree = compile("fun(a, b) := a + b //foo ~ //bar fun(//foo, //bar)")
+        tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
         tree.errors must beEmpty
       }
     }
@@ -602,9 +600,11 @@ object ProvenanceComputationSpecs extends Specification
     "identify a case when a tic variable is not solvable in all cases" in {
       {
         val tree = compile("""
-        | a('b) :=
-        |   k := //clicks.time where //clicks.time = 'b
-        |   j := //views.time where //views.time > 'b
+        | clicks := //clicks
+        | views := //views
+        | a := solve 'b
+        |   k := clicks.time where clicks.time = 'b
+        |   j := views.time where views.time > 'b
         |   k ~ j
         |   {kay: k, jay: j}
         | a""".stripMargin)
@@ -616,14 +616,18 @@ object ProvenanceComputationSpecs extends Specification
 
     "identify dispatch to an unquantified value function as dynamic" in {
       {
-        val tree = compile("histogram('a) := 'a + count(//foo where //foo = 'a) histogram")
+        val tree = compile("""
+        | foo := //foo 
+        | histogram := solve 'a 
+        |   'a + count(foo where foo = 'a) 
+        | histogram""".stripMargin)
         tree.provenance must beLike { case DynamicProvenance(_) => ok }
         tree.errors must beEmpty
       }
       
       {
         val input = """
-          | histogram('a) :=
+          | histogram := solve 'a
           |   foo := //foo
           |   bar := //bar
           |   
@@ -638,7 +642,7 @@ object ProvenanceComputationSpecs extends Specification
       
       {
         val input = """
-          | histogram('a) :=
+          | histogram := solve 'a
           |   foo := //foo
           |   bar := //bar
           |   
@@ -659,7 +663,7 @@ object ProvenanceComputationSpecs extends Specification
     
     "identify dispatch to an unquantified function with relate as dynamic" in {
       val input = """
-        | fun('a) :=
+        | fun := solve 'a
         |   foo := //foo
         |   bar := //bar
         |
@@ -679,7 +683,11 @@ object ProvenanceComputationSpecs extends Specification
     }
 
     "identify dispatch to unquantified function with a consistent dynamic provenance" in {
-      val tree = compile("histogram('a) := 'a + count(//foo where //foo = 'a) histogram + histogram")   // if not consistent, binary op will fail
+      val tree = compile("""
+        | foo := //foo
+        | histogram := solve 'a
+        |   'a + count(foo where foo = 'a) 
+        | histogram + histogram""")   // if not consistent, binary op will fail
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty
     }
