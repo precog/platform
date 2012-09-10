@@ -167,8 +167,9 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
         type A = BigDecimal
         val init = BigDecimal(0)
         def scan(a: BigDecimal, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-          val prioritized = cols.values filter {
-            case _: LongColumn | _: DoubleColumn | _: NumColumn => true
+          val identityPath = cols collect { case c @ (ColumnRef(JPath.Identity, _), _) => c }
+          val prioritized = identityPath.values filter {
+            case (_: LongColumn | _: DoubleColumn | _: NumColumn) => true
             case _ => false
           }
           
