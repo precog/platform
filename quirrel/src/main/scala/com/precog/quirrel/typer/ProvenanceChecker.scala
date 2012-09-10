@@ -107,10 +107,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         expr.provenance = NullProvenance
         (Set(), Set())
       } else {
-        // TODO DynamicDerivedProvenance?
-        val leftCard = left.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
-        
-        val rightCard = right.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
+        val leftCard = left.provenance.cardinality
+        val rightCard = right.provenance.cardinality
         
         if (left.provenance.isParametric || right.provenance.isParametric) {
           expr.provenance = if (left.provenance.isParametric && right.provenance.isParametric)
@@ -277,6 +275,23 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                 
                 (errors, related)
               }
+              
+              case SameCard(left, right) => {
+                val optLeft2 = resolveUnifications(relations)(sub(left))
+                val optRight2 = resolveUnifications(relations)(sub(right))
+                
+                val same = for {
+                  left2 <- optLeft2
+                  right2 <- optRight2
+                } yield SameCard(left2, right2)
+                
+                val errors = if (same.isDefined)
+                  Set[Error]()
+                else
+                  Set(Error(expr, OperationOnUnrelatedSets))
+                
+                (errors, same)
+              }
             } unzip
             
             val resolutionErrors = errorSet.flatten
@@ -293,6 +308,13 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
               case NotRelated(left, right) if !left.isParametric && !right.isParametric => {
                 if (!unifyProvenance(relations)(left, right).isDefined)
                   Some(Left(Error(expr, AlreadyRelatedSets)))
+                else
+                  None
+              }
+              
+              case SameCard(left, right) if !left.isParametric && !right.isParametric => {
+                if (left.cardinality != right.cardinality)
+                  Some(Left(Error(expr, UnionProvenanceDifferentLength)))
                 else
                   None
               }
@@ -403,10 +425,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           expr.provenance = NullProvenance
           (Set(), Set())
         } else {
-          // TODO DynamicDerivedProvenance?
-          val leftCard = left.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
-          
-          val rightCard = right.provenance.possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
+          val leftCard = left.provenance.cardinality
+          val rightCard = right.provenance.cardinality
           
           if (left.provenance.isParametric || right.provenance.isParametric) {
             expr.provenance = left.provenance
@@ -517,7 +537,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
 
     case (p1, p2) => Some(p1)
   }
-
+  
   private def pathExists(graph: Map[Provenance, Set[Provenance]], from: Provenance, to: Provenance): Boolean = {
     // not actually DFS, but that's alright since we can't have cycles
     def dfs(seen: Set[Provenance])(from: Provenance): Boolean = {
@@ -543,6 +563,14 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     
     case UnionProvenance(left, right) =>
       UnionProvenance(substituteParam(id, let, left, sub), substituteParam(id, let, right, sub))
+    
+    case DynamicDerivedProvenance(source) => {
+      val source2 = substituteParam(id, let, source, sub)
+      if (source2.isParametric)
+        DynamicDerivedProvenance(source2)
+      else
+        Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take source2.cardinality reduce UnionProvenance
+    }
     
     case _ => target
   }
@@ -579,6 +607,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       } yield left2 & right2
     }
     
+    case DynamicDerivedProvenance(source) =>
+      resolveUnifications(relations)(source) map DynamicDerivedProvenance
+    
     case ParamProvenance(_, _) | StaticProvenance(_) | DynamicProvenance(_) | ValueProvenance | NullProvenance =>
       Some(prov)
   }
@@ -595,6 +626,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     def isParametric: Boolean
     
     def possibilities = Set(this)
+    
+    // TODO DynamicDerivedProvenance?
+    def cardinality = possibilities filterNot { _.isInstanceOf[UnionProvenance] } size
   }
   
   case class ParamProvenance(id: Identifier, let: ast.Let) extends Provenance {

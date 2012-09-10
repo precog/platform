@@ -516,7 +516,7 @@ object ProvenanceCheckingSpecs extends Specification
         | fb := foo ~ bar foo + bar
         | 
         | f(a, b) := a union b
-        | f(fb, //baz)
+        | f(fb, baz)
         | """.stripMargin
         
       val tree = compile(input)
@@ -529,17 +529,18 @@ object ProvenanceCheckingSpecs extends Specification
       val input = """
         | foo := //foo
         | bar := //bar
+        | baz := //baz
         | 
         | fb := foo ~ bar foo + bar
         | 
         | f(a, b) := a intersect b
-        | f(fb, //baz)
+        | f(fb, baz)
         | """.stripMargin
         
       val tree = compile(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+      tree.errors mustEqual Set(UnionProvenanceDifferentLength)
     }
     
     "accept difference through a function on union provenances" in {
@@ -551,13 +552,13 @@ object ProvenanceCheckingSpecs extends Specification
         | fb := foo ~ bar foo + bar
         | 
         | f(a, b) := a difference b
-        | f(fb, //baz)
+        | f(fb, baz)
         | """.stripMargin
         
       val tree = compile(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+      tree.errors mustEqual Set(UnionProvenanceDifferentLength)
     }
 
     "reject addition on different loads" in {
