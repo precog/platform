@@ -62,6 +62,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     CompactSpec[M] with 
     PartitionMergeSpec[M] with
     UnionAllSpec[M] with
+    CrossAllSpec[M] with
     DistinctSpec[M] { spec => //with
     //GrouperSpec[M] { spec =>
 
@@ -755,6 +756,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
   "unionAll" should {
     "union a simple homogeneous borg result set" in simpleUnionAllTest
+    "union a simple reversed borg result set" in reversedUnionAllTest
+  }
+
+  "crossAll" should {
+    "cross a simple borg result set" in simpleCrossAllTest
   }
 }
 
