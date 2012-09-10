@@ -476,14 +476,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             case (l @ Ordered(left), r @ Ordered(right)) => 
               val joinedHeads = left.head.join(right.head)
 
-              if (joinedHeads.join == Zero) Join.unjoined(l, r)
+              if (joinedHeads.failure) Join.unjoined(l, r)
               else {
                 val leftTail = ordered(joinedHeads.leftRem, Ordered(left.tail))
                 val rightTail = ordered(joinedHeads.rightRem, Ordered(right.tail))
 
                 val joinedTails = leftTail.join(rightTail)
 
-                if (joinedTails.join == Zero) Join.unjoined(l, r)
+                if (joinedTails.failure) Join.unjoined(l, r)
                 else {
                   Join(ordered(joinedHeads.join, joinedTails.join), joinedTails.leftRem, joinedTails.rightRem)
                 }
@@ -503,7 +503,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
                       val newJoin = lastJoin.leftRem.join(choice)
 
-                      if (newJoin.join == Zero) acc
+                      if (newJoin.failure) acc
                       else {
                         acc ++ foldSet(
                           Join(ordered(lastJoin.join, newJoin.join), leftRem = newJoin.leftRem, rightRem = unordered(lastJoin.rightRem, newJoin.rightRem)),
@@ -514,7 +514,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 }
               }
               
-              foldSet(Join(Zero, leftRem = l), right).filterNot(_.join == Zero).sortBy(_.size).last
+              foldSet(Join(Zero, leftRem = l), right).filterNot(_.failure).sortBy(_.size).last
 
             case (l @ Variable(left), r @ Variable(right)) => 
               if (left == right) Join(l) else Join.unjoined(l, r)
@@ -551,6 +551,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         def flip = copy(leftRem = rightRem, rightRem = leftRem)
 
         def size = join.size
+
+        def success = join != Zero
+
+        def failure = join == Zero
       }
 
       object Join {
