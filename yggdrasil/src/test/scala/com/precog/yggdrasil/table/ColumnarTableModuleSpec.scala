@@ -306,7 +306,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
         "succeed for ['a, 'b, 'c] join [{'a, 'b}, 'c]" in {
           c("['a, 'b]").join(c("[{'a, 'b}, 'c]")) mustEqual Join(c("['a, 'b, 'c']"), leftRem = Zero, rightRem = Zero)
-        }
+        }.pendingUntilFixed
 
         "fail for ['a, 'b] join ['b]" in {
           c("['a, 'b]").join(c("['b]")) mustEqual Join(Zero, c("['a, 'b]"), c("'b"))
