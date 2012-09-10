@@ -869,7 +869,7 @@ object ProvenanceComputationSpecs extends Specification
         }  
         {
           val tree = compile("6 union {foo: 5}.foo")
-          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.provenance mustEqual ValueProvenance
           tree.errors must beEmpty
         }
       }
