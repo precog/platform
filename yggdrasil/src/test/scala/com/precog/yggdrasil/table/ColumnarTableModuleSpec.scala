@@ -181,7 +181,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "perform a trivial number type-based filter" in checkTypedNumber
       "perform another trivial number type-based filter" in checkTypedNumber2
       "perform a filter returning the empty set" in checkTypedEmpty
-      "perform a less trivial type-based filter" in checkTyped.pendingUntilFixed
+      "perform a less trivial type-based filter" in checkTyped
       "perform a summation scan case 1" in testTrivialScan
       "perform a summation scan of heterogeneous data" in testHetScan
       "perform a summation scan" in checkScan
