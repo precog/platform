@@ -312,6 +312,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends
         "succeed for ['a, 'b, 'c] join [{'a, 'b}, 'c]" in {
           c("['a, 'b, 'c]").join(c("[{'a, 'b}, 'c]")) mustEqual Join(c("['a, 'b, 'c]"))
         }
+
+        "succeed for ['a, 'b, 'c] join [{'a, 'b}, 'd]" in {
+          c("['a, 'b, 'c]").join(c("[{'a, 'b}, 'd]")) mustEqual Join(c("['a, 'b]"), leftRem = c("'c"), rightRem = c("'d"))
+        }
       }
     }
 

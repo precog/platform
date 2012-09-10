@@ -488,12 +488,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 val leftTail = ordered(joinedHeads.leftRem, Ordered(left.tail))
                 val rightTail = ordered(joinedHeads.rightRem, Ordered(right.tail))
 
+                // In some cases, the tails may not join, that's OK though because we've joined the heads already.
                 val joinedTails = leftTail.join(rightTail)
 
-                if (joinedTails.failure) Join.unjoined(l, r)
-                else {
-                  Join(ordered(joinedHeads.join, joinedTails.join), joinedTails.leftRem, joinedTails.rightRem)
-                }
+                Join(ordered(joinedHeads.join, joinedTails.join), joinedTails.leftRem, joinedTails.rightRem)
               }
 
             case (l @ Ordered(left), r @ Variable(right)) => 
