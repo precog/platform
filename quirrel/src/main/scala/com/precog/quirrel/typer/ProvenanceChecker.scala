@@ -60,8 +60,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     def handleNary(expr: Expr, values: Vector[Expr], relations: Map[Provenance, Set[Provenance]]): (Set[Error], Set[ProvConstraint]) = {
       val (errorsVec, constrVec) = values map { loop(_, relations) } unzip
       
-      val errors = errorsVec reduce { _ ++ _ }
-      val constr = constrVec reduce { _ ++ _ }
+      val errors = errorsVec reduceOption { _ ++ _ } getOrElse Set()
+      val constr = constrVec reduceOption { _ ++ _ } getOrElse Set()
       
       if (values.isEmpty) {
         expr.provenance = ValueProvenance
