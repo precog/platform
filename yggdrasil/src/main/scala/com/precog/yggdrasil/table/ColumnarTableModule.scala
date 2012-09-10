@@ -1258,8 +1258,59 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
 
     // Create the omniverse
-    def unionAll(borgResults: Set[BorgResult]): M[BorgResult] = {
-      sys.error("todo")
+    def unionAll(borgResults: Set[BorgResult]): BorgResult = {
+      import TransSpec._
+      def union2(left: BorgResult, right: BorgResult): BorgResult = {
+        // At the point that we union, both sides should have the same ticvars, although they
+        // may not be in the same order. If a reorder is needed, we'll have to remap since
+        // groupKeys are identified by index.
+        val (rightRemapped, groupKeys) = if (left.groupKeys == right.groupKeys) {
+          (right.table, left.groupKeys)
+        } else {
+          val extraRight = (right.groupKeys.toSet diff left.groupKeys.toSet).toArray
+          val leftKeys = left.groupKeys.toArray
+          val rightKeys = right.groupKeys.zipWithIndex
+
+          val remapKeyTrans = ObjectConcat((
+            // Remap the keys that exist on the left into the proper order
+            ((0 until leftKeys.length) flatMap { leftIndex: Int =>
+              rightKeys.find(_._1 == leftKeys(leftIndex)).map {
+                case (_, rightIndex) => {
+                  WrapObject(
+                    DerefObjectStatic(
+                      DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
+                      JPathField(GroupKeyTrans.keyName(rightIndex))
+                    ),
+                    GroupKeyTrans.keyName(leftIndex)
+                  )
+                }
+              }
+            }) ++
+            // Remap the extra keys from the right, if any
+            ((0 until extraRight.length) map { extraIndex: Int =>
+              rightKeys.find(_._1 == extraRight(extraIndex)).map {
+                case (_, rightIndex) => {
+                  WrapObject(
+                    DerefObjectStatic(
+                      DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
+                      JPathField(GroupKeyTrans.keyName(rightIndex))
+                    ),
+                    GroupKeyTrans.keyName(leftKeys.length + extraIndex)
+                  )
+                }
+              }.get
+            })
+          ): _*)
+
+          (right.table.transform(remapKeyTrans), left.groupKeys ++ extraRight.toSeq)
+        }
+
+        BorgResult(Table(left.table.slices ++ rightRemapped.slices),
+                   groupKeys,
+                   left.groups ++ right.groups)
+      }
+
+      borgResults.reduceLeft(union2)
     }
 
     /**
@@ -1293,7 +1344,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }.sequence
 
       for {
-        omniverse <- borgedUniverses.flatMap(s => unionAll(s.toSet))
+        omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
         result <- omniverse.table.partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("groupKeys"))) { partition =>
           val groupKeyTrans = ObjectConcat(
             omniverse.groupKeys.zipWithIndex map { case (ticvar, i) =>
