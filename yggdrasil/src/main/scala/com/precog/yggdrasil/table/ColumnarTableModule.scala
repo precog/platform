@@ -1267,7 +1267,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         val (rightRemapped, groupKeys) = if (left.groupKeys == right.groupKeys) {
           (right.table, left.groupKeys)
         } else {
-          val extraRight = (right.groupKeys.toSet diff left.groupKeys.toSet).toArray
+          val extraRight = (right.groupKeys diff left.groupKeys).toArray
           val leftKeys = left.groupKeys.toArray
           val rightKeys = right.groupKeys.zipWithIndex
 
