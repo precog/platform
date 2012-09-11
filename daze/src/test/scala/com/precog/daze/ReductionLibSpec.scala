@@ -554,8 +554,4 @@ trait ReductionLibSpec[M[+_]] extends Specification
   }
 }
 
-object ReductionLibSpec extends ReductionLibSpec[test.YId] with test.YIdInstances {
-  object Table extends TableCompanion {
-    val geq: scalaz.Equal[GroupId] = scalaz.std.anyVal.intInstance
-  }
-}
+object ReductionLibSpec extends ReductionLibSpec[test.YId] with test.YIdInstances

@@ -267,8 +267,4 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
   }
 }
 
-object JoinOptimizerSpecs extends JoinOptimizerSpecs[YId] with yggdrasil.test.YIdInstances {
-  object Table extends TableCompanion {
-    val geq: scalaz.Equal[GroupId] = scalaz.std.anyVal.intInstance
-  }
-}
+object JoinOptimizerSpecs extends JoinOptimizerSpecs[YId] with yggdrasil.test.YIdInstances
