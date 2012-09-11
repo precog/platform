@@ -41,6 +41,7 @@ import scalaz._
 import scalaz.effect.IO 
 import scalaz.syntax.copointed._
 import scalaz.std.anyVal._
+import scalaz.std.stream._
 
 import org.specs2._
 import org.specs2.mutable.Specification
@@ -288,7 +289,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
       "-" should {
         "remove vars from nested expression" in {
-          (c("[{'a, 'b}, 'c, ['d, {'e, 'f}]]") - c("{'a, 'f}")).render mustEqual c("['b, 'c, 'd, 'e]").render
+          (c("[{'a, 'b}, 'c, ['d, {'e, 'f}]]") - c("['a, 'f]").fixed.toSet).render mustEqual c("['b, 'c, 'd, 'e]").render
         }
       }
 
@@ -318,46 +319,77 @@ trait ColumnarTableModuleSpec[M[+_]] extends
         }
 
         "succeed for {'a, ['b, 'c], 'd} join {'a, 'b, ['c, 'd]}" in {
-          c("{'a, ['b, 'c], 'd}").join(c("{'a, 'b, ['c, 'd]}")) mustEqual Join(c("{'a, ['b, 'c, 'd]}"))
+          val joined = c("{'a, ['b, 'c], 'd}").join(c("{'a, 'b, ['c, 'd]}"))
+
+          println("join = " + joined.join.render + ", leftRem = " + joined.leftRem.render + ", rightRem = " + joined.rightRem.render)
+
+          // join = 'a, leftRem = {'d, ['b, 'c]}, rightRem = *
+
+          joined mustEqual Join(c("{'a, ['b, 'c, 'd]}"))
         }.pendingUntilFixed
+
+        "succeed for {'a, 'b} join {'a, 'b, 'c}" in {
+          c("{'a, 'b}").join(c("{'a, 'b, 'c}")) mustEqual Join(join = c("{'a, 'b}"), leftRem = Zero, rightRem = c("'c"))
+        }
       }
     }
 
     "borg algorithm" >> {
-      "plan step" should {
-        "compute accOrderPost from pre and node" in {
-          BorgTraversalPlanStep.fromAccOrderPre(
-            accOrderPre  = constraint("a,b,c"),
-            node         = mergeNode("bc")
-          ).accOrderPost mustEqual constraint("bc,a")
-        }
+      //val plan1 = BorgTraversalPlanUnfixed()
+      "unfixed plan" should {
+          val ab = mergeNode("ab")
+          val abc = mergeNode("abc")
+          val ad = mergeNode("ad")
 
-        "specify correct node sort order" in {
-          BorgTraversalPlanStep(
-            accOrderPre  = constraint("a,b,c"),
-            node         = mergeNode("bc"),
-            accOrderPost = constraint("bc,a")
-          ).nodeOrder mustEqual constraint("b,c")
-        }.pendingUntilFixed
+          val connectedNodes = Set(ab, abc, ad)
 
-        "identify resorted accumulator" in {
-          BorgTraversalPlanStep(
-            accOrderPre  = constraint("a,b,c"),
-            node         = mergeNode("bc"),
-            accOrderPost = constraint("b,c,a")
-          ).accResort must beTrue
-        }.pendingUntilFixed
+          val spanningGraph = findSpanningGraphs(edgeMap(connectedNodes)).head
 
-        "identify non-resorted accumulator" in {
-          BorgTraversalPlanStep(
-            accOrderPre  = constraint("b,c"),
-            node         = mergeNode("bc"),
-            accOrderPost = constraint("b,c,a")
-          ).accResort must beFalse
-        }
+          val oracle = Map(
+            ab -> NodeMetadata(10, None),
+            abc -> NodeMetadata(10, None),
+            ad -> NodeMetadata(10, None)
+          )
+
+          val plan = findBorgTraversalOrder(spanningGraph, oracle)
+
+          val steps = plan.unpack
+
+          /*val nodeOrder = steps.map(_.nodeOrder.render)
+          val accOrderPre = steps.map(_.accOrderPre.render)
+          val accOrderPost = steps.map(_.accOrderPost.render)
+          val accResort = steps.map(_.accResort)
+          val nodeResort = steps.map(_.nodeResort)*/
+
+          /*
+
+          */
+
+          steps.foreach { plan =>
+            println("=========================")
+            println("node = " + plan.node)
+            println("nodeOrder = " + plan.nodeOrder.render)
+            println("accOrderPre = " + plan.accOrderPre.render)
+            println("accOrderPost = " + plan.accOrderPost.render)
+            println("accResort = " + plan.accResort)
+            println("nodeResort = " + plan.nodeResort)
+          }
+
+
+
+          /*
+
+          BorgTraversalPlanUnfixed(None,MergeNode(Set(.a, .b),null),Zero,Zero,BorgTraversalCostModel(0,0,Set()),false,false)
+          
+          BorgTraversalPlanUnfixed(None,MergeNode(Set(.a, .b, .c),null),Ordered(Vector(Unordered(Set()), Unordered(Set(Variable(.a), Variable(.b), Variable(.c))))),Ordered(Vector(Unordered(Set(Variable(.a), Variable(.b), Variable(.c))), Unordered(Set(Zero)))),BorgTraversalCostModel(30,40,Set(.a, .b, .c)),false,true)
+
+          BorgTraversalPlanUnfixed(None,MergeNode(Set(.a, .d),null),Ordered(Vector(Unordered(Set()), Unordered(Set(Variable(.a), Variable(.d))))),Ordered(Vector(Unordered(Set(Variable(.a), Variable(.d))), Unordered(Set(Zero)))),BorgTraversalCostModel(60,160,Set(.a, .b, .c, .d)),false,true)
+
+
+          */
       }
 
-      "traversal ordering" >> {
+      /* "traversal ordering" >> {
         "for ab-abc-ad" should {
           val ab = mergeNode("ab")
           val abc = mergeNode("abc")
@@ -368,9 +400,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
           val spanningGraph = findSpanningGraphs(edgeMap(connectedNodes)).head
 
           val oracle = Map(
-            ab -> NodeMetadata(10),
-            abc -> NodeMetadata(10),
-            ad -> NodeMetadata(10)
+            ab -> NodeMetadata(10, None),
+            abc -> NodeMetadata(10, None),
+            ad -> NodeMetadata(10, None)
           )
 
           val plan = findBorgTraversalOrder(spanningGraph, oracle).fixed
@@ -453,7 +485,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
             }
           }
         }
-      }
+      }*/
     }
 
     "derive the universes of binding constraints" >> {
