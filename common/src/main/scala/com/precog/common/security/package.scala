@@ -52,12 +52,4 @@ package object security {
 
   implicit val OptionDateTimeDecomposer: Decomposer[Option[DateTime]] = OptionDecomposer[DateTime]
   implicit val OptionDateTimeExtractor: Extractor[Option[DateTime]] = OptionExtractor[DateTime]
-   
-  val tidSafePrefix = 30 
-  val gidSafePrefix = 30 
-
-  def safeTokenID(tid: TokenID): String = safePrefix(tid, tidSafePrefix) 
-  def safeGrantID(gid: GrantID): String = safePrefix(gid, gidSafePrefix) 
-
-  def safePrefix(s: String, prefix: Int): String = s.substring(0, math.min(s.length-1, prefix))
 }

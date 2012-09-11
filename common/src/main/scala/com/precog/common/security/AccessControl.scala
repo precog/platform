@@ -40,16 +40,21 @@ import blueeyes.json.xschema.Extractor._
 import java.util.concurrent.TimeUnit._
 
 import scalaz._
+import scalaz.std.option._
 import scalaz.std.set._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
 trait AccessControl[M[+_]] {
   def mayAccess(uid: UID, path: Path, ownders: Set[UID], accessType: AccessType): M[Boolean]
+  
+  def mayGrant(uid: UID, permissions: Set[Permission]): M[Boolean]
 }
 
 class UnlimitedAccessControl[M[+_]: Pointed] extends AccessControl[M] {
   def mayAccess(uid: UID, path: Path, ownders: Set[UID], accessType: AccessType) = Pointed[M].point(true)
+
+  def mayGrant(uid: UID, permissions: Set[Permission]): M[Boolean] = Pointed[M].point(true)
 }
 
 class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Monad[M]) extends AccessControl[M] with Logging {
@@ -57,6 +62,14 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
     tokens.findToken(uid).flatMap{ _.map { t => 
       logger.debug("Checking %s access to %s from token %s with owners: %s".format(accessType, path, uid, owners))
        hasValidPermissions(t, path, owners, accessType)
+    }.getOrElse(M.point(false)) }
+  }
+  
+  def mayGrant(uid: UID, permissions: Set[Permission]): M[Boolean] = {
+    tokens.findToken(uid).flatMap{ _.map { t =>
+      permissions.map { 
+        case p @ Permission(accessType, path, owner, _) => hasValidPermissions(t, path, owner.toSet, accessType)
+      }.sequence.map(_.forall(identity))
     }.getOrElse(M.point(false)) }
   }
 
@@ -88,24 +101,26 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
         )})
       case ReadPermission =>
         if(owners.isEmpty) { logger.debug("Empty owners == no read permission"); M.point(false) }
-        else forall(owners.map { owner =>
-          exists(t.grants.map{ gid =>
-            tokens.findGrant(gid).flatMap( _.map {
-              case g @ Grant(_, _, ReadPermission(p, o, _)) =>
-                isValid(g).map { valid =>
-                  val equalOrChild = p.equalOrChild(path)
-                  val goodOwnership = owner == o 
-                  logger.debug("Got grant %s > valid: %s, equalOrChild: %s, goodOwnership: %s".format(gid.take(10) + "...", valid, equalOrChild, goodOwnership))
-                  valid && equalOrChild && goodOwnership
-                }
-              case _ => M.point(false)
-            }.getOrElse { logger.debug("Could not locate grant " + gid); M.point(false) }
-          )})
-        })
+        else {
+          forall(owners.map { owner =>
+            exists(t.grants.map{ gid =>
+              tokens.findGrant(gid).flatMap( _.map {
+                case g @ Grant(_, _, ReadPermission(p, o, _)) =>
+                  isValid(g).map { valid =>
+                    val equalOrChild = p.equalOrChild(path)
+                    val goodOwnership = owner == o
+                    logger.debug("Got grant %s > valid: %s, equalOrChild: %s, goodOwnership: %s".format(gid.take(10) + "...", valid, equalOrChild, goodOwnership))
+                    valid && equalOrChild && goodOwnership
+                  }
+                case other => M.point(false)
+              }.getOrElse { logger.debug("Could not locate grant " + gid); M.point(false) }
+            )})
+          })
+        }
       case ReducePermission =>
         if(owners.isEmpty) M.point(false)
         else forall( owners.map { owner =>
-          exists( t.grants.map{ gid =>
+          exists(t.grants.map{ gid =>
             tokens.findGrant(gid).flatMap( _.map { 
               case g @ Grant(_, _, ReducePermission(p, o, _)) =>
                 isValid(g).map { _ && p.equalOrChild(path) && owner == o }

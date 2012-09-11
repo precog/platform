@@ -41,7 +41,8 @@ class AccessControlSpec extends Specification with TokenManagerTestValues with A
   implicit lazy val accessControl = new TokenManagerAccessControl(tokens)
   implicit lazy val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)
 
-  "legacy access control" should {
+  "access control" should {
+    
     "control path access" in {
       "allow access" in {
         val accessRoot = mayAccess(rootToken.tid, "/", Set(rootToken.tid), _: AccessType)
@@ -135,6 +136,7 @@ class AccessControlSpec extends Specification with TokenManagerTestValues with A
         accessChild(WritePermission) must beFalse
       }
     }
+    
     "control data access" in {
       "allow access" in {
         mayAccess(rootToken.tid, "/", Set(rootToken.tid), ReducePermission) must beTrue

@@ -312,8 +312,6 @@ trait TableModule[M[+_]] extends FNModule {
   trait TableCompanionLike {
     import trans._
 
-    implicit val geq: scalaz.Equal[GroupId]
-
     def empty: Table
     
     def constString(v: Set[CString]): Table
