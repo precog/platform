@@ -24,11 +24,10 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
   import Utils._
   import ast._
   
-  // TODO
   override def findGroups(expr: Expr): Set[GroupTree] = {
     import group._
     
-    def loop(root: Let, expr: Expr, currentWhere: Option[Where]): Set[GroupTree] = expr match {
+    def loop(root: Solve, expr: Expr, currentWhere: Option[Where]): Set[GroupTree] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
 
       case Import(_, _, child) => loop(root, child, currentWhere)
@@ -43,8 +42,9 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
       }
       
       case t @ TicVar(_, id) => t.binding match {
-        // TODO
-        // case SolveBinding(`root`) => currentWhere map { where => Set(GroupCondition(where): GroupTree) } getOrElse Set()
+        case SolveBinding(`root`) =>
+          currentWhere map { where => Set(GroupCondition(where): GroupTree) } getOrElse Set()
+        
         case _ => Set()
       }
       
@@ -77,29 +77,14 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
           case _ => Set[GroupTree]()
         }
         
-        val back: Set[GroupTree] = merged ++ fromDef
-        
-        d.binding match {
-          case b: ReductionBinding if d.isReduction =>
-            Set(GroupReduction(b, back): GroupTree)
-          
-          case _ => back
-        }
+        merged ++ fromDef
       }
       
       case op @ Where(_, left, right) => {
         val leftSet = loop(root, left, currentWhere)
+        val rightSet = loop(root, right, Some(op))
         
-        /* val rightSet = op.provenance match {
-          case UnionProvenance(_, _) =>
-            loop(root, right, currentWhere)
-          
-          case _ =>
-            loop(root, right, Some(op))
-        }
-        
-        leftSet ++ rightSet */
-        sys.error("TODO")
+        leftSet ++ rightSet
       }
       
       case With(_, left, right) =>
@@ -180,6 +165,5 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
   object group {
     case class GroupCondition(op: Where) extends GroupTree
     case class GroupConstraint(constr: Expr) extends GroupTree
-    case class GroupReduction(b: ReductionBinding, children: Set[GroupTree]) extends GroupTree
   }
 }
