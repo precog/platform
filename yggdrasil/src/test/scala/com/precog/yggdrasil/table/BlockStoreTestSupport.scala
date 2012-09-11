@@ -116,9 +116,7 @@ trait BlockStoreTestSupport[M[+_]] { self =>
       implicit val geq: scalaz.Equal[Int] = intInstance
     }
 
-    object Table extends TableCompanion {
-      implicit def groupIdShow: Show[GroupId] = sys.error("TODO")
-    }
+    object Table extends TableCompanion
     
     val yggConfig = new IdSourceConfig {
       val idSource = new IdSource {

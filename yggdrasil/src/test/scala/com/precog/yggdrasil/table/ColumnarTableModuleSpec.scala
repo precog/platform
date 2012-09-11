@@ -97,9 +97,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       sys.error("not implemented here")
   }
 
-  object Table extends TableCompanion { 
-    implicit def groupIdShow: Show[GroupId] = sys.error("TODO")
-  }
+  object Table extends TableCompanion
+
   def newMemoContext = new MemoContext
 
   "a table dataset" should {
