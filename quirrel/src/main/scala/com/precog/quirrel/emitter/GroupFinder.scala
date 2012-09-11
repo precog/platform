@@ -30,7 +30,7 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
     
     def loop(root: Let, expr: Expr, currentWhere: Option[Where]): Set[GroupTree] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
-      
+
       case Import(_, _, child) => loop(root, child, currentWhere)
       
       case New(_, child) => loop(root, child, currentWhere)
@@ -158,10 +158,21 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
     }
     
     expr match {
-      case root @ Solve(_, _, child) => loop(root, child, None)
+      case root @ Solve(_, constraints, child) => {
+        val filtered = constraints filter { 
+          case TicVar(_, _) => false
+          case _ => true
+        }
+
+        val groupTrees = filtered map GroupConstraint toSet
+
+        groupTrees ++ loop(root, child, currentWhere)
+      }
+      
       case _ => Set()
     }
   }
+
   
   
   sealed trait GroupTree
