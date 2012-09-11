@@ -150,6 +150,22 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       stream(sliceTransform.initial, slices)
     }
 
+    def intersect(set: Set[NodeSubset], requiredSorts: Map[MergeNode, Set[Seq[TicVar]]]): M[NodeSubset] = {
+      if (set.size == 1) {
+        set.head.point[M]
+      } else {
+        val preferredKeyOrder: Seq[TicVar] = requiredSorts(set.head.node).groupBy(a => a).mapValues(_.size).maxBy(_._2)._1
+
+        val reindexedSubsets = set map { 
+           sub => sub.copy(groupKeyTrans = sub.groupKeyTrans.alignTo(preferredKeyOrder))
+        }
+
+        intersect(reindexedSubsets.head.idTrans, reindexedSubsets.map(_.table).toSeq: _*) map { joinedTable =>
+          reindexedSubsets.head.copy(table = joinedTable, groupKeyPrefix = preferredKeyOrder)
+        }
+      }
+    }
+
     /**
      * Intersects the given tables on identity, where identity is defined by the provided TransSpecs
      */
@@ -350,11 +366,23 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     // BorgResult tables must have the following structure with respect to the root:
     // {
-    //   "groupKeys": { "000001": ..., "000002": ... },
+    //   "groupKeys": { "000000": ..., "000001": ... },
     //   "identities": { "<string value of groupId1>": <identities for groupId1>, "<string value of groupId2>": ... },
     //   "values": { "<string value of groupId1>": <values for groupId1>, "<string value of groupId2>": ... },
     // }
     case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId])
+
+    object BorgResult {
+      val allFields = Set(JPathField("groupKeys"), JPathField("identities"), JPathField("values"))
+
+      def groupKeySpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("groupKeys"))
+      def identSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("identities"))
+      def valueSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("values"))
+
+      def wrapGroupKeySpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "groupKeys")
+      def wrapIdentSpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "identities")
+      def wrapValueSpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "values")
+    }
 
     object Universe {
       def allEdges(nodes: collection.Set[MergeNode]): collection.Set[MergeEdge] = {
@@ -446,6 +474,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def fromFixed(order: Seq[TicVar]): OrderingConstraint = OrderingConstraint(order.map(v => Set(v)))
     }
 
+    /*
     sealed trait OrderingConstraint2 { self =>
       import OrderingConstraint2._
 
@@ -580,7 +609,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
-    /*
     object OrderingConstraint2 {
       case class Join(join: OrderingConstraint2, leftRem: OrderingConstraint2 = Zero, rightRem: OrderingConstraint2 = Zero) {
         def normalize = copy(join = join.normalize, leftRem = leftRem.normalize, rightRem = rightRem.normalize)
@@ -935,11 +963,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       nodeSubsetsM map { _.toMap }
     }
 
-    def alignOnEdges(spanningGraph: MergeGraph): M[Map[GroupId, Set[NodeSubset]]] = {
+    def alignOnEdges(spanningGraph: MergeGraph, requiredSorts: Map[MergeNode, Set[Seq[TicVar]]]): M[Map[GroupId, Set[NodeSubset]]] = {
       import OrderingConstraints._
-
-      // Compute required sort orders based on graph traversal
-      val requiredSorts: Map[MergeNode, Set[Seq[TicVar]]] = findRequiredSorts(spanningGraph)
 
       val sortPairs: M[Map[MergeNode, Map[Seq[TicVar], NodeSubset]]] = 
         requiredSorts.map({ case (node, orders) => materializeSortOrders(node, orders) map { node -> _ }}).toStream
@@ -965,8 +990,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   
                   alignedM map {
                     case (aAligned, bAligned) => List(
-                      NodeSubset(a, aAligned, aSorted.idTrans, aSorted.targetTrans, aSorted.groupKeyTrans, aSorted.groupKeyPrefix),
-                      NodeSubset(b, bAligned, bSorted.idTrans, bSorted.targetTrans, bSorted.groupKeyTrans, bSorted.groupKeyPrefix)
+                      aSorted.copy(table = aAligned),
+                      bSorted.copy(table = bAligned)
                     )
                   }
               }
@@ -980,12 +1005,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
 
 /*
-    // TODO: This should NOT return NodeSubset, but rather, something like it, without
-    //        groupKeyPrefix (which is MEANINGELSS for the return value)
-    def intersect(set: Set[NodeSubset]): M[NodeSubset] = {
-      sys.error("todo")
-    }
-
     // 
     // Represents the cost of a particular borg traversal plan, measured in terms of IO.
     // Computational complexity of algorithms occurring in memory is neglected. 
@@ -1221,12 +1240,87 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
     */
 
+    def join(left: BorgResult, right: BorgResult, keyOrder: Seq[TicVar]) = {
+      import BorgResult._
+
+      val leftJoinableM = if (keyOrder.startsWith(left.groupKeys)) { left.point[M] } else {
+        val keyMap = keyOrder.zipWithIndex.toMap
+        val newOrder = left.groupKeys.sortBy(keyMap)
+
+        val remapGroupKeySpec = ObjectConcat(
+          newOrder.zipWithIndex.map {
+            case (ticvar, i) => GroupKeyTrans.reindex(BorgResult.groupKeySpec(Source), left.groupKeys.indexOf(ticvar), i)
+          }: _*
+        )
+
+        val remapSpec = ObjectConcat(
+          wrapGroupKeySpec(remapGroupKeySpec),
+          wrapIdentSpec(identSpec(Source)),
+          wrapValueSpec(valueSpec(Source))
+        )
+
+        left.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending) map { leftSorted =>
+          left.copy(table = leftSorted, groupKeys = newOrder)
+        }
+      }
+
+      val rightJoinableM = if (keyOrder.startsWith(right.groupKeys)) { right.point[M] } else {
+        val keyMap = keyOrder.zipWithIndex.toMap
+        val newOrder = right.groupKeys.sortBy(keyMap)
+        val remapGroupKeySpec = ObjectConcat(
+          newOrder.zipWithIndex.map {
+            case (ticvar, i) => GroupKeyTrans.reindex(BorgResult.groupKeySpec(Source), right.groupKeys.indexOf(ticvar), i)
+          }: _*
+        )
+
+        val remapSpec = ObjectConcat(
+          wrapGroupKeySpec(remapGroupKeySpec),
+          wrapIdentSpec(identSpec(Source)),
+          wrapValueSpec(valueSpec(Source))
+        )
+
+        right.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending) map { rightSorted =>
+          right.copy(table = rightSorted, groupKeys = newOrder)
+        }
+      }
+
+      for {
+        leftJoinable <- leftJoinableM
+        rightJoinable <- rightJoinableM
+      } yield {
+        val neededRight = right.groupKeys diff left.groupKeys
+        val rightKeyMap = right.groupKeys.zipWithIndex.toMap
+
+        val groupKeyTrans2 = ObjectConcat(
+          groupKeySpec(SourceLeft) +: neededRight.zipWithIndex.map { 
+            case (key, i) =>
+            wrapGroupKeySpec(
+              WrapObject(
+                DerefObjectStatic(groupKeySpec(SourceRight), JPathField(GroupKeyTrans.keyName(rightKeyMap(key)))),
+                GroupKeyTrans.keyName(i + leftJoinable.groupKeys.size)
+              )
+            )
+          }: _*
+        )
+
+        val idTrans2 = wrapIdentSpec(ObjectConcat(identSpec(SourceLeft), identSpec(SourceRight)))
+        val recordTrans2 = wrapValueSpec(ObjectConcat(valueSpec(SourceLeft), valueSpec(SourceRight)))
+
+        val borgTrans = ObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
+        val unmatchedTrans = ObjectDelete(Leaf(Source), BorgResult.allFields)
+
+        leftJoinable.table.cogroup(groupKeySpec(Source), groupKeySpec(Source), rightJoinable.table)(unmatchedTrans, unmatchedTrans, borgTrans)
+      }
+    }
+
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
     def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {
       val (spanningGraph, connectedSubgraph) = tuple
 
       val metaForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
 
+      sys.error("todo")
+/*
       val plan = findBorgTraversalOrder(spanningGraph, metaForNode)
 
       val planSteps = plan.fixed.steps
@@ -1265,45 +1359,32 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               (acc, newStep)
           }
       }).map(_._1)
+*/
+    }
+
+    def crossAllTrans(leftKeySize: Int, rightKeySize: Int): TransSpec2 = {
+      import BorgResult._
+      val keyTransLeft = groupKeySpec(SourceLeft)
+
+      // remap the group keys on the right so that they don't conflict with the left
+      // and respect the composite ordering of the left and right
+      val keyTransRight = ObjectConcat(
+        (0 until rightKeySize) map { i =>
+          GroupKeyTrans.reindex(groupKeySpec(SourceRight), i, i + leftKeySize)
+        }: _*
+      )
+
+      val groupKeyTrans2 = wrapGroupKeySpec(ObjectConcat(keyTransLeft, keyTransRight))
+      val idTrans2 = wrapIdentSpec(ObjectConcat(identSpec(SourceLeft), identSpec(SourceRight)))
+      val recordTrans2 = wrapValueSpec(ObjectConcat(valueSpec(SourceLeft), valueSpec(SourceRight)))
+
+      ObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
     }
 
     def crossAll(borgResults: Set[BorgResult]): BorgResult = {
       import TransSpec._
       def cross2(left: BorgResult, right: BorgResult): BorgResult = {
-        val leftKeySize = left.groupKeys.size
-        val keyTransLeft = DerefObjectStatic(Leaf(SourceLeft), JPathField("groupKeys"))
-
-        // remap the group keys on the right so that they don't conflict with the left
-        // and respect the composite ordering of the left and right
-        val keyTransRight = ObjectConcat(
-          (0 until right.groupKeys.size) map { i =>
-            GroupKeyTrans.reindex(
-              DerefObjectStatic(Leaf(SourceRight), JPathField("groupKeys")),
-              i + 1,
-              i + leftKeySize + 1
-            )
-          }: _*
-        )
-
-        val groupKeyTrans2 = WrapObject(ObjectConcat(keyTransLeft, keyTransRight), "groupKeys")
-
-        val idTrans2 = WrapObject(
-          ObjectConcat(
-            DerefObjectStatic(Leaf(SourceLeft), JPathField("identities")),
-            DerefObjectStatic(Leaf(SourceRight), JPathField("identities"))
-          ),
-          "identities"
-        )
-
-        val recordTrans2 = WrapObject(
-          ObjectConcat(
-            DerefObjectStatic(Leaf(SourceLeft), JPathField("values")),
-            DerefObjectStatic(Leaf(SourceRight), JPathField("values"))
-          ),
-          "values"
-        )
-
-        val omniverseTrans = ObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
+        val omniverseTrans = crossAllTrans(left.groupKeys.size, right.groupKeys.size)
 
         BorgResult(left.table.cross(right.table)(omniverseTrans),
                    left.groupKeys ++ right.groupKeys,
@@ -1334,8 +1415,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 case (_, rightIndex) => {
                   GroupKeyTrans.reindex(
                     DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
-                    rightIndex + 1,
-                    leftIndex + 1
+                    rightIndex,
+                    leftIndex
                   )
                 }
               }
@@ -1346,8 +1427,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 case (_, rightIndex) => {
                   GroupKeyTrans.reindex(
                     DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
-                    rightIndex + 1,
-                    leftKeys.length + extraIndex + 1
+                    rightIndex,
+                    leftKeys.length + extraIndex
                   )
                 }
               }.get
@@ -1378,17 +1459,19 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       // all of the universes will be unioned together.
       val universes = findBindingUniverses(grouping)
       val borgedUniverses: M[Stream[BorgResult]] = universes.toStream.map { universe =>
-        val alignedSpanningGraphsM: M[Set[(MergeGraph, Map[GroupId, Set[NodeSubset]])]] = 
+        val alignedSpanningGraphsM: M[Set[(MergeGraph, Map[MergeNode, Set[Seq[TicVar]]], Map[GroupId, Set[NodeSubset]])]] = 
           universe.spanningGraphs.map { spanningGraph =>
-            for (aligned <- alignOnEdges(spanningGraph))
-              yield (spanningGraph, aligned)
+            // Compute required sort orders based on graph traversal
+            val requiredSorts: Map[MergeNode, Set[Seq[TicVar]]] = findRequiredSorts(spanningGraph)
+            for (aligned <- alignOnEdges(spanningGraph, requiredSorts))
+              yield (spanningGraph, requiredSorts, aligned)
           }.sequence
 
         val minimizedSpanningGraphsM: M[Set[(MergeGraph, ConnectedSubgraph)]] = for {
           aligned      <- alignedSpanningGraphsM
           intersected  <- aligned.map { 
-                            case (spanningGraph, alignment) => 
-                              for (intersected <- alignment.values.toStream.map(intersect).sequence)
+                            case (spanningGraph, requiredSorts, alignment) => 
+                              for (intersected <- alignment.values.toStream.map(intersect(_, requiredSorts)).sequence)
                                 yield (spanningGraph, intersected.toSet)
                           }.sequence
         } yield intersected
