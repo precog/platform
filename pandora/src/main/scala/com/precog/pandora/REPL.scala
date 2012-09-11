@@ -72,7 +72,7 @@ trait REPL
     def compile(oldTree: Expr): Option[Expr] = {
       bindRoot(oldTree, oldTree)
       
-      val tree = rewriteForall(shakeTree(oldTree))
+      val tree = shakeTree(oldTree)
       val strs = for (error <- tree.errors) yield showError(error)
       
       if (!tree.errors.isEmpty) {
@@ -113,7 +113,7 @@ trait REPL
       
       case PrintTree(tree) => {
         bindRoot(tree, tree)
-        val tree2 = rewriteForall(shakeTree(tree))
+        val tree2 = shakeTree(tree)
         
         out.println()
         out.println(prettyPrint(tree2))
