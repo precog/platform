@@ -1222,9 +1222,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             WrapObject(
               DerefObjectStatic(
                 DerefObjectStatic(Leaf(SourceRight), JPathField("groupKeys")), 
-                JPathField(GroupKeyTrans.keyName(i))
+                JPathField(GroupKeyTrans.keyName(i + 1))
               ),
-              GroupKeyTrans.keyName(i + leftKeySize)
+              GroupKeyTrans.keyName(i + leftKeySize + 1)
             )
           }: _*
         )

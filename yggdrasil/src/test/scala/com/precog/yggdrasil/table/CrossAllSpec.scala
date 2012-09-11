@@ -38,19 +38,28 @@ trait CrossAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
     // These are used in all tests
     val JArray(leftData) = JsonParser.parse("""[
       {
-        "groupKeys":  { "001": "foo" },
+        "groupKeys":  { "%1$s": "foo" },
         "identities": { "1": [1,2] },
         "values":     { "1": { "a": "foo" } }
       }
-    ]""")
+    ]""".format(GroupKeyTrans.keyName(1)))
   
     val JArray(rightData) = JsonParser.parse("""[
       {
-        "groupKeys":  { "001": true },
+        "groupKeys":  { "%1$s": true },
         "identities": { "2": [5,1] },
         "values":     { "2": { "b": true } }
       }
-    ]""")
+    ]""".format(GroupKeyTrans.keyName(1)))
+
+    val JArray(crossedData) = JsonParser.parse("""[
+      {
+        "groupKeys":  { "%1$s": "foo", "%2$s" : true },
+        "identities": { "1": [1,2], "2": [5,1] },
+        "values":     { "1": { "a": "foo" }, "2": { "b": true } }
+      }
+    ]""".format(GroupKeyTrans.keyName(1), GroupKeyTrans.keyName(2)))
+    
   }
 
   def simpleCrossAllTest = {
@@ -61,15 +70,11 @@ trait CrossAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
     val leftBorg = BorgResult(fromJson(leftData.toStream), varsLeft, Set(1))
     val rightBorg = BorgResult(fromJson(rightData.toStream), varsRight, Set(1))
 
-    val expected = (leftData.toStream zip rightData.toStream).map {
-      case (lv, rv) => lv.insertAll(rv).getOrElse (throw new Exception("Failed to merge JValues"))
-    }
-
     val result = crossAll(Set(leftBorg, rightBorg))
     val jsonResult = result.table.toJson.copoint
 
-    jsonResult       must_== expected
-    result.groupKeys must_== varsLeft
+    jsonResult       must_== crossedData
+    result.groupKeys must_== varsLeft ++ varsRight
     result.groups    must_== Set(1)
   }
 }
