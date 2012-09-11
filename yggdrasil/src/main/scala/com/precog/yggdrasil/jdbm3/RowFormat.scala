@@ -296,8 +296,10 @@ trait SortingRowFormat extends RowFormat with StdCodecs with RowFormatSupport {
 
   def pool: ByteBufferPool
 
-  override implicit val StringCodec = Codec.Utf8Codec
-  abstract override implicit val BigDecimalCodec: Codec[BigDecimal] =
+  override implicit def StringCodec = Codec.Utf8Codec
+
+  @transient
+  abstract override implicit lazy val BigDecimalCodec: Codec[BigDecimal] =
     Codec.CompositeCodec[Double, BigDecimal, BigDecimal](Codec[Double], super.BigDecimalCodec, bd => (bd.toDouble, bd), (_, bd) => bd)
 
   @transient lazy val selectors: List[(JPath, List[CType])] = {

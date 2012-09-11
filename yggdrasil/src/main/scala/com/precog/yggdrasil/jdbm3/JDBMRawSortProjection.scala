@@ -65,13 +65,13 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
     val vals = keyFormat.decode(k)
     val last = vals.last match {
       case CLong(n) => CLong(n + 1)
-      case v => sys.error("Expected a CLong (global ID) in the last position, but found " + v)
+      case v => sys.error("Expected a CLong (global ID) in the last position, but found " + v + " (more: " + vals + ")")
     }
     keyFormat.encode(vals.init :+ last)
   }
 
   val rowFormat = RowFormat.forValues(valRefs)
-  val keyFormat = RowFormat.forValues(sortKeyRefs)
+  val keyFormat = RowFormat.forSortingKey(sortKeyRefs)
 
   def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Array[Byte], Slice]] = {
     // TODO: Make this far, far less ugly

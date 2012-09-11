@@ -616,7 +616,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           val (keyColumnRefs, keyColumns) = kslice.columns.toList.sortBy(_._1).unzip
           assert (keyColumnRefs.size >= 1)
 
-          val keyRowFormat = RowFormat.forValues(keyColumnRefs)
+          val keyRowFormat = RowFormat.forSortingKey(keyColumnRefs)
           val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
           val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
 
@@ -645,7 +645,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       val dataColumnEncoder = dataRowFormat.ColumnEncoder(vColumns)
 
       val (keyColumnRefs, keyColumns) = kslice.columns.toList.sortBy(_._1).unzip
-      val keyRowFormat = RowFormat.forValues(keyColumnRefs)
+      val keyRowFormat = RowFormat.forSortingKey(keyColumnRefs)
       val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
       val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
 
