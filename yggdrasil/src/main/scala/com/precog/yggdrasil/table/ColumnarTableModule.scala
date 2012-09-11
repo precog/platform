@@ -71,7 +71,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
   trait ColumnarTableCompanion extends TableCompanionLike {
     def apply(slices: StreamT[M, Slice]): Table
 
-    implicit def groupIdShow: Show[GroupId]
+    implicit def groupIdShow: Show[GroupId] = Show.showFromToString[GroupId]
 
     def empty: Table = Table(StreamT.empty[M, Slice])
     
