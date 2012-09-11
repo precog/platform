@@ -760,7 +760,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def keyName(i: Int) = "%06d".format(i)
       def keyVar(i: Int): TicVar = JPathField(keyName(i))
 
-      def reindex(spec: TransSpec1, from: Int, to: Int) = WrapObject(DerefObjectStatic(spec, keyVar(from)), keyName(to))
+      def reindex[A <: SourceType](spec: TransSpec[A], from: Int, to: Int) = WrapObject(DerefObjectStatic(spec, keyVar(from)), keyName(to))
 
       // the GroupKeySpec passed to deriveTransSpecs must be either a source or a conjunction; all disjunctions
       // have been factored out by this point
@@ -1252,12 +1252,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         // and respect the composite ordering of the left and right
         val keyTransRight = ObjectConcat(
           (0 until right.groupKeys.size) map { i =>
-            WrapObject(
-              DerefObjectStatic(
-                DerefObjectStatic(Leaf(SourceRight), JPathField("groupKeys")), 
-                JPathField(GroupKeyTrans.keyName(i + 1))
-              ),
-              GroupKeyTrans.keyName(i + leftKeySize + 1)
+            GroupKeyTrans.reindex(
+              DerefObjectStatic(Leaf(SourceRight), JPathField("groupKeys")),
+              i + 1,
+              i + leftKeySize + 1
             )
           }: _*
         )
@@ -1309,12 +1307,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             ((0 until leftKeys.length) flatMap { leftIndex: Int =>
               rightKeys.find(_._1 == leftKeys(leftIndex)).map {
                 case (_, rightIndex) => {
-                  WrapObject(
-                    DerefObjectStatic(
-                      DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
-                      JPathField(GroupKeyTrans.keyName(rightIndex + 1))
-                    ),
-                    GroupKeyTrans.keyName(leftIndex + 1)
+                  GroupKeyTrans.reindex(
+                    DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
+                    rightIndex + 1,
+                    leftIndex + 1
                   )
                 }
               }
@@ -1323,12 +1319,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             ((0 until extraRight.length) map { extraIndex: Int =>
               rightKeys.find(_._1 == extraRight(extraIndex)).map {
                 case (_, rightIndex) => {
-                  WrapObject(
-                    DerefObjectStatic(
-                      DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
-                      JPathField(GroupKeyTrans.keyName(rightIndex + 1))
-                    ),
-                    GroupKeyTrans.keyName(leftKeys.length + extraIndex + 1)
+                  GroupKeyTrans.reindex(
+                    DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
+                    rightIndex + 1,
+                    leftKeys.length + extraIndex + 1
                   )
                 }
               }.get
