@@ -168,6 +168,7 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
   
   object group {
     case class GroupCondition(op: Where) extends GroupTree
+    case class GroupConstraint(constr: Expr) extends GroupTree
     case class GroupReduction(b: ReductionBinding, children: Set[GroupTree]) extends GroupTree
   }
 }
