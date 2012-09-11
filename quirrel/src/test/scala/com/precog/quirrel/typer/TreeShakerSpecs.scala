@@ -388,7 +388,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }  
 
     "detect unused formal in let" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("b", "c"), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "c"), Vector()), NumLit(LineStream(), "42")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("b", "c"), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "c"), Vector()), NumLit(LineStream(), "42")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -396,7 +396,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "avoid false negatives with used formal" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("b", "c"), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "b"), Vector()), Dispatch(LineStream(), Identifier(Vector(), "c"), Vector())), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("b", "c"), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "b"), Vector()), Dispatch(LineStream(), Identifier(Vector(), "c"), Vector())), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -430,7 +430,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal in new" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), New(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42"))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), New(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42"))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -497,7 +497,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     
     "detect unused formal parameter in relate" in {
       {
-        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Relate(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Relate(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
         bindRoot(tree, tree)
         
         val result = shakeTree(tree)
@@ -505,7 +505,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       }
       
       {
-        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Relate(LineStream(), NumLit(LineStream(), "24"), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "25")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Relate(LineStream(), NumLit(LineStream(), "24"), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "25")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
         bindRoot(tree, tree)
         
         val result = shakeTree(tree)
@@ -513,7 +513,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       }
       
       {
-        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Relate(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25"), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42"))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Relate(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25"), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42"))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
         bindRoot(tree, tree)
         
         val result = shakeTree(tree)
@@ -572,7 +572,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in object definition" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), ObjectDef(LineStream(), Vector("foo" -> Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), ObjectDef(LineStream(), Vector("foo" -> Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -612,7 +612,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in array definition" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), ArrayDef(LineStream(), Vector(Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), ArrayDef(LineStream(), Vector(Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -652,7 +652,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in descent" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Descent(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), "foo"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Descent(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), "foo"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -706,7 +706,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal binding in deref" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Deref(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "42")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Deref(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "42")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -746,7 +746,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in dispatch" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Dispatch(LineStream(), Identifier(Vector(), "count"), Vector(Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Dispatch(LineStream(), Identifier(Vector(), "count"), Vector(Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -800,7 +800,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in where" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Where(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Where(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -854,7 +854,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in addition" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Add(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Add(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -908,7 +908,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in subtraction" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Sub(LineStream(), Sub(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Sub(LineStream(), Sub(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -963,7 +963,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in multiplication" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Mul(LineStream(), Mul(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Mul(LineStream(), Mul(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1017,7 +1017,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in division" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Div(LineStream(), Div(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Div(LineStream(), Div(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1071,7 +1071,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in less-than" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Lt(LineStream(), Lt(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Lt(LineStream(), Lt(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1125,7 +1125,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in less-than-equal" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), LtEq(LineStream(), LtEq(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), LtEq(LineStream(), LtEq(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1179,7 +1179,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in greater-than" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Gt(LineStream(), Gt(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Gt(LineStream(), Gt(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1233,7 +1233,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in greater-than-equal" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), GtEq(LineStream(), GtEq(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), GtEq(LineStream(), GtEq(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1287,7 +1287,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in equality" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Eq(LineStream(), Eq(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Eq(LineStream(), Eq(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1341,7 +1341,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in not equality" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), NotEq(LineStream(), NotEq(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), NotEq(LineStream(), NotEq(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1395,7 +1395,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in boolean and" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), And(LineStream(), And(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), And(LineStream(), And(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1449,7 +1449,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in boolean or" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Or(LineStream(), Or(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Or(LineStream(), Or(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1489,7 +1489,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in complement" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Comp(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42"))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Comp(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42"))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1529,7 +1529,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "detect unused formal parameter in negation" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Neg(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42"))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Neg(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42"))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
@@ -1547,14 +1547,14 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
   
   "name binding after tree shake" should {
     "re-bind formals" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("b"), Paren(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "b"), Vector())), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("b"), Paren(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "b"), Vector())), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors must beEmpty
       
       result must beLike {
-        case Let(LineStream(), Identifier(Vector(), "a"), Vector("b"), t @ Dispatch(LineStream(), Identifier(Vector(), "b"), Vector()), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())) =>
+        case Let(LineStream(), Identifier(Vector(), "a"), Vector("b"), t @ Dispatch(LineStream(), Identifier(Vector(), "b"), Vector()), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream())))) =>
           t.binding must beLike { case FormalBinding(`result`) => ok }
       }
     }
@@ -1573,14 +1573,14 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
     }
     
     "re-bind dispatch" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a"), Paren(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a"), Paren(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result.errors must beEmpty
       
       result must beLike {
-        case Let(LineStream(), Identifier(Vector(), "a"), Vector("a"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), d @ Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())) =>
+        case Let(LineStream(), Identifier(Vector(), "a"), Vector("a"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), d @ Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream())))) =>
           d.binding must beLike { case LetBinding(`result`) => ok }
       }
     }
