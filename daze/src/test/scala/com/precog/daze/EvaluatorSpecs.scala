@@ -39,6 +39,8 @@ trait TestConfigComponent[M[+_]] extends table.StubColumnarTableModule[M] with I
   val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
   
   object yggConfig extends YggConfig
+
+  object Table extends TableCompanion
   
   trait YggConfig extends EvaluatorConfig with DatasetConsumersConfig {
     val sortBufferSize = 1000
@@ -2548,9 +2550,5 @@ trait EvaluatorSpecs[M[+_]] extends Specification
   }
 }
 
-object EvaluatorSpecs extends EvaluatorSpecs[YId] with test.YIdInstances {
-  object Table extends TableCompanion {
-    val geq: scalaz.Equal[GroupId] = scalaz.std.anyVal.intInstance
-  }
-}
+object EvaluatorSpecs extends EvaluatorSpecs[YId] with test.YIdInstances
 
