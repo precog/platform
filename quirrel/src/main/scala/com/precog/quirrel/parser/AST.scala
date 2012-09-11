@@ -349,14 +349,6 @@ trait AST extends Phases {
     private val _constrainingExpr = attribute[Option[Expr]](checkProvenance)
     def constrainingExpr = _constrainingExpr()
     private[quirrel] def constrainingExpr_=(expr: Option[Expr]) = _constrainingExpr() = expr
-
-    // TODO set
-    private val _accumulatedProvenance = attribute[Option[Vector[Provenance]]](checkProvenance)
-    def accumulatedProvenance = _accumulatedProvenance()
-    def accumulatedProvenance_=(acc: Option[Vector[Provenance]]) = _accumulatedProvenance() = acc
-    
-    lazy val cardinality: Option[Int] =
-      accumulatedProvenance map { _.size }
     
     private[quirrel] final lazy val _errors: Atom[Set[Error]] = {
       if (this eq root) {
