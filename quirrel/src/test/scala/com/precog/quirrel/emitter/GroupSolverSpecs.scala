@@ -51,10 +51,11 @@ object GroupSolverSpecs extends Specification
       
       val Let(_, _, _, _,
         tree @ Solve(_, _, 
-          origin @ Where(_, target, Eq(_, solution, _)))) = compile(input)
+          origin @ Where(_, target, pred @ Eq(_, solution, _)))) = compile(input)
           
       val expected = Group(origin, target, UnfixedSolution("'day", solution))
-        
+      println(ExprUtils.buildChains(Map())(target))
+      println(ExprUtils.buildChains(Map())(pred))
       tree.errors must beEmpty
       // tree.buckets must beSome(expected)
     }
@@ -277,6 +278,25 @@ object GroupSolverSpecs extends Specification
           // anything else?
         }
       }
+    }
+    
+    "reject a constraint which lacks an unambiguous common parent" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | 
+        | solve 'a
+        |   foo ~ bar
+        |     (foo + bar) where (foo - bar).a = 'a
+        | """.stripMargin
+        
+      val tree @ Let(_, _, _, _,
+        Let(_, _, _, _,
+          solve @ Solve(_, _, 
+            Relate(_, _, _,
+              Where(_, left, right))))) = compile(input)
+      
+      tree.errors must not(beEmpty)
     }
   }
 }

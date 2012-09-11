@@ -38,7 +38,7 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
         val first = loop(root, from, currentWhere)
         val second = loop(root, to, currentWhere)
         val third = loop(root, in, currentWhere)
-        first ++ second
+        first ++ second ++ third
       }
       
       case t @ TicVar(_, id) => t.binding match {
@@ -81,8 +81,10 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
       }
       
       case op @ Where(_, left, right) => {
+        lazy val hasSingularCommonality = ExprUtils.findCommonality(Set(left, right)).isDefined
+        
         val leftSet = loop(root, left, currentWhere)
-        val rightSet = if (left.provenance.makeCanonical == right.provenance.makeCanonical)
+        val rightSet = if (left.provenance.makeCanonical == right.provenance.makeCanonical && hasSingularCommonality)
           loop(root, right, Some(op))
         else
           loop(root, right, currentWhere)

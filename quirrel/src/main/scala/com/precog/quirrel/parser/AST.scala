@@ -632,7 +632,7 @@ trait AST extends Phases {
       _errors ++= phase(root)
     }
   }
- 
+  
   object ast {    
     sealed trait ExprLeafNode extends Expr with LeafNode
     
