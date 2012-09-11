@@ -158,7 +158,7 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
     }
     
     expr match {
-      case root @ Let(_, _, _, left, _) => loop(root, left, None)
+      case root @ Solve(_, _, child) => loop(root, child, None)
       case _ => Set()
     }
   }
