@@ -673,7 +673,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit split and merge for trivial cf example" in {
-      testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day onDay")(
+      testEmit("clicks := //clicks onDay := solve 'day clicks where clicks.day = 'day onDay")(
         Vector(
           PushString("/clicks"),
           LoadLocal,
@@ -689,7 +689,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit merge_buckets & for trivial cf example with conjunction" in {
-      testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day & clicks.din = 'day onDay")(
+      testEmit("clicks := //clicks onDay := solve 'day clicks where clicks.day = 'day & clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
           LoadLocal,
@@ -711,7 +711,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit merge_buckets | for trivial cf example with disjunction" in {
-      testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day | clicks.din = 'day onDay")(
+      testEmit("clicks := //clicks onDay := solve 'day clicks where clicks.day = 'day | clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
           LoadLocal,
@@ -763,7 +763,7 @@ object EmitterSpecs extends Specification
       testEmit("""
         | organizations := //organizations
         | 
-        | hist('revenue, 'campaign) :=
+        | hist := solve 'revenue, 'campaign 
         |   organizations' := organizations where organizations.revenue = 'revenue
         |   organizations'' := organizations' where organizations'.campaign = 'campaign
         |   
@@ -775,7 +775,7 @@ object EmitterSpecs extends Specification
     "emit split and merge for cf example with single, multiply constrained tic variable" in {
       testEmit("""
         | clicks := //clicks
-        | foo('a) :=
+        | foo := solve 'a
         |   bar := clicks where clicks.a = 'a
         |   baz := clicks where clicks.b = 'a
         |
@@ -816,7 +816,7 @@ object EmitterSpecs extends Specification
       testEmit("""
         | clicks := //clicks
         | 
-        | foo('a, 'b) :=
+        | foo := solve 'a, 'b
         |   bar := clicks where clicks.a = 'a
         |   baz := clicks where clicks.b = 'b
         |
@@ -858,7 +858,7 @@ object EmitterSpecs extends Specification
         | clicks := //clicks
         | imps := //impressions
         | 
-        | foo('a, 'b) :=
+        | foo := solve 'a, 'b
         |   bar := clicks where clicks.a = 'a
         |   baz := imps where imps.b = 'b
         |
@@ -901,7 +901,7 @@ object EmitterSpecs extends Specification
     "emit split and merge for cf example with extra sets" in {
       testEmit("""
         | clicks := //clicks
-        | foo('a) := clicks where clicks = 'a & clicks.b = 42
+        | foo := solve 'a clicks where clicks = 'a & clicks.b = 42
         | foo""".stripMargin)(
         Vector(
           PushString("/clicks"),
@@ -927,8 +927,9 @@ object EmitterSpecs extends Specification
       testEmit("""
         | clicks := //clicks
         | 
-        | totalPairs('sessionId, 'time) :=
-        |   clicks where clicks.externalSessionId = 'time & clicks.datetime = 'sessionId
+        | totalPairs(sessionId) :=
+        |   solve 'time
+        |     clicks where clicks.externalSessionId = 'time & clicks.datetime = sessionId
         |   
         | totalPairs("fubar")""".stripMargin)(Vector())
     }.pendingUntilFixed
@@ -937,7 +938,7 @@ object EmitterSpecs extends Specification
       testEmit("""
         | clicks := //clicks
         | imps := //impressions
-        | ctr('day) :=
+        | ctr := solve 'day
         |   count(clicks where clicks.day = 'day) / count(imps where imps.day = 'day)
         | ctr""".stripMargin)(
         Vector(
@@ -973,7 +974,7 @@ object EmitterSpecs extends Specification
     "emit dup for merge results" in {
       val input = """
         | clicks := //clicks
-        | f('c) := count(clicks where clicks = 'c)
+        | f := solve 'c count(clicks where clicks = 'c)
         | f.a + f.b""".stripMargin
 
       testEmit(input)(
@@ -1001,7 +1002,7 @@ object EmitterSpecs extends Specification
       val input = """
         | campaigns := //campaigns
         | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
-        | sums('n) :=
+        | sums := solve 'n
         |   m := max(nums where nums < 'n)
         |   (nums where nums = 'n) + m 
         | sums""".stripMargin
@@ -1042,7 +1043,7 @@ object EmitterSpecs extends Specification
       val input = """
         | clicks := //clicks
         | views := //views
-        | a('b) :=
+        | a := solve 'b
         |   k := clicks.time where clicks.time = 'b
         |   j := views.time where views.time > 'b
         |   k ~ j
@@ -1090,7 +1091,7 @@ object EmitterSpecs extends Specification
         testEmit("""
           | interactions := //interactions
           | 
-          | big1z('userId) :=
+          | big1z := solve 'userId
           |   userInteractions := interactions where interactions.userId = 'userId
           |   
           |   m := mean(userInteractions.duration)
@@ -1179,7 +1180,7 @@ object EmitterSpecs extends Specification
           |   conversions := conversions' where conversions'.userId = 'userId
           |   impressions := impressions' where impressions'.userId = 'userId
           | 
-          |   greaterConversions('time) :=
+          |   greaterConversions := solve 'time
           |     impressionTimes := impressions.time where impressions.time = 'time
           |     conversionTimes :=
           |       conversions.time where conversions.time = min(conversions.time where conversions.time > 'time)
@@ -1304,7 +1305,7 @@ object EmitterSpecs extends Specification
         testEmit("""
           | clicks := //clicks
           | 
-          | histogram('value) :=
+          | histogram := solve 'value
           |   { cnt: count(clicks where clicks = 'value), value: 'value }
           |   
           | histogram
