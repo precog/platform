@@ -82,7 +82,10 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
       
       case op @ Where(_, left, right) => {
         val leftSet = loop(root, left, currentWhere)
-        val rightSet = loop(root, right, Some(op))
+        val rightSet = if (left.provenance.makeCanonical == right.provenance.makeCanonical)
+          loop(root, right, Some(op))
+        else
+          loop(root, right, currentWhere)
         
         leftSet ++ rightSet
       }
