@@ -453,6 +453,27 @@ object Codec {
       val len = readPackedInt(buf)
       buf.position(buf.position() + len)
     }
+
+    def compare(a: ByteBuffer, b: ByteBuffer): Int = {
+      val alen = readPackedInt(a)
+      val blen = readPackedInt(b)
+      var cmp = 0
+      var pos = 0
+      val len = alen min blen
+      while (cmp == 0 && pos < len) {
+        cmp = a.get() - b.get()
+        pos += 1
+      }
+
+      a.position(a.position() + (alen - pos))
+      b.position(b.position() + (blen - pos))
+
+      if (cmp == 0) {
+        alen - blen
+      } else {
+        cmp
+      }
+    }
   }
 
 
