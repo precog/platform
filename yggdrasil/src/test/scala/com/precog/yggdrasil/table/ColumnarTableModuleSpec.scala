@@ -61,10 +61,12 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     TransformSpec[M] with
     CompactSpec[M] with 
     PartitionMergeSpec[M] with
+    UnionAllSpec[M] with
+    CrossAllSpec[M] with
     DistinctSpec[M] { spec => //with
     //GrouperSpec[M] { spec =>
 
-  type GroupId = Int
+  //type GroupId = Int
   import trans._
   import constants._
     
@@ -89,15 +91,15 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   }
   
   trait TableCompanion extends ColumnarTableCompanion {
-    implicit val geq: scalaz.Equal[Int] = intInstance
-
     def apply(slices: StreamT[M, Slice]) = new Table(slices)
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = 
       sys.error("not implemented here")
   }
 
-  object Table extends TableCompanion
+  object Table extends TableCompanion { 
+    implicit def groupIdShow: Show[GroupId] = sys.error("TODO")
+  }
   def newMemoContext = new MemoContext
 
   "a table dataset" should {
@@ -208,7 +210,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     }
   }
 
-  "grouping support" >> {  
+  "grouping support" >> {
     import Table._
     import Table.Universe._
     def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
@@ -767,6 +769,15 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
   "partitionMerge" should {
     "concatenate reductions of subsequences" in testPartitionMerge
+  }
+
+  "unionAll" should {
+    "union a simple homogeneous borg result set" in simpleUnionAllTest
+    "union a simple reversed borg result set" in reversedUnionAllTest
+  }
+
+  "crossAll" should {
+    "cross a simple borg result set" in simpleCrossAllTest
   }
 }
 
