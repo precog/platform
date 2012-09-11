@@ -36,26 +36,29 @@ trait GroupSolver extends AST with GroupFinder with Solver {
   import buckets._
   
   override def inferBuckets(tree: Expr): Set[Error] = tree match {
-    /* case expr @ Let(_, _, params, left, right) => {
-      val leftErrors = inferBuckets(left)
+    case Let(_, _, _, left, right) =>
+      inferBuckets(left) ++ inferBuckets(right)
+    
+    case expr @ Solve(_, constraints, child) => {
+      val constrErrors = constraints map inferBuckets reduce { _ ++ _ }
+      val childErrors = inferBuckets(child)
       
       val (spec, errors) = solveForest(expr, expr.groups)(IntersectBucketSpec)
       
       val finalErrors = spec match {
         case Some(forest) => {
-          val rem = Set(params: _*) -- listSolvedVars(forest)
+          val rem = expr.vars -- listSolvedVars(forest)
           rem map UnableToSolveTicVariable map { Error(expr, _) }
         }
         
-        case None => {
-          Set(params map UnableToSolveTicVariable map { Error(expr, _) }: _*)
-        }
+        case None =>
+          expr.vars map UnableToSolveTicVariable map { Error(expr, _) }
       }
       
       expr.buckets = spec
       
-      leftErrors ++ errors ++ finalErrors ++ inferBuckets(right)
-    } */
+      constrErrors ++ childErrors ++ errors ++ finalErrors
+    }
     
     case Import(_, _, child) => inferBuckets(child)
     
@@ -151,7 +154,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     }
   }
   
-  private def solveForest(b: Let, forest: Set[GroupTree])(f: (BucketSpec, BucketSpec) => BucketSpec): (Option[BucketSpec], Set[Error]) = {
+  private def solveForest(b: Solve, forest: Set[GroupTree])(f: (BucketSpec, BucketSpec) => BucketSpec): (Option[BucketSpec], Set[Error]) = {
     val (conditions, reductions) = forest partition {
       case c: GroupCondition => true
       // case r: GroupReduction => false
@@ -174,7 +177,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     (spec, condErrors)
   }
   
-  private def solveGroupCondition(b: Let, expr: Expr): (Option[BucketSpec], Set[Error]) = expr match {
+  private def solveGroupCondition(b: Solve, expr: Expr): (Option[BucketSpec], Set[Error]) = expr match {
     case And(_, left, right) => {
       val (leftSpec, leftErrors) = solveGroupCondition(b, left)
       val (rightSpec, rightErrors) = solveGroupCondition(b, right)
@@ -202,7 +205,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
         (None, Set(Error(expr, InseparablePairedTicVariables(vars))))
       } else {
         val tv = vars.head
-        val result = solveRelation(expr) { case t @ TicVar(_, `tv`) => t.binding == LetBinding(b) }
+        val result = solveRelation(expr) { case t @ TicVar(_, `tv`) => t.binding == SolveBinding(b) }
         
         if (result.isDefined)
           (result map { UnfixedSolution(tv, _) }, Set())
@@ -218,7 +221,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
         (None, Set(Error(expr, InseparablePairedTicVariables(vars))))
       } else {
         val tv = vars.head
-        val result = solveComplement(expr) { case t @ TicVar(_, `tv`) => t.binding == LetBinding(b) }
+        val result = solveComplement(expr) { case t @ TicVar(_, `tv`) => t.binding == SolveBinding(b) }
         
         if (result.isDefined)
           (result map { UnfixedSolution(tv, _) }, Set())
@@ -250,11 +253,12 @@ trait GroupSolver extends AST with GroupFinder with Solver {
       (back, errors)
   }
   
-  private def listTicVars(b: Let, expr: Expr): Set[TicId] = expr match {
+  private def listTicVars(b: Solve, expr: Expr): Set[TicId] = expr match {
     case Let(_, _, _, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Solve(_, constraints, child) => (constraints map { listTicVars(b, _) } reduce { _ ++ _ }) ++ listTicVars(b, child)
     case New(_, child) => listTicVars(b, child)
     case Relate(_, from, to, in) => listTicVars(b, from) ++ listTicVars(b, to) ++ listTicVars(b, in)
-    case t @ TicVar(_, name) if t.binding == LetBinding(b) => Set(name)
+    case t @ TicVar(_, name) if t.binding == SolveBinding(b) => Set(name)
     case TicVar(_, _) => Set()
     case StrLit(_, _) => Set()
     case NumLit(_, _) => Set()
