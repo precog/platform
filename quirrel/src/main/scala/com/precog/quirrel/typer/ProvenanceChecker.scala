@@ -23,8 +23,12 @@ package typer
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import com.precog.util.IdGen
+import scalaz._
+import scalaz.Ordering._
 import scalaz.std.option._  
 import scalaz.syntax.apply._
+import scalaz.syntax.semigroup._
+import scalaz.syntax.order._
 
 trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFinder {
   import Function._
@@ -649,6 +653,87 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         } size
         
         Some(back)
+      }
+    }
+
+
+    private def associateLeft: Provenance = this match {
+      case UnifiedProvenance(left, right) => 
+        findChildren(this, true).toList sorted Provenance.order.toScalaOrdering reduceLeft UnifiedProvenance
+      
+      case UnionProvenance(left, right) => 
+        findChildren(this, false).toList sorted Provenance.order.toScalaOrdering reduceLeft UnionProvenance
+      
+      case prov => prov
+    }
+     
+    // TODO is this too slow?
+    private def findChildren(prov: Provenance, unified: Boolean): Set[Provenance] = prov match { 
+      case UnifiedProvenance(left, right) if unified => findChildren(left, unified) ++ findChildren(right, unified)
+      case UnionProvenance(left, right) if !unified => findChildren(left, unified) ++ findChildren(right, unified)
+      case _ => Set(prov)
+    }
+
+    def makeCanonical: Provenance = {
+      this match {
+        case UnifiedProvenance(left, right) => UnifiedProvenance(left.makeCanonical, right.makeCanonical).associateLeft
+        case UnionProvenance(left, right) => UnionProvenance(left.makeCanonical, right.makeCanonical).associateLeft
+        case DynamicDerivedProvenance(prov) => DynamicDerivedProvenance(prov.makeCanonical)
+        case prov => prov
+      }
+    }
+  }
+
+  object Provenance {
+    implicit def order: Order[Provenance] = new Order[Provenance] {
+      def order(p1: Provenance, p2: Provenance): Ordering = (p1, p2) match {
+        case (ParamProvenance(id1, let1), ParamProvenance(id2, let2)) => {
+          if (id1.id == id2.id) {
+            if (let1 == let2) EQ
+            else if (let1.loc.lineNum == let2.loc.lineNum) {
+              if (let1.loc.colNum == let2.loc.colNum) EQ           // wtf??
+              else if (let1.loc.colNum < let2.loc.colNum) LT
+              else GT
+            } else if (let1.loc.lineNum < let2.loc.lineNum) LT
+            else GT
+          } else if (id1.id < id2.id) LT
+          else GT
+        }
+        case (ParamProvenance(_, _), _) => GT
+        case (_, ParamProvenance(_, _)) => LT
+
+        case (DynamicDerivedProvenance(prov1), DynamicDerivedProvenance(prov2)) => prov1 ?|? prov2
+        case (DynamicDerivedProvenance(_), _) => GT
+        case (_, DynamicDerivedProvenance(_)) => LT
+    
+        case (UnifiedProvenance(left1, right1), UnifiedProvenance(left2, right2)) => (left1 ?|? left2) |+| (right1 ?|? right2)
+        case (UnifiedProvenance(_, _), _) => GT
+        case (_, UnifiedProvenance(_, _)) => LT
+
+        case (UnionProvenance(left1, right1), UnionProvenance(left2, right2)) => (left1 ?|? left2) |+| (right1 ?|? right2)
+        case (UnionProvenance(_, _), _) => GT
+        case (_, UnionProvenance(_, _)) => LT
+
+        case (StaticProvenance(v1), StaticProvenance(v2)) => {
+          if (v1 == v2) EQ
+          else if (v1 < v2) LT
+          else GT
+        }
+        case (StaticProvenance(_), _) => GT
+        case (_, StaticProvenance(_)) => LT
+
+        case (DynamicProvenance(v1), DynamicProvenance(v2)) => { 
+          if (v1 == v2) EQ
+          else if (v1 < v2) LT
+          else GT
+        }
+        case (DynamicProvenance(_), _) => GT
+        case (_, DynamicProvenance(_)) => LT
+
+        case (ValueProvenance, _) => GT
+        case (_, ValueProvenance) => LT
+
+        case (NullProvenance, NullProvenance) => EQ
       }
     }
   }
