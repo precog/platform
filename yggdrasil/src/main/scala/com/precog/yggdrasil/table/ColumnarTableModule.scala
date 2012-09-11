@@ -483,40 +483,41 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
 
       def join(that: OrderingConstraint2): Join = {
-        def joinSet(constructJoin: (OrderingConstraint2, OrderingConstraint2) => OrderingConstraint2)(leftRem: OrderingConstraint2, lastJoin: Join, choices: Set[OrderingConstraint2]): Join = {
+        def joinSet(constructJoin: (OrderingConstraint2, OrderingConstraint2) => OrderingConstraint2)(lastJoin: Join, choices: Set[OrderingConstraint2]): Join = {
+          println("joinSet: " + lastJoin + ", choices: " + choices)
+
           // Tries to join the maximal number of elements from "remaining" into lastJoin:
-          def joinSet0(leftRem: OrderingConstraint2, choices: Set[OrderingConstraint2], lastJoin: Join): Join = {
-            if (leftRem == Zero) {
-              lastJoin.copy(
-                rightRem = unordered(lastJoin.rightRem, Unordered(choices))
-              )
+          def joinSet0(lastJoin: Join, choices: Set[OrderingConstraint2]): Set[(Join, Set[OrderingConstraint2])] = {
+            val default = Set((lastJoin, choices))
+
+            if (lastJoin.leftRem == Zero) {
+              default
             } else {
-              choices.foldLeft(lastJoin) { 
-                case (bestSoFar, choice) =>
+              choices.foldLeft(default) { 
+                case (solutions, choice) =>
                   val nextChoices = choices - choice
 
                   val newJoin = lastJoin.leftRem.join(choice)
 
-                  if (newJoin.success) {
-                    val fullNewJoin = joinSet0(
-                      leftRem  = newJoin.leftRem,
-                      choices  = nextChoices,
-                      lastJoin = Join(
-                                   join     = constructJoin(lastJoin.join, newJoin.join), 
-                                   leftRem  = newJoin.leftRem, 
-                                   rightRem = unordered(lastJoin.rightRem, newJoin.rightRem)
-                                 )
+                  solutions ++ (if (newJoin.success) {
+                    joinSet0(
+                      Join(
+                        join     = constructJoin(lastJoin.join, newJoin.join), 
+                        leftRem  = newJoin.leftRem, 
+                        rightRem = unordered(lastJoin.rightRem, newJoin.rightRem)
+                      ),
+                      nextChoices
                     )
-
-                    if (fullNewJoin.size > bestSoFar.size) fullNewJoin else bestSoFar
                   } else {
-                    bestSoFar
-                  }
+                    Set.empty
+                  })
               }
             }
           }
 
-          joinSet0(leftRem, choices, lastJoin)
+          val (join, rightRem) = joinSet0(lastJoin, choices).toSeq.maxBy(_._1.size)
+
+          join.copy(rightRem = unordered(join.rightRem, Unordered(rightRem)))
         }
 
         def join2(left: OrderingConstraint2, right: OrderingConstraint2): Join = {
@@ -543,13 +544,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               if (left.head == r) Join(r, leftRem = Ordered(left.tail), rightRem = Zero) else Join.unjoined(l, r)
 
             case (l @ Variable(left), r @ Unordered(right)) => 
-              if (right.contains(l)) Join(l, leftRem = Zero, rightRem = Unordered(right - l)) else Join.unjoined(l, r)
+              joinSet((a, b) => ordered(a, b))(Join(Zero, l, Zero), right)
+              //if (right.contains(l)) Join(l, leftRem = Zero, rightRem = Unordered(right - l)) else Join.unjoined(l, r)
 
             case (l @ Ordered(left), r @ Unordered(right)) => 
-              joinSet((a, b) => ordered(a, b))(l, Join(Zero, l, Zero), right)
+              joinSet((a, b) => ordered(a, b))(Join(Zero, l, Zero), right)
 
             case (l @ Unordered(left), r @ Unordered(right)) => 
-              joinSet((a, b) => unordered(a, b))(l, Join(Zero, l, Zero), right)
+              joinSet((a, b) => unordered(a, b))(Join(Zero, l, Zero), right)
 
             case (l @ Variable(left), r @ Variable(right)) => 
               if (left == right) Join(l) else Join.unjoined(l, r)
