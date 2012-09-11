@@ -570,6 +570,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         join2(self.normalize, that.normalize).normalize
       }
     }
+
+    /*
     object OrderingConstraint2 {
       case class Join(join: OrderingConstraint2, leftRem: OrderingConstraint2 = Zero, rightRem: OrderingConstraint2 = Zero) {
         def normalize = copy(join = join.normalize, leftRem = leftRem.normalize, rightRem = rightRem.normalize)
@@ -596,22 +598,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       object Join {
         def unjoined(left: OrderingConstraint2, right: OrderingConstraint2): Join = Join(Zero, left, right)
       }
-
-      object ConstraintParser extends scala.util.parsing.combinator.JavaTokenParsers {
-        lazy val ticVar: Parser[OrderingConstraint2] = "'" ~> ident ^^ (s => Variable(JPathField(s)))
-
-        lazy val ordered: Parser[OrderingConstraint2] = ("[" ~> repsep(constraint, ",") <~ "]") ^^ (v => Ordered(v.toSeq))
-
-        lazy val unordered: Parser[OrderingConstraint2] = ("{" ~> repsep(constraint, ",") <~ "}") ^^  (v => Unordered(v.toSet))
-
-        lazy val zero: Parser[OrderingConstraint2] = "*" ^^^ Zero
-
-        lazy val constraint: Parser[OrderingConstraint2] = ticVar | ordered | unordered | zero
-
-        def parse(input: String): OrderingConstraint2 = parseAll(constraint, input).getOrElse(sys.error("Could not parse " + input))
-      }
-
-      def parse(input: String): OrderingConstraint2 = ConstraintParser.parse(input)
 
       def ordered(values: OrderingConstraint2*) = Ordered(Vector(values: _*))
 
@@ -703,6 +689,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         def fromVars(set: Set[TicVar]) = Unordered(set.map(Variable(_)))
       }
     }
+    */
 
     object OrderingConstraints {
       /**
@@ -983,21 +970,20 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
+/*
     // TODO: This should NOT return NodeSubset, but rather, something like it, without
     //        groupKeyPrefix (which is MEANINGELSS for the return value)
     def intersect(set: Set[NodeSubset]): M[NodeSubset] = {
       sys.error("todo")
     }
 
-    /**
-     * Represents the cost of a particular borg traversal plan, measured in terms of IO.
-     * Computational complexity of algorithms occurring in memory is neglected. 
-     * This should be thought of as a rough approximation that eliminates stupid choices.
-     */
+    // 
+    // Represents the cost of a particular borg traversal plan, measured in terms of IO.
+    // Computational complexity of algorithms occurring in memory is neglected. 
+    // This should be thought of as a rough approximation that eliminates stupid choices.
+    // 
     final case class BorgTraversalCostModel private (ioCost: Long, size: Long, ticVars: Set[TicVar]) { self =>
-      /**
-       * Computes a new model derived from this one by cogroup with the specified set.
-       */
+      // Computes a new model derived from this one by cogroup with the specified set.
       def consume(rightSize: Long, rightTicVars: Set[TicVar], accResort: Boolean, nodeResort: Boolean): BorgTraversalCostModel = {
         val commonTicVars = self.ticVars intersect rightTicVars
 
@@ -1026,16 +1012,15 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       val Zero = new BorgTraversalCostModel(0, 0, Set.empty)
     }
 
-    /**
-     * Represents a step in a borg traversal plan. The step is defined by the following elements:
-     * 
-     *  1. The order of the accumulator prior to executing the step.
-     *  2. The order of the accumulator after executing the step.
-     *  3. The node being incorporated into the accumulator during this step.
-     *  4. The tic variables of the node being incorporated into this step.
-     *  5. The ordering of the node required for cogroup.
-     * 
-     */
+    // 
+    // Represents a step in a borg traversal plan. The step is defined by the following elements:
+    // 
+    //  1. The order of the accumulator prior to executing the step.
+    //  2. The order of the accumulator after executing the step.
+    //  3. The node being incorporated into the accumulator during this step.
+    //  4. The tic variables of the node being incorporated into this step.
+    //  5. The ordering of the node required for cogroup.
+    // 
     case class BorgTraversalPlanUnfixed(priorPlan: Option[BorgTraversalPlanUnfixed], node: MergeNode, nodeOrder: OrderingConstraint2, accOrderPost: OrderingConstraint2, costModel: BorgTraversalCostModel, accResort: Boolean, nodeResort: Boolean) { self =>
       import OrderingConstraint2._
 
@@ -1128,12 +1113,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
-    /**
-     * Represents a (perhaps partial) traversal plan for applying the borg algorithm,
-     * together with the cost of the plan.
-     */
+    // 
+    // Represents a (perhaps partial) traversal plan for applying the borg algorithm,
+    // together with the cost of the plan.
+    // 
     case class BorgTraversalPlanFixed private (node: MergeNode, resortNode: Option[Seq[TicVar]], resortAcc: Option[Seq[TicVar]], accOrderPost: Seq[TicVar], joinPrefix: Int, next: Option[BorgTraversalPlanFixed])
-    /*
     object BorgTraversalPlanFixed {
       def apply(uplan: BorgTraversalPlanUnfixed): Option[BorgTraversalPlanFixed] = {
 
@@ -1175,11 +1159,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         }
       }
     }
-*/
-    /**
-     * Finds a traversal order for the borg algorithm which minimizes the number of resorts 
-     * required.
-     */
+
+    // 
+    // Finds a traversal order for the borg algorithm which minimizes the number of resorts 
+    // required.
+    // 
     def findBorgTraversalOrder(connectedGraph: MergeGraph, nodeOracle: MergeNode => NodeMetadata): BorgTraversalPlanUnfixed= {
       import OrderingConstraint2._
 
@@ -1226,6 +1210,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           pick(Set(plan.node), choices, plan)
       }).toSeq.sortBy(_.costModel.ioCost).head
     }
+    */
 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
     def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {

@@ -212,6 +212,24 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   "grouping support" >> {  
     import Table._
     import Table.Universe._
+    import OrderingConstraint2._
+
+    object ConstraintParser extends scala.util.parsing.combinator.JavaTokenParsers {
+      lazy val ticVar: Parser[OrderingConstraint2] = "'" ~> ident ^^ (s => Variable(JPathField(s)))
+
+      lazy val ordered: Parser[OrderingConstraint2] = ("[" ~> repsep(constraint, ",") <~ "]") ^^ (v => Ordered(v.toSeq))
+
+      lazy val unordered: Parser[OrderingConstraint2] = ("{" ~> repsep(constraint, ",") <~ "}") ^^  (v => Unordered(v.toSet))
+
+      lazy val zero: Parser[OrderingConstraint2] = "*" ^^^ Zero
+
+      lazy val constraint: Parser[OrderingConstraint2] = ticVar | ordered | unordered | zero
+
+      def parse(input: String): OrderingConstraint2 = parseAll(constraint, input).getOrElse(sys.error("Could not parse " + input))
+    }
+
+    def parse(input: String): OrderingConstraint2 = ConstraintParser.parse(input)
+
     def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
     def c(str: String) = OrderingConstraint2.parse(str)
     def ticvars(str: String) = str.toSeq.map((c: Char) => JPathField(c.toString))
