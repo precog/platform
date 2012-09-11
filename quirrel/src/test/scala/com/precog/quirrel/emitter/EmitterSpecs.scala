@@ -571,7 +571,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit body of fully applied characteristic function" in {
-      testEmit("clicks := //clicks clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(
+      testEmit("clicks := //clicks clicksFor(userId) := clicks where clicks.userId = userId clicksFor(\"foo\")")(
         Vector(
           PushString("/clicks"),
           LoadLocal,
@@ -586,8 +586,8 @@ object EmitterSpecs extends Specification
     
     "emit body of a fully applied characteristic function with two variables" in {
       testEmit("""
-        | fun('a, 'b) := 
-        |   //campaigns where //campaigns.ageRange = 'a & //campaigns.gender = 'b
+        | fun(a, b) := 
+        |   //campaigns where //campaigns.ageRange = a & //campaigns.gender = b
         | fun([25,36],
           "female")""".stripMargin)(
         Vector(
@@ -754,10 +754,10 @@ object EmitterSpecs extends Specification
     "emit split and merge for cf example with paired tic variables in critical condition" in {
       testEmit("""
         | clicks := //clicks
-        | foo('a, 'b) :=
+        | solve 'a, 'b
         |   clicks' := clicks where clicks.time = 'a & clicks.pageId = 'b
         |   clicks'
-        | foo""")(
+        | """)(
         Vector(
           PushString("/clicks"),
           LoadLocal,
@@ -1192,24 +1192,20 @@ object EmitterSpecs extends Specification
       
       "first-conversion.qrl" >> {
         testEmit("""
-          | firstConversionAfterEachImpression('userId) :=
+          | solve 'userId
           |   conversions' := //conversions
           |   impressions' := //impressions
           | 
           |   conversions := conversions' where conversions'.userId = 'userId
           |   impressions := impressions' where impressions'.userId = 'userId
           | 
-          |   greaterConversions := solve 'time
+          |   solve 'time
           |     impressionTimes := impressions.time where impressions.time = 'time
           |     conversionTimes :=
           |       conversions.time where conversions.time = min(conversions.time where conversions.time > 'time)
           |     
           |     conversionTimes ~ impressionTimes
           |       { impression: impressions, nextConversion: conversions }
-          | 
-          |   greaterConversions
-          | 
-          | firstConversionAfterEachImpression
           """.stripMargin)(
           Vector(
             PushString("/conversions"),
@@ -1393,7 +1389,7 @@ object EmitterSpecs extends Specification
   
   if (exampleDir.exists) {
     "specification examples" >> {
-      val pending = Set("interaction-totals.qrl", "relative-durations.qrl", "sessionize.qrl")
+      val pending = Set("interaction-totals.qrl", "relative-durations.qrl")
       
       for (file <- exampleDir.listFiles if file.getName endsWith ".qrl") {
         if (pending contains file.getName) {

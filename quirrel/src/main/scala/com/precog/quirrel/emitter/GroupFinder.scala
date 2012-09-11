@@ -30,6 +30,8 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
     def loop(root: Solve, expr: Expr, currentWhere: Option[Where]): Set[GroupTree] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
 
+      case Solve(_, _, child) => loop(root, child, currentWhere)
+
       case Import(_, _, child) => loop(root, child, currentWhere)
       
       case New(_, child) => loop(root, child, currentWhere)

@@ -48,7 +48,8 @@ trait Emitter extends AST
 
   private sealed trait MarkType
   private case class MarkExpr(expr: Expr) extends MarkType
-  private case class MarkTicVar(let: ast.Let, name: String) extends MarkType
+  private case class MarkTicVar(let: ast.Solve, name: String) extends MarkType
+  private case class MarkFormal(name: Identifier, let: ast.Let) extends MarkType
   private case class MarkDispatch(let: ast.Let, actuals: Vector[Expr]) extends MarkType
   private case class MarkGroup(op: ast.Where) extends MarkType
 
@@ -56,7 +57,7 @@ trait Emitter extends AST
     bytecode: Vector[Instruction] = Vector(),
     marks: Map[MarkType, Mark] = Map(),
     curLine: Option[(Int, String)] = None,
-    ticVars: Map[(ast.Let, TicId), EmitterState] = Map(),
+    ticVars: Map[(ast.Solve, TicId), EmitterState] = Map(),
     groups: Map[ast.Where, Int] = Map(),
     currentId: Int = 0)
   
@@ -128,9 +129,9 @@ trait Emitter extends AST
       }
     }
     
-    private def labelTicVar(let: ast.Let, name: TicId)(state: => EmitterState): EmitterState = {
+    private def labelTicVar(solve: ast.Solve, name: TicId)(state: => EmitterState): EmitterState = {
       StateT.apply[Id, Emission, Unit] { e =>
-        (e.copy(ticVars = e.ticVars + ((let, name) -> state)), ())
+        (e.copy(ticVars = e.ticVars + ((solve, name) -> state)), ())
       }
     }
     
@@ -201,8 +202,7 @@ trait Emitter extends AST
     }
 
     def emitMap(left: Expr, right: Expr, op: BinaryOperation): EmitterState = {
-      // emitMapState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, op)
-      notImpl(left)
+      emitMapState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, op)
     }
 
     def emitUnary(expr: Expr, op: UnaryOperation): EmitterState = {
@@ -217,8 +217,7 @@ trait Emitter extends AST
     }
 
     def emitFilter(left: Expr, right: Expr): EmitterState = {
-      // emitFilterState(emitExpr(left), left.provenance, emitExpr(right), right.provenance)
-      notImpl(left)
+      emitFilterState(emitExpr(left), left.provenance, emitExpr(right), right.provenance)
     }
     
     def emitWhere(where: ast.Where): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
@@ -234,16 +233,16 @@ trait Emitter extends AST
       state(e)
     }
     
-    def emitBucketSpec(let: ast.Let, spec: BucketSpec): EmitterState = spec match {
+    def emitBucketSpec(solve: ast.Solve, spec: BucketSpec): EmitterState = spec match {
       case buckets.UnionBucketSpec(left, right) =>
-        emitBucketSpec(let, left) >> emitBucketSpec(let, right) >> emitInstr(MergeBuckets(false))
+        emitBucketSpec(solve, left) >> emitBucketSpec(solve, right) >> emitInstr(MergeBuckets(false))
       
       case buckets.IntersectBucketSpec(left, right) =>
-        emitBucketSpec(let, left) >> emitBucketSpec(let, right) >> emitInstr(MergeBuckets(true))
+        emitBucketSpec(solve, left) >> emitBucketSpec(solve, right) >> emitInstr(MergeBuckets(true))
       
       case buckets.Group(origin, target, forest) => {
         nextId { id =>
-          emitBucketSpec(let, forest) >>
+          emitBucketSpec(solve, forest) >>
             emitExpr(target) >>
             labelGroup(origin, id) >>
             emitInstr(Group(id))
@@ -253,7 +252,7 @@ trait Emitter extends AST
       case buckets.UnfixedSolution(name, solution) => {
         nextId { id =>
           emitExpr(solution) >>
-            labelTicVar(let, name)(emitInstr(PushKey(id))) >>
+            labelTicVar(solve, name)(emitInstr(PushKey(id))) >>
             emitInstr(KeyPart(id))
         }
       }
@@ -270,6 +269,15 @@ trait Emitter extends AST
       (expr match {
         case ast.Let(loc, id, params, left, right) =>
           emitExpr(right)
+
+        case expr @ ast.Solve(loc, _, body) => 
+          val spec = expr.buckets.get
+          
+          emitBucketSpec(expr, spec) >> 
+            emitInstr(Split) >>
+            emitExpr(body) >>
+            emitInstr(Merge)
+                  
         
         case ast.Import(_, _, child) =>
           emitExpr(child)
@@ -283,13 +291,11 @@ trait Emitter extends AST
         case t @ ast.TicVar(loc, name) => { 
           t.binding match {
             case SolveBinding(solve) => {
-              notImpl(expr)
-              // TODO
-              // emitOrDup(MarkTicVar(let, name)) {
-                // StateT.apply[Id, Emission, Unit] { e =>
-                  // e.ticVars((let, name))(e)     // assert: this will work iff lexical scoping is working
-                // }
-              // }
+              emitOrDup(MarkTicVar(solve, name)) {
+                StateT.apply[Id, Emission, Unit] { e =>
+                  e.ticVars((solve, name))(e)     // assert: this will work iff lexical scoping is working
+                }
+              }
             }
             
             case _ => notImpl(expr)
@@ -312,7 +318,7 @@ trait Emitter extends AST
           emitInstr(PushNull)
         
         case ast.ObjectDef(loc, props) => 
-          /* def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2) >> emitInstr(Map2Cross(WrapObject))
+          def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2) >> emitInstr(Map2Cross(WrapObject))
 
           val provToField = props.groupBy(_._2.provenance)
 
@@ -330,11 +336,10 @@ trait Emitter extends AST
 
           val joins = Vector.fill(provToField.size - 1)(emitInstr(Map2Cross(JoinObject)))
 
-          reduce(groups ++ joins) */
-          notImpl(expr)
+          reduce(groups ++ joins)
 
         case ast.ArrayDef(loc, values) => 
-          /* val indexedValues = values.zipWithIndex
+          val indexedValues = values.zipWithIndex
 
           val provToElements = indexedValues.groupBy(_._1.provenance)
 
@@ -383,12 +388,10 @@ trait Emitter extends AST
 
           val fixedState = fixAll.foldLeft[StateT[Id, (Seq[Int], EmitterState), Unit]](StateT.stateT(()))(_ >> _).exec((indices, mzero[EmitterState]))._2
 
-          joined >> fixedState */
-          notImpl(expr)
+          joined >> fixedState
         
         case ast.Descent(loc, child, property) => 
-          // emitMapState(emitExpr(child), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefObject)
-          notImpl(expr)
+          emitMapState(emitExpr(child), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefObject)
         
         case ast.Deref(loc, left, right) => 
           emitMap(left, right, DerefArray)
@@ -410,6 +413,9 @@ trait Emitter extends AST
             case ReductionBinding(f) =>
               emitExpr(actuals.head) >> emitInstr(Reduce(BuiltInReduction(f)))
 
+            case FormalBinding(let) =>
+              emitDup(MarkFormal(name, let))
+
             case Op1Binding(op) =>  
               emitUnary(actuals(0), BuiltInFunction1Op(op))
 
@@ -424,27 +430,10 @@ trait Emitter extends AST
                 case n => emitOrDup(MarkDispatch(let, actuals)) {
                   val actualStates = params zip actuals map {
                     case (name, expr) =>
-                      labelTicVar(let, name)(emitExpr(expr))
+                      emitAndMark(MarkFormal(Identifier(Vector(), name), let))(emitExpr(expr))
                   }
                   
-                  val body = if (actuals.length == n) {
-                    emitExpr(left)
-                  } else {
-                    /* val spec = {
-                      val init: BucketSpec = let.buckets.get         // assuming no errors
-                      (params zip actuals).foldLeft(init) {
-                        case (spec, (id, expr)) => spec.derive(id, expr)
-                      }
-                    }
-                    
-                    emitBucketSpec(let, spec) >> 
-                      emitInstr(Split) >>
-                      emitExpr(left) >>
-                      emitInstr(Merge) */
-                    notImpl(expr)
-                  }
-                  
-                  reduce(actualStates) >> body
+                  reduce(actualStates) >> emitExpr(left)
                 }
               }
 
