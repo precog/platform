@@ -151,7 +151,7 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
 
         val groupTrees = filtered map GroupConstraint toSet
 
-        groupTrees ++ loop(root, child, currentWhere)
+        groupTrees ++ loop(root, child, None)
       }
       
       case _ => Set()

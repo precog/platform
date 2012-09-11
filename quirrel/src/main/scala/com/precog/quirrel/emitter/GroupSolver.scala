@@ -154,10 +154,10 @@ trait GroupSolver extends AST with GroupFinder with Solver {
   private def solveForest(b: Let, forest: Set[GroupTree])(f: (BucketSpec, BucketSpec) => BucketSpec): (Option[BucketSpec], Set[Error]) = {
     val (conditions, reductions) = forest partition {
       case c: GroupCondition => true
-      case r: GroupReduction => false
+      // case r: GroupReduction => false
     }
     
-    val (optCondSpec, condErrors) = {
+    val (spec, condErrors) = {
       val processed = conditions collect {
         case GroupCondition(origin @ Where(_, target, pred)) => {
           if (listTicVars(b, target).isEmpty) {
@@ -171,16 +171,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
       mergeSpecs(processed)(f)
     }
     
-    val typedReductions = reductions collect { case r: GroupReduction => r }
-    
-    val (optRedSpec, redErrors) = mergeSpecs(typedReductions map solveReduction(b))(UnionBucketSpec)
-    
-    val andSpec = for (cond <- optCondSpec; red <- optRedSpec)
-      yield UnionBucketSpec(cond, red)
-    
-    val spec = andSpec orElse optCondSpec orElse optRedSpec
-    
-    (spec, if (optCondSpec.isDefined) condErrors else condErrors ++ redErrors)
+    (spec, condErrors)
   }
   
   private def solveGroupCondition(b: Let, expr: Expr): (Option[BucketSpec], Set[Error]) = expr match {
@@ -240,9 +231,6 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     
     case _ => (None, listTicVars(b, expr) map UnableToSolveTicVariable map { Error(expr, _) })
   }
-  
-  private def solveReduction(b: Let)(red: GroupReduction): (Option[BucketSpec], Set[Error]) = 
-    solveForest(b, red.children)(IntersectBucketSpec)
   
   private def mergeSpecs(specs: TraversableOnce[(Option[BucketSpec], Set[Error])])(f: (BucketSpec, BucketSpec) => BucketSpec): (Option[BucketSpec], Set[Error]) = {
     val optionalErrors = f == IntersectBucketSpec
