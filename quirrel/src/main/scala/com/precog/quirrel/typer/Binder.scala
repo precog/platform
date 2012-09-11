@@ -328,13 +328,13 @@ trait Binder extends parser.AST with Library {
       case New(_, child) => buildChains(env)(child) map { expr :: _ }
       case Relate(_, _, _, in) => buildChains(env)(in) map { expr :: _ }
       
-      case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => Set(Nil)
+      case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => Set()
       
       case ObjectDef(_, props) =>
-        props map { _._2 } map buildChains(env) reduceOption { _ ++ _ } getOrElse Set[List[Expr]](Nil) map { expr :: _ }
+        props map { _._2 } map buildChains(env) reduceOption { _ ++ _ } getOrElse Set[List[Expr]]() map { expr :: _ }
       
       case ArrayDef(_, values) =>
-        values map buildChains(env) reduceOption { _ ++ _ } getOrElse Set[List[Expr]](Nil) map { expr :: _ }
+        values map buildChains(env) reduceOption { _ ++ _ } getOrElse Set[List[Expr]]() map { expr :: _ }
       
       case Descent(_, left, _) =>
         buildChains(env)(left) map { expr :: _ }
@@ -343,12 +343,16 @@ trait Binder extends parser.AST with Library {
         val actualChains = actuals map buildChains(env)
         
         val dispatchChains = expr.binding match {
-          case FormalBinding(let) => env.getOrElse((id, let), Set[List[Expr]](Nil))
+          case FormalBinding(let) => env.getOrElse((id, let), Set[List[Expr]]())
           
           case LetBinding(let) => {
             val env2 = env ++ (let.params map { Identifier(Vector(), _) } zip (Stream continually let) zip actualChains)
             buildChains(env2)(let.left)
           }
+          
+          case ReductionBinding(_) => Set[List[Expr]]()
+          
+          case Op1Binding(_) | Op2Binding(_) => actualChains reduce { _ ++ _ }
           
           case _ => Set[List[Expr]](Nil)
         }
