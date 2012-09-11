@@ -37,42 +37,42 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
   object unionAllData {
     val JArray(leftData) = JsonParser.parse("""[
       {
-        "groupKeys":  { "001": "foo", "002": false },
+        "groupKeys":  { "%1$s": "foo", "%2$s": false },
         "identities": { "1": [1,2] },
         "values":     { "1": { "a": "foo", "b": false } }
       },
       {
-        "groupKeys":  { "001": "foo", "002": true },
+        "groupKeys":  { "%1$s": "foo", "%2$s": true },
         "identities": { "1": [1,3] },
         "values":     { "1": { "a": "foo", "b": true } }
       }
-    ]""")
+    ]""".format(GroupKeyTrans.keyName(1), GroupKeyTrans.keyName(2)))
   
     val JArray(rightData) = JsonParser.parse("""[
       {
-        "groupKeys":  { "001": "bar", "002": true },
+        "groupKeys":  { "%1$s": "bar", "%2$s": true },
         "identities": { "1": [5,1] },
         "values":     { "1": { "a": "bar", "b": true } }
       },
       {
-        "groupKeys":  { "001": "baz", "002": true },
+        "groupKeys":  { "%1$s": "baz", "%2$s": true },
         "identities": { "1": [4,5] },
         "values":     { "1": { "a": "baz", "b": true } }
       }
-    ]""")
+    ]""".format(GroupKeyTrans.keyName(1), GroupKeyTrans.keyName(2)))
   
     val JArray(rightDataReversed) = JsonParser.parse("""[
       {
-        "groupKeys":  { "002": "bar", "001": true },
+        "groupKeys":  { "%2$s": "bar", "%1$s": true },
         "identities": { "1": [5,1] },
         "values":     { "1": { "a": "bar", "b": true } }
       },
       {
-        "groupKeys":  { "002": "baz", "001": true },
+        "groupKeys":  { "%2$s": "baz", "%1$s": true },
         "identities": { "1": [4,5] },
         "values":     { "1": { "a": "baz", "b": true } }
       }
-    ]""")
+    ]""".format(GroupKeyTrans.keyName(1), GroupKeyTrans.keyName(2)))
   }
 
   def simpleUnionAllTest = {

@@ -1279,9 +1279,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   WrapObject(
                     DerefObjectStatic(
                       DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
-                      JPathField(GroupKeyTrans.keyName(rightIndex))
+                      JPathField(GroupKeyTrans.keyName(rightIndex + 1))
                     ),
-                    GroupKeyTrans.keyName(leftIndex)
+                    GroupKeyTrans.keyName(leftIndex + 1)
                   )
                 }
               }
@@ -1293,16 +1293,22 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   WrapObject(
                     DerefObjectStatic(
                       DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
-                      JPathField(GroupKeyTrans.keyName(rightIndex))
+                      JPathField(GroupKeyTrans.keyName(rightIndex + 1))
                     ),
-                    GroupKeyTrans.keyName(leftKeys.length + extraIndex)
+                    GroupKeyTrans.keyName(leftKeys.length + extraIndex + 1)
                   )
                 }
               }.get
             })
           ): _*)
 
-          (right.table.transform(remapKeyTrans), left.groupKeys ++ extraRight.toSeq)
+          val remapFullSpec = ObjectConcat(
+            WrapObject(remapKeyTrans, "groupKeys"),
+            WrapObject(DerefObjectStatic(Leaf(Source), JPathField("identities")), "identities"),
+            WrapObject(DerefObjectStatic(Leaf(Source), JPathField("values")), "values")
+          )
+
+          (right.table.transform(remapFullSpec), left.groupKeys ++ extraRight.toSeq)
         }
 
         BorgResult(Table(left.table.slices ++ rightRemapped.slices),
