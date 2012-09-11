@@ -55,7 +55,8 @@ object CValue {
         
     case (a: CNullValue, b: CNullValue) if a.cType == b.cType => 0
 
-    case invalid                      => sys.error("Invalid comparison for SortingKey of " + invalid)
+    case (a, b) => a.cType.typeIndex - b.cType.typeIndex
+    // case invalid                      => sys.error("Invalid comparison for SortingKey of " + invalid)
   }
 
   implicit object CValueOrder extends Order[CValue] {
@@ -74,8 +75,10 @@ sealed trait CType extends Serializable {
   def isNumeric: Boolean = false
 
   @inline 
-  private[CType] final def typeIndex = this match {
-    case CBoolean      => 0
+  private[yggdrasil] final def typeIndex = this match {
+    case CUndefined    => 0
+
+    case CBoolean      => 1
 
     case CString       => 2
     
@@ -93,7 +96,6 @@ sealed trait CType extends Serializable {
 
     case CDate         => 12
 
-    case CUndefined    => 13
   }
 }
 
