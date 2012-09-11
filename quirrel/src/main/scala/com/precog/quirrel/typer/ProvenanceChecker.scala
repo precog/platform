@@ -181,11 +181,11 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           val (fromErrors, fromConstr) = loop(from, relations, constraints)
           val (toErrors, toConstr) = loop(to, relations, constraints)
           
+          val unified = unifyProvenance(relations)(from.provenance, to.provenance)
+
           val (contribErrors, contribConstr) = if (from.provenance.isParametric || to.provenance.isParametric) {
             (Set(), Set(NotRelated(from.provenance, to.provenance)))
           } else {
-            val unified = unifyProvenance(relations)(from.provenance, to.provenance)
-            
             if (unified.isDefined && unified != Some(NullProvenance))
               (Set(Error(expr, AlreadyRelatedSets)), Set())
             else
@@ -200,6 +200,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           val (inErrors, inConstr) = loop(in, relations3, constraints2)
           
           if (from.provenance == NullProvenance || to.provenance == NullProvenance) {
+            expr.provenance = NullProvenance
+          } else if (unified.isDefined || unified == Some(NullProvenance)) {
             expr.provenance = NullProvenance
           } else {
             expr.provenance = in.provenance
