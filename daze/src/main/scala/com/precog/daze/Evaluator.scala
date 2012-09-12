@@ -551,6 +551,58 @@ trait Evaluator[M[+_]] extends DAG
               state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
           }
         }
+        
+        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
+          right.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(left, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ObjectConcat(pendingTable.trans))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
+        
+        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
+          left.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(right, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ObjectConcat(pendingTable.trans))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
+        
+        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
+          right.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(left, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArrayConcat(pendingTable.trans))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
+        
+        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
+          left.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(right, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArrayConcat(pendingTable.trans))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
   
         // case Join(_, Map2CrossLeft(op), left, right) if right.isSingleton =>
         
@@ -945,6 +997,8 @@ trait Evaluator[M[+_]] extends DAG
     left.identities zip right.identities takeWhile { case (a, b) => a == b } length
   
   private def svalueToCValue(sv: SValue) = sv match {
+    case STrue => CBoolean(true)
+    case SFalse => CBoolean(false)
     case SString(str) => CString(str)
     case SDecimal(d) => CNum(d)
     // case SLong(l) => CLong(l)
@@ -952,7 +1006,7 @@ trait Evaluator[M[+_]] extends DAG
     case SNull => CNull
     case SObject(obj) if obj.isEmpty => CEmptyObject
     case SArray(Vector()) => CEmptyArray
-    case _ => sys.error("die a horrible death")
+    case _ => sys.error("die a horrible death: " + sv)
   }
   
   private def join(left: Table, right: Table)(key: TransSpec1, spec: TransSpec2): Table = {
