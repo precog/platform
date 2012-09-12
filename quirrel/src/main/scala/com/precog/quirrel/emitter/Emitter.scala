@@ -58,6 +58,7 @@ trait Emitter extends AST
     marks: Map[MarkType, Mark] = Map(),
     curLine: Option[(Int, String)] = None,
     ticVars: Map[(ast.Solve, TicId), EmitterState] = Map(),
+    formals: Map[(Identifier, ast.Let), EmitterState] = Map(),
     groups: Map[ast.Where, Int] = Map(),
     currentId: Int = 0)
   
@@ -132,6 +133,12 @@ trait Emitter extends AST
     private def labelTicVar(solve: ast.Solve, name: TicId)(state: => EmitterState): EmitterState = {
       StateT.apply[Id, Emission, Unit] { e =>
         (e.copy(ticVars = e.ticVars + ((solve, name) -> state)), ())
+      }
+    }
+    
+    private def labelFormal(id: Identifier, let: ast.Let)(state: => EmitterState): EmitterState = {
+      StateT.apply[Id, Emission, Unit] { e =>
+        (e.copy(formals = e.formals + ((id, let) -> state)), ())
       }
     }
     
@@ -414,7 +421,11 @@ trait Emitter extends AST
               emitExpr(actuals.head) >> emitInstr(Reduce(BuiltInReduction(f)))
 
             case FormalBinding(let) =>
-              emitDup(MarkFormal(name, let))
+              emitOrDup(MarkFormal(name, let)) {
+                StateT.apply[Id, Emission, Unit] { e =>
+                  e.formals((name, let))(e)
+                }
+              }
 
             case Op1Binding(op) =>  
               emitUnary(actuals(0), BuiltInFunction1Op(op))
@@ -430,7 +441,7 @@ trait Emitter extends AST
                 case n => emitOrDup(MarkDispatch(let, actuals)) {
                   val actualStates = params zip actuals map {
                     case (name, expr) =>
-                      emitAndMark(MarkFormal(Identifier(Vector(), name), let))(emitExpr(expr))
+                      labelFormal(Identifier(Vector(), name), let)(emitExpr(expr))
                   }
                   
                   reduce(actualStates) >> emitExpr(left)
