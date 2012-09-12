@@ -39,9 +39,10 @@ import scala.util.Random
 
 import scalaz._
 import scalaz.effect.IO 
-import scalaz.syntax.copointed._
 import scalaz.std.anyVal._
 import scalaz.std.stream._
+import scalaz.syntax.copointed._
+import scalaz.syntax.show._
 
 import org.specs2._
 import org.specs2.mutable.Specification
@@ -55,395 +56,245 @@ import org.scalacheck.Arbitrary._
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
-trait GroupingSupportSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specification with ScalaCheck {
+trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
   import TableModule._
-  import trans._
-  import trans.constants._
 
-  import Table._
-  import Table.Universe._
-  import OrderingConstraints._
-  import GroupKeyTrans._
+  //def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
+  def testJoinOnPreSortedVictims[M[+_]](module: ColumnarTableModuleTestSupport[M]) = {
+    import module._
+    import trans._
+    import trans.constants._
 
-  override type GroupId = Int
+    import Table._
+    import Table.Universe._
+    import OrderingConstraints._
+    import GroupKeyTrans._
 
-  def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
-  def ticvars(str: String): Seq[TicVar] = str.toSeq.map((c: Char) => JPathField(c.toString))
-  def order(str: String) = OrderingConstraint.fromFixed(ticvars(str))
-  def mergeNode(str: String) = MergeNode(ticvars(str).toSet, null)
+    def ticvars(str: String): Seq[TicVar] = str.toSeq.map((c: Char) => JPathField(c.toString))
+    def order(str: String) = OrderingConstraint.fromFixed(ticvars(str))
+    def mergeNode(str: String) = MergeNode(ticvars(str).toSet, null)
 
-  "derivation of the universes of binding constraints" should {
-    "generate single binding universes for single-source groupings" in {
-      val spec = GroupingSource(
-        Table.empty, 
-        SourceKey.Single, Some(TransSpec1.Id), 2, 
-        GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
-
-      Table.findBindingUniverses(spec) must haveSize(1)
-    }
-    
-    "generate single binding universes if no disjunctions are present for single-source groupings"  in {
-      val spec = GroupingSource(
-        Table.empty,
-        SourceKey.Single, Some(SourceValue.Single), 3,
-        GroupKeySpecAnd(
-          GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-          GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
-
-      Table.findBindingUniverses(spec) must haveSize(1)
-    }
-    
-    "multiple-source groupings should generate single binding universes if no disjunctions are present" in {
-      val spec1 = GroupingSource(
-        Table.empty,
-        SourceKey.Single, Some(TransSpec1.Id), 2,
-        GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
-        
-      val spec2 = GroupingSource(
-        Table.empty,
-        SourceKey.Single, Some(TransSpec1.Id), 3,
-        GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
-        
-      val union = GroupingAlignment(
-        DerefObjectStatic(Leaf(Source), JPathField("1")),
-        DerefObjectStatic(Leaf(Source), JPathField("1")),
-        spec1,
-        spec2, GroupingSpec.Union)
-
-      Table.findBindingUniverses(union) must haveSize(1)
-    }
-
-    "single-source groupings should generate a number of binding universes equal to the number of disjunctive clauses" in {
-      val spec = GroupingSource(
-        Table.empty,
-        SourceKey.Single, Some(SourceValue.Single), 3,
-        GroupKeySpecOr(
-          GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-          GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
-
-      Table.findBindingUniverses(spec) must haveSize(2)
-    }
-    
-    "multiple-source groupings should generate a number of binding universes equal to the product of the number of disjunctive clauses from each source" in {
-      val spec1 = GroupingSource(
-        Table.empty,
-        SourceKey.Single, Some(TransSpec1.Id), 2,
-        GroupKeySpecOr(
-          GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-          GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
-        
-      val spec2 = GroupingSource(
-        Table.empty,
-        SourceKey.Single, Some(TransSpec1.Id), 3,
-        GroupKeySpecOr(
-          GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-          GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
-        
-      val union = GroupingAlignment(
-        DerefObjectStatic(Leaf(Source), JPathField("1")),
-        DerefObjectStatic(Leaf(Source), JPathField("1")),
-        spec1,
-        spec2, GroupingSpec.Union)
-
-      Table.findBindingUniverses(union) must haveSize(4)
-    }
-  }
-
-  "derive a correct TransSpec for a conjunctive GroupKeySpec" in {
-    val keySpec = GroupKeySpecAnd(
-      GroupKeySpecAnd(
-        GroupKeySpecSource(JPathField("tica"), DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(JPathField("ticb"), DerefObjectStatic(SourceValue.Single, JPathField("b")))),
-      GroupKeySpecSource(JPathField("ticc"), DerefObjectStatic(SourceValue.Single, JPathField("c"))))
-
-    val transspec = GroupKeyTrans(Table.Universe.sources(keySpec))
-    val JArray(data) = JsonParser.parse("""[
-      {"key": [1], "value": {"a": 12, "b": 7}},
-      {"key": [2], "value": {"a": 42}},
-      {"key": [1], "value": {"a": 13, "c": true}}
+    val JArray(victim1Data) = JsonParser.parse("""[
+      {"key": [1], "value": {"a0": 3, "b0": 7}},
+      {"key": [2], "value": {"a0": 5, "b0": 11}},
     ]""")
 
-    val JArray(expected) = JsonParser.parse("""[
-      {"000000": 12, "000001": 7},
-      {"000000": 42},
-      {"000000": 13, "000002": true}
+    val JArray(victim2Data) = JsonParser.parse("""[
+      {"key": [3], "value": {"a0": 3, "c": 17}},
+      {"key": [4], "value": {"a0": 13, "c": 19}},
     ]""")
 
-    fromJson(data.toStream).transform(transspec.spec).toJson.copoint must_== expected
-  }
+    val v1GroupId = newGroupId
 
-  "find the maximal spanning forest of a set of merge trees" in {
-    val abcd = MergeNode(ticvars("abcd").toSet, null)
-    val abc = MergeNode(ticvars("abc").toSet, null)
-    val ab = MergeNode(ticvars("ab").toSet, null)
-    val ac = MergeNode(ticvars("ac").toSet, null)
-    val a = MergeNode(ticvars("a").toSet, null)
-    val e = MergeNode(ticvars("e").toSet, null)
-
-    val connectedNodes = Set(abcd, abc, ab, ac, a)
-    val allNodes = connectedNodes + e
-    val result = findSpanningGraphs(edgeMap(allNodes))
-
-    result.toList must beLike {
-      case MergeGraph(n1, e1) :: MergeGraph(n2, e2) :: Nil =>
-        val (nodes, edges) = if (n1 == Set(e)) (n2, e2) else (n1, e1)
-
-        nodes must haveSize(5)
-        edges must haveSize(4) 
-        edges.map(_.sharedKeys.size) must_== Set(3, 2, 2, 1)
-    }
-  }
-
-  "find the maximal spanning forest of a set of merge trees" in {
-    val ab = MergeNode(ticvars("ab").toSet, null)
-    val bc = MergeNode(ticvars("bc").toSet, null)
-    val ac = MergeNode(ticvars("ac").toSet, null)
-
-    val connectedNodes = Set(ab, bc, ac)
-    val result = findSpanningGraphs(edgeMap(connectedNodes))
-
-    result must haveSize(1)
-    result.head.nodes must_== connectedNodes
-
-    val expectedUnorderedEdges = edgeMap(connectedNodes).values.flatten.toSet
-    forall(result.head.edges) { edge =>
-      (expectedUnorderedEdges must contain(edge)) //or
-      //(expectedUnorderedEdges must contain(edge.reverse))
-    }
-  }
-
-  "binding constraints" >> {
-    "minimize" >> {
-      "minimize to multiple sets" in {
-        val abcd = constraint("abcd")
-        val abc = constraint("abc")
-        val ab = constraint("ab")
-        val ac = constraint("ac")
-
-        val expected = Set(
-          constraint("ab,c,d"),
-          constraint("ac")
-        )
-
-        minimize(Set(abcd, abc, ab, ac)) must_== expected
-      }
-
-      "minimize to multiple sets with a singleton" in {
-        val abcd = constraint("abcd")
-        val abc = constraint("abc")
-        val ab = constraint("ab")
-        val ac = constraint("ac")
-        val c = constraint("c")
-
-        val expected = Set(
-          constraint("c,a,b,d"),
-          constraint("ab")
-        )
-
-        minimize(Set(abcd, abc, ab, ac, c)) must_== expected
-      }
-
-      "not minimize completely disjoint constraints" in {
-        val ab = constraint("ab")
-        val bc = constraint("bc")
-        val ca = constraint("ca")
-
-        val expected = Set(
-          constraint("ab"),
-          constraint("bc"),
-          constraint("ca")
-        )
-
-        minimize(Set(ab, bc, ca)) must_== expected
-      }
-    }
-
-    "find required sorts" >> {
-      "simple sort" in {
-        val abcd = MergeNode(ticvars("abcd").toSet, null)
-        val abc = MergeNode(ticvars("abc").toSet, null)
-        val ab = MergeNode(ticvars("ab").toSet, null)
-        val ac = MergeNode(ticvars("ac").toSet, null)
-        val a = MergeNode(ticvars("a").toSet, null)
-
-        val spanningGraph = findSpanningGraphs(edgeMap(Set(abcd, abc, ab, ac, a))).head
-
-        def checkPermutation(nodeList: List[MergeNode]) = {
-          val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
-
-          requiredSorts(a) must_== Set(ticvars("a"))
-          requiredSorts(ac) must_== Set(ticvars("ac"))
-          requiredSorts(ab) must_== Set(ticvars("ab"))
-          (requiredSorts(abc), requiredSorts(abcd)) must beLike {
-            case (sabc, sabcd) =>
-              (
-                (sabc == Set(ticvars("abc")) && (sabcd == Set(ticvars("abc"), ticvars("ac")))) ||
-                (sabc == Set(ticvars("acb")) && (sabcd == Set(ticvars("acb"), ticvars("ab")))) ||
-                (sabc == Set(ticvars("abc"), ticvars("ac")) && (sabcd == Set(ticvars("abc")))) ||
-                (sabc == Set(ticvars("acb"), ticvars("ab")) && (sabcd == Set(ticvars("acb")))) 
-              ) must beTrue
-          }
-        }
-
-        forall(spanningGraph.nodes.toList.permutations) { nodeList =>
-          checkPermutation(nodeList)
-        }
-      }
-
-      "in a cycle" in {
-        val ab = MergeNode(ticvars("ab").toSet, null)
-        val ac = MergeNode(ticvars("ac").toSet, null)
-        val bc = MergeNode(ticvars("bc").toSet, null)
-
-        val spanningGraph = findSpanningGraphs(edgeMap(Set(ab, ac, bc))).head
-
-        forall(spanningGraph.nodes.toList.permutations) { nodeList =>
-          val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
-
-          requiredSorts(ab) must_== Set(ticvars("a"), ticvars("b"))
-          requiredSorts(ac) must_== Set(ticvars("a"), ticvars("c"))
-          requiredSorts(bc) must_== Set(ticvars("b"), ticvars("c"))
-        }
-      }
-
-      "in connected cycles" in {
-        val ab = MergeNode(ticvars("ab").toSet, null)
-        val ac = MergeNode(ticvars("ac").toSet, null)
-        val bc = MergeNode(ticvars("bc").toSet, null)
-        val ad = MergeNode(ticvars("ad").toSet, null)
-        val db = MergeNode(ticvars("db").toSet, null)
-
-        val spanningGraph = findSpanningGraphs(edgeMap(Set(ab, ac, bc, ad, db))).head
-
-        forall(spanningGraph.nodes.toList.permutations) { nodeList =>
-          val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
-
-          requiredSorts(ab) must_== Set(ticvars("a"), ticvars("b"))
-          requiredSorts(ac) must_== Set(ticvars("a"), ticvars("c"))
-          requiredSorts(bc) must_== Set(ticvars("b"), ticvars("c"))
-          requiredSorts(ad) must_== Set(ticvars("a"), ticvars("d"))
-          requiredSorts(db) must_== Set(ticvars("d"), ticvars("b"))
-        }
-      }
-
-      "in a connected cycle with extraneous constraints" in {
-        val ab = MergeNode(ticvars("ab").toSet, null)
-        val ac = MergeNode(ticvars("ac").toSet, null)
-        val bc = MergeNode(ticvars("bc").toSet, null)
-        val ad = MergeNode(ticvars("ad").toSet, null)
-
-        val spanningGraph = findSpanningGraphs(edgeMap(Set(ab, ac, bc, ad))).head
-
-        forall(spanningGraph.nodes.toList.permutations) { nodeList =>
-          val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
-
-          requiredSorts(ab) must_== Set(ticvars("a"), ticvars("b"))
-          requiredSorts(ac) must_== Set(ticvars("a"), ticvars("c"))
-          requiredSorts(bc) must_== Set(ticvars("b"), ticvars("c"))
-          requiredSorts(ad) must_== Set(ticvars("a"))
-        }
-      }
-    }
-  }
-
-  "transform a group key transspec to use a desired sort key order" in {
-    val trans = GroupKeyTrans(
-      ObjectConcat(
-        WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a")), keyName(0)),
-        WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b")), keyName(1)),
-        WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("c")), keyName(2))
-      ),
-      ticvars("abc")
+    val victim1Source = MergeNode(
+      Binding(fromJson(victim1Data.toStream),
+              SourceKey.Single,
+              Some(TransSpec1.Id),
+              v1GroupId,
+              GroupKeySpecAnd(
+                GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))),
+                GroupKeySpecSource(JPathField("b"), DerefObjectStatic(Leaf(Source), JPathField("b0")))))
     )
 
-    val JArray(data) = JsonParser.parse("""[
-      {"key": [1], "value": {"a": 12, "b": 7}},
-      {"key": [2], "value": {"a": 42}},
-      {"key": [1], "value": {"a": 13, "c": true}}
-    ]""")
+    val victim1 = BorgVictimNode(
+      NodeSubset(
+        victim1Source, 
+        victim1Source.binding.source, 
+        SourceKey.Single, 
+        Some(TransSpec1.Id),
+        GroupKeyTrans(
+          ObjectConcat(
+            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000"),
+            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b0")), "000001")
+          ),
+          ticvars("ab")),
+        ticvars("ab")
+      )
+    )
+
+    val v2GroupId = newGroupId
+    val victim2Source = MergeNode(
+      Binding(fromJson(victim2Data.toStream),
+              SourceKey.Single,
+              Some(TransSpec1.Id),
+              v2GroupId,
+              GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))))
+    )
+
+    val victim2 = BorgVictimNode(
+      NodeSubset(
+        victim2Source, 
+        victim2Source.binding.source, 
+        SourceKey.Single, 
+        Some(TransSpec1.Id),
+        GroupKeyTrans(
+          ObjectConcat(
+            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000")
+          ),
+          ticvars("a")),
+        ticvars("a")
+      )
+    )
+
+    val requiredOrders = Map(
+      victim1Source -> Set(ticvars("a")),
+      victim2Source -> Set(ticvars("a"))
+    )
+
+    val BorgResultNode(BorgResult(table, keys, groups, size)) = Table.join(victim1, victim2, requiredOrders).copoint
 
     val JArray(expected) = JsonParser.parse("""[
-      {"000001": 12, "000002": 7},
-      {"000001": 42},
-      {"000001": 13, "000000": true}
+      {
+        "values":{
+          "%1$s":{
+            "value":{
+              "b0":7,
+              "a0":3
+            },
+            "key":[1]
+          },
+          "%2$s":{
+            "value":{
+              "c":17,
+              "a0":3
+            },
+            "key":[3]
+          }
+        },
+        "identities":{
+          "%2$s":[3],
+          "%1$s":[1]
+        },
+        "groupKeys":{
+          "000000":3,
+          "000001":7
+        }
+      }
+    ]""".format(v1GroupId.shows, v2GroupId.shows))
+
+    toJson(table).copoint must_== expected.toStream
+  }
+
+  def testJoinOnPartiallySortedVictims[M[+_]](module: ColumnarTableModuleTestSupport[M]) = {
+    import module._
+    import trans._
+    import trans.constants._
+
+    import Table._
+    import Table.Universe._
+    import OrderingConstraints._
+    import GroupKeyTrans._
+
+    def ticvars(str: String): Seq[TicVar] = str.toSeq.map((c: Char) => JPathField(c.toString))
+    def order(str: String) = OrderingConstraint.fromFixed(ticvars(str))
+    def mergeNode(str: String) = MergeNode(ticvars(str).toSet, null)
+
+    val JArray(victim1Data) = JsonParser.parse("""[
+      {"key": [1], "value": {"a0": 5, "b0": 7}},
+      {"key": [2], "value": {"a0": 3, "b0": 11}},
     ]""")
 
-    val alignedSpec = trans.alignTo(ticvars("ca")).spec
-    fromJson(data.toStream).transform(alignedSpec).toJson.copoint must_== expected
+    val JArray(victim2Data) = JsonParser.parse("""[
+      {"key": [3], "value": {"a0": 3, "c": 17}},
+      {"key": [4], "value": {"a0": 13, "c": 19}},
+    ]""")
+
+    val v1GroupId = newGroupId
+
+    val victim1Source = MergeNode(
+      Binding(fromJson(victim1Data.toStream),
+              SourceKey.Single,
+              Some(TransSpec1.Id),
+              v1GroupId,
+              GroupKeySpecAnd(
+                GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))),
+                GroupKeySpecSource(JPathField("b"), DerefObjectStatic(Leaf(Source), JPathField("b0")))))
+    )
+
+    val victim1: BorgVictimNode = BorgVictimNode(
+      NodeSubset(
+        victim1Source, 
+        victim1Source.binding.source, 
+        SourceKey.Single, 
+        Some(TransSpec1.Id),
+        GroupKeyTrans(
+          ObjectConcat(
+            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000"),
+            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b0")), "000001")
+          ),
+          ticvars("ab")),
+        ticvars("ab"),
+        sortedByIdentities = true
+      )
+    )
+
+    val v2GroupId = newGroupId
+
+    val victim2Source = MergeNode(
+      Binding(fromJson(victim2Data.toStream),
+              SourceKey.Single,
+              Some(TransSpec1.Id),
+              v2GroupId,
+              GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))))
+    )
+
+    val victim2 = BorgVictimNode(
+      NodeSubset(
+        victim2Source, 
+        victim2Source.binding.source, 
+        SourceKey.Single, 
+        Some(TransSpec1.Id),
+        GroupKeyTrans(
+          ObjectConcat(
+            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000")
+          ),
+          ticvars("a")),
+        ticvars("a")
+      )
+    )
+
+    val requiredOrders = Map(
+      victim1Source -> Set(ticvars("a")),
+      victim2Source -> Set(ticvars("a"))
+    )
+
+    val BorgResultNode(BorgResult(table, keys, groups, size)) = Table.join(victim1, victim2, requiredOrders).copoint
+
+    val JArray(expected) = JsonParser.parse("""[
+      {
+        "values":{
+          "%1$s":{
+            "value":{
+              "b0":11,
+              "a0":3
+            },
+            "key":[2]
+          },
+          "%2$s":{
+            "value":{
+              "c":17,
+              "a0":3
+            },
+            "key":[3]
+          }
+        },
+        "identities":{
+          "%2$s":[3],
+          "%1$s":[2]
+        },
+        "groupKeys":{
+          "000000":3,
+          "000001":11
+        }
+      }
+    ]""".format(v1GroupId.shows, v2GroupId.shows))
+
+    toJson(table).copoint must_== expected.toStream
   }
 
   "join" should {
-    "combine a pair of victims" in {
-      val JArray(victim1Data) = JsonParser.parse("""[
-        {"key": [1], "value": {"a0": 3, "b0": 7}},
-        {"key": [2], "value": {"a0": 5, "b0": 11}},
-      ]""")
-
-      val JArray(victim2Data) = JsonParser.parse("""[
-        {"key": [3], "value": {"a0": 3, "c": 17}},
-        {"key": [4], "value": {"a0": 13, "c": 19}},
-      ]""")
-
-      val victim1Source = MergeNode(
-        Binding(fromJson(victim1Data.toStream),
-                SourceKey.Single,
-                Some(TransSpec1.Id),
-                1,
-                GroupKeySpecAnd(
-                  GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))),
-                  GroupKeySpecSource(JPathField("b"), DerefObjectStatic(Leaf(Source), JPathField("b0")))))
-      )
-
-      val victim1 = BorgVictimNode(
-        NodeSubset(
-          victim1Source, 
-          victim1Source.binding.source, 
-          SourceKey.Single, 
-          Some(TransSpec1.Id),
-          GroupKeyTrans(
-            ObjectConcat(
-              WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000"),
-              WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b0")), "000001")
-            ),
-            ticvars("ab")),
-          ticvars("ab")
-        )
-      )
-
-      val victim2Source = MergeNode(
-        Binding(fromJson(victim2Data.toStream),
-                SourceKey.Single,
-                Some(TransSpec1.Id),
-                2,
-                GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))))
-      )
-
-      val victim2 = BorgVictimNode(
-        NodeSubset(
-          victim2Source, 
-          victim2Source.binding.source, 
-          SourceKey.Single, 
-          Some(TransSpec1.Id),
-          GroupKeyTrans(
-            ObjectConcat(
-              WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000")
-            ),
-            ticvars("a")),
-          ticvars("a")
-        )
-      )
-
-      val requiredOrders = Map(
-        victim1Source -> Set(ticvars("a")),
-        victim2Source -> Set(ticvars("a"))
-      )
-
-      val BorgResultNode(BorgResult(table, keys, groups, size)) = Table.join(victim1, victim2, requiredOrders).copoint
-
-      println(keys)
-      println(groups)
-      println("result table: " + toJson(table).copoint.mkString("\n"))
-    }
+    "combine a pair of already-group-sorted victims" in testJoinOnPreSortedVictims(emptyTestModule)
+    "combine a pair where one victim is sorted by identity" in testJoinOnPartiallySortedVictims(emptyTestModule)
   }
 
   /*

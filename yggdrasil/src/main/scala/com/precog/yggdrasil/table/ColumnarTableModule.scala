@@ -363,44 +363,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
-    // BorgResult tables must have the following structure with respect to the root:
-    // {
-    //   "groupKeys": { "000000": ..., "000001": ... },
-    //   "identities": { "<string value of groupId1>": <identities for groupId1>, "<string value of groupId2>": ... },
-    //   "values": { "<string value of groupId1>": <values for groupId1>, "<string value of groupId2>": ... },
-    // }
-    case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId], size: Option[Long] = None)
-
-    object BorgResult {
-      val allFields = Set(JPathField("groupKeys"), JPathField("identities"), JPathField("values"))
-
-      def apply(nodeSubset: NodeSubset): BorgResult = {
-        assert(!nodeSubset.sortedByIdentities)
-        val groupId = nodeSubset.node.binding.groupId
-
-        val trans = ObjectConcat(
-          wrapGroupKeySpec(nodeSubset.groupKeyTrans.spec) ::
-          wrapIdentSpec(nestInGroupId(nodeSubset.idTrans, groupId)) ::
-          nodeSubset.targetTrans.map(t => wrapValueSpec(nestInGroupId(t, groupId))).toList : _*
-        )
-
-        BorgResult(nodeSubset.table.transform(trans), 
-                   nodeSubset.groupKeyTrans.keyOrder, 
-                   Set(groupId),
-                   nodeSubset.size)
-      }
-
-      def groupKeySpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("groupKeys"))
-      def identSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("identities"))
-      def valueSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("values"))
-
-      def wrapGroupKeySpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "groupKeys")
-      def wrapIdentSpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "identities")
-      def wrapValueSpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "values")
-
-      def nestInGroupId[A <: SourceType](source: TransSpec[A], groupId: GroupId) = WrapObject(source, groupId.shows)
-    }
-
     object Universe {
       def allEdges(nodes: collection.Set[MergeNode]): collection.Set[MergeEdge] = {
         for {
@@ -474,6 +436,45 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
+
+    // BorgResult tables must have the following structure with respect to the root:
+    // {
+    //   "groupKeys": { "000000": ..., "000001": ... },
+    //   "identities": { "<string value of groupId1>": <identities for groupId1>, "<string value of groupId2>": ... },
+    //   "values": { "<string value of groupId1>": <values for groupId1>, "<string value of groupId2>": ... },
+    // }
+    case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId], size: Option[Long] = None)
+
+    object BorgResult {
+      val allFields = Set(JPathField("groupKeys"), JPathField("identities"), JPathField("values"))
+
+      def apply(nodeSubset: NodeSubset): BorgResult = {
+        assert(!nodeSubset.sortedByIdentities)
+        val groupId = nodeSubset.node.binding.groupId
+
+        val trans = ObjectConcat(
+          wrapGroupKeySpec(nodeSubset.groupKeyTrans.spec) ::
+          wrapIdentSpec(nestInGroupId(nodeSubset.idTrans, groupId)) ::
+          nodeSubset.targetTrans.map(t => wrapValueSpec(nestInGroupId(t, groupId))).toList : _*
+        )
+
+        BorgResult(nodeSubset.table.transform(trans), 
+                   nodeSubset.groupKeyTrans.keyOrder, 
+                   Set(groupId),
+                   nodeSubset.size)
+      }
+
+      def groupKeySpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("groupKeys"))
+      def identSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("identities"))
+      def valueSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("values"))
+
+      def wrapGroupKeySpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "groupKeys")
+      def wrapIdentSpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "identities")
+      def wrapValueSpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "values")
+
+      def nestInGroupId[A <: SourceType](source: TransSpec[A], groupId: GroupId) = WrapObject(source, groupId.shows)
+    }
+
     case class OrderingConstraint(ordering: Seq[Set[TicVar]]) { self =>
       // Fix this binding constraint into a sort order. Any non-singleton TicVar sets will simply
       // be converted into an arbitrary sequence
@@ -540,7 +541,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       def join(that: OrderingConstraint2): Join = {
         def joinSet(constructJoin: (OrderingConstraint2, OrderingConstraint2) => OrderingConstraint2)(lastJoin: Join, choices: Set[OrderingConstraint2]): Join = {
-          println("joinSet: " + lastJoin + ", choices: " + choices)
 
           // Tries to join the maximal number of elements from "remaining" into lastJoin:
           def joinSet0(lastJoin: Join, choices: Set[OrderingConstraint2]): Set[(Join, Set[OrderingConstraint2])] = {
@@ -1101,22 +1101,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def accSortOrder = accOrderPost - newTicVars
 
       def consume(node: MergeNode, nodeSize: Long, nodeOrderOpt: Option[Seq[TicVar]]): BorgTraversalPlanUnfixed = {
-        println("consuming " + node)
 
         val (accOrderPost, nodeOrder, accResort, nodeResort) = {
-          println("postTicVars = " + postTicVars)
 
           val commonVariables = postTicVars intersect node.ticVars
 
-          println("commonVariables = " + commonVariables)
 
           val otherVariables = (postTicVars union node.ticVars) diff commonVariables
 
-          println("otherVariables = " + otherVariables)
 
           val nodeUniqueVariables = node.ticVars diff commonVariables
 
-          println("nodeUniqueVariables = " + nodeUniqueVariables)
 
           val initialNodeOrder = nodeOrderOpt.map(nodeOrder => Ordered.fromVars(nodeOrder))
 
@@ -1126,29 +1121,23 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           }.getOrElse {
             val minimalJoinConstraint = ordered(Unordered.fromVars(commonVariables), Unordered.fromVars(otherVariables))
 
-            println("minimalJoinConstraint = " + minimalJoinConstraint.render)
 
             // Can, in theory, we reuse the node ordering?
             initialNodeOrder.map { o => (o, (o join minimalJoinConstraint)) }.filter(_._2.success(commonVariables)).map {
               case (nodeOrder, nodeJoin) =>
-                println("nodeOrder = " + nodeOrder.render + ", nodeJoin = " + nodeJoin)
                 // Have to resort the acc, because the node order is compatible with the minimal join constraint:
                 (minimalJoinConstraint, nodeOrder, true, false)
             }.getOrElse {
               // Can, in theory, we reuse the accumulator ordering?
               val accJoin = (self.accOrderPost join minimalJoinConstraint)
 
-              println("self.accOrderPost = " + self.accOrderPost)
 
-              println("accJoin = " + accJoin)
 
               // MUST sort node, it's new order is minimally constrained:
               val nodeOrder = ordered(Unordered.fromVars(commonVariables), Unordered.fromVars(nodeUniqueVariables))
 
-              println("nodeOrder = " + nodeOrder)
 
               if (accJoin.success(commonVariables)) {  
-                println("(self.accOrderPost join nodeOrder) = " + (self.accOrderPost join nodeOrder))
                 ((self.accOrderPost join nodeOrder).collapse, nodeOrder, false, true)
               } else {
                 (minimalJoinConstraint, nodeOrder, true, true)
@@ -1287,10 +1276,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       import BorgResult._
       import OrderingConstraints._
 
-      def reorderGroupKeySpec(newOrder: Seq[TicVar], original: Seq[TicVar]) = {
+      def reorderGroupKeySpec(source: TransSpec1, newOrder: Seq[TicVar], original: Seq[TicVar]) = {
         ObjectConcat(
           newOrder.zipWithIndex.map {
-            case (ticvar, i) => GroupKeyTrans.reindex(BorgResult.groupKeySpec(Source), original.indexOf(ticvar), i)
+            case (ticvar, i) => GroupKeyTrans.reindex(source, original.indexOf(ticvar), i)
           }: _*
         )
       }
@@ -1299,7 +1288,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         val newAssimilatorOrder = newPrefix ++ (borgResult.groupKeys diff newPrefix)
 
         val remapSpec = ObjectConcat(
-          wrapGroupKeySpec(reorderGroupKeySpec(newAssimilatorOrder, borgResult.groupKeys)),
+          wrapGroupKeySpec(reorderGroupKeySpec(groupKeySpec(Source), newAssimilatorOrder, borgResult.groupKeys)),
           wrapIdentSpec(identSpec(Source)),
           wrapValueSpec(valueSpec(Source))
         )
@@ -1317,12 +1306,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         val groupId = victim.node.binding.groupId
         val newOrder = toPrefix ++ (victim.node.keys -- toPrefix).toSeq
         val remapSpec = ObjectConcat(
-          wrapGroupKeySpec(reorderGroupKeySpec(newOrder, victim.groupKeyTrans.keyOrder)) ::
+          wrapGroupKeySpec(reorderGroupKeySpec(victim.groupKeyTrans.spec, newOrder, victim.groupKeyTrans.keyOrder)) ::
           wrapIdentSpec(nestInGroupId(victim.idTrans, groupId)) :: 
           victim.targetTrans.map(t => wrapValueSpec(nestInGroupId(t, groupId))).toList: _*
         )
 
-        victim.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending) map { sorted =>
+        victim.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending).map { sorted =>
           BorgResult(sorted, newOrder, Set(victim.node.binding.groupId))
         }
       }
@@ -1344,7 +1333,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
 
       def joinAsymmetric(assimilator: BorgResult, victim: NodeSubset): M[(BorgResult, BorgResult, Seq[TicVar])] = {
-        println("joining asymmetric.")
         (if (victim.sortedByIdentities) {
           findCompatiblePrefix(Set(assimilator.groupKeys), requiredOrders(victim.node)) map { commonPrefix =>
             resortVictimToBorgResult(victim, commonPrefix) map { prepared => 
@@ -1388,9 +1376,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
 
       def joinSymmetric(borgLeft: BorgResult, borgRight: BorgResult): M[(BorgResult, BorgResult, Seq[TicVar])] = {
-        println("joining symmetric")
         findCompatiblePrefix(Set(borgLeft.groupKeys), Set(borgRight.groupKeys)) map { compatiblePrefix =>
-          println("no re-sorting necessary.")
           (borgLeft, borgRight, compatiblePrefix).point[M]
         } orElse {
           // one or the other will require a re-sort
@@ -2280,6 +2266,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           Table.empty
       }
     }
+
     def normalize: Table = Table(slices.filter(!_.isEmpty))
 
     def toStrings: M[Iterable[String]] = {

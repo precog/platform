@@ -69,6 +69,9 @@ trait BlockStoreTestSupport[M[+_]] { self =>
     type Key = JArray
     type GroupId = Int
 
+    private val groupId = new java.util.concurrent.atomic.AtomicInteger
+    def newGroupId = groupId.getAndIncrement
+
     implicit def M = self.M
 
     object storage extends Storage
@@ -145,6 +148,10 @@ trait BlockStoreTestSupport[M[+_]] { self =>
         "%09d".format(idx)
       )
     }: _*)
+  }
+
+  def emptyTestModule = new BlockStoreTestModule {
+    val projections = Map.empty[ProjectionDescriptor, Projection]
   }
 }
 

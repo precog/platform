@@ -43,6 +43,8 @@ import scalaz.std.anyVal._
 import TableModule._
 
 trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] with ColumnarTableModule[M] {
+  def newGroupId: GroupId
+
   def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
     val sliceSize = maxSliceSize.getOrElse(10)
 

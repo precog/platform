@@ -54,15 +54,15 @@ import org.scalacheck.Arbitrary._
 import TableModule._
 import TableModule.paths._
 
-trait BlockStoreColumnarTableModuleSpec[M[+_]] extends
-    TableModuleSpec[M] with 
-    BlockLoadSpec[M] with
-    BlockSortSpec[M] with 
-    IntersectSpec[M] with
-    BlockAlignSpec[M] { self =>
+trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] 
+    with BlockLoadSpec[M]
+    with BlockSortSpec[M] 
+    with IntersectSpec[M]
+    with BlockAlignSpec[M] 
+    with GroupingSupportSpec[M]
+    { self =>
 
   type MemoId = Int
-  type GroupId = Int
 
   "a block store columnar table" should {
     "load" >> {

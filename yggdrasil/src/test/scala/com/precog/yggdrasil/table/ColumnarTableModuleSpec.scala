@@ -54,18 +54,18 @@ import org.scalacheck.Arbitrary._
 
 import TableModule._
 
-trait ColumnarTableModuleSpec[M[+_]] extends
-    ColumnarTableModuleTestSupport[M] with
-    TableModuleSpec[M] with
-    CogroupSpec[M] with
-    CrossSpec[M] with
-    TransformSpec[M] with
-    CompactSpec[M] with 
-    PartitionMergeSpec[M] with
-    UnionAllSpec[M] with
-    CrossAllSpec[M] with
-    DistinctSpec[M] with 
-    GroupingSupportSpec[M] { spec => //with
+trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] 
+    with TableModuleSpec[M]
+    with CogroupSpec[M]
+    with CrossSpec[M]
+    with TransformSpec[M]
+    with CompactSpec[M] 
+    with PartitionMergeSpec[M]
+    with UnionAllSpec[M]
+    with CrossAllSpec[M]
+    with DistinctSpec[M] 
+    with GroupingGraphSpec[M]
+    { spec => //with
     //GrouperSpec[M] { spec =>
 
   //type GroupId = Int
@@ -73,6 +73,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   import constants._
     
   override val defaultPrettyParams = Pretty.Params(2)
+
+  private val groupId = new java.util.concurrent.atomic.AtomicInteger
+  def newGroupId = groupId.getAndIncrement
 
   class MemoContext extends MemoizationContext {
     import trans._
