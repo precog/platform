@@ -23,7 +23,7 @@ package table
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
-trait GroupingSupportSpec[M] extends ColumnarTableModuleTestSupport[M] with Specification with ScalaCheck {
+trait GroupingSupportSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specification with ScalaCheck {
     import Table._
     import Table.Universe._
     /*

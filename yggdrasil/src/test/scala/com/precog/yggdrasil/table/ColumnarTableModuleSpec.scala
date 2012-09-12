@@ -211,6 +211,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   }
 
   "grouping support" >> {
+    import Table._
+    import Table.Universe._
+
     def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
     def ticvars(str: String) = str.toSeq.map((c: Char) => JPathField(c.toString))
     def order(str: String) = OrderingConstraint.fromFixed(ticvars(str))
