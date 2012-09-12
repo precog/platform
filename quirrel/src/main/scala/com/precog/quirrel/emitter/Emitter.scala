@@ -333,6 +333,8 @@ trait Emitter extends AST
         case ast.NullLit(loc) =>
           emitInstr(PushNull)
         
+        case ast.ObjectDef(loc, Vector()) => emitInstr(PushObject)
+        
         case ast.ObjectDef(loc, props) => 
           def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2) >> emitInstr(Map2Cross(WrapObject))
 
@@ -353,6 +355,8 @@ trait Emitter extends AST
           val joins = Vector.fill(provToField.size - 1)(emitInstr(Map2Cross(JoinObject)))
 
           reduce(groups ++ joins)
+          
+        case ast.ArrayDef(loc, Vector()) => emitInstr(PushArray)
 
         case ast.ArrayDef(loc, values) => 
           val indexedValues = values.zipWithIndex

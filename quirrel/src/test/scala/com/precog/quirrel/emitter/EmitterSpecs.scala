@@ -280,6 +280,10 @@ object EmitterSpecs extends Specification
           PushNum("5"),
           Map1(New)))
     }
+    
+    "emit empty object" in {
+      testEmit("{}")(Vector(PushObject))
+    }
 
     "emit wrap object for object with single field having constant numeric value" in {
       testEmit("{foo: 1}")(
@@ -333,6 +337,10 @@ object EmitterSpecs extends Specification
           Swap(2),
           Map2Cross(WrapObject),
           Map2Match(JoinObject)))
+    }
+    
+    "emit empty array" in {
+      testEmit("[]")(Vector(PushArray))
     }
 
     "emit wrap array for array with single element having constant string value" in {
