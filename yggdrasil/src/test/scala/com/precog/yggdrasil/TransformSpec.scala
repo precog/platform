@@ -225,7 +225,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     
     val wrappedValueSpec = trans.WrapObject(Equal(leftValueSpec, rightValueSpec), "value")
 
-    val results = toJson(table.cross(table2)(ObjectConcat(wrappedIdentitySpec, wrappedValueSpec)))
+    val results = toJson(table.cross(table2)(InnerObjectConcat(wrappedIdentitySpec, wrappedValueSpec)))
     val expected = (data map {
       case jo @ JObject(List(JField("value", v), key @ _)) => {
         if (v == JArray(List(JNum(9), JNum(10), JNum(11)))) 
@@ -300,11 +300,35 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
-        ObjectConcat(Leaf(Source), Leaf(Source))
+        InnerObjectConcat(Leaf(Source), Leaf(Source))
       })
 
       results.copoint must_== sample.data
     }
+  }
+
+  def testObjectConcatSingletonNonObject = {
+    val data: Stream[JValue] = Stream(JBool(true))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      InnerObjectConcat(Leaf(Source))
+    })
+
+    results.copoint must beEmpty
+  }
+
+  def testObjectConcatTrivial = {
+    val data: Stream[JValue] = Stream(JBool(true), JObject(List()))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      InnerObjectConcat(Leaf(Source))
+    })
+
+    results.copoint must beEmpty
   }
 
   def checkObjectConcat = {
@@ -312,7 +336,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
-        ObjectConcat(
+        InnerObjectConcat(
           WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")), "value1"), "value"), 
           WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2")), "value2"), "value") 
         )
@@ -337,7 +361,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
-        ObjectConcat(
+        InnerObjectConcat(
           WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")), "value1"),
           WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2")), "value1")
         )

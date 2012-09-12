@@ -86,7 +86,7 @@ trait EvalStackSpecs extends Specification {
 
       "empty array" >> {
         eval("[].foo") mustEqual Set()
-      }.pendingUntilFixed
+      }
     }
 
     "accept a dereferenced object" >> {
@@ -96,50 +96,50 @@ trait EvalStackSpecs extends Specification {
 
       "empty object" >> {
         eval("{}[0]") mustEqual Set()
-      }.pendingUntilFixed
+      }
     }    
     
     "accept a where'd empty array and empty object" >> {
       "empty object (left)" >> {
-        eval("{} where true") mustEqual Set()
-      }.pendingUntilFixed
+        eval("{} where true") mustEqual Set(SObject(Map()))
+      }
 
       "empty object (right)" >> {
         eval("true where {}") mustEqual Set()
-      }.pendingUntilFixed
+      }
       
       "empty array (left)" >> {
-        eval("[] where true") mustEqual Set()
-      }.pendingUntilFixed
+        eval("[] where true") mustEqual Set(SArray(Vector()))
+      }
 
       "empty array (right)" >> {
         eval("true where []") mustEqual Set()
-      }.pendingUntilFixed
+      }
     }    
     
     "accept a with'd empty array and empty object" >> {
       "empty object (left)" >> {
         eval("{} with true") mustEqual Set()
-      }.pendingUntilFixed
+      }
 
       "empty object (right)" >> {
         eval("true with {}") mustEqual Set()
-      }.pendingUntilFixed
+      }
       
       "empty array (left)" >> {
         eval("[] with true") mustEqual Set()
-      }.pendingUntilFixed
+      }
 
       "empty array (right)" >> {
         eval("true with []") mustEqual Set()
-      }.pendingUntilFixed
-    }    
+      }
+    }
 
-    "union sets coming out of a forall" >> {
+    "union sets coming out of a solve" >> {
       val input = """
         clicks := //clicks
-        foobar := forall 'a {userId: 'a, size: count(clicks where clicks.userId = 'a)}
-        foobaz := forall 'b {pageId: 'b, size: count(clicks where clicks.pageId = 'b)}
+        foobar := solve 'a {userId: 'a, size: count(clicks where clicks.userId = 'a)}
+        foobaz := solve 'b {pageId: 'b, size: count(clicks where clicks.pageId = 'b)}
         foobar union foobaz
       """.stripMargin
 
@@ -444,7 +444,7 @@ trait EvalStackSpecs extends Specification {
         }
         case r => failure("Result has wrong shape: "+r)
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate the with operator across the campaigns dataset" in {
       val input = "count(//campaigns with { t: 42 })"
@@ -510,15 +510,20 @@ trait EvalStackSpecs extends Specification {
     "correctly handle cross-match situations" in {
       val input = """
         | campaigns := //campaigns
-        | clicks := //clicks
+        | clicks := new //campaigns
         | 
         | campaigns ~ clicks
         |   campaigns = campaigns
         |     & clicks = clicks
         |     & clicks = clicks""".stripMargin
         
-      eval(input) must not(beEmpty)
-    }.pendingUntilFixed    
+      try {
+        eval(input)
+        true mustEqual false
+      } catch {
+        case t: ArrayIndexOutOfBoundsException => t.printStackTrace(); throw t
+      }
+    }
 
     "add sets of different types" >> {
       "a set of numbers and a set of strings" >> {
@@ -544,9 +549,8 @@ trait EvalStackSpecs extends Specification {
       "characteristic function" >> {
         val input = """
           | campaigns := //campaigns
-          | f('a) :=
-          |   campaigns.gender where campaigns.platform = 'a
-          | f""".stripMargin
+          | solve 'a 
+          |   campaigns.gender where campaigns.platform = 'a""".stripMargin
           
         val results = evalE(input)
         
@@ -559,10 +563,10 @@ trait EvalStackSpecs extends Specification {
         }
       }.pendingUntilFixed
 
-      "forall expression" >> {
+      "solve expression" >> {
         val input = """
           | campaigns := //campaigns
-          | forall 'a 
+          | solve 'a 
           |   campaigns.gender where campaigns.platform = 'a""".stripMargin
           
         val results = evalE(input)
@@ -581,19 +585,18 @@ trait EvalStackSpecs extends Specification {
       "characteristic function" >> { 
         val input = """
           | campaigns := //campaigns
-          | hist('gender) :=
-          |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
-          | hist""".stripMargin
+          | solve 'gender
+          |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }""".stripMargin
           
         eval(input) mustEqual Set(
           SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
           SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
       }.pendingUntilFixed
 
-      "forall expression" >> { 
+      "solve expression" >> { 
         val input = """
           | campaigns := //campaigns
-          | forall 'gender 
+          | solve 'gender 
           |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }""".stripMargin
           
         eval(input) mustEqual Set(
@@ -646,7 +649,7 @@ trait EvalStackSpecs extends Specification {
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed      
+      }
       
       "using where" >> {
         val input = """
@@ -664,7 +667,7 @@ trait EvalStackSpecs extends Specification {
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
 
       "using where and with" >> {
         val input = """
@@ -675,23 +678,23 @@ trait EvalStackSpecs extends Specification {
         val results = eval(input)
         
         results mustEqual Set(SDecimal(38))
-      }.pendingUntilFixed      
+      }
       
       "on a set of strings" >> {
         val input = """
-          | std::stats::rank(//campaigns.userId)""".stripMargin
+          | std::stats::rank(//campaigns.campaign)""".stripMargin
 
         val results = eval(input) 
         
         val sanity = """
-          | //campaigns.userId""".stripMargin
+          | //campaigns.campaign""".stripMargin
 
         val sanityCheck = eval(sanity)
 
         results must be empty
 
         sanityCheck must not be empty
-      }.pendingUntilFixed
+      }
     }
 
     "evaluate denseRank" >> {
@@ -711,7 +714,7 @@ trait EvalStackSpecs extends Specification {
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
 
       "using where and with" >> {
         val input = """
@@ -722,23 +725,23 @@ trait EvalStackSpecs extends Specification {
         val results = eval(input) 
         
         results mustEqual Set(SDecimal(39))
-      }.pendingUntilFixed      
+      }
       
       "on a set of strings" >> {
         val input = """
-          | std::stats::denseRank(//campaigns.userId)""".stripMargin
+          | std::stats::denseRank(//campaigns.campaign)""".stripMargin
 
         val results = eval(input) 
         
         val sanity = """
-          | //campaigns.userId""".stripMargin
+          | //campaigns.campaign""".stripMargin
 
         val sanityCheck = eval(sanity)
 
         results must be empty
 
         sanityCheck must not be empty
-      }.pendingUntilFixed
+      }
     }
 
     "evaluate functions from each library" >> {
@@ -757,7 +760,7 @@ trait EvalStackSpecs extends Specification {
           | std::math::pow(selectCpm, 2)""".stripMargin
 
         eval(input) mustEqual Set(SDecimal(25), SDecimal(1), SDecimal(36), SDecimal(81), SDecimal(16))
-      }.pendingUntilFixed
+      }
 
       "Timelib" >> {
         val input = """
@@ -823,16 +826,15 @@ trait EvalStackSpecs extends Specification {
     "set critical conditions given an empty set in" >> {
       "characteristic function" >> {
         val input = """
-          | function('a) :=
-          |   //campaigns where //campaigns.foo = 'a
-          | function""".stripMargin
+          | solve 'a
+          |   //campaigns where //campaigns.foo = 'a""".stripMargin
 
         eval(input) mustEqual Set()
       }.pendingUntilFixed
 
-      "forall expression" >> {
+      "solve expression" >> {
         val input = """
-          | forall 'a
+          | solve 'a
           |   //campaigns where //campaigns.foo = 'a""".stripMargin
 
         eval(input) mustEqual Set()
@@ -858,19 +860,18 @@ trait EvalStackSpecs extends Specification {
         val input = """
           | campaigns := //campaigns
           | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
-          | sums('n) :=
+          | solve 'n
           |   m := max(nums where nums < 'n)
-          |   (nums where nums = 'n) + m 
-          | sums""".stripMargin
+          |   (nums where nums = 'n) + m""".stripMargin
 
         eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
       }.pendingUntilFixed
 
-      "forall expression" >> {
+      "solve expression" >> {
         val input = """
           | campaigns := //campaigns
           | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
-          | forall 'n
+          | solve 'n
           |   m := max(nums where nums < 'n)
           |   (nums where nums = 'n) + m""".stripMargin
 
@@ -880,8 +881,8 @@ trait EvalStackSpecs extends Specification {
 
     "evaluate a quantified characteristic function of two parameters" in {
       val input = """
-        | fun('a, 'b) := 
-        |   //campaigns where //campaigns.ageRange = 'a & //campaigns.gender = 'b
+        | fun(a, b) := 
+        |   //campaigns where //campaigns.ageRange = a & //campaigns.gender = b
         | fun([25,36], "female")""".stripMargin
 
       val results = evalE(input) 
@@ -895,102 +896,58 @@ trait EvalStackSpecs extends Specification {
         }
         case r => failure("Result has wrong shape: "+r)
       }
-    }.pendingUntilFixed
-
-    "evaluate a function of two parameters" >> {  //note: this is NOT the the most efficient way to implement this query, but it still should work
-      "characteristic function" >> {
-        val input = """
-          | campaigns := //campaigns
-          | gender := campaigns.gender
-          | platform := campaigns.platform
-          | equality('a, 'b) :=
-          |   g := gender where gender = 'a
-          |   p := platform where platform = 'b
-          |   campaigns where g = p
-          | equality""".stripMargin
-
-        eval(input) mustEqual Set()
-      }.pendingUntilFixed
-
-      "forall expression" >> {
-        val input = """
-          | campaigns := //campaigns
-          | gender := campaigns.gender
-          | platform := campaigns.platform
-          | forall 'a forall 'b
-          |   g := gender where gender = 'a
-          |   p := platform where platform = 'b
-          |   campaigns where g = p""".stripMargin
-
-        eval(input) mustEqual Set()
-      }.pendingUntilFixed
     }
 
-    "determine a histogram of genders on category" in {
+    "evaluate a solve of two parameters" in {
+      val input = """
+        | campaigns := //campaigns
+        | gender := campaigns.gender
+        | platform := campaigns.platform
+        | solve 'a, 'b
+        |   g := gender where gender = 'a
+        |   p := platform where platform = 'b
+        |   campaigns where g = p""".stripMargin
+
+      eval(input) mustEqual Set()
+    }.pendingUntilFixed
+
+    "determine a histogram of a composite key of revenue and campaign" in {
       val input = """
         | campaigns := //campaigns
         | organizations := //organizations
         | 
-        | hist('revenue, 'campaign) :=
+        | solve 'revenue, 'campaign
         |   organizations' := organizations where organizations.revenue = 'revenue
         |   campaigns' := campaigns where campaigns.campaign = 'campaign
         |   organizations'' := organizations' where organizations'.campaign = 'campaign
         |   
         |   campaigns' ~ organizations''
-        |     { revenue: 'revenue, num: count(campaigns') }
-        |   
-        | hist""".stripMargin
+        |     { revenue: 'revenue, num: count(campaigns') }""".stripMargin
 
       todo //eval(input) mustEqual Set()   
     }.pendingUntilFixed
      
-    "determine most isolated clicks in time" >> {
-      "characteristic function" >> {
-        val input = """
-          | clicks := //clicks
-          | 
-          | spacings('time) :=
-          |   click := clicks where clicks.time = 'time
-          |   belowTime := max(clicks.time where clicks.time < 'time)
-          |   aboveTime := min(clicks.time where clicks.time > 'time)
-          |   
-          |   {
-          |     click: click,
-          |     below: click.time - belowTime,
-          |     above: aboveTime - click.time
-          |   }
-          |   
-          | meanAbove := mean(spacings.above)
-          | meanBelow := mean(spacings.below)
-          | 
-          | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
+    "determine most isolated clicks in time" in {
+      val input = """
+        | clicks := //clicks
+        | 
+        | spacings := solve 'time
+        |   click := clicks where clicks.time = 'time
+        |   belowTime := max(clicks.time where clicks.time < 'time)
+        |   aboveTime := min(clicks.time where clicks.time > 'time)
+        |   
+        |   {
+        |     click: click,
+        |     below: click.time - belowTime,
+        |     above: aboveTime - click.time
+        |   }
+        |   
+        | meanAbove := mean(spacings.above)
+        | meanBelow := mean(spacings.below)
+        | 
+        | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
 
-        todo //eval(input) must not(beEmpty)   
-      }
-
-      "forall expression" >> {
-        val input = """
-          | clicks := //clicks
-          | 
-          | spacings := (forall 'time
-          |   click := clicks where clicks.time = 'time
-          |   belowTime := max(clicks.time where clicks.time < 'time)
-          |   aboveTime := min(clicks.time where clicks.time > 'time)
-          |   
-          |   {
-          |     click: click,
-          |     below: click.time - belowTime,
-          |     above: aboveTime - click.time
-          |   })
-          |   
-          | meanAbove := mean(spacings.above)
-          | meanBelow := mean(spacings.below)
-          | 
-          | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
-
-        
-        todo //eval(input) must not(beEmpty) 
-      }
+      todo //eval(input) must not(beEmpty)   
     }
   
     "evaluate the 'hello, quirrel' examples" >> {
@@ -1095,7 +1052,7 @@ trait EvalStackSpecs extends Specification {
         """.stripMargin
 
         eval(input) must not(throwA[Throwable])
-      }.pendingUntilFixed
+      }
 
       "handle query on empty array" >> {
         val input = """
@@ -1103,7 +1060,7 @@ trait EvalStackSpecs extends Specification {
         """.stripMargin
 
         eval(input) mustEqual Set(SArray(Vector()), SObject(Map("foo" -> SArray(Vector()))))
-      }.pendingUntilFixed
+      }
       
       "handle query on empty object" >> {
         val input = """
@@ -1111,7 +1068,7 @@ trait EvalStackSpecs extends Specification {
         """.stripMargin
 
         eval(input) mustEqual Set(SObject(Map()), SObject(Map("foo" -> SObject(Map()))))
-      }.pendingUntilFixed
+      }
 
       "handle query on null" >> {
         val input = """
@@ -1131,9 +1088,9 @@ trait EvalStackSpecs extends Specification {
       }
 
       "handle load of error-prone fastspring data" >> {
-        (eval("//fastspring_nulls") must haveSize(2)) and
-        (eval("//fastspring_mixed_type") must haveSize(2))
-      }.pendingUntilFixed
+        eval("//fastspring_nulls") must haveSize(2)
+        eval("//fastspring_mixed_type") must haveSize(2)
+      }
 
       // times out...
       /* "handle chained characteristic functions" in {

@@ -38,7 +38,7 @@ trait Phases {
   def checkProvenance(expr: Expr): Set[Error]
   def inferBuckets(expr: Expr): Set[Error]
   
-  def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]]
+  def findCriticalConditions(expr: Expr): Map[TicId, Set[ConditionTree]]
   def findGroups(expr: Expr): Set[GroupTree]
   
   private[quirrel] def runPhasesInSequence(tree: Expr): Set[Error] =

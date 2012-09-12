@@ -29,7 +29,7 @@ trait TreeShaker extends Phases with parser.AST with Binder {
    * @return The <em>root</em> of the shaken tree
    */
   def shakeTree(tree: Expr): Expr = {
-    val (root, _, errors) = performShake(tree.root)
+    val (root, _, _, errors) = performShake(tree.root)
     bindRoot(root, root)
     
     root._errors appendFrom tree._errors
@@ -38,248 +38,258 @@ trait TreeShaker extends Phases with parser.AST with Binder {
     root
   }
   
-  def performShake(tree: Expr): (Expr, Set[(Either[TicId, Identifier], Binding)], Set[Error]) = tree match {
+  def performShake(tree: Expr): (Expr, Set[(Identifier, NameBinding)], Set[(TicId, VarBinding)], Set[Error]) = tree match {
     case b @ Let(loc, id, params, left, right) => {
-      lazy val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      lazy val (left2, leftNameBindings, leftVarBindings, leftErrors) = performShake(left)
+      val (right2, rightNameBindings, rightVarBindings, rightErrors) = performShake(right)
       
-      if (rightBindings contains (Right(id) -> LetBinding(b))) {
-        val unusedParamBindings = Set(params zip (Stream continually (LetBinding(b): Binding)): _*) &~ leftBindings.collect { 
-          case (Left(id), b) => (id, b)
-        }  
+      if (rightNameBindings contains (id -> LetBinding(b))) {
+        val ids = params map { Identifier(Vector(), _) }
+        val unusedParamBindings = Set(ids zip (Stream continually (FormalBinding(b): NameBinding)): _*) &~ leftNameBindings
 
-        val errors = unusedParamBindings map { case (id, _) => Error(b, UnusedTicVariable(id)) }
+        val errors = unusedParamBindings map { case (id, _) => Error(b, UnusedFormalBinding(id)) }
         
-        (Let(loc, id, params, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors ++ errors)
+        (Let(loc, id, params, left2, right2), leftNameBindings ++ rightNameBindings, leftVarBindings ++ rightVarBindings, leftErrors ++ rightErrors ++ errors)
       } else {
-        (right2, rightBindings, rightErrors + Error(b, UnusedLetBinding(id)))
+        (right2, rightNameBindings, rightVarBindings, rightErrors + Error(b, UnusedLetBinding(id)))
       }
     }
 
-    case b @ Forall(loc, param, child) => {
-      val (child2, bindings, errors) = performShake(child)
-
-      val unusedParamBinding = Set((param, ForallDef(b): Binding)) &~ bindings.collect {
-        case (Left(id), b) => (id, b)
-      }
-
-      val errorsFromUnused = unusedParamBinding map { case (id, _) => Error(b, UnusedTicVariable(id)) }
-
-      (Forall(loc, param, child2), bindings, errorsFromUnused ++ errors) 
+    case b @ Solve(loc, constraints, child) => {
+      val mapped = constraints map performShake
+      
+      val constraints2 = mapped map { _._1 }
+      
+      val (constNameVector, constVarVector) = mapped map {
+        case (_, names, vars, _) => (names, vars)
+      } unzip
+      
+      val constNames = constNameVector reduce { _ ++ _ }
+      val constVars = constVarVector reduce { _ ++ _ }
+      
+      val constErrors = mapped map { _._4 } reduce { _ ++ _ }
+      
+      val (child2, childNames, childVars, childErrors) = performShake(child)
+      
+      val unusedBindings = Set(b.vars.toSeq zip (Stream continually (SolveBinding(b): VarBinding)): _*) &~ childVars
+      
+      val errors = unusedBindings map { case (id, _) => Error(b, UnusedTicVariable(id)) }
+      
+      (Solve(loc, constraints2, child2), constNames ++ childNames, constVars ++ childVars, constErrors ++ childErrors ++ errors)
     }
     
     case Import(loc, spec, child) => {
-      val (child2, bindings, errors) = performShake(child)
-      (Import(loc, spec, child2), bindings, errors)
+      val (child2, names, vars, errors) = performShake(child)
+      (Import(loc, spec, child2), names, vars, errors)
     }
     
     case New(loc, child) => {
-      val (child2, bindings, errors) = performShake(child)
-      (New(loc, child2), bindings, errors)
+      val (child2, names, vars, errors) = performShake(child)
+      (New(loc, child2), names, vars, errors)
     }
     
     case Relate(loc, from, to, in) => {
-      val (from2, fromBindings, fromErrors) = performShake(from)
-      val (to2, toBindings, toErrors) = performShake(to)
-      val (in2, inBindings, inErrors) = performShake(in)
-      (Relate(loc, from2, to2, in2), fromBindings ++ toBindings ++ inBindings, fromErrors ++ toErrors ++ inErrors)
+      val (from2, fromNames, fromVars, fromErrors) = performShake(from)
+      val (to2, toNames, toVars, toErrors) = performShake(to)
+      val (in2, inNames, inVars, inErrors) = performShake(in)
+      (Relate(loc, from2, to2, in2), fromNames ++ toNames ++ inNames, fromVars ++ toVars ++ inVars, fromErrors ++ toErrors ++ inErrors)
     }
     
     case e @ TicVar(loc, id) =>
-      (TicVar(loc, id), Set(Left(id) -> e.binding), Set())
+      (TicVar(loc, id), Set(), Set(id -> e.binding), Set())
     
-    case e @ StrLit(_, _) => (e, Set(), Set())
-    case e @ NumLit(_, _) => (e, Set(), Set())
-    case e @ BoolLit(_, _) => (e, Set(), Set())
-    case e @ NullLit(_) => (e, Set(), Set())
+    case e @ StrLit(_, _) => (e, Set(), Set(), Set())
+    case e @ NumLit(_, _) => (e, Set(), Set(), Set())
+    case e @ BoolLit(_, _) => (e, Set(), Set(), Set())
+    case e @ NullLit(_) => (e, Set(), Set(), Set())
     
     case ObjectDef(loc, props) => {
-      val mapped = props map {
+      val mapped: Vector[(String, (Expr, Set[(Identifier, NameBinding)], Set[(TicId, VarBinding)], Set[Error]))] = props map {
         case (key, value) => (key, performShake(value))
       }
       
-      val props2 = mapped map { case (key, (value, _, _)) => (key, value) }
+      val props2 = mapped map { case (key, (value, _, _, _)) => (key, value) }
       
-      val bindings = mapped.foldLeft(Set[(Either[TicId, Identifier], Binding)]()) {
-        case (bindings, (_, (_, bindings2, _))) => bindings ++ bindings2
+      val (names, vars) = mapped.foldLeft((Set[(Identifier, NameBinding)](), Set[(TicId, VarBinding)]())) {
+        case ((names, vars), (_, (_, names2, vars2, _))) => (names ++ names2, vars ++ vars2)
       }
       
       val errors = mapped.foldLeft(Set[Error]()) {
-        case (errors, (_, (_, _, errors2))) => errors ++ errors2
+        case (errors, (_, (_, _, _, errors2))) => errors ++ errors2
       }
       
-      (ObjectDef(loc, props2), bindings, errors)
+      (ObjectDef(loc, props2), names, vars, errors)
     }
     
     case ArrayDef(loc, values) => {
       val mapped = values map performShake
-      val values2 = mapped map { case (value, _, _) => value }
+      val values2 = mapped map { case (value, _, _, _) => value }
       
-      val bindings = mapped.foldLeft(Set[(Either[TicId, Identifier], Binding)]()) {
-        case (bindings, (_, bindings2, _)) => bindings ++ bindings2
+      val (names, vars) = mapped.foldLeft((Set[(Identifier, NameBinding)](), Set[(TicId, VarBinding)]())) {
+        case ((names, vars), (_, names2, vars2, _)) => (names ++ names2, vars ++ vars2)
       }
       
       val errors = mapped.foldLeft(Set[Error]()) {
-        case (errors, (_, _, errors2)) => errors ++ errors2
+        case (errors, (_, _, _, errors2)) => errors ++ errors2
       }
       
-      (ArrayDef(loc, values2), bindings, errors)
+      (ArrayDef(loc, values2), names, vars, errors)
     }
     
     case Descent(loc, child, property) => {
-      val (child2, bindings, errors) = performShake(child)
-      (Descent(loc, child2, property), bindings, errors)
+      val (child2, names, vars, errors) = performShake(child)
+      (Descent(loc, child2, property), names, vars, errors)
     }
     
     case Deref(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Deref(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Deref(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case d @ Dispatch(loc, name, actuals) => {
       val mapped = actuals map performShake
-      val actuals2 = mapped map { case (value, _, _) => value }
+      val actuals2 = mapped map { case (value, _, _, _) => value }
       
-      val bindings = mapped.foldLeft(Set[(Either[TicId, Identifier], Binding)]()) {
-        case (bindings, (_, bindings2, _)) => bindings ++ bindings2
+      val (names, vars) = mapped.foldLeft((Set[(Identifier, NameBinding)](), Set[(TicId, VarBinding)]())) {
+        case ((names, vars), (_, names2, vars2, _)) => (names ++ names2, vars ++ vars2)
       }
       
       val errors = mapped.foldLeft(Set[Error]()) {
-        case (errors, (_, _, errors2)) => errors ++ errors2
+        case (errors, (_, _, _, errors2)) => errors ++ errors2
       }
       
-      (Dispatch(loc, name, actuals2), bindings + (Right(name) -> d.binding), errors)
+      (Dispatch(loc, name, actuals2), names + (name -> d.binding), vars, errors)
     }
     
     case Where(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Where(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Where(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case With(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (With(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (With(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case Intersect(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Intersect(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Intersect(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case Union(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Union(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Union(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }    
 
     case Difference(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Difference(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Difference(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case Add(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Add(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Add(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case Sub(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Sub(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Sub(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case Mul(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Mul(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Mul(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case Div(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Div(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Div(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case Lt(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Lt(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Lt(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case LtEq(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (LtEq(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (LtEq(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case Gt(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Gt(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Gt(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case GtEq(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (GtEq(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (GtEq(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case Eq(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Eq(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Eq(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case NotEq(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (NotEq(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (NotEq(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case And(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (And(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (And(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case Or(loc, left, right) => {
-      val (left2, leftBindings, leftErrors) = performShake(left)
-      val (right2, rightBindings, rightErrors) = performShake(right)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
       
-      (Or(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+      (Or(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
     case Comp(loc, child) => {
-      val (child2, bindings, errors) = performShake(child)
-      (Comp(loc, child2), bindings, errors)
+      val (child2, names, vars, errors) = performShake(child)
+      (Comp(loc, child2), names, vars, errors)
     }
     
     case Neg(loc, child) => {
-      val (child2, bindings, errors) = performShake(child)
-      (Neg(loc, child2), bindings, errors)
+      val (child2, names, vars, errors) = performShake(child)
+      (Neg(loc, child2), names, vars, errors)
     }
     
     case Paren(_, child) => performShake(child)     // nix parentheses on shake

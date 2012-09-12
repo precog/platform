@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.{Path, VectorCase}
-import com.precog.bytecode.JType
+import com.precog.bytecode.{ JType, JObjectUnfixedT }
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
 
@@ -267,30 +267,61 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
             _ wrap JPathIndex(0) 
           }
 
-        case ObjectConcat(objects @ _*) =>
-          objects.map(composeSliceTransform2).reduceLeft { (l0, r0) =>
-            l0.zip(r0) { (sl, sr) =>
-              new Slice {
-                val size = sl.size
-                val columns = {
-                  val logicalFilters = sr.columns.groupBy(_._1.selector) mapValues { cols => new BoolColumn {
-                    def isDefinedAt(row: Int) = cols.exists(_._2.isDefinedAt(row))
-                    def apply(row: Int) = !isDefinedAt(row)
-                  }}
+        case OuterObjectConcat(objects @ _*) =>
+          if (objects.size == 1) {
+            val typed = Typed(objects.head, JObjectUnfixedT)
+            composeSliceTransform2(typed) 
+          } else {
+            objects.map(composeSliceTransform2).reduceLeft { (l0, r0) =>
+              l0.zip(r0) { (sl, sr) =>
+                new Slice {
+                  val size = sl.size
+                  val columns = {
+                    val logicalFilters = sr.columns.groupBy(_._1.selector) mapValues { cols => new BoolColumn {
+                      def isDefinedAt(row: Int) = cols.exists(_._2.isDefinedAt(row))
+                      def apply(row: Int) = !isDefinedAt(row)
+                    }}
 
-                  val remapped = sl.columns map {
-                    case (ref @ ColumnRef(jpath, ctype), col) => (ref, logicalFilters.get(jpath).flatMap(c => cf.util.FilterComplement(c)(col)).getOrElse(col))
+                    val remapped = sl.columns map {
+                      case (ref @ ColumnRef(jpath, ctype), col) => (ref, logicalFilters.get(jpath).flatMap(c => cf.util.FilterComplement(c)(col)).getOrElse(col))
+                    }
+
+                    val finalCols = remapped ++ sr.columns
+
+                    // We should never return a slice with zero columns in an outer object concat
+                    if (finalCols.size == 0) {
+                      Map(ColumnRef(JPath.Identity, CEmptyObject) -> new EmptyObjectColumn {
+                        def isDefinedAt(row: Int) = sl.isDefinedAt(row) || sr.isDefinedAt(row)
+                      })
+                    } else {
+                      finalCols
+                    }
                   }
+                }
+              }
+            }
+          }
 
-                  val finalCols = remapped ++ sr.columns
+        case InnerObjectConcat(objects @ _*) =>
+          if (objects.size == 1) {
+            val typed = Typed(objects.head, JObjectUnfixedT)
+            composeSliceTransform2(typed) 
+          } else {
+            objects.map(composeSliceTransform2).reduceLeft { (l0, r0) =>
+              l0.zip(r0) { (sl, sr) =>
+                new Slice {
+                  val size = sl.size
+                  val columns = {
+                    val logicalFilters = sr.columns.groupBy(_._1.selector) mapValues { cols => new BoolColumn {
+                      def isDefinedAt(row: Int) = cols.exists(_._2.isDefinedAt(row))
+                      def apply(row: Int) = !isDefinedAt(row)
+                    }}
 
-                  // We should never return a slice with zero columns
-                  if (finalCols.size == 0) {
-                    Map(ColumnRef(JPath.Identity, CEmptyObject) -> new EmptyObjectColumn {
-                      def isDefinedAt(row: Int) = sl.isDefinedAt(row) || sr.isDefinedAt(row)
-                    })
-                  } else {
-                    finalCols
+                    val remapped = sl.columns map {
+                      case (ref @ ColumnRef(jpath, ctype), col) => (ref, logicalFilters.get(jpath).flatMap(c => cf.util.FilterComplement(c)(col)).getOrElse(col))
+                    }
+
+                    remapped ++ sr.columns 
                   }
                 }
               }

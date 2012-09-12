@@ -139,7 +139,7 @@ trait BlockStoreTestSupport[M[+_]] { self =>
       case _ => false
     }
 
-    def sortTransspec(sortKeys: JPath*): TransSpec1 = ObjectConcat(sortKeys.zipWithIndex.map {
+    def sortTransspec(sortKeys: JPath*): TransSpec1 = InnerObjectConcat(sortKeys.zipWithIndex.map {
       case (sortKey, idx) => WrapObject(
         sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), JPathField("value"))) {
           case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, field)

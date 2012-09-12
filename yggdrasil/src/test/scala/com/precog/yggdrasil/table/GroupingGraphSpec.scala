@@ -331,7 +331,7 @@ trait GroupingGraphSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Sp
 
       "transform a group key transspec to use a desired sort key order" in {
         val trans = GroupKeyTrans(
-          ObjectConcat(
+          OuterObjectConcat(
             WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a")), keyName(0)),
             WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b")), keyName(1)),
             WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("c")), keyName(2))

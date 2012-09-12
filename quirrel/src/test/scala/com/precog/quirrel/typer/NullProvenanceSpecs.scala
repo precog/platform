@@ -108,7 +108,7 @@ object NullProvenanceSpecs extends Specification
     }
     
     "propagate through dispatch" in {
-      val tree = compile("a('b) := 'b a(//a + //b)")
+      val tree = compile("a(b) := b a(//a + //b)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -145,13 +145,13 @@ object NullProvenanceSpecs extends Specification
       {
         val tree = compile("(//a + //b) union 42")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, UnionProvenanceDifferentLength) 
+        tree.errors mustEqual Set(OperationOnUnrelatedSets) 
       }
       
       {
         val tree = compile("42 union (//a + //b)")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, UnionProvenanceDifferentLength)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     
@@ -159,13 +159,13 @@ object NullProvenanceSpecs extends Specification
       {
         val tree = compile("(//a + //b) intersect 42")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, IntersectProvenanceDifferentLength)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
         val tree = compile("42 intersect (//a + //b)")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, IntersectProvenanceDifferentLength)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }    
 
@@ -173,13 +173,13 @@ object NullProvenanceSpecs extends Specification
       {
         val tree = compile("(//a + //b) difference 42")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, DifferenceProvenanceDifferentLength)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
         val tree = compile("42 difference (//a + //b)")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, DifferenceProvenanceDifferentLength)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     

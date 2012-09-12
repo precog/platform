@@ -101,7 +101,7 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
           SourceKey.Single, 
           Some(TransSpec1.Id),
           GroupKeyTrans(
-            ObjectConcat(
+            OuterObjectConcat(
               WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000"),
               WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b0")), "000001")
             ),
@@ -126,7 +126,7 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
           SourceKey.Single, 
           Some(TransSpec1.Id),
           GroupKeyTrans(
-            ObjectConcat(
+            OuterObjectConcat(
               WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000")
             ),
             ticvars("a")),

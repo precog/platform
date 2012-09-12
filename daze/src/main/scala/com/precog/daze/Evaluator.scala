@@ -355,7 +355,7 @@ trait Evaluator[M[+_]] extends DAG
 
             result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, paths.Value))) }
             keyWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, trans.DerefArrayStatic(Leaf(Source), JPathIndex(0))), paths.Key.name)  //TODO deref by index 0 is WRONG
-            valueWrapped = trans.ObjectConcat(keyWrapped, trans.WrapObject(Leaf(Source), paths.Value.name))
+            valueWrapped = trans.InnerObjectConcat(keyWrapped, trans.WrapObject(Leaf(Source), paths.Value.name))
             wrapped = result map { _ transform valueWrapped }
             _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (m -> wrapped)) }
           } yield {
@@ -413,7 +413,7 @@ trait Evaluator[M[+_]] extends DAG
               leftSorted <- ctx.memoizationContext.sort(leftTable, TransSpec1.Id, SortAscending, left.memoId)
               rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
             } yield {
-              val keyValueSpec = trans.ObjectConcat(
+              val keyValueSpec = trans.InnerObjectConcat(
                 trans.WrapObject(
                   DerefObjectStatic(Leaf(Source), paths.Key),
                   paths.Key.name),
@@ -451,7 +451,7 @@ trait Evaluator[M[+_]] extends DAG
               leftSorted <- ctx.memoizationContext.sort(leftTable, TransSpec1.Id, SortAscending, left.memoId)
               rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
             } yield {
-              val keyValueSpec = trans.ObjectConcat(
+              val keyValueSpec = trans.InnerObjectConcat(
                 trans.WrapObject(
                   DerefObjectStatic(Leaf(Source), paths.Key),
                   paths.Key.name),
@@ -545,6 +545,58 @@ trait Evaluator[M[+_]] extends DAG
               for {
                 pendingTable <- loop(left, splits)
               } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArraySwap(pendingTable.trans, d.toInt))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
+        
+        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
+          right.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(left, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.InnerObjectConcat(pendingTable.trans))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
+        
+        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
+          left.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(right, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.InnerObjectConcat(pendingTable.trans))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
+        
+        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
+          right.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(left, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArrayConcat(pendingTable.trans))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
+        
+        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
+          left.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(right, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArrayConcat(pendingTable.trans))
             }
             
             case _ =>
@@ -765,8 +817,8 @@ trait Evaluator[M[+_]] extends DAG
                   case _ => None
                 }
                 
-                val spec = ObjectConcat(
-                  ObjectConcat(
+                val spec = InnerObjectConcat(
+                  InnerObjectConcat(
                     ObjectDelete(Leaf(Source), Set(JPathField("sort-" + id), paths.Value) ++ oldSortField),
                       wrappedSort),
                       wrappedValue)
@@ -860,7 +912,7 @@ trait Evaluator[M[+_]] extends DAG
       trans.WrapObject(DerefObjectStatic(Leaf(Source), JPathField(id.toString)), id.toString)
     }
     
-    parts reduce { (left, right) => trans.ObjectConcat(left, right) }
+    parts reduce { (left, right) => trans.InnerObjectConcat(left, right) }
   }
   
   private def buildChains(graph: DepGraph): Set[List[DepGraph]] =
@@ -933,7 +985,7 @@ trait Evaluator[M[+_]] extends DAG
     case Eq => trans.Equal(left, right)
     case NotEq => trans.Map1(trans.Equal(left, right), op1(Comp).f1)
     case instructions.WrapObject => WrapObjectDynamic(left, right)
-    case JoinObject => ObjectConcat(left, right)
+    case JoinObject => InnerObjectConcat(left, right)
     case JoinArray => ArrayConcat(left, right)
     case instructions.ArraySwap => sys.error("nothing happens")
     case DerefObject => DerefObjectDynamic(left, right)
@@ -945,6 +997,8 @@ trait Evaluator[M[+_]] extends DAG
     left.identities zip right.identities takeWhile { case (a, b) => a == b } length
   
   private def svalueToCValue(sv: SValue) = sv match {
+    case STrue => CBoolean(true)
+    case SFalse => CBoolean(false)
     case SString(str) => CString(str)
     case SDecimal(d) => CNum(d)
     // case SLong(l) => CLong(l)
@@ -952,7 +1006,7 @@ trait Evaluator[M[+_]] extends DAG
     case SNull => CNull
     case SObject(obj) if obj.isEmpty => CEmptyObject
     case SArray(Vector()) => CEmptyArray
-    case _ => sys.error("die a horrible death")
+    case _ => sys.error("die a horrible death: " + sv)
   }
   
   private def join(left: Table, right: Table)(key: TransSpec1, spec: TransSpec2): Table = {
@@ -963,7 +1017,7 @@ trait Evaluator[M[+_]] extends DAG
   
   private def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  //TODO don't use Map1, returns an empty array of type CNum
     val bottomWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, source), paths.Key.name)
-    trans.ObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
+    trans.InnerObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
   }
 
   private def buildValueWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {
@@ -998,7 +1052,7 @@ trait Evaluator[M[+_]] extends DAG
     
     val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
       
-    ObjectConcat(wrappedValueSpec, wrappedIdentitySpec)
+    InnerObjectConcat(wrappedValueSpec, wrappedIdentitySpec)
   }
   
   private def buildWrappedCrossSpec(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
@@ -1014,7 +1068,7 @@ trait Evaluator[M[+_]] extends DAG
     
     val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
 
-    ObjectConcat(wrappedIdentitySpec, wrappedValueSpec)
+    InnerObjectConcat(wrappedIdentitySpec, wrappedValueSpec)
   }
   
   private def buildIdShuffleSpec(indexes: Vector[Int]): TransSpec1 = {
@@ -1044,7 +1098,7 @@ trait Evaluator[M[+_]] extends DAG
       }
       
       wrapped.foldLeft[TransSpec1](ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*))) { (acc, ts) =>
-        trans.ObjectConcat(acc, ts)
+        trans.InnerObjectConcat(acc, ts)
       }
     }
   }

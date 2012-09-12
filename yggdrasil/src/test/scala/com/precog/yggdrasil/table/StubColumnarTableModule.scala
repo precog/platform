@@ -73,7 +73,7 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = true): M[Table] = {
       // We use the sort transspec1 to compute a new table with a combination of the 
       // original data and the new sort columns, referenced under the sortkey namespace
-      val tableWithSortKey = transform(ObjectConcat(Leaf(Source), WrapObject(sortKey, TableModule.paths.SortKey.name)))
+      val tableWithSortKey = transform(InnerObjectConcat(Leaf(Source), WrapObject(sortKey, TableModule.paths.SortKey.name)))
 
       implicit val jValueOrdering = blueeyes.json.xschema.DefaultOrderings.JValueOrdering
 
