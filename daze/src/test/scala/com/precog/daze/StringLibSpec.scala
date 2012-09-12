@@ -15,8 +15,7 @@ import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
 trait StringLibSpec[M[+_]] extends Specification
-    with Evaluator[M]
-    with TestConfigComponent[M] 
+    with EvaluatorTestSupport[M]
     with StringLib[M] 
     with MemoryDatasetConsumer[M] { self =>
       

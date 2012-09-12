@@ -46,8 +46,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with CrossAllSpec[M]
     with DistinctSpec[M] 
     with GroupingGraphSpec[M]
-    { spec => //with
-    //GrouperSpec[M] { spec =>
+    { spec => 
 
   //type GroupId = Int
   import trans._

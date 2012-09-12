@@ -15,14 +15,14 @@ import scalaz.std.anyVal._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 
-trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specification with ScalaCheck {
-  import trans._
-  import constants._
-
-  type GroupId = Int
-
+trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
   "simple single-key grouping" should {
     "compute a histogram by value" in check { set: Stream[Int] =>
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+      
       val data = set map { JNum(_) }
         
       val spec = GroupingSource(
@@ -60,6 +60,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
     }.pendingUntilFixed
     
     "compute a histogram by value (mapping target)" in check { set: Stream[Int] =>
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+
       val data = set map { JNum(_) }
       
       val doubleF1 = new CF1P({
@@ -108,6 +113,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
     }.pendingUntilFixed
     
     "compute a histogram by even/odd" in check { set: Stream[Int] =>
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+
       val data = set map { JNum(_) }
       
       val mod2 = new CF1P({
@@ -158,6 +168,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
   }
   
   "simple multi-key grouping" should {
+    val module = emptyTestModule
+    import module._
+    import trans._
+    import constants._
+
     val data = Stream(
       JObject(
         JField("a", JNum(12)) ::
@@ -183,6 +198,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
     
     "compute a histogram on two keys" >> {
       "and" >> {
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val table = fromJson(data)
         
         val spec = GroupingSource(
@@ -238,6 +258,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
       }.pendingUntilFixed
       
       "or" >> {
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val table = fromJson(data)
         
         val spec = GroupingSource(
@@ -317,6 +342,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
       })
       
       "and" >> {
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val table = fromJson(data)
         
         val spec = GroupingSource(
@@ -362,6 +392,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
       }.pendingUntilFixed
       
       "or" >> {
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val table = fromJson(data)
         
         val spec = GroupingSource(
@@ -424,6 +459,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
   
   "multi-set grouping" should {
     "compute ctr on value" in check { (rawData1: Stream[Int], rawData2: Stream[Int]) =>
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+
       val data1 = rawData1 map { JNum(_) }
       val data2 = rawData2 map { JNum(_) }
       
@@ -507,6 +547,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
     }.pendingUntilFixed
     
     "compute pair-sum join" in check { (rawData1: Stream[Int], rawData2: Stream[Int]) =>
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+
       val data1 = rawData1 map { JNum(_) }
       val data2 = rawData2 map { JNum(_) }
       
@@ -594,6 +639,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
     
     "compute ctr on one field of a composite value" >> {
       "and" >> check { (rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) =>
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
@@ -704,6 +754,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
       }.pendingUntilFixed
       
       "or" >> check { (rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) =>
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
@@ -817,6 +872,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
     
     "compute pair-sum join on one field of a composite value" >> {
       "and" >> check { (rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) =>
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
@@ -930,6 +990,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
       }.pendingUntilFixed
       
       "or" >> check { (rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) =>
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
@@ -1056,6 +1121,11 @@ trait GrouperSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
      */
      
     "handle non-trivial group alignment with composite key" in {
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+
       val foo = Stream(
         JObject(
           JField("a", JNum(42)) ::    // 1
