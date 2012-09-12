@@ -46,7 +46,7 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
         "identities": { "1": [1,3] },
         "values":     { "1": { "a": "foo", "b": true } }
       }
-    ]""".format(GroupKeyTrans.keyName(1), GroupKeyTrans.keyName(2)))
+    ]""".format(GroupKeyTrans.keyName(0), GroupKeyTrans.keyName(1)))
   
     val JArray(rightData) = JsonParser.parse("""[
       {
@@ -59,7 +59,7 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
         "identities": { "1": [4,5] },
         "values":     { "1": { "a": "baz", "b": true } }
       }
-    ]""".format(GroupKeyTrans.keyName(1), GroupKeyTrans.keyName(2)))
+    ]""".format(GroupKeyTrans.keyName(0), GroupKeyTrans.keyName(1)))
   
     val JArray(rightDataReversed) = JsonParser.parse("""[
       {
@@ -72,7 +72,7 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
         "identities": { "1": [4,5] },
         "values":     { "1": { "a": "baz", "b": true } }
       }
-    ]""".format(GroupKeyTrans.keyName(1), GroupKeyTrans.keyName(2)))
+    ]""".format(GroupKeyTrans.keyName(0), GroupKeyTrans.keyName(1)))
   }
 
   def simpleUnionAllTest = {

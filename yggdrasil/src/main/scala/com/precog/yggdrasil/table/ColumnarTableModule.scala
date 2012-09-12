@@ -150,6 +150,23 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       stream(sliceTransform.initial, slices)
     }
 
+    def intersect(set: Set[NodeSubset], requiredSorts: Map[MergeNode, Set[Seq[TicVar]]]): M[NodeSubset] = {
+      if (set.size == 1) {
+        set.head.point[M]
+      } else {
+        val preferredKeyOrder: Seq[TicVar] = requiredSorts(set.head.node).groupBy(a => a).mapValues(_.size).maxBy(_._2)._1
+
+        val reindexedSubsets = set map { 
+           sub => sub.copy(groupKeyTrans = sub.groupKeyTrans.alignTo(preferredKeyOrder))
+        }
+
+        intersect(reindexedSubsets.head.idTrans, reindexedSubsets.map(_.table).toSeq: _*) map { joinedTable =>
+          // todo: make sortedByIdentities not a boolean flag, maybe wrap groupKeyPrefix in Option
+          reindexedSubsets.head.copy(table = joinedTable, groupKeyPrefix = preferredKeyOrder, sortedByIdentities = true)
+        }
+      }
+    }
+
     /**
      * Intersects the given tables on identity, where identity is defined by the provided TransSpecs
      */
@@ -346,15 +363,40 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
-    type ConnectedSubgraph = Set[NodeSubset]
-
     // BorgResult tables must have the following structure with respect to the root:
     // {
-    //   "groupKeys": { "000001": ..., "000002": ... },
+    //   "groupKeys": { "000000": ..., "000001": ... },
     //   "identities": { "<string value of groupId1>": <identities for groupId1>, "<string value of groupId2>": ... },
     //   "values": { "<string value of groupId1>": <values for groupId1>, "<string value of groupId2>": ... },
     // }
-    case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId])
+    case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId], size: Option[Long] = None)
+
+    object BorgResult {
+      val allFields = Set(JPathField("groupKeys"), JPathField("identities"), JPathField("values"))
+
+      def apply(nodeSubset: NodeSubset): BorgResult = {
+        assert(!nodeSubset.sortedByIdentities)
+
+        val trans = ObjectConcat(
+          wrapGroupKeySpec(nodeSubset.groupKeyTrans.spec) ::
+          wrapIdentSpec(nodeSubset.idTrans) ::
+          nodeSubset.targetTrans.map(wrapValueSpec).toList : _*
+        )
+
+        BorgResult(nodeSubset.table.transform(trans), 
+                   nodeSubset.groupKeyTrans.keyOrder, 
+                   Set(nodeSubset.node.binding.groupId),
+                   nodeSubset.size)
+      }
+
+      def groupKeySpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("groupKeys"))
+      def identSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("identities"))
+      def valueSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("values"))
+
+      def wrapGroupKeySpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "groupKeys")
+      def wrapIdentSpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "identities")
+      def wrapValueSpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "values")
+    }
 
     object Universe {
       def allEdges(nodes: collection.Set[MergeNode]): collection.Set[MergeEdge] = {
@@ -440,14 +482,29 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       override def toString = ordering.map(_.map(_.toString.substring(1)).mkString("{", ", ", "}")).mkString("OrderingConstraint(", ",", ")")
     }
+
     object OrderingConstraint {
       val Zero = OrderingConstraint(Vector.empty)
 
       def fromFixed(order: Seq[TicVar]): OrderingConstraint = OrderingConstraint(order.map(v => Set(v)))
     }
 
+    /*
     sealed trait OrderingConstraint2 { self =>
+      import OrderingConstraint2._
+
       def fixed: Seq[TicVar]
+
+      // Fixes this one to the specified ordering:
+      def fixedFrom(fixed: Seq[TicVar]): Option[Seq[TicVar]] = {
+        val commonVariables = fixed.toSet intersect self.variables
+
+        val joined = Ordered.fromVars(fixed) join self
+        
+        if (joined.success(commonVariables)) {
+          Some(ordered(joined.join, joined.rightRem).fixed)
+        } else None
+      }
 
       def normalize: OrderingConstraint2
 
@@ -457,9 +514,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       def filter(pf: PartialFunction[OrderingConstraint2, Boolean]): OrderingConstraint2
 
-      def - (that: OrderingConstraint2): OrderingConstraint2 = {
-        val thatVars = that.variables
-
+      def - (thatVars: Set[TicVar]): OrderingConstraint2 = {
         (filter {
           case OrderingConstraint2.Variable(x) => !thatVars.contains(x)
 
@@ -473,8 +528,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       lazy val size = fixed.size      
 
-      import OrderingConstraint2._
-
       def & (that: OrderingConstraint2): Option[OrderingConstraint2] = {
         val joined = self.join(that)
 
@@ -483,26 +536,41 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
 
       def join(that: OrderingConstraint2): Join = {
-        // Tries to join the maximal number of elements from "remaining" into lastJoin:
-        def joinSet(constructJoin: (OrderingConstraint2, OrderingConstraint2) => OrderingConstraint2)(lastJoin: Join, remaining: Set[OrderingConstraint2]): Vector[Join] = {
-          if (lastJoin.leftRem == Zero) Vector(lastJoin)
-          else if (remaining.size == 0) Vector(lastJoin)
-          else {
-            remaining.foldLeft(Vector.empty[Join]) {
-              case (acc, choice) => 
-                val nextChoices = remaining - choice
+        def joinSet(constructJoin: (OrderingConstraint2, OrderingConstraint2) => OrderingConstraint2)(lastJoin: Join, choices: Set[OrderingConstraint2]): Join = {
+          println("joinSet: " + lastJoin + ", choices: " + choices)
 
-                val newJoin = lastJoin.leftRem.join(choice)
+          // Tries to join the maximal number of elements from "remaining" into lastJoin:
+          def joinSet0(lastJoin: Join, choices: Set[OrderingConstraint2]): Set[(Join, Set[OrderingConstraint2])] = {
+            val default = Set((lastJoin, choices))
 
-                if (newJoin.failure) acc
-                else {
-                  acc ++ joinSet(constructJoin)(
-                    Join(constructJoin(lastJoin.join, newJoin.join), leftRem = newJoin.leftRem, rightRem = unordered(lastJoin.rightRem, newJoin.rightRem)),
-                    nextChoices
-                  )
-                }
+            if (lastJoin.leftRem == Zero) {
+              default
+            } else {
+              choices.foldLeft(default) { 
+                case (solutions, choice) =>
+                  val nextChoices = choices - choice
+
+                  val newJoin = lastJoin.leftRem.join(choice)
+
+                  solutions ++ (if (newJoin.success) {
+                    joinSet0(
+                      Join(
+                        join     = constructJoin(lastJoin.join, newJoin.join), 
+                        leftRem  = newJoin.leftRem, 
+                        rightRem = unordered(lastJoin.rightRem, newJoin.rightRem)
+                      ),
+                      nextChoices
+                    )
+                  } else {
+                    Set.empty
+                  })
+              }
             }
           }
+
+          val (join, rightRem) = joinSet0(lastJoin, choices).toSeq.maxBy(_._1.size)
+
+          join.copy(rightRem = unordered(join.rightRem, Unordered(rightRem)))
         }
 
         def join2(left: OrderingConstraint2, right: OrderingConstraint2): Join = {
@@ -529,13 +597,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               if (left.head == r) Join(r, leftRem = Ordered(left.tail), rightRem = Zero) else Join.unjoined(l, r)
 
             case (l @ Variable(left), r @ Unordered(right)) => 
-              if (right.contains(l)) Join(l, leftRem = Zero, rightRem = Unordered(right - l)) else Join.unjoined(l, r)
+              joinSet((a, b) => ordered(a, b))(Join(Zero, l, Zero), right)
+              //if (right.contains(l)) Join(l, leftRem = Zero, rightRem = Unordered(right - l)) else Join.unjoined(l, r)
 
             case (l @ Ordered(left), r @ Unordered(right)) => 
-              joinSet((a,b) => ordered(a, b))(Join(Zero, leftRem = l), right).filterNot(_.failure).sortBy(_.size).lastOption.getOrElse(Join.unjoined(l, r))
+              joinSet((a, b) => ordered(a, b))(Join(Zero, l, Zero), right)
 
             case (l @ Unordered(left), r @ Unordered(right)) => 
-              joinSet((a,b) => unordered(a, b))(Join(Zero, leftRem = l), right).filterNot(_.failure).sortBy(_.size).lastOption.getOrElse(Join.unjoined(l, r))
+              joinSet((a, b) => unordered(a, b))(Join(Zero, l, Zero), right)
 
             case (l @ Variable(left), r @ Variable(right)) => 
               if (left == right) Join(l) else Join.unjoined(l, r)
@@ -554,6 +623,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         join2(self.normalize, that.normalize).normalize
       }
     }
+
     object OrderingConstraint2 {
       case class Join(join: OrderingConstraint2, leftRem: OrderingConstraint2 = Zero, rightRem: OrderingConstraint2 = Zero) {
         def normalize = copy(join = join.normalize, leftRem = leftRem.normalize, rightRem = rightRem.normalize)
@@ -564,7 +634,15 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
         def success = join != Zero
 
+        def success(variables: Set[TicVar]): Boolean = {
+          success && {
+            (join.variables intersect variables).size == variables.size
+          }
+        }
+
         def failure = !success
+
+        def failure(variables: Set[TicVar]) = !success(variables)
 
         def collapse: OrderingConstraint2 = ordered(join, unordered(leftRem, rightRem))
       }
@@ -572,22 +650,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       object Join {
         def unjoined(left: OrderingConstraint2, right: OrderingConstraint2): Join = Join(Zero, left, right)
       }
-
-      object ConstraintParser extends scala.util.parsing.combinator.JavaTokenParsers {
-        lazy val ticVar: Parser[OrderingConstraint2] = "'" ~> ident ^^ (s => Variable(JPathField(s)))
-
-        lazy val ordered: Parser[OrderingConstraint2] = ("[" ~> repsep(constraint, ",") <~ "]") ^^ (v => Ordered(v.toSeq))
-
-        lazy val unordered: Parser[OrderingConstraint2] = ("{" ~> repsep(constraint, ",") <~ "}") ^^  (v => Unordered(v.toSet))
-
-        lazy val zero: Parser[OrderingConstraint2] = "*" ^^^ Zero
-
-        lazy val constraint: Parser[OrderingConstraint2] = ticVar | ordered | unordered | zero
-
-        def parse(input: String): OrderingConstraint2 = parseAll(constraint, input).getOrElse(sys.error("Could not parse " + input))
-      }
-
-      def parse(input: String): OrderingConstraint2 = ConstraintParser.parse(input)
 
       def ordered(values: OrderingConstraint2*) = Ordered(Vector(values: _*))
 
@@ -646,6 +708,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           pf.lift(self2).filter(_ == true).map(Function.const(self2)).getOrElse(Zero)
         }
       }
+      object Ordered {
+        def fromVars(seq: Seq[TicVar]) = Ordered(seq.map(Variable(_)))
+      }
       case class Unordered(value: Set[OrderingConstraint2]) extends OrderingConstraint2 { self =>
         def fixed = value.toSeq.map(_.fixed).flatten
 
@@ -672,9 +737,40 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           pf.lift(self2).filter(_ == true).map(Function.const(self2)).getOrElse(Zero)
         }
       }
+      object Unordered {
+        def fromVars(set: Set[TicVar]) = Unordered(set.map(Variable(_)))
+      }
     }
+    */
 
     object OrderingConstraints {
+      def findCompatiblePrefix(a: Set[Seq[TicVar]], b: Set[Seq[TicVar]]): Option[Seq[TicVar]] = {
+        @tailrec def compatiblePrefix(sa: Seq[TicVar], sb: Seq[TicVar], acc: Seq[TicVar]): Option[Seq[TicVar]] = {
+          if (sa.isEmpty || sb.isEmpty) {
+            Some(acc)
+          } else if (sa.head == sb.head) {
+            compatiblePrefix(sa.tail, sb.tail, acc :+ sa.head)
+          } else {
+            (sa.toSet intersect sb.toSet).isEmpty.option(acc)
+          }
+        }
+
+        val found = for (sa <- a; sb <- b; result <- compatiblePrefix(sa, sb, Vector())) yield result
+        if (found.isEmpty) None else Some(found.maxBy(_.size))
+      }
+
+      def findLongestPrefix(unconstrained: Set[TicVar], from: Set[Seq[TicVar]]): Option[Seq[TicVar]] = {
+        @tailrec def compatiblePrefix(sa: Set[TicVar], suf: Seq[TicVar], acc: Seq[TicVar]): Option[Seq[TicVar]] = {
+          if (suf.isEmpty) Some(acc)
+          else if (sa.contains(suf.head)) compatiblePrefix(sa - suf.head, suf.tail, acc :+ suf.head)
+          else if ((sa intersect suf.toSet).isEmpty) Some(acc)
+          else None
+        }
+
+        val found = from.flatMap(compatiblePrefix(unconstrained, _, Vector()))
+        if (found.isEmpty) None else Some(found.maxBy(prefix => (prefix diff unconstrained.toSeq).size))
+      }
+
       /**
        * Compute a new constraint that can replace both input constraints
        */
@@ -773,17 +869,22 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
-    sealed trait NodeMetadata {
-      def size: Long
-    }
 
-    object NodeMetadata {
-      def apply(size0: Long) = new NodeMetadata {
-        def size = size0
-      }
-    }
+    //sealed trait NodeMetadata {
+    //  def size: Long
 
-    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], size: Long = 1) extends NodeMetadata {
+    //  def nodeOrderOpt: Option[Seq[TicVar]]
+    //}
+
+    //object NodeMetadata {
+    //  def apply(size0: Long, nodeOrderOpt0: Option[Seq[TicVar]]) = new NodeMetadata {
+    //    def size = size0
+
+    //    def nodeOrderOpt = nodeOrderOpt0
+    //  }
+    //}
+
+    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], sortedByIdentities: Boolean = false, size: Option[Long] = None) {
       def sortedOn = groupKeyTrans.alignTo(groupKeyPrefix).prefixTrans(groupKeyPrefix.size)
     }
 
@@ -903,11 +1004,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       nodeSubsetsM map { _.toMap }
     }
 
-    def alignOnEdges(spanningGraph: MergeGraph): M[Map[GroupId, Set[NodeSubset]]] = {
+    def alignOnEdges(spanningGraph: MergeGraph, requiredSorts: Map[MergeNode, Set[Seq[TicVar]]]): M[Map[GroupId, Set[NodeSubset]]] = {
       import OrderingConstraints._
-
-      // Compute required sort orders based on graph traversal
-      val requiredSorts: Map[MergeNode, Set[Seq[TicVar]]] = findRequiredSorts(spanningGraph)
 
       val sortPairs: M[Map[MergeNode, Map[Seq[TicVar], NodeSubset]]] = 
         requiredSorts.map({ case (node, orders) => materializeSortOrders(node, orders) map { node -> _ }}).toStream
@@ -933,8 +1031,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   
                   alignedM map {
                     case (aAligned, bAligned) => List(
-                      NodeSubset(a, aAligned, aSorted.idTrans, aSorted.targetTrans, aSorted.groupKeyTrans, aSorted.groupKeyPrefix),
-                      NodeSubset(b, bAligned, bSorted.idTrans, bSorted.targetTrans, bSorted.groupKeyTrans, bSorted.groupKeyPrefix)
+                      aSorted.copy(table = aAligned),
+                      bSorted.copy(table = bAligned)
                     )
                   }
               }
@@ -947,22 +1045,15 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
-    // TODO: This should NOT return NodeSubset, but rather, something like it, without
-    //        groupKeyPrefix (which is MEANINGELSS for the return value)
-    def intersect(set: Set[NodeSubset]): M[NodeSubset] = {
-      sys.error("todo")
-    }
-
-    /**
-     * Represents the cost of a particular borg traversal plan, measured in terms of IO.
-     * Computational complexity of algorithms occurring in memory is neglected. 
-     * This should be thought of as a rough approximation that eliminates stupid choices.
-     */
+/*
+    // 
+    // Represents the cost of a particular borg traversal plan, measured in terms of IO.
+    // Computational complexity of algorithms occurring in memory is neglected. 
+    // This should be thought of as a rough approximation that eliminates stupid choices.
+    // 
     final case class BorgTraversalCostModel private (ioCost: Long, size: Long, ticVars: Set[TicVar]) { self =>
-      /**
-       * Computes a new model derived from this one by cogroup with the specified set.
-       */
-      def consume(rightSize: Long, rightTicVars: Set[TicVar], accResort: Boolean): BorgTraversalCostModel = {
+      // Computes a new model derived from this one by cogroup with the specified set.
+      def consume(rightSize: Long, rightTicVars: Set[TicVar], accResort: Boolean, nodeResort: Boolean): BorgTraversalCostModel = {
         val commonTicVars = self.ticVars intersect rightTicVars
 
         val unionTicVars = self.ticVars ++ rightTicVars
@@ -990,295 +1081,493 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       val Zero = new BorgTraversalCostModel(0, 0, Set.empty)
     }
 
-    /**
-     * Represents a step in a borg traversal plan. The step is defined by the following elements:
-     * 
-     *  1. The order of the accumulator prior to executing the step.
-     *  2. The order of the accumulator after executing the step.
-     *  3. The node being incorporated into the accumulator during this step.
-     *  4. The tic variables of the node being incorporated into this step.
-     *  5. The ordering of the node required for cogroup.
-     * 
-     */
-    case class BorgTraversalPlanStep(accOrderPre: OrderingConstraint, node: MergeNode, accOrderPost: OrderingConstraint) { self =>
+    // 
+    // Represents a step in a borg traversal plan. The step is defined by the following elements:
+    // 
+    //  1. The order of the accumulator prior to executing the step.
+    //  2. The order of the accumulator after executing the step.
+    //  3. The node being incorporated into the accumulator during this step.
+    //  4. The tic variables of the node being incorporated into this step.
+    //  5. The ordering of the node required for cogroup.
+    // 
+    case class BorgTraversalPlanUnfixed(priorPlan: Option[BorgTraversalPlanUnfixed], node: MergeNode, nodeOrder: OrderingConstraint2, accOrderPost: OrderingConstraint2, costModel: BorgTraversalCostModel, accResort: Boolean, nodeResort: Boolean) { self =>
+      import OrderingConstraint2._
+
+      def accOrderPre: OrderingConstraint2 = priorPlan.map(_.accOrderPost).getOrElse(OrderingConstraint2.Zero)
+
+      def accSortOrder = accOrderPost - newTicVars
+
+      def consume(node: MergeNode, nodeSize: Long, nodeOrderOpt: Option[Seq[TicVar]]): BorgTraversalPlanUnfixed = {
+        println("consuming " + node)
+
+        val (accOrderPost, nodeOrder, accResort, nodeResort) = {
+          println("postTicVars = " + postTicVars)
+
+          val commonVariables = postTicVars intersect node.ticVars
+
+          println("commonVariables = " + commonVariables)
+
+          val otherVariables = (postTicVars union node.ticVars) diff commonVariables
+
+          println("otherVariables = " + otherVariables)
+
+          val nodeUniqueVariables = node.ticVars diff commonVariables
+
+          println("nodeUniqueVariables = " + nodeUniqueVariables)
+
+          val initialNodeOrder = nodeOrderOpt.map(nodeOrder => Ordered.fromVars(nodeOrder))
+
+          initialNodeOrder.map(o => (o, self.accOrderPost join o)).filter(_._2.success(commonVariables)).map {
+            case (nodeOrder, join) =>
+              (join.collapse, nodeOrder, false, false)
+          }.getOrElse {
+            val minimalJoinConstraint = ordered(Unordered.fromVars(commonVariables), Unordered.fromVars(otherVariables))
+
+            println("minimalJoinConstraint = " + minimalJoinConstraint.render)
+
+            // Can, in theory, we reuse the node ordering?
+            initialNodeOrder.map { o => (o, (o join minimalJoinConstraint)) }.filter(_._2.success(commonVariables)).map {
+              case (nodeOrder, nodeJoin) =>
+                println("nodeOrder = " + nodeOrder.render + ", nodeJoin = " + nodeJoin)
+                // Have to resort the acc, because the node order is compatible with the minimal join constraint:
+                (minimalJoinConstraint, nodeOrder, true, false)
+            }.getOrElse {
+              // Can, in theory, we reuse the accumulator ordering?
+              val accJoin = (self.accOrderPost join minimalJoinConstraint)
+
+              println("self.accOrderPost = " + self.accOrderPost)
+
+              println("accJoin = " + accJoin)
+
+              // MUST sort node, it's new order is minimally constrained:
+              val nodeOrder = ordered(Unordered.fromVars(commonVariables), Unordered.fromVars(nodeUniqueVariables))
+
+              println("nodeOrder = " + nodeOrder)
+
+              if (accJoin.success(commonVariables)) {  
+                println("(self.accOrderPost join nodeOrder) = " + (self.accOrderPost join nodeOrder))
+                ((self.accOrderPost join nodeOrder).collapse, nodeOrder, false, true)
+              } else {
+                (minimalJoinConstraint, nodeOrder, true, true)
+              }
+            }
+          }
+        }
+
+        val costModel = self.costModel.consume(nodeSize, node.ticVars, accResort, nodeResort)
+
+        BorgTraversalPlanUnfixed(Some(self), node, nodeOrder.normalize, accOrderPost.normalize, costModel, accResort, nodeResort)
+      }
+
       // Tic variables before the step is executed:
-      lazy val preTicVars = accOrderPre.ordering.toSet.flatten
+      lazy val preTicVars = accOrderPre.variables
 
       // Tic variables after the step is executed:
-      lazy val postTicVars = accOrderPost.ordering.toSet.flatten
+      lazy val postTicVars = accOrderPost.variables
 
       // New tic variables gained during the step:
       lazy val newTicVars = postTicVars -- preTicVars
+    
+      def unpack: List[BorgTraversalPlanUnfixed] = {
+        def unpack0(plan: BorgTraversalPlanUnfixed, acc: List[BorgTraversalPlanUnfixed]): List[BorgTraversalPlanUnfixed] = {
+          val unpackedPlan = plan
 
-      def nodeTicVars: Set[TicVar] = node.ticVars
+          plan.priorPlan match {
+            case Some(plan0) => unpack0(plan0, unpackedPlan :: acc)
+            case None => unpackedPlan :: acc
+          }
+        }
 
-      // Whether or not the accumulator needs to be resorted for this step.
-      lazy val accResort: Boolean = {
-        val leftUniqueTicVars = preTicVars -- nodeTicVars
-        val rightUniqueTicVars = nodeTicVars -- preTicVars
-
-        val leftCommon = (accOrderPre - leftUniqueTicVars)
-        val rightCommon = (nodeOrder - rightUniqueTicVars)
-
-        val resortNeeded = (leftCommon & rightCommon).isEmpty
-
-        //if (resortNeeded) println("RESORT NEEDED!!!!!!!!!!!!!!!")
-
-        resortNeeded
+        unpack0(this, Nil)
       }
+    }
 
-      // The order the node must be sorted by in order to perform the step:
-      lazy val nodeOrder: OrderingConstraint = {
-        val uniqueAccTicVars = preTicVars -- nodeTicVars
+    // 
+    // Represents a (perhaps partial) traversal plan for applying the borg algorithm,
+    // together with the cost of the plan.
+    // 
+    case class BorgTraversalPlanFixed private (node: MergeNode, resortNode: Option[Seq[TicVar]], resortAcc: Option[Seq[TicVar]], accOrderPost: Seq[TicVar], joinPrefix: Int, next: Option[BorgTraversalPlanFixed])
+    object BorgTraversalPlanFixed {
+      def apply(uplan: BorgTraversalPlanUnfixed): Option[BorgTraversalPlanFixed] = {
 
-        accOrderPost - uniqueAccTicVars
-      }
 
-      // Choses an arbitrary order:
-      def fixed: BorgTraversalPlanStep = BorgTraversalPlanStep.fromAccOrderPost(preTicVars, OrderingConstraint.fromFixed(accOrderPost.fixed), node)
+        def rec(fplan: BorgTraversalPlanFixed, uplan: BorgTraversalPlanUnfixed): BorgTraversalPlanFixed = {
 
-      def fixedBefore(next: BorgTraversalPlanStep): BorgTraversalPlanStep = {
-        accOrderPost & next.accOrderPre match {
-          case Some(newAccOrderPost) => 
-            BorgTraversalPlanStep.fromAccOrderPost(preTicVars, newAccOrderPost, node)
+        }
 
-          case None => 
-            self.fixed
+        uplan.priorPlan.map { priorPlan =>
+          val accOrderPost = uplan.accOrderPost
+
+          lazy val nodeFixed = uplan.nodeOrder.fixedFrom(accOrderPost - )
+          lazy val accFixed = uplan.accOrder.fixed
+
+
+          val (resortNode, resortAcc) = (uplan.resortNode, uplan.resortAcc) match {
+            case (false, true) => 
+              (Node, Some(accFixed))
+
+            case (true, false) =>
+              (Some(nodeFixed), None)
+
+            case (true, true) =>
+              (Some(nodeFixed), Some(uplan.accOrder.fixedFrom(nodeFixed)))
+
+            case (false, false) => (None, None)
+          }
+
+          val fixed = BorgTraversalPlanFixed(
+            node         = uplan.node,
+            resortNode   = resortNode,
+            resortAcc    = resortAcc,
+            accOrderPost = uplan.accOrderPost.fixed,
+            joinPrefix   = ,
+            next       = None
+          )
+
+          rec(fixed, priorPlan)
         }
       }
     }
 
-    object BorgTraversalPlanStep {
-      def fromAccOrderPre(accOrderPre: OrderingConstraint, node: MergeNode): BorgTraversalPlanStep = {
-        val preTicVars  = accOrderPre.ordering.toSet.flatten
-        val nodeTicVars = node.ticVars
+    // 
+    // Finds a traversal order for the borg algorithm which minimizes the number of resorts 
+    // required.
+    // 
+    def findBorgTraversalOrder(connectedGraph: MergeGraph, nodeOracle: MergeNode => NodeMetadata): BorgTraversalPlanUnfixed= {
+      import OrderingConstraint2._
 
-        val commonNodeTicVars = preTicVars intersect nodeTicVars
-        val uniqueNodeTicVars = nodeTicVars -- preTicVars
+      // Find all the nodes accessible from the specified node (through edges):
+      def connections(node: MergeNode): Set[MergeNode] = connectedGraph.edgesFor(node).flatMap(e => Set(e.a, e.b)) - node
 
-        val nodeOrderConstraint = OrderingConstraint(Seq(commonNodeTicVars, uniqueNodeTicVars))
+      def pick(consumed: Set[MergeNode], choices: Set[MergeNode], plan: BorgTraversalPlanUnfixed): Set[BorgTraversalPlanUnfixed] = {
+        if (choices.isEmpty) Set(plan)
+        else for {
+          choice <- choices
+          finalPlan <- {
+            val nodeMetadata = nodeOracle(choice)
 
-        val accOrderPost: OrderingConstraint = accOrderPre & nodeOrderConstraint match {
-          case Some(constraint) => 
-            // No resort necessary:
-            constraint
+            val consumed0 = consumed + choice
+            val choices0 = (choices union connections(choice)) diff consumed0
 
-          case None => 
-            // Have to resort:
-            val commonTicVars = preTicVars intersect nodeTicVars
-            val unionTicVars = preTicVars union nodeTicVars
+            val newPlan = plan.consume(choice, nodeMetadata.size, nodeMetadata.nodeOrderOpt)
 
-            OrderingConstraint(Seq(commonTicVars, unionTicVars -- commonTicVars))
-        }
-
-        BorgTraversalPlanStep(accOrderPre, node, accOrderPost)
+            pick(consumed0, choices0, newPlan)
+          }
+        } yield finalPlan
       }
 
-      def fromAccOrderPost(preTicVars: Set[TicVar], accOrderPost: OrderingConstraint, node: MergeNode): BorgTraversalPlanStep = {
-        val postTicVars = accOrderPost.ordering.toSet.flatten
-        val newTicVars = postTicVars -- preTicVars
+      val initials = connectedGraph.nodes.map { node =>
+        val nodeOrder = nodeOracle(node).nodeOrderOpt.map(Ordered.fromVars).getOrElse(Unordered.fromVars(node.ticVars))
 
-        val accOrderPre = accOrderPost - newTicVars
+        val plan = BorgTraversalPlanUnfixed(
+          priorPlan    = None,
+          node         = node,
+          nodeOrder    = nodeOrder,
+          accOrderPost = nodeOrder,
+          accResort    = false,
+          nodeResort   = false,
+          costModel    = BorgTraversalCostModel.Zero
+        )
 
-        BorgTraversalPlanStep(accOrderPre, node, accOrderPost)
+        val choices = connections(node)
+
+        (plan, choices)
       }
+      (initials.flatMap {
+        case (plan, choices) =>
+          pick(Set(plan.node), choices, plan)
+      }).toSeq.sortBy(_.costModel.ioCost).head
     }
+    */
 
-    /**
-     * Represents a (perhaps partial) traversal plan for applying the borg algorithm,
-     * together with the cost of the plan.
-     */
-    case class BorgTraversalPlan(steps: Vector[BorgTraversalPlanStep], costModel: BorgTraversalCostModel) {
-      /**
-       * The set of all tic variables after the plan has been executed.
-       */
-      def ticVars = steps.lastOption.map(_.postTicVars).getOrElse(Set.empty)
+    def join(leftNode: BorgNode, rightNode: BorgNode, requiredOrders: Map[MergeNode, Set[Seq[TicVar]]]): M[BorgResultNode] = {
+      import BorgResult._
+      import OrderingConstraints._
 
-      /**
-       * Generates a new plan by cogrouping the result of this plan with the specified node.
-       */
-      def consume(rightNode: MergeNode, rightSize: Long) = {
-        val rightTicVars: Set[TicVar] = rightNode.ticVars
 
-        val accOrderPre = steps.lastOption match {
-          case Some(last) => last.accOrderPost
-          case None => OrderingConstraint.Zero
-        }
-
-        val newStep = BorgTraversalPlanStep.fromAccOrderPre(accOrderPre, rightNode)
-
-        val newCostModel = costModel.consume(rightSize, rightTicVars, newStep.accResort)
-
-        copy(
-          steps = steps :+ newStep,
-          costModel = newCostModel
+      def reorderGroupKeySpec(newOrder: Seq[TicVar], original: Seq[TicVar]) = {
+        ObjectConcat(
+          newOrder.zipWithIndex.map {
+            case (ticvar, i) => GroupKeyTrans.reindex(BorgResult.groupKeySpec(Source), original.indexOf(ticvar), i)
+          }: _*
         )
       }
 
-      /**
-       * Generates a completely fixed plan (a totally defined sort order for the accumulate and nodes being consumed).
-       */
-      def fixed: BorgTraversalPlan = {
-        // Back-propagate constraints to fix everything:
-        val fixedSteps = {
-          def fix0(unfixed: Vector[BorgTraversalPlanStep], fixed: Vector[BorgTraversalPlanStep]): Vector[BorgTraversalPlanStep] = {
-            unfixed.lastOption match {
-              case None => fixed
+      def resortBorgResult(borgResult: BorgResult, newPrefix: Seq[TicVar]): M[BorgResult] = {
+        val newAssimilatorOrder = newPrefix ++ (borgResult.groupKeys diff newPrefix)
 
-              case Some(unfixedHead) =>
-                fixed.headOption match {
-                  case None =>
-                    // We've met all constraints, just pick any fixed ordering:
-                    fix0(unfixed.init, Vector(unfixedHead.fixed))
+        val remapSpec = ObjectConcat(
+          wrapGroupKeySpec(reorderGroupKeySpec(newAssimilatorOrder, borgResult.groupKeys)),
+          wrapIdentSpec(identSpec(Source)),
+          wrapValueSpec(valueSpec(Source))
+        )
 
-                  case Some(fixedHead) =>
-                    val newFixed = unfixedHead.fixedBefore(fixedHead)
+        borgResult.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending) map { sorted =>
+          borgResult.copy(table = sorted, groupKeys = newAssimilatorOrder)
+        }
+      }
 
-                    fix0(unfixed.init, newFixed +: fixed)
-                }
+      def resortVictimToBorgResult(victim: NodeSubset, toPrefix: Seq[TicVar]): M[BorgResult] = {
+        // the assimilator is already in a compatible ordering, so we need to
+        // resort the victim and we don't care what the remainder of the ordering is,
+        // because we're not smart enough to figure out what the right one is and are
+        // counting on our traversal order to get the biggest ordering constraints first.
+        val newOrder = toPrefix ++ (victim.node.keys -- toPrefix).toSeq
+        val remapSpec = ObjectConcat(
+          wrapGroupKeySpec(reorderGroupKeySpec(newOrder, victim.groupKeyTrans.keyOrder)) ::
+          wrapIdentSpec(victim.idTrans) :: 
+          victim.targetTrans.map(wrapValueSpec).toList: _*
+        )
+
+        victim.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending) map { sorted =>
+          BorgResult(sorted, newOrder, Set(victim.node.binding.groupId))
+        }
+      }
+
+      def resortBoth(assimilator: BorgResult, victim: NodeSubset): Option[M[(BorgResult, BorgResult, Seq[TicVar])]] = {
+        // no compatible prefix, so both will require a resort
+        // this case needs optimization to see into the future to know what the best ordering
+        // is, but if every time we assimilate a node we have removed an ordering that was only
+        // required to assimilate some previously consumed node, we can know that we're at least 
+        // picking from an order that may be necessary for some other purpose.
+        findLongestPrefix(assimilator.groupKeys.toSet, requiredOrders(victim.node)) map { newPrefix =>
+          for {
+            sortedAssimilator <- resortBorgResult(assimilator, newPrefix)
+            sortedVictim <- resortVictimToBorgResult(victim, newPrefix)
+          } yield {
+            (sortedAssimilator, sortedVictim, newPrefix)
+          }
+        }
+      }
+
+      def joinAsymmetric(assimilator: BorgResult, victim: NodeSubset): M[(BorgResult, BorgResult, Seq[TicVar])] = {
+        (if (victim.sortedByIdentities) {
+          findCompatiblePrefix(Set(assimilator.groupKeys), requiredOrders(victim.node)) map { commonPrefix =>
+            resortVictimToBorgResult(victim, commonPrefix) map { prepared => 
+              (assimilator, prepared, commonPrefix) 
+            }
+          } orElse {
+            resortBoth(assimilator, victim)
+          } 
+        } else {
+          // victim already has a sort order that may or may not be compatible with the assimilator
+          findCompatiblePrefix(Set(assimilator.groupKeys), Set(victim.groupKeyTrans.keyOrder)) map { commonPrefix =>
+            // the assimilator and the victim are both already sorted according to a compatible
+            // ordering, so we just need to transform the victim to a BorgResult
+            (assimilator, BorgResult(victim), commonPrefix).point[M]
+          } orElse {
+            // the victim had a preexisting sort order which was incompatible with the assimilator.
+            // so we should first look to see if there's a compatible prefix with one of the other
+            // required sort orders for the node that the victim can be sorted by
+            findCompatiblePrefix(Set(assimilator.groupKeys), requiredOrders(victim.node)) map { commonPrefix =>
+              resortVictimToBorgResult(victim, commonPrefix) map { prepared => 
+                (assimilator, prepared, commonPrefix)
+              }
+            } 
+          } orElse {
+            // the assimilator ordering was not compatible with any of the required sort orders
+            // for the node, so we need to resort the accumulator to be compatible with
+            // the victim
+            findLongestPrefix(assimilator.groupKeys.toSet, Set(victim.groupKeyTrans.keyOrder)) map { newPrefix =>
+              resortBorgResult(assimilator, newPrefix) map { newAssimilator =>
+                (newAssimilator, BorgResult(victim), newPrefix)
+              }
+            }
+          } orElse {
+            // the victim must have a sort order that is entirely incompatible with the assimilator, 
+            // so both must be resorted. For example, assimilator: {a, b, c, d}, victim: [a, b, e, d]
+            resortBoth(assimilator, victim)
+          } 
+        }) getOrElse {
+          sys.error("Assimilator with keys " + assimilator.groupKeys + " and victim " + victim + " incompatible")
+        }
+      }
+
+      def joinSymmetric(borgLeft: BorgResult, borgRight: BorgResult): M[(BorgResult, BorgResult, Seq[TicVar])] = {
+        findCompatiblePrefix(Set(borgLeft.groupKeys), Set(borgRight.groupKeys)) map { compatiblePrefix =>
+          (borgLeft, borgRight, compatiblePrefix).point[M]
+        } orElse {
+          // one or the other will require a re-sort
+          if (borgLeft.size.exists(s => borgRight.size.exists(_ < s))) {
+            // sort the left
+            findLongestPrefix(borgLeft.groupKeys.toSet, Set(borgRight.groupKeys)) map { commonPrefix =>
+              resortBorgResult(borgLeft, commonPrefix) map { newBorgLeft =>
+                (newBorgLeft, borgRight, commonPrefix)
+              }
+            }
+          } else {
+            findLongestPrefix(borgRight.groupKeys.toSet, Set(borgLeft.groupKeys)) map { commonPrefix =>
+              resortBorgResult(borgRight, commonPrefix) map { newBorgRight =>
+                (borgLeft, newBorgRight, commonPrefix)
+              }
             }
           }
-
-          fix0(steps, Vector.empty)
+        } getOrElse {
+          sys.error("Borged sets sharing an edge are incompatible: " + borgLeft.groupKeys + "; " + borgRight.groupKeys)
         }
-
-        copy(steps = fixedSteps)
       }
-    }
 
-    object BorgTraversalPlan {
-      val Zero = BorgTraversalPlan(Vector.empty, BorgTraversalCostModel.Zero) 
-    }
+      if (leftNode == rightNode) {
+        leftNode match {
+          case leftResult : BorgResultNode => leftResult.point[M]
+          case _ => sys.error("Cannot have a self-cycle on non-result BorgNodes")
+        }
+      } else {
+        val joinablesM = (leftNode, rightNode) match {
+          case (BorgVictimNode(left), BorgVictimNode(right)) =>
+            if (left.sortedByIdentities && right.sortedByIdentities) {
+              // choose compatible ordering for both sides from requiredOrders
+              OrderingConstraints.findCompatiblePrefix(requiredOrders(left.node), requiredOrders(right.node)) match {
+                case Some(prefix) =>
+                  val (toSort, toAssimilate) = if (left.size.exists(ls => right.size.exists(ls < _))) (left, right) 
+                                               else (right, left)
 
-    /**
-     * Finds a traversal order for the borg algorithm which minimizes the number of resorts 
-     * required.
-     */
-    def findBorgTraversalOrder(spanningGraph: MergeGraph, nodeOracle: MergeNode => NodeMetadata): BorgTraversalPlan = {
-      // Find all the nodes accessible from the specified node (through edges):
-      def connections(node: MergeNode): Set[MergeNode] = spanningGraph.edgesFor(node).flatMap(e => Set(e.a, e.b)) - node
+                  resortVictimToBorgResult(toSort, prefix) flatMap { assimilator =>
+                    joinAsymmetric(assimilator, toAssimilate)
+                  }
 
-      // TODO: Discard junk in the Map[Set[MergeNode], Set[BorgTraversalPlan]]
-
-      def pick0(fixed: Set[MergeNode], unfixed: Set[MergeNode], options: Set[MergeNode], 
-                plans: Map[Set[MergeNode], Set[BorgTraversalPlan]]): Map[Set[MergeNode], Set[BorgTraversalPlan]] = {
-        // Normally, the choices are constrained to those nodes that are connected to those 
-        // already merged into the Borg collective. However, initially, any node can be chosen
-        // as the starting node. So this helper function factors out the duplication:
-        def chooseFrom(choices: Set[MergeNode]): Map[Set[MergeNode], Set[BorgTraversalPlan]] = {
-          // We have lots of choices, let's try each one and see what happens!
-          choices.foldLeft(plans) {
-            case (plans, choice) =>
-              val nodeMetadata = nodeOracle(choice)
-
-              val newFixed   = fixed + choice
-              val newUnfixed = unfixed - choice
-              val newOptions = options ++ connections(choice) -- newFixed
-
-              plans(fixed).foldLeft(plans) {
-                case (plans, fixedPlan) =>
-                  val newPlan = fixedPlan.consume(choice, nodeMetadata.size)
-
-                  val newSet = plans.getOrElse(newFixed, Set.empty) + newPlan
-
-                  pick0(newFixed, newUnfixed, newOptions, plans + (newFixed -> newSet))
+                case None =>
+                  sys.error("Unable to find compatible ordering from minimized set; something went wrong.")
               }
-          }
+            } else if (left.sortedByIdentities) {
+              joinAsymmetric(BorgResult(right), left)
+            } else if (right.sortedByIdentities) {
+              joinAsymmetric(BorgResult(left), right)
+            } else {
+              joinSymmetric(BorgResult(left), BorgResult(right))
+            }
+
+          case (BorgResultNode(left), BorgVictimNode(right)) => joinAsymmetric(left, right)
+          case (BorgVictimNode(left), BorgResultNode(right)) => joinAsymmetric(right, left)
+          case (BorgResultNode(left), BorgResultNode(right)) => joinSymmetric(left, right)
         }
 
-        if (unfixed.isEmpty) plans                    // Nothing to traverse, return plans
-        else if (options.isEmpty) chooseFrom(unfixed) // First pass through, choose any node
-        else chooseFrom(options)                      // Can only choose from those merged into collective
-      }
-      
-      val plans = pick0(Set.empty, spanningGraph.nodes, Set.empty, Map(Set.empty -> Set(BorgTraversalPlan.Zero)))
+        joinablesM map {
+          case (leftJoinable, rightJoinable, commonPrefix) =>
+            // todo: Reorder keys into the order specified by the common prefix. The common prefix determination
+            // will be factored out in the plan-based version, and will simply be a specified keyOrder that both
+            // sides will be brought into alignment with, instead of passing in the required sort orders.
+            val neededRight = rightJoinable.groupKeys diff leftJoinable.groupKeys
+            val rightKeyMap = rightJoinable.groupKeys.zipWithIndex.toMap
 
-      plans(spanningGraph.nodes).toSeq.sortBy(_.costModel.ioCost).head
+            val groupKeyTrans2 = ObjectConcat(
+              groupKeySpec(SourceLeft) +: neededRight.zipWithIndex.map { 
+                case (key, i) =>
+                wrapGroupKeySpec(
+                  WrapObject(
+                    DerefObjectStatic(groupKeySpec(SourceRight), JPathField(GroupKeyTrans.keyName(rightKeyMap(key)))),
+                    GroupKeyTrans.keyName(i + leftJoinable.groupKeys.size)
+                  )
+                )
+              }: _*
+            )
+
+            val cogroupBySpec = ObjectConcat(
+              (0 until commonPrefix.size) map { i =>
+                WrapObject(
+                  DerefObjectStatic(groupKeySpec(Source), JPathField(GroupKeyTrans.keyName(i))),
+                  GroupKeyTrans.keyName(i)
+                )
+              }: _*
+            )
+
+            val idTrans2 = wrapIdentSpec(ObjectConcat(identSpec(SourceLeft), identSpec(SourceRight)))
+            val recordTrans2 = wrapValueSpec(ObjectConcat(valueSpec(SourceLeft), valueSpec(SourceRight)))
+
+            val borgTrans = ObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
+            val unmatchedTrans = ObjectDelete(Leaf(Source), BorgResult.allFields)
+
+            BorgResultNode(
+              BorgResult(
+                leftJoinable.table.cogroup(cogroupBySpec, cogroupBySpec, rightJoinable.table)(unmatchedTrans, unmatchedTrans, borgTrans),
+                leftJoinable.groupKeys ++ neededRight,
+                leftJoinable.groups union rightJoinable.groups
+              )
+            )
+        }
+      }
+    }
+
+    sealed trait BorgNode {
+      def keys: Seq[TicVar]
+    }
+
+    case class BorgResultNode(result: BorgResult) extends BorgNode {
+      def keys = result.groupKeys
+    }
+
+    case class BorgVictimNode(independent: NodeSubset) extends BorgNode {
+      def keys = independent.groupKeyTrans.keyOrder
+    }
+
+    case class BorgEdge(left: BorgNode, right: BorgNode) {
+      def sharedKeys = left.keys intersect right.keys
     }
 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
-    def borg(tuple: (MergeGraph, ConnectedSubgraph)): M[BorgResult] = {
-      val (spanningGraph, connectedSubgraph) = tuple
+    def borg(spanningGraph: MergeGraph, connectedSubgraph: Set[NodeSubset], requiredOrders: Map[MergeNode, Set[Seq[TicVar]]]): M[BorgResult] = {
+      def assimilate(edges: Set[BorgEdge]): M[BorgResult] = {
+        val largestEdge = edges.maxBy(_.sharedKeys.size)
 
-      val metaForNode: Map[MergeNode, NodeSubset] = connectedSubgraph.groupBy(_.node).mapValues(_.head)
+        //val prunedRequirements = orderingIndex.foldLeft(Map.empty[MergeNode, Set[Seq[TicVar]]]) {
+        //  case (acc, (key, nodes)) => nodes.foldLeft(acc) {
+        //    case (acc, node) => acc + (node -> (acc.getOrElse(node, Set()) + key))
+        //  }
+        //}
 
-      val plan = findBorgTraversalOrder(spanningGraph, metaForNode)
+        for {
+          assimilated <- join(largestEdge.left, largestEdge.right, requiredOrders)
+          result <- {
+            val edges0 = (edges - largestEdge) map {
+              case BorgEdge(a, b) if a == largestEdge.left || a == largestEdge.right => BorgEdge(assimilated, b) 
+              case BorgEdge(a, b) if b == largestEdge.left || b == largestEdge.right => BorgEdge(a, assimilated) 
+              case other => other
+            }
 
-      val planSteps = plan.fixed.steps
-
-      val x =  planSteps.head
-      val xs = planSteps.tail
-
-      val node = metaForNode(x.node)
-
-      val nodeGroupId = node.node.binding.groupId
-
-      // we have to use an enforced structure for the keys and values, otherwise
-      // concatenation in crossAll gets way too complicated.
-      val brKeyTrans = WrapObject(node.groupKeyTrans.spec, "groupKeys")
-      val brIdTrans = WrapObject(WrapObject(node.idTrans, nodeGroupId.shows), "identities")
-      val brRowTrans = node.targetTrans.map(t => WrapObject(WrapObject(t, nodeGroupId.shows), "values"))
-
-      val borgResultsTrans = ObjectConcat(brKeyTrans :: brIdTrans :: brRowTrans.toList : _*)
-
-      val initial = (BorgResult(
-                      table       = node.table.transform(borgResultsTrans), 
-                      groupKeys   = node.groupKeyTrans.keyOrder,
-                      groups      = Set(nodeGroupId)
-                    ), x).point[M]
-
-      // TODO: Sort initial according to x
-
-      (xs.foldLeft(initial) { 
-        case (accM, newStep) => 
-          accM.map {
-            case ((acc, lastStep)) =>
-              val node = metaForNode(newStep.node)
-
-              // Cogroup on acc data and node data:
-
-              (acc, newStep)
+            if (edges0.isEmpty) assimilated.result.point[M] else assimilate(edges0)
           }
-      }).map(_._1)
+        } yield result
+      }
+
+      val borgNodes = connectedSubgraph.map(BorgVictimNode.apply)
+      val victims: Map[MergeNode, BorgNode] = borgNodes.map(s => s.independent.node -> s).toMap
+      val borgEdges = spanningGraph.edges.map {
+        case MergeEdge(a, b) => BorgEdge(victims(a), victims(b))
+      }
+
+      //val orderingIndex = requiredOrders.foldLeft(Map.empty[Seq[TicVar], Set[MergeNode]])  {
+      //  case (acc, (orderings, node)) => 
+      //    orderings.foldLeft(acc) { 
+      //      case (acc, o) => acc + (o -> (acc.getOrElse(o, Set()) + node))
+      //    }
+      //}
+
+      assimilate(borgEdges)
+    }
+
+    def crossAllTrans(leftKeySize: Int, rightKeySize: Int): TransSpec2 = {
+      import BorgResult._
+      val keyTransLeft = groupKeySpec(SourceLeft)
+
+      // remap the group keys on the right so that they don't conflict with the left
+      // and respect the composite ordering of the left and right
+      val keyTransRight = ObjectConcat(
+        (0 until rightKeySize) map { i =>
+          GroupKeyTrans.reindex(groupKeySpec(SourceRight), i, i + leftKeySize)
+        }: _*
+      )
+
+      val groupKeyTrans2 = wrapGroupKeySpec(ObjectConcat(keyTransLeft, keyTransRight))
+      val idTrans2 = wrapIdentSpec(ObjectConcat(identSpec(SourceLeft), identSpec(SourceRight)))
+      val recordTrans2 = wrapValueSpec(ObjectConcat(valueSpec(SourceLeft), valueSpec(SourceRight)))
+
+      ObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
     }
 
     def crossAll(borgResults: Set[BorgResult]): BorgResult = {
       import TransSpec._
       def cross2(left: BorgResult, right: BorgResult): BorgResult = {
-        val leftKeySize = left.groupKeys.size
-        val keyTransLeft = DerefObjectStatic(Leaf(SourceLeft), JPathField("groupKeys"))
-
-        // remap the group keys on the right so that they don't conflict with the left
-        // and respect the composite ordering of the left and right
-        val keyTransRight = ObjectConcat(
-          (0 until right.groupKeys.size) map { i =>
-            GroupKeyTrans.reindex(
-              DerefObjectStatic(Leaf(SourceRight), JPathField("groupKeys")),
-              i + 1,
-              i + leftKeySize + 1
-            )
-          }: _*
-        )
-
-        val groupKeyTrans2 = WrapObject(ObjectConcat(keyTransLeft, keyTransRight), "groupKeys")
-
-        val idTrans2 = WrapObject(
-          ObjectConcat(
-            DerefObjectStatic(Leaf(SourceLeft), JPathField("identities")),
-            DerefObjectStatic(Leaf(SourceRight), JPathField("identities"))
-          ),
-          "identities"
-        )
-
-        val recordTrans2 = WrapObject(
-          ObjectConcat(
-            DerefObjectStatic(Leaf(SourceLeft), JPathField("values")),
-            DerefObjectStatic(Leaf(SourceRight), JPathField("values"))
-          ),
-          "values"
-        )
-
-        val omniverseTrans = ObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
+        val omniverseTrans = crossAllTrans(left.groupKeys.size, right.groupKeys.size)
 
         BorgResult(left.table.cross(right.table)(omniverseTrans),
                    left.groupKeys ++ right.groupKeys,
@@ -1309,8 +1598,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 case (_, rightIndex) => {
                   GroupKeyTrans.reindex(
                     DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
-                    rightIndex + 1,
-                    leftIndex + 1
+                    rightIndex,
+                    leftIndex
                   )
                 }
               }
@@ -1321,8 +1610,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 case (_, rightIndex) => {
                   GroupKeyTrans.reindex(
                     DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
-                    rightIndex + 1,
-                    leftKeys.length + extraIndex + 1
+                    rightIndex,
+                    leftKeys.length + extraIndex
                   )
                 }
               }.get
@@ -1353,24 +1642,26 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       // all of the universes will be unioned together.
       val universes = findBindingUniverses(grouping)
       val borgedUniverses: M[Stream[BorgResult]] = universes.toStream.map { universe =>
-        val alignedSpanningGraphsM: M[Set[(MergeGraph, Map[GroupId, Set[NodeSubset]])]] = 
+        val alignedSpanningGraphsM: M[Set[(MergeGraph, Map[MergeNode, Set[Seq[TicVar]]], Map[GroupId, Set[NodeSubset]])]] = 
           universe.spanningGraphs.map { spanningGraph =>
-            for (aligned <- alignOnEdges(spanningGraph))
-              yield (spanningGraph, aligned)
+            // Compute required sort orders based on graph traversal
+            val requiredSorts: Map[MergeNode, Set[Seq[TicVar]]] = findRequiredSorts(spanningGraph)
+            for (aligned <- alignOnEdges(spanningGraph, requiredSorts))
+              yield (spanningGraph, requiredSorts, aligned)
           }.sequence
 
-        val minimizedSpanningGraphsM: M[Set[(MergeGraph, ConnectedSubgraph)]] = for {
+        val minimizedSpanningGraphsM: M[Set[(MergeGraph, Set[NodeSubset], Map[MergeNode, Set[Seq[TicVar]]])]] = for {
           aligned      <- alignedSpanningGraphsM
           intersected  <- aligned.map { 
-                            case (spanningGraph, alignment) => 
-                              for (intersected <- alignment.values.toStream.map(intersect).sequence)
-                                yield (spanningGraph, intersected.toSet)
+                            case (spanningGraph, requiredSorts, alignment) => 
+                              for (intersected <- alignment.values.toStream.map(intersect(_, requiredSorts)).sequence)
+                                yield (spanningGraph, intersected.toSet, requiredSorts)
                           }.sequence
         } yield intersected
 
         for {
           spanningGraphs <- minimizedSpanningGraphsM
-          borgedGraphs <- spanningGraphs.map(borg).sequence
+          borgedGraphs <- spanningGraphs.map(Function.tupled(borg)).sequence
         } yield {
           crossAll(borgedGraphs)
         }
