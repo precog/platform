@@ -39,8 +39,7 @@ class AlmostEqual(d: Double) {
 }
 
 trait StatsLibSpec[M[+_]] extends Specification
-    with Evaluator[M]
-    with TestConfigComponent[M]
+    with EvaluatorTestSupport[M]
     with StatsLib[M]
     with InfixLib[M]
     with MemoryDatasetConsumer[M]{ self =>

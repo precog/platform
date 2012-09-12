@@ -34,11 +34,10 @@ import scalaz.Failure
 import scalaz.Success
 
 trait JoinOptimizerSpecs[M[+_]] extends Specification
-    with Evaluator[M]
+    with EvaluatorTestSupport[M]
     with JoinOptimizer
     with PrettyPrinter
     with StdLib[M]
-    with TestConfigComponent[M] 
     with MemoryDatasetConsumer[M] { self =>
 
   import Function._

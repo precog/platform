@@ -34,8 +34,7 @@ import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
 trait ReductionLibSpec[M[+_]] extends Specification
-    with Evaluator[M]
-    with TestConfigComponent[M]
+    with EvaluatorTestSupport[M]
     with ReductionLib[M]
     with StatsLib[M]
     with InfixLib[M]

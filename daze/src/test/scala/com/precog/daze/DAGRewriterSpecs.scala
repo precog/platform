@@ -23,9 +23,7 @@ import org.specs2.mutable._
 
 import com.precog.yggdrasil._
 
-trait DAGRewriterSpecs[M[+_]] extends Specification 
-    with Evaluator[M]
-    with TestConfigComponent[M] {
+trait DAGRewriterSpecs[M[+_]] extends Specification with EvaluatorTestSupport[M] {
 
   import dag._
   import instructions._

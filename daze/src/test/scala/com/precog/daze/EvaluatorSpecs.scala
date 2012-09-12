@@ -54,9 +54,12 @@ import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
 
-trait TestConfigComponent[M[+_]] extends table.StubColumnarTableModule[M] with IdSourceScannerModule[M] {
+trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with table.StubColumnarTableModule[M] with IdSourceScannerModule[M] {
   val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
-  
+
+  private val groupId = new java.util.concurrent.atomic.AtomicInteger
+  def newGroupId = groupId.getAndIncrement
+
   object yggConfig extends YggConfig
 
   object Table extends TableCompanion
@@ -77,10 +80,10 @@ trait TestConfigComponent[M[+_]] extends table.StubColumnarTableModule[M] with I
   }
 }
 
+
 trait EvaluatorSpecs[M[+_]] extends Specification
-    with Evaluator[M]
+    with EvaluatorTestSupport[M]
     with StdLib[M]
-    with TestConfigComponent[M] 
     with MemoryDatasetConsumer[M] { self =>
   
   import Function._

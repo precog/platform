@@ -60,7 +60,7 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
   import TableModule._
 
   //def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
-  def testJoinOnPreSortedVictims[M[+_]](module: ColumnarTableModuleTestSupport[M]) = {
+  abstract class RunVictimPairTest[M[+_]](val module: ColumnarTableModuleTestSupport[M]) {
     import module._
     import trans._
     import trans.constants._
@@ -70,231 +70,235 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
     import OrderingConstraints._
     import GroupKeyTrans._
 
+    type GroupId = module.GroupId
+
     def ticvars(str: String): Seq[TicVar] = str.toSeq.map((c: Char) => JPathField(c.toString))
     def order(str: String) = OrderingConstraint.fromFixed(ticvars(str))
     def mergeNode(str: String) = MergeNode(ticvars(str).toSet, null)
 
-    val JArray(victim1Data) = JsonParser.parse("""[
-      {"key": [1], "value": {"a0": 3, "b0": 7}},
-      {"key": [2], "value": {"a0": 5, "b0": 11}},
-    ]""")
+    def generate(v1GroupId: GroupId, v2GroupId: GroupId)(implicit show: Show[GroupId]): (List[JValue], List[JValue], List[JValue], Boolean, Boolean)
 
-    val JArray(victim2Data) = JsonParser.parse("""[
-      {"key": [3], "value": {"a0": 3, "c": 17}},
-      {"key": [4], "value": {"a0": 13, "c": 19}},
-    ]""")
+    def run = {
+      val v1GroupId = newGroupId
+      val v2GroupId = newGroupId
 
-    val v1GroupId = newGroupId
+      val (victim1Data, victim2Data, expected, v1ByIdentity, v2ByIdentity) = generate(v1GroupId, v2GroupId)
 
-    val victim1Source = MergeNode(
-      Binding(fromJson(victim1Data.toStream),
-              SourceKey.Single,
-              Some(TransSpec1.Id),
-              v1GroupId,
-              GroupKeySpecAnd(
-                GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))),
-                GroupKeySpecSource(JPathField("b"), DerefObjectStatic(Leaf(Source), JPathField("b0")))))
-    )
-
-    val victim1 = BorgVictimNode(
-      NodeSubset(
-        victim1Source, 
-        victim1Source.binding.source, 
-        SourceKey.Single, 
-        Some(TransSpec1.Id),
-        GroupKeyTrans(
-          ObjectConcat(
-            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000"),
-            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b0")), "000001")
-          ),
-          ticvars("ab")),
-        ticvars("ab")
+      val victim1Source = MergeNode(
+        Binding(fromJson(victim1Data.toStream),
+                SourceKey.Single,
+                Some(TransSpec1.Id),
+                v1GroupId,
+                GroupKeySpecAnd(
+                  GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))),
+                  GroupKeySpecSource(JPathField("b"), DerefObjectStatic(Leaf(Source), JPathField("b0")))))
       )
-    )
 
-    val v2GroupId = newGroupId
-    val victim2Source = MergeNode(
-      Binding(fromJson(victim2Data.toStream),
-              SourceKey.Single,
-              Some(TransSpec1.Id),
-              v2GroupId,
-              GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))))
-    )
-
-    val victim2 = BorgVictimNode(
-      NodeSubset(
-        victim2Source, 
-        victim2Source.binding.source, 
-        SourceKey.Single, 
-        Some(TransSpec1.Id),
-        GroupKeyTrans(
-          ObjectConcat(
-            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000")
-          ),
-          ticvars("a")),
-        ticvars("a")
+      val victim1 = BorgVictimNode(
+        NodeSubset(
+          victim1Source, 
+          victim1Source.binding.source, 
+          SourceKey.Single, 
+          Some(TransSpec1.Id),
+          GroupKeyTrans(
+            ObjectConcat(
+              WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000"),
+              WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b0")), "000001")
+            ),
+            ticvars("ab")),
+          ticvars("ab"),
+          v1ByIdentity
+        )
       )
-    )
 
-    val requiredOrders = Map(
-      victim1Source -> Set(ticvars("a")),
-      victim2Source -> Set(ticvars("a"))
-    )
+      val victim2Source = MergeNode(
+        Binding(fromJson(victim2Data.toStream),
+                SourceKey.Single,
+                Some(TransSpec1.Id),
+                v2GroupId,
+                GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))))
+      )
 
-    val BorgResultNode(BorgResult(table, keys, groups, size)) = Table.join(victim1, victim2, requiredOrders).copoint
+      val victim2 = BorgVictimNode(
+        NodeSubset(
+          victim2Source, 
+          victim2Source.binding.source, 
+          SourceKey.Single, 
+          Some(TransSpec1.Id),
+          GroupKeyTrans(
+            ObjectConcat(
+              WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000")
+            ),
+            ticvars("a")),
+          ticvars("a"),
+          v2ByIdentity
+        )
+      )
 
-    val JArray(expected) = JsonParser.parse("""[
-      {
-        "values":{
-          "%1$s":{
-            "value":{
-              "b0":7,
-              "a0":3
+      val requiredOrders = Map(
+        victim1Source -> Set(ticvars("a")),
+        victim2Source -> Set(ticvars("a"))
+      )
+
+      val BorgResultNode(BorgResult(table, keys, groups, size)) = Table.join(victim1, victim2, requiredOrders).copoint
+
+      toJson(table).copoint must_== expected.toStream
+    }
+  }
+
+  def testJoinOnPreSortedVictims[M[+_]](module: ColumnarTableModuleTestSupport[M]) = {
+    val test = new RunVictimPairTest[M](module) {
+      def generate(v1GroupId: GroupId, v2GroupId: GroupId)(implicit show: Show[GroupId]) = {
+        val JArray(victim1Data) = JsonParser.parse("""[
+          {"key": [1], "value": {"a0": 3, "b0": 7}},
+          {"key": [2], "value": {"a0": 5, "b0": 11}},
+        ]""")
+
+        val JArray(victim2Data) = JsonParser.parse("""[
+          {"key": [3], "value": {"a0": 3, "c": 17}},
+          {"key": [4], "value": {"a0": 13, "c": 19}},
+        ]""")
+
+        val JArray(expected) = JsonParser.parse("""[
+          {
+            "values":{
+              "%1$s":{
+                "value":{
+                  "b0":7,
+                  "a0":3
+                },
+                "key":[1]
+              },
+              "%2$s":{
+                "value":{
+                  "c":17,
+                  "a0":3
+                },
+                "key":[3]
+              }
             },
-            "key":[1]
-          },
-          "%2$s":{
-            "value":{
-              "c":17,
-              "a0":3
+            "identities":{
+              "%2$s":[3],
+              "%1$s":[1]
             },
-            "key":[3]
+            "groupKeys":{
+              "000000":3,
+              "000001":7
+            }
           }
-        },
-        "identities":{
-          "%2$s":[3],
-          "%1$s":[1]
-        },
-        "groupKeys":{
-          "000000":3,
-          "000001":7
-        }
-      }
-    ]""".format(v1GroupId.shows, v2GroupId.shows))
+        ]""".format(v1GroupId.shows, v2GroupId.shows))
 
-    toJson(table).copoint must_== expected.toStream
+        (victim1Data, victim2Data, expected, false, false) 
+      }
+    }
+
+    test.run
   }
 
   def testJoinOnPartiallySortedVictims[M[+_]](module: ColumnarTableModuleTestSupport[M]) = {
-    import module._
-    import trans._
-    import trans.constants._
+    val test = new RunVictimPairTest[M](module) {
+      def generate(v1GroupId: GroupId, v2GroupId: GroupId)(implicit show: Show[GroupId]) = {
 
-    import Table._
-    import Table.Universe._
-    import OrderingConstraints._
-    import GroupKeyTrans._
+        val JArray(victim1Data) = JsonParser.parse("""[
+          {"key": [1], "value": {"a0": 5, "b0": 7}},
+          {"key": [2], "value": {"a0": 3, "b0": 11}},
+        ]""")
 
-    def ticvars(str: String): Seq[TicVar] = str.toSeq.map((c: Char) => JPathField(c.toString))
-    def order(str: String) = OrderingConstraint.fromFixed(ticvars(str))
-    def mergeNode(str: String) = MergeNode(ticvars(str).toSet, null)
+        val JArray(victim2Data) = JsonParser.parse("""[
+          {"key": [3], "value": {"a0": 3, "c": 17}},
+          {"key": [4], "value": {"a0": 13, "c": 19}},
+        ]""")
 
-    val JArray(victim1Data) = JsonParser.parse("""[
-      {"key": [1], "value": {"a0": 5, "b0": 7}},
-      {"key": [2], "value": {"a0": 3, "b0": 11}},
-    ]""")
-
-    val JArray(victim2Data) = JsonParser.parse("""[
-      {"key": [3], "value": {"a0": 3, "c": 17}},
-      {"key": [4], "value": {"a0": 13, "c": 19}},
-    ]""")
-
-    val v1GroupId = newGroupId
-
-    val victim1Source = MergeNode(
-      Binding(fromJson(victim1Data.toStream),
-              SourceKey.Single,
-              Some(TransSpec1.Id),
-              v1GroupId,
-              GroupKeySpecAnd(
-                GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))),
-                GroupKeySpecSource(JPathField("b"), DerefObjectStatic(Leaf(Source), JPathField("b0")))))
-    )
-
-    val victim1: BorgVictimNode = BorgVictimNode(
-      NodeSubset(
-        victim1Source, 
-        victim1Source.binding.source, 
-        SourceKey.Single, 
-        Some(TransSpec1.Id),
-        GroupKeyTrans(
-          ObjectConcat(
-            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000"),
-            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b0")), "000001")
-          ),
-          ticvars("ab")),
-        ticvars("ab"),
-        sortedByIdentities = true
-      )
-    )
-
-    val v2GroupId = newGroupId
-
-    val victim2Source = MergeNode(
-      Binding(fromJson(victim2Data.toStream),
-              SourceKey.Single,
-              Some(TransSpec1.Id),
-              v2GroupId,
-              GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))))
-    )
-
-    val victim2 = BorgVictimNode(
-      NodeSubset(
-        victim2Source, 
-        victim2Source.binding.source, 
-        SourceKey.Single, 
-        Some(TransSpec1.Id),
-        GroupKeyTrans(
-          ObjectConcat(
-            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000")
-          ),
-          ticvars("a")),
-        ticvars("a")
-      )
-    )
-
-    val requiredOrders = Map(
-      victim1Source -> Set(ticvars("a")),
-      victim2Source -> Set(ticvars("a"))
-    )
-
-    val BorgResultNode(BorgResult(table, keys, groups, size)) = Table.join(victim1, victim2, requiredOrders).copoint
-
-    val JArray(expected) = JsonParser.parse("""[
-      {
-        "values":{
-          "%1$s":{
-            "value":{
-              "b0":11,
-              "a0":3
+        val JArray(expected) = JsonParser.parse("""[
+          {
+            "values":{
+              "%1$s":{
+                "value":{
+                  "b0":11,
+                  "a0":3
+                },
+                "key":[2]
+              },
+              "%2$s":{
+                "value":{
+                  "c":17,
+                  "a0":3
+                },
+                "key":[3]
+              }
             },
-            "key":[2]
-          },
-          "%2$s":{
-            "value":{
-              "c":17,
-              "a0":3
+            "identities":{
+              "%2$s":[3],
+              "%1$s":[2]
             },
-            "key":[3]
+            "groupKeys":{
+              "000000":3,
+              "000001":11
+            }
           }
-        },
-        "identities":{
-          "%2$s":[3],
-          "%1$s":[2]
-        },
-        "groupKeys":{
-          "000000":3,
-          "000001":11
-        }
-      }
-    ]""".format(v1GroupId.shows, v2GroupId.shows))
+        ]""".format(v1GroupId.shows, v2GroupId.shows))
 
-    toJson(table).copoint must_== expected.toStream
+        (victim1Data, victim2Data, expected, true, false)
+      }
+    }
+
+    test.run
+  }
+
+  def testJoinOnUnsortedVictims[M[+_]](module: ColumnarTableModuleTestSupport[M]) = {
+    val test = new RunVictimPairTest[M](module) {
+      def generate(v1GroupId: GroupId, v2GroupId: GroupId)(implicit show: Show[GroupId]) = {
+
+        val JArray(victim1Data) = JsonParser.parse("""[
+          {"key": [1], "value": {"a0": 5, "b0": 7}},
+          {"key": [2], "value": {"a0": 3, "b0": 11}},
+        ]""")
+
+        val JArray(victim2Data) = JsonParser.parse("""[
+          {"key": [3], "value": {"a0": 13, "c": 17}},
+          {"key": [4], "value": {"a0": 3, "c": 19}},
+        ]""")
+
+        val JArray(expected) = JsonParser.parse("""[
+          {
+            "values":{
+              "%1$s":{
+                "value":{
+                  "b0":11,
+                  "a0":3
+                },
+                "key":[2]
+              },
+              "%2$s":{
+                "value":{
+                  "c":19,
+                  "a0":3
+                },
+                "key":[4]
+              }
+            },
+            "identities":{
+              "%2$s":[4],
+              "%1$s":[2]
+            },
+            "groupKeys":{
+              "000000":3,
+              "000001":11
+            }
+          }
+        ]""".format(v1GroupId.shows, v2GroupId.shows))
+
+        (victim1Data, victim2Data, expected, true, true)
+      }
+    }
+
+    test.run
   }
 
   "join" should {
     "combine a pair of already-group-sorted victims" in testJoinOnPreSortedVictims(emptyTestModule)
     "combine a pair where one victim is sorted by identity" in testJoinOnPartiallySortedVictims(emptyTestModule)
+    "combine a pair where both victims are sorted by identity" in testJoinOnUnsortedVictims(emptyTestModule)
   }
 
   /*

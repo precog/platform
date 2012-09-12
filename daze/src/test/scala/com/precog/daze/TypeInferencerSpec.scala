@@ -32,7 +32,7 @@ import org.specs2.mutable._
 import scalaz._
 
 trait TypeInferencerSpec[M[+_]] extends Specification
-  with TestConfigComponent[M] 
+  with EvaluatorTestSupport[M] 
   with ReductionLib[M] 
   with StatsLib[M]
   with MathLib[M]
