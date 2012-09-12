@@ -23,7 +23,7 @@ trait CrossAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
         "identities": { "1": [1,2] },
         "values":     { "1": { "a": "foo" } }
       }
-    ]""".format(GroupKeyTrans.keyName(1)))
+    ]""".format(GroupKeyTrans.keyName(0)))
   
     val JArray(rightData) = JsonParser.parse("""[
       {
@@ -31,7 +31,7 @@ trait CrossAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
         "identities": { "2": [5,1] },
         "values":     { "2": { "b": true } }
       }
-    ]""".format(GroupKeyTrans.keyName(1)))
+    ]""".format(GroupKeyTrans.keyName(0)))
 
     val JArray(crossedData) = JsonParser.parse("""[
       {
@@ -39,7 +39,7 @@ trait CrossAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
         "identities": { "1": [1,2], "2": [5,1] },
         "values":     { "1": { "a": "foo" }, "2": { "b": true } }
       }
-    ]""".format(GroupKeyTrans.keyName(1), GroupKeyTrans.keyName(2)))
+    ]""".format(GroupKeyTrans.keyName(0), GroupKeyTrans.keyName(1)))
     
   }
 
