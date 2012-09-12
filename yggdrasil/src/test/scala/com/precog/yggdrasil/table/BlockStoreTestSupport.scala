@@ -67,10 +67,10 @@ trait BlockStoreTestSupport[M[+_]] { self =>
 
     type YggConfig = IdSourceConfig
     type Key = JArray
-    type GroupId = Int
+    type GroupId = String
 
     private val groupId = new java.util.concurrent.atomic.AtomicInteger
-    def newGroupId = groupId.getAndIncrement
+    def newGroupId = "groupId(" + groupId.getAndIncrement + ")"
 
     implicit def M = self.M
 

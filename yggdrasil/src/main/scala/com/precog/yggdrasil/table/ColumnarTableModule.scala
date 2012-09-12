@@ -997,9 +997,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           ticvars ->
           NodeSubset(node,
                      sortedTable,
-                     deepMap(idTrans) { case Leaf(_) => TransSpec1.DerefArray1 },
-                     targetTrans.map(t => deepMap(t) { case Leaf(_) => TransSpec1.DerefArray1 }),
-                     groupKeyTrans.copy(spec = deepMap(groupKeyTrans.spec) { case Leaf(_) => TransSpec1.DerefArray1 }),
+                     idTrans,
+                     targetTrans,
+                     groupKeyTrans,
                      ticvars)
         }
       }.sequence
@@ -1010,41 +1010,57 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def alignOnEdges(spanningGraph: MergeGraph, requiredSorts: Map[MergeNode, Set[Seq[TicVar]]]): M[Map[GroupId, Set[NodeSubset]]] = {
       import OrderingConstraints._
 
-      val sortPairs: M[Map[MergeNode, Map[Seq[TicVar], NodeSubset]]] = 
-        requiredSorts.map({ case (node, orders) => materializeSortOrders(node, orders) map { node -> _ }}).toStream
-        .sequence.map(_.toMap)
-      
-      for {
-        sorts <- sortPairs
-        groupedSubsets <- {
-          val edgeAlignments = spanningGraph.edges flatMap {
-            case MergeEdge(a, b) =>
-              // Find the compatible sortings for this edge's endpoints
-              val common: Set[(NodeSubset, NodeSubset)] = for {
-                aVars <- sorts(a).keySet
-                bVars <- sorts(b).keySet
-                if aVars.startsWith(bVars) || bVars.startsWith(aVars)
-              } yield {
-                (sorts(a)(aVars), sorts(b)(bVars))
-              }
+      if (spanningGraph.edges.isEmpty) {
+        assert(spanningGraph.nodes.size == 1)
+        val node = spanningGraph.nodes.head
+        val groupKeyTrans = GroupKeyTrans(Universe.sources(node.binding.groupKeySpec))
+        Map(
+          node.binding.groupId -> Set(
+            NodeSubset(node,
+                       node.binding.source,
+                       node.binding.idTrans,
+                       node.binding.targetTrans,
+                       groupKeyTrans,
+                       groupKeyTrans.keyOrder)
+          )
+        ).point[M]
+      } else {
+        val sortPairs: M[Map[MergeNode, Map[Seq[TicVar], NodeSubset]]] = 
+          requiredSorts.map({ case (node, orders) => materializeSortOrders(node, orders) map { node -> _ }}).toStream
+          .sequence.map(_.toMap)
+        
+        for {
+          sorts <- sortPairs
+          groupedSubsets <- {
+            val edgeAlignments = spanningGraph.edges flatMap {
+              case MergeEdge(a, b) =>
+                // Find the compatible sortings for this edge's endpoints
+                val common: Set[(NodeSubset, NodeSubset)] = for {
+                  aVars <- sorts(a).keySet
+                  bVars <- sorts(b).keySet
+                  if aVars.startsWith(bVars) || bVars.startsWith(aVars)
+                } yield {
+                  (sorts(a)(aVars), sorts(b)(bVars))
+                }
 
-              common map {
-                case (aSorted, bSorted) => 
-                  val alignedM = Table.align(aSorted.table, aSorted.sortedOn, bSorted.table, bSorted.sortedOn)
-                  
-                  alignedM map {
-                    case (aAligned, bAligned) => List(
-                      aSorted.copy(table = aAligned),
-                      bSorted.copy(table = bAligned)
-                    )
-                  }
-              }
+                common map {
+                  case (aSorted, bSorted) => 
+                    val alignedM = Table.align(aSorted.table, aSorted.sortedOn, bSorted.table, bSorted.sortedOn)
+                    
+                    alignedM map {
+                      case (aAligned, bAligned) => List(
+                        aSorted.copy(table = aAligned),
+                        bSorted.copy(table = bAligned)
+                      )
+                    }
+                }
+            }
+
+            edgeAlignments.sequence
           }
-
-          edgeAlignments.sequence
+        } yield {
+          groupedSubsets.flatten.groupBy(_.node.binding.groupId)
         }
-      } yield {
-        groupedSubsets.flatten.groupBy(_.node.binding.groupId)
       }
     }
 
@@ -1272,17 +1288,37 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
     */
 
+    def reorderGroupKeySpec(source: TransSpec1, newOrder: Seq[TicVar], original: Seq[TicVar]) = {
+      ObjectConcat(
+        newOrder.zipWithIndex.map {
+          case (ticvar, i) => GroupKeyTrans.reindex(source, original.indexOf(ticvar), i)
+        }: _*
+      )
+    }
+
+    def resortVictimToBorgResult(victim: NodeSubset, toPrefix: Seq[TicVar]): M[BorgResult] = {
+      import BorgResult._
+
+      // the assimilator is already in a compatible ordering, so we need to
+      // resort the victim and we don't care what the remainder of the ordering is,
+      // because we're not smart enough to figure out what the right one is and are
+      // counting on our traversal order to get the biggest ordering constraints first.
+      val groupId = victim.node.binding.groupId
+      val newOrder = toPrefix ++ (victim.node.keys -- toPrefix).toSeq
+      val remapSpec = ObjectConcat(
+        wrapGroupKeySpec(reorderGroupKeySpec(victim.groupKeyTrans.spec, newOrder, victim.groupKeyTrans.keyOrder)) ::
+        wrapIdentSpec(nestInGroupId(victim.idTrans, groupId)) :: 
+        victim.targetTrans.map(t => wrapValueSpec(nestInGroupId(t, groupId))).toList: _*
+      )
+
+      victim.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending).map { sorted =>
+        BorgResult(sorted, newOrder, Set(victim.node.binding.groupId))
+      }
+    }
+
     def join(leftNode: BorgNode, rightNode: BorgNode, requiredOrders: Map[MergeNode, Set[Seq[TicVar]]]): M[BorgResultNode] = {
       import BorgResult._
       import OrderingConstraints._
-
-      def reorderGroupKeySpec(source: TransSpec1, newOrder: Seq[TicVar], original: Seq[TicVar]) = {
-        ObjectConcat(
-          newOrder.zipWithIndex.map {
-            case (ticvar, i) => GroupKeyTrans.reindex(source, original.indexOf(ticvar), i)
-          }: _*
-        )
-      }
 
       def resortBorgResult(borgResult: BorgResult, newPrefix: Seq[TicVar]): M[BorgResult] = {
         val newAssimilatorOrder = newPrefix ++ (borgResult.groupKeys diff newPrefix)
@@ -1295,24 +1331,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
         borgResult.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending) map { sorted =>
           borgResult.copy(table = sorted, groupKeys = newAssimilatorOrder)
-        }
-      }
-
-      def resortVictimToBorgResult(victim: NodeSubset, toPrefix: Seq[TicVar]): M[BorgResult] = {
-        // the assimilator is already in a compatible ordering, so we need to
-        // resort the victim and we don't care what the remainder of the ordering is,
-        // because we're not smart enough to figure out what the right one is and are
-        // counting on our traversal order to get the biggest ordering constraints first.
-        val groupId = victim.node.binding.groupId
-        val newOrder = toPrefix ++ (victim.node.keys -- toPrefix).toSeq
-        val remapSpec = ObjectConcat(
-          wrapGroupKeySpec(reorderGroupKeySpec(victim.groupKeyTrans.spec, newOrder, victim.groupKeyTrans.keyOrder)) ::
-          wrapIdentSpec(nestInGroupId(victim.idTrans, groupId)) :: 
-          victim.targetTrans.map(t => wrapValueSpec(nestInGroupId(t, groupId))).toList: _*
-        )
-
-        victim.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending).map { sorted =>
-          BorgResult(sorted, newOrder, Set(victim.node.binding.groupId))
         }
       }
 
@@ -1521,20 +1539,25 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         } yield result
       }
 
-      val borgNodes = connectedSubgraph.map(BorgVictimNode.apply)
-      val victims: Map[MergeNode, BorgNode] = borgNodes.map(s => s.independent.node -> s).toMap
-      val borgEdges = spanningGraph.edges.map {
-        case MergeEdge(a, b) => BorgEdge(victims(a), victims(b))
+      assert(connectedSubgraph.nonEmpty)
+      if (connectedSubgraph.size == 1) {
+        val victim = connectedSubgraph.head
+        resortVictimToBorgResult(victim, victim.groupKeyTrans.keyOrder)
+      } else {
+        val borgNodes = connectedSubgraph.map(BorgVictimNode.apply)
+        val victims: Map[MergeNode, BorgNode] = borgNodes.map(s => s.independent.node -> s).toMap
+        val borgEdges = spanningGraph.edges.map {
+          case MergeEdge(a, b) => BorgEdge(victims(a), victims(b))
+        }
+
+        //val orderingIndex = requiredOrders.foldLeft(Map.empty[Seq[TicVar], Set[MergeNode]])  {
+        //  case (acc, (orderings, node)) => 
+        //    orderings.foldLeft(acc) { 
+        //      case (acc, o) => acc + (o -> (acc.getOrElse(o, Set()) + node))
+        //    }
+        //}
+        assimilate(borgEdges)
       }
-
-      //val orderingIndex = requiredOrders.foldLeft(Map.empty[Seq[TicVar], Set[MergeNode]])  {
-      //  case (acc, (orderings, node)) => 
-      //    orderings.foldLeft(acc) { 
-      //      case (acc, o) => acc + (o -> (acc.getOrElse(o, Set()) + node))
-      //    }
-      //}
-
-      assimilate(borgEdges)
     }
 
     def crossAllTrans(leftKeySize: Int, rightKeySize: Int): TransSpec2 = {
@@ -1640,6 +1663,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           universe.spanningGraphs.map { spanningGraph =>
             // Compute required sort orders based on graph traversal
             val requiredSorts: Map[MergeNode, Set[Seq[TicVar]]] = findRequiredSorts(spanningGraph)
+            println("Got required sorts: " + requiredSorts)
             for (aligned <- alignOnEdges(spanningGraph, requiredSorts))
               yield (spanningGraph, requiredSorts, aligned)
           }.sequence
