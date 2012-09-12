@@ -677,12 +677,12 @@ trait EvalStackSpecs extends Specification {
       
       "on a set of strings" >> {
         val input = """
-          | std::stats::rank(//campaigns.userId)""".stripMargin
+          | std::stats::rank(//campaigns.campaign)""".stripMargin
 
         val results = eval(input) 
         
         val sanity = """
-          | //campaigns.userId""".stripMargin
+          | //campaigns.campaign""".stripMargin
 
         val sanityCheck = eval(sanity)
 
@@ -724,19 +724,19 @@ trait EvalStackSpecs extends Specification {
       
       "on a set of strings" >> {
         val input = """
-          | std::stats::denseRank(//campaigns.userId)""".stripMargin
+          | std::stats::denseRank(//campaigns.campaign)""".stripMargin
 
         val results = eval(input) 
         
         val sanity = """
-          | //campaigns.userId""".stripMargin
+          | //campaigns.campaign""".stripMargin
 
         val sanityCheck = eval(sanity)
 
         results must be empty
 
         sanityCheck must not be empty
-      }.pendingUntilFixed
+      }
     }
 
     "evaluate functions from each library" >> {
