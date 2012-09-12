@@ -879,7 +879,8 @@ object BlockStoreColumnarTableModule {
         }
 
       case JArrayUnfixedT =>
-        metadataView.findProjections(path, prefix) map { sources =>
+        val emptyM = metadataView.findProjections(path, prefix, CEmptyArray) map { _.keySet }
+        val nonEmptyM = metadataView.findProjections(path, prefix) map { sources =>
           sources.keySet filter { 
             _.columns exists { 
               case ColumnDescriptor(`path`, selector, _, _) => 
@@ -887,6 +888,8 @@ object BlockStoreColumnarTableModule {
             }
           }
         }
+
+        for (empty <- emptyM; nonEmpty <- nonEmptyM) yield empty ++ nonEmpty
 
       case JObjectFixedT(fields) =>
         if (fields.isEmpty) {
@@ -896,7 +899,8 @@ object BlockStoreColumnarTableModule {
         }
 
       case JObjectUnfixedT =>
-        metadataView.findProjections(path, prefix) map { sources =>
+        val emptyM = metadataView.findProjections(path, prefix, CEmptyObject) map { _.keySet }
+        val nonEmptyM = metadataView.findProjections(path, prefix) map { sources =>
           sources.keySet filter { 
             _.columns exists { 
               case ColumnDescriptor(`path`, selector, _, _) => 
@@ -904,6 +908,8 @@ object BlockStoreColumnarTableModule {
             }
           }
         }
+
+        for (empty <- emptyM; nonEmpty <- nonEmptyM) yield empty ++ nonEmpty
 
       case JUnionT(tpe1, tpe2) =>
         (Set(loadable(metadataView, path, prefix, tpe1), loadable(metadataView, path, prefix, tpe2))).sequence map { _.flatten }
