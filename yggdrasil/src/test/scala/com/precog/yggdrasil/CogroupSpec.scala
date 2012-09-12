@@ -94,7 +94,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     val result: Table = ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
       Leaf(Source),
       Leaf(Source),
-      ObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(ObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
+      InnerObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(InnerObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
     )
 
     val jsonResult = toJson(result)
@@ -134,7 +134,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     val result: Table = ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
       Leaf(Source),
       Leaf(Source),
-      ObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(ObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
+      InnerObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(InnerObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
     )
 
     val jsonResult = toJson(result)
@@ -163,7 +163,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     val result: Table = ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
       Leaf(Source),
       Leaf(Source),
-      ObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(ObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
+      InnerObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(InnerObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
     )
 
     val jsonResult = toJson(result)
@@ -193,7 +193,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     val result: Table = ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
       Leaf(Source),
       Leaf(Source),
-      ObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(ObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
+      InnerObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(InnerObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
     )
 
     val jsonResult = toJson(result)
@@ -212,7 +212,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     toJson(ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
       Leaf(Source),
       Leaf(Source),
-      ObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(ObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
+      InnerObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(InnerObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
     )).copoint must throwAn[Exception]
   }
 
