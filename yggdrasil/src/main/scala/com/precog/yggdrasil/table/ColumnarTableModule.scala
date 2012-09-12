@@ -357,16 +357,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       def apply(nodeSubset: NodeSubset): BorgResult = {
         assert(!nodeSubset.sortedByIdentities)
+        val groupId = nodeSubset.node.binding.groupId
 
         val trans = ObjectConcat(
           wrapGroupKeySpec(nodeSubset.groupKeyTrans.spec) ::
-          wrapIdentSpec(nodeSubset.idTrans) ::
-          nodeSubset.targetTrans.map(wrapValueSpec).toList : _*
+          wrapIdentSpec(nestInGroupId(nodeSubset.idTrans, groupId)) ::
+          nodeSubset.targetTrans.map(t => wrapValueSpec(nestInGroupId(t, groupId))).toList : _*
         )
 
         BorgResult(nodeSubset.table.transform(trans), 
                    nodeSubset.groupKeyTrans.keyOrder, 
-                   Set(nodeSubset.node.binding.groupId),
+                   Set(groupId),
                    nodeSubset.size)
       }
 
@@ -377,6 +378,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def wrapGroupKeySpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "groupKeys")
       def wrapIdentSpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "identities")
       def wrapValueSpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "values")
+
+      def nestInGroupId[A <: SourceType](source: TransSpec[A], groupId: GroupId) = WrapObject(source, groupId.shows)
     }
 
     object Universe {
@@ -1265,7 +1268,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       import BorgResult._
       import OrderingConstraints._
 
-
       def reorderGroupKeySpec(newOrder: Seq[TicVar], original: Seq[TicVar]) = {
         ObjectConcat(
           newOrder.zipWithIndex.map {
@@ -1293,11 +1295,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         // resort the victim and we don't care what the remainder of the ordering is,
         // because we're not smart enough to figure out what the right one is and are
         // counting on our traversal order to get the biggest ordering constraints first.
+        val groupId = victim.node.binding.groupId
         val newOrder = toPrefix ++ (victim.node.keys -- toPrefix).toSeq
         val remapSpec = ObjectConcat(
           wrapGroupKeySpec(reorderGroupKeySpec(newOrder, victim.groupKeyTrans.keyOrder)) ::
-          wrapIdentSpec(victim.idTrans) :: 
-          victim.targetTrans.map(wrapValueSpec).toList: _*
+          wrapIdentSpec(nestInGroupId(victim.idTrans, groupId)) :: 
+          victim.targetTrans.map(t => wrapValueSpec(nestInGroupId(t, groupId))).toList: _*
         )
 
         victim.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending) map { sorted =>
@@ -1322,6 +1325,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
 
       def joinAsymmetric(assimilator: BorgResult, victim: NodeSubset): M[(BorgResult, BorgResult, Seq[TicVar])] = {
+        println("joining asymmetric.")
         (if (victim.sortedByIdentities) {
           findCompatiblePrefix(Set(assimilator.groupKeys), requiredOrders(victim.node)) map { commonPrefix =>
             resortVictimToBorgResult(victim, commonPrefix) map { prepared => 
@@ -1365,7 +1369,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
 
       def joinSymmetric(borgLeft: BorgResult, borgRight: BorgResult): M[(BorgResult, BorgResult, Seq[TicVar])] = {
+        println("joining symmetric")
         findCompatiblePrefix(Set(borgLeft.groupKeys), Set(borgRight.groupKeys)) map { compatiblePrefix =>
+          println("no re-sorting necessary.")
           (borgLeft, borgRight, compatiblePrefix).point[M]
         } orElse {
           // one or the other will require a re-sort
@@ -1431,16 +1437,16 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             val neededRight = rightJoinable.groupKeys diff leftJoinable.groupKeys
             val rightKeyMap = rightJoinable.groupKeys.zipWithIndex.toMap
 
-            val groupKeyTrans2 = ObjectConcat(
-              groupKeySpec(SourceLeft) +: neededRight.zipWithIndex.map { 
-                case (key, i) =>
-                wrapGroupKeySpec(
-                  WrapObject(
-                    DerefObjectStatic(groupKeySpec(SourceRight), JPathField(GroupKeyTrans.keyName(rightKeyMap(key)))),
-                    GroupKeyTrans.keyName(i + leftJoinable.groupKeys.size)
-                  )
-                )
-              }: _*
+            val groupKeyTrans2 = wrapGroupKeySpec(
+              ObjectConcat(
+                groupKeySpec(SourceLeft) +: neededRight.zipWithIndex.map { 
+                  case (key, i) =>
+                    WrapObject(
+                      DerefObjectStatic(groupKeySpec(SourceRight), JPathField(GroupKeyTrans.keyName(rightKeyMap(key)))),
+                      GroupKeyTrans.keyName(i + leftJoinable.groupKeys.size)
+                    )
+                }: _*
+              )
             )
 
             val cogroupBySpec = ObjectConcat(
@@ -1620,6 +1626,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
      * Merge controls the iteration over the table of group key values. 
      */
     def merge(grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => M[Table]): M[Table] = {
+      import BorgResult._
+
       // all of the universes will be unioned together.
       val universes = findBindingUniverses(grouping)
       val borgedUniverses: M[Stream[BorgResult]] = universes.toStream.map { universe =>
@@ -1654,10 +1662,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           val groupKeyTrans = ObjectConcat(
             omniverse.groupKeys.zipWithIndex map { case (ticvar, i) =>
               WrapObject(
-                DerefObjectStatic(
-                  DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
-                  JPathField(GroupKeyTrans.keyName(i))
-                ),
+                DerefObjectStatic(groupKeySpec(Source), JPathField(GroupKeyTrans.keyName(i))),
                 ticvar.name
               )
             } : _*
@@ -1668,16 +1673,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               grouped <- omniverse.groups.map{ groupId =>
                            val recordTrans = ArrayConcat(
                              WrapArray(
-                               DerefObjectStatic(
-                                 DerefObjectStatic(Leaf(Source), JPathField("identities")),
-                                 JPathField(groupId.shows)
-                               )
+                               DerefObjectStatic(identSpec(Source), JPathField(groupId.shows))
                              ),
                              WrapArray(
-                               DerefObjectStatic(
-                                 DerefObjectStatic(Leaf(Source), JPathField("values")),
-                                 JPathField(groupId.shows)
-                               )
+                               DerefObjectStatic(valueSpec(Source), JPathField(groupId.shows))
                              )
                            )
 
