@@ -261,7 +261,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           })
 
           // Break the idents out into field "0", original data in "1"
-          val splitIdentsTransSpec = ObjectConcat(WrapObject(identitySpec, "0"), WrapObject(Leaf(Source), "1"))
+          val splitIdentsTransSpec = OuterObjectConcat(WrapObject(identitySpec, "0"), WrapObject(Leaf(Source), "1"))
 
           Table(transformStream(collapse, sortedTable.transform(splitIdentsTransSpec).slices)).transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
         }
@@ -377,7 +377,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def apply(nodeSubset: NodeSubset): BorgResult = {
         assert(!nodeSubset.sortedByIdentities)
 
-        val trans = ObjectConcat(
+        val trans = OuterObjectConcat(
           wrapGroupKeySpec(nodeSubset.groupKeyTrans.spec) ::
           wrapIdentSpec(nodeSubset.idTrans) ::
           nodeSubset.targetTrans.map(wrapValueSpec).toList : _*
@@ -838,7 +838,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           }
 
           GroupKeyTrans(
-            ObjectConcat(keyComponents: _*),
+            OuterObjectConcat(keyComponents: _*),
             newOrder
           )
         }
@@ -846,7 +846,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       def prefixTrans(length: Int): TransSpec1 = {
         if (keyOrder.size == length) spec else {
-          ObjectConcat((0 until length) map { i => reindex(spec, i, i) }: _*)
+          OuterObjectConcat((0 until length) map { i => reindex(spec, i, i) }: _*)
         }
       }
     }
@@ -863,7 +863,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def apply(conjunction: Seq[GroupKeySpecSource]): GroupKeyTrans = {
         // [avalue, bvalue]
         val (keySpecs, fullKeyOrder) = conjunction.zipWithIndex.map({ case (src, i) => WrapObject(src.spec, keyName(i)) -> src.key }).unzip
-        val groupKeys = ObjectConcat(keySpecs: _*)
+        val groupKeys = OuterObjectConcat(keySpecs: _*)
 
         GroupKeyTrans(groupKeys, fullKeyOrder)
       }
@@ -1286,7 +1286,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
 
       def reorderGroupKeySpec(newOrder: Seq[TicVar], original: Seq[TicVar]) = {
-        ObjectConcat(
+        OuterObjectConcat(
           newOrder.zipWithIndex.map {
             case (ticvar, i) => GroupKeyTrans.reindex(BorgResult.groupKeySpec(Source), original.indexOf(ticvar), i)
           }: _*
@@ -1296,7 +1296,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def resortBorgResult(borgResult: BorgResult, newPrefix: Seq[TicVar]): M[BorgResult] = {
         val newAssimilatorOrder = newPrefix ++ (borgResult.groupKeys diff newPrefix)
 
-        val remapSpec = ObjectConcat(
+        val remapSpec = OuterObjectConcat(
           wrapGroupKeySpec(reorderGroupKeySpec(newAssimilatorOrder, borgResult.groupKeys)),
           wrapIdentSpec(identSpec(Source)),
           wrapValueSpec(valueSpec(Source))
@@ -1313,7 +1313,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         // because we're not smart enough to figure out what the right one is and are
         // counting on our traversal order to get the biggest ordering constraints first.
         val newOrder = toPrefix ++ (victim.node.keys -- toPrefix).toSeq
-        val remapSpec = ObjectConcat(
+        val remapSpec = OuterObjectConcat(
           wrapGroupKeySpec(reorderGroupKeySpec(newOrder, victim.groupKeyTrans.keyOrder)) ::
           wrapIdentSpec(victim.idTrans) :: 
           victim.targetTrans.map(wrapValueSpec).toList: _*
@@ -1450,7 +1450,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             val neededRight = rightJoinable.groupKeys diff leftJoinable.groupKeys
             val rightKeyMap = rightJoinable.groupKeys.zipWithIndex.toMap
 
-            val groupKeyTrans2 = ObjectConcat(
+            val groupKeyTrans2 = OuterObjectConcat(
               groupKeySpec(SourceLeft) +: neededRight.zipWithIndex.map { 
                 case (key, i) =>
                 wrapGroupKeySpec(
@@ -1462,7 +1462,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               }: _*
             )
 
-            val cogroupBySpec = ObjectConcat(
+            val cogroupBySpec = OuterObjectConcat(
               (0 until commonPrefix.size) map { i =>
                 WrapObject(
                   DerefObjectStatic(groupKeySpec(Source), JPathField(GroupKeyTrans.keyName(i))),
@@ -1471,10 +1471,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               }: _*
             )
 
-            val idTrans2 = wrapIdentSpec(ObjectConcat(identSpec(SourceLeft), identSpec(SourceRight)))
-            val recordTrans2 = wrapValueSpec(ObjectConcat(valueSpec(SourceLeft), valueSpec(SourceRight)))
+            val idTrans2 = wrapIdentSpec(OuterObjectConcat(identSpec(SourceLeft), identSpec(SourceRight)))
+            val recordTrans2 = wrapValueSpec(OuterObjectConcat(valueSpec(SourceLeft), valueSpec(SourceRight)))
 
-            val borgTrans = ObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
+            val borgTrans = OuterObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
             val unmatchedTrans = ObjectDelete(Leaf(Source), BorgResult.allFields)
 
             BorgResultNode(
@@ -1551,17 +1551,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       // remap the group keys on the right so that they don't conflict with the left
       // and respect the composite ordering of the left and right
-      val keyTransRight = ObjectConcat(
+      val keyTransRight = OuterObjectConcat(
         (0 until rightKeySize) map { i =>
           GroupKeyTrans.reindex(groupKeySpec(SourceRight), i, i + leftKeySize)
         }: _*
       )
 
-      val groupKeyTrans2 = wrapGroupKeySpec(ObjectConcat(keyTransLeft, keyTransRight))
-      val idTrans2 = wrapIdentSpec(ObjectConcat(identSpec(SourceLeft), identSpec(SourceRight)))
-      val recordTrans2 = wrapValueSpec(ObjectConcat(valueSpec(SourceLeft), valueSpec(SourceRight)))
+      val groupKeyTrans2 = wrapGroupKeySpec(OuterObjectConcat(keyTransLeft, keyTransRight))
+      val idTrans2 = wrapIdentSpec(OuterObjectConcat(identSpec(SourceLeft), identSpec(SourceRight)))
+      val recordTrans2 = wrapValueSpec(OuterObjectConcat(valueSpec(SourceLeft), valueSpec(SourceRight)))
 
-      ObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
+      OuterObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
     }
 
     def crossAll(borgResults: Set[BorgResult]): BorgResult = {
@@ -1591,7 +1591,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           val leftKeys = left.groupKeys.toArray
           val rightKeys = right.groupKeys.zipWithIndex
 
-          val remapKeyTrans = ObjectConcat((
+          val remapKeyTrans = OuterObjectConcat((
             // Remap the keys that exist on the left into the proper order
             ((0 until leftKeys.length) flatMap { leftIndex: Int =>
               rightKeys.find(_._1 == leftKeys(leftIndex)).map {
@@ -1618,7 +1618,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             })
           ): _*)
 
-          val remapFullSpec = ObjectConcat(
+          val remapFullSpec = OuterObjectConcat(
             WrapObject(remapKeyTrans, "groupKeys"),
             WrapObject(DerefObjectStatic(Leaf(Source), JPathField("identities")), "identities"),
             WrapObject(DerefObjectStatic(Leaf(Source), JPathField("values")), "values")
@@ -1670,7 +1670,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       for {
         omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
         result <- omniverse.table.partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("groupKeys"))) { partition =>
-          val groupKeyTrans = ObjectConcat(
+          val groupKeyTrans = OuterObjectConcat(
             omniverse.groupKeys.zipWithIndex map { case (ticvar, i) =>
               WrapObject(
                 DerefObjectStatic(
@@ -2269,7 +2269,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         groupedStream ++ dropAndSplit(comparatorGen, head :: tail)
       }
 
-      val keyTrans = ObjectConcat(
+      val keyTrans = OuterObjectConcat(
         WrapObject(partitionBy, "0"),
         WrapObject(Leaf(Source), "1")
       )

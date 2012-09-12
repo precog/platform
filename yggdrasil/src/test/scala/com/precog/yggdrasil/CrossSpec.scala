@@ -51,7 +51,7 @@ trait CrossSpec[M[+_]] extends TableModuleTestSupport[M] with Specification with
     }
 
     val result = ltable.cross(rtable)(
-      ObjectConcat(WrapObject(Leaf(SourceLeft), "left"), WrapObject(Leaf(SourceRight), "right"))
+      InnerObjectConcat(WrapObject(Leaf(SourceLeft), "left"), WrapObject(Leaf(SourceRight), "right"))
     )
 
     val jsonResult: M[Stream[JValue]] = toJson(result)

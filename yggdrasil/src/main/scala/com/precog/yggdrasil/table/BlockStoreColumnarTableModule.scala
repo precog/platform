@@ -83,7 +83,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     def memoize(table: Table, memoId: MemoId): M[Table] = {
       val preMemoTable =
         table.transform(
-          ObjectConcat(
+          OuterObjectConcat(
             WrapObject(
               Scan(
                 ConstLiteral(CLong(0), Leaf(Source)),
@@ -818,7 +818,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             }
           ),
           groupKeys map { kt => 
-            ObjectConcat(WrapObject(deepMap(kt) { case Leaf(_) => TransSpec1.DerefArray0 }, "0"), WrapObject(TransSpec1.DerefArray1, "1")) 
+            OuterObjectConcat(WrapObject(deepMap(kt) { case Leaf(_) => TransSpec1.DerefArray0 }, "0"), WrapObject(TransSpec1.DerefArray1, "1")) 
           },
           deepMap(valueSpec) { case Leaf(_) => TransSpec1.DerefArray0 }
         )
