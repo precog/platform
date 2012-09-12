@@ -247,61 +247,28 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                 }
               }
               
-              val (errorSet, constraintsSet) = let.constraints map {
+              val constraints2 = let.constraints map {
                 case Related(left, right) => {
-                  val optLeft2 = resolveUnifications(relations)(sub(left))
-                  val optRight2 = resolveUnifications(relations)(sub(right))
+                  val left2 = resolveUnifications(relations)(sub(left))
+                  val right2 = resolveUnifications(relations)(sub(right))
                   
-                  val related = for {
-                    left2 <- optLeft2
-                    right2 <- optRight2
-                  } yield Related(left2, right2)
-                  
-                  val errors = if (related.isDefined)
-                    Set[Error]()
-                  else
-                    Set(Error(expr, OperationOnUnrelatedSets))
-                  
-                  (errors, related)
+                  Related(left2, right2)
                 }
                 
                 case NotRelated(left, right) => {
-                  val optLeft2 = resolveUnifications(relations)(sub(left))
-                  val optRight2 = resolveUnifications(relations)(sub(right))
+                  val left2 = resolveUnifications(relations)(sub(left))
+                  val right2 = resolveUnifications(relations)(sub(right))
                   
-                  val related = for {
-                    left2 <- optLeft2
-                    right2 <- optRight2
-                  } yield NotRelated(left2, right2)
-                  
-                  val errors = if (related.isDefined)
-                    Set[Error]()
-                  else
-                    Set(Error(expr, OperationOnUnrelatedSets))
-                  
-                  (errors, related)
+                  NotRelated(left2, right2)
                 }
                 
                 case SameCard(left, right) => {
-                  val optLeft2 = resolveUnifications(relations)(sub(left))
-                  val optRight2 = resolveUnifications(relations)(sub(right))
+                  val left2 = resolveUnifications(relations)(sub(left))
+                  val right2 = resolveUnifications(relations)(sub(right))
                   
-                  val same = for {
-                    left2 <- optLeft2
-                    right2 <- optRight2
-                  } yield SameCard(left2, right2)
-                  
-                  val errors = if (same.isDefined)
-                    Set[Error]()
-                  else
-                    Set(Error(expr, OperationOnUnrelatedSets))
-                  
-                  (errors, same)
+                  SameCard(left2, right2)
                 }
-              } unzip
-              
-              val resolutionErrors = errorSet.flatten
-              val constraints2 = constraintsSet.flatten
+              }
               
               val mapped = constraints2 flatMap {
                 case Related(left, right) if !left.isParametric && !right.isParametric => {
@@ -312,7 +279,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                 }
                 
                 case NotRelated(left, right) if !left.isParametric && !right.isParametric => {
-                  if (!unifyProvenance(relations)(left, right).isDefined)
+                  if (unifyProvenance(relations)(left, right).isDefined)
                     Some(Left(Error(expr, AlreadyRelatedSets)))
                   else
                     None
@@ -331,19 +298,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
               val constrErrors = mapped collect { case Left(error) => error }
               val constraints3 = mapped collect { case Right(constr) => constr }
               
-              val errors = resolveUnifications(relations)(sub(let.resultProvenance)) match {
-                case Some(prov) => {
-                  expr.provenance = prov
-                  Set()
-                }
-                
-                case None => {
-                  expr.provenance = NullProvenance
-                  Set(Error(expr, OperationOnUnrelatedSets))
-                }
-              }
+              expr.provenance = resolveUnifications(relations)(sub(let.resultProvenance))
               
-              val finalErrors = actualErrors ++ resolutionErrors ++ constrErrors ++ errors
+              val finalErrors = actualErrors ++ constrErrors
               if (!finalErrors.isEmpty) {
                 expr.provenance = NullProvenance
               }
@@ -586,43 +543,33 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case _ => target
   }
   
-  private def resolveUnifications(relations: Map[Provenance, Set[Provenance]])(prov: Provenance): Option[Provenance] = prov match {
+  private def resolveUnifications(relations: Map[Provenance, Set[Provenance]])(prov: Provenance): Provenance = prov match {
     case UnifiedProvenance(left, right) if !left.isParametric && !right.isParametric => {
-      val optLeft2 = resolveUnifications(relations)(left)
-      val optRight2 = resolveUnifications(relations)(right)
+      val left2 = resolveUnifications(relations)(left)
+      val right2 = resolveUnifications(relations)(right)
       
-      for {
-        left2 <- optLeft2
-        right2 <- optRight2
-        result <- unifyProvenance(relations)(left2, right2)
-      } yield result
+      val optResult = unifyProvenance(relations)(left2, right2)
+      optResult getOrElse (left2 & right2)
     }
     
     case UnifiedProvenance(left, right) => {
-      val optLeft2 = resolveUnifications(relations)(left)
-      val optRight2 = resolveUnifications(relations)(right)
+      val left2 = resolveUnifications(relations)(left)
+      val right2 = resolveUnifications(relations)(right)
       
-      for {
-        left2 <- optLeft2
-        right2 <- optRight2
-      } yield UnifiedProvenance(left2, right2)
+      UnifiedProvenance(left2, right2)
     }
     
     case UnionProvenance(left, right) => {
-      val optLeft2 = resolveUnifications(relations)(left)
-      val optRight2 = resolveUnifications(relations)(right)
-      
-      for {
-        left2 <- optLeft2
-        right2 <- optRight2
-      } yield left2 & right2
+      val left2 = resolveUnifications(relations)(left)
+      val right2 = resolveUnifications(relations)(right)
+      left2 & right2
     }
     
     case DynamicDerivedProvenance(source) =>
-      resolveUnifications(relations)(source) map DynamicDerivedProvenance
+      DynamicDerivedProvenance(resolveUnifications(relations)(source))
     
     case ParamProvenance(_, _) | StaticProvenance(_) | DynamicProvenance(_) | ValueProvenance | NullProvenance =>
-      Some(prov)
+      prov
   }
   
   

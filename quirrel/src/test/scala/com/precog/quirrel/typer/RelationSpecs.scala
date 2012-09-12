@@ -444,6 +444,12 @@ object RelationSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    "substitute and resolve relation unification within a function" in {
+      val tree = compile("f(a, b) := a ~ b a + b f(//foo, //bar)")
+      tree.errors must beEmpty
+      tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
+    }
+    
     "accept operations according to the commutative relation" in {
       {
         val input = """
