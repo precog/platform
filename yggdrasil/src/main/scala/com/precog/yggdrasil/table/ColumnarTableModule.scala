@@ -1542,7 +1542,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       assert(connectedSubgraph.nonEmpty)
       if (connectedSubgraph.size == 1) {
         val victim = connectedSubgraph.head
-        resortVictimToBorgResult(victim, victim.groupKeyTrans.keyOrder)
+        resortVictimToBorgResult(victim, victim.groupKeyTrans.keyOrder) flatMap { borgResult =>
+          borgResult.table.toJson map { j =>
+            //println("Got borg result: " + j.mkString("\n"))
+            borgResult
+          }
+        }
       } else {
         val borgNodes = connectedSubgraph.map(BorgVictimNode.apply)
         val victims: Map[MergeNode, BorgNode] = borgNodes.map(s => s.independent.node -> s).toMap
@@ -1663,7 +1668,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           universe.spanningGraphs.map { spanningGraph =>
             // Compute required sort orders based on graph traversal
             val requiredSorts: Map[MergeNode, Set[Seq[TicVar]]] = findRequiredSorts(spanningGraph)
-            println("Got required sorts: " + requiredSorts)
             for (aligned <- alignOnEdges(spanningGraph, requiredSorts))
               yield (spanningGraph, requiredSorts, aligned)
           }.sequence
@@ -1687,6 +1691,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       for {
         omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
+        json <- omniverse.table.toJson
+        //_ = println("Omniverse: " + json.mkString("\n"))
         result <- omniverse.table.partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("groupKeys"))) { partition =>
           val groupKeyTrans = ObjectConcat(
             omniverse.groupKeys.zipWithIndex map { case (ticvar, i) =>
@@ -1699,7 +1705,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
           val groups: M[Map[GroupId, Table]] = 
             for {
-              grouped <- omniverse.groups.map{ groupId =>
+              grouped <- omniverse.groups.map { groupId =>
                            val recordTrans = ArrayConcat(
                              WrapArray(
                                DerefObjectStatic(identSpec(Source), JPathField(groupId.shows))
@@ -1713,7 +1719,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
                            // transform to get just the information related to the particular groupId,
                            partition.transform(recordTrans).sort(sortByTrans, unique = false) map {
-                             t => groupId -> t.transform(DerefArrayStatic(TransSpec1.DerefArray1, JPathIndex(1)))
+                             t => groupId -> t.transform(TransSpec1.DerefArray1)
                            }
                          }.sequence
             } yield grouped.toMap

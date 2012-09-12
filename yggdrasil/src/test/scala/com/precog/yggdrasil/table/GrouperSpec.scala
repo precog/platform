@@ -39,6 +39,7 @@ import scalaz.syntax.monad._
 trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
   "simple single-key grouping" should {
     "compute a histogram by value" in check { set: Stream[Int] =>
+      //println("===========================================================")
       val module = emptyTestModule
       import module._
       import trans._
@@ -63,11 +64,18 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
           keyIter.head must beLike {
             case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
           }
+
+          val histoKey = keyIter.head \ "tic_a"
+          val JNum(histoKey0) = histoKey
+          val histoKeyInt = histoKey0.toInt
         
           setIter must not(beEmpty)
+          //println(setIter.mkString("\n"))
           forall(setIter) { i =>
-            i mustEqual keyIter.head
+            i mustEqual histoKey
           }
+
+          setIter.size must_== set.count(_ == histoKeyInt)
           
           fromJson(JNum(setIter.size) #:: Stream.empty)
         }
