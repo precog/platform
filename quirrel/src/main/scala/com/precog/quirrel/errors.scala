@@ -67,7 +67,7 @@ case class MultiplyDefinedTicVariable(name: TicId) extends ErrorType {
 }
 
 case class UndefinedFunction(name: Identifier) extends ErrorType {
-  override def toString = "undefined function: %s".format(name)
+  override def toString = "undefined name: %s".format(name)
 }
 
 case object OperationOnUnrelatedSets extends ErrorType {
@@ -102,17 +102,21 @@ case class UnspecifiedRequiredParams(missing: Seq[String]) extends ErrorType {
   override def toString = "unconstrained parameters on function invoked without specification: " + (missing mkString ", ")
 }
 
-case object SetFunctionAppliedToSet extends ErrorType {
-  override def toString = "cannot apply a set function to another set"
-}
-
 case object FunctionArgsInapplicable extends ErrorType {
   override def toString = "cannot apply function to specified arguments"
+}
+
+case object SolveLackingFreeVariables extends ErrorType {
+  override def toString = "nothing to solve"
 }
 
 // intended to be a warning
 case class UnusedLetBinding(id: Identifier) extends ErrorType {
   override def toString = "binding '%s' defined but not referenced in scope".format(id)
+}
+
+case class UnusedFormalBinding(id: Identifier) extends ErrorType {
+  override def toString = "parameter '%s' defined but not referenced in scope".format(id)
 }
 
 case class UnusedTicVariable(id: TicId) extends ErrorType {
