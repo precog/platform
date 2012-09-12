@@ -193,6 +193,51 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     }
   }
 
+  def checkEqualSelfArray = {
+    val array: JValue = JsonParser.parse("""
+      [[9,10,11]]""")
+
+    val data: Stream[JValue] = (array match {
+      case JArray(li) => li
+      case _ => sys.error("expected JArray")
+    }).map { k => { JObject(List(JField("value", k), JField("key", JArray(List(JNum(0)))))) } }.toStream
+    
+    println("data: %s\n".format(data.toList))
+
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val data2: Stream[JValue] = Stream(
+      JObject(List(JField("value", JArray(List(JNum(9), JNum(10), JNum(11)))), JField("key", JArray(List())))))
+
+    val sample2 = SampleData(data2)
+    val table2 = fromSample(sample2)
+    
+    val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), JPathField("key"))
+    val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), JPathField("key"))
+    
+    val newIdentitySpec = ArrayConcat(leftIdentitySpec, rightIdentitySpec)
+    
+    val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, "key")
+
+    val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), JPathField("value"))
+    val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), JPathField("value"))
+    
+    val wrappedValueSpec = trans.WrapObject(Equal(leftValueSpec, rightValueSpec), "value")
+
+    val results = toJson(table.cross(table2)(ObjectConcat(wrappedIdentitySpec, wrappedValueSpec)))
+    val expected = (data map {
+      case jo @ JObject(List(JField("value", v), key @ _)) => {
+        if (v == JArray(List(JNum(9), JNum(10), JNum(11)))) 
+          JObject(List(JField("value", JBool(true)), key))
+        else JObject(List(JField("value", JBool(false)), key))
+      }
+      case _ => sys.error("unreachable case")
+    }).toStream
+
+    results.copoint must_== expected
+  }
+
   def checkEqual = {
     val genBase: Gen[SampleData] = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong)).arbitrary
     implicit val gen: Arbitrary[SampleData] = Arbitrary {

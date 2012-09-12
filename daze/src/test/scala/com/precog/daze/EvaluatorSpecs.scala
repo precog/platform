@@ -1882,6 +1882,31 @@ trait EvaluatorSpecs[M[+_]] extends Specification
                 Operate(line, WrapArray, Root(line, PushNum("10")))),
               Operate(line, WrapArray, Root(line, PushNum("11"))))))
 
+        testEval(input) { result =>
+          result must haveSize(1)
+
+          val result2 = result collect {
+            case (ids, SArray(arr)) if ids.size == 1 => arr
+          }
+
+          result2 must contain(Vector(SDecimal(9), SDecimal(10), SDecimal(11)))
+        }
+      }
+
+      "equal with a singleton array" >> {
+        val line = Line(0, "")
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/array")))
+        
+        val input = Filter(line, IdentitySort,
+          numbers,
+          Join(line, Eq, CrossLeftSort,
+            numbers,
+            Join(line, JoinArray, CrossLeftSort,
+              Join(line, JoinArray, CrossLeftSort,
+                Operate(line, WrapArray, Root(line, PushNum("9"))),
+                Operate(line, WrapArray, Root(line, PushNum("10")))),
+              Operate(line, WrapArray, Root(line, PushNum("11"))))))
+
 
         testEval(input) { result =>
           result must haveSize(1)
@@ -1890,9 +1915,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             case (ids, SArray(arr)) if ids.size == 1 => arr
           }
 
-          result2 must contain(Vector(8, 9, 10))
+          result2 must contain(Vector(SDecimal(9), SDecimal(10), SDecimal(11)))
         }
-      }.pendingUntilFixed
+      }
       
       "equal with an object" >> {
         val line = Line(0, "")
@@ -2056,8 +2081,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           result2 must contain(Map.empty[String, SValue], Vector.empty[SValue], Map("foo" -> SNull))
  
         }
-      }.pendingUntilFixed  
-      
+      }
+
       "not-equal with an object" >> {
         val line = Line(0, "")
         val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers10")))
@@ -2570,4 +2595,3 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 }
 
 object EvaluatorSpecs extends EvaluatorSpecs[YId] with test.YIdInstances
-

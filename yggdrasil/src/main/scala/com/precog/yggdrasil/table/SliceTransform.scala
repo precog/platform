@@ -175,10 +175,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                 }
 
                 val excluded = excludedLeft ++ sr.columns.collect({
-                  case (ColumnRef(selector, CLong | CDouble | CNum), col) 
-                    if !(List(CLong, CDouble, CNum)).exists(ctype => sl.columns.contains(ColumnRef(selector, ctype))) => col
+                  case (ColumnRef(selector, tpe), col) 
+                    if tpe.isNumeric && sl.columns.keys.forall { case ColumnRef(`selector`, ctype) => !ctype.isNumeric ; case _ => true } => col
 
-                  case (ref, col) if !sl.columns.contains(ref) => col
+                  case (ref @ ColumnRef(_, tpe), col)
+                    if !tpe.isNumeric && !sl.columns.contains(ref) => col
                 })
 
                 val allColumns = sl.columns ++ sr.columns

@@ -164,6 +164,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "perform an array dereference" in checkArrayDeref
       "perform a trivial map2" in checkMap2
       "perform a trivial equality check" in checkEqualSelf
+      "perform a trivial equality check on an array" in checkEqualSelfArray
       "perform a slightly less trivial equality check" in checkEqual
       "wrap the results of a transform in an object as the specified field" in checkWrapObject
       "give the identity transform for self-object concatenation" in checkObjectConcatSelf
