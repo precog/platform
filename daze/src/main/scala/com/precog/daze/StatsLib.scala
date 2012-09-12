@@ -64,7 +64,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
         val valueTable = median.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
         
-        valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+        valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
       }
     }
   }
@@ -300,7 +300,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
           val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
-          valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+          valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
       } getOrElse Table.empty
     }
@@ -448,7 +448,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
           val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
-          valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+          valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
       } getOrElse Table.empty
     }
@@ -601,12 +601,12 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
           val slopeSpec = trans.WrapObject(Leaf(SourceLeft), "slope")
           val yintSpec = trans.WrapObject(Leaf(SourceRight), "intercept")
-          val concatSpec = trans.ObjectConcat(slopeSpec, yintSpec)
+          val concatSpec = trans.InnerObjectConcat(slopeSpec, yintSpec)
 
           val valueTable = constSlope.cross(constIntercept)(trans.WrapObject(concatSpec, paths.Value.name))
           val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
-          valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+          valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
       } getOrElse Table.empty
     }
@@ -806,12 +806,12 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
           val slopeSpec = trans.WrapObject(Leaf(SourceLeft), "slope")
           val yintSpec = trans.WrapObject(Leaf(SourceRight), "intercept")
-          val concatSpec = trans.ObjectConcat(slopeSpec, yintSpec)
+          val concatSpec = trans.InnerObjectConcat(slopeSpec, yintSpec)
 
           val valueTable = constSlope.cross(constIntercept)(trans.WrapObject(concatSpec, paths.Value.name))
           val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
-          valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+          valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
       } getOrElse Table.empty
     }
