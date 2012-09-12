@@ -524,7 +524,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     dfs(Set())(from)
   }
   
-  private def substituteParam(id: Identifier, let: ast.Let, target: Provenance, sub: Provenance): Provenance = target match {
+  def substituteParam(id: Identifier, let: ast.Let, target: Provenance, sub: Provenance): Provenance = target match {
     case ParamProvenance(`id`, `let`) => sub
     
     case UnifiedProvenance(left, right) =>
@@ -544,7 +544,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case _ => target
   }
   
-  private def resolveUnifications(relations: Map[Provenance, Set[Provenance]])(prov: Provenance): Provenance = prov match {
+  def resolveUnifications(relations: Map[Provenance, Set[Provenance]])(prov: Provenance): Provenance = prov match {
     case UnifiedProvenance(left, right) if !left.isParametric && !right.isParametric => {
       val left2 = resolveUnifications(relations)(left)
       val right2 = resolveUnifications(relations)(right)

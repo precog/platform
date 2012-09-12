@@ -60,6 +60,7 @@ trait Emitter extends AST
     ticVars: Map[(ast.Solve, TicId), EmitterState] = Map(),
     formals: Map[(Identifier, ast.Let), EmitterState] = Map(),
     groups: Map[ast.Where, Int] = Map(),
+    subResolve: Provenance => Provenance = identity,
     currentId: Int = 0)
   
   private type EmitterState = StateT[Id, Emission, Unit]
@@ -194,11 +195,19 @@ trait Emitter extends AST
     
     def emitCrossOrMatchState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance)
         (ifCross: => Instruction, ifMatch: => Instruction): EmitterState = {
-      val itx = leftProv.possibilities.intersect(rightProv.possibilities).filter(p => p != ValueProvenance && p != NullProvenance)
-
-      val instr = emitInstr(if (itx.isEmpty) ifCross else ifMatch)
-
-      left >> right >> instr
+      StateT.apply[Id, Emission, Unit] { e =>
+        val leftResolved = e.subResolve(leftProv)
+        val rightResolved = e.subResolve(rightProv)
+        
+        assert(!leftResolved.isParametric)
+        assert(!rightResolved.isParametric)
+        
+        val itx = leftResolved.possibilities.intersect(rightResolved.possibilities).filter(p => p != ValueProvenance && p != NullProvenance)
+  
+        val instr = emitInstr(if (itx.isEmpty) ifCross else ifMatch)
+  
+        (left >> right >> instr)(e)
+      }
     }
 
     def emitMapState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance, op: BinaryOperation): EmitterState = {
@@ -439,12 +448,29 @@ trait Emitter extends AST
                   emitOrDup(MarkExpr(left))(emitExpr(left))
 
                 case n => emitOrDup(MarkDispatch(let, actuals)) {
+                  val ids = let.params map { Identifier(Vector(), _) }
+                  val zipped = ids zip (actuals map { _.provenance })
+                  
+                  def sub(target: Provenance): Provenance = {
+                    zipped.foldLeft(target) {
+                      case (target, (id, sub)) => substituteParam(id, let, target, sub)
+                    }
+                  }
+                  
                   val actualStates = params zip actuals map {
                     case (name, expr) =>
                       labelFormal(Identifier(Vector(), name), let)(emitExpr(expr))
                   }
                   
-                  reduce(actualStates) >> emitExpr(left)
+                  StateT.apply[Id, Emission, Unit] { e =>
+                    def subResolve2(prov: Provenance): Provenance =
+                      resolveUnifications(expr.relations)(sub(prov))
+                    
+                    val e2 = e.copy(subResolve = e.subResolve compose subResolve2)
+                    
+                    val (e3, ()) = (reduce(actualStates) >> emitExpr(left))(e2)
+                    (e3.copy(subResolve = e.subResolve), ())
+                  }
                 }
               }
 

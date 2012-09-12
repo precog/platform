@@ -569,7 +569,7 @@ object EmitterSpecs extends Specification
             Map2Match(BuiltInFunction2Op(f))))
       }
     }
-
+ 
     "emit body of fully applied characteristic function" in {
       testEmit("clicks := //clicks clicksFor(userId) := clicks where clicks.userId = userId clicksFor(\"foo\")")(
         Vector(
@@ -980,7 +980,7 @@ object EmitterSpecs extends Specification
           Swap(1),
           Swap(2),
           Group(2),
-          MergeBuckets(false),
+          MergeBuckets(true),
           Split,
           PushGroup(0),
           Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
@@ -1110,7 +1110,7 @@ object EmitterSpecs extends Specification
         testEmit("""
           | interactions := //interactions
           | 
-          | big1z := solve 'userId
+          | solve 'userId
           |   userInteractions := interactions where interactions.userId = 'userId
           |   
           |   m := mean(userInteractions.duration)
@@ -1120,34 +1120,22 @@ object EmitterSpecs extends Specification
           |     userId: 'userId,
           |     interaction: userInteractions where userInteractions.duration > m + (sd * 3)
           |   }
-          |   
-          | big1z
           """.stripMargin)(
           Vector(
             PushString("/interactions"),
             LoadLocal,
-            Dup,
-            Dup,
             Dup,
             PushString("userId"),
             Map2Cross(DerefObject),
             KeyPart(1),
             Swap(1),
             Group(0),
-            Swap(1),
-            PushString("userId"),
-            Map2Cross(DerefObject),
-            KeyPart(3),
-            Swap(1),
-            Swap(2),
-            Group(2),
-            MergeBuckets(false),
             Split,
             PushString("userId"),
-            PushKey(3),
+            PushKey(1),
             Map2Cross(WrapObject),
             PushString("interaction"),
-            PushGroup(2),
+            PushGroup(0),
             Dup,
             Swap(3),
             Swap(2),
@@ -1211,8 +1199,6 @@ object EmitterSpecs extends Specification
             PushString("/conversions"),
             LoadLocal,
             Dup,
-            Dup,
-            Dup,
             PushString("userId"),
             Map2Cross(DerefObject),
             KeyPart(1),
@@ -1230,35 +1216,27 @@ object EmitterSpecs extends Specification
             Swap(2),
             Group(2),
             MergeBuckets(true),
-            Swap(1),
-            PushString("userId"),
-            Map2Cross(DerefObject),
-            KeyPart(5),
-            Swap(1),
-            Swap(2),
-            Group(4),
-            MergeBuckets(false),
             Split,
             PushGroup(2),
             Dup,
             Dup,
             PushString("time"),
             Map2Cross(DerefObject),
-            KeyPart(7),
+            KeyPart(5),
             Swap(1),
             PushString("time"),
             Map2Cross(DerefObject),
-            Group(6),
+            Group(4),
             Split,
             PushString("impression"),
             Swap(1),
-            PushGroup(6),
+            PushGroup(4),
             Dup,
             Map2Match(Eq),
             FilterMatch,
             Map2Cross(WrapObject),
             PushString("nextConversion"),
-            PushGroup(4),
+            PushGroup(0),
             Dup,
             Swap(3),
             Swap(2),
@@ -1301,7 +1279,7 @@ object EmitterSpecs extends Specification
             Swap(6),
             PushString("time"),
             Map2Cross(DerefObject),
-            PushKey(7),
+            PushKey(5),
             Map2Cross(Gt),
             FilterMatch,
             Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
@@ -1343,45 +1321,6 @@ object EmitterSpecs extends Specification
             Map2Cross(JoinObject),
             Merge))
       }
-      
-      /*
-      "interaction-totals.qrl" >> {
-        val input = """
-          | interactions := //interactions
-          | 
-          | hourOfDay('time) := 'time / 3600000           -- timezones,
-          anyone?
-          | dayOfWeek('time) := 'time / 604800000         -- not even slightly correct
-          | 
-          | total('hour,
-          'day) :=
-          |   dayAndHour := dayOfWeek(interactions.time) = 'day & hourOfDay(interactions.time) = 'hour
-          |   sum(interactions where dayAndHour)
-          |   
-          | total
-          """.stripMargin
-        
-        parse(input) must not(throwA[ParseException])
-      }
-      
-      "relative-durations.qrl" >> {
-        val input = """
-          | interactions := //interactions
-          | 
-          | relativeDurations('userId,
-          'value) :=
-          |   userInteractions := interactions where interactions.userId = 'userId
-          |   interactionDurations := (userInteractions where userInteractions = 'value).duration
-          |   totalDurations := sum(userInteractions.duration)
-          | 
-          |   { userId: 'userId,
-          ratio: interactionDurations / totalDurations }
-          | 
-          | relativeDurations
-          """.stripMargin
-        
-        parse(input) must not(throwA[ParseException])
-      }*/
     }
   }
   
