@@ -1829,7 +1829,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         case object CogroupDone extends CogroupState
 
         val Reset = -1
-
+        
         // step is the continuation function fed to uncons. It is called once for each emitted slice
         def step(state: CogroupState): M[Option[(Slice, CogroupState)]] = {
           // step0 is the inner monadic recursion needed to cross slice boundaries within the emission of a slice
@@ -2126,6 +2126,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   lempty <- ltail.isEmpty //TODO: Scalaz result here is negated from what it should be!
                   rempty <- rtail.isEmpty
                 } yield {
+                  
                   if (lempty) {
                     // left side is a small set, so restart it in memory
                     crossLeftSingle(lhead, rhead :: rtail)
@@ -2144,7 +2145,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           case None => M.point(StreamT.empty[M, Slice])
         }
       }
-
+      
       Table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }))
     }
     

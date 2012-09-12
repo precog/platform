@@ -510,14 +510,19 @@ trait EvalStackSpecs extends Specification {
     "correctly handle cross-match situations" in {
       val input = """
         | campaigns := //campaigns
-        | clicks := //clicks
+        | clicks := new //campaigns
         | 
         | campaigns ~ clicks
         |   campaigns = campaigns
         |     & clicks = clicks
         |     & clicks = clicks""".stripMargin
         
-      eval(input) must not(beEmpty)
+      try {
+        eval(input)
+        true mustEqual false
+      } catch {
+        case t: ArrayIndexOutOfBoundsException => t.printStackTrace(); throw t
+      }
     }
 
     "add sets of different types" >> {
