@@ -425,7 +425,7 @@ trait EvalStackSpecs extends Specification {
         }
         case r => failure("Result has wrong shape: "+r)
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate the with operator across the campaigns dataset" in {
       val input = "count(//campaigns with { t: 42 })"
@@ -872,7 +872,7 @@ trait EvalStackSpecs extends Specification {
         }
         case r => failure("Result has wrong shape: "+r)
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate a solve of two parameters" in {
       val input = """
