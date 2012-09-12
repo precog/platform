@@ -67,7 +67,7 @@ trait EvalStackSpecs extends Specification {
 
       "empty array" >> {
         eval("[].foo") mustEqual Set()
-      }.pendingUntilFixed
+      }
     }
 
     "accept a dereferenced object" >> {
@@ -77,44 +77,44 @@ trait EvalStackSpecs extends Specification {
 
       "empty object" >> {
         eval("{}[0]") mustEqual Set()
-      }.pendingUntilFixed
+      }
     }    
     
     "accept a where'd empty array and empty object" >> {
       "empty object (left)" >> {
         eval("{} where true") mustEqual Set(SObject(Map()))
-      }.pendingUntilFixed
+      }
 
       "empty object (right)" >> {
         eval("true where {}") mustEqual Set()
-      }.pendingUntilFixed
+      }
       
       "empty array (left)" >> {
         eval("[] where true") mustEqual Set(SArray(Vector()))
-      }.pendingUntilFixed
+      }
 
       "empty array (right)" >> {
         eval("true where []") mustEqual Set()
-      }.pendingUntilFixed
+      }
     }    
     
     "accept a with'd empty array and empty object" >> {
       "empty object (left)" >> {
         eval("{} with true") mustEqual Set()
-      }.pendingUntilFixed
+      }
 
       "empty object (right)" >> {
         eval("true with {}") mustEqual Set()
-      }.pendingUntilFixed
+      }
       
       "empty array (left)" >> {
         eval("[] with true") mustEqual Set()
-      }.pendingUntilFixed
+      }
 
       "empty array (right)" >> {
         eval("true with []") mustEqual Set()
-      }.pendingUntilFixed
-    }    
+      }
+    }
 
     "union sets coming out of a solve" >> {
       val input = """
@@ -499,7 +499,7 @@ trait EvalStackSpecs extends Specification {
         |     & clicks = clicks""".stripMargin
         
       eval(input) must not(beEmpty)
-    }.pendingUntilFixed    
+    }
 
     "add sets of different types" >> {
       "a set of numbers and a set of strings" >> {
@@ -670,7 +670,7 @@ trait EvalStackSpecs extends Specification {
         results must be empty
 
         sanityCheck must not be empty
-      }.pendingUntilFixed
+      }
     }
 
     "evaluate denseRank" >> {
@@ -1028,7 +1028,7 @@ trait EvalStackSpecs extends Specification {
         """.stripMargin
 
         eval(input) must not(throwA[Throwable])
-      }.pendingUntilFixed
+      }
 
       "handle query on empty array" >> {
         val input = """
@@ -1036,7 +1036,7 @@ trait EvalStackSpecs extends Specification {
         """.stripMargin
 
         eval(input) mustEqual Set(SArray(Vector()), SObject(Map("foo" -> SArray(Vector()))))
-      }.pendingUntilFixed
+      }
       
       "handle query on empty object" >> {
         val input = """
@@ -1044,7 +1044,7 @@ trait EvalStackSpecs extends Specification {
         """.stripMargin
 
         eval(input) mustEqual Set(SObject(Map()), SObject(Map("foo" -> SObject(Map()))))
-      }.pendingUntilFixed
+      }
 
       "handle query on null" >> {
         val input = """
@@ -1064,9 +1064,9 @@ trait EvalStackSpecs extends Specification {
       }
 
       "handle load of error-prone fastspring data" >> {
-        (eval("//fastspring_nulls") must haveSize(2)) and
-        (eval("//fastspring_mixed_type") must haveSize(2))
-      }.pendingUntilFixed
+        eval("//fastspring_nulls") must haveSize(2)
+        eval("//fastspring_mixed_type") must haveSize(2)
+      }
 
       // times out...
       /* "handle chained characteristic functions" in {
