@@ -349,6 +349,10 @@ trait AST extends Phases {
     private val _constrainingExpr = attribute[Option[Expr]](checkProvenance)
     def constrainingExpr = _constrainingExpr()
     private[quirrel] def constrainingExpr_=(expr: Option[Expr]) = _constrainingExpr() = expr
+
+    private val _relations = attribute[Map[Provenance, Set[Provenance]]](checkProvenance)
+    def relations = _relations()
+    private[quirrel] def relations_=(rels: Map[Provenance, Set[Provenance]]) = _relations() = rels
     
     private[quirrel] final lazy val _errors: Atom[Set[Error]] = {
       if (this eq root) {

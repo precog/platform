@@ -64,13 +64,17 @@ object RelationSpecs extends Specification
     }
     
     "accept object definition on different loads when related" in {
-      val tree = compile("//foo ~ //bar { a: //foo, b: //bar }")
+      val tree @ Relate(_, _, _, in) = compile("//foo ~ //bar { a: //foo, b: //bar }")
+      in.relations mustEqual Map(StaticProvenance("/foo") -> Set(StaticProvenance("/bar")), StaticProvenance("/bar") -> Set(StaticProvenance("/foo")))
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept object definition on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s { a: //foo, b: s }")
+      val tree @ Let(_, _, _, _, Relate(_, _, _, in)) = compile("s := new 1 //foo ~ s { a: //foo, b: s }")
+      (in.relations.keys.toList sorted Provenance.order.toScalaOrdering) must beLike { case DynamicProvenance(_) :: StaticProvenance("/foo") :: Nil => ok }
+      in.relations(StaticProvenance("/foo")).toList(0) must beLike { case DynamicProvenance(_) => ok }
+      (in.relations.values.map(_.toList)) must beLike { case (DynamicProvenance(_) :: Nil) :: (StaticProvenance("/foo") :: Nil) :: Nil => ok }
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
@@ -82,7 +86,8 @@ object RelationSpecs extends Specification
     }
     
     "accept array definition on different loads when related" in {
-      val tree = compile("//foo ~ //bar [ //foo, //bar ]")
+      val tree @ Relate(_, _, _, in) = compile("//foo ~ //bar [ //foo, //bar ]")
+      in.relations mustEqual Map(StaticProvenance("/foo") -> Set(StaticProvenance("/bar")), StaticProvenance("/bar") -> Set(StaticProvenance("/foo")))
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
@@ -537,7 +542,8 @@ object RelationSpecs extends Specification
         | foo ~ bar
         |   foo + bar + foo""".stripMargin
         
-        val tree = compile(input)
+        val tree @ Let(_, _, _, _, Let(_, _, _, _, Relate(_, _, _, in))) = compile(input)
+        in.relations mustEqual Map(StaticProvenance("/foo") -> Set(StaticProvenance("/bar")), StaticProvenance("/bar") -> Set(StaticProvenance("/foo")))
         tree.provenance must beLike {
           case p: UnionProvenance => {
             p.possibilities must contain(StaticProvenance("/foo"))
@@ -579,6 +585,11 @@ object RelationSpecs extends Specification
         
       val tree @ Let(_, _, _, _, Let(_, _, _, _, Let(_, _, _, _, Relate(_, _, _, Relate(_, _, _, body @ Mul(_, left @ Sub(_, minLeft, minRight), right @ Div(_, divLeft, divRight))))))) =
         compile(input)
+
+      body.relations mustEqual Map(
+        StaticProvenance("/foo") -> Set(StaticProvenance("/bar")),
+        StaticProvenance("/bar") -> Set(StaticProvenance("/foo"), StaticProvenance("/baz")),
+        StaticProvenance("/baz") -> Set(StaticProvenance("/bar")))
       
       tree.provenance must beLike {
         case p: UnionProvenance => {

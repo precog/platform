@@ -441,6 +441,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       expr.constrainingExpr = constraints get expr.provenance
+      expr.relations = relations
       
       back
     }
