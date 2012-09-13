@@ -37,13 +37,19 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
     val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
-        def apply(row: Int) = math.sinh(c(row))
+        def result(row: Int) = math.sinh(c(row))
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
+        def apply(row: Int) = result(row)
       }
       case c: LongColumn => new Map1Column(c) with DoubleColumn {
-        def apply(row: Int) = math.sinh(c(row).toDouble)
+        def result(row: Int) = math.sinh(c(row).toDouble)
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
+        def apply(row: Int) = result(row)
       }
       case c: NumColumn => new Map1Column(c) with DoubleColumn {
-        def apply(row: Int) = math.sinh(c(row).toDouble)
+        def result(row: Int) = math.sinh(c(row).toDouble)
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
+        def apply(row: Int) = result(row)
       }
     })
     
@@ -75,12 +81,18 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
     val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def result(row: Int) = math.expm1(c(row))
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
         def apply(row: Int) = math.expm1(c(row))
       }
       case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def result(row: Int) = math.expm1(c(row).toDouble)
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
         def apply(row: Int) = math.expm1(c(row).toDouble)
       }
       case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def result(row: Int) = math.expm1(c(row).toDouble)
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
         def apply(row: Int) = math.expm1(c(row).toDouble)
       }
     })
@@ -181,12 +193,18 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
     val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def result(row: Int) = math.exp(c(row))
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
         def apply(row: Int) = math.exp(c(row))
       }
       case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def result(row: Int) = math.exp(c(row).toDouble)
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
         def apply(row: Int) = math.exp(c(row).toDouble)
       }
       case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def result(row: Int) = math.exp(c(row).toDouble)
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
         def apply(row: Int) = math.exp(c(row).toDouble)
       }
     })
@@ -398,12 +416,18 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
     val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def result(row: Int) = math.cosh(c(row))
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
         def apply(row: Int) = math.cosh(c(row))
       }
       case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def result(row: Int) = math.cosh(c(row).toDouble)
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
         def apply(row: Int) = math.cosh(c(row).toDouble)
       }
       case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def result(row: Int) = math.cosh(c(row).toDouble)
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && result(row) != Double.PositiveInfinity && result(row) != Double.NegativeInfinity
         def apply(row: Int) = math.cosh(c(row).toDouble)
       }
     })

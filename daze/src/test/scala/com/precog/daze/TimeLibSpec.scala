@@ -55,11 +55,6 @@ trait TimeLibSpec[M[+_]] extends Specification
     }
   }
 
-  "all time functions" should {
-    "validate input" in todo
-    "return failing validations for bad input" in todo
-  }
-
   "parse a time string into an ISO801 string, given its format" should {
     "time zone not specified" in {
       val line = Line(0, "")

@@ -53,31 +53,7 @@ trait MathLibSpec[M[+_]] extends Specification
     }
   }
 
-  "all math functions" should {
-    "validate input" in todo
-    "return failing validations for bad input" in todo
-  }
-
   "for sets with numeric values inside arrays and objects" should {
-    "compute cos only of the numeric value" in {
-      val line = Line(0, "")
-      
-      val input = dag.Operate(line, BuiltInFunction1Op(cos),
-        Join(line, JoinArray, CrossLeftSort, 
-          dag.Operate(line, WrapArray, Root(line, PushNum("0"))),
-          dag.Operate(line, WrapArray, Root(line, PushString("foo")))))
-        
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
-      }
-      
-      result2 must contain(1)
-    }.pendingUntilFixed
-    
     "compute cos only of the numeric value" in {
       val line = Line(0, "")
       
@@ -112,6 +88,16 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0, 1.1752011936438014, -1.1752011936438014, 8.696374707602505E17, -4.872401723124452E9)
+    }     
+    "compute sinh on two large(ish) values" in {
+      val line = Line(0, "")
+      
+      val input = dag.Operate(line, BuiltInFunction1Op(sinh),
+        dag.LoadLocal(line, Root(line, PushString("/hom/number"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(0)
     }  
     "compute toDegrees" in {
       val line = Line(0, "")
@@ -144,6 +130,22 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0.0, 1.718281828459045, -0.6321205588285577, 1.73927494152050099E18, -0.9999999998973812)
+    }      
+    "compute expm1 on two large(ish) values" in {
+      val line = Line(0, "")
+      
+      val input = dag.Operate(line, BuiltInFunction1Op(expm1),
+        dag.LoadLocal(line, Root(line, PushString("/hom/number"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+      
+      result2 must contain(-1.0)
     }  
     "compute getExponent" in {
       val line = Line(0, "")
@@ -225,6 +227,22 @@ trait MathLibSpec[M[+_]] extends Specification
       
       result2 must contain(1.0, 2.7182818284590455, 0.36787944117144233, 1.73927494152050099E18, 1.026187963170189E-10)
     }  
+    "compute exp on two large(ish) values" in {
+      val line = Line(0, "")
+      
+      val input = dag.Operate(line, BuiltInFunction1Op(exp),
+        dag.LoadLocal(line, Root(line, PushString("/hom/number"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+      
+      result2 must contain(0.0)
+    } 
     "compute cbrt" in {
       val line = Line(0, "")
       
@@ -401,6 +419,16 @@ trait MathLibSpec[M[+_]] extends Specification
       
       result2 must contain(1.0, 1.543080634815244, 1.543080634815244, 8.696374707602505E17, 4.872401723124452E9)
     }  
+    "compute cosh on two large(ish) values" in {
+      val line = Line(0, "")
+      
+      val input = dag.Operate(line, BuiltInFunction1Op(cosh),
+        dag.LoadLocal(line, Root(line, PushString("/hom/number"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(0)
+    } 
     "compute tan" in {
       val line = Line(0, "")
       

@@ -52,11 +52,6 @@ trait StringLibSpec[M[+_]] extends Specification
     }
   }
 
-  "all string functions" should {
-    "validate input" in todo
-    "return failing validations for bad input" in todo
-  }
-
   "for homogeneous sets, the appropriate string function" should {
     "determine length" in {
       val line = Line(0, "")
