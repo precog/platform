@@ -2139,8 +2139,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           result2 must contain(42, 12, 1, true, false, "daniel",
             Map("test" -> SString("fubar")), Vector())
         }
-      }.pendingUntilFixed
-      
+      }
+
       "or" >> {
         val line = Line(0, "")
         val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
@@ -2164,8 +2164,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
           result2 must contain(77, 13)
         }
-      }.pendingUntilFixed
-      
+      }
+
       "complement of equality" >> {
         val line = Line(0, "")
         val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
