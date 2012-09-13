@@ -581,7 +581,7 @@ object Codec {
     bytes
   }
 
-  implicit val BitSetCodec = Codec[Array[Long]].as[BitSet](bitSet2Array(_), BitSet.fromArray(_))
+  implicit val BitSetCodec = ArrayCodec[Long](LongCodec, implicitly).as[BitSet](bitSet2Array(_), BitSet.fromArray(_))
 
   case class SparseBitSetCodec(size: Int) extends Codec[BitSet] {
 
