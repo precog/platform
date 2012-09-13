@@ -35,18 +35,50 @@ import org.specs2._
 import org.specs2.mutable.Specification
 import org.scalacheck.{Shrink, Arbitrary, Gen}
 
+import scala.annotation.tailrec
+
 class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators {
   import Arbitrary._
   import ByteBufferPool._
 
 
-  def genColumnRefs: Gen[List[ColumnRef]] = Gen.listOf(genCType) map (_.zipWithIndex map {
-    case (cType, i) => ColumnRef(JPath(JPathIndex(i)), cType)
-  })
+  // This should generate some jpath ids, then generate CTypes for these.
+  // def genColumnRefs: Gen[List[ColumnRef]] = 
+  def genColumnRefs: Gen[List[ColumnRef]] = Gen.listOf(Gen.alphaStr filter (_.size > 0)) flatMap { paths =>
+    Gen.sequence[List, List[ColumnRef]](paths.distinct.map { name =>
+      Gen.listOf(genCType) map { _.distinct map (ColumnRef(JPath(name), _)) }
+    }).map(_.flatten)
+  }
 
-  def genCValuesForColumnRefs(refs: List[ColumnRef]): Gen[List[CValue]] = Gen.sequence[List, CValue](refs map {
+  // def genColumnRefs: Gen[List[ColumnRef]] = Gen.listOf(genCType) map (_.zipWithIndex map {
+  //   case (cType, i) => ColumnRef(JPath(JPathIndex(i)), cType)
+  // })
+
+  def groupConsecutive[A, B](as: List[A])(f: A => B) = {
+    @tailrec
+    def build(as: List[A], prev: List[List[A]]): List[List[A]] = as match {
+      case Nil =>
+        prev.reverse
+      case a :: _ =>
+        val bs = as takeWhile { b => f(a) == f(b) }
+        build(as drop bs.size, bs :: prev)
+    }
+
+    build(as, Nil)
+  }
+
+  def genCValuesForColumnRefs(refs: List[ColumnRef]): Gen[List[CValue]] = /*Gen.sequence[List, CValue](refs map {
     case ColumnRef(_, cType) => Gen.frequency(5 -> genCValue(cType), 1 -> Gen.value(CUndefined))
-  })
+  })*/
+  Gen.sequence[List, List[CValue]](groupConsecutive(refs)(_.selector) map {
+    case refs =>
+      Gen.choose(0, refs.size - 1) flatMap { i =>
+        Gen.sequence[List, CValue](refs.zipWithIndex map {
+          case (ColumnRef(_, cType), `i`) => Gen.frequency(5 -> genCValue(cType), 1 -> Gen.value(CUndefined))
+          case (_, _) => Gen.value(CUndefined)
+        })
+      }
+  }) map (_.flatten)
 
   def arrayColumnsFor(size: Int, refs: List[ColumnRef]): List[ArrayColumn[_]] =
     refs map JDBMSlice.columnFor(JPath.Identity, size) map (_._2)
@@ -74,11 +106,43 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
   implicit val shrinkCValues: Shrink[List[CValue]] = Shrink.shrinkAny[List[CValue]]
   implicit val shrinkRows: Shrink[List[List[CValue]]] = Shrink.shrinkAny[List[List[CValue]]]
 
+  "ValueRowFormat" should {
+    checkRoundTrips(RowFormat.forValues(_))
+  }
 
-  "RowFormat encoding/decoding" should {
+  "SortingKeyRowFormat" should {
+    checkRoundTrips(RowFormat.forSortingKey(_))
+
+    "sort encoded as ValueFormat does" in {
+      check { refs: List[ColumnRef] =>
+        val valueRowFormat = RowFormat.forValues(refs)
+        val sortingKeyRowFormat = RowFormat.forSortingKey(refs)
+        implicit val arbRows: Arbitrary[List[List[CValue]]] =
+          Arbitrary(Gen.listOfN(10, genCValuesForColumnRefs(refs)))
+
+
+
+        check { (vals: List[List[CValue]]) =>
+          val valueEncoded = vals map (valueRowFormat.encode(_))
+          val sortEncoded = vals map (sortingKeyRowFormat.encode(_))
+
+          val sortedA = valueEncoded.sorted(new Ordering[Array[Byte]] {
+            def compare(a: Array[Byte], b: Array[Byte]) = valueRowFormat.compare(a, b)
+          }) map (valueRowFormat.decode(_))
+          val sortedB = sortEncoded.sorted(new Ordering[Array[Byte]] {
+            def compare(a: Array[Byte], b: Array[Byte]) = sortingKeyRowFormat.compare(a, b)
+          }) map (sortingKeyRowFormat.decode(_))
+
+          sortedA must_== sortedB
+        }
+      }
+    }
+  }
+
+  def checkRoundTrips(toRowFormat: List[ColumnRef] => RowFormat) {
     "survive round-trip from CValue -> Array[Byte] -> CValue" in {
       check { (refs: List[ColumnRef]) =>
-        val rowFormat = RowFormat.forValues(refs)
+        val rowFormat = toRowFormat(refs)
         implicit val arbColumnValues: Arbitrary[List[CValue]] = Arbitrary(genCValuesForColumnRefs(refs))
 
         check { (vals: List[CValue]) =>
@@ -91,7 +155,7 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
       val size = 10
 
       check { (refs: List[ColumnRef]) =>
-        val rowFormat = RowFormat.forValues(refs)
+        val rowFormat = toRowFormat(refs)
         implicit val arbRows: Arbitrary[List[List[CValue]]] =
           Arbitrary(Gen.listOfN(size, genCValuesForColumnRefs(refs)))
 

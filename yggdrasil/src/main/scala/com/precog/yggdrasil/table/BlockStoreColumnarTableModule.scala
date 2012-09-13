@@ -159,6 +159,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         slice0.sparsen(remap, if (position > 0) remap(position - 1) + 1 else 0)
       }
 
+      def currentJson = slice0.toJson(position)
+
       def succ: M[Option[CellState]] = {
         for (blockOpt <- succf(maxKey)) yield {
           blockOpt map { block => CellState(index, block.maxKey, block.data, succf) }
@@ -217,7 +219,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       }
     }
 
-    def mergeProjections(cellStates: Stream[CellState], invert: Boolean)(keyf: Slice => List[ColumnRef]): StreamT[M, Slice] = {
+    def mergeProjections(inputSortOrder: DesiredSortOrder, cellStates: Stream[CellState])(keyf: Slice => List[ColumnRef]): StreamT[M, Slice] = {
       StreamT.unfoldM[M, Slice, Stream[CellState]](cellStates) { cellStates => 
         val cells: Vector[Cell] = cellStates.map(_.toCell)(collection.breakOut)
 
@@ -225,8 +227,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         // still be valid and usable. However, getting to this requires more significant rework than can be
         // undertaken right now.
         val cellMatrix = CellMatrix(cells)(keyf)
-        val queue = mutable.PriorityQueue(cells.toSeq: _*)(if (invert) cellMatrix.ordering.reverse else cellMatrix.ordering)
-        
+        val queue = mutable.PriorityQueue(cells.toSeq: _*)(if (inputSortOrder.isAscending) cellMatrix.ordering.reverse else cellMatrix.ordering)
+
         // dequeues all equal elements from the head of the queue
         @inline @tailrec def dequeueEqual(cells: List[Cell]): List[Cell] = {
           if (queue.isEmpty) cells
@@ -237,7 +239,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         // consume as many records as possible
         @inline @tailrec def consumeToBoundary(idx: Int): (Int, List[Cell]) = {
           val cellBlock = dequeueEqual(Nil)
-          
+
           if (cellBlock.isEmpty) {
             // At the end of data, since this will only occur if nothing remains in the priority queue
             (idx, Nil)
@@ -616,7 +618,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           val (keyColumnRefs, keyColumns) = kslice.columns.toList.sortBy(_._1).unzip
           assert (keyColumnRefs.size >= 1)
 
-          val keyRowFormat = RowFormat.forValues(keyColumnRefs)
+          val keyRowFormat = RowFormat.forSortingKey(keyColumnRefs)
           val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
           val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
 
@@ -645,7 +647,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       val dataColumnEncoder = dataRowFormat.ColumnEncoder(vColumns)
 
       val (keyColumnRefs, keyColumns) = kslice.columns.toList.sortBy(_._1).unzip
-      val keyRowFormat = RowFormat.forValues(keyColumnRefs)
+      val keyRowFormat = RowFormat.forSortingKey(keyColumnRefs)
       val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
       val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
 
@@ -696,13 +698,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     }
 
     def loadTable(dbFile: File, mergeEngine: MergeEngine[SortingKey, SortBlockData], indices: IndexMap, sortOrder: DesiredSortOrder, notes: String = ""): Table = {
-      //println("Losding using indices: " + indices.keys.map(_.name).mkString("\n  ", "\n  ", "\n"))
       import mergeEngine._
 
       // Map the distinct indices into SortProjections/Cells, then merge them
       def cellsMs: Stream[M[Option[CellState]]] = indices.values.toStream.zipWithIndex map {
         case (SliceIndex(name, _, _, keyColumns, valColumns), index) => 
-          val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns)
+          val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns, sortOrder)
           val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
           
           succ(None) map { 
@@ -715,7 +716,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       val head = StreamT.Skip(
         StreamT.wrapEffect(
           for (cellOptions <- cellsMs.sequence) yield {
-            mergeProjections(cellOptions.flatMap(a => a), sortOrder.isAscending) { slice => 
+            mergeProjections(sortOrder, cellOptions.flatMap(a => a)) { slice => 
               // only need to compare on the group keys (0th element of resulting table) between projections
               slice.columns.keys.collect({ case ref @ ColumnRef(JPath(JPathIndex(0), _ @ _*), _) => ref}).toList.sorted
             }
@@ -771,8 +772,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             coveringProjections <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
             cellOptions         <- cellsM(minimalCover(tpe, coveringProjections)).sequence
           } yield {
-            mergeProjections(cellOptions.flatMap(a => a), false) { slice => 
-              //todo: How do we actually determine the correct function for retrieving the key?
+            mergeProjections(SortAscending, // Projections are always sorted in ascending identity order
+                             cellOptions.flatMap(a => a)) { slice => 
               slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(JPathField("key") :: Nil) }).toList.sorted
             }
           }
@@ -879,7 +880,8 @@ object BlockStoreColumnarTableModule {
         }
 
       case JArrayUnfixedT =>
-        metadataView.findProjections(path, prefix) map { sources =>
+        val emptyM = metadataView.findProjections(path, prefix, CEmptyArray) map { _.keySet }
+        val nonEmptyM = metadataView.findProjections(path, prefix) map { sources =>
           sources.keySet filter { 
             _.columns exists { 
               case ColumnDescriptor(`path`, selector, _, _) => 
@@ -887,6 +889,8 @@ object BlockStoreColumnarTableModule {
             }
           }
         }
+
+        for (empty <- emptyM; nonEmpty <- nonEmptyM) yield empty ++ nonEmpty
 
       case JObjectFixedT(fields) =>
         if (fields.isEmpty) {
@@ -896,7 +900,8 @@ object BlockStoreColumnarTableModule {
         }
 
       case JObjectUnfixedT =>
-        metadataView.findProjections(path, prefix) map { sources =>
+        val emptyM = metadataView.findProjections(path, prefix, CEmptyObject) map { _.keySet }
+        val nonEmptyM = metadataView.findProjections(path, prefix) map { sources =>
           sources.keySet filter { 
             _.columns exists { 
               case ColumnDescriptor(`path`, selector, _, _) => 
@@ -904,6 +909,8 @@ object BlockStoreColumnarTableModule {
             }
           }
         }
+
+        for (empty <- emptyM; nonEmpty <- nonEmptyM) yield empty ++ nonEmpty
 
       case JUnionT(tpe1, tpe2) =>
         (Set(loadable(metadataView, path, prefix, tpe1), loadable(metadataView, path, prefix, tpe2))).sequence map { _.flatten }

@@ -1941,12 +1941,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             _ must beLike {
               case (ids, SObject(obj)) if ids.size == 1 => {
                 obj must haveKey("foo")
-                obj must haveValue("bar")
+                obj must haveValue(SString("bar"))
               }
             }
           }
         }
-      }.pendingUntilFixed
+      }
 
       "equal without a filter" >> {
         val line = Line(0, "")
@@ -2096,7 +2096,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             numbers,
             Join(line, WrapObject, CrossLeftSort,
               Root(line, PushString("foo")),
-              Root(line, PushString("bar")))))
+              Root(line, PushNull))))
 
         testEval(input) { result =>
           result must haveSize(3)
@@ -2108,7 +2108,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
           result2 must contain(Vector.empty[SValue], Vector(SDecimal(9), SDecimal(10)), Map.empty[String, SValue])
 
-        }.pendingUntilFixed  //TODO first place to look:  buildWrappedCrossSpec
+        }
       }
 
       "and" >> {
@@ -2139,8 +2139,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           result2 must contain(42, 12, 1, true, false, "daniel",
             Map("test" -> SString("fubar")), Vector())
         }
-      }.pendingUntilFixed
-      
+      }
+
       "or" >> {
         val line = Line(0, "")
         val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
@@ -2164,8 +2164,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
           result2 must contain(77, 13)
         }
-      }.pendingUntilFixed
-      
+      }
+
       "complement of equality" >> {
         val line = Line(0, "")
         val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))

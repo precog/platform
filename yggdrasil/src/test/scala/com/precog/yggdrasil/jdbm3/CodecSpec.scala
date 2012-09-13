@@ -92,7 +92,7 @@ class CodecSpec extends Specification with ScalaCheck {
   }
 
   "LongCodec" should surviveRoundTrip(Codec.LongCodec)
-  "PackedLongCodec" should surviveRoundTrip(Codec.LongCodec)
+  "PackedLongCodec" should surviveRoundTrip(Codec.PackedLongCodec)
   "BooleanCodec" should surviveRoundTrip(Codec.BooleanCodec)
   "DoubleCodec" should surviveRoundTrip(Codec.DoubleCodec)
   "Utf8Codec" should surviveRoundTrip(Codec.Utf8Codec)

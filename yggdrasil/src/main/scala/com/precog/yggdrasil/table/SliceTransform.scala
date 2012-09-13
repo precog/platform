@@ -103,7 +103,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
         case Filter(source, predicate) => 
           composeSliceTransform2(source).zip(composeSliceTransform2(predicate)) { (s: Slice, filter: Slice) => 
             assert(filter.size == s.size)
-
+            
             if (s.columns.isEmpty) {
               s
             } else {
@@ -216,44 +216,35 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
 
           val sourceSlice = composeSliceTransform2(source)
 
-          def comp: (BoolColumn => BoolColumn) = {
-            (b: BoolColumn) => new BoolColumn {
-              def isDefinedAt(row: Int) = b.isDefinedAt(row)
-              def apply(row: Int) = !b(row)
-            }
+          def complement(col: BoolColumn) = new BoolColumn {
+            def isDefinedAt(row: Int) = col.isDefinedAt(row)
+            def apply(row: Int) = !col(row)
           }
-
-          def boolId: (BoolColumn => BoolColumn) = {
-            (b: BoolColumn) => b
-          }
-
-          def transform: (BoolColumn => BoolColumn)  = if (invert) comp else boolId
-
+          
           sourceSlice map { ss =>
             new Slice {
               val size = ss.size
               val columns = {
-                val (comparable, other) = ss.columns.toList.partition {
+                val (comparable0, other0) = ss.columns.toList.partition {
                   case (ref @ ColumnRef(JPath.Identity, tpe), col) if CType.canCompare(CType.of(value),tpe) => true
                   case _ => false
                 }
-
-                (comparable.flatMap { case (ref, col) => Eq.partialRight(value)(col).map { col => (ref, col.asInstanceOf[BoolColumn]) } } ++
-                 other.map { case (ref, col) => (ref.copy(selector = JPath.Identity), new Map1Column(col) with BoolColumn { def apply(row: Int) = false }) }).map {
-                  case (ref, col) => (ref, transform(col)) 
-                }.groupBy { 
-                  case (ref, col) => ref 
-                }.map {
-                  case (ref, columns) => (ref, new BoolColumn {
-                    def isDefinedAt(row: Int) = columns.exists { case (_, col) => col.isDefinedAt(row) }
-                    def apply(row: Int)       = columns.exists { case (_, col) => col(row) }
-                  })
+                
+                val comparable = comparable0.map(_._2).flatMap { col => Eq.partialRight(value)(col).map(_.asInstanceOf[BoolColumn]) }
+                val other = other0.map(_._2).map { col => new Map1Column(col) with BoolColumn { def apply(row: Int) = false } }
+                
+                val columns = comparable ++ other
+                val aggregate = new BoolColumn {
+                  def isDefinedAt(row: Int) = columns.exists { _.isDefinedAt(row) }
+                  def apply(row: Int)       = columns.exists { col => col.isDefinedAt(row) && col(row) }
                 }
+                
+                Map(ColumnRef(JPath.Identity, CBoolean) -> (if(invert) complement(aggregate) else aggregate))
               }
             }
           }
         }
-        
+
         case ConstLiteral(value, target) =>
           composeSliceTransform2(target) map { _.definedConst(value) }
 
