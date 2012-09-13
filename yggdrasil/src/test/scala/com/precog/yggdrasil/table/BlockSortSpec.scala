@@ -53,12 +53,11 @@ import TableModule._
 trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
   implicit def M: Monad[M] with Copointed[M]
 
-  def testSortDense(sample: SampleData, sortKeys: JPath*) = {
+  def testSortDense(sample: SampleData, sortOrder: DesiredSortOrder, sortKeys: JPath*) = {
     object module extends BlockStoreTestModule {
       val projections = Map.empty[ProjectionDescriptor, Projection]
     }
 
-    //println("testing for sample: " + sample)
     val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
       import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
 
@@ -68,8 +67,10 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       } 
     }
 
+    val desiredJValueOrder = if (sortOrder.isAscending) jvalueOrdering else jvalueOrdering.reverse
+
     val resultM = for {
-      sorted <- module.fromSample(sample).sort(module.sortTransspec(sortKeys: _*), SortAscending)
+      sorted <- module.fromSample(sample).sort(module.sortTransspec(sortKeys: _*), sortOrder)
       json <- sorted.toJson
     } yield json
 
@@ -77,7 +78,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
     val original = sample.data.sortBy({
       v => JArray(sortKeys.map(_.extract(v \ "value")).toList).asInstanceOf[JValue]
-    })(jvalueOrdering).toList
+    })(desiredJValueOrder).toList
 
     result must_== original
   }
@@ -89,7 +90,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     check { (sample: SampleData) => {
       val Some((_, schema)) = sample.schema
 
-      testSortDense(sample, schema.map(_._1).head)
+      testSortDense(sample, SortAscending, schema.map(_._1).head)
     }}
   }
 
@@ -121,7 +122,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       )
     )
 
-    testSortDense(sampleData, JPath(".uid"))
+    testSortDense(sampleData, SortAscending, JPath(".uid"))
   }
 
   // Simple test of partially undefined sort key data
@@ -151,7 +152,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       )
     )
 
-    testSortDense(sampleData, JPath(".uid"), JPath(".hW"))
+    testSortDense(sampleData, SortAscending, JPath(".uid"), JPath(".hW"))
   }
 
   def heterogeneousBaseValueTypeSample = {
@@ -174,7 +175,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       )
     )
 
-    testSortDense(sampleData, JPath(".uid"))
+    testSortDense(sampleData, SortAscending, JPath(".uid"))
   }
 
   def badSchemaSortSample = {
@@ -210,7 +211,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
         JPath(".u") -> CDouble,
         JPath(".q") -> CNum,
         JPath(".vxu") -> CEmptyArray))))
-    testSortDense(sampleData, JPath("q"))
+    testSortDense(sampleData, SortAscending, JPath("q"))
   }
 
   // Simple test of heterogeneous sort keys
@@ -254,7 +255,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       )
     )
 
-    testSortDense(sampleData, JPath(".uid"))
+    testSortDense(sampleData, SortAscending, JPath(".uid"))
   }
 
   def secondHetSortSample = {
@@ -290,7 +291,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       )
     )
 
-    testSortDense(sampleData, JPath(".zw1"))
+    testSortDense(sampleData, SortAscending, JPath(".zw1"))
   }
 
   /* The following data set results in three separate JDBM
@@ -442,7 +443,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       )
     )
 
-    testSortDense(sampleData, JPath(".zbtQhnpnun"))
+    testSortDense(sampleData, SortAscending, JPath(".zbtQhnpnun"))
   }
 
   def emptySort = {
@@ -453,7 +454,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       )
     )
 
-    testSortDense(sampleData, JPath(".foo"))
+    testSortDense(sampleData, SortAscending, JPath(".foo"))
   }
 
 }
