@@ -37,58 +37,63 @@ import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 
 trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
-  "simple single-key grouping" should {
-    "compute a histogram by value" in check { set: Stream[Int] =>
-      //println("===========================================================")
-      val module = emptyTestModule
-      import module._
-      import trans._
-      import constants._
+  def testHistogramByValue(set: Stream[Int]) = {
+    //println("===========================================================")
+    //println("source: " + set.mkString("[", "," , "]"))
+    val module = emptyTestModule
+    import module._
+    import trans._
+    import constants._
+    
+    val data = set.zipWithIndex map { case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", JNum(v)) :: Nil) }
+
+    val groupId = module.newGroupId
       
-      val data = set map { JNum(_) }
-
-      val groupId = module.newGroupId
-        
-      val spec = GroupingSource(
-        fromJson(data), 
-        TransSpec1.Id, Some(TransSpec1.Id), groupId, 
-        GroupKeySpecSource(JPathField("tic_a"), TransSpec1.Id))
-        
-      val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
-        for {
-          keyIter <- key.toJson
-          group2  <- map(groupId)
-          setIter <- group2.toJson
-        } yield {
-          keyIter must haveSize(1)
-          keyIter.head must beLike {
-            case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
-          }
-
-          val histoKey = keyIter.head \ "tic_a"
-          val JNum(histoKey0) = histoKey
-          val histoKeyInt = histoKey0.toInt
-        
-          setIter must not(beEmpty)
-          //println(setIter.mkString("\n"))
-          forall(setIter) { i =>
-            i mustEqual histoKey
-          }
-
-          setIter.size must_== set.count(_ == histoKeyInt)
-          
-          fromJson(JNum(setIter.size) #:: Stream.empty)
+    val spec = GroupingSource(
+      fromJson(data), 
+      SourceKey.Single, Some(TransSpec1.Id), groupId, 
+      GroupKeySpecSource(JPathField("tic_a"), SourceValue.Single))
+      
+    val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
+      for {
+        keyIter <- key.toJson
+        group2  <- map(groupId)
+        setIter <- group2.toJson
+      } yield {
+        keyIter must haveSize(1)
+        keyIter.head must beLike {
+          case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
         }
+
+        val histoKey = keyIter.head \ "tic_a"
+        val JNum(histoKey0) = histoKey
+        val histoKeyInt = histoKey0.toInt
+      
+        setIter must not(beEmpty)
+        //println("results: " + setIter.mkString("[", "," , "]"))
+        forall(setIter) { i =>
+          (i \ "value") mustEqual histoKey
+        }
+
+        setIter.size must_== set.count(_ == histoKeyInt)
+        
+        fromJson(JNum(setIter.size) #:: Stream.empty)
       }
-      
-      val resultIter = result.flatMap(_.toJson).copoint
-      
-      resultIter must haveSize(set.distinct.size)
-      
-      val expectedSet = (set.toSeq groupBy identity values) map { _.length } map { JNum(_) }
-      
-      forall(resultIter) { i => expectedSet must contain(i) }
-    }.pendingUntilFixed
+    }
+    
+    val resultIter = result.flatMap(_.toJson).copoint
+    
+    resultIter must haveSize(set.distinct.size)
+    
+    val expectedSet = (set.toSeq groupBy identity values) map { _.length } map { JNum(_) }
+    
+    forall(resultIter) { i => expectedSet must contain(i) }
+  }
+
+  "simple single-key grouping" should {
+    "compute a histogram by value" in check (testHistogramByValue _)
+    //"compute a histogram by value" in testHistogramByValue(Stream(2147483647, 2147483647))
+    //"foo" in testHistogramByValue(Stream(24, -10, 0, -1, -1, 0, 24, 0, 0, 24, -1, 0, 0, 24))
   }
 }
     /*

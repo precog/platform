@@ -2218,21 +2218,27 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
      * the values specified by the partitionBy transspec.
      */
     def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = {
-      @tailrec
-      def findEnd(index: Int, size: Int, step: Int, compare: Int => Ordering): Int = {
-        if (index < size) {
-          compare(index) match {
-            case GT =>
-              sys.error("Inputs to partitionMerge not sorted.")
-
-            case EQ => 
-              findEnd(index + step, size, step, compare)
-
-            case LT =>
-              if (step <= 1) index else findEnd(index - (step / 2), size, step / 2, compare)
-          }
-        } else {
-          size
+      @tailrec def findEnd(compare: Int => Ordering, imin: Int, imax: Int): Int = {
+        (compare(imin), compare(imax)) match {
+          case (LT, LT) => 
+            // Min index is first LT
+            imin
+          case (EQ, EQ) =>
+            // The slice only holds EQ values
+            imax + 1
+          case (EQ, LT) =>
+            val imid = imin + ((imax - imin) / 2)
+            
+            compare(imid) match {
+              case LT =>
+                findEnd(compare, imin, imid - 1)
+              case EQ => 
+                findEnd(compare, imid, imax - 1)
+              case GT => 
+                sys.error("Inputs to partitionMerge not sorted.")
+            }
+          case _ =>
+            sys.error("Inputs to partitionMerge not sorted.")
         }
       }
 
@@ -2240,7 +2246,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         slices.uncons map {
           case Some((head, tail)) =>
             val headComparator = comparatorGen(head)
-            val spanEnd = findEnd(head.size - 1, head.size, head.size, headComparator)
+            val spanEnd = findEnd(headComparator, 0, head.size - 1)
             if (spanEnd < head.size) {
               val (prefix, _) = head.split(spanEnd) 
               prefix :: StreamT.empty[M, Slice]
@@ -2257,7 +2263,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         slices.uncons map {
           case Some((head, tail)) =>
             val headComparator = comparatorGen(head)
-            val spanEnd = findEnd(head.size - 1, head.size, head.size, headComparator)
+            val spanEnd = findEnd(headComparator, 0, head.size - 1)
             if (spanEnd < head.size) {
               val (_, suffix) = head.split(spanEnd) 
               stepPartition(suffix, tail)
