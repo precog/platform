@@ -75,22 +75,34 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     } yield json
 
     val result = resultM.copoint.toList
+    
+    val globalIdPath = JPath(".globalId")
 
-    val original = sample.data.sortBy({
-      v => JArray(sortKeys.map(_.extract(v \ "value")).toList).asInstanceOf[JValue]
-    })(desiredJValueOrder).toList
+    // We have to add in and then later remove the global Id (insert
+    // order) to match real sort semantics for disambiguation of equal
+    // values
+    val original = sample.data.zipWithIndex.map {
+      case (jv, i) => JValue.unsafeInsert(jv, globalIdPath, JNum(i))
+    }.sortBy({ v => { JArray(sortKeys.map(_.extract(v \ "value")).toList ::: List(v \ "globalId")).asInstanceOf[JValue] }       
+    })(desiredJValueOrder).map(_.delete(globalIdPath).get).toList
+
+    if (result != original) {
+       result zip original foreach {
+         case (r, o) => if (r != o) { println("%s != %s".format(r, o)) }
+       }
+    }
 
     result must_== original
   }
 
-  def checkSortDense = {
+  def checkSortDense(sortOrder: DesiredSortOrder) = {
     import TableModule.paths.Value
 
     implicit val gen = sample(objectSchema(_, 3))
     check { (sample: SampleData) => {
       val Some((_, schema)) = sample.schema
 
-      testSortDense(sample, SortAscending, schema.map(_._1).head)
+      testSortDense(sample, sortOrder, schema.map(_._1).head)
     }}
   }
 
@@ -122,7 +134,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       )
     )
 
-    testSortDense(sampleData, SortAscending, JPath(".uid"))
+    testSortDense(sampleData, SortDescending, JPath(".uid"))
   }
 
   // Simple test of partially undefined sort key data

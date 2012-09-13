@@ -703,7 +703,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       // Map the distinct indices into SortProjections/Cells, then merge them
       def cellsMs: Stream[M[Option[CellState]]] = indices.values.toStream.zipWithIndex map {
         case (SliceIndex(name, _, _, keyColumns, valColumns), index) => 
-          val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns)
+          val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns, sortOrder)
           val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
           
           succ(None) map { 

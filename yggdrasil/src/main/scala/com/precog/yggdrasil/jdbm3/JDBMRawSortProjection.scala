@@ -22,6 +22,7 @@ package jdbm3
 
 import com.precog.common.Path
 import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.TableModule._
 
 import blueeyes.json._
 
@@ -41,7 +42,7 @@ import scala.collection.JavaConverters._
  * A Projection wrapping a raw JDBM TreeMap index used for sorting. It's assumed that
  * the index has been created and filled prior to creating this wrapper.
  */
-class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte],Slice] with Logging {
+class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sortOrder: DesiredSortOrder, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte],Slice] with Logging {
 
   // These should not actually be used in sorting
   def descriptor: ProjectionDescriptor = sys.error("Sort projections do not have full ProjectionDescriptors")
@@ -56,6 +57,8 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
     DB.close()
   }
 
+  val keyAfterDelta = if (sortOrder.isAscending) 1 else -1
+
   private def keyAfter(k: Array[Byte]): Array[Byte] = {
 
     // TODO This won't be nearly as fast as Derek's, since JDBMSlice can no
@@ -64,7 +67,7 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
 
     val vals = keyFormat.decode(k)
     val last = vals.last match {
-      case CLong(n) => CLong(n + 1)
+      case CLong(n) => CLong(n + keyAfterDelta)
       case v => sys.error("Expected a CLong (global ID) in the last position, but found " + v + " (more: " + vals + ")")
     }
     keyFormat.encode(vals.init :+ last)
