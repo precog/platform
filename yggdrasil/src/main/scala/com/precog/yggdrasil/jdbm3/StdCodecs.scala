@@ -59,9 +59,7 @@ trait StdCodecs {
 
 
 trait RowFormatCodecs extends StdCodecs { self: RowFormat =>
-  // TODO Renable LongCodec.
-  // implicit def LongCodec: Codec[Long] = Codec.PackedLongCodec
-  implicit def LongCodec: Codec[Long] = Codec.LongCodec
+  implicit def LongCodec: Codec[Long] = Codec.PackedLongCodec
   implicit def DoubleCodec: Codec[Double] = Codec.DoubleCodec
   implicit def BigDecimalCodec: Codec[BigDecimal] = Codec.BigDecimalCodec
   implicit def StringCodec: Codec[String] = Codec.Utf8Codec
