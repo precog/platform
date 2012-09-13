@@ -1941,12 +1941,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             _ must beLike {
               case (ids, SObject(obj)) if ids.size == 1 => {
                 obj must haveKey("foo")
-                obj must haveValue("bar")
+                obj must haveValue(SString("bar"))
               }
             }
           }
         }
-      }.pendingUntilFixed
+      }
 
       "equal without a filter" >> {
         val line = Line(0, "")
