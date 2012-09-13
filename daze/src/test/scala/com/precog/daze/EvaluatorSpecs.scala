@@ -2096,7 +2096,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             numbers,
             Join(line, WrapObject, CrossLeftSort,
               Root(line, PushString("foo")),
-              Root(line, PushString("bar")))))
+              Root(line, PushNull))))
 
         testEval(input) { result =>
           result must haveSize(3)
@@ -2108,7 +2108,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
           result2 must contain(Vector.empty[SValue], Vector(SDecimal(9), SDecimal(10)), Map.empty[String, SValue])
 
-        }.pendingUntilFixed  //TODO first place to look:  buildWrappedCrossSpec
+        }
       }
 
       "and" >> {
