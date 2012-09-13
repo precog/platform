@@ -27,7 +27,7 @@ import blueeyes.json.JsonAST._
 import akka.actor.ActorSystem
 import akka.dispatch.{Future, ExecutionContext}
 
-import scalaz.Validation
+import scalaz.{ Validation, StreamT, Id }
 import Validation._
 
 sealed trait EvaluationError
@@ -42,16 +42,16 @@ object EvaluationError {
   val timeoutError: EvaluationError = TimeoutError
 }
 
-trait QueryExecutor {
-  def execute(userUID: String, query: String, prefix: Path): Validation[EvaluationError, JArray]
-  def browse(userUID: String, path: Path): Future[Validation[String, JArray]]
-  def structure(userUID: String, path: Path): Future[Validation[String, JObject]]
-  def status(): Future[Validation[String, JValue]]
-  def startup(): Future[Boolean]
-  def shutdown(): Future[Boolean]
+trait QueryExecutor[M[+_]] {
+  def execute(userUID: String, query: String, prefix: Path): Validation[EvaluationError, StreamT[M, List[JValue]]]
+  def browse(userUID: String, path: Path): M[Validation[String, JArray]]
+  def structure(userUID: String, path: Path): M[Validation[String, JObject]]
+  def status(): M[Validation[String, JValue]]
+  def startup(): M[Boolean]
+  def shutdown(): M[Boolean]
 }
 
-trait NullQueryExecutor extends QueryExecutor {
+trait NullQueryExecutor extends QueryExecutor[Id.Id] {
   def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
 
@@ -63,8 +63,8 @@ trait NullQueryExecutor extends QueryExecutor {
   def structure(userUID: String, path: Path) = sys.error("feature not available")
   def status() = sys.error("feature not available")
 
-  def startup = Future(true)
-  def shutdown = Future { actorSystem.shutdown; true }
+  def startup = true
+  def shutdown = true
 }
 
 // vim: set ts=4 sw=4 et:

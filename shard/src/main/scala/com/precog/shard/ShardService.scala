@@ -30,7 +30,7 @@ import akka.dispatch.Future
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.BlueEyesServiceBuilder
-import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
+import blueeyes.core.data.{ BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk }
 import blueeyes.health.metrics.{eternity}
 
 import org.streum.configrity.Configuration
@@ -38,7 +38,7 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
 
-case class ShardState(queryExecutor: QueryExecutor, tokenManager: TokenManager[Future], accessControl: AccessControl[Future])
+case class ShardState(queryExecutor: QueryExecutor[Future], tokenManager: TokenManager[Future], accessControl: AccessControl[Future])
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
@@ -48,12 +48,13 @@ trait ShardService extends
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
+  import BijectionsChunkQueryResult._
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
   implicit def M: Monad[Future]
 
-  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]): QueryExecutor
+  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]): QueryExecutor[Future]
 
   def tokenManagerFactory(config: Configuration): TokenManager[Future]
 
@@ -92,17 +93,17 @@ trait ShardService extends
             path("/actors/status") {
                 get(new ActorStatusHandler(state.queryExecutor))
             }
-          } ~ jsonp[ByteChunk] {
+          } ~ jsonpcb[QueryResult] {
             token(state.tokenManager) {
               dataPath("vfs") {
                 query {
                   get(new QueryServiceHandler(state.queryExecutor))
-                } ~ 
+                } ~
                 get(new BrowseServiceHandler(state.queryExecutor, state.accessControl))
               }
-            } ~ path("actors/status") {
+            }/* ~ path("actors/status") {
               get(new ActorStatusHandler(state.queryExecutor))
-            }
+            }*/
           }
         } ->
         shutdown { state => Future[Option[Stoppable]]( None ) }

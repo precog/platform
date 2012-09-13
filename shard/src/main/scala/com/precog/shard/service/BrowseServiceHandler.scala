@@ -39,18 +39,18 @@ import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
 
-class BrowseServiceHandler(queryExecutor: QueryExecutor, accessControl: AccessControl[Future])(implicit dispatcher: MessageDispatcher)
-extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
+class BrowseServiceHandler(queryExecutor: QueryExecutor[Future], accessControl: AccessControl[Future])(implicit dispatcher: MessageDispatcher)
+extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[QueryResult]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => { 
     success((t: Token, p: Path) => {
       accessControl.mayAccess(t.tid, p, Set(t.tid), ReadPermission).flatMap { 
         case true =>
           queryExecutor.browse(t.tid, p) map {
-            case Success(result) => HttpResponse[JValue](OK, content = Some(result))
-            case Failure(error) => HttpResponse[JValue](HttpStatus(BadRequest, error))
+            case Success(result) => HttpResponse[QueryResult](OK, content = Some(Left(result)))
+            case Failure(error) => HttpResponse[QueryResult](HttpStatus(BadRequest, error))
           }
         case false =>
-          Future(HttpResponse[JValue](HttpStatus(Unauthorized, "The specified token may not browse this location")))
+          Future(HttpResponse[QueryResult](HttpStatus(Unauthorized, "The specified token may not browse this location")))
       }
     })
   }
