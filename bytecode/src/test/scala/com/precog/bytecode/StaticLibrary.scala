@@ -51,13 +51,21 @@ trait StaticLibrary extends Library {
     Op2(Vector("std", "lib"), "baz2", 0x0003))
   
   lazy val libMorphism1 = Set(
-    Morphism1(Vector(), "bin5", 0x0000),
+    M1,
     Morphism1(Vector(), "bar33", 0x0002))
 
   lazy val libMorphism2 = Set(
-    Morphism2(Vector("std"), "bin9", 0x0001),
+    M2,
     Morphism2(Vector("std", "lib9"), "baz2", 0x0003))
   
+  object M1 extends Morphism1(Vector(), "bin5", 0x0000) {
+    override val retainIds = true
+  }
+
+  object M2 extends Morphism2(Vector("std"), "bin9", 0x0001) {
+    override val retainIds = true
+  }
+
   case class Morphism1(namespace: Vector[String], name: String, opcode: Int) extends Morphism1Like {
     val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
   }
