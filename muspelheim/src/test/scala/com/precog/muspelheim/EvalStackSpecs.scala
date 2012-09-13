@@ -201,7 +201,7 @@ trait EvalStackSpecs extends Specification {
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
 
       "clicks.platform" >> {
         val input = """
@@ -219,7 +219,7 @@ trait EvalStackSpecs extends Specification {
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
     }
 
     "basic set difference queries" >> {
@@ -348,7 +348,7 @@ trait EvalStackSpecs extends Specification {
           val results = evalE(input)
 
           results must haveSize(100)
-      }.pendingUntilFixed      
+      }
 
       "clicks.platform" >> {
         val input = """
@@ -448,7 +448,7 @@ trait EvalStackSpecs extends Specification {
           | distinct(gender union pageId)""".stripMargin
 
         eval(input) mustEqual Set(SString("female"), SString("male"), SString("page-0"), SString("page-1"), SString("page-2"), SString("page-3"), SString("page-4"))   
-      }.pendingUntilFixed
+      }
     }
 
     "map object creation over the campaigns dataset" in {
@@ -491,19 +491,14 @@ trait EvalStackSpecs extends Specification {
     "correctly handle cross-match situations" in {
       val input = """
         | campaigns := //campaigns
-        | clicks := new //campaigns
+        | clicks := //clicks
         | 
         | campaigns ~ clicks
         |   campaigns = campaigns
         |     & clicks = clicks
         |     & clicks = clicks""".stripMargin
         
-      try {
-        eval(input)
-        true mustEqual false
-      } catch {
-        case t: ArrayIndexOutOfBoundsException => t.printStackTrace(); throw t
-      }
+      eval(input) must not(beEmpty)
     }
 
     "add sets of different types" >> {
