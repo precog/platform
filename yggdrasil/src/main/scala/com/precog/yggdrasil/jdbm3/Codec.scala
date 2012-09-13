@@ -160,7 +160,7 @@ trait Codec[@spec(Boolean, Long, Double) A] { self =>
 
 object Codec {
 
-  @inline def apply[A](implicit codec: Codec[A]): Codec[A] = codec
+  @inline final def apply[A](implicit codec: Codec[A]): Codec[A] = codec
 
   private val byteBufferPool = new ByteBufferPool()
 
@@ -293,15 +293,13 @@ object Codec {
   }
 
 
-  implicit case object LongCodec extends FixedWidthCodec[Long] {
+  case object LongCodec extends FixedWidthCodec[Long] {
     val size = 8
     def writeUnsafe(n: Long, sink: ByteBuffer) { sink.putLong(n) }
     def read(src: ByteBuffer): Long = src.getLong()
   }
 
-  implicit val DateCodec = LongCodec.as[DateTime](_.getMillis, new DateTime(_))
-
-  case object PackedLongCodec extends Codec[Long] {
+  implicit case object PackedLongCodec extends Codec[Long] {
     type S = Long
 
     override def maxSize(n: Long) = 10
@@ -369,6 +367,8 @@ object Codec {
       }
     }
   }
+
+  implicit val DateCodec = Codec[Long].as[DateTime](_.getMillis, new DateTime(_))
 
   implicit case object DoubleCodec extends FixedWidthCodec[Double] {
     val size = 8
