@@ -113,83 +113,15 @@ trait TypeInferencer extends DAG {
       }
     }
 
-    def applySpecTypes(typing: Map[DepGraph, JType], splits: => Map[Split, Split], spec: BucketSpec): BucketSpec = spec match {
-      case UnionBucketSpec(left, right) =>
-        UnionBucketSpec(applySpecTypes(typing, splits, left), applySpecTypes(typing, splits, right))
-      
-      case IntersectBucketSpec(left, right) =>
-        IntersectBucketSpec(applySpecTypes(typing, splits, left), applySpecTypes(typing, splits, right))
-      
-      case Group(id, target, child) =>
-        Group(id, applyTypes(typing, splits, target), applySpecTypes(typing, splits, child))
-      
-      case UnfixedSolution(id, target) =>
-        UnfixedSolution(id, applyTypes(typing, splits, target))
-      
-      case Extra(target) =>
-        Extra(applyTypes(typing, splits, target))
-    }
-
-    def applyTypes(typing: Map[DepGraph, JType], splits0: => Map[Split, Split], graph: DepGraph): DepGraph = {
-      lazy val splits = splits0
-
-      def inner(graph: DepGraph): DepGraph = graph match {
-        case r : Root => r
-  
-        case New(loc, parent) => New(loc, applyTypes(typing, splits, parent))
-  
-        case l @ LoadLocal(loc, parent, _) => LoadLocal(loc, applyTypes(typing, splits, parent), typing(l))
-  
-        case Operate(loc, op, parent) => Operate(loc, op, applyTypes(typing, splits, parent))
-  
-        case Reduce(loc, red, parent) => Reduce(loc, red, applyTypes(typing, splits, parent))
-
-        case MegaReduce(loc, reds, parent) => MegaReduce(loc, reds, applyTypes(typing, splits, parent))
-  
-        case Morph1(loc, m, parent) => Morph1(loc, m, applyTypes(typing, splits, parent))
-  
-        case Morph2(loc, m, left, right) => Morph2(loc, m, applyTypes(typing, splits, left), applyTypes(typing, splits, right))
-  
-        case Join(loc, op, joinSort, left, right) => Join(loc, op, joinSort, applyTypes(typing, splits, left), applyTypes(typing, splits, right))
-
-        case IUI(loc, union, left, right) => IUI(loc, union, applyTypes(typing, splits, left), applyTypes(typing, splits, right))
-
-        case Diff(loc, left, right) => Diff(loc, applyTypes(typing, splits, left), applyTypes(typing, splits, right))
-  
-        case Filter(loc, cross, target, boolean) =>
-          Filter(loc, cross, applyTypes(typing, splits, target), applyTypes(typing, splits, boolean))
-  
-        case Sort(parent, indices) => Sort(applyTypes(typing, splits, parent), indices)
-        
-        case SortBy(parent, sortField, valueField, id) => SortBy(applyTypes(typing, splits, parent), sortField, valueField, id)
-        
-        case ReSortBy(parent, id) => ReSortBy(applyTypes(typing, splits, parent), id)
-  
-        case Memoize(parent, priority) => Memoize(applyTypes(typing, splits, parent), priority)
-  
-        case Distinct(loc, parent) => Distinct(loc, applyTypes(typing, splits, parent))
-  
-        case s @ Split(loc, spec, child) => {
-          lazy val splits2 = splits + (s -> s2)
-          lazy val spec2 = applySpecTypes(typing, splits2, spec)
-          lazy val child2 = applyTypes(typing, splits2, child)
-          lazy val s2: Split = Split(loc, spec2, child2)
-          s2
-        }
-  
-        case s @ SplitGroup(loc, id, provenance) => SplitGroup(loc, id, provenance)(splits(s.parent))
-  
-        case s @ SplitParam(loc, id) => SplitParam(loc, id)(splits(s.parent))
-      }
-
-      memotable.get(graph) getOrElse {
-        val result = inner(graph)
-        memotable += (graph -> result)
-        result
-      }
+    def applyTypes(typing: Map[DepGraph, JType], graph: DepGraph): DepGraph = {
+      graph mapDown { recurse => {
+        case ld @ LoadLocal(loc, parent, _) =>
+          LoadLocal(loc, recurse(parent), typing(ld))
+      }}
     }
     
-    val typing = collectTypes(jtpe, Map(), graph).mapValues(_.reduce(JUnionT)) 
-    applyTypes(typing, Map(), graph)
+    val collectedTypes = collectTypes(jtpe, Map(), graph)
+    val typing = collectedTypes.mapValues(_.reduce(JUnionT)) 
+    applyTypes(typing, graph)
   }
 }

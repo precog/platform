@@ -501,7 +501,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
 
       result must_== expected
     }
-
+    
     "propagate structure/type information through Split nodes (3)" in {
       val line = Line(0, "")
       def clicks = LoadLocal(line, Root(line, PushString("/clicks")))
