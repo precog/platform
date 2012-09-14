@@ -191,11 +191,17 @@ trait TableModule[M[+_]] extends FNModule {
     }
     
     object TransSpec1 {
+      import constants._
+
       val Id = Leaf(Source)
 
       val DerefArray0 = DerefArrayStatic(Leaf(Source), JPathIndex(0))
       val DerefArray1 = DerefArrayStatic(Leaf(Source), JPathIndex(1))
       val DerefArray2 = DerefArrayStatic(Leaf(Source), JPathIndex(2))
+
+      val PruneToKeyValue = InnerObjectConcat(
+        WrapObject(SourceKey.Single, paths.Key.name), 
+        WrapObject(SourceValue.Single, paths.Value.name))
     }
     
     type TransSpec2 = TransSpec[Source2]
