@@ -209,8 +209,8 @@ trait YggdrasilQueryExecutor
     withContext { ctx =>
       logger.debug("Evaluating DAG for " + userUID)
       val result = consumeEval(userUID, dag, ctx,prefix) map { events => logger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
-      sys.error("todo: uncomment the next line (and make it work)")
-      //ctx.release.release.unsafePerformIO
+      // FIXME: The next line should really handle resource cleanup. Not quite there with current MemoizationContext
+      //ctx.memoizationContext.release.unsafePerformIO
       logger.debug("DAG evaluated to " + result)
       result
     }
