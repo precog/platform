@@ -2346,7 +2346,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate with on the clicks dataset" in {
       val line = Line(0, "")
