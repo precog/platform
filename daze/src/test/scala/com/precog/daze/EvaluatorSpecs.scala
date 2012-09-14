@@ -1312,7 +1312,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
     
     "compute the set difference of the set difference" in {
       val line = Line(0, "")
@@ -1341,6 +1341,18 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }.pendingUntilFixed
     
+    "compute the iunion of a set with itself" in {
+      val line = Line(0, "")
+      
+      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+
+      val input = IUI(line, true, numbers, numbers)
+        
+      testEval(input) { result =>
+        result must haveSize(5)
+      }
+    }
+
     "compute the iunion of two homogeneous sets" in {
       val line = Line(0, "")
       
