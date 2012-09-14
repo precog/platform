@@ -421,6 +421,8 @@ trait Evaluator[M[+_]] extends DAG
                   DerefObjectStatic(Leaf(Source), paths.Value),
                   paths.Value.name))
               
+              // using cogroup for identity union will *only* work if there are no duplicate identities; 
+              // if there were, you'd get the cartesian of the duplicates.
               if (union) {
                 leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
               } else {
