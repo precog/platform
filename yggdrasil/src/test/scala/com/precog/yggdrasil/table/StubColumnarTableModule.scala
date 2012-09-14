@@ -73,13 +73,18 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = true): M[Table] = {
       // We use the sort transspec1 to compute a new table with a combination of the 
       // original data and the new sort columns, referenced under the sortkey namespace
-      val tableWithSortKey = transform(InnerObjectConcat(Leaf(Source), WrapObject(sortKey, TableModule.paths.SortKey.name)))
+      val tableWithSortKey = transform(InnerObjectConcat(WrapObject(sortKey, "0"),
+                                                         WrapObject(Leaf(Source), "1")))
 
-      implicit val jValueOrdering = blueeyes.json.xschema.DefaultOrderings.JValueOrdering
+      implicit val jValueOrdering = if (sortOrder.isAscending) {
+        blueeyes.json.xschema.DefaultOrderings.JValueOrdering
+      } else {
+        blueeyes.json.xschema.DefaultOrderings.JValueOrdering.reverse
+      }
 
       tableWithSortKey.toJson.map {
-        jvals => fromJson(jvals.toList.sorted.toStream)
-      }
+        jvals => fromJson(jvals.toList.sortBy(_ \ ".0").toStream)
+      }.map(_.transform(DerefObjectStatic(Leaf(Source), JPathField("1"))))
     }
     
     override def load(uid: UserId, jtpe: JType) = {
