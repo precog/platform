@@ -1691,7 +1691,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       for {
         omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
-        json <- omniverse.table.toJson
+        //json <- omniverse.table.toJson
         //_ = println("Omniverse: " + json.mkString("\n"))
         result <- omniverse.table.partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("groupKeys"))) { partition =>
           val groupKeyTrans = OuterObjectConcat(
@@ -1706,29 +1706,39 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           val groups: M[Map[GroupId, Table]] = 
             for {
               grouped <- omniverse.groups.map { groupId =>
-                           val recordTrans = ArrayConcat(
-                             WrapArray(
-                               DerefObjectStatic(identSpec(Source), JPathField(groupId.shows))
+                           val recordTrans = OuterObjectConcat(
+                             WrapObject(
+                               DerefObjectStatic(identSpec(Source), JPathField(groupId.shows)),
+                               "0"
                              ),
-                             WrapArray(
-                               DerefObjectStatic(valueSpec(Source), JPathField(groupId.shows))
+                             WrapObject(
+                               DerefObjectStatic(valueSpec(Source), JPathField(groupId.shows)),
+                               "1"
                              )
                            )
 
-                           val sortByTrans = TransSpec1.DerefArray0
-
+                           val sortByTrans = DerefObjectStatic(Leaf(Source), JPathField("0"))
                            // transform to get just the information related to the particular groupId,
                            partition.transform(recordTrans).sort(sortByTrans, unique = false) map {
-                             t => groupId -> t.transform(TransSpec1.DerefArray1)
+                             t => groupId -> t.transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
                            }
                          }.sequence
             } yield grouped.toMap
 
+          val groupKeyForBody = partition.takeRange(0, 1).transform(groupKeyTrans) 
           body(
-            partition.takeRange(0, 1).transform(groupKeyTrans), 
-            (groupId: GroupId) => groups.map(_(groupId))
+            groupKeyForBody,
+            (groupId: GroupId) => for {
+              groupIdJson <- groupKeyForBody.toJson
+              groupTable <- groups.map(_(groupId))
+              json <- groupTable.toJson
+              _ = println("group id: " + groupId + "\ngroup key:\n" + groupIdJson.mkString("\n") + "\nvalues:\n" + json.mkString("\n"))
+            } yield groupTable
           )
         }
+        //resultJson <- result.toJson
+        //_ = println("Merged result:\n" + resultJson.mkString("\n"))
+
       } yield result
     }
   }
@@ -2285,7 +2295,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           (i: Int) => rowComparator.compare(0, i)
         }
 
-        val groupedM = f(Table(subTable(comparatorGen, head :: tail)).transform(DerefObjectStatic(Leaf(Source), JPathField("1"))))
+        val groupTable = Table(subTable(comparatorGen, head :: tail)).transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
+        val groupedM: M[Table] = f(groupTable)
         val groupedStream: StreamT[M, Slice] = StreamT.wrapEffect(groupedM.map(_.slices))
 
         groupedStream ++ dropAndSplit(comparatorGen, head :: tail)
