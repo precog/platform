@@ -15,11 +15,10 @@ import scalaz.Failure
 import scalaz.Success
 
 trait JoinOptimizerSpecs[M[+_]] extends Specification
-    with Evaluator[M]
+    with EvaluatorTestSupport[M]
     with JoinOptimizer
     with PrettyPrinter
     with StdLib[M]
-    with TestConfigComponent[M] 
     with MemoryDatasetConsumer[M] { self =>
 
   import Function._
@@ -248,7 +247,4 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
   }
 }
 
-object JoinOptimizerSpecs extends JoinOptimizerSpecs[YId] {
-  val M = YId.M
-  val coM = YId.M
-}
+object JoinOptimizerSpecs extends JoinOptimizerSpecs[YId] with yggdrasil.test.YIdInstances

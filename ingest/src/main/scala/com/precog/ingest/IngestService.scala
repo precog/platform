@@ -28,6 +28,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
   import BijectionsChunkFutureJson._
 
   val insertTimeout = akka.util.Timeout(10000)
+  val deleteTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now
   implicit def M: Monad[Future]
 
@@ -58,7 +59,8 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           jsonp[ByteChunk] {
             token(state.tokenManager) {
               dataPath("vfs") {
-                post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout)(defaultFutureDispatch))
+                post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout)(defaultFutureDispatch)) ~
+                delete(new ArchiveServiceHandler(state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
               }
             }
           }

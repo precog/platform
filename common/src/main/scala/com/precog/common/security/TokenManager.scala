@@ -50,7 +50,6 @@ trait TokenManager[M[+_]] {
   def findToken(tid: TokenID): M[Option[Token]]
   def findGrant(gid: GrantID): M[Option[Grant]]
   def findGrantChildren(gid: GrantID): M[Set[Grant]]
- 
 
   def listDeletedTokens(): M[Seq[Token]]
   def listDeletedGrants(): M[Seq[Grant]]
@@ -120,7 +119,7 @@ class MongoTokenManager(
 
   def newToken(name: String, grants: Set[GrantID]) = {
     val newToken = Token(newTokenID(), name, grants)
-    database(insert(newToken.serialize(Token.UnsafeTokenDecomposer).asInstanceOf[JObject]).into(settings.tokens)) map {
+    database(insert(newToken.serialize(Token.TokenDecomposer).asInstanceOf[JObject]).into(settings.tokens)) map {
       _ => newToken
     }
   }
@@ -128,7 +127,7 @@ class MongoTokenManager(
   def newGrant(issuer: Option[GrantID], perm: Permission) = {
     val ng = Grant(newGrantID, issuer, perm)
     logger.debug("Adding grant: " + ng)
-    database(insert(ng.serialize(Grant.UnsafeGrantDecomposer).asInstanceOf[JObject]).into(settings.grants)) map { 
+    database(insert(ng.serialize(Grant.GrantDecomposer).asInstanceOf[JObject]).into(settings.grants)) map { 
       _ => logger.debug("Add complete for " + ng); ng 
     }
   }
@@ -173,7 +172,7 @@ class MongoTokenManager(
   }
 
   def removeGrants(tid: TokenID, remove: Set[GrantID]) = updateToken(tid) { t =>
-    Some(t.removeGrants(remove))
+    if(remove.subsetOf(t.grants)) Some(t.removeGrants(remove)) else None
   }
 
   private def updateToken(tid: TokenID)(f: Token => Option[Token]): Future[Option[Token]] = {
@@ -182,7 +181,7 @@ class MongoTokenManager(
         f(t) match {
           case Some(nt) if nt != t =>
             database {
-              val updateObj = nt.serialize(Token.UnsafeTokenDecomposer).asInstanceOf[JObject]
+              val updateObj = nt.serialize(Token.TokenDecomposer).asInstanceOf[JObject]
               update(settings.tokens).set(updateObj).where("tid" === tid)
             }.map{ _ => Some(nt) }
           case _ => Future(Some(t))
@@ -195,7 +194,7 @@ class MongoTokenManager(
     findToken(tid).flatMap { 
       case ot @ Some(t) =>
         for {
-          _ <- database(insert(t.serialize(Token.UnsafeTokenDecomposer).asInstanceOf[JObject]).into(settings.deletedTokens))
+          _ <- database(insert(t.serialize(Token.TokenDecomposer).asInstanceOf[JObject]).into(settings.deletedTokens))
           _ <- database(remove.from(settings.tokens).where("tid" === tid))
         } yield { ot }
       case None    => Future(None)
@@ -207,7 +206,7 @@ class MongoTokenManager(
         findGrant(gid).flatMap {
           case og @ Some(g) =>
             for {
-              _ <- database(insert(g.serialize(Grant.UnsafeGrantDecomposer).asInstanceOf[JObject]).into(settings.deletedGrants))
+              _ <- database(insert(g.serialize(Grant.GrantDecomposer).asInstanceOf[JObject]).into(settings.deletedGrants))
               _ <- database(remove.from(settings.grants).where("gid" === gid))
             } yield { gds + g }
           case None    => Future(gds)
@@ -215,7 +214,7 @@ class MongoTokenManager(
       }
     }
   }
-
+  
   def close() = database.disconnect.fallbackTo(Future(())).flatMap{_ => mongo.close}
 }
 

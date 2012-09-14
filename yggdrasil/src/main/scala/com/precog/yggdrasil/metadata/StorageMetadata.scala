@@ -69,7 +69,7 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
     metadata.findChildren(path) flatMap { paths =>
       paths traverse { p =>
         val tPath = path / p
-        accessControl.mayAccessPath(uid, tPath, PathRead) map {
+        accessControl.mayAccess(uid, tPath, Set(uid), ReadPermission) map {
           case true => Set(p)
           case false => Set.empty
         }
@@ -94,7 +94,7 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
           traverseForall(value) {
             case (colDesc, _) => 
               val uids = colDesc.authorities.uids
-              accessControl.mayAccessData(uid, path, uids, DataQuery)
+              accessControl.mayAccess(uid, path, uids, ReducePermission)
           }
       }
     }
@@ -111,7 +111,7 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
           restrictAccess(children).map(c => Some(PathIndex(index, c)))
 
         case p @ PathValue(_, authorities, _) =>
-          (accessControl.mayAccessData(uid, path, authorities.uids, DataQuery) map { _ option p })
+          (accessControl.mayAccess(uid, path, authorities.uids, ReducePermission) map { _ option p })
       }
 
       mapped.sequence map { _.flatten }
@@ -131,13 +131,8 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
        }
     }
 
-    accessControl.mayAccessPath(uid, path, PathRead).flatMap {
-      case true =>
-        metadata.findPathMetadata(path, selector).flatMap{ pr => 
-          restrictAccess(pr.children) map removeAllEmpty map { PathRoot }
-        }
-      case false =>
-        M.point(PathRoot(Set.empty))
+    metadata.findPathMetadata(path, selector).flatMap{ pr => 
+      restrictAccess(pr.children) map removeAllEmpty map { PathRoot }
     }
   }
 

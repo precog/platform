@@ -285,7 +285,7 @@ trait DAG extends Instructions {
           val openPoss = splits find { open => findGraphWithId(id)(open.spec).isDefined }
           openPoss map { open =>
             val graph = findGraphWithId(id)(open.spec).get
-            loop(loc, Right(SplitGroup(loc, id, graph.provenance)(open.result)) :: roots, splits, stream.tail)
+            loop(loc, Right(SplitGroup(loc, id, graph.identities)(open.result)) :: roots, splits, stream.tail)
           } getOrElse Left(UnableToLocateSplitDescribingId(id))
         }
         
@@ -365,7 +365,7 @@ trait DAG extends Instructions {
   sealed trait DepGraph {
     val loc: Line
     
-    def provenance: Vector[dag.Provenance]
+    def identities: Vector[dag.IdentitySpec]
     
     def sorting: dag.TableSort
     
@@ -469,7 +469,7 @@ trait DAG extends Instructions {
       def foldDown0(node: DepGraph, acc: Z)(f: DepGraph => Z): Z = node match {
         case dag.SplitParam(_, _) => acc
 
-        case dag.SplitGroup(_, _, provenance) => acc
+        case dag.SplitGroup(_, _, identities) => acc
 
         case node @ dag.Root(_, _) => acc
 
@@ -541,7 +541,7 @@ trait DAG extends Instructions {
     case class SplitParam(loc: Line, id: Int)(_parent: => Split) extends DepGraph {
       lazy val parent = _parent
       
-      val provenance = Vector()
+      val identities = Vector()
       
       val sorting = IdentitySort
       
@@ -553,7 +553,7 @@ trait DAG extends Instructions {
     }
     
     //grouping node (e.g. foo where foo.a = 'b)
-    case class SplitGroup(loc: Line, id: Int, provenance: Vector[Provenance])(_parent: => Split) extends DepGraph {
+    case class SplitGroup(loc: Line, id: Int, identities: Vector[IdentitySpec])(_parent: => Split) extends DepGraph {
       lazy val parent = _parent
       
       val sorting = IdentitySort
@@ -566,7 +566,7 @@ trait DAG extends Instructions {
     }
     
     case class Root(loc: Line, instr: RootInstr) extends DepGraph {
-      lazy val provenance = Vector()
+      lazy val identities = Vector()
       
       val sorting = IdentitySort
       
@@ -588,7 +588,7 @@ trait DAG extends Instructions {
     }
     
     case class New(loc: Line, parent: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
+      lazy val identities = Vector(SynthIds(IdGen.nextInt()))
       
       val sorting = IdentitySort
       
@@ -607,8 +607,11 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
 
-    case class Morph1(loc: Line, m: Morphism1, parent: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
+    case class Morph1(loc: Line, mor: Morphism1, parent: DepGraph) extends DepGraph {
+      lazy val identities = {
+        if (mor.retainIds) parent.identities
+        else Vector(SynthIds(IdGen.nextInt()))
+      }
       
       val sorting = IdentitySort
       
@@ -625,8 +628,11 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
 
-    case class Morph2(loc: Line, m: Morphism2, left: DepGraph, right: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
+    case class Morph2(loc: Line, mor: Morphism2, left: DepGraph, right: DepGraph) extends DepGraph {
+      lazy val identities = {
+        if (mor.retainIds) sys.error("not implemented yet") //TODO need to retain only the identities that are being used in the match
+        else Vector(SynthIds(IdGen.nextInt()))
+      }
       
       val sorting = IdentitySort
       
@@ -644,7 +650,7 @@ trait DAG extends Instructions {
     }
 
     case class Distinct(loc: Line, parent: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
+      lazy val identities = Vector(SynthIds(IdGen.nextInt()))
       
       val sorting = IdentitySort
       
@@ -662,9 +668,9 @@ trait DAG extends Instructions {
     }
     
     case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JType.JUnfixedT) extends DepGraph {
-      lazy val provenance = parent match {
-        case Root(_, PushString(path)) => Vector(StaticProvenance(path))
-        case _ => Vector(DynamicProvenance(IdGen.nextInt()))
+      lazy val identities = parent match {
+        case Root(_, PushString(path)) => Vector(LoadIds(path))
+        case _ => Vector(SynthIds(IdGen.nextInt()))
       }
       
       val sorting = IdentitySort
@@ -684,7 +690,7 @@ trait DAG extends Instructions {
     
     // TODO propagate AOT value computation
     case class Operate(loc: Line, op: UnaryOperation, parent: DepGraph) extends DepGraph {
-      lazy val provenance = parent.provenance
+      lazy val identities = parent.identities
       
       lazy val sorting = parent.sorting
       
@@ -702,7 +708,7 @@ trait DAG extends Instructions {
     }
     
     case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph {
-      lazy val provenance = Vector()
+      lazy val identities = Vector()
       
       val sorting = IdentitySort
       
@@ -720,7 +726,7 @@ trait DAG extends Instructions {
     }
     
     case class MegaReduce(loc: Line, reds: NEL[dag.Reduce], parent: DepGraph) extends DepGraph {
-      lazy val provenance = Vector()
+      lazy val identities = Vector()
       
       val sorting = IdentitySort
       
@@ -738,7 +744,7 @@ trait DAG extends Instructions {
     }
     
     case class Split(loc: Line, spec: BucketSpec, child: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
+      lazy val identities = Vector(SynthIds(IdGen.nextInt()))
       
       val sorting = IdentitySort
       
@@ -788,7 +794,7 @@ trait DAG extends Instructions {
     }
     
     case class IUI(loc: Line, union: Boolean, left: DepGraph, right: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take left.provenance.length: _*)
+      lazy val identities = Vector(Stream continually SynthIds(IdGen.nextInt()) take left.identities.length: _*)
       
       val sorting = IdentitySort
       
@@ -806,7 +812,7 @@ trait DAG extends Instructions {
     }
     
     case class Diff(loc: Line, left: DepGraph, right: DepGraph) extends DepGraph {
-      lazy val provenance = left.provenance
+      lazy val identities = left.identities
       
       val sorting = IdentitySort
       
@@ -825,11 +831,11 @@ trait DAG extends Instructions {
     
     // TODO propagate AOT value computation
     case class Join(loc: Line, op: BinaryOperation, joinSort: JoinSort, left: DepGraph, right: DepGraph) extends DepGraph {
-      lazy val provenance = joinSort match {
-        case CrossRightSort => right.provenance ++ left.provenance
-        case CrossLeftSort => left.provenance ++ right.provenance
+      lazy val identities = joinSort match {
+        case CrossRightSort => right.identities ++ left.identities
+        case CrossLeftSort => left.identities ++ right.identities
         
-        case _ => (left.provenance ++ right.provenance).distinct
+        case _ => (left.identities ++ right.identities).distinct
       }
       
       lazy val sorting = joinSort match {
@@ -851,10 +857,10 @@ trait DAG extends Instructions {
     }
     
     case class Filter(loc: Line, joinSort: JoinSort, target: DepGraph, boolean: DepGraph) extends DepGraph {
-      lazy val provenance = joinSort match {
-        case CrossRightSort => boolean.provenance ++ target.provenance
-        case CrossLeftSort => target.provenance ++ boolean.provenance
-        case _ => (target.provenance ++ boolean.provenance).distinct
+      lazy val identities = joinSort match {
+        case CrossRightSort => boolean.identities ++ target.identities
+        case CrossLeftSort => target.identities ++ boolean.identities
+        case _ => (target.identities ++ boolean.identities).distinct
       }
       
       lazy val sorting = joinSort match {
@@ -878,8 +884,8 @@ trait DAG extends Instructions {
     case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph {
       val loc = parent.loc
       
-      lazy val provenance = {
-        val (first, second) = parent.provenance.zipWithIndex partition {
+      lazy val identities = {
+        val (first, second) = parent.identities.zipWithIndex partition {
           case (_, i) => indexes contains i
         }
         
@@ -920,7 +926,7 @@ trait DAG extends Instructions {
     case class SortBy(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph {
       val loc = parent.loc
 
-      lazy val provenance = parent.provenance
+      lazy val identities = parent.identities
       
       val sorting = ValueSort(id)
       
@@ -934,7 +940,7 @@ trait DAG extends Instructions {
     case class ReSortBy(parent: DepGraph, id: Int) extends DepGraph {
       val loc = parent.loc
       
-      lazy val provenance = parent.provenance
+      lazy val identities = parent.identities
       
       val sorting = ValueSort(id)
       
@@ -948,7 +954,7 @@ trait DAG extends Instructions {
     case class Memoize(parent: DepGraph, priority: Int) extends DepGraph {
       val loc = parent.loc
       
-      lazy val provenance = parent.provenance
+      lazy val identities = parent.identities
       lazy val sorting = parent.sorting
       lazy val isSingleton = parent.isSingleton
       
@@ -974,10 +980,10 @@ trait DAG extends Instructions {
     case class Extra(expr: DepGraph) extends BucketSpec
     
     
-    sealed trait Provenance
+    sealed trait IdentitySpec
     
-    case class StaticProvenance(path: String) extends Provenance
-    case class DynamicProvenance(id: Int) extends Provenance
+    case class LoadIds(path: String) extends IdentitySpec
+    case class SynthIds(id: Int) extends IdentitySpec
     
     
     sealed trait JoinSort
