@@ -669,6 +669,18 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("1 /") must throwA[ParseException]
     }
     
+    "accept a mod operation" in {
+      parse("1 % 2") must beLike { case Mod(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
+    }
+    
+    "reject a mod operation lacking a left operand" in {
+      parse("% 2") must throwA[ParseException]
+    }
+    
+    "reject a division operation lacking a right operand" in {
+      parse("1 %") must throwA[ParseException]
+    }
+    
     "accept a less-than operation" in {
       parse("1 < 2") must beLike { case Lt(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
@@ -807,6 +819,8 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("neg a * b") must beLike { case Mul(_, Neg(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
       parse("!a / b") must beLike { case Div(_, Comp(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
       parse("neg a / b") must beLike { case Div(_, Neg(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
+      parse("!a % b") must beLike { case Mod(_, Comp(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
+      parse("neg a % b") must beLike { case Mod(_, Neg(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
     }
     
     "favor multiplication/division over addition/subtraction" in {
@@ -819,11 +833,22 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("a - b / c") must beLike { case Sub(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Div(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
       parse("a / b + c") must beLike { case Add(_, Div(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
       parse("a / b - c") must beLike { case Sub(_, Div(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+      
+      parse("a + b % c") must beLike { case Add(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Mod(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
+      parse("a - b % c") must beLike { case Sub(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Mod(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector()))) => ok }
+      parse("a % b + c") must beLike { case Add(_, Mod(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+      parse("a % b - c") must beLike { case Sub(_, Mod(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
     }
     
     "favor multiplication/division according to left/right ordering" in {
       parse("1 * 2 / 3") must beLike { case Div(_, Mul(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
       parse("1 / 2 * 3") must beLike { case Mul(_, Div(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      
+      parse("1 * 2 % 3") must beLike { case Mod(_, Mul(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 % 2 * 3") must beLike { case Mul(_, Mod(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      
+      parse("1 % 2 / 3") must beLike { case Div(_, Mod(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+      parse("1 / 2 % 3") must beLike { case Mod(_, Div(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
     }
     
     "favor addition/subtraction according to left/right ordering" in {

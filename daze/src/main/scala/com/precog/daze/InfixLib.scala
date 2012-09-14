@@ -173,6 +173,120 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
 
+    object Mod extends Op2(InfixNamespace, "mod") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+      def f2: F2 = new CF2P({
+        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
+          def apply(row: Int) = {
+            val c1r = c1(row) 
+            val c2r = c2(row)
+
+            if ((c1r ^ c2r) < 0)
+              (c1r % c2r) + c2r
+            else
+              c1r % c2r
+          }
+        }
+        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
+          def apply(row: Int) = {
+            val c1r = c1(row): BigDecimal 
+            val c2r = c2(row): BigDecimal
+
+            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
+              (c1r % c2r) + c2r
+            else
+              c1r % c2r
+          }
+        }
+        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
+          def apply(row: Int) = {
+            val c1r = c1(row): BigDecimal 
+            val c2r = c2(row)
+
+            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
+              (c1r % c2r) + c2r
+            else
+              c1r % c2r
+          }
+        }
+        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
+          def apply(row: Int) = {
+            val c1r = c1(row) 
+            val c2r = c2(row)
+
+            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
+              (c1r % c2r) + c2r
+            else
+              c1r % c2r
+          }
+        }
+        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
+          def apply(row: Int) = {
+            val c1r = c1(row): BigDecimal 
+            val c2r = c2(row): BigDecimal
+
+            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
+              (c1r % c2r) + c2r
+            else
+              c1r % c2r
+          }
+        }
+        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
+          def apply(row: Int) = {
+            val c1r = c1(row): BigDecimal 
+            val c2r = c2(row)
+
+            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
+              (c1r % c2r) + c2r
+            else
+              c1r % c2r
+          }
+        }
+        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
+          def apply(row: Int) = {
+            val c1r = c1(row) 
+            val c2r = c2(row)
+
+            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
+              (c1r % c2r) + c2r
+            else
+              c1r % c2r
+          }
+        }
+        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
+          def apply(row: Int) = {
+            val c1r = c1(row) 
+            val c2r = c2(row): BigDecimal
+
+            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
+              (c1r % c2r) + c2r
+            else
+              c1r % c2r
+          }
+        }
+        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
+          def apply(row: Int) = {
+            val c1r = c1(row) 
+            val c2r = c2(row): BigDecimal
+
+            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
+              (c1r % c2r) + c2r
+            else
+              c1r % c2r
+          }
+        }
+      })
+    }
+
     object Lt extends Op2(InfixNamespace, "lt") {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({

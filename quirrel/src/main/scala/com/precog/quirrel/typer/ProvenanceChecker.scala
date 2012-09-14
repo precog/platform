@@ -446,6 +446,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         case Sub(_, left, right) => handleBinary(expr, left, right, relations, constraints)
         case Mul(_, left, right) => handleBinary(expr, left, right, relations, constraints)
         case Div(_, left, right) => handleBinary(expr, left, right, relations, constraints)
+        case Mod(_, left, right) => handleBinary(expr, left, right, relations, constraints)
         case Lt(_, left, right) => handleBinary(expr, left, right, relations, constraints)
         case LtEq(_, left, right) => handleBinary(expr, left, right, relations, constraints)
         case Gt(_, left, right) => handleBinary(expr, left, right, relations, constraints)

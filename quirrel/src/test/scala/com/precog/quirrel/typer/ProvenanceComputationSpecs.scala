@@ -1471,6 +1471,42 @@ object ProvenanceComputationSpecs extends Specification
       }
     }
     
+    "identify mod according to its children" in {
+      {
+        val tree = compile("1 % 2")
+        tree.provenance mustEqual ValueProvenance
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compile("//foo % 2")
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compile("1 % //foo")
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compile("new 1 % 2")
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compile("1 % new 2")
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
+      }
+    }
+    
     "identify less-than according to its children" in {
       {
         val tree = compile("1 < 2")

@@ -239,6 +239,20 @@ object NullProvenanceSpecs extends Specification
       }
     }
     
+    "propagate through mod" in {
+      {
+        val tree = compile("(//a + //b) % 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+      
+      {
+        val tree = compile("42 % (//a + //b)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+    }
+    
     "propagate through less-than" in {
       {
         val tree = compile("(//a + //b) < 42")

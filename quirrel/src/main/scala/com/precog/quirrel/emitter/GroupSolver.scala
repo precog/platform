@@ -114,6 +114,9 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     case Div(_, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
     
+    case Mod(_, left, right) =>
+      inferBuckets(left) ++ inferBuckets(right)
+    
     case Lt(_, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
     
@@ -285,6 +288,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     case Sub(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
     case Mul(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
     case Div(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Mod(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
     case Lt(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
     case LtEq(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
     case Gt(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)

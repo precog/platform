@@ -827,6 +827,10 @@ trait AST extends Phases {
       val sym = 'div
     }
     
+    final case class Mod(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+      val sym = 'mod
+    }
+    
     final case class Lt(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
       val sym = 'lt
     }
