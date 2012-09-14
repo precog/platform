@@ -60,6 +60,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with CrossSpec[M]
     with TransformSpec[M]
     with CompactSpec[M] 
+    with TakeRangeSpec[M]
     with PartitionMergeSpec[M]
     with UnionAllSpec[M]
     with CrossAllSpec[M]
@@ -214,6 +215,15 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "peform properly when the same row appears in two different slices" in testDistinctAcrossSlices
       "peform properly again when the same row appears in two different slices" in testDistinctAcrossSlices2
       "have no duplicate rows" in testDistinct
+    }
+
+    "in takeRange" >> {
+      "select the correct rows in a trivial case" in testTakeRange
+      "select the correct rows when we take past the end of the table" in testTakeRangeLarger
+      "select the correct rows when we start at an index larger than the size of the table" in testTakeRangeEmpty
+      "select the correct rows across slice boundary" in testTakeRangeAcrossSlices
+      "select the correct rows only in second slice" in testTakeRangeSecondSlice
+      "select the first slice" in testTakeRangeFirstSliceOnly
     }
   }
 

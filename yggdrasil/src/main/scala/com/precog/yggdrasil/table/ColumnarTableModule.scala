@@ -2221,9 +2221,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       distinct0(SliceTransform.identity(None : Option[Slice]), composeSliceTransform(spec))
     }
     
-    def takeRange(startIndex: Long, numberToTake: Long): Table = {  //in slice.takeRange, need to numberToTake to not be larger than the slice. 
+    def takeRange(startIndex: Long, numberToTake: Long): Table = {
       def loop(s: Stream[Slice], readSoFar: Long): Stream[Slice] = s match {
-        case h #:: rest if (readSoFar + h.size) < startIndex => loop(rest, readSoFar + h.size)
+        case h #:: rest if (readSoFar + h.size) < startIndex + 1 => loop(rest, readSoFar + h.size)
         case rest if readSoFar < startIndex + 1 => {
           inner(rest, 0, (startIndex - readSoFar).toInt)
         }
@@ -2231,12 +2231,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
 
       def inner(s: Stream[Slice], takenSoFar: Long, sliceStartIndex: Int): Stream[Slice] = s match {
-        case h #:: rest if takenSoFar < numberToTake && h.size > numberToTake - takenSoFar => {
+        case h #:: rest if takenSoFar < numberToTake => {
           val needed = h.takeRange(sliceStartIndex, (numberToTake - takenSoFar).toInt)
-          needed #:: Stream.empty[Slice]
+          needed #:: inner(rest, takenSoFar + (h.size - (sliceStartIndex)), 0)
         }
-        case h #:: rest if takenSoFar < numberToTake =>
-          h #:: inner(rest, takenSoFar + h.size, 0)
         case _ => Stream.empty[Slice]
       }
 

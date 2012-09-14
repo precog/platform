@@ -486,7 +486,7 @@ trait Slice { source =>
     new Slice {
       val size = numberToTake
       val columns = source.columns mapValues { 
-        col => (col |> cf.util.Remap( { case i if i < numberToTake => i + startIndex} )).get 
+        col => (col |> cf.util.Remap( { case i if i < numberToTake => i + startIndex} )).get  //remaps new to old
       }
     }
   }
