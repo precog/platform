@@ -66,6 +66,55 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
         Root(line, PushNum("0")))
 
       megaReduce(input, findReductions(input)) mustEqual expected
+    } 
+    
+    "findReductions given a reduction inside a reduction" >> {
+      val line = Line(0, "")
+
+      val input = dag.Reduce(line, Reduction(Vector(), "count", 0x0000), 
+        dag.Reduce(line, Reduction(Vector(), "mean", 0x0013), 
+          dag.LoadLocal(line, Root(line, PushString("/foo")))))
+
+
+      val parentCount = dag.Reduce(line, Reduction(Vector(), "mean", 0x0013), 
+        dag.LoadLocal(line, Root(line, PushString("/foo"))))
+      val parentMean = dag.LoadLocal(line, Root(line, PushString("/foo")))
+
+      val expected: Map[DepGraph, NEL[dag.Reduce]] = Map(parentCount -> NEL(input), parentMean -> NEL(parentCount))
+
+      findReductions(input) mustEqual expected
+    }     
+
+    "findReductions given two reductions inside a reduction" >> {
+      val line = Line(0, "")
+
+      val foo = dag.LoadLocal(line, Root(line, PushString("/foo")))
+      val mean = dag.Reduce(line, Reduction(Vector(), "mean", 0x0013), foo)
+      val stdDev = dag.Reduce(line, Reduction(Vector(), "stdDev", 0x0007), foo)
+      val parentCount = dag.Join(line, Add, CrossLeftSort, mean, stdDev)
+
+      val input = dag.Reduce(line, Reduction(Vector(), "count", 0x0000), parentCount)
+
+      val expected: Map[DepGraph, NEL[dag.Reduce]] = Map(parentCount -> NEL(input), foo -> NEL(mean, stdDev))
+
+      findReductions(input) mustEqual expected
+    } 
+
+    "findReductions inside a Split" >> {
+      val line = Line(0, "")
+
+      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val count = dag.Reduce(line, Reduction(Vector(), "count", 0x0000), clicks)
+
+      lazy val input: dag.Split = dag.Split(line,
+        dag.Group(1,
+        clicks,
+        UnfixedSolution(0, count)),
+        SplitParam(line, 1)(input))
+        
+      val expected: Map[DepGraph, NEL[dag.Reduce]] = Map(clicks -> NEL(count))
+
+      findReductions(input) mustEqual expected
     }   
 
     "in a join of two reductions on the same dataset" >> {
@@ -251,7 +300,7 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
       
       val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
        
-      lazy val input: dag.Split =  dag.Split(line,
+      lazy val input: dag.Split = dag.Split(line,
         dag.Group(1,
           Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("foo"))),
           UnfixedSolution(0,
@@ -431,7 +480,7 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
       
       val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
        
-      lazy val input: dag.Split =  dag.Split(line,
+      lazy val input: dag.Split = dag.Split(line,
         dag.Group(1,
           Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("foo"))),
           UnfixedSolution(0,

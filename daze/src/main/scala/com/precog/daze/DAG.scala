@@ -485,59 +485,73 @@ trait DAG extends Instructions {
     def foldDown[Z](f0: PartialFunction[DepGraph, Z])(implicit monoid: Monoid[Z]): Z = {
       val f: PartialFunction[DepGraph, Z] = f0.orElse { case _ => monoid.zero }
 
-      def foldDown0(node: DepGraph, acc: Z)(f: DepGraph => Z): Z = node match {
+      def foldThroughSpec(spec: dag.BucketSpec, acc: Z): Z = spec match {
+        case dag.UnionBucketSpec(left, right) =>
+          foldThroughSpec(right, foldThroughSpec(left, acc))
+
+        case dag.IntersectBucketSpec(left, right) =>
+          foldThroughSpec(right, foldThroughSpec(left, acc))
+
+        case dag.Group(_, target, forest) =>
+          foldThroughSpec(forest, foldDown0(target, acc |+| f(target)))
+
+        case dag.UnfixedSolution(_, solution) => foldDown0(solution, acc |+| f(solution))
+        case dag.Extra(expr) => foldDown0(expr, acc |+| f(expr))
+      }
+
+      def foldDown0(node: DepGraph, acc: Z): Z = node match {
         case dag.SplitParam(_, _) => acc
 
         case dag.SplitGroup(_, _, identities) => acc
 
         case node @ dag.Root(_, _) => acc
 
-        case dag.New(_, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.New(_, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.Morph1(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.Morph1(_, _, parent) => foldDown0(parent, acc |+| f(parent))
 
         case dag.Morph2(_, _, left, right) => 
-          val acc2 = foldDown0(left, acc |+| f(left))(f)
-          foldDown0(right, acc2 |+| f(right))(f)
+          val acc2 = foldDown0(left, acc |+| f(left))
+          foldDown0(right, acc2 |+| f(right))
 
-        case dag.Distinct(_, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.Distinct(_, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.LoadLocal(_, parent, _) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.LoadLocal(_, parent, _) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.Operate(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.Operate(_, _, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case node @ dag.Reduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case node @ dag.Reduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case node @ dag.MegaReduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case node @ dag.MegaReduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.Split(_, specs, child) => foldDown0(child, acc |+| f(child))(f)
+        case dag.Split(_, specs, child) => foldDown0(child, foldThroughSpec(specs, acc) |+| f(child))
 
         case dag.IUI(_, _, left, right) =>
-          val acc2 = foldDown0(left, acc |+| f(left))(f)
-          foldDown0(right, acc2 |+| f(right))(f)
+          val acc2 = foldDown0(left, acc |+| f(left))
+          foldDown0(right, acc2 |+| f(right))
 
         case dag.Diff(_, left, right) =>
-          val acc2 = foldDown0(left, acc |+| f(left))(f)
-          foldDown0(right, acc2 |+| f(right))(f)
+          val acc2 = foldDown0(left, acc |+| f(left))
+          foldDown0(right, acc2 |+| f(right))
 
         case dag.Join(_, _, _, left, right) =>
-          val acc2 = foldDown0(left, acc |+| f(left))(f)
-          foldDown0(right, acc2 |+| f(right))(f)
+          val acc2 = foldDown0(left, acc |+| f(left))
+          foldDown0(right, acc2 |+| f(right))
 
         case dag.Filter(_, _, target, boolean) =>
-          val acc2 = foldDown0(target, acc |+| f(target))(f)
-          foldDown0(boolean, acc2 |+| f(boolean))(f)
+          val acc2 = foldDown0(target, acc |+| f(target))
+          foldDown0(boolean, acc2 |+| f(boolean))
 
-        case dag.Sort(parent, _) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.Sort(parent, _) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.SortBy(parent, _, _, _) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.SortBy(parent, _, _, _) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.ReSortBy(parent, _) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.ReSortBy(parent, _) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.Memoize(parent, _) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.Memoize(parent, _) => foldDown0(parent, acc |+| f(parent))
       }
 
-      foldDown0(this, f(this))(f)
+      foldDown0(this, f(this))
     }
   }
   
