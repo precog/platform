@@ -413,14 +413,7 @@ trait Evaluator[M[+_]] extends DAG
               leftSorted <- ctx.memoizationContext.sort(leftTable, TransSpec1.Id, SortAscending, left.memoId)
               rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
             } yield {
-              val keyValueSpec = trans.InnerObjectConcat(
-                trans.WrapObject(
-                  DerefObjectStatic(Leaf(Source), paths.Key),
-                  paths.Key.name),
-                trans.WrapObject(
-                  DerefObjectStatic(Leaf(Source), paths.Value),
-                  paths.Value.name))
-              
+              val keyValueSpec = TransSpec1.PruneToKeyValue              
               // using cogroup for identity union will *only* work if there are no duplicate identities; 
               // if there were, you'd get the cartesian of the duplicates.
               if (union) {
@@ -431,7 +424,7 @@ trait Evaluator[M[+_]] extends DAG
               
                 val wrapped = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(emptySpec, emptySpec, fullSpec)
                 
-                wrapped.transform(DerefArrayStatic(Leaf(Source), JPathIndex(0)))
+                wrapped.transform(TransSpec1.DerefArray0)
               }
             }
 
@@ -453,21 +446,17 @@ trait Evaluator[M[+_]] extends DAG
               leftSorted <- ctx.memoizationContext.sort(leftTable, TransSpec1.Id, SortAscending, left.memoId)
               rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
             } yield {
-              val keyValueSpec = trans.InnerObjectConcat(
-                trans.WrapObject(
-                  DerefObjectStatic(Leaf(Source), paths.Key),
-                  paths.Key.name),
-                trans.WrapObject(
-                  DerefObjectStatic(Leaf(Source), paths.Value),
-                  paths.Value.name))
-              
+              // this transspec prunes everything that is not a key or a value.
+              val keyValueSpec = TransSpec1.PruneToKeyValue              
               val emptySpec1 = trans.ConstLiteral(CEmptyArray, Leaf(Source))
               val emptySpec2 = trans.ConstLiteral(CEmptyArray, Leaf(SourceLeft))
               val fullSpec = trans.WrapArray(Leaf(Source))
               
               val wrappedResult = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(fullSpec, emptySpec1, emptySpec2)
               
-              wrappedResult.transform(DerefArrayStatic(Leaf(Source), JPathIndex(0)))
+              // this is a clever hack - by derefing to the 0th element, we will get undefined values for the empty 
+              // arrays produced by the right and both transspecs
+              wrappedResult.transform(TransSpec1.DerefArray0)
             }
             
             PendingTable(result, graph, TransSpec1.Id)
