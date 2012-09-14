@@ -692,4 +692,43 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       result mustEqual Left(MergeWithUnmatchedTails)
     }
   }
+  
+  "mapDown" should {
+    "rewrite a LoadLocal shared across Split branches to the same object" in {
+      val loc = Line(0, "")
+      val load = dag.LoadLocal(loc, Root(loc, PushString("/clicks")))
+      
+      lazy val input: dag.Split = dag.Split(loc, 
+        dag.Group(1, load, UnfixedSolution(0, load)),
+        SplitParam(loc, 0)(input))
+        
+      val result = input.mapDown { recurse => {
+        case dag.LoadLocal(loc, Root(_, PushString(path)), tpe) =>
+          dag.LoadLocal(loc, Root(loc, PushString("/foo" + path)), tpe)
+      }}
+      
+      result must beLike {
+        case dag.Split(_, dag.Group(_, load1, UnfixedSolution(_, load2)), _) =>
+          load1 must be(load2)
+      }
+    }
+  }
+  
+  "foldDown" should {
+    "look within a Split branch" in {
+      val loc = Line(0, "")
+      val load = dag.LoadLocal(loc, Root(loc, PushString("/clicks")))
+      
+      lazy val input: dag.Split = dag.Split(loc, 
+        dag.Group(1, load, UnfixedSolution(0, load)),
+        SplitParam(loc, 0)(input))
+        
+      import scalaz.std.anyVal._
+      val result = input.foldDown[Int] {
+        case _: LoadLocal => 1
+      }
+      
+      result mustEqual 2
+    }
+  }
 }
