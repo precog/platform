@@ -39,8 +39,7 @@ class AlmostEqual(d: Double) {
 }
 
 trait StatsLibSpec[M[+_]] extends Specification
-    with Evaluator[M]
-    with TestConfigComponent[M]
+    with EvaluatorTestSupport[M]
     with StatsLib[M]
     with InfixLib[M]
     with MemoryDatasetConsumer[M]{ self =>
@@ -78,7 +77,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(13)
-    }.pendingUntilFixed
+    }
     
     "median with even number of elements" >> {
       val line = Line(0, "")
@@ -95,7 +94,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(2)
-    }.pendingUntilFixed
+    }
 
     "median with singleton" >> {
       val line = Line(0, "")
@@ -112,7 +111,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(42)
-    }.pendingUntilFixed
+    }
     
     "mode" >> {
       val line = Line(0, "")
@@ -179,17 +178,18 @@ trait StatsLibSpec[M[+_]] extends Specification
         case (VectorCase(_), SDecimal(d)) => d.toInt
       }
 
-      result2 must contain(1,3,4,5,8,9).only  
-    }.pendingUntilFixed
+      result2 must contain(1,3,4,5,8,9).only
+    }
 
     "compute rank within a filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))),
+      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))
+
+      val input = Filter(line, IdentitySort,
+        numbers,
         Join(line, Eq, CrossLeftSort,
-          dag.Morph1(line, Rank,
-            dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
+          dag.Morph1(line, Rank, numbers),
           Root(line, PushNum("5"))))
         
       val result = testEval(input)
@@ -201,7 +201,29 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(11).only
-    }.pendingUntilFixed
+    }
+
+    "compute rank resulting in a boolean set" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Eq, CrossLeftSort,
+        dag.Morph1(line, Rank,
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+
+      result must haveSize(10)
+
+      val (tr, fls) = result partition {
+        case (VectorCase(_), STrue) => true
+        case (VectorCase(_), SFalse) => false
+        case _ => false
+      }
+
+      tr.size mustEqual 3
+      fls.size mustEqual 7
+    }
 
     "compute rank within a join" in {
       val line = Line(0, "")
@@ -220,7 +242,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(3,5,6,7,10,11).only  
-    }.pendingUntilFixed
+    }
   }  
   
   "heterogenous sets" should {
@@ -239,7 +261,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(13)
-    }.pendingUntilFixed
+    }
     
     "mode in the case there is only one" >> {
       val line = Line(0, "")
@@ -290,12 +312,12 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(1,3,4,5,8,9).only  
-    }.pendingUntilFixed
+    }
 
     "compute rank within an equals filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, CrossLeftSort,
+      val input = Filter(line, IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
         Join(line, Eq, CrossLeftSort,
           dag.Morph1(line, Rank,
@@ -311,12 +333,12 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(34).only
-    }.pendingUntilFixed
+    }
 
     "compute rank within another equals filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, CrossLeftSort,
+      val input = Filter(line, IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
         Join(line, Eq, CrossLeftSort,
           dag.Morph1(line, Rank,
@@ -333,12 +355,12 @@ trait StatsLibSpec[M[+_]] extends Specification
 
       result2 must contain(-10).only
 
-    }.pendingUntilFixed
+    }
 
     "compute rank within a less-than filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, CrossLeftSort,
+      val input = Filter(line, IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
         Join(line, LtEq, CrossLeftSort,
           dag.Morph1(line, Rank,
@@ -354,7 +376,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(-10,0,5,11).only
-    }.pendingUntilFixed
+    }
 
     "compute rank within a join" in {
       val line = Line(0, "")
@@ -373,7 +395,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(3,5,6,7,10,11).only  
-    }.pendingUntilFixed
+    }
   }  
   
   "homogenous sets" should {
@@ -392,12 +414,12 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(1,2,3,4,5,6).only  
-    }.pendingUntilFixed
+    }
 
     "compute denseRank within a filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, CrossLeftSort,
+      val input = Filter(line, IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))),
         Join(line, Eq, CrossLeftSort,
           dag.Morph1(line, DenseRank,
@@ -413,7 +435,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(11)
-    }.pendingUntilFixed
+    }
 
     "compute denseRank within a join" in {
       val line = Line(0, "")
@@ -432,7 +454,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(3,4,5,6,7,8).only  
-    }.pendingUntilFixed
+    }
   }
 
   "heterogenous sets" should {
@@ -451,12 +473,12 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(1,2,3,4,5,6).only  
-    }.pendingUntilFixed
+    }
 
     "compute denseRank within an equals filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, CrossRightSort,
+      val input = Filter(line, IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
         Join(line, Eq, CrossLeftSort,
           dag.Morph1(line, DenseRank,
@@ -472,12 +494,12 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(34)
-    }.pendingUntilFixed
+    }
 
     "compute denseRank within a less-than filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, CrossLeftSort,
+      val input = Filter(line, IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
         Join(line, LtEq, CrossLeftSort,
           dag.Morph1(line, DenseRank,
@@ -493,7 +515,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(-10,0,5,11,12).only
-    }.pendingUntilFixed
+    }
 
     "compute denseRank within a join" in {
       val line = Line(0, "")
@@ -512,7 +534,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(3,4,5,6,7,8).only  
-    }.pendingUntilFixed
+    }
   }
 
   "for homogenous sets, the appropriate stats function" should {

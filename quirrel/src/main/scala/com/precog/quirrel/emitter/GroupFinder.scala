@@ -27,9 +27,11 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
   override def findGroups(expr: Expr): Set[GroupTree] = {
     import group._
     
-    def loop(root: Let, expr: Expr, currentWhere: Option[Where]): Set[GroupTree] = expr match {
+    def loop(root: Solve, expr: Expr, currentWhere: Option[Where]): Set[GroupTree] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
-      
+
+      case Solve(_, _, child) => loop(root, child, currentWhere)
+
       case Import(_, _, child) => loop(root, child, currentWhere)
       
       case New(_, child) => loop(root, child, currentWhere)
@@ -38,11 +40,13 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
         val first = loop(root, from, currentWhere)
         val second = loop(root, to, currentWhere)
         val third = loop(root, in, currentWhere)
-        first ++ second
+        first ++ second ++ third
       }
       
       case t @ TicVar(_, id) => t.binding match {
-        case LetBinding(`root`) => currentWhere map { where => Set(GroupCondition(where): GroupTree) } getOrElse Set()
+        case SolveBinding(`root`) =>
+          currentWhere map { where => Set(GroupCondition(where): GroupTree) } getOrElse Set()
+        
         case _ => Set()
       }
       
@@ -77,26 +81,17 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
           case _ => Set[GroupTree]()
         }
         
-        val back: Set[GroupTree] = merged ++ fromDef
-        
-        d.binding match {
-          case b: ReductionBinding if d.isReduction =>
-            Set(GroupReduction(b, back): GroupTree)
-          
-          case _ => back
-        }
+        merged ++ fromDef
       }
       
       case op @ Where(_, left, right) => {
-        val leftSet = loop(root, left, currentWhere)
+        lazy val hasSingularCommonality = ExprUtils.findCommonality(Set(left, right)).isDefined
         
-        val rightSet = op.provenance match {
-          case UnionProvenance(_, _) =>
-            loop(root, right, currentWhere)
-          
-          case _ =>
-            loop(root, right, Some(op))
-        }
+        val leftSet = loop(root, left, currentWhere)
+        val rightSet = if (left.provenance.makeCanonical == right.provenance.makeCanonical && hasSingularCommonality)
+          loop(root, right, Some(op))
+        else
+          loop(root, right, currentWhere)
         
         leftSet ++ rightSet
       }
@@ -157,16 +152,27 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
     }
     
     expr match {
-      case root @ Let(_, _, _, left, _) => loop(root, left, None)
+      case root @ Solve(_, constraints, child) => {
+        val filtered = constraints filter { 
+          case TicVar(_, _) => false
+          case _ => true
+        }
+
+        val groupTrees = filtered map GroupConstraint toSet
+
+        groupTrees ++ loop(root, child, None)
+      }
+      
       case _ => Set()
     }
   }
+
   
   
   sealed trait GroupTree
   
   object group {
     case class GroupCondition(op: Where) extends GroupTree
-    case class GroupReduction(b: ReductionBinding, children: Set[GroupTree]) extends GroupTree
+    case class GroupConstraint(constr: Expr) extends GroupTree
   }
 }

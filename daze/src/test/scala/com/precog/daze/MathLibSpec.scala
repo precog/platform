@@ -35,8 +35,7 @@ import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
 trait MathLibSpec[M[+_]] extends Specification
-    with Evaluator[M]
-    with TestConfigComponent[M]
+    with EvaluatorTestSupport[M]
     with MathLib[M] 
     with MemoryDatasetConsumer[M] { self =>
       

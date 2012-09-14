@@ -53,6 +53,7 @@ import akka.util.duration._
 import java.io.File
 
 import scalaz._
+import scalaz.std.anyVal._
 import scalaz.effect.IO
 
 import org.streum.configrity.Configuration
@@ -68,13 +69,18 @@ class PlatformSpecs
   class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig 
   object yggConfig  extends YggConfig
 
-  implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
-  implicit val coM = new Copointed[Future] {
-    def map[A, B](m: Future[A])(f: A => B) = m map f
+  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
 
-  class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
+  type TableCompanion = BlockStoreColumnarTableCompanion
+  object Table extends BlockStoreColumnarTableCompanion {
+    implicit val geq: scalaz.Equal[Int] = intInstance
+  }
+
+  val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
+
+  class Storage extends SystemActorStorageLike(fileMetadataStorage) {
     val accessControl = new UnlimitedAccessControl[Future]()
   }
 
@@ -82,7 +88,10 @@ class PlatformSpecs
 
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
-    def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+    def baseDir(descriptor: ProjectionDescriptor): File =
+      fileMetadataStorage.findDescriptorRoot(descriptor, false).unsafePerformIO getOrElse sys.error("Cannot find base dir. for descriptor: " + descriptor)
+    def archiveDir(descriptor: ProjectionDescriptor): File =
+      fileMetadataStorage.findArchiveRoot(descriptor).unsafePerformIO getOrElse sys.error("Cannot find base dir. for descriptor: " + descriptor)
   }
 
   override def startup() {

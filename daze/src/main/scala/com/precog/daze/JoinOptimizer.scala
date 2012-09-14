@@ -78,7 +78,7 @@ trait JoinOptimizer extends DAGTransform {
               Join(loc1, op, ValueSort(sortId),
                 liftRewrite(lhs, eqLHS, liftedLHS),
                 liftRewrite(rhs, eqRHS, liftedRHS)),
-              Vector(0 until j.provenance.length: _*))
+              Vector(0 until j.identities.length: _*))
           }
 
           case Join(loc1, op, IdentitySort, lhs, rhs)

@@ -35,6 +35,7 @@ import blueeyes.json.xschema.Extractor._
 import java.io.{File, FileReader, FileWriter}
 import scalaz.{Validation, Success, Failure}
 import scalaz.effect._
+import scalaz.std.option._
 import scalaz.std.set._
 import scalaz.syntax.apply._
 import scalaz.syntax.bifunctor._
@@ -166,15 +167,22 @@ object FileMetadataStorage extends Logging {
   final val curFilename = "projection_metadata.cur"
   final val nextFilename = "projection_metadata.next"
 
-  def load(baseDir: File, fileOps: FileOps): IO[FileMetadataStorage] = {
+  def load(baseDir: File, archiveDir: File, fileOps: FileOps): IO[FileMetadataStorage] = {
     for {
       _  <- IO {
               if (!baseDir.isDirectory) throw new IllegalArgumentException("FileMetadataStorage cannot use non-directory %s for its base".format(baseDir))
               if (!baseDir.canRead) throw new IllegalArgumentException("FileMetadataStorage cannot read base directory " + baseDir)
+              if (!baseDir.canWrite) throw new IllegalArgumentException("FileMetadataStorage cannot write base directory " + baseDir)
+              
+              // Don't require the existence of the archiveDir, just ensure that it can be created.
+              val archiveParentDir = archiveDir.getParentFile
+              if (!archiveParentDir.isDirectory) throw new IllegalArgumentException("FileMetadataStorage cannot use non-directory %s for its archive".format(archiveDir))
+              if (!archiveParentDir.canRead) throw new IllegalArgumentException("FileMetadataStorage cannot read archive directory " + archiveDir)
+              if (!archiveParentDir.canWrite) throw new IllegalArgumentException("FileMetadataStorage cannot write archive directory " + archiveDir)
             }
       locations <- loadDescriptors(baseDir)
     } yield {
-      new FileMetadataStorage(baseDir, fileOps, locations)
+      new FileMetadataStorage(baseDir, archiveDir, fileOps, locations)
     }
   }
 
@@ -237,7 +245,7 @@ object FileMetadataStorage extends Logging {
   }
 }
 
-class FileMetadataStorage(baseDir: File, fileOps: FileOps, private var metadataLocations: Map[ProjectionDescriptor, File]) extends MetadataStorage with Logging {
+class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, private var metadataLocations: Map[ProjectionDescriptor, File]) extends MetadataStorage with Logging {
   import FileMetadataStorage._
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = {
     metadataLocations.keySet.filter(f)
@@ -263,6 +271,10 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps, private var metadataL
     } else {
       IO(metadataLocations.get(desc))
     }
+  }
+
+  def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]] = {
+    metadataLocations.get(desc).map(newArchiveDir(archiveDir, _)).sequence
   }
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = {
@@ -297,7 +309,7 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps, private var metadataL
     }
   }
 
-  override def toString = "FileMetadataStorage(root = " + baseDir + ")"
+  override def toString = "FileMetadataStorage(root = " + baseDir + " archive = " + archiveDir +")"
 
   private def newRandomDir(parent: File): IO[File] = {
     def dirUUID: String = {
@@ -313,6 +325,16 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps, private var metadataL
     IO {
       newDir.mkdirs
       newDir
+    }
+  }
+
+  private def newArchiveDir(parent: File, source: File): IO[File] = {
+    val dirUUID = Iterator.iterate(source)(_.getParentFile).map(_.getName).take(3).toList.reverse.mkString("/", "/", "")
+
+    val archiveDir = new File(parent, dirUUID)
+    IO {
+      archiveDir.mkdirs
+      archiveDir
     }
   }
 

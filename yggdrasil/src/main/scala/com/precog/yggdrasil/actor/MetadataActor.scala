@@ -105,7 +105,9 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ FindDescriptors(path, selector) => 
       logger.trace(msg.toString)
-      sender ! findDescriptors(path, selector).unsafePerformIO
+      val result = findDescriptors(path, selector).unsafePerformIO
+      logger.trace("Found descriptors: " + result)
+      sender ! result
 
     case msg @ FindPathMetadata(path, selector) => 
       logger.trace(msg.toString)
@@ -182,7 +184,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
 object ProjectionMetadata {
   import metadata._
-  import ProjectionInsert.Row
+  import ProjectionUpdate.Row
 
   def columnMetadata(desc: ProjectionDescriptor, rows: Seq[Row]): ColumnMetadata = {
     rows.foldLeft(ColumnMetadata.Empty) { 

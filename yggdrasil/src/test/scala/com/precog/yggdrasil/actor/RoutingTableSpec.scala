@@ -52,7 +52,7 @@ class RoutingTableSpec extends Specification {
       
       val colDesc = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("token")))
 
-      val actions = rt.route(msg)
+      val actions = rt.routeEvent(msg)
 
       val expected = Seq(ProjectionData(toProjDesc(colDesc :: Nil), List[CValue](CString("Test")), List(Set.empty)))
 
@@ -83,7 +83,7 @@ class RoutingTableSpec extends Specification {
       val colDesc3 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bat"), CDouble, Authorities(Set("token")))
       val colDesc4 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.baz"), CNum, Authorities(Set("token")))
 
-      val actions = rt.route(msg)
+      val actions = rt.routeEvent(msg)
 
       val expected = Seq(
         ProjectionData(toProjDesc(colDesc1 :: Nil), VectorCase[CValue](CString("Test")), List(Set.empty)),

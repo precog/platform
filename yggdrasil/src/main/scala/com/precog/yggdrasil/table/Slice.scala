@@ -23,7 +23,7 @@ package table
 import util.CPathUtils
 
 import com.precog.common.VectorCase
-import com.precog.bytecode.JType
+import com.precog.bytecode._
 
 import com.precog.common.json._
 
@@ -32,7 +32,7 @@ import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 
 import scala.annotation.tailrec
-import scala.collection.breakOut
+import scala.collection.{breakOut, BitSet}
 import scalaz._
 import scalaz.Ordering._
 import scalaz.Validation._
@@ -40,8 +40,33 @@ import scalaz.syntax.foldable._
 import scalaz.syntax.semigroup._
 import scalaz.std.iterable._
 
+trait RowComparator { self =>
+  def compare(i1: Int, i2: Int): Ordering
+
+  def swap: RowComparator = new RowComparator {
+    def compare(i1: Int, i2: Int) = self.compare(i2, i1)
+  }
+
+  @tailrec
+  final def nextLeftIndex(lidx: Int, lsize: Int, ridx: Int, step: Int): Int = {
+    if (lidx < lsize) {
+      compare(lidx, ridx) match {
+        case EQ | GT =>
+          if (step <= 1) lidx -1
+          nextLeftIndex(lidx - (step / 2), lsize, ridx, step / 2)
+
+        case LT => 
+          nextLeftIndex(lidx + step, lsize, ridx, step)
+      }
+    } else {
+      lsize
+    }
+  }
+}
+
 trait Slice { source =>
   import Slice._
+  import TableModule._
 
   def size: Int
   def isEmpty: Boolean = size == 0
@@ -55,7 +80,10 @@ trait Slice { source =>
   }
 
   lazy val valueColumns: Set[Column] = columns collect { case (ColumnRef(CPath.Identity, _), col) => col } toSet
+  
+  def isDefinedAt(row: Int) = columns.values.exists(_.isDefinedAt(row))
 
+  // FIXME: rename to mapRoot
   def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {
@@ -65,6 +93,7 @@ trait Slice { source =>
     }
   }
 
+  // FIXME: rename to mapColumns
   def filterColumns(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {
@@ -72,10 +101,59 @@ trait Slice { source =>
     }
   }
 
+  /**
+   * Transform this slice such that its columns are only defined for row indices
+   * in the given BitSet.
+   */
+  def redefineWith(s: BitSet): Slice = filterColumns(cf.util.filter(0, size, s))
+  
+  def definedConst(value: CValue): Slice = new Slice {
+    val size = source.size
+    val columns = {
+      Map(
+        value match {
+          case CString(s) => (ColumnRef(CPath.Identity, CString), new StrColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = s
+          })
+          case CBoolean(b) => (ColumnRef(CPath.Identity, CBoolean), new BoolColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = b
+          })
+          case CLong(l) => (ColumnRef(CPath.Identity, CLong), new LongColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = l
+          })
+          case CDouble(d) => (ColumnRef(CPath.Identity, CDouble), new DoubleColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = d
+          })
+          case CNum(n) => (ColumnRef(CPath.Identity, CNum), new NumColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = n
+          })
+          case CDate(d) => (ColumnRef(CPath.Identity, CDate), new DateColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = d
+          })
+          case CNull => (ColumnRef(CPath.Identity, CNull), new NullColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+          })
+          case CEmptyObject => (ColumnRef(CPath.Identity, CEmptyObject), new EmptyObjectColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+          })
+          case CEmptyArray => (ColumnRef(CPath.Identity, CEmptyArray), new EmptyArrayColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+          })
+          case CUndefined => sys.error("Cannot define a constant undefined value")
+        }
+      )
+    }
+  }
+
   def deref(node: CPathNode): Slice = new Slice {
     val size = source.size
     val columns = source.columns.collect {
-      // case (ColumnRef(CPath(`node` :: rest), ctype), col) => (ColumnRef(CPath(rest), ctype), col) // TODO: why won't this work?
       case (ColumnRef(CPath(`node`, xs @ _*), ctype), col) => (ColumnRef(CPath(xs: _*), ctype), col)
     }
   }
@@ -121,11 +199,90 @@ trait Slice { source =>
     }
   }
 
-  def typed(jtpe : JType) : Slice = new Slice {
+  def typed(jtpe: JType): Slice = new Slice {  //TODO use logicalColumns
     val size = source.size
+    val sub = Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)
     val columns = {
-      if(size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe))
-        source.columns.filter { case (ColumnRef(path, ctpe), _) => Schema.includes(jtpe, path, ctpe) }
+      if (size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)) {
+        val filteredCols = source.columns.filter { case (ColumnRef(path, ctpe), _) => {
+          Schema.includes(jtpe, path, ctpe)
+        }} 
+
+        val next: Seq[(CPath, CType)] = filteredCols.keys.toList map { case ColumnRef(path, ctpe) => (path, ctpe) }
+
+        val grouped: Map[(CPath, JType), Seq[(CPath, CType)]] = next.groupBy { case (path, ctpe) => (path, ctpe match {
+          case CString => JTextT
+          case CBoolean => JBooleanT
+          case CLong | CDouble | CNum => JNumberT
+          case CNull => JNullT
+          case CEmptyObject => JObjectFixedT(Map.empty[String, JType])
+          case CEmptyArray => JArrayFixedT(Map.empty[Int, JType])
+          case invalid => sys.error("Cannot group on CType: " + invalid)
+        })}
+
+        val values = grouped.values map { seq => seq.flatMap { case (path, ctpe) => filteredCols.get(ColumnRef(path, ctpe)) } }
+        
+        def defined(row: Int, values: Iterable[Seq[Column]]): Boolean = values.forall { _.exists { _.isDefinedAt(row) }}
+
+        def sdflsd(values: Iterable[Seq[Column]], col: Column): Column = {
+          col match {
+            case c: StrColumn => {
+              new StrColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: LongColumn => {
+              new LongColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: NumColumn => {
+              new NumColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: DoubleColumn => {
+              new DoubleColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: BoolColumn => {
+              new BoolColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: NullColumn => {
+              new NullColumn {
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: EmptyArrayColumn => {
+              new EmptyArrayColumn {
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: EmptyObjectColumn => {
+              new EmptyObjectColumn {
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case c: DateColumn => {
+              new DateColumn {
+                def apply(row: Int) = c(row)
+                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
+              }
+            }
+            case invalid => sys.error("sdflsd on invalid column: " + invalid)
+          }
+        }
+
+        filteredCols map { case (cref, col) => (cref, sdflsd(values, col)) }
+      }
       else
         Map.empty[ColumnRef, Column]
     }
@@ -145,7 +302,7 @@ trait Slice { source =>
       case (ColumnRef(CPath(CPathIndex(`index`), xs @ _*), ctype), col) => 
         (ColumnRef(CPath(CPathIndex(0) +: xs : _*), ctype), col)
 
-      case unchanged => unchanged
+      case c @ (ColumnRef(CPath(CPathIndex(i), xs @ _*), ctype), col) => c
     }
   }
 
@@ -187,12 +344,19 @@ trait Slice { source =>
     }
   }
 
-  def compact(filter: Slice): Slice = {
+  def compact(filter: Slice, definedness: Definedness): Slice = {
     new Slice {
-      lazy val retained =
-        (0 until filter.size).foldLeft(new ArrayIntList) {
-          case (acc, i) => if(filter.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
-        }
+      lazy val retained = definedness match {
+        case AnyDefined =>
+          (0 until filter.size).foldLeft(new ArrayIntList) {
+            case (acc, i) => if (filter.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
+          }
+
+        case AllDefined =>
+          (0 until filter.size).foldLeft(new ArrayIntList) {
+            case (acc, i) => if (filter.columns.values.forall(_.isDefinedAt(i))) acc.add(i) ; acc
+          }
+      }
 
       lazy val size = retained.size
       lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }
@@ -215,13 +379,13 @@ trait Slice { source =>
         val acc = new ArrayIntList
         
         def findSelfDistinct(prevRow: Int, curRow: Int) = {
-          val selfComparator = rowComparator(filter, filter)(_.columns.keys.toList.sorted)
+          val selfComparator = rowComparatorFor(filter, filter)(_.columns.keys.toList.sorted)
         
           @tailrec
           def findSelfDistinct0(prevRow: Int, curRow: Int) : ArrayIntList = {
             if(curRow >= filter.size) acc
             else {
-              val retain = selfComparator(prevRow, curRow) != EQ
+              val retain = selfComparator.compare(prevRow, curRow) != EQ
               if(retain) acc.add(curRow)
               findSelfDistinct0(if(retain) curRow else prevRow, curRow+1)
             }
@@ -231,13 +395,13 @@ trait Slice { source =>
         }
 
         def findStraddlingDistinct(prev: Slice, prevRow: Int, curRow: Int) = {
-          val straddleComparator = rowComparator(prev, filter)(_.columns.keys.toList.sorted) 
+          val straddleComparator = rowComparatorFor(prev, filter)(_.columns.keys.toList.sorted) 
 
           @tailrec
           def findStraddlingDistinct0(prevRow: Int, curRow: Int): ArrayIntList = {
             if(curRow >= filter.size) acc
             else {
-              val retain = straddleComparator(prevRow, curRow) != EQ
+              val retain = straddleComparator.compare(prevRow, curRow) != EQ
               if(retain) acc.add(curRow)
               if(retain)
                 findSelfDistinct(curRow, curRow+1)
@@ -302,6 +466,15 @@ trait Slice { source =>
     }
   )
 
+  def takeRange(startIndex: Int, numberToTake: Int): Slice = {
+    new Slice {
+      val size = numberToTake
+      val columns = source.columns mapValues { 
+        col => (col |> cf.util.Remap( { case i if i < numberToTake => i + startIndex} )).get 
+      }
+    }
+  }
+
   def append(other: Slice): Slice = {
     new Slice {
       val size = source.size + other.size
@@ -329,11 +502,10 @@ trait Slice { source =>
 
   def toJson(row: Int): Option[JValue] = {
     columns.foldLeft[JValue](JNothing) {
-      case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => {
+      case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
         CPathUtils.cPathToJPaths(selector, col.cValue(row)).foldLeft(jv) {
           case (jv, (path, value)) => jv.unsafeInsert(path, value.toJValue)
         }
-      }
 
       case (jv, _) => jv
     } match {
@@ -343,7 +515,7 @@ trait Slice { source =>
   }
 
   def toString(row: Int): Option[String] = {
-    (columns collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }) match {
+    (columns.toList.sortBy(_._1) collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }) match {
       case Nil => None
       case l   => Some(l.mkString("[", ", ", "]")) 
     }
@@ -408,97 +580,121 @@ object Slice {
     xs(j) = temp;
   }
 
-  def rowComparator(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): (Int, Int) => Ordering = {
-    def compare0(cols: (Column, Column)): (Int, Int) => Ordering = {
-      (cols: @unchecked) match {
-        case (c1: BoolColumn, c2: BoolColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+  def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): RowComparator = {
+    def compare0(cols: (Column, Column)): RowComparator = {
+      cols match {
+        case (c1: BoolColumn, c2: BoolColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow) 
             if (thisVal == c2(thatRow)) EQ else if (thisVal) GT else LT
           }
+        }
 
-        case (c1: LongColumn, c2: LongColumn) => 
-          val ord = Order[Long]
-          (thisRow: Int, thatRow: Int) => {
-            ord.order(c1(thisRow), c2(thatRow))
-          }
-
-        case (c1: LongColumn, c2: DoubleColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: LongColumn, c2: LongColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = c2(thatRow)
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: LongColumn, c2: NumColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: LongColumn, c2: DoubleColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = c2(thatRow)
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: DoubleColumn, c2: LongColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: LongColumn, c2: NumColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = c2(thatRow)
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: DoubleColumn, c2: DoubleColumn) => 
-          val ord = Order[Double]
-          (thisRow: Int, thatRow: Int) => {
-            ord.order(c1(thisRow), c2(thatRow))
+        case (c1: DoubleColumn, c2: LongColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
+            val thisVal = c1(thisRow)
+            val thatVal = c2(thatRow)
+            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: DoubleColumn, c2: NumColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: DoubleColumn, c2: DoubleColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
+            val thisVal = c1(thisRow)
+            val thatVal = c2(thatRow)
+            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+          }
+        }
+
+        case (c1: DoubleColumn, c2: NumColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = BigDecimal(c1(thisRow))
             val thatVal = c2(thatRow)
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: NumColumn, c2: LongColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: NumColumn, c2: LongColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = BigDecimal(c2(thatRow))
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: NumColumn, c2: DoubleColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: NumColumn, c2: DoubleColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = BigDecimal(c2(thatRow))
             if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: NumColumn, c2: NumColumn) => 
+        case (c1: NumColumn, c2: NumColumn) => new RowComparator {
           val ord = Order[BigDecimal]
-          (thisRow: Int, thatRow: Int) => {
+          def compare(thisRow: Int, thatRow: Int) = {
             ord.order(c1(thisRow), c2(thatRow))
           }
+        }
 
-
-        case (c1: StrColumn, c2: StrColumn) => 
+        case (c1: StrColumn, c2: StrColumn) => new RowComparator {
           val ord = Order[String]
-          (thisRow: Int, thatRow: Int) => {
+          def compare(thisRow: Int, thatRow: Int) = {
             ord.order(c1(thisRow), c2(thatRow))
           }
+        }
 
-        case (c1: DateColumn, c2: DateColumn) => 
-          (thisRow: Int, thatRow: Int) => {
+        case (c1: DateColumn, c2: DateColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = {
             val thisVal = c1(thisRow)
             val thatVal = c2(thatRow)
             if (thisVal isAfter thatVal) GT else if (thisVal == thatVal) EQ else LT
           }
+        }
 
-        case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => 
-          (thisRow: Int, thatRow: Int) => EQ
+        case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = EQ
+        }
 
-        case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => 
-          (thisRow: Int, thatRow: Int) => EQ
+        case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = EQ
+        }
 
-        case (c1: NullColumn, c2: NullColumn) => 
-          (thisRow: Int, thatRow: Int) => EQ
+        case (c1: NullColumn, c2: NullColumn) => new RowComparator {
+          def compare(thisRow: Int, thatRow: Int) = EQ
+        }
+        
+        case (c1, c2) => {
+          val ordering = implicitly[Order[CType]].apply(c1.tpe, c2.tpe)
+          
+          new RowComparator {
+            def compare(thisRow: Int, thatRow: Int) = ordering
+          }
+        }
       }
     }
 
@@ -512,82 +708,92 @@ object Slice {
       if (i == columns.length) -1 else i
     }
 
-    @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): (Int, Int) => Ordering = {
-      val array1 = l1.map(s1.columns).toArray
-      val array2 = l2.map(s2.columns).toArray
+    @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): RowComparator = {
+      new RowComparator {
+        private val array1 = l1.map(s1.columns).toArray
+        private val array2 = l2.map(s2.columns).toArray
 
-      // Build an array of pairwise comparator functions for later use
-      val comparators = (for {
-        i1 <- 0 until array1.length
-        i2 <- 0 until array2.length
-      } yield compare0(array1(i1), array2(i2))).toArray
+        // Build an array of pairwise comparator functions for later use
+        private val comparators: Array[RowComparator] = (for {
+          i1 <- 0 until array1.length
+          i2 <- 0 until array2.length
+        } yield compare0(array1(i1), array2(i2))).toArray
 
-      (i: Int, j: Int) => {
-        val first1 = firstDefinedIndexFor(array1, i)
-        val first2 = firstDefinedIndexFor(array2, j)
+        def compare(i: Int, j: Int) = {
+          val first1 = firstDefinedIndexFor(array1, i)
+          val first2 = firstDefinedIndexFor(array2, j)
 
-        // In the following, undefined always sorts LT defined values
-        if (first1 == -1 && first2 == -1) {
-          EQ
-        } else if (first1 == -1) {
-          LT
-        } else if (first2 == -1) {
-          GT
-        } else {
-          // We have the indices, so use it to look up the comparator for the rows
-          comparators(first1 * array2.length + first2)(i, j)
+          // In the following, undefined always sorts LT defined values
+          if (first1 == -1 && first2 == -1) {
+            EQ
+          } else if (first1 == -1) {
+            LT
+          } else if (first2 == -1) {
+            GT
+          } else {
+            // We have the indices, so use it to look up the comparator for the rows
+            comparators(first1 * array2.length + first2).compare(i, j)
+          }
         }
       }
     }
 
     @inline @tailrec
-    def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[(Int, Int) => Ordering]): List[(Int, Int) => Ordering] = (l1, l2) match {
-      case (h1 :: t1, h2 :: t2) if h1.selector == h2.selector => {
-        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+    def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[RowComparator]): List[RowComparator] = {
+      import scalaz.syntax.order._
 
-        pairColumns(l1Rest, l2Rest, genComparatorFor(l1Equal, l2Equal) :: comparators)
+      (l1, l2) match {
+        case (h1 :: t1, h2 :: t2) if h1.selector == h2.selector => {
+          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+          pairColumns(l1Rest, l2Rest, genComparatorFor(l1Equal, l2Equal) :: comparators)
+        }
+
+        case (h1 :: t1, h2 :: t2) if h1 ?|? h2 == LT => {
+          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+
+          pairColumns(l1Rest, l2, genComparatorFor(l1Equal, Nil) :: comparators)
+        }
+
+        case (h1 :: t1, h2 :: t2) if h1 ?|? h2 == GT => {
+          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+          pairColumns(l1, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
+        }
+
+        case (h1 :: t1, Nil) => {
+          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+
+          pairColumns(l1Rest, Nil, genComparatorFor(l1Equal, Nil) :: comparators)
+        }
+
+        case (Nil, h2 :: t2) => {
+          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+          pairColumns(Nil, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
+        }
+
+        case (Nil, Nil) => comparators.reverse
+
+        case (h1 :: t1, h2 :: t2) => sys.error("selector guard failure in pairColumns")
       }
-
-      case (h1 :: t1, h2 :: t2) if h1.selector < h2.selector => {
-        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-
-        pairColumns(l1Rest, l2, genComparatorFor(l1Equal, Nil) :: comparators)
-      }
-
-      case (h1 :: t1, h2 :: t2) if h1.selector > h2.selector => {
-        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
-
-        pairColumns(l1, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
-      }
-
-      case (h1 :: t1, Nil) => {
-        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-
-        pairColumns(l1Rest, Nil, genComparatorFor(l1Equal, Nil) :: comparators)
-      }
-
-      case (Nil, h2 :: t2) => {
-        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
-
-        pairColumns(Nil, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
-      }
-
-      case (Nil, Nil) => comparators.reverse
-
-      case (h1 :: t1, h2 :: t2) => sys.error("selector guard failure in pairColumns")
     }
 
-    (i1: Int, i2: Int) => {
-      @inline @tailrec def compare1(l: List[(Int, Int) => Ordering]): Ordering = l match {
-        case h :: t => 
-          val intermediateOrder = h(i1, i2)
-          if (intermediateOrder == EQ) compare1(t) else intermediateOrder
+    val comparators: Array[RowComparator] = pairColumns(refs1, refs2, Nil).toArray
 
-        case Nil => EQ
+    new RowComparator {
+      def compare(i1: Int, i2: Int) = {
+        var i = 0
+        var result: Ordering = EQ
+
+        while (i < comparators.length && result == EQ) {
+          result = comparators(i).compare(i1, i2)
+          i += 1
+        }
+        
+        result
       }
-
-      compare1(pairColumns(refs1, refs2, Nil))
     }
   } 
 }

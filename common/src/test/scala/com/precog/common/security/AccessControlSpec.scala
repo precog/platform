@@ -41,132 +41,134 @@ class AccessControlSpec extends Specification with TokenManagerTestValues with A
   implicit lazy val accessControl = new TokenManagerAccessControl(tokens)
   implicit lazy val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)
 
-  "legacy access control" should {
+  "access control" should {
+    
     "control path access" in {
       "allow access" in {
-        val accessRoot = mayAccessPath(rootToken.tid, "/", _: PathAccess, Set(rootToken.tid))
-        val accessChild = mayAccessPath(rootToken.tid, "/child", _: PathAccess, Set(rootToken.tid))
+        val accessRoot = mayAccess(rootToken.tid, "/", Set(rootToken.tid), _: AccessType)
+        val accessChild = mayAccess(rootToken.tid, "/child", Set(rootToken.tid), _: AccessType)
       
-        accessRoot(PathRead) must beTrue
-        accessChild(PathRead) must beTrue
-        accessRoot(PathWrite) must beTrue
-        accessChild(PathWrite) must beTrue
+        accessRoot(ReadPermission) must beTrue
+        accessChild(ReadPermission) must beTrue
+        accessRoot(WritePermission) must beTrue
+        accessChild(WritePermission) must beTrue
       }
       "limit access" in {
-        val accessRoot = mayAccessPath(rootLikeToken.tid, "/", _: PathAccess, Set(rootLikeToken.tid))
-        val accessChild = mayAccessPath(rootLikeToken.tid, "/child", _: PathAccess, Set(rootLikeToken.tid))
+        val accessRoot = mayAccess(rootLikeToken.tid, "/", Set(rootLikeToken.tid), _: AccessType)
+        val accessChild = mayAccess(rootLikeToken.tid, "/child", Set(rootLikeToken.tid), _: AccessType)
       
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beTrue
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beTrue
+        accessRoot(ReadPermission) must beFalse
+        accessChild(ReadPermission) must beTrue
+        accessRoot(WritePermission) must beFalse
+        accessChild(WritePermission) must beTrue
       }
       "allow access via grant" in {
-        val accessRoot = mayAccessPath(superToken.tid, "/", _: PathAccess, Set(rootToken.tid))
-        val accessChild = mayAccessPath(superToken.tid, "/child", _: PathAccess, Set(rootToken.tid))
+        val accessRoot = mayAccess(superToken.tid, "/", Set(rootToken.tid), _: AccessType)
+        val accessChild = mayAccess(superToken.tid, "/child", Set(rootToken.tid), _: AccessType)
 
-        accessRoot(PathRead) must beTrue
-        accessChild(PathRead) must beTrue
-        accessRoot(PathWrite) must beTrue
-        accessChild(PathWrite) must beTrue
+        accessRoot(ReadPermission) must beTrue
+        accessChild(ReadPermission) must beTrue
+        accessRoot(WritePermission) must beTrue
+        accessChild(WritePermission) must beTrue
       }
       "limit access via grant" in {
-        val accessRoot = mayAccessPath(childToken.tid, "/", _: PathAccess, Set(childToken.tid))
-        val accessChild = mayAccessPath(childToken.tid, "/child", _: PathAccess, Set(childToken.tid))
+        val accessRoot = mayAccess(childToken.tid, "/", Set(childToken.tid), _: AccessType)
+        val accessChild = mayAccess(childToken.tid, "/child", Set(childToken.tid), _: AccessType)
       
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beTrue
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beTrue
+        accessRoot(ReadPermission) must beFalse
+        accessChild(ReadPermission) must beTrue
+        accessRoot(WritePermission) must beFalse
+        accessChild(WritePermission) must beTrue
       }
       "deny access to invalid uid" in {
         val invalidUID = "not-there"
-        val accessRoot = mayAccessPath(invalidUID, "/", _: PathAccess, Set(invalidUID))
-        val accessChild = mayAccessPath(invalidUID, "/child", _: PathAccess, Set(invalidUID))
+        val accessRoot = mayAccess(invalidUID, "/", Set(invalidUID), _: AccessType)
+        val accessChild = mayAccess(invalidUID, "/child", Set(invalidUID), _: AccessType)
       
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
+        accessRoot(ReadPermission) must beFalse
+        accessChild(ReadPermission) must beFalse
+        accessRoot(WritePermission) must beFalse
+        accessChild(WritePermission) must beFalse
       }
       "deny access to invalid grant" in {
-        val accessRoot = mayAccessPath(invalidGrantToken.tid, "/", _: PathAccess, Set(invalidGrantToken.tid))
-        val accessChild = mayAccessPath(invalidGrantToken.tid, "/child", _: PathAccess, Set(invalidGrantToken.tid))
+        val accessRoot = mayAccess(invalidGrantToken.tid, "/", Set(invalidGrantToken.tid), _: AccessType)
+        val accessChild = mayAccess(invalidGrantToken.tid, "/child", Set(invalidGrantToken.tid), _: AccessType)
       
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
+        accessRoot(ReadPermission) must beFalse
+        accessChild(ReadPermission) must beFalse
+        accessRoot(WritePermission) must beFalse
+        accessChild(WritePermission) must beFalse
       }
       "deny access when grant issuer is invalid" in {
-        val accessRoot = mayAccessPath(invalidGrantParentToken.tid, "/", _: PathAccess, Set(invalidGrantParentToken.tid))
-        val accessChild = mayAccessPath(invalidGrantParentToken.tid, "/child", _: PathAccess, Set(invalidGrantParentToken.tid))
+        val accessRoot = mayAccess(invalidGrantParentToken.tid, "/", Set(invalidGrantParentToken.tid), _: AccessType)
+        val accessChild = mayAccess(invalidGrantParentToken.tid, "/child", Set(invalidGrantParentToken.tid), _: AccessType)
       
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
+        accessRoot(ReadPermission) must beFalse
+        accessChild(ReadPermission) must beFalse
+        accessRoot(WritePermission) must beFalse
+        accessChild(WritePermission) must beFalse
       }
       "deny access with no grants" in {
-        val accessRoot = mayAccessPath(noPermsToken.tid, "/", _: PathAccess, Set(noPermsToken.tid))
-        val accessChild = mayAccessPath(noPermsToken.tid, "/child", _: PathAccess, Set(noPermsToken.tid))
+        val accessRoot = mayAccess(noPermsToken.tid, "/", Set(noPermsToken.tid), _: AccessType)
+        val accessChild = mayAccess(noPermsToken.tid, "/child", Set(noPermsToken.tid), _: AccessType)
       
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
+        accessRoot(ReadPermission) must beFalse
+        accessChild(ReadPermission) must beFalse
+        accessRoot(WritePermission) must beFalse
+        accessChild(WritePermission) must beFalse
       }
       "deny access when grant expired" in {
-        val accessRoot = mayAccessPath(expiredToken.tid, "/", _: PathAccess, Set(expiredToken.tid))
-        val accessChild = mayAccessPath(expiredToken.tid, "/child", _: PathAccess, Set(expiredToken.tid))
+        val accessRoot = mayAccess(expiredToken.tid, "/", Set(expiredToken.tid), _: AccessType)
+        val accessChild = mayAccess(expiredToken.tid, "/child", Set(expiredToken.tid), _: AccessType)
       
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
+        accessRoot(ReadPermission) must beFalse
+        accessChild(ReadPermission) must beFalse
+        accessRoot(WritePermission) must beFalse
+        accessChild(WritePermission) must beFalse
       }
       "deny access when grant parent expired" in {
-        val accessRoot = mayAccessPath(expiredParentToken.tid, "/", _: PathAccess, Set(expiredParentToken.tid))
-        val accessChild = mayAccessPath(expiredParentToken.tid, "/child", _: PathAccess, Set(expiredParentToken.tid))
+        val accessRoot = mayAccess(expiredParentToken.tid, "/", Set(expiredParentToken.tid), _: AccessType)
+        val accessChild = mayAccess(expiredParentToken.tid, "/child", Set(expiredParentToken.tid), _: AccessType)
       
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
+        accessRoot(ReadPermission) must beFalse
+        accessChild(ReadPermission) must beFalse
+        accessRoot(WritePermission) must beFalse
+        accessChild(WritePermission) must beFalse
       }
     }
+    
     "control data access" in {
       "allow access" in {
-        mayAccessData(rootToken.tid, "/", Set(rootToken.tid), DataQuery) must beTrue
-        mayAccessData(rootToken.tid, "/child", Set(rootToken.tid), DataQuery) must beTrue
+        mayAccess(rootToken.tid, "/", Set(rootToken.tid), ReducePermission) must beTrue
+        mayAccess(rootToken.tid, "/child", Set(rootToken.tid), ReducePermission) must beTrue
       }
       "limit access" in {
-        mayAccessData(childToken.tid, "/", Set(childToken.tid), DataQuery) must beFalse
-        mayAccessData(childToken.tid, "/child", Set(childToken.tid), DataQuery) must beTrue
+        mayAccess(childToken.tid, "/", Set(childToken.tid), ReducePermission) must beFalse
+        mayAccess(childToken.tid, "/child", Set(childToken.tid), ReducePermission) must beTrue
       }
       "deny access to invalid uid" in {
-        mayAccessData(invalidUID, "/", Set(invalidUID), DataQuery) must beFalse
-        mayAccessData(invalidUID, "/child", Set(invalidUID), DataQuery) must beFalse
+        mayAccess(invalidUID, "/", Set(invalidUID), ReducePermission) must beFalse
+        mayAccess(invalidUID, "/child", Set(invalidUID), ReducePermission) must beFalse
       }
       "deny access to invalid grant" in {
-        mayAccessData(invalidGrantToken.tid, "/", Set(invalidGrantToken.tid), DataQuery) must beFalse
-        mayAccessData(invalidGrantToken.tid, "/child", Set(invalidGrantToken.tid), DataQuery) must beFalse
+        mayAccess(invalidGrantToken.tid, "/", Set(invalidGrantToken.tid), ReducePermission) must beFalse
+        mayAccess(invalidGrantToken.tid, "/child", Set(invalidGrantToken.tid), ReducePermission) must beFalse
       }
       "deny access when parent grant invalid" in {
-        mayAccessData(invalidGrantParentToken.tid, "/", Set(invalidGrantParentToken.tid), DataQuery) must beFalse
-        mayAccessData(invalidGrantParentToken.tid, "/child", Set(invalidGrantParentToken.tid), DataQuery) must beFalse
+        mayAccess(invalidGrantParentToken.tid, "/", Set(invalidGrantParentToken.tid), ReducePermission) must beFalse
+        mayAccess(invalidGrantParentToken.tid, "/child", Set(invalidGrantParentToken.tid), ReducePermission) must beFalse
       }
       "deny access with no perms" in {
-        mayAccessData(noPermsToken.tid, "/", Set(noPermsToken.tid), DataQuery) must beFalse
-        mayAccessData(noPermsToken.tid, "/child", Set(noPermsToken.tid), DataQuery) must beFalse
+        mayAccess(noPermsToken.tid, "/", Set(noPermsToken.tid), ReducePermission) must beFalse
+        mayAccess(noPermsToken.tid, "/child", Set(noPermsToken.tid), ReducePermission) must beFalse
       }
       "deny access when expired" in {
-        mayAccessData(expiredToken.tid, "/", Set(expiredToken.tid), DataQuery) must beFalse
-        mayAccessData(expiredToken.tid, "/child", Set(expiredToken.tid), DataQuery) must beFalse
+        mayAccess(expiredToken.tid, "/", Set(expiredToken.tid), ReducePermission) must beFalse
+        mayAccess(expiredToken.tid, "/child", Set(expiredToken.tid), ReducePermission) must beFalse
       }
       "deny access when issuer expired" in {
-        mayAccessData(expiredParentToken.tid, "/", Set(expiredParentToken.tid), DataQuery) must beFalse
-        mayAccessData(expiredParentToken.tid, "/child", Set(expiredParentToken.tid), DataQuery) must beFalse
+        mayAccess(expiredParentToken.tid, "/", Set(expiredParentToken.tid), ReducePermission) must beFalse
+        mayAccess(expiredParentToken.tid, "/child", Set(expiredParentToken.tid), ReducePermission) must beFalse
       }
     }
   }
@@ -180,35 +182,35 @@ class AccessControlUseCasesSpec extends Specification with UseCasesTokenManagerT
   "access control" should {
     "handle proposed use cases" in {
       "addon grants sandboxed to user paths" in {
-        mayAccessData(customer.tid, "/customer", Set(customer.tid), DataQuery) must beTrue
-        mayAccessData(customer.tid, "/customer", Set(customer.tid), DataQuery) must beTrue
-        mayAccessData(customer.tid, "/customer", Set(addon.tid), DataQuery) must beTrue
-        mayAccessData(customer.tid, "/customer", Set(customer.tid, addon.tid), DataQuery) must beTrue
+        mayAccess(customer.tid, "/customer", Set(customer.tid), ReadPermission) must beTrue
+        mayAccess(customer.tid, "/customer", Set(customer.tid), ReadPermission) must beTrue
+        mayAccess(customer.tid, "/customer", Set(addon.tid), ReadPermission) must beTrue
+        mayAccess(customer.tid, "/customer", Set(customer.tid, addon.tid), ReadPermission) must beTrue
+
+        mayAccess(customer.tid, "/friend", Set(friend.tid), ReadPermission) must beTrue
+        mayAccess(customer.tid, "/friend", Set(friend.tid, customer.tid), ReadPermission) must beTrue
+
+        mayAccess(customer.tid, "/friend", Set(addon.tid), ReadPermission) must beFalse
+        mayAccess(customer.tid, "/friend", Set(friend.tid, customer.tid, addon.tid), ReadPermission) must beFalse
         
-        mayAccessData(customer.tid, "/friend", Set(friend.tid), DataQuery) must beTrue
-        mayAccessData(customer.tid, "/friend", Set(friend.tid, customer.tid), DataQuery) must beTrue
-        
-        mayAccessData(customer.tid, "/friend", Set(addon.tid), DataQuery) must beFalse
-        mayAccessData(customer.tid, "/friend", Set(friend.tid, customer.tid, addon.tid), DataQuery) must beFalse
-        
-        mayAccessData(customer.tid, "/stranger", Set(stranger.tid), DataQuery) must beFalse
-        mayAccessData(customer.tid, "/stranger", Set(addon.tid), DataQuery) must beFalse
-        mayAccessData(customer.tid, "/stranger", Set(stranger.tid, addon.tid), DataQuery) must beFalse
+        mayAccess(customer.tid, "/stranger", Set(stranger.tid), ReadPermission) must beFalse
+        mayAccess(customer.tid, "/stranger", Set(addon.tid), ReadPermission) must beFalse
+        mayAccess(customer.tid, "/stranger", Set(stranger.tid, addon.tid), ReadPermission) must beFalse
       }
       "addon grants can be passed to our customer's customers" in {
-        mayAccessData(customersCustomer.tid, "/customer/cust-id", Set(customersCustomer.tid), DataQuery) must beTrue
-        mayAccessData(customersCustomer.tid, "/customer/cust-id", Set(customersCustomer.tid, addon.tid), DataQuery) must beTrue
-        mayAccessData(customersCustomer.tid, "/customer", Set(customer.tid), DataQuery) must beFalse
-        mayAccessData(customersCustomer.tid, "/customer", Set(customer.tid, addon.tid), DataQuery) must beFalse
+        mayAccess(customersCustomer.tid, "/customer/cust-id", Set(customersCustomer.tid), ReadPermission) must beTrue
+        mayAccess(customersCustomer.tid, "/customer/cust-id", Set(customersCustomer.tid, addon.tid), ReadPermission) must beTrue
+        mayAccess(customersCustomer.tid, "/customer", Set(customer.tid), ReadPermission) must beFalse
+        mayAccess(customersCustomer.tid, "/customer", Set(customer.tid, addon.tid), ReadPermission) must beFalse
       }
       "ability to access data created by an agent (child) of the granter" in {
-        mayAccessData(customer.tid, "/customer", Set(customer.tid, addonAgent.tid), DataQuery) must beTrue
-        mayAccessData(customersCustomer.tid, "/customer", Set(customer.tid, addonAgent.tid), DataQuery) must beFalse
-        mayAccessData(customersCustomer.tid, "/customer/cust-id", Set(customersCustomer.tid, addonAgent.tid), DataQuery) must beTrue
+        mayAccess(customer.tid, "/customer", Set(customer.tid, addonAgent.tid), ReadPermission) must beTrue
+        mayAccess(customersCustomer.tid, "/customer", Set(customer.tid, addonAgent.tid), ReadPermission) must beFalse
+        mayAccess(customersCustomer.tid, "/customer/cust-id", Set(customersCustomer.tid, addonAgent.tid), ReadPermission) must beTrue
       }
       "ability to grant revokable public access" in {
-        mayAccessData(customer.tid, "/addon/public", Set(addon.tid), DataQuery) must beTrue
-        mayAccessData(customer.tid, "/addon/revoked_public", Set(addon.tid), DataQuery) must beFalse
+        mayAccess(customer.tid, "/addon/public", Set(addon.tid), ReadPermission) must beTrue
+        mayAccess(customer.tid, "/addon/revoked_public", Set(addon.tid), ReadPermission) must beFalse
       }
     }
   }
@@ -218,16 +220,8 @@ trait AccessControlHelpers {
 
   val testTimeout = Duration(30, "seconds")
 
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess, owners: Set[GrantID] = Set.empty)(implicit ac: AccessControl[Future]): Boolean = {
-    pathAccess match {
-      case PathWrite => 
-        Await.result(ac.mayAccessPath(uid, path, pathAccess), testTimeout)
-      case PathRead =>
-        Await.result(ac.mayAccessData(uid, path, owners, DataQuery), testTimeout)
-    }
-  }
-  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess)(implicit ac: AccessControl[Future]): Boolean = {
-    Await.result(ac.mayAccessData(uid, path, owners, dataAccess), testTimeout)
+  def mayAccess(uid: UID, path: Path, owners: Set[UID], accessType: AccessType)(implicit ac: AccessControl[Future]): Boolean = {
+    Await.result(ac.mayAccess(uid, path, owners, accessType), testTimeout)
   }
 }
 
@@ -474,5 +468,4 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults { self : Specification
   }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => tokens.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
 
   tokens.addGrants(customersCustomer.tid, customersCustomerAddonsGrants ++ customersCustomerAddonAgentGrants)
-
 }

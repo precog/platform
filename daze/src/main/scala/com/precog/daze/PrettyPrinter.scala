@@ -59,8 +59,8 @@ trait PrettyPrinter extends DAG {
       (if(suffixNL) "\n" else "")
     }
     
-    def prettyPrintProvenance(provenance: Provenance) = provenance match {
-      case StaticProvenance(path) => "StaticProvenance("+prettyString(path)+")"
+    def prettyPrintIdentitySpec(identity: IdentitySpec) = identity match {
+      case LoadIds(path) => "LoadIds("+prettyString(path)+")"
       case other => other.toString
     }
 
@@ -133,7 +133,7 @@ trait PrettyPrinter extends DAG {
             
           case sp @ SplitParam(_, id) => "SplitParam(line, "+id+")("+bindings(sp.parent)+")" 
   
-          case sp @ SplitGroup(_, id, provenance) => "SplitParam(line, "+id+", "+provenance.map(prettyPrintProvenance)+"("+bindings(sp.parent)+")" 
+          case sp @ SplitGroup(_, id, identities) => "SplitParam(line, "+id+", "+identities.map(prettyPrintIdentitySpec)+"("+bindings(sp.parent)+")" 
         }
       }) +
       (if(suffixNL) "\n" else "")

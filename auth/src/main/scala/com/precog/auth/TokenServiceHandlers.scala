@@ -23,50 +23,45 @@ package auth
 import com.precog.common.Path
 import com.precog.common.security._
 
-import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
+import akka.dispatch.{ ExecutionContext, Future, MessageDispatcher }
 import akka.util.Timeout
 
+import blueeyes.bkka.AkkaTypeClasses._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
-import blueeyes.json.xschema.DefaultSerialization._
-
 import blueeyes.json.JsonAST._
+import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.xschema.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
+import blueeyes.json.xschema.Extractor._
 
 import com.weiglewilczek.slf4s.Logging
 
-import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.Extractor._
-
-import scalaz.{Validation, Success, Failure}
+import scalaz.{ Applicative, Validation, Success, Failure }
 import scalaz.Scalaz._
+import scalaz.Validation._
 
 import org.joda.time.DateTime
+import org.joda.time.format.ISODateTimeFormat
 
-class GetTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
-  val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) =>
-      Future(HttpResponse[JValue](OK, content = Some(t.serialize)))
-    }
-  }
-  val metadata = None
-}
-
-class AddTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class CreateTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Token => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => 
+    Success { (authToken: Token) => 
       request.content.map { _.flatMap { _.validated[NewTokenRequest] match {
         case Success(r) =>
-          tokenManagement.newToken(t.tid, r).map { 
-            case Success(r) => 
-              HttpResponse[JValue](OK, content = Some(r.serialize))
-            case Failure(e) => 
-              HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new token."), content = Some(JObject(List(
-                JField("error", "Error creating new token: " + e)
-              ))))
-          }
+          if (r.grants.exists(_.isExpired(new DateTime())))
+            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new token."), content = Some(JObject(List(
+              JField("error", "Unable to create token with expired permission")
+            )))))
+          else
+            tokenManagement.createToken(authToken, r).map { 
+              case Success(token) => 
+                HttpResponse[JValue](OK, content = Some(token.tid.serialize))
+              case Failure(e) => 
+                HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new token."), content = Some(JObject(List(
+                  JField("error", "Error creating new token: " + e)
+                ))))
+            }
         case Failure(e) =>
           Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new token request body."), content = Some(JObject(List(
             JField("error", "Invalid new token request body: " + e)
@@ -79,30 +74,144 @@ class AddTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: Mes
   val metadata = None
 }
 
-class GetGrantsHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class GetTokenDetailsHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => 
-      tokenManagement.findTokenGrants(t.tid).map { grants =>
-        HttpResponse[JValue](OK, content = Some(JArray(grants.map { _.serialize }(collection.breakOut)))) 
+    Success { (authToken: Token) => 
+      request.parameters.get('apikey).map { tid =>
+        tokenManagement.tokenDetails(tid).map { 
+          case Some((token, grants)) =>
+            HttpResponse[JValue](OK, content = Some(TokenDetails(token, grants).serialize))
+          case None =>
+            HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find token "+tid)))
+        }
+      }.getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
       }
     }
   }
   val metadata = None
 }
 
-class AddGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class GetTokenGrantsHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => 
-      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+    Success { (authToken: Token) => 
+      request.parameters.get('apikey).map { tid =>
+        tokenManagement.tokenGrants(tid).map {
+          case Some(grants) =>
+            HttpResponse[JValue](OK, content = Some(GrantSet(grants).serialize))
+          case None =>
+            HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("The specified token does not exist")))
+        }
+      }.getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+      }
     }
   }
   val metadata = None
 }
 
-class RemoveGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class AddTokenGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+  val service = (request: HttpRequest[Future[JValue]]) => {
+    Success { (authToken: Token) => 
+      (for {
+        tid <- request.parameters.get('apikey) 
+        content <- request.content 
+      } yield {
+        content.flatMap { _.validated[String] match {
+          case Success(gid) =>
+            tokenManagement.addTokenGrant(tid, gid).map {
+              case Success(_)   => HttpResponse[JValue](Created)
+              case Failure(msg) => HttpResponse[JValue](HttpStatus(BadRequest), content = Some(JString(msg)))
+            }
+          case Failure(e) =>
+            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid add grant request body."), content = Some(JObject(List(
+              JField("error", "Invalid add grant request body: " + e)
+            )))))
+        }}
+      }).getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+      }
+    }
+  }
+  val metadata = None
+}
+
+class RemoveTokenGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+  val service = (request: HttpRequest[Future[JValue]]) => {
+    Success { (authToken: Token) =>
+      (for {
+        tid <- request.parameters.get('apikey) 
+        gid <- request.parameters.get('grantId)
+      } yield tokenManagement.removeTokenGrant(tid, gid).map {
+        case Success(_) => HttpResponse[JValue](NoContent)
+        case Failure(e) => 
+          HttpResponse[JValue](HttpStatus(BadRequest, "Invalid remove grant request."), content = Some(JObject(List(
+            JField("error", "Invalid remove grant request: " + e)
+          ))))
+      }).getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+      }
+    }
+  }
+  val metadata = None
+}
+
+class DeleteTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+  val service = (request: HttpRequest[Future[JValue]]) => {
+    Success { (authToken: Token) => 
+      request.parameters.get('apikey).map { tid =>
+        tokenManagement.deleteToken(tid).map { 
+          if(_) HttpResponse[JValue](HttpStatus(NoContent))
+          else  HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find token "+tid)))
+        }
+      }.getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+      }
+    }
+  }
+  val metadata = None
+}
+
+class CreateGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+  val service = (request: HttpRequest[Future[JValue]]) => {
+    Success { (authToken: Token) =>
+      (for {
+        content <- request.content 
+      } yield {
+        content.flatMap { _.validated[Permission] match {
+          case Success(permission) => tokenManagement.createGrant(permission) map {
+            case Success(grant) => 
+              HttpResponse[JValue](OK, content = Some(grant.gid.serialize))
+            case Failure(e) => 
+              HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new grant."), content = Some(JObject(List(
+                JField("error", "Error creating new grant: " + e)
+              ))))
+          }
+          case Failure(e) =>
+            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new grant request body."), content = Some(JObject(List(
+              JField("error", "Invalid new grant request body: " + e)
+            )))))
+        }}
+      }).getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+      }
+    }
+  }
+  val metadata = None
+}
+
+class GetGrantDetailsHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token) => 
-      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+      (for {
+        gid <- request.parameters.get('grantId)
+      } yield tokenManagement.grantDetails(gid).map {
+        case Success(grant) => HttpResponse[JValue](OK, content = Some(GrantDetails(grant).serialize))
+        case Failure(e) => 
+          HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find grant "+gid)))
+      }).getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+      }
     }
   }
   val metadata = None
@@ -110,253 +219,210 @@ class RemoveGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: 
 
 class GetGrantChildrenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => 
-      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+    Success { (authToken: Token) =>
+      (for {
+        gid <- request.parameters.get('grantId)
+      } yield tokenManagement.grantChildren(gid).map { grants =>
+        HttpResponse[JValue](OK, content = Some(GrantSet(grants).serialize))
+      }).getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+      }
     }
   }
   val metadata = None
 }
 
-class AddGrantChildrenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class AddGrantChildHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => 
-      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+    Success { (authToken: Token) =>
+      (for {
+        gid <- request.parameters.get('grantId) 
+        content <- request.content 
+      } yield {
+        content.flatMap { _.validated[Permission] match {
+          case Success(permission) => tokenManagement.addGrantChild(gid, permission) map {
+            case Success(grant) => 
+              HttpResponse[JValue](OK, content = Some(grant.gid.serialize))
+            case Failure(e) => 
+              HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new child grant."), content = Some(JObject(List(
+                JField("error", "Error creating new child grant: " + e)
+              ))))
+          }
+          case Failure(e) =>
+            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new child grant request body."), content = Some(JObject(List(
+              JField("error", "Invalid new child grant request body: " + e)
+            )))))
+        }}
+      }).getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+      }
     }
   }
   val metadata = None
 }
 
-class GetGrantChildHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class DeleteGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => 
-      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+    Success { (authToken: Token) =>
+      request.parameters.get('grantId).map { gid =>
+        tokenManagement.deleteGrant(gid).map {
+          if(_) HttpResponse[JValue](HttpStatus(NoContent))
+          else  HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find grant "+gid)))
+      }}.getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+      }
     }
   }
   val metadata = None
 }
 
-class RemoveGrantChildHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
-  val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => 
-      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+class TokenManagement(val tokenManager: TokenManager[Future])(implicit val execContext: ExecutionContext)
+  extends TokenManagerAccessControl[Future](tokenManager) {
+  
+  def createToken(requestor: Token, request: NewTokenRequest): Future[Validation[String, Token]] = {
+    tokenManager.newToken("Anonymous", Set.empty).flatMap { token =>
+      val tid = token.tid
+      
+      mayGrant(requestor.tid, request.grants.toSet).flatMap { mayGrant =>
+        if (mayGrant) {
+          val grantIds = Future.sequence(request.grants.map(tokenManager.newGrant(None, _))).map(_.map(_.gid).toSet)
+          val foToken = grantIds.flatMap(tokenManager.addGrants(tid, _))
+          
+          foToken.map {
+            case Some(t) => Success(t)
+            case None => failure("Unable to assign given grants to token "+tid)
+          }
+        } else {
+          Future(failure("Unable to assign given grants to token "+tid))
+        }
+      }
     }
   }
-  val metadata = None
-}
 
-class TokenManagement(tokenManager: TokenManager[Future]) {
+  def tokenDetails(tid: TokenID): Future[Option[(Token, Set[Grant])]] = {
+    tokenManager.findToken(tid).flatMap {
+      case Some(token) =>
+        val grants = Future.sequence { token.grants.map(grantId => tokenManager.findGrant(grantId)) }
+        grants.map(_.flatten).map(Option(token, _))
+      case None => Future(None)
+    }
+  }
 
-  def findTokenAndGrants(tid: TokenID): Future[Option[(Token, Set[Grant])]] = sys.error("todo")
+  def tokenGrants(tid: TokenID): Future[Option[Set[Grant]]] = {
+    tokenManager.findToken(tid).flatMap {
+      case Some(token) =>
+        val grants = Future.sequence { token.grants.map(grantId => tokenManager.findGrant(grantId)) }
+        grants.map(grants => some(grants.flatten))
+      case None => Future(some(Set.empty))
+    }
+  }
+  
+  def addTokenGrant(tid: TokenID, gid: GrantID): Future[Validation[String, Unit]] = {
+    tokenManager.addGrants(tid, Set(gid)).map(_.map(_ => ()).toSuccess("Unable to add grant "+gid+" to token "+tid))
+  }
+  
+  def removeTokenGrant(tid: TokenID, gid: GrantID): Future[Validation[String, Unit]] = {
+    tokenManager.removeGrants(tid, Set(gid)).map(_.map(_ => ()).toSuccess("Unable to remove grant "+gid+" from token "+tid))
+  } 
 
-  def newToken(issuer: TokenID, request: NewTokenRequest): Future[Validation[String, Token]] = sys.error("todo")
+  def deleteToken(tid: TokenID): Future[Boolean] = {
+    tokenManager.deleteToken(tid).map(_.isDefined)
+  } 
 
-  def findTokenGrants(tid: TokenID): Future[Set[Grant]] = sys.error("todo") 
-  def addTokenGrant(tid: TokenID, gid: GrantID): Future[Validation[String, Unit]] = sys.error("todo")
-  def deleteTokenGrant(tid: TokenID, gid: GrantID): Future[Validation[String, Unit]] = sys.error("todo")
+  def createGrant(request: Permission): Future[Validation[String, Grant]] = {
+    tokenManager.newGrant(None, request).map(Success(_))
+  }
+  
+  def grantDetails(gid: GrantID): Future[Validation[String, Grant]] = {
+    tokenManager.findGrant(gid).map(_.toSuccess("Unable to find grant "+gid))
+  }
 
-  def findGrantChildren(tid: TokenID, gid: GrantID): Future[Set[Grant]] = sys.error("todo")
-  def newGrantChild(tid: TokenID, gid: GrantID, request: NewGrantRequest): Future[Validation[String, Grant]] = sys.error("todo")
-  def deleteGrantChild(tid: TokenID, gid: GrantID, childGid: GrantID): Future[Validation[String, Unit]] = sys.error("todo")
+  def grantChildren(gid: GrantID): Future[Set[Grant]] = {
+    tokenManager.findGrantChildren(gid)
+  }
+  
+  def addGrantChild(gid: GrantID, request: Permission): Future[Validation[String, Grant]] = {
+    tokenManager.findGrant(gid).flatMap {
+      case Some(grant) => tokenManager.newGrant(Option(gid), request).map(Success(_))
+      case None => Future(Failure("Unable to find grant "+gid))
+    }
+  }
+  
+  def deleteGrant(gid: GrantID): Future[Boolean] = {
+    tokenManager.deleteGrant(gid).map(!_.isEmpty)
+  } 
 
   def close() = tokenManager.close()
 }
 
-
-case class NewTokenRequest(name: String, grants: List[NewGrantRequest], readback: Boolean)
+case class NewTokenRequest(grants: List[Permission])
 
 trait NewTokenRequestSerialization {
-    implicit val NewTokenRequestExtractor: Extractor[NewTokenRequest] = new Extractor[NewTokenRequest] with ValidatedExtraction[NewTokenRequest] {    
-      override def validated(obj: JValue): Validation[Error, NewTokenRequest] = 
-        ((obj \ "name").validated[String] |@|
-         (obj \ "grants").validated[List[NewGrantRequest]] |@|
-         (obj \ "readback").validated[Boolean]).apply(NewTokenRequest(_,_,_))
-    }
+  implicit val newTokenRequestExtractor: Extractor[NewTokenRequest] = new Extractor[NewTokenRequest] with ValidatedExtraction[NewTokenRequest] {    
+    override def validated(obj: JValue): Validation[Error, NewTokenRequest] = 
+      (obj \ "grants").validated[List[Permission]].map(NewTokenRequest(_))
+  }
+  
+  implicit val newTokenRequestDecomposer: Decomposer[NewTokenRequest] = new Decomposer[NewTokenRequest] {
+    override def decompose(request: NewTokenRequest): JValue = JObject(List(
+      JField("grants", JArray(request.grants.map(_.serialize)))
+    )) 
+  }
 }
 
 object NewTokenRequest extends NewTokenRequestSerialization
 
-case class NewGrantRequest(accessTypeString: String, path: Path, owner: Option[String], expiration: Option[DateTime]) {
-  val accessType = AccessType.fromString(accessTypeString) 
-  def toPermission(): Validation[String, Permission] = {
-    accessType match {
-      case Some(WritePermission) =>
-        Success(WritePermission(path, expiration))
-      case Some(OwnerPermission) =>
-        Success(OwnerPermission(path, expiration))
-      case Some(ReadPermission) =>
-        owner.map { o => Success(ReadPermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
-      case Some(ReducePermission) =>
-        owner.map { o => Success(ReducePermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
-      case Some(ModifyPermission) =>
-        owner.map { o => Success(ModifyPermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
-      case Some(TransformPermission) =>
-        owner.map { o => Success(TransformPermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
-      case None => Failure("Unknown access type: " + accessType)
-    } 
+case class TokenDetails(token: Token, grants: Set[Grant])
+
+trait TokenDetailsSerialization {
+  implicit val tokenDetailsExtractor: Extractor[TokenDetails] = new Extractor[TokenDetails] with ValidatedExtraction[TokenDetails] {
+    override def validated(obj: JValue): Validation[Error, TokenDetails] =
+      ((obj \ "apiKey").validated[String] |@|
+       (obj \ "grants").validated[GrantSet]).apply((id, grantSet) => TokenDetails(Token(id, "Unknown", grantSet.grants.map(_.gid)), grantSet.grants))
   }
-}
-
-trait NewGrantRequestSerialization {
-    
-    implicit val NewGrantRequestExtractor: Extractor[NewGrantRequest] = new Extractor[NewGrantRequest] with ValidatedExtraction[NewGrantRequest] {    
-      override def validated(obj: JValue): Validation[Error, NewGrantRequest] = 
-        ((obj \ "accessType").validated[String] |@|
-         (obj \ "path").validated[Path] |@|
-         (obj \ "owner").validated[Option[TokenID]] |@|
-         (obj \ "expiration").validated[Option[DateTime]]).apply(NewGrantRequest(_,_,_,_))
-    }
-
-}
-
-object NewGrantRequest extends NewGrantRequestSerialization
-
-
-
-
-
-
-
-
-
-
-
-
-
-class CreateTokenHandler(tokenManager: TokenManager[Future], accessControl: AccessControl[Future])(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging with HandlerHelpers {
-  val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => Future(todo) }
-//      request.content.map { _.flatMap { _.validated[TokenCreate] match {
-//        case Success(tokenCreate) =>
-//          tokenCreate.permissions.map{ Future(_) }.getOrElse{ tokenManager.sharablePermissions(t) }.flatMap{ perms =>
-//            accessControl.mayGrant(t.uid, perms) flatMap {
-//              case false => Future[Resp]((Unauthorized, "The specified token may not grant the requested permissions"))
-//              case true  =>
-//                tokenManager.issueNew(Some(t.uid), perms, 
-//                                      tokenCreate.grants.getOrElse(Set()), 
-//                                      tokenCreate.expired.getOrElse(false)) map { 
-//                  case Success(t) => (OK, t.serialize): Resp
-//                  case Failure(e) => (BadRequest, e): Resp
-//                }
-//            }
-//          }
-//        case Failure(e)           => Future[Resp](BadRequest, e)
-//      }}}.getOrElse(Future[Resp]((BadRequest -> "Missing token create request body.")))
-//    }
-  }
-
-  val metadata = None
-}
-
-class DeleteTokenHandler(tokenManager: TokenManager[Future])(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging with HandlerHelpers {
-  val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => Future(todo) } 
-//      request.parameters.get('delete) match {
-//        case None         =>
-//          Future(HttpResponse[JValue](BadRequest, content=Some(JString("Token to be deleted was not found."))))
-//        case Some(delete) =>
-//          tokenManager.deleteDescendant(t, delete) map { deleted =>
-//            val content = JArray(deleted.map{ t => JString(t.uid) })
-//            HttpResponse[JValue](OK, content=Some(content)) 
-//          }
-//      }     
-//    }
-  }
-  val metadata = None
-}
-
-class UpdateTokenHandler(tokenManager: TokenManager[Future])(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging with HandlerHelpers {
-
-  val service  = (request: HttpRequest[Future[JValue]]) => {
-//    request.parameters.get('update) match {
-//      case None            =>
-//        Failure(inapplicable)
-//      case Some(updateUID) => 
-        Success {(t: Token) => Future(todo)}
-        //tokenManager.findToken(updateUID) flatMap {
-//          case None              => Future[Resp]((BadRequest, "Token to update doesn't exists."))
-//          case Some(updateToken) => request.content.map { _.flatMap { _.validated[TokenUpdate] match {
-//            case Success(tokenUpdate) =>
-//              val toUpdate = applyUpdates(updateToken, tokenUpdate)
-//              tokenManager.updateToken(t, toUpdate) map {
-//                case Success(rt) => (OK, rt.serialize): Resp
-//                case Failure(e) => (BadRequest, e): Resp
-//              }
-//            case Failure(e)  => Future[Resp]((BadRequest, e))
-//          }}}.getOrElse(Future[Resp]((BadRequest -> "Missing token update request body.")))
-//        }
-//      }
-//    }
-  }
-
-  val metadata = None
-
-//  def applyUpdates(t: Token, tu: TokenUpdate): Token = {
-//    Token(t.uid, t.issuer, t.permissions, (t.grants ++ tu.addGrants) -- tu.removeGrants, tu.expired.getOrElse(t.expired))
-//  }
-}
-
-trait HandlerHelpers {
- 
-  type Resp = HttpResponse[JValue]
-
-  val todo: Resp = (BadRequest, JString("todo"))
   
-  implicit def codeAndMessageToResponse(t: (HttpStatusCode, String)): HttpResponse[JValue] = HttpResponse(t._1, content = Some(JString(t._2)))
-  implicit def codeAndValueToResponse(t: (HttpStatusCode, JValue)): HttpResponse[JValue] = HttpResponse(t._1, content = Some(t._2))
-  implicit def codeAndErrorToResponse(t: (HttpStatusCode, Error)): HttpResponse[JValue] = HttpResponse(t._1, content = Some(t._2.message))
-
+  implicit val tokenDetailsDecomposer: Decomposer[TokenDetails] = new Decomposer[TokenDetails] {
+    override def decompose(details: TokenDetails): JValue = JObject(List(
+      JField("apiKey", details.token.tid),
+      JField("grants", GrantSet(details.grants).serialize)
+    ))
+  }
 }
 
-//case class TokenCreate(permissions: Option[Permissions], grants: Option[Set[UID]], expired: Option[Boolean])
-//
-//trait TokenCreateSerialization {
-//  implicit val TokenCreateDecomposer: Decomposer[TokenCreate] = new Decomposer[TokenCreate] {
-//    override def decompose(token: TokenCreate): JValue = JObject(List(  
-//      JField("permissions", token.permissions.serialize),
-//      JField("grants", token.grants.serialize),
-//      JField("expired", token.expired.serialize)
-//    ))        
-//  }     
-//
-//  implicit val TokenCreateExtractor: Extractor[TokenCreate] = new Extractor[TokenCreate] with ValidatedExtraction[TokenCreate] {            
-//    override def validated(obj: JValue): Validation[Error, TokenCreate] = {
-//      val fields = List("permissions", "grants", "expired")
-//
-//      fields.map{ obj \? _ }.collect { 
-//        case Some(v) => true
-//      }
-//
-//      if(fields.size == obj.children.size) {
-//        ((obj \ "permissions").validated[Option[Permissions]] |@| 
-//         (obj \ "grants").validated[Option[Set[UID]]] |@| 
-//         (obj \ "expired").validated[Option[Boolean]]).apply(TokenCreate(_,_,_))
-//      } else {
-//        Failure(Invalid("Unexpected fields in token create object."))
-//      }
-//    }
-//  }        
-//}
-//
-//object TokenCreate extends TokenCreateSerialization with ((Option[Permissions], Option[Set[UID]], Option[Boolean]) => TokenCreate)
-//
-//case class TokenUpdate(addGrants: Set[UID], removeGrants: Set[UID], expired: Option[Boolean])
-//
-//trait TokenUpdateSerialization {
-//  implicit val TokenUpdateDecomposer: Decomposer[TokenUpdate] = new Decomposer[TokenUpdate] {
-//    override def decompose(token: TokenUpdate): JValue = JObject(List(  
-//      JField("addGrants", token.addGrants.serialize),
-//      JField("removeGrants", token.removeGrants.serialize),
-//      JField("expired", token.expired.serialize)
-//    ))        
-//  }     
-//
-//  implicit val TokenUpdateExtractor: Extractor[TokenUpdate] = new Extractor[TokenUpdate] with ValidatedExtraction[TokenUpdate] {            
-//    override def validated(obj: JValue): Validation[Error, TokenUpdate] =
-//      ((obj \ "addGrants").validated[Set[UID]] |@| 
-//       (obj \ "removeGrants").validated[Set[UID]] |@|  
-//       (obj \ "expired").validated[Option[Boolean]]).apply(TokenUpdate(_,_,_))
-//
-//  }        
-//}
-//
-//object TokenUpdate extends TokenUpdateSerialization with ((Set[UID], Set[UID], Option[Boolean]) => TokenUpdate)
+object TokenDetails extends TokenDetailsSerialization
+
+case class GrantSet(grants: Set[Grant])
+
+trait GrantSetSerialization {
+  implicit val grantSetExtractor: Extractor[GrantSet] = new Extractor[GrantSet] with ValidatedExtraction[GrantSet] {
+    override def validated(obj: JValue): Validation[Error, GrantSet] =
+      obj.validated[Set[GrantDetails]].map(grants => GrantSet(grants.map(_.grant)))
+  }
+  
+  implicit val grantSetDecomposer: Decomposer[GrantSet] = new Decomposer[GrantSet] {
+    override def decompose(details: GrantSet): JValue = JArray(details.grants.map(GrantDetails(_).serialize).toList)
+  }
+}
+
+object GrantSet extends GrantSetSerialization
+
+case class GrantDetails(grant: Grant)
+
+trait GrantDetailsSerialization {
+  implicit val grantDetailsExtractor: Extractor[GrantDetails] = new Extractor[GrantDetails] with ValidatedExtraction[GrantDetails] {
+    override def validated(obj: JValue): Validation[Error, GrantDetails] =
+      ((obj \ "grantId").validated[String] |@|
+       (obj \ "issuer").validated[Option[String]] |@|
+       obj.validated[Permission]).apply((id, issuer, permission) => GrantDetails(Grant(id, issuer, permission)))
+  }
+
+  implicit val grantDetailsDecomposer: Decomposer[GrantDetails] = new Decomposer[GrantDetails] {
+    override def decompose(details: GrantDetails): JValue =
+      JObject(List(
+        Some(JField("grantId", details.grant.gid)),
+        details.grant.issuer.map(JField("issuer", _))
+      ).flatten) merge details.grant.permission.serialize
+  }
+}
+
+object GrantDetails extends GrantDetailsSerialization

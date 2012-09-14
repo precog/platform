@@ -37,9 +37,11 @@ trait AST extends Phases {
   
   type BucketSpec
 
-  type Binding
-  type FormalBinding
+  type NameBinding
+  type VarBinding
+  
   type Provenance
+  type ProvConstraint
   
   def printSExp(tree: Expr, indent: String = ""): String = tree match {
     case Add(_, left, right) => "%s(+\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
@@ -72,32 +74,19 @@ trait AST extends Phases {
       case e @ Let(loc, id, params, left, right) => {
         val paramStr = params map { indent + "  - " + _ } mkString "\n"
         
-        val assumptionStr = e.assumptions map {
-          case (name, prov) => {
-            indent + "  -\n" +
-              indent + "    name: " + name + "\n" +
-              indent + "    provenance: " + prov.toString
-          }
-        } mkString "\n"
-        
-        val unconstrainedStr = e.unconstrainedParams map { name =>
-          indent + "  - " + name
-        } mkString "\n"
-        
         indent + "type: let\n" +
           indent + "id: " + id + "\n" +
           indent + "params:\n" + paramStr + "\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
-          indent + "right:\n" + prettyPrint(right, level + 2) + "\n" +
-          indent + "assumptions:\n" + assumptionStr + "\n" +
-          indent + "unconstrained-params:\n" + unconstrainedStr + "\n" +
-          indent + "required-params: " + e.requiredParams
+          indent + "right:\n" + prettyPrint(right, level + 2)
       }
 
-      case Forall(loc, ticVar, child) => {
-        indent + "type: forall\n" +
-          indent + "ticVar: \n" + ticVar + "\n" +
-          indent + "child: \n" + prettyPrint(child, level + 2)
+      case Solve(loc, constraints, child) => {
+        val constraintsStr = constraints map { indent + "  -\n" + prettyPrint(_, level + 4) } mkString "\n"
+        
+        indent + "type: solve\n" +
+          indent + "constraints:\n" + constraintsStr + "\n" +
+          indent + "child:\n" + prettyPrint(child, level + 2)
       }
       
       case Import(loc, spec, child) => {
@@ -361,14 +350,9 @@ trait AST extends Phases {
     def constrainingExpr = _constrainingExpr()
     private[quirrel] def constrainingExpr_=(expr: Option[Expr]) = _constrainingExpr() = expr
 
-    private val _accumulatedProvenance = attribute[Option[Vector[Provenance]]](checkProvenance)
-    def accumulatedProvenance = _accumulatedProvenance()
-    def accumulatedProvenance_=(acc: Option[Vector[Provenance]]) = _accumulatedProvenance() = acc
-    
-    lazy val cardinality: Option[Int] = {
-      if (accumulatedProvenance.isDefined) accumulatedProvenance map { _.length }
-      else None
-    }
+    private val _relations = attribute[Map[Provenance, Set[Provenance]]](checkProvenance)
+    def relations = _relations()
+    private[quirrel] def relations_=(rels: Map[Provenance, Set[Provenance]]) = _relations() = rels
     
     private[quirrel] final lazy val _errors: Atom[Set[Error]] = {
       if (this eq root) {
@@ -400,6 +384,15 @@ trait AST extends Phases {
 
     def tree: Tree[Expr] = Tree.node(this, subForest)
     
+    override def toString: String = {
+      val result = productIterator map {
+        case ls: LineStream => "<%d:%d>".format(ls.lineNum, ls.colNum)
+        case x => x.toString
+      }
+      
+      productPrefix + "(%s)".format(result mkString ",")
+    }
+    
     def equalsIgnoreLoc(that: Expr): Boolean = (this, that) match {
       case (Let(_, id1, params1, left1, right1), Let(_, id2, params2, left2, right2)) =>
         (id1 == id2) &&
@@ -407,8 +400,14 @@ trait AST extends Phases {
           (left1 equalsIgnoreLoc left2) &&
           (right1 equalsIgnoreLoc right2)
 
-      case (Forall(_, ticVar1, child1), Forall(_, ticVar2, child2)) =>
-        (ticVar1 == ticVar2) && (child1 equalsIgnoreLoc child2)
+      case (Solve(_, constraints1, child1), Solve(_, constraints2, child2)) => {
+        val sizing = constraints1.length == constraints2.length
+        val contents = constraints1 zip constraints2 forall {
+          case (e1, e2) => e1 equalsIgnoreLoc e2
+        }
+        
+        sizing && contents && (child1 equalsIgnoreLoc child2)
+      }
           
       case (Import(_, spec1, child1), Import(_, spec2, child2)) =>
         (child1 equalsIgnoreLoc child2) && (spec1 == spec2)
@@ -536,8 +535,8 @@ trait AST extends Phases {
       case Let(_, id, params, left, right) =>
         id.hashCode + params.hashCode + left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
 
-      case Forall(_, ticVar, child) =>
-        ticVar.hashCode + child.hashCodeIgnoreLoc
+      case Solve(_, constraints, child) =>
+        (constraints map { _.hashCodeIgnoreLoc } sum) + child.hashCodeIgnoreLoc
       
       case Import(_, spec, child) =>
         spec.hashCode + child.hashCodeIgnoreLoc
@@ -637,7 +636,7 @@ trait AST extends Phases {
       _errors ++= phase(root)
     }
   }
- 
+  
   object ast {    
     sealed trait ExprLeafNode extends Expr with LeafNode
     
@@ -658,40 +657,39 @@ trait AST extends Phases {
       override def children = List(child)
     }
     
-    final case class Let(loc: LineStream, name: Identifier, params: Vector[TicId], left: Expr, right: Expr) extends ExprUnaryNode {
+    final case class Let(loc: LineStream, name: Identifier, params: Vector[String], left: Expr, right: Expr) extends ExprUnaryNode {
       val sym = 'let
       
       val isPrefix = true
       
       def child = right
       
-      private val _buckets = attribute[Option[BucketSpec]](inferBuckets)
-      def buckets = _buckets()
-      private[quirrel] def buckets_=(spec: Option[BucketSpec]) = _buckets() = spec
+      private val _constraints = attribute[Set[ProvConstraint]](checkProvenance)
+      def constraints = _constraints()
+      private[quirrel] def constraints_=(constraints: Set[ProvConstraint]) = _constraints() = constraints
+      
+      private val _resultProvenance = attribute[Provenance](checkProvenance)
+      def resultProvenance = _resultProvenance()
+      private[quirrel] def resultProvenance_=(prov: Provenance) = _resultProvenance() = prov
+    }
+
+    final case class Solve(loc: LineStream, constraints: Vector[Expr], child: Expr) extends Expr with Node {
+      val sym = 'solve
+      
+      def form = 'solve ~ (constraints.init map { _ ~ 'comma } reduceOption { _ ~ _ } map { _ ~ constraints.last ~ child } getOrElse (constraints.last ~ child))
+      
+      def children = child +: constraints toList
+      
+      private val _vars = attribute[Set[TicId]](bindNames)
+      def vars: Set[TicId] = _vars()
+      private[quirrel] def vars_=(vars: Set[TicId]) = _vars() = vars
       
       lazy val criticalConditions = findCriticalConditions(this)
       lazy val groups = findGroups(this)
       
-      private val _assumptions = attribute[Map[String, Provenance]](checkProvenance)
-      def assumptions = _assumptions()
-      private[quirrel] def assumptions_=(map: Map[String, Provenance]) = _assumptions() = map
-      
-      private val _accumulatedAssumptions = attribute[Map[String, Option[Vector[Provenance]]]](checkProvenance)
-      def accumulatedAssumptions = _accumulatedAssumptions()
-      private[quirrel] def accumulatedAssumptions_=(map: Map[String, Option[Vector[Provenance]]]) = _accumulatedAssumptions() = map
-      
-      private val _unconstrainedParams = attribute[Set[String]](checkProvenance)
-      def unconstrainedParams = _unconstrainedParams()
-      private[quirrel] def unconstrainedParams_=(up: Set[String]) = _unconstrainedParams() = up
-      
-      private val _requiredParams = attribute[Int](checkProvenance)
-      def requiredParams = _requiredParams()
-      private[quirrel] def requiredParams_=(req: Int) = _requiredParams() = req
-    }
-
-    final case class Forall(loc: LineStream, param: TicId, child: Expr) extends ExprUnaryNode {
-      val sym = 'forall
-      val isPrefix = true
+      private val _buckets = attribute[Option[BucketSpec]](inferBuckets)
+      def buckets = _buckets()
+      private[quirrel] def buckets_=(spec: Option[BucketSpec]) = _buckets() = spec
     }
 
     final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends ExprUnaryNode {
@@ -715,9 +713,9 @@ trait AST extends Phases {
     final case class TicVar(loc: LineStream, name: TicId) extends ExprLeafNode {
       val sym = 'ticvar
       
-      private val _binding = attribute[FormalBinding](bindNames)
+      private val _binding = attribute[VarBinding](bindNames)
       def binding = _binding()
-      private[quirrel] def binding_=(b: FormalBinding) = _binding() = b
+      private[quirrel] def binding_=(b: VarBinding) = _binding() = b
     }
     
     final case class StrLit(loc: LineStream, value: String) extends ExprLeafNode {
@@ -785,9 +783,9 @@ trait AST extends Phases {
       def isReduction = _isReduction()
       private[quirrel] def isReduction_=(b: Boolean) = _isReduction() = b
       
-      private val _binding = attribute[Binding](bindNames)
+      private val _binding = attribute[NameBinding](bindNames)
       def binding = _binding()
-      private[quirrel] def binding_=(b: Binding) = _binding() = b
+      private[quirrel] def binding_=(b: NameBinding) = _binding() = b
       
       def form = {
         val opt = (actuals map { _ ~ 'comma } reduceOption { _ ~ _ })

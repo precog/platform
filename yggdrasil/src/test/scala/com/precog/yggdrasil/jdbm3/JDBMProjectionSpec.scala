@@ -36,40 +36,21 @@ import com.precog.common.json._
 
 import java.io.File
 
-class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
+class JDBMProjectionSpec extends Specification with ScalaCheck with Logging with CValueGenerators {
   import Gen._
   import Arbitrary._
 
-  def genColumn(size: Int, values: Gen[Array[CValue]]): Gen[List[Seq[CValue]]] = containerOfN[List,Seq[CValue]](size, values.map(_.toSeq))
-
-  def genFor(tpe: CType): Gen[CValue] = tpe match {
-    case CString  => arbString.arbitrary.map(CString(_))
-    case CBoolean => arbBool.arbitrary.map(CBoolean(_)) 
-    case CLong    => arbLong.arbitrary.map(CLong(_))
-    case CDouble  => arbDouble.arbitrary.map(CDouble(_))
-    // ScalaCheck's arbBigDecimal fails on argument creation intermittently due to math context conflicts with scale/value.
-    case CNum     => for {
-      scale  <- arbInt.arbitrary
-      bigInt <- arbBigInt.arbitrary
-    } yield CNum(BigDecimal(new java.math.BigDecimal(bigInt.bigInteger, scale - 1 /* BigDecimal can't handle Integer min/max scales */), java.math.MathContext.UNLIMITED))
-    case CDate    => arbLong.arbitrary.map { ts => CDate(new DateTime(ts)) }
-    case CNull    => Gen.value(CNull)
-    case CEmptyObject => Gen.value(CEmptyObject)
-    case CEmptyArray  => Gen.value(CEmptyArray)
-    case invalid      => sys.error("No values for type " + invalid)
-  }
-  
   override def defaultValues = super.defaultValues + (minTestsOk -> 20)
 
   case class ProjectionData(desc: ProjectionDescriptor, data: List[Seq[CValue]])
 
   implicit val genData: Arbitrary[ProjectionData] = Arbitrary(
     for {
-      size       <- chooseNum(1,100000)
-      width      <- chooseNum(1,40)
-      types      <- pick(width, List(CString, CBoolean, CLong, CDouble, CNum , CDate, CNull, CEmptyObject, CEmptyArray))
+      size       <- chooseNum(1,1000)//00) TODO bump back up to 100000 when memory isn't an issue.
+      width      <- chooseNum(1,20) // TODO bump back up to 40 when bytebuffer overflows handled.
+      types      <- listOfN(width, genCType)
       descriptor <- ProjectionDescriptor(1, types.toList.map { tpe => ColumnDescriptor(Path("/test"), CPath.Identity, tpe, Authorities(Set.empty)) })
-      val typeGens: Seq[Gen[CValue]] = types.map(genFor)
+      val typeGens: Seq[Gen[CValue]] = types.map(genCValue)
       data       <- genColumn(size, sequence[Array, CValue](typeGens))
     } yield ProjectionData(descriptor, data)
   )

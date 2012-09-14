@@ -22,7 +22,9 @@ package daze
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.serialization._
+import com.precog.yggdrasil.util.IdSourceConfig
 import com.precog.util._
+import com.precog.common.json._
 import com.precog.common.{Path, VectorCase}
 import com.precog.common.json.{CPath, CPathField, CPathIndex}
 import com.precog.bytecode._
@@ -49,19 +51,13 @@ import scalaz.syntax.traverse._
 
 import com.weiglewilczek.slf4s.Logging
 
-trait EvaluatorConfig {
-  implicit def valueSerialization: SortSerialization[SValue]
-  implicit def eventSerialization: SortSerialization[(Identities, SValue)]
-  implicit def groupSerialization: SortSerialization[(SValue, Identities, SValue)]
-  implicit def memoSerialization: IncrementalSerialization[(Identities, SValue)]
+trait EvaluatorConfig extends IdSourceConfig {
   def maxEvalDuration: akka.util.Duration
-  def idSource: IdSource
 }
 
 trait Evaluator[M[+_]] extends DAG
     with CrossOrdering
     with Memoizer
-    with PathRelativizer[M]
     with TypeInferencer
     with ReductionFinder
     with TableModule[M]        // TODO specific implementation
@@ -74,17 +70,25 @@ trait Evaluator[M[+_]] extends DAG
 
   type UserId = String
   
+  type MemoId = Int
+  type GroupId = Int
+  
   import Function._
   
   import instructions._
   import dag._
   import trans._
-  import TableModule.paths
+  import constants._
+  import TableModule._
 
   type YggConfig <: EvaluatorConfig
   
   def withContext[A](f: Context => A): A = 
-    f(new Context {})
+    withMemoizationContext { ctx =>
+      f(new Context {
+          val memoizationContext = ctx
+        })
+      }
 
   import yggConfig._
 
@@ -94,11 +98,18 @@ trait Evaluator[M[+_]] extends DAG
   def ConstantEmptyArray: F1
   
   def freshIdScanner: Scanner
+
+  def rewriteDAG(optimize: Boolean): DepGraph => DepGraph = {
+    (orderCrosses _) andThen
+    (if (optimize) (g => megaReduce(g, findReductions(g))) else identity) andThen
+    (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
+    (if (optimize) (memoize _) else identity)
+  }
   
   def eval(userUID: UserId, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean): M[Table] = {
     logger.debug("Eval for %s = %s".format(userUID.toString, graph))
   
-    def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, M[GroupingSpec[Int]]] = spec match {
+    def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, M[GroupingSpec]] = spec match {
       case UnionBucketSpec(left, right) => {
         for {
           leftSpec <- resolveTopLevelGroup(left, splits) 
@@ -110,7 +121,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             leftRes <- leftSpec
             rightRes <- rightSpec
-          } yield GroupingUnion(keySpec, keySpec, leftRes, rightRes, GroupKeyAlign.Eq)
+          } yield GroupingAlignment(keySpec, keySpec, leftRes, rightRes, GroupingSpec.Union)
         }
       }
       
@@ -125,7 +136,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             leftRes <- leftSpec
             rightRes <- rightSpec
-          } yield GroupingIntersect(keySpec, keySpec, leftRes, rightRes, GroupKeyAlign.Eq)
+          } yield GroupingAlignment(keySpec, keySpec, leftRes, rightRes, GroupingSpec.Intersection)
         }
       }
       
@@ -147,7 +158,7 @@ trait Evaluator[M[+_]] extends DAG
               trans = loop(target, splits).eval(state.copy(assume = state.assume + (reducedTarget -> resultTargetTable))).trans
               subSpec <- resolveLowLevelGroup(resultTargetTable, reducedTarget, forest, splits)
             } yield {
-              resultTargetTable map { resultTargetTable => resultTargetTable.group(trans, id, subSpec) }
+              resultTargetTable map { GroupingSource(_, SourceKey.Single, Some(trans), id, subSpec) }
             }
           }
           
@@ -159,7 +170,7 @@ trait Evaluator[M[+_]] extends DAG
     }
 
     //** only used in resolveTopLevelGroup **/
-    def resolveLowLevelGroup(commonTable: M[Table], commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, GroupKeySpec] = forest match {
+    def resolveLowLevelGroup(commonTable: M[Table], commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, GroupKeySpec] = forest match {
       case UnionBucketSpec(left, right) => {
         for {
           leftRes <- resolveLowLevelGroup(commonTable, commonGraph, left, splits)
@@ -200,7 +211,9 @@ trait Evaluator[M[+_]] extends DAG
 
     lazy val reductions: Map[DepGraph, NEL[dag.Reduce]] = findReductions(graph)
 
-    def loop(graph: DepGraph, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, PendingTable] = {
+    def loop(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, PendingTable] = {
+      logger.trace("Loop on %s".format(graph))
+      
       val assumptionCheck: StateT[Id, EvaluatorState, Option[M[Table]]] = for {
         state <- get[EvaluatorState]
       } yield state.assume.get(graph)
@@ -217,17 +230,17 @@ trait Evaluator[M[+_]] extends DAG
         
         case s @ SplitGroup(_, index, _) => {
           val (_, f) = splits(s.parent)
-          state(PendingTable(M.point(f(index)), graph, TransSpec1.Id))
+          state(PendingTable(f(index), graph, TransSpec1.Id))
         }
         
         case Root(_, instr) => {
           val table = graph.value collect {
-            case SString(str) => ops.constString(Set(CString(str)))
-            case SDecimal(d) => ops.constDecimal(Set(CNum(d)))
-            case SBoolean(b) => ops.constBoolean(Set(CBoolean(b)))
-            case SNull => ops.constNull
-            case SObject(map) if map.isEmpty => ops.constEmptyObject
-            case SArray(Vector()) => ops.constEmptyArray
+            case SString(str) => Table.constString(Set(CString(str)))
+            case SDecimal(d) => Table.constDecimal(Set(CNum(d)))
+            case SBoolean(b) => Table.constBoolean(Set(CBoolean(b)))
+            case SNull => Table.constNull
+            case SObject(map) if map.isEmpty => Table.constEmptyObject
+            case SArray(Vector()) => Table.constEmptyArray
           }
           
           val spec = buildConstantWrapSpec(Leaf(Source))
@@ -244,7 +257,7 @@ trait Evaluator[M[+_]] extends DAG
             
             tableM2 = for {
               table <- pendingTable.table
-              transformed = table.transform(liftToValues(pendingTable.trans))
+              transformed = table.transform(liftToValues(pendingTable.trans))  //TODO `transformed` is not used
             } yield table.transform(spec)
           } yield PendingTable(tableM2, graph, TransSpec1.Id)
         }
@@ -252,14 +265,17 @@ trait Evaluator[M[+_]] extends DAG
         case dag.LoadLocal(_, parent, jtpe) => {
           for {
             pendingTable <- loop(parent, splits)
-            val back = pendingTable.table flatMap { _.transform(liftToValues(pendingTable.trans)).load(userUID, jtpe) }
+            Path(prefixStr) = prefix
+            f1 = Infix.concatString.f2.partialLeft(CString(prefixStr.replaceAll("/$", "")))
+            trans2 = trans.Map1(trans.DerefObjectStatic(pendingTable.trans, paths.Value), f1)
+            val back = pendingTable.table flatMap { _.transform(trans2).load(userUID, jtpe) }
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
         case dag.Morph1(_, mor, parent) => {
           for {
             pendingTable <- loop(parent, splits)
-            val back = pendingTable.table flatMap { table => mor(table.transform(pendingTable.trans)) }
+            val back = pendingTable.table flatMap { table => mor(table.transform(liftToValues(pendingTable.trans))) }
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
@@ -296,9 +312,8 @@ trait Evaluator[M[+_]] extends DAG
               rightSpec = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
               transformed = aligned.transform(ArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
 
-              result = mor(transformed)
-              wrapped <- result //TODO
-            } yield wrapped
+              result <- mor(transformed)
+            } yield result
 
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
@@ -307,7 +322,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pending <- loop(parent, splits)
           } yield {
-            val back = pending.table map { _ transform liftToValues(pending.trans) distinct(Leaf(Source)) }
+            val back = pending.table map { _ transform liftToValues(pending.trans) distinct(DerefObjectStatic(Leaf(Source), paths.Value)) }
             PendingTable(back, graph, TransSpec1.Id)
           }
         }
@@ -337,8 +352,8 @@ trait Evaluator[M[+_]] extends DAG
             liftedTrans = liftToValues(pendingTable.trans)
 
             result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, paths.Value))) }
-            keyWrapped = trans.WrapObject(trans.Map1(trans.DerefArrayStatic(Leaf(Source), CPathIndex(0)), ConstantEmptyArray), paths.Key.name)  //TODO deref by index 0 is WRONG
-            valueWrapped = trans.ObjectConcat(keyWrapped, trans.WrapObject(Leaf(Source), paths.Value.name))
+            keyWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, trans.DerefArrayStatic(Leaf(Source), CPathIndex(0))), paths.Key.name)  //TODO deref by index 0 is WRONG
+            valueWrapped = trans.InnerObjectConcat(keyWrapped, trans.WrapObject(Leaf(Source), paths.Value.name))
             wrapped = result map { _ transform valueWrapped }
             _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (m -> wrapped)) }
           } yield {
@@ -363,12 +378,20 @@ trait Evaluator[M[+_]] extends DAG
             for {
               grouping2 <- grouping
             
-              result <- grouper.merge(grouping2) { (key: Table, map: Int => Table) =>
+              result <- Table.merge(grouping2) { (key: Table, map: Int => M[Table]) =>
                 val back = for {
-                  pendingTable <- loop(child, splits + (s -> (key, map)))
-                } yield pendingTable.table map { _ transform liftToValues(pendingTable.trans) }
+                  pending <- loop(child, splits + (s -> (key -> map)))
+                } yield {
+                  for {
+                    pendingTable <- pending.table
+                    val table = pendingTable.transform(liftToValues(pending.trans))  
+                    memoized <- ctx.memoizationContext.memoize(table, s.memoId)
+                  } yield memoized
+                }
                 
-                back.eval(state): M[Table]
+                child.findMemos(s).foreach { ctx.memoizationContext.expire(_) }
+                
+                back.eval(state)  //: M[Table]
               }
             } yield result
           } 
@@ -383,12 +406,12 @@ trait Evaluator[M[+_]] extends DAG
             val result = for {
               leftPendingTable <- leftPending.table
               rightPendingTable <- rightPending.table
-              val leftTable = leftPendingTable.transform(leftPending.trans)
-              val rightTable = rightPendingTable.transform(rightPending.trans)
-              leftSorted <- leftTable.sort(TransSpec1.Id, SortAscending)
-              rightSorted <- rightTable.sort(TransSpec1.Id, SortAscending)
+              val leftTable = leftPendingTable.transform(liftToValues(leftPending.trans))
+              val rightTable = rightPendingTable.transform(liftToValues(rightPending.trans))
+              leftSorted <- ctx.memoizationContext.sort(leftTable, TransSpec1.Id, SortAscending, left.memoId)
+              rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
             } yield {
-              val keyValueSpec = trans.ObjectConcat(
+              val keyValueSpec = trans.InnerObjectConcat(
                 trans.WrapObject(
                   DerefObjectStatic(Leaf(Source), paths.Key),
                   paths.Key.name),
@@ -399,7 +422,7 @@ trait Evaluator[M[+_]] extends DAG
               if (union) {
                 leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
               } else {
-                val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
+                val emptySpec = trans.ConstLiteral(CEmptyArray, Leaf(Source))
                 val fullSpec = trans.WrapArray(Leaf(SourceLeft))
               
                 val wrapped = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(emptySpec, emptySpec, fullSpec)
@@ -407,7 +430,7 @@ trait Evaluator[M[+_]] extends DAG
                 wrapped.transform(DerefArrayStatic(Leaf(Source), CPathIndex(0)))
               }
             }
-            
+
             PendingTable(result, graph, TransSpec1.Id)
           }
         }
@@ -421,12 +444,12 @@ trait Evaluator[M[+_]] extends DAG
             val result = for {
               leftPendingTable <- leftPending.table
               rightPendingTable <- rightPending.table
-              val leftTable = leftPendingTable.transform(leftPending.trans)
-              val rightTable = rightPendingTable.transform(rightPending.trans)
-              leftSorted <- leftTable.sort(TransSpec1.Id, SortAscending)
-              rightSorted <- rightTable.sort(TransSpec1.Id, SortAscending)
+              val leftTable = leftPendingTable.transform(liftToValues(leftPending.trans))
+              val rightTable = rightPendingTable.transform(liftToValues(rightPending.trans))
+              leftSorted <- ctx.memoizationContext.sort(leftTable, TransSpec1.Id, SortAscending, left.memoId)
+              rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
             } yield {
-              val keyValueSpec = trans.ObjectConcat(
+              val keyValueSpec = trans.InnerObjectConcat(
                 trans.WrapObject(
                   DerefObjectStatic(Leaf(Source), paths.Key),
                   paths.Key.name),
@@ -434,8 +457,8 @@ trait Evaluator[M[+_]] extends DAG
                   DerefObjectStatic(Leaf(Source), paths.Value),
                   paths.Value.name))
               
-              val emptySpec1 = trans.Map1(Leaf(Source), ConstantEmptyArray)
-              val emptySpec2 = trans.Map1(Leaf(SourceLeft), ConstantEmptyArray)
+              val emptySpec1 = trans.ConstLiteral(CEmptyArray, Leaf(Source))
+              val emptySpec2 = trans.ConstLiteral(CEmptyArray, Leaf(SourceLeft))
               val fullSpec = trans.WrapArray(Leaf(Source))
               
               val wrappedResult = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(fullSpec, emptySpec1, emptySpec2)
@@ -482,7 +505,7 @@ trait Evaluator[M[+_]] extends DAG
             }
             
             case _ =>
-              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
           }
         }
         
@@ -495,7 +518,7 @@ trait Evaluator[M[+_]] extends DAG
             }
             
             case _ =>
-              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
           }
         }
         
@@ -508,7 +531,7 @@ trait Evaluator[M[+_]] extends DAG
             }
             
             case _ =>
-              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
           }
         }
         
@@ -523,7 +546,7 @@ trait Evaluator[M[+_]] extends DAG
             // TODO other numeric types
             
             case _ =>
-              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
           }
         }
         
@@ -536,7 +559,59 @@ trait Evaluator[M[+_]] extends DAG
             }
             
             case _ =>
-              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
+        
+        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
+          right.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(left, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.InnerObjectConcat(pendingTable.trans))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
+        
+        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
+          left.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(right, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.InnerObjectConcat(pendingTable.trans))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
+        
+        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
+          right.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(left, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArrayConcat(pendingTable.trans))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+          }
+        }
+        
+        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
+          left.value match {
+            case Some(SObject(obj)) if obj.isEmpty => {
+              for {
+                pendingTable <- loop(right, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArrayConcat(pendingTable.trans))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
           }
         }
   
@@ -584,16 +659,17 @@ trait Evaluator[M[+_]] extends DAG
                 case _ => sys.error("unreachable code")
               }
               
-              val spec = buildWrappedJoinSpec(sharedPrefixLength(left, right), left.provenance.length, right.provenance.length)(transFromBinOp(op))
-              
+              val spec = buildWrappedJoinSpec(sharedPrefixLength(left, right), left.identities.length, right.identities.length)(transFromBinOp(op))
+
               val result = for {
                 parentLeftTable <- pendingTableLeft.table 
-                val leftResult = parentLeftTable.transform(pendingTableLeft.trans)
+                val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
                 
                 parentRightTable <- pendingTableRight.table 
-                val rightResult = parentRightTable.transform(pendingTableRight.trans)
+                val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
+
               } yield join(leftResult, rightResult)(key, spec)
-              
+
               PendingTable(result, graph, TransSpec1.Id)
             } 
           }
@@ -601,17 +677,17 @@ trait Evaluator[M[+_]] extends DAG
   
         case j @ Join(_, op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => {
           val isLeft = joinSort == CrossLeftSort
-          
+
           for {
             pendingTableLeft <- loop(left, splits)
             pendingTableRight <- loop(right, splits)
           } yield {
             val result = for {
               parentLeftTable <- pendingTableLeft.table 
-              val leftResult = parentLeftTable.transform(pendingTableLeft.trans)
+              val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
               
               parentRightTable <- pendingTableRight.table 
-              val rightResult = parentRightTable.transform(pendingTableRight.trans)
+              val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
             } yield {
               if (isLeft)
                 leftResult.cross(rightResult)(buildWrappedCrossSpec(transFromBinOp(op)))
@@ -632,8 +708,7 @@ trait Evaluator[M[+_]] extends DAG
           } yield {
             if (pendingTableTarget.graph == pendingTableBoolean.graph) {
               PendingTable(pendingTableTarget.table, pendingTableTarget.graph, trans.Filter(pendingTableTarget.trans, pendingTableBoolean.trans))
-            }
-            else {
+            } else {
               val key = joinSort match {
                 case IdentitySort =>
                   trans.DerefObjectStatic(Leaf(Source), paths.Key)
@@ -643,17 +718,17 @@ trait Evaluator[M[+_]] extends DAG
                 
                 case _ => sys.error("unreachable code")
               }
-              
-              val spec = buildWrappedJoinSpec(sharedPrefixLength(target, boolean), target.provenance.length, boolean.provenance.length) { (srcLeft, srcRight) =>
+
+              val spec = buildWrappedJoinSpec(sharedPrefixLength(target, boolean), target.identities.length, boolean.identities.length) { (srcLeft, srcRight) =>
                 trans.Filter(srcLeft, srcRight)
               }
-              
+
               val result = for {
                 parentTargetTable <- pendingTableTarget.table 
-                val targetResult = parentTargetTable.transform(pendingTableTarget.trans)
+                val targetResult = parentTargetTable.transform(liftToValues(pendingTableTarget.trans))
                 
                 parentBooleanTable <- pendingTableBoolean.table
-                val booleanResult = parentBooleanTable.transform(pendingTableBoolean.trans)
+                val booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
               } yield join(targetResult, booleanResult)(key, spec)
 
               PendingTable(result, graph, TransSpec1.Id)
@@ -676,10 +751,10 @@ trait Evaluator[M[+_]] extends DAG
           } yield {
             val result = for {
               parentTargetTable <- pendingTableTarget.table 
-              val targetResult = parentTargetTable.transform(pendingTableTarget.trans)
+              val targetResult = parentTargetTable.transform(liftToValues(pendingTableTarget.trans))
               
               parentBooleanTable <- pendingTableBoolean.table
-              val booleanResult = parentBooleanTable.transform(pendingTableBoolean.trans)
+              val booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
             } yield {
               if (isLeft) {
                 val spec = buildWrappedCrossSpec { (srcLeft, srcRight) =>
@@ -702,7 +777,7 @@ trait Evaluator[M[+_]] extends DAG
           if (indexes == Vector(0 until indexes.length: _*) && parent.sorting == IdentitySort) {
             loop(parent, splits)
           } else {
-            val fullOrder = indexes ++ ((0 until parent.provenance.length) filterNot (indexes contains))
+            val fullOrder = indexes ++ ((0 until parent.identities.length) filterNot (indexes contains))
             val idSpec = buildIdShuffleSpec(fullOrder)
             
             for {
@@ -713,7 +788,7 @@ trait Evaluator[M[+_]] extends DAG
                 val table = pendingTable.transform(liftToValues(pending.trans))
                 val shuffled = table.transform(TableTransSpec.makeTransSpec(Map(paths.Key -> idSpec)))
                 // TODO this could be made more efficient by only considering the indexes we care about
-                sorted <- shuffled.sort(DerefObjectStatic(Leaf(Source), paths.Key), SortAscending)
+                sorted <- ctx.memoizationContext.sort(shuffled, DerefObjectStatic(Leaf(Source), paths.Key), SortAscending, parent.memoId)
               } yield {                              
                 parent.sorting match {
                   case ValueSort(id) =>
@@ -738,7 +813,7 @@ trait Evaluator[M[+_]] extends DAG
               val result = for {
                 pendingTable <- pending.table
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                sorted <- table.sort(liftToValues(DerefObjectStatic(Leaf(Source), CPathField(sortField))), SortAscending)
+                sorted <- ctx.memoizationContext.sort(table, liftToValues(DerefObjectStatic(Leaf(Source), CPathField(sortField))), SortAscending, parent.memoId)
               } yield {
                 val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), CPathField(sortField))
                 val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), CPathField(valueField))
@@ -753,8 +828,8 @@ trait Evaluator[M[+_]] extends DAG
                   case _ => None
                 }
                 
-                val spec = ObjectConcat(
-                  ObjectConcat(
+                val spec = InnerObjectConcat(
+                  InnerObjectConcat(
                     ObjectDelete(Leaf(Source), Set(CPathField("sort-" + id), paths.Value) ++ oldSortField),
                       wrappedSort),
                       wrappedValue)
@@ -777,7 +852,7 @@ trait Evaluator[M[+_]] extends DAG
               val result = for {
                 pendingTable <- pending.table
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                sorted <- table.sort(DerefObjectStatic(Leaf(Source), CPathField("sort-" + id)), SortAscending)
+                sorted <- ctx.memoizationContext.sort(table, DerefObjectStatic(Leaf(Source), CPathField("sort-" + id)), SortAscending, parent.memoId)
               } yield sorted
               
               PendingTable(result, graph, TransSpec1.Id)
@@ -785,10 +860,20 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case m @ Memoize(parent, _) =>
-          loop(parent, splits)     // TODO
+        case Memoize(parent, memoId) =>
+          for {
+            pending <- loop(parent, splits)
+          } yield {
+            val result = for {
+              pendingTable <- pending.table
+              val table = pendingTable.transform(liftToValues(pending.trans))
+              memoized <- ctx.memoizationContext.memoize(table, memoId)
+            } yield memoized
+            
+            PendingTable(result, graph, TransSpec1.Id)
+          }
       }
-      
+
       assumptionCheck flatMap { assumedResult: Option[M[Table]] =>
         val liftedAssumption = assumedResult map { table =>
           state[EvaluatorState, PendingTable](
@@ -799,15 +884,8 @@ trait Evaluator[M[+_]] extends DAG
       }
     }
     
-    val rewrite = 
-      (orderCrosses _) andThen
-      (g => megaReduce(g, findReductions(g))) andThen
-      (memoize _) andThen
-      (makePathRelative(_, prefix)) andThen //Path Relativizer
-      (if (optimize) inferTypes(JType.JUnfixedT) else identity)
-
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 
-      loop(rewrite(graph), Map()) map { pendingTable => pendingTable.table map { _ transform liftToValues(pendingTable.trans) } }
+      loop(rewriteDAG(optimize)(graph), Map()) map { pendingTable => pendingTable.table map { _ transform liftToValues(pendingTable.trans) } }
 
     resultState.eval(EvaluatorState(Map()))
   }
@@ -845,7 +923,7 @@ trait Evaluator[M[+_]] extends DAG
       trans.WrapObject(DerefObjectStatic(Leaf(Source), CPathField(id.toString)), id.toString)
     }
     
-    parts reduce { (left, right) => trans.ObjectConcat(left, right) }
+    parts reduce { (left, right) => trans.InnerObjectConcat(left, right) }
   }
   
   private def buildChains(graph: DepGraph): Set[List[DepGraph]] =
@@ -919,7 +997,7 @@ trait Evaluator[M[+_]] extends DAG
     case Eq => trans.Equal(left, right)
     case NotEq => trans.Map1(trans.Equal(left, right), op1(Comp).f1)
     case instructions.WrapObject => WrapObjectDynamic(left, right)
-    case JoinObject => ObjectConcat(left, right)
+    case JoinObject => InnerObjectConcat(left, right)
     case JoinArray => ArrayConcat(left, right)
     case instructions.ArraySwap => sys.error("nothing happens")
     case DerefObject => DerefObjectDynamic(left, right)
@@ -929,9 +1007,11 @@ trait Evaluator[M[+_]] extends DAG
   }
 
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
-    left.provenance zip right.provenance takeWhile { case (a, b) => a == b } length
+    left.identities zip right.identities takeWhile { case (a, b) => a == b } length
   
   private def svalueToCValue(sv: SValue) = sv match {
+    case STrue => CBoolean(true)
+    case SFalse => CBoolean(false)
     case SString(str) => CString(str)
     case SDecimal(d) => CNum(d)
     // case SLong(l) => CLong(l)
@@ -939,18 +1019,18 @@ trait Evaluator[M[+_]] extends DAG
     case SNull => CNull
     case SObject(obj) if obj.isEmpty => CEmptyObject
     case SArray(Vector()) => CEmptyArray
-    case _ => sys.error("die a horrible death")
+    case _ => sys.error("die a horrible death: " + sv)
   }
   
   private def join(left: Table, right: Table)(key: TransSpec1, spec: TransSpec2): Table = {
-    val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
+    val emptySpec = trans.ConstLiteral(CEmptyArray, Leaf(Source))
     val result = left.cogroup(key, key, right)(emptySpec, emptySpec, trans.WrapArray(spec))
     result.transform(trans.DerefArrayStatic(Leaf(Source), CPathIndex(0)))
   }
   
   private def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  //TODO don't use Map1, returns an empty array of type CNum
-    val bottomWrapped = trans.WrapObject(trans.Map1(source, ConstantEmptyArray), paths.Key.name)
-    trans.ObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
+    val bottomWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, source), paths.Key.name)
+    trans.InnerObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
   }
 
   private def buildValueWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {
@@ -958,6 +1038,7 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
+    assert(sharedLength > 0)
     val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
     val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
     
@@ -973,22 +1054,18 @@ trait Evaluator[M[+_]] extends DAG
     val derefs: Seq[TransSpec2] = sharedDerefs ++ unsharedLeft ++ unsharedRight
     
     val newIdentitySpec = if (derefs.isEmpty)
-      trans.Map1(Leaf(SourceLeft), ConstantEmptyArray)
+      trans.ConstLiteral(CEmptyArray, Leaf(SourceLeft))
     else
       derefs reduce { trans.ArrayConcat(_, _) }
     
-    val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, paths.Key.name)
+    val wrappedIdentitySpec = trans.WrapObject(trans.WrapArray(newIdentitySpec), paths.Key.name)
     
     val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), paths.Value)
     val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
     
     val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
       
-    ObjectConcat(
-      ObjectConcat(
-        ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)),
-        wrappedIdentitySpec),
-      wrappedValueSpec)
+    InnerObjectConcat(wrappedValueSpec, wrappedIdentitySpec)
   }
   
   private def buildWrappedCrossSpec(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
@@ -998,17 +1075,13 @@ trait Evaluator[M[+_]] extends DAG
     val newIdentitySpec = ArrayConcat(leftIdentitySpec, rightIdentitySpec)
     
     val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, paths.Key.name)
-    
+
     val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), paths.Value)
     val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
     
     val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
-      
-    ObjectConcat(
-      ObjectConcat(
-        ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)),
-        wrappedIdentitySpec),
-      wrappedValueSpec)
+
+    InnerObjectConcat(wrappedIdentitySpec, wrappedValueSpec)
   }
   
   private def buildIdShuffleSpec(indexes: Vector[Int]): TransSpec1 = {
@@ -1023,49 +1096,29 @@ trait Evaluator[M[+_]] extends DAG
     TableTransSpec.makeTransSpec(Map(paths.Value -> trans))
    
   
-  private type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
-  private type TableTransSpec1 = TableTransSpec[Source1]
-  private type TableTransSpec2 = TableTransSpec[Source2]
+  type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
+  type TableTransSpec1 = TableTransSpec[Source1]
+  type TableTransSpec2 = TableTransSpec[Source2]
   
-  private object TableTransSpec {
+  object TableTransSpec {
     def makeTransSpec(tableTrans: TableTransSpec1): TransSpec1 = {
       val wrapped = for ((key @ CPathField(fieldName), value) <- tableTrans) yield {
-        val mapped = deepMap(value) {
-          case lf @ Leaf(_) =>
-            DerefObjectStatic(lf, key)
+        val mapped = TransSpec.deepMap(value) {
+          case Leaf(_) => DerefObjectStatic(Leaf(Source), key)
         }
         
         trans.WrapObject(mapped, fieldName)
       }
       
-      wrapped.foldLeft(ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*)): TransSpec1) { (acc, ts) =>
-        trans.ObjectConcat(acc, ts)
+      wrapped.foldLeft[TransSpec1](ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*))) { (acc, ts) =>
+        trans.InnerObjectConcat(acc, ts)
       }
-    }
-    
-    private def deepMap(spec: TransSpec1)(f: PartialFunction[TransSpec1, TransSpec1]): TransSpec1 = spec match {
-      case x if f isDefinedAt x => f(x)
-      case x @ Leaf(_) => x
-      case trans.Filter(source, pred) => trans.Filter(deepMap(source)(f), deepMap(pred)(f))
-      case Scan(source, scanner) => Scan(deepMap(source)(f), scanner)
-      case trans.Map1(source, f1) => trans.Map1(deepMap(source)(f), f1)
-      case trans.Map2(left, right, f2) => trans.Map2(deepMap(left)(f), deepMap(right)(f), f2)
-      case trans.ObjectConcat(left, right) => trans.ObjectConcat(deepMap(left)(f), deepMap(right)(f))
-      case trans.ArrayConcat(left, right) => trans.ArrayConcat(deepMap(left)(f), deepMap(right)(f))
-      case trans.WrapObject(source, field) => trans.WrapObject(deepMap(source)(f), field)
-      case trans.WrapArray(source) => trans.WrapArray(deepMap(source)(f))
-      case DerefObjectStatic(source, field) => DerefObjectStatic(deepMap(source)(f), field)
-      case DerefObjectDynamic(left, right) => DerefObjectDynamic(deepMap(left)(f), deepMap(right)(f))
-      case DerefArrayStatic(source, element) => DerefArrayStatic(deepMap(source)(f), element)
-      case DerefArrayDynamic(left, right) => DerefArrayDynamic(deepMap(left)(f), deepMap(right)(f))
-      case trans.ArraySwap(source, index) => trans.ArraySwap(deepMap(source)(f), index)
-      case Typed(source, tpe) => Typed(deepMap(source)(f), tpe)
-      case trans.Equal(left, right) => trans.Equal(deepMap(left)(f), deepMap(right)(f))
-      case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(deepMap(source)(f), value, invert)
     }
   }
 
-  sealed trait Context
+  sealed trait Context {
+    def memoizationContext: MemoContext
+  }
   
   private case class EvaluatorState(assume: Map[DepGraph, M[Table]] = Map(), extraCount: Int = 0)
   

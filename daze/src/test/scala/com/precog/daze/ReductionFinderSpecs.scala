@@ -209,7 +209,7 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
       lazy val input: dag.Split = dag.Split(line,
         dag.Group(1, nums, UnfixedSolution(0, nums)),
         Join(line, Add, CrossLeftSort,
-          SplitGroup(line, 1, nums.provenance)(input),
+          SplitGroup(line, 1, nums.identities)(input),
           dag.Reduce(line, Reduction(Vector(), "max", 0x0001),
             Filter(line, IdentitySort,
               nums,
@@ -228,7 +228,7 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
       val expected = dag.Split(line,
         dag.Group(1, nums, UnfixedSolution(0, nums)),
         Join(line, Add, CrossLeftSort,
-          SplitGroup(line, 1, nums.provenance)(input),
+          SplitGroup(line, 1, nums.identities)(input),
           Join(line, DerefArray, CrossLeftSort,
             MegaReduce(line, NEL(dag.Reduce(line, red, parent)), parent),
             Root(line, PushNum("0")))))
@@ -266,14 +266,14 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
             Join(line, WrapObject, CrossLeftSort,
               Root(line, PushString("min")),
               dag.Reduce(line, Reduction(Vector(), "min", 0x0004),
-                SplitGroup(line, 1, Vector(StaticProvenance("/clicks")))(input))),
+                SplitGroup(line, 1, Vector(LoadIds("/clicks")))(input))),
             Join(line, WrapObject, CrossLeftSort,
               Root(line, PushString("max")),
               dag.Reduce(line, Reduction(Vector(), "max", 0x0001),
-                SplitGroup(line, 1, Vector(StaticProvenance("/clicks")))(input))))))
+                SplitGroup(line, 1, Vector(LoadIds("/clicks")))(input))))))
 
 
-      val parent = SplitGroup(line, 1, clicks.provenance)(input)
+      val parent = SplitGroup(line, 1, clicks.identities)(input)
       val red1 = dag.Reduce(line, Reduction(Vector(), "min", 0x0004), parent)
       val red2 = dag.Reduce(line, Reduction(Vector(), "max", 0x0001), parent)
       val megaR = MegaReduce(line, NEL(red1, red2), parent)
@@ -397,7 +397,7 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
       lazy val input: dag.Split = dag.Split(line,
         dag.Group(1, nums, UnfixedSolution(0, nums)),
         Join(line, Add, CrossLeftSort,
-          SplitGroup(line, 1, nums.provenance)(input),
+          SplitGroup(line, 1, nums.identities)(input),
           dag.Reduce(line, Reduction(Vector(), "max", 0x0001),
             Filter(line, IdentitySort,
               nums,
@@ -446,14 +446,14 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
             Join(line, WrapObject, CrossLeftSort,
               Root(line, PushString("min")),
               dag.Reduce(line, Reduction(Vector(), "min", 0x0004),
-                SplitGroup(line, 1, Vector(StaticProvenance("/clicks")))(input))),
+                SplitGroup(line, 1, Vector(LoadIds("/clicks")))(input))),
             Join(line, WrapObject, CrossLeftSort,
               Root(line, PushString("max")),
               dag.Reduce(line, Reduction(Vector(), "max", 0x0001),
-                SplitGroup(line, 1, Vector(StaticProvenance("/clicks")))(input))))))
+                SplitGroup(line, 1, Vector(LoadIds("/clicks")))(input))))))
 
 
-      val parent = SplitGroup(line, 1, clicks.provenance)(input)
+      val parent = SplitGroup(line, 1, clicks.identities)(input)
       val red1 = Reduction(Vector(), "min", 0x0004)
       val red2 = Reduction(Vector(), "max", 0x0001)
 

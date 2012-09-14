@@ -55,6 +55,8 @@ import scalaz.syntax.traverse._
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
+import TableModule._
+
 trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
   implicit def M: Monad[M]
 
@@ -80,7 +82,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
         projections = json.elements.foldLeft(projections) { 
           case (acc, jobj) => 
             val evID = EventId(0, identity.getAndIncrement)
-            routingTable.route(EventMessage(evID, Event(path, "", jobj, Map()))).foldLeft(acc) {
+            routingTable.routeEvent(EventMessage(evID, Event(path, "", jobj, Map()))).foldLeft(acc) {
               case (acc, data) =>
                 acc + (data.descriptor -> (acc.getOrElse(data.descriptor, Vector.empty[JValue]) :+ data.toJValue))
           }
@@ -129,10 +131,21 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
   }
 }
 
-trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModule[M] with TestColumnarTableModule[M] {
+trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModuleTestSupport[M] {
+  import trans._
+  import TableModule._
+
+  trait TableCompanion extends ColumnarTableCompanion {
+    def apply(slices: StreamT[M, Slice]) = new Table(slices)
+    def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = sys.error("Feature not implemented in test stub.")
+  }
+  
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import trans._
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = true) = sys.error("Feature not implemented in test stub")
+    
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Seq[Table]] = sys.error("Feature not implemented in test stub.")
+
     def load(uid: UserId, tpe: JType): M[Table] = {
       val pathsM = this.reduce {
         new CReducer[Set[Path]] {
@@ -152,7 +165,7 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
         table <- path map { 
                    case (descriptor, _) => storage.projection(descriptor) map { projection => fromJson(projection._1.data.toStream) }
                  } getOrElse {
-                   M.point(ops.empty)
+                   M.point(Table.empty)
                  }
       } yield table
     }
@@ -166,7 +179,18 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
     def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = new Projection(descriptor, data)
   }
 
-  def table(slices: StreamT[M, Slice]) = new Table(slices)
+  class MemoContext extends MemoizationContext {
+    import trans._
+    
+    def memoize(table: Table, memoId: MemoId): M[Table] = M.point(table)
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table] =
+      table.sort(sortKey, sortOrder)
+    
+    def expire(memoId: MemoId): Unit = ()
+    def purge(): Unit = ()
+  }
+  
+  def newMemoContext = new MemoContext
 
   object storage extends Storage
 }

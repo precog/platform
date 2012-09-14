@@ -31,6 +31,8 @@ trait ProjectionModule {
     def open(descriptor: ProjectionDescriptor): IO[Projection]
 
     def close(p: Projection): IO[Unit]
+
+    def archive(p: Projection): IO[Boolean]
   }
 }
 
@@ -46,7 +48,7 @@ trait BlockProjectionLike[Key, Block] extends ProjectionLike {
   //TODO: make the following type member work instead of having a type parameter
   // type Key
 
-  implicit def keyOrder: Order[Key]
+  //implicit def keyOrder: Order[Key]
 
   /** 
    * Get a block of data beginning with the first record with a key greater than

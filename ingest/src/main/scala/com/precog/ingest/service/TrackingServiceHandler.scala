@@ -42,7 +42,7 @@ class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: E
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token, p: Path) =>
-      accessControl.mayAccessPath(t.tid, p, PathWrite) flatMap { mayAccess =>
+      accessControl.mayAccess(t.tid, p, Set(), WritePermission) flatMap { mayAccess =>
         if(mayAccess) {
           request.content map { futureContent =>
             try { 

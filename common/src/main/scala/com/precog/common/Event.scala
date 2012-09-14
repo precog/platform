@@ -34,7 +34,9 @@ import blueeyes.json.xschema.Extractor._
 import scalaz._
 import Scalaz._
 
-case class Event(path: Path, tokenId: String, data: JValue, metadata: Map[JPath, Set[UserMetadata]]) 
+sealed trait Action
+
+case class Event(path: Path, tokenId: String, data: JValue, metadata: Map[JPath, Set[UserMetadata]]) extends Action 
 
 class EventSerialization {
 
@@ -61,5 +63,30 @@ object Event extends EventSerialization {
     Event(path, ownerToken, data, Map[JPath, Set[UserMetadata]]())
   }
 }
+
+case class Archive(path: Path, tokenId: String) extends Action
+
+class ArchiveSerialization {
+
+  implicit val ArchiveDecomposer: Decomposer[Archive] = new Decomposer[Archive] {
+    override def decompose(archive: Archive): JValue = JObject(
+      List(
+        JField("path", archive.path.serialize),
+        JField("tokenId", archive.tokenId.serialize)))
+  }
+
+  implicit val ArchiveExtractor: Extractor[Archive] = new Extractor[Archive] with ValidatedExtraction[Archive] {
+    override def validated(obj: JValue): Validation[Error, Archive] = 
+      ((obj \ "path").validated[Path] |@|
+       (obj \ "tokenId").validated[String]).apply(Archive(_,_))
+  }  
+}
+
+object Archive extends ArchiveSerialization {
+  def fromJValue(path: Path, data: JValue, ownerToken: String): Archive = {
+    Archive(path, ownerToken)
+  }
+}
+
 
 // vim: set ts=4 sw=4 et:

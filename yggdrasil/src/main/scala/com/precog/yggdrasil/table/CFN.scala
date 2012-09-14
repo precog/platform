@@ -55,7 +55,7 @@ class CF2P(f: PartialFunction[(Column, Column), Column]) extends CF2(Function.un
 trait CScanner {
   type A
   def init: A
-  def scan(a: A, col: Column, range: Range): (A, Option[Column])
+  def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column])
 }
 
 trait CReducer[A] {

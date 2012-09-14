@@ -43,6 +43,7 @@ import yggdrasil.memoization._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
+import yggdrasil.util._
 
 import daze._
 
@@ -90,7 +91,7 @@ trait REPL
     def compile(oldTree: Expr): Option[Expr] = {
       bindRoot(oldTree, oldTree)
       
-      val tree = rewriteForall(shakeTree(oldTree))
+      val tree = shakeTree(oldTree)
       val strs = for (error <- tree.errors) yield showError(error)
       
       if (!tree.errors.isEmpty) {
@@ -131,7 +132,7 @@ trait REPL
       
       case PrintTree(tree) => {
         bindRoot(tree, tree)
-        val tree2 = rewriteForall(shakeTree(tree))
+        val tree2 = shakeTree(tree)
         
         out.println()
         out.println(prettyPrint(tree2))
@@ -251,11 +252,6 @@ object Console extends App {
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
 
-    object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-
     //TODO: Get a producer ID
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
@@ -269,7 +265,7 @@ object Console extends App {
 
   val repl: IO[scalaz.Validation[blueeyes.json.xschema.Extractor.Error, Lifecycle]] = for {
     replConfig <- loadConfig(args.headOption) 
-    fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, FilesystemFileOps)
+    fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, replConfig.archiveDir, FilesystemFileOps)
   } yield {
       scalaz.Success[blueeyes.json.xschema.Extractor.Error, Lifecycle](new REPL 
           with Lifecycle 
@@ -278,15 +274,20 @@ object Console extends App {
           with SystemActorStorageModule
           with StandaloneShardSystemActorModule { self =>
 
+        trait TableCompanion extends BlockStoreColumnarTableCompanion {
+          import scalaz.std.anyVal._
+          implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
+        }
+
+        object Table extends TableCompanion
+
         val actorSystem = ActorSystem("replActorSystem")
         implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
         type YggConfig = REPLConfig
         val yggConfig = replConfig
 
-        implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
-        implicit val coM = new Copointed[Future] {
-          def map[A, B](m: Future[A])(f: A => B) = m map f
+        implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
           def copoint[A](m: Future[A]) = Await.result(m, yggConfig.maxEvalDuration)
         }
 
@@ -299,6 +300,7 @@ object Console extends App {
         object Projection extends JDBMProjectionCompanion {
           val fileOps = FilesystemFileOps
           def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+          def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
         }
 
         def startup = IO { Await.result(storage.start(), controlTimeout) }

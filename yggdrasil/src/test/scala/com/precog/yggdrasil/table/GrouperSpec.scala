@@ -21,45 +21,62 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.json._
+import com.precog.yggdrasil.util.IdSourceConfig
+
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 
 import java.util.concurrent.Executors
 
-import org.specs2._
-import org.specs2.mutable.Specification
 import org.specs2.ScalaCheck
+import org.specs2.mutable._
 
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 
-object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] with ScalaCheck with test.YIdInstances {
-  import trans._
-
+trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
   "simple single-key grouping" should {
     "compute a histogram by value" in check { set: Stream[Int] =>
+      //println("===========================================================")
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+      
       val data = set map { JNum(_) }
+
+      val groupId = module.newGroupId
         
-      val spec = fromJson(data).group(TransSpec1.Id, 2,
-        GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
+      val spec = GroupingSource(
+        fromJson(data), 
+        TransSpec1.Id, Some(TransSpec1.Id), groupId, 
+        GroupKeySpecSource(CPathField("tic_a"), TransSpec1.Id))
         
-      val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
+      val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
         for {
           keyIter <- key.toJson
-          setIter <- map(2).toJson
+          group2  <- map(groupId)
+          setIter <- group2.toJson
         } yield {
           keyIter must haveSize(1)
           keyIter.head must beLike {
-            case JNum(i) => set must contain(i)
+            case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
           }
+
+          val histoKey = keyIter.head \ "tic_a"
+          val JNum(histoKey0) = histoKey
+          val histoKeyInt = histoKey0.toInt
         
           setIter must not(beEmpty)
+          //println(setIter.mkString("\n"))
           forall(setIter) { i =>
-            i mustEqual keyIter.head
+            i mustEqual histoKey
           }
+
+          setIter.size must_== set.count(_ == histoKeyInt)
           
           fromJson(JNum(setIter.size) #:: Stream.empty)
         }
@@ -73,8 +90,16 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       
       forall(resultIter) { i => expectedSet must contain(i) }
     }.pendingUntilFixed
+  }
+}
+    /*
     
     "compute a histogram by value (mapping target)" in check { set: Stream[Int] =>
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+
       val data = set map { JNum(_) }
       
       val doubleF1 = new CF1P({
@@ -83,17 +108,21 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         }
       })
       
-      val spec = fromJson(data).group(Map1(Leaf(Source), doubleF1), 2,
+      val spec = GroupingSource(
+        fromJson(data), 
+        SourceKey.Single, Some(Map1(TransSpec1.Id, doubleF1)), 2, 
         GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
         
-      val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
+      val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
         for {
           keyIter <- key.toJson
-          setIter <- map(2).toJson
+          group2  <- map(2)
+          setIter <- group2.toJson
         } yield {
           keyIter must haveSize(1)
           keyIter.head must beLike {
             case JNum(i) => set must contain(i)
+            case _ => sys.error("Expected a JNum")
           }
           
           setIter must not(beEmpty)
@@ -102,6 +131,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               val JNum(v2) = keyIter.head
               v1 mustEqual (v2 * 2)
             }
+            case _ => sys.error("Expected a JNum")
           }
           
           fromJson(JNum(setIter.size) #:: Stream.empty)
@@ -118,6 +148,11 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
     }.pendingUntilFixed
     
     "compute a histogram by even/odd" in check { set: Stream[Int] =>
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+
       val data = set map { JNum(_) }
       
       val mod2 = new CF1P({
@@ -126,17 +161,21 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         }
       })
       
-      val spec = fromJson(data).group(TransSpec1.Id, 2,
+      val spec = GroupingSource(
+        fromJson(data),
+        SourceKey.Single, Some(TransSpec1.Id), 2, 
         GroupKeySpecSource(CPathField("1"), Map1(Leaf(Source), mod2)))
         
-      val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
+      val result = Table.merge(spec) { (key: Table, map: Int => M[Table]) =>
         for {
           keyIter <- key.toJson
-          setIter <- map(2).toJson
+          group2  <- map(2)
+          setIter <- group2.toJson
         } yield {
           keyIter must haveSize(1)
           keyIter.head must beLike {
             case JNum(i) => set must contain(i)
+            case _ => sys.error("Expected a JNum")
           }
           
           
@@ -146,6 +185,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               val JNum(v2) = keyIter.head
               (v1 % 2) mustEqual v2
             }
+            case _ => sys.error("Expected a JNum")
           }
           
           fromJson(JNum(setIter.size) #:: Stream.empty)
@@ -163,6 +203,11 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
   }
   
   "simple multi-key grouping" should {
+    val module = emptyTestModule
+    import module._
+    import trans._
+    import constants._
+
     val data = Stream(
       JObject(
         JField("a", JNum(12)) ::
@@ -188,19 +233,25 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
     
     "compute a histogram on two keys" >> {
       "and" >> {
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val table = fromJson(data)
         
-        val spec = table.group(
-          TransSpec1.Id,
-          3,
+        val spec = GroupingSource(
+          table,
+          SourceKey.Single, Some(SourceValue.Single), 3,
           GroupKeySpecAnd(
             GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
             GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
             
-        val result = grouper.merge(spec) { (key, map) =>
+        val result = Table.merge(spec) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(3).toJson
+            group3  <- map(3)
+            gs1Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -242,19 +293,25 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       }.pendingUntilFixed
       
       "or" >> {
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val table = fromJson(data)
         
-        val spec = table.group(
-          TransSpec1.Id,
-          3,
+        val spec = GroupingSource(
+          table,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecOr(
             GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
             GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
             
-        val result = grouper.merge(spec) { (key, map) =>
+        val result = Table.merge(spec) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(3).toJson
+            group3  <- map(3)
+            gs1Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -320,20 +377,26 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       })
       
       "and" >> {
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val table = fromJson(data)
         
-        val spec = table.group(
-          TransSpec1.Id,
-          3,
+        val spec = GroupingSource(
+          table,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecAnd(
             GroupKeySpecSource(CPathField("extra"),
               Filter(Map1(DerefObjectStatic(Leaf(Source), CPathField("a")), eq12F1), Map1(DerefObjectStatic(Leaf(Source), CPathField("a")), eq12F1))),
             GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
             
-        val result = grouper.merge(spec) { (key, map) =>
+        val result = Table.merge(spec) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(3).toJson
+            group3  <- map(3)
+            gs1Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -364,19 +427,25 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       }.pendingUntilFixed
       
       "or" >> {
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val table = fromJson(data)
         
-        val spec = table.group(
-          TransSpec1.Id,
-          3,
+        val spec = GroupingSource(
+          table,
+          SourceKey.Single, Some(SourceValue.Single), 3,
           GroupKeySpecOr(
             GroupKeySpecSource(CPathField("extra"),
               Filter(Map1(DerefObjectStatic(Leaf(Source), CPathField("a")), eq12F1), Map1(DerefObjectStatic(Leaf(Source), CPathField("a")), eq12F1))),
             GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
             
-        val result = grouper.merge(spec) { (key, map) =>
+        val result = Table.merge(spec) { (key, map) =>
           for {
-            gs1Json <- map(3).toJson
+            group3  <- map(3)
+            gs1Json <- group3.toJson
             keyJson <- key.toJson
           } yield {
             gs1Json must haveSize(1)
@@ -425,34 +494,40 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
   
   "multi-set grouping" should {
     "compute ctr on value" in check { (rawData1: Stream[Int], rawData2: Stream[Int]) =>
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+
       val data1 = rawData1 map { JNum(_) }
       val data2 = rawData2 map { JNum(_) }
       
       val table1 = fromJson(data1)
       val table2 = fromJson(data2)
       
-      val spec1 = table1.group(
-        TransSpec1.Id,
-        2,
+      val spec1 = GroupingSource(
+        table1,
+        SourceKey.Single, Some(TransSpec1.Id), 2,
         GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
         
-      val spec2 = table2.group(
-        TransSpec1.Id,
-        3,
+      val spec2 = GroupingSource(
+        table2,
+        SourceKey.Single, Some(TransSpec1.Id), 3,
         GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
         
-      val union = GroupingUnion(
+      val union = GroupingAlignment(
         DerefObjectStatic(Leaf(Source), CPathField("1")),
         DerefObjectStatic(Leaf(Source), CPathField("1")),
         spec1,
-        spec2,
-        GroupKeyAlign.Eq)
+        spec2, GroupingSpec.Union)
           
-      val result = grouper.merge(union) { (key, map) =>
+      val result = Table.merge(union) { (key, map) =>
         for {
           keyJson <- key.toJson
-          gs1Json <- map(2).toJson
-          gs2Json <- map(3).toJson
+          group2  <- map(2)
+          group3  <- map(3)
+          gs1Json <- group2.toJson
+          gs2Json <- group3.toJson
         } yield {
           keyJson must haveSize(1)
           
@@ -507,34 +582,40 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
     }.pendingUntilFixed
     
     "compute pair-sum join" in check { (rawData1: Stream[Int], rawData2: Stream[Int]) =>
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+
       val data1 = rawData1 map { JNum(_) }
       val data2 = rawData2 map { JNum(_) }
       
       val table1 = fromJson(data1)
       val table2 = fromJson(data2)
       
-      val spec1 = table1.group(
-        TransSpec1.Id,
-        2,
+      val spec1 = GroupingSource(
+        table1,
+        SourceKey.Single, Some(TransSpec1.Id), 2,
         GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
         
-      val spec2 = table2.group(
-        TransSpec1.Id,
-        3,
+      val spec2 = GroupingSource(
+        table2,
+        SourceKey.Single, Some(TransSpec1.Id), 3,
         GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
         
-      val union = GroupingIntersect(
+      val intersect = GroupingAlignment(
         DerefObjectStatic(Leaf(Source), CPathField("1")),
         DerefObjectStatic(Leaf(Source), CPathField("1")),
         spec1,
-        spec2,
-        GroupKeyAlign.Eq)
+        spec2, GroupingSpec.Intersection)
           
-      val result = grouper.merge(union) { (key, map) =>
+      val result = Table.merge(intersect) { (key, map) =>
         for {
           keyJson <- key.toJson
-          gs1Json <- map(2).toJson
-          gs2Json <- map(3).toJson
+          group2  <- map(2)
+          group3  <- map(3)
+          gs1Json <- group2.toJson
+          gs2Json <- group3.toJson
         } yield {
           keyJson must haveSize(1)
           
@@ -593,6 +674,11 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
     
     "compute ctr on one field of a composite value" >> {
       "and" >> check { (rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) =>
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
@@ -608,33 +694,34 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
         
-        val spec1 = table1.group(
-          TransSpec1.Id,
-          2,
+        val spec1 = GroupingSource(
+          table1,
+          SourceKey.Single, Some(TransSpec1.Id), 2,
           GroupKeySpecAnd(
             GroupKeySpecSource(CPathField("1"),
               DerefObjectStatic(Leaf(Source), CPathField("a"))),
             GroupKeySpecSource(CPathField("2"),
               DerefObjectStatic(Leaf(Source), CPathField("b")))))
           
-        val spec2 = table2.group(
-          TransSpec1.Id,
-          3,
+        val spec2 = GroupingSource(
+          table2,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecSource(CPathField("1"),
             DerefObjectStatic(Leaf(Source), CPathField("a"))))
           
-        val union = GroupingUnion(
+        val union = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), CPathField("1")),
           DerefObjectStatic(Leaf(Source), CPathField("1")),
           spec1,
-          spec2,
-          GroupKeyAlign.Eq)
+          spec2, GroupingSpec.Union)
             
-        val result = grouper.merge(union) { (key, map) =>
+        val result = Table.merge(union) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(2).toJson
-            gs2Json <- map(3).toJson
+            group2  <- map(2)
+            group3  <- map(3)
+            gs1Json <- group2.toJson
+            gs2Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -702,6 +789,11 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       }.pendingUntilFixed
       
       "or" >> check { (rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) =>
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
@@ -717,33 +809,34 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
         
-        val spec1 = table1.group(
-          TransSpec1.Id,
-          2,
+        val spec1 = GroupingSource(
+          table1,
+          SourceKey.Single, Some(TransSpec1.Id), 2,
           GroupKeySpecOr(
             GroupKeySpecSource(CPathField("1"),
               DerefObjectStatic(Leaf(Source), CPathField("a"))),
             GroupKeySpecSource(CPathField("2"),
               DerefObjectStatic(Leaf(Source), CPathField("b")))))
           
-        val spec2 = table2.group(
-          TransSpec1.Id,
-          3,
+        val spec2 = GroupingSource(
+          table2,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecSource(CPathField("1"),
             DerefObjectStatic(Leaf(Source), CPathField("a"))))
           
-        val union = GroupingUnion(
+        val union = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), CPathField("1")),
           DerefObjectStatic(Leaf(Source), CPathField("1")),
           spec1,
-          spec2,
-          GroupKeyAlign.Eq)
+          spec2, GroupingSpec.Union)
             
-        val result = grouper.merge(union) { (key, map) =>
+        val result = Table.merge(union) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(2).toJson
-            gs2Json <- map(3).toJson
+            group2  <- map(2)
+            group3  <- map(3)
+            gs1Json <- group2.toJson
+            gs2Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -814,6 +907,11 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
     
     "compute pair-sum join on one field of a composite value" >> {
       "and" >> check { (rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) =>
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
@@ -829,33 +927,34 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
         
-        val spec1 = table1.group(
-          TransSpec1.Id,
-          2,
+        val spec1 = GroupingSource(
+          table1,
+          SourceKey.Single, Some(TransSpec1.Id), 2,
           GroupKeySpecAnd(
             GroupKeySpecSource(CPathField("1"),
               DerefObjectStatic(Leaf(Source), CPathField("a"))),
             GroupKeySpecSource(CPathField("2"),
               DerefObjectStatic(Leaf(Source), CPathField("b")))))
           
-        val spec2 = table2.group(
-          TransSpec1.Id,
-          3,
+        val spec2 = GroupingSource(
+          table2,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecSource(CPathField("1"),
             DerefObjectStatic(Leaf(Source), CPathField("a"))))
           
-        val union = GroupingIntersect(
+        val intersect = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), CPathField("1")),
           DerefObjectStatic(Leaf(Source), CPathField("1")),
           spec1,
-          spec2,
-          GroupKeyAlign.Eq)
+          spec2, GroupingSpec.Intersection)
             
-        val result = grouper.merge(union) { (key, map) =>
+        val result = Table.merge(intersect) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(2).toJson
-            gs2Json <- map(3).toJson
+            group2  <- map(2)
+            group3  <- map(3)
+            gs1Json <- group2.toJson
+            gs2Json <- group3.toJson
           } yield {
             keyJson must haveSize(1)
             
@@ -926,6 +1025,11 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       }.pendingUntilFixed
       
       "or" >> check { (rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) =>
+        val module = emptyTestModule
+        import module._
+        import trans._
+        import constants._
+
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
@@ -941,33 +1045,34 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
         
-        val spec1 = table1.group(
-          TransSpec1.Id,
-          2,
+        val spec1 = GroupingSource(
+          table1,
+          SourceKey.Single, Some(TransSpec1.Id), 2,
           GroupKeySpecOr(
             GroupKeySpecSource(CPathField("1"),
               DerefObjectStatic(Leaf(Source), CPathField("a"))),
             GroupKeySpecSource(CPathField("2"),
               DerefObjectStatic(Leaf(Source), CPathField("b")))))
           
-        val spec2 = table2.group(
-          TransSpec1.Id,
-          3,
+        val spec2 = GroupingSource(
+          table2,
+          SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecSource(CPathField("1"),
             DerefObjectStatic(Leaf(Source), CPathField("a"))))
           
-        val union = GroupingUnion(
+        val union = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), CPathField("1")),
           DerefObjectStatic(Leaf(Source), CPathField("1")),
           spec1,
-          spec2,
-          GroupKeyAlign.Eq)
+          spec2, GroupingSpec.Union)
             
-        val result = grouper.merge(union) { (key, map) =>
+        val result = Table.merge(union) { (key, map) =>
           for {
             keyJson <- key.toJson
-            gs1Json <- map(2).toJson
-            gs2Json <- map(3).toJson
+            group2  <- map(2)
+            group3  <- map(3)
+            gs1Json <- group2.toJson
+            gs2Json <- group3.toJson
           } yield {
             
             keyJson must haveSize(1)
@@ -1040,17 +1145,22 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       }.pendingUntilFixed
     }
     
-    /*
-     forall 'a forall 'b
-       foo where foo.a = 'a & foo.b = 'b
-       bar where bar.a = 'a
-       baz where baz.b = 'b
-       
-       -- note: intersect, not union!  (inexpressible in Quirrel)
-       { a: 'a, b: 'b, foo: count(foo'), bar: count(bar'), baz: count(baz') }
-     */
+    //
+    // forall 'a forall 'b
+    //   foo where foo.a = 'a & foo.b = 'b
+    //   bar where bar.a = 'a
+    //   baz where baz.b = 'b
+    //   
+    //   -- note: intersect, not union!  (inexpressible in Quirrel)
+    //   { a: 'a, b: 'b, foo: count(foo'), bar: count(bar'), baz: count(baz') }
+    //
      
     "handle non-trivial group alignment with composite key" in {
+      val module = emptyTestModule
+      import module._
+      import trans._
+      import constants._
+
       val foo = Stream(
         JObject(
           JField("a", JNum(42)) ::    // 1
@@ -1139,9 +1249,9 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         JObject(
           JField("d", JNum(0)) :: Nil))
           
-      val fooSpec = fromJson(foo).group(
-        TransSpec1.Id,
-        3,
+      val fooSpec = GroupingSource(
+        fromJson(foo),
+        SourceKey.Single, Some(TransSpec1.Id), 3,
         GroupKeySpecAnd(
           GroupKeySpecSource(
             CPathField("1"),
@@ -1150,34 +1260,32 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             CPathField("2"),
             DerefObjectStatic(Leaf(Source), CPathField("b")))))
           
-      val barSpec = fromJson(bar).group(
-        TransSpec1.Id,
-        4,
+      val barSpec = GroupingSource(
+        fromJson(bar),
+        SourceKey.Single, Some(TransSpec1.Id), 4,
         GroupKeySpecSource(
           CPathField("1"),
           DerefObjectStatic(Leaf(Source), CPathField("a"))))
           
-      val bazSpec = fromJson(baz).group(
-        TransSpec1.Id,
-        5,
+      val bazSpec = GroupingSource(
+        fromJson(baz),
+        SourceKey.Single, Some(TransSpec1.Id), 5,
         GroupKeySpecSource(
           CPathField("2"),
           DerefObjectStatic(Leaf(Source), CPathField("b"))))
           
       "intersect" >> {
-        val spec = GroupingIntersect(
+        val spec = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), CPathField("2")),
           DerefObjectStatic(Leaf(Source), CPathField("2")),
-          GroupingIntersect(
+          GroupingAlignment(
             DerefObjectStatic(Leaf(Source), CPathField("1")),
             DerefObjectStatic(Leaf(Source), CPathField("1")),
             fooSpec,
-            barSpec,
-            GroupKeyAlign.Eq),
-          bazSpec,
-          GroupKeyAlign.Eq)
+            barSpec, GroupingSpec.Intersection),
+          bazSpec, GroupingSpec.Intersection)
           
-        val forallResult = grouper.merge(spec) { (key, map) =>
+        val forallResult = Table.merge(spec) { (key, map) =>
           val keyJson = key.toJson.copoint
           
           keyJson must not(beEmpty)
@@ -1188,23 +1296,28 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
           a mustNotEqual JNothing
           b mustNotEqual JNothing
           
-          val fooPJson = map(3).toJson.copoint
-          val barPJson = map(4).toJson.copoint
-          val bazPJson = map(5).toJson.copoint
-          
-          fooPJson must not(beEmpty)
-          barPJson must not(beEmpty)
-          bazPJson must not(beEmpty)
-          
-          val result = Stream(
-            JObject(
-              JField("a", a) ::
-              JField("b", b) ::
-              JField("foo", JNum(fooPJson.size)) ::
-              JField("bar", JNum(barPJson.size)) ::
-              JField("baz", JNum(bazPJson.size)) :: Nil))
-              
-          implicitly[Pointed[test.YId]].point(fromJson(result))
+          for {
+            group3 <- map(3)
+            group4 <- map(4)
+            group5 <- map(5)
+            fooPJson <- group3.toJson
+            barPJson <- group4.toJson
+            bazPJson <- group5.toJson
+          } yield {
+            fooPJson must not(beEmpty)
+            barPJson must not(beEmpty)
+            bazPJson must not(beEmpty)
+
+            val result = Stream(
+              JObject(
+                JField("a", a) ::
+                JField("b", b) ::
+                JField("foo", JNum(fooPJson.size)) ::
+                JField("bar", JNum(barPJson.size)) ::
+                JField("baz", JNum(bazPJson.size)) :: Nil))
+                
+            fromJson(result)
+          }
         }
         
         val forallJson = forallResult flatMap { _.toJson } copoint
@@ -1250,19 +1363,17 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       }.pendingUntilFixed
           
       "union" >> {
-        val spec = GroupingUnion(
+        val spec = GroupingAlignment(
           DerefObjectStatic(Leaf(Source), CPathField("2")),
           DerefObjectStatic(Leaf(Source), CPathField("2")),
-          GroupingUnion(
+          GroupingAlignment(
             DerefObjectStatic(Leaf(Source), CPathField("1")),
             DerefObjectStatic(Leaf(Source), CPathField("1")),
             fooSpec,
-            barSpec,
-            GroupKeyAlign.Eq),
-          bazSpec,
-          GroupKeyAlign.Eq)
+            barSpec, GroupingSpec.Union),
+          bazSpec, GroupingSpec.Union)
           
-        val forallResult = grouper.merge(spec) { (key, map) =>
+        val forallResult = Table.merge(spec) { (key, map) =>
           val keyJson = key.toJson.copoint
           
           keyJson must not(beEmpty)
@@ -1272,23 +1383,28 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
           
           (a mustNotEqual JNothing) or (b mustNotEqual JNothing)
           
-          val fooPJson = map(3).toJson.copoint
-          val barPJson = map(4).toJson.copoint
-          val bazPJson = map(5).toJson.copoint
-          
-          (fooPJson must not(beEmpty)) or
-            (barPJson must not(beEmpty)) or
-            (bazPJson must not(beEmpty))
-          
-          val result = Stream(
-            JObject(
-              JField("a", a) ::
-              JField("b", b) ::
-              JField("foo", JNum(fooPJson.size)) ::
-              JField("bar", JNum(barPJson.size)) ::
-              JField("baz", JNum(bazPJson.size)) :: Nil))
-              
-          implicitly[Pointed[test.YId]].point(fromJson(result))
+          for {
+            fooP <- map(3)
+            barP <- map(4)
+            bazP <- map(5)
+            fooPJson <- fooP.toJson
+            barPJson <- barP.toJson
+            bazPJson <- bazP.toJson
+          } yield {
+            (fooPJson must not(beEmpty)) or
+              (barPJson must not(beEmpty)) or
+              (bazPJson must not(beEmpty))
+            
+            val result = Stream(
+              JObject(
+                JField("a", a) ::
+                JField("b", b) ::
+                JField("foo", JNum(fooPJson.size)) ::
+                JField("bar", JNum(barPJson.size)) ::
+                JField("baz", JNum(bazPJson.size)) :: Nil))
+                
+            fromJson(result)
+          }
         }
         
         val forallJson = forallResult flatMap { _.toJson } copoint
@@ -1398,6 +1514,19 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
           }
         }
       }.pendingUntilFixed
+    }
+  }
+}
+*/
+
+object GrouperSpec extends TableModuleSpec[Free.Trampoline] with GrouperSpec[Free.Trampoline] {
+  implicit def M = Trampoline.trampolineMonad
+
+  type YggConfig = IdSourceConfig
+  val yggConfig = new IdSourceConfig {
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
     }
   }
 }

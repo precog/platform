@@ -33,7 +33,7 @@ import scalaz.syntax.copointed._
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
-trait CompactSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTestSupport[M] with Specification with ScalaCheck {
+trait CompactSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specification with ScalaCheck {
   import SampleData._
   import trans._
   
@@ -96,7 +96,7 @@ trait CompactSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTest
         }
       }
       
-      table(StreamT.fromStream(M.point(maskedSlices)))
+      Table(StreamT.fromStream(M.point(maskedSlices)))
   }
 
   def undefineColumn(fullTable: Table, path: CPath): Table = fullTable match {
@@ -123,7 +123,7 @@ trait CompactSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTest
         maskedSlice.getOrElse(slice)
       }
       
-      table(StreamT.fromStream(M.point(maskedSlices)))
+      Table(StreamT.fromStream(M.point(maskedSlices)))
   }
 
   def testCompactIdentity = {

@@ -100,11 +100,13 @@ class InMemoryTokenManager[M[+_]: Monad](tokens: mutable.Map[TokenID, Token] = m
     deletedGrants.values.toSet.filter{ _.issuer.map { _ == gid }.getOrElse(false) }
   }
 
- def removeGrants(tid: TokenID, remove: Set[GrantID]) = Monad[M].point {
-    tokens.get(tid).map { t =>
-      val updated = t.removeGrants(remove)
-      tokens.put(tid, updated)
-      updated
+  def removeGrants(tid: TokenID, remove: Set[GrantID]) = Monad[M].point {
+    tokens.get(tid).flatMap { t =>
+      if(remove.subsetOf(t.grants)) {
+        val updated = t.removeGrants(remove)
+        tokens.put(tid, updated)
+        Some(updated)
+      } else None
     }
   }
 
@@ -143,9 +145,7 @@ object TestTokenManager {
       ("write", WritePermission(_, _)),
       ("owner", OwnerPermission(_, _)),
       ("read", ReadPermission(_, owner, _)),
-      ("reduce", ReducePermission(_, owner, _)),
-      ("modify", ModifyPermission(_, owner, _)),
-      ("transform", TransformPermission(_, owner, _))
+      ("reduce", ReducePermission(_, owner, _))
     )
     
     config map {
@@ -185,6 +185,8 @@ object TestTokenManager {
     Token("user2", "user2", (grantList(4) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
     Token("expired", "expired", (grantList(5) ++ grantList(6)).map{ _.gid}(collection.breakOut))
   ).map { t => (t.tid -> t) }(collection.breakOut)
+  
+  val rootReadChildren = grantList.flatten.filter(_.issuer.map(_ == "root_read").getOrElse(false)).toSet
 
   def testTokenManager[M[+_]: Monad]: TokenManager[M] = new InMemoryTokenManager[M](tokens, grants)
 }

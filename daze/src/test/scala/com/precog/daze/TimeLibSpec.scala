@@ -37,8 +37,7 @@ import org.joda.time._
 import org.joda.time.format._
 
 trait TimeLibSpec[M[+_]] extends Specification
-    with Evaluator[M]
-    with TestConfigComponent[M] 
+    with EvaluatorTestSupport[M]
     with TimeLib[M] 
     with MemoryDatasetConsumer[M] { self =>
       
@@ -2095,4 +2094,5 @@ trait TimeLibSpec[M[+_]] extends Specification
 }
 
 object TimeLibSpec extends TimeLibSpec[test.YId] with test.YIdInstances
+
 // vim: set ts=4 sw=4 et:

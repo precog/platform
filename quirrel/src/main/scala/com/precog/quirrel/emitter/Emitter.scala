@@ -48,7 +48,8 @@ trait Emitter extends AST
 
   private sealed trait MarkType
   private case class MarkExpr(expr: Expr) extends MarkType
-  private case class MarkTicVar(let: ast.Let, name: String) extends MarkType
+  private case class MarkTicVar(let: ast.Solve, name: String) extends MarkType
+  private case class MarkFormal(name: Identifier, let: ast.Let) extends MarkType
   private case class MarkDispatch(let: ast.Let, actuals: Vector[Expr]) extends MarkType
   private case class MarkGroup(op: ast.Where) extends MarkType
 
@@ -56,8 +57,10 @@ trait Emitter extends AST
     bytecode: Vector[Instruction] = Vector(),
     marks: Map[MarkType, Mark] = Map(),
     curLine: Option[(Int, String)] = None,
-    ticVars: Map[(ast.Let, TicId), EmitterState] = Map(),
+    ticVars: Map[(ast.Solve, TicId), EmitterState] = Map(),
+    formals: Map[(Identifier, ast.Let), EmitterState] = Map(),
     groups: Map[ast.Where, Int] = Map(),
+    subResolve: Provenance => Provenance = identity,
     currentId: Int = 0)
   
   private type EmitterState = StateT[Id, Emission, Unit]
@@ -128,9 +131,15 @@ trait Emitter extends AST
       }
     }
     
-    private def labelTicVar(let: ast.Let, name: TicId)(state: => EmitterState): EmitterState = {
+    private def labelTicVar(solve: ast.Solve, name: TicId)(state: => EmitterState): EmitterState = {
       StateT.apply[Id, Emission, Unit] { e =>
-        (e.copy(ticVars = e.ticVars + ((let, name) -> state)), ())
+        (e.copy(ticVars = e.ticVars + ((solve, name) -> state)), ())
+      }
+    }
+    
+    private def labelFormal(id: Identifier, let: ast.Let)(state: => EmitterState): EmitterState = {
+      StateT.apply[Id, Emission, Unit] { e =>
+        (e.copy(formals = e.formals + ((id, let) -> state)), ())
       }
     }
     
@@ -186,11 +195,19 @@ trait Emitter extends AST
     
     def emitCrossOrMatchState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance)
         (ifCross: => Instruction, ifMatch: => Instruction): EmitterState = {
-      val itx = leftProv.possibilities.intersect(rightProv.possibilities).filter(p => p != ValueProvenance && p != NullProvenance)
-
-      val instr = emitInstr(if (itx.isEmpty) ifCross else ifMatch)
-
-      left >> right >> instr
+      StateT.apply[Id, Emission, Unit] { e =>
+        val leftResolved = e.subResolve(leftProv)
+        val rightResolved = e.subResolve(rightProv)
+        
+        assert(!leftResolved.isParametric)
+        assert(!rightResolved.isParametric)
+        
+        val itx = leftResolved.possibilities.intersect(rightResolved.possibilities).filter(p => p != ValueProvenance && p != NullProvenance)
+  
+        val instr = emitInstr(if (itx.isEmpty) ifCross else ifMatch)
+  
+        (left >> right >> instr)(e)
+      }
     }
 
     def emitMapState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance, op: BinaryOperation): EmitterState = {
@@ -232,16 +249,16 @@ trait Emitter extends AST
       state(e)
     }
     
-    def emitBucketSpec(let: ast.Let, spec: BucketSpec): EmitterState = spec match {
+    def emitBucketSpec(solve: ast.Solve, spec: BucketSpec): EmitterState = spec match {
       case buckets.UnionBucketSpec(left, right) =>
-        emitBucketSpec(let, left) >> emitBucketSpec(let, right) >> emitInstr(MergeBuckets(false))
+        emitBucketSpec(solve, left) >> emitBucketSpec(solve, right) >> emitInstr(MergeBuckets(false))
       
       case buckets.IntersectBucketSpec(left, right) =>
-        emitBucketSpec(let, left) >> emitBucketSpec(let, right) >> emitInstr(MergeBuckets(true))
+        emitBucketSpec(solve, left) >> emitBucketSpec(solve, right) >> emitInstr(MergeBuckets(true))
       
       case buckets.Group(origin, target, forest) => {
         nextId { id =>
-          emitBucketSpec(let, forest) >>
+          emitBucketSpec(solve, forest) >>
             emitExpr(target) >>
             labelGroup(origin, id) >>
             emitInstr(Group(id))
@@ -251,7 +268,7 @@ trait Emitter extends AST
       case buckets.UnfixedSolution(name, solution) => {
         nextId { id =>
           emitExpr(solution) >>
-            labelTicVar(let, name)(emitInstr(PushKey(id))) >>
+            labelTicVar(solve, name)(emitInstr(PushKey(id))) >>
             emitInstr(KeyPart(id))
         }
       }
@@ -268,6 +285,15 @@ trait Emitter extends AST
       (expr match {
         case ast.Let(loc, id, params, left, right) =>
           emitExpr(right)
+
+        case expr @ ast.Solve(loc, _, body) => 
+          val spec = expr.buckets.get
+          
+          emitBucketSpec(expr, spec) >> 
+            emitInstr(Split) >>
+            emitExpr(body) >>
+            emitInstr(Merge)
+                  
         
         case ast.Import(_, _, child) =>
           emitExpr(child)
@@ -280,10 +306,10 @@ trait Emitter extends AST
         
         case t @ ast.TicVar(loc, name) => { 
           t.binding match {
-            case LetBinding(let) => {
-              emitOrDup(MarkTicVar(let, name)) {
+            case SolveBinding(solve) => {
+              emitOrDup(MarkTicVar(solve, name)) {
                 StateT.apply[Id, Emission, Unit] { e =>
-                  e.ticVars((let, name))(e)     // assert: this will work iff lexical scoping is working
+                  e.ticVars((solve, name))(e)     // assert: this will work iff lexical scoping is working
                 }
               }
             }
@@ -307,6 +333,8 @@ trait Emitter extends AST
         case ast.NullLit(loc) =>
           emitInstr(PushNull)
         
+        case ast.ObjectDef(loc, Vector()) => emitInstr(PushObject)
+        
         case ast.ObjectDef(loc, props) => 
           def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2) >> emitInstr(Map2Cross(WrapObject))
 
@@ -327,6 +355,8 @@ trait Emitter extends AST
           val joins = Vector.fill(provToField.size - 1)(emitInstr(Map2Cross(JoinObject)))
 
           reduce(groups ++ joins)
+          
+        case ast.ArrayDef(loc, Vector()) => emitInstr(PushArray)
 
         case ast.ArrayDef(loc, values) => 
           val indexedValues = values.zipWithIndex
@@ -391,10 +421,10 @@ trait Emitter extends AST
         
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
-            case LoadBinding(_) =>
+            case LoadBinding =>
               emitExpr(actuals.head) >> emitInstr(LoadLocal)
 
-            case DistinctBinding(_) =>
+            case DistinctBinding =>
               emitExpr(actuals.head) >> emitInstr(Distinct)
 
             case Morphism1Binding(m) => 
@@ -405,6 +435,13 @@ trait Emitter extends AST
 
             case ReductionBinding(f) =>
               emitExpr(actuals.head) >> emitInstr(Reduce(BuiltInReduction(f)))
+
+            case FormalBinding(let) =>
+              emitOrDup(MarkFormal(name, let)) {
+                StateT.apply[Id, Emission, Unit] { e =>
+                  e.formals((name, let))(e)
+                }
+              }
 
             case Op1Binding(op) =>  
               emitUnary(actuals(0), BuiltInFunction1Op(op))
@@ -418,28 +455,29 @@ trait Emitter extends AST
                   emitOrDup(MarkExpr(left))(emitExpr(left))
 
                 case n => emitOrDup(MarkDispatch(let, actuals)) {
+                  val ids = let.params map { Identifier(Vector(), _) }
+                  val zipped = ids zip (actuals map { _.provenance })
+                  
+                  def sub(target: Provenance): Provenance = {
+                    zipped.foldLeft(target) {
+                      case (target, (id, sub)) => substituteParam(id, let, target, sub)
+                    }
+                  }
+                  
                   val actualStates = params zip actuals map {
                     case (name, expr) =>
-                      labelTicVar(let, name)(emitExpr(expr))
+                      labelFormal(Identifier(Vector(), name), let)(emitExpr(expr))
                   }
                   
-                  val body = if (actuals.length == n) {
-                    emitExpr(left)
-                  } else {
-                    val spec = {
-                      val init: BucketSpec = let.buckets.get         // assuming no errors
-                      (params zip actuals).foldLeft(init) {
-                        case (spec, (id, expr)) => spec.derive(id, expr)
-                      }
-                    }
+                  StateT.apply[Id, Emission, Unit] { e =>
+                    def subResolve2(prov: Provenance): Provenance =
+                      resolveUnifications(expr.relations)(sub(prov))
                     
-                    emitBucketSpec(let, spec) >> 
-                      emitInstr(Split) >>
-                      emitExpr(left) >>
-                      emitInstr(Merge)
+                    val e2 = e.copy(subResolve = e.subResolve compose subResolve2)
+                    
+                    val (e3, ()) = (reduce(actualStates) >> emitExpr(left))(e2)
+                    (e3.copy(subResolve = e.subResolve), ())
                   }
-                  
-                  reduce(actualStates) >> body
                 }
               }
 
