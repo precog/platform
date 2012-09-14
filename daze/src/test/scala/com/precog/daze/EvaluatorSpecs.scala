@@ -2371,7 +2371,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(55, 13, 119, 25)
       }
-    }.pendingUntilFixed
+    }
     
     "evaluate a histogram function" in {
       val Expected = Map("daniel" -> 9, "kris" -> 8, "derek" -> 7, "nick" -> 17,
