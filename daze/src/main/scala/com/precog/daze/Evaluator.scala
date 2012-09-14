@@ -913,8 +913,11 @@ trait Evaluator[M[+_]] extends DAG
     parts reduce { (left, right) => trans.InnerObjectConcat(left, right) }
   }
   
-  private def buildChains(graph: DepGraph): Set[List[DepGraph]] =
-    enumerateParents(graph) flatMap buildChains map { graph :: _ }
+  private def buildChains(graph: DepGraph): Set[List[DepGraph]] = {
+    val parents = enumerateParents(graph)
+    val recursive = parents flatMap buildChains map { graph :: _ }
+    if (!parents.isEmpty && recursive.isEmpty) Set(graph :: Nil) else recursive
+  }
   
   private def enumerateParents(graph: DepGraph): Set[DepGraph] = graph match {
     case SplitParam(_, _) => Set()
