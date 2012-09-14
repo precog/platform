@@ -193,7 +193,10 @@ trait Evaluator[M[+_]] extends DAG
           pendingTable <- loop(solution, splits)
           _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume - commonGraph) }
 
-        } yield GroupKeySpecSource(JPathField(id.toString), pendingTable.trans)
+          liftedTrans = TransSpec.deepMap(pendingTable.trans) {
+            case Leaf(_) => DerefObjectStatic(Leaf(Source), paths.Value)
+          }
+        } yield GroupKeySpecSource(JPathField(id.toString), liftedTrans)
       }
       
       case dag.Extra(graph) => {
@@ -205,7 +208,11 @@ trait Evaluator[M[+_]] extends DAG
           state <- get[EvaluatorState]
           extraId = state.extraCount
           _ <- modify[EvaluatorState] { _.copy(extraCount = extraId + 1) }
-        } yield GroupKeySpecSource(JPathField("extra" + extraId), trans.Filter(pendingTable.trans, pendingTable.trans))
+
+          liftedTrans = TransSpec.deepMap(pendingTable.trans) {
+            case Leaf(_) => DerefObjectStatic(Leaf(Source), paths.Value)
+          }
+        } yield GroupKeySpecSource(JPathField("extra" + extraId), trans.Filter(liftedTrans, liftedTrans))
       }
       
       case dag.Group(_, _, _) => sys.error("assertion error")
@@ -877,7 +884,7 @@ trait Evaluator[M[+_]] extends DAG
       val sharedPrefixReversed = forest flatMap buildChains map { _.reverse } reduceOption { (left, right) =>
         left zip right takeWhile { case (a, b) => a == b } map { _._1 }
       }
-      
+
       sharedPrefixReversed flatMap { _.lastOption }
     }
   }
