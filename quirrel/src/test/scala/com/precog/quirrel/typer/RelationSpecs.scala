@@ -21,7 +21,7 @@ package com.precog
 package quirrel
 package typer
 
-import bytecode.RandomLibrary
+import bytecode.StaticLibrary
 import com.codecommit.gll.LineStream
 import org.specs2.mutable.Specification
 
@@ -31,8 +31,8 @@ import scala.io.Source
 object RelationSpecs extends Specification
     with StubPhases
     with Compiler
-    with ProvenanceChecker 
-    with RandomLibrary {
+    with ProvenanceChecker
+    with StaticLibrary {
 
   import ast._
   

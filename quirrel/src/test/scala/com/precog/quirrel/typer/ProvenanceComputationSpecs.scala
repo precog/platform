@@ -21,7 +21,7 @@ package com.precog
 package quirrel
 package typer
 
-import bytecode.RandomLibrary
+import bytecode.StaticLibrary
 import com.codecommit.gll.LineStream
 import org.specs2.mutable.Specification
 
@@ -32,7 +32,7 @@ object ProvenanceComputationSpecs extends Specification
     with StubPhases
     with Compiler
     with ProvenanceChecker 
-    with RandomLibrary {
+    with StaticLibrary {
 
   import ast._
   
@@ -69,6 +69,36 @@ object ProvenanceComputationSpecs extends Specification
           foo(clicks.a)""".format(f.fqn))
 
         tree.provenance mustEqual ValueProvenance
+
+        tree.errors must beEmpty
+      }
+    } 
+    "compute result provenance correctly in a morph1" in {
+      forall(libMorphism1) { f =>
+        val tree = parse("""
+          clicks := //clicks
+          foo(a) := %s(a) 
+          foo(clicks.a)""".format(f.fqn))
+
+        if (f.retainIds)
+          tree.provenance mustEqual StaticProvenance("/clicks")
+        else
+          tree.provenance mustEqual ValueProvenance
+
+        tree.errors must beEmpty
+      }
+    } 
+    "compute result provenance correctly in a morph2" in {
+      forall(libMorphism2) { f =>
+        val tree = parse("""
+          clicks := //clicks
+          foo(a, b) := %s(a, b) 
+          foo(clicks.a, clicks.b)""".format(f.fqn))
+
+        if (f.retainIds)
+          tree.provenance mustEqual StaticProvenance("/clicks")
+        else
+          tree.provenance mustEqual ValueProvenance
 
         tree.errors must beEmpty
       }
@@ -407,6 +437,13 @@ object ProvenanceComputationSpecs extends Specification
       }
     }
 
+    "identify reduction dispatch according to its child" in {
+      forall(libReduction) { f =>
+        val tree = compile("%s(//foo)".format(f.fqn))
+        tree.provenance mustEqual ValueProvenance
+        tree.errors must beEmpty
+      }
+    }
     "identify op1 dispatch according to its child" in {
       forall(lib1) { f =>
         val tree = compile("%s(//foo)".format(f.fqn))
@@ -446,6 +483,61 @@ object ProvenanceComputationSpecs extends Specification
         tree.errors must beEmpty
       }
     }
+    
+    "identify morph1 dispatch given incorrect number of parameters" in {
+      forall(libMorphism1) { f =>
+        val tree = compile("%s(//foo, //bar)".format(f.fqn))
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(1, 2))
+      }
+    }
+    "identify morph1 dispatch according to its child" in {
+      forall(libMorphism1) { f =>
+        val tree = compile("%s(//foo)".format(f.fqn))
+        if (f.retainIds)
+          tree.provenance mustEqual StaticProvenance("/foo")
+        else 
+          tree.provenance mustEqual ValueProvenance
+        tree.errors must beEmpty
+      }
+    }
+    "identify morph2 dispatch according to its children given unrelated sets" in {
+      forall(libMorphism2) { f => 
+        val tree = compile("%s(//foo, //bar)".format(f.fqn))
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+    }
+
+    "identify morph2 dispatch according to its children given a load and a value" in {
+      forall(libMorphism2) { f =>
+        val tree = compile("""%s(//foo, "bar")""".format(f.fqn))
+        if (f.retainIds)
+          tree.provenance mustEqual StaticProvenance("/foo")
+        else
+          tree.provenance mustEqual ValueProvenance
+        tree.errors must beEmpty
+      }
+    }
+
+    "identify morph2 dispatch according to its children given set related by ~" in {
+      forall(libMorphism2) { f =>
+        val tree = compile("""//foo ~ //bar %s(//foo, //bar)""".format(f.fqn))
+        if (f.retainIds)
+          tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
+        else
+          tree.provenance mustEqual ValueProvenance
+        tree.errors must beEmpty
+      }
+    }
+    "identify morph2 dispatch according to its children given sets not related" in {
+      forall(libMorphism2) { f =>
+        val tree = compile("""foo(a, b) := %s(a, b) foo(//bar, //baz)""".format(f.fqn))
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+    }
+
     
     "identify load dispatch with static params according to its path" in {
       {
@@ -936,6 +1028,51 @@ object ProvenanceComputationSpecs extends Specification
             val tree = compile("%s(//bar.foo, //bar.ack) union //bar".format(f.fqn))
             tree.provenance must beLike { case DynamicProvenance(_) => ok }
             tree.errors must beEmpty
+          }
+        }        
+        {
+          forall(libReduction) { f =>
+            val tree = compile("%s(//bar.foo) union [1, 9]".format(f.fqn))
+            tree.provenance mustEqual ValueProvenance 
+            tree.errors must beEmpty
+          }
+        }          
+        {
+          forall(libReduction) { f =>
+            val tree = compile("%s(//bar.foo) union //foo".format(f.fqn))
+            tree.provenance mustEqual NullProvenance
+            tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+          }
+        }        
+        {
+          forall(libMorphism1) { f =>
+            val tree = compile("%s(//bar.foo) union //baz".format(f.fqn))
+            if (f.retainIds) {
+              tree.provenance must beLike { case DynamicProvenance(_) => ok }
+              tree.errors must beEmpty
+            } else {
+              tree.provenance mustEqual NullProvenance
+              tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+            }
+          }
+        }        
+        {
+          forall(libMorphism2) { f =>
+            val tree = compile("%s(//bar.foo, //bar.ack) union //baz".format(f.fqn))
+            if (f.retainIds) {
+              tree.provenance must beLike { case DynamicProvenance(_) => ok }
+              tree.errors must beEmpty
+            } else {
+              tree.provenance mustEqual NullProvenance
+              tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+            }
+          }
+        }
+        {
+          forall(libMorphism2) { f =>
+            val tree = compile("%s(//bar, //foo) union //ack".format(f.fqn))
+              tree.provenance mustEqual NullProvenance
+              tree.errors mustEqual Set(OperationOnUnrelatedSets)
           }
         }
         {

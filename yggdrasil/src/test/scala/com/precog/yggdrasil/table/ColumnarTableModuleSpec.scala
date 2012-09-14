@@ -137,6 +137,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "in cogroup" >> {
       "perform a simple cogroup" in testSimpleCogroup
       "perform another simple cogroup" in testAnotherSimpleCogroup
+      "cogroup for unions" in testUnionCogroup
       "perform yet another simple cogroup" in testAnotherSimpleCogroupSwitched
       "cogroup across slice boundaries" in testCogroupSliceBoundaries
       "error on unsorted inputs" in testUnsortedInputs
@@ -177,7 +178,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "test inner object concat with a boolean and an empty object" in testObjectConcatTrivial
       "concatenate dissimilar objects" in checkObjectConcat
       "concatenate dissimilar arrays" in checkArrayConcat
-      "delete elements according to a JType" in checkObjectDelete
+      "delete elements according to a JType" in checkObjectDelete //.set(minTestsOk -> 5000) TODO: saw an error here once
       "perform a trivial type-based filter" in checkTypedTrivial
       "perform a trivial heterogeneous type-based filter" in checkTypedHeterogeneous
       "perform a trivial object type-based filter" in checkTypedObject

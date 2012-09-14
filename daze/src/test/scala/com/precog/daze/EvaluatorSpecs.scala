@@ -1361,7 +1361,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
         result3 must haveSize(10)
       }
-    }.pendingUntilFixed
+    }
 
     "compute the iunion of two homogeneous sets (with relative path)" in {
       val line = Line(0, "")
@@ -1379,7 +1379,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(42, 12, 77, 1, 13, 14, -1, 0)
       }
-    }.pendingUntilFixed
+    }
     
     "compute the iunion of two datasets, one with objects" in {
       val line = Line(0, "")
@@ -1391,7 +1391,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(105)
       }
-    }.pendingUntilFixed
+    }
     
     "compute the iintersect of two nonintersecting sets of numbers" in {
       val line = Line(0, "")

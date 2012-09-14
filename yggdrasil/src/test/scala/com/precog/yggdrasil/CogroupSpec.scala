@@ -160,6 +160,29 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     jsonResult.copoint must containAllOf(expected).only
   }
 
+  def testUnionCogroup = {
+    def recl(i: Int, j: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JNum(j)))))
+    def recr(i: Int, j: Int) = toRecord(VectorCase(i), JObject(List(JField("right", JNum(j)))))
+    def recBoth(i: Int, j: Int, k: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JNum(j)), JField("right", JNum(k)))))
+
+    val ltable  = fromSample(SampleData(Stream(recl(0, 1), recl(1, 12), recl(3, 13), recl(4, 42), recl(5, 77))))
+    val rtable  = fromSample(SampleData(Stream(recr(6, -1), recr(7, 0), recr(8, 14), recr(9, 42), recr(10, 77))))
+
+    val expected = Vector(
+      recl(0, 1), recl(1, 12), recl(3, 13), recl(4, 42), recl(5, 77),
+      recr(6, -1), recr(7, 0), recr(8, 14), recr(9, 42), recr(10, 77)
+    )
+
+    val result: Table = ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
+      Leaf(Source),
+      Leaf(Source),
+      InnerObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(InnerObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
+    )
+
+    val jsonResult = toJson(result)
+    jsonResult.copoint must containAllOf(expected).only
+  }
+
   def testAnotherSimpleCogroup = {
     def recl(i: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JString(i.toString)))))
     def recr(i: Int) = toRecord(VectorCase(i), JObject(List(JField("right", JString(i.toString)))))

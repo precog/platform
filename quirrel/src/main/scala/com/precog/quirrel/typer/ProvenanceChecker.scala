@@ -344,13 +344,47 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             }
             
             case Morphism2Binding(morph2) => {
-              val pair = handleBinary(expr, actuals(0), actuals(1), relations, constraints)
-              
-              if (!morph2.retainIds) {
-                expr.provenance = ValueProvenance
+              // oddly, handleBinary doesn't seem to work here (premature fixation of expr.provenance)
+              val left = actuals(0)
+              val right = actuals(1)
+
+              val (leftErrors, leftConstr) = loop(left, relations, constraints)
+              val (rightErrors, rightConstr) = loop(right, relations, constraints)
+                
+              val unified = unifyProvenance(relations)(left.provenance, right.provenance)
+
+              val (errors, constr) = if (morph2.retainIds) {
+                if (left.provenance.isParametric || right.provenance.isParametric) {
+                  expr.provenance = UnifiedProvenance(left.provenance, right.provenance)
+
+                  if (unified.isDefined)
+                    (Set(), Set())
+                  else
+                    (Set(), Set(Related(left.provenance, right.provenance)))
+                } else {
+                  expr.provenance = unified getOrElse NullProvenance
+                  if (unified.isDefined)
+                    (Set(), Set())
+                  else
+                    (Set(Error(expr, OperationOnUnrelatedSets)), Set())
+                }
+              } else {
+                if (left.provenance.isParametric || right.provenance.isParametric) {
+                  expr.provenance = ValueProvenance
+                  
+                  (Set(), Set(Related(left.provenance, right.provenance)))
+                } else {
+                  if (unified.isDefined) {
+                    expr.provenance = ValueProvenance
+                    (Set(), Set())
+                  } else {
+                    expr.provenance = NullProvenance
+                    (Set(Error(expr, OperationOnUnrelatedSets)), Set())
+                  }
+                }
               }
               
-              pair
+              (leftErrors ++ rightErrors ++ errors, leftConstr ++ rightConstr ++ constr)
             }
             
             case Op1Binding(_) => {
