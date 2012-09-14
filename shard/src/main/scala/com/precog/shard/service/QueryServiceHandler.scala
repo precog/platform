@@ -40,19 +40,20 @@ import com.precog.common.security._
 
 
 class QueryServiceHandler(queryExecutor: QueryExecutor[Future])(implicit dispatcher: MessageDispatcher, m: Monad[Future])
-extends CustomHttpService[Future[JValue], (Token, Path, String) => Future[HttpResponse[QueryResult]]] with Logging {
+extends CustomHttpService[Future[JValue], (Token, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
+with Logging {
   import scalaz.syntax.monad._
 
   val Command = """:(\w+)\s+(.+)""".r
 
   val service = (request: HttpRequest[Future[JValue]]) => {
-    success((t: Token, p: Path, q: String) => q.trim match {
+    success((t: Token, p: Path, q: String, opts: QueryOptions) => q.trim match {
       case Command("ls", arg) => list(t.tid, Path(arg.trim))
       case Command("list", arg) => list(t.tid, Path(arg.trim))
       case Command("ds", arg) => describe(t.tid, Path(arg.trim))
       case Command("describe", arg) => describe(t.tid, Path(arg.trim))
       case qt => Future {
-        queryExecutor.execute(t.tid, q, p) match {
+        queryExecutor.execute(t.tid, q, p, opts) match {
           case Success(result)               => HttpResponse[QueryResult](OK, content = Some(Right(result)))
           case Failure(UserError(errorData)) => HttpResponse[QueryResult](UnprocessableEntity, content = Some(Left(errorData)))
           case Failure(AccessDenied(reason)) => HttpResponse[QueryResult](HttpStatus(Unauthorized, reason))

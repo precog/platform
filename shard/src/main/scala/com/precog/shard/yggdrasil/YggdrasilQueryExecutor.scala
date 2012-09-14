@@ -21,7 +21,7 @@ package com.precog
 package shard
 package yggdrasil 
 
-import blueeyes.json.JPath
+import blueeyes.json._
 import blueeyes.json.JsonAST._
 
 import daze._
@@ -183,16 +183,44 @@ trait YggdrasilQueryExecutor
 
   def jsonChunks(table: Future[Table]): StreamT[Future, List[JValue]]
 
-  def execute(userUID: String, query: String, prefix: Path): Validation[EvaluationError, StreamT[Future, List[JValue]]] = {
+  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, List[JValue]]] = {
     logger.debug("Executing for %s: %s, prefix: %s".format(userUID, query,prefix))
 
     import EvaluationError._
+    import trans._
     val solution: Validation[Throwable, Validation[EvaluationError, StreamT[Future, List[JValue]]]] = Validation.fromTryCatch {
       asBytecode(query) flatMap { bytecode =>
         ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
           /*(systemError _) <-: */
           // TODO: How can jsonChunks return a Validation... or report evaluation error to user....
-          Validation.success(jsonChunks(withContext(eval(userUID, dag, _, prefix, true))))
+
+          Validation.success(jsonChunks(withContext { ctx =>
+            val table = for {
+              tbl <- eval(userUID, dag, ctx, prefix, true)
+            } yield {
+              val compactTbl = tbl.compact(constants.SourceValue.Single)
+
+              opts.page map { case (offset, limit) =>
+                compactTbl.takeRange(offset, limit)
+              } getOrElse compactTbl
+            }
+
+            if (!opts.sortOn.isEmpty) {
+
+              val sortKey = ArrayConcat(opts.sortOn map { jpath =>
+                WrapArray(jpath.nodes.foldLeft(Leaf(Source): TransSpec1) {
+                  case (inner, f @ JPathField(_)) =>
+                    DerefObjectStatic(inner, f)
+                  case (inner, i @ JPathIndex(_)) =>
+                    DerefArrayStatic(inner, i)
+                })
+              }: _*)
+
+              table flatMap (_.sort(sortKey, opts.sortOrder))
+            } else {
+              table
+            }
+          }))
         }
       }
     }
