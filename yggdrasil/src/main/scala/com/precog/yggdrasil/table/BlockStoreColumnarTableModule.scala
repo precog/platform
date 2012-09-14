@@ -616,16 +616,18 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         case (keyTransform, i) :: tail => 
           val (nextKeyTransform, kslice) = keyTransform.advance(slice)
           val (keyColumnRefs, keyColumns) = kslice.columns.toList.sortBy(_._1).unzip
-          assert (keyColumnRefs.size >= 1)
+          if (keyColumnRefs.nonEmpty) {
+            val keyRowFormat = RowFormat.forSortingKey(keyColumnRefs)
+            val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
+            val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
 
-          val keyRowFormat = RowFormat.forSortingKey(keyColumnRefs)
-          val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
-          val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
-
-          writeRawSlices(db, kslice, keyColumnRefs, keyColumnEncoder, keyComparator,
-                         vslice, vColumnRefs,   dataColumnEncoder, 
-                         i.toString, jdbmState) flatMap { newJdbmState =>
-            storeTransformed(newJdbmState, tail, nextKeyTransform +: updatedTransforms)
+            writeRawSlices(db, kslice, keyColumnRefs, keyColumnEncoder, keyComparator,
+                           vslice, vColumnRefs,   dataColumnEncoder, 
+                           i.toString, jdbmState) flatMap { newJdbmState =>
+              storeTransformed(newJdbmState, tail, nextKeyTransform +: updatedTransforms)
+            }
+          } else {
+            M.point((jdbmState, nextKeyTransform +: updatedTransforms))
           }
 
         case Nil => 

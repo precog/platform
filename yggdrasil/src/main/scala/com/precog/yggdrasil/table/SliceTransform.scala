@@ -433,9 +433,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
           val sourceTransform = composeSliceTransform2(source)
           val keyTransform = composeSliceTransform2(definedFor)
 
-          sourceTransform.zip(keyTransform) { (s1, s2) =>
-            s1.compact(s2, definedness)
-          }
+          sourceTransform.zip(keyTransform) { (s1, s2) => s1.filterDefined(s2, definedness) }
       }
       
       result.withSource(spec)

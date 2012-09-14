@@ -71,8 +71,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       
         setIter must not(beEmpty)
         //println("results: " + setIter.mkString("[", "," , "]"))
-        forall(setIter) { i =>
-          (i \ "value") mustEqual histoKey
+        forall(setIter) { record =>
+          (record \ "value") mustEqual histoKey
         }
 
         setIter.size must_== set.count(_ == histoKeyInt)
@@ -89,212 +89,214 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     
     forall(resultIter) { i => expectedSet must contain(i) }
   }
-
-  "simple single-key grouping" should {
-    "compute a histogram by value" in check (testHistogramByValue _)
-    //"compute a histogram by value" in testHistogramByValue(Stream(2147483647, 2147483647))
-    //"foo" in testHistogramByValue(Stream(24, -10, 0, -1, -1, 0, 24, 0, 0, 24, -1, 0, 0, 24))
-  }
-}
-    /*
-    
-    "compute a histogram by value (mapping target)" in check { set: Stream[Int] =>
-      val module = emptyTestModule
-      import module._
-      import trans._
-      import constants._
-
-      val data = set map { JNum(_) }
-      
-      val doubleF1 = new CF1P({
-        case c: NumColumn => new Map1Column(c) with NumColumn {
-          def apply(row: Int) = c(row) * 2
-        }
-      })
-      
-      val spec = GroupingSource(
-        fromJson(data), 
-        SourceKey.Single, Some(Map1(TransSpec1.Id, doubleF1)), 2, 
-        GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
-        
-      val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
-        for {
-          keyIter <- key.toJson
-          group2  <- map(2)
-          setIter <- group2.toJson
-        } yield {
-          keyIter must haveSize(1)
-          keyIter.head must beLike {
-            case JNum(i) => set must contain(i)
-            case _ => sys.error("Expected a JNum")
-          }
-          
-          setIter must not(beEmpty)
-          forall(setIter) {
-            case JNum(v1) => {
-              val JNum(v2) = keyIter.head
-              v1 mustEqual (v2 * 2)
-            }
-            case _ => sys.error("Expected a JNum")
-          }
-          
-          fromJson(JNum(setIter.size) #:: Stream.empty)
-        }
-      }
-      
-      val resultIter = result.flatMap(_.toJson).copoint
-      
-      resultIter must haveSize(set.distinct.size)
-      
-      val expectedSet = (set.toSeq groupBy identity values) map { _.length } map { JNum(_) }
-      
-      forall(resultIter) { i => expectedSet must contain(i) }
-    }.pendingUntilFixed
-    
-    "compute a histogram by even/odd" in check { set: Stream[Int] =>
-      val module = emptyTestModule
-      import module._
-      import trans._
-      import constants._
-
-      val data = set map { JNum(_) }
-      
-      val mod2 = new CF1P({
-        case c: NumColumn => new Map1Column(c) with NumColumn {
-          def apply(row: Int) = c(row) % 2
-        }
-      })
-      
-      val spec = GroupingSource(
-        fromJson(data),
-        SourceKey.Single, Some(TransSpec1.Id), 2, 
-        GroupKeySpecSource(JPathField("1"), Map1(Leaf(Source), mod2)))
-        
-      val result = Table.merge(spec) { (key: Table, map: Int => M[Table]) =>
-        for {
-          keyIter <- key.toJson
-          group2  <- map(2)
-          setIter <- group2.toJson
-        } yield {
-          keyIter must haveSize(1)
-          keyIter.head must beLike {
-            case JNum(i) => set must contain(i)
-            case _ => sys.error("Expected a JNum")
-          }
-          
-          
-          setIter must not(beEmpty)
-          forall(setIter) {
-            case JNum(v1) => {
-              val JNum(v2) = keyIter.head
-              (v1 % 2) mustEqual v2
-            }
-            case _ => sys.error("Expected a JNum")
-          }
-          
-          fromJson(JNum(setIter.size) #:: Stream.empty)
-        }
-      }
-      
-      val resultIter = result.flatMap(_.toJson).copoint
-      
-      resultIter must haveSize((set map { _ % 2 } distinct) size)
-      
-      val expectedSet = (set.toSeq groupBy { _ % 2 } values) map { _.length } map { JNum(_) }
-      
-      forall(resultIter) { i => expectedSet must contain(i) }
-    }.pendingUntilFixed
-  }
   
-  "simple multi-key grouping" should {
+  def testHistogramByValueMapped(set: Stream[Int]) = {
     val module = emptyTestModule
     import module._
     import trans._
     import constants._
 
-    val data = Stream(
-      JObject(
-        JField("a", JNum(12)) ::
-        JField("b", JNum(7)) :: Nil),
-      JObject(
-        JField("a", JNum(42)) :: Nil),
-      JObject(
-        JField("a", JNum(11)) ::
-        JField("c", JBool(true)) :: Nil),
-      JObject(
-        JField("a", JNum(12)) :: Nil),
-      JObject(
-        JField("b", JNum(15)) :: Nil),
-      JObject(
-        JField("b", JNum(-1)) ::
-        JField("c", JBool(false)) :: Nil),
-      JObject(
-        JField("b", JNum(7)) :: Nil),
-      JObject(
-        JField("a", JNum(-7)) ::
-        JField("b", JNum(3)) ::
-        JField("d", JString("testing")) :: Nil))
+    val data = set.zipWithIndex map { case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", JNum(v)) :: Nil) }
     
-    "compute a histogram on two keys" >> {
-      "and" >> {
-        val module = emptyTestModule
-        import module._
-        import trans._
-        import constants._
+    val doubleF1 = new CF1P({
+      case c: LongColumn => new Map1Column(c) with LongColumn {
+        def apply(row: Int) = c(row) * 2
+      }
+    })
 
-        val table = fromJson(data)
+    val groupId = module.newGroupId
+
+    val valueTrans = InnerObjectConcat(
+      WrapObject(SourceKey.Single, TableModule.paths.Key.name),
+      WrapObject(Map1(SourceValue.Single, doubleF1), TableModule.paths.Value.name))
+    
+    val spec = GroupingSource(
+      fromJson(data), 
+      SourceKey.Single, Some(valueTrans), groupId, 
+      GroupKeySpecSource(JPathField("tic_a"), SourceValue.Single))
+      
+    val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
+      for {
+        keyIter <- key.toJson
+        group2  <- map(groupId)
+        setIter <- group2.toJson
+      } yield {
+        keyIter must haveSize(1)
+        keyIter.head must beLike {
+          case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
+        }
         
-        val spec = GroupingSource(
-          table,
-          SourceKey.Single, Some(SourceValue.Single), 3,
-          GroupKeySpecAnd(
-            GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+        val histoKey = keyIter.head \ "tic_a"
+        val JNum(histoKey0) = histoKey
+        val histoKeyInt = histoKey0.toInt
+      
+        setIter must not(beEmpty)
+        forall(setIter) { record =>
+          val JNum(v2) = (record \ "value") 
+          v2 must_== (histoKey0 * 2)
+        }
+        
+        fromJson(JNum(setIter.size) #:: Stream.empty)
+      }
+    }
+    
+    val resultIter = result.flatMap(_.toJson).copoint
+    
+    resultIter must haveSize(set.distinct.size)
+    
+    val expectedSet = (set.toSeq groupBy identity values) map { _.length } map { JNum(_) }
+    
+    forall(resultIter) { i => expectedSet must contain(i) }
+  }
+
+  def testHistogramEvenOdd(set: Stream[Int]) = {
+    val module = emptyTestModule
+    import module._
+    import trans._
+    import constants._
+
+    val data = set.zipWithIndex map { case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", JNum(v)) :: Nil) }
+    
+    val mod2 = new CF1P({
+      case c: LongColumn => new Map1Column(c) with LongColumn {
+        def apply(row: Int) = c(row) % 2
+      }
+    })
+
+    val groupId = module.newGroupId
+    
+    val spec = GroupingSource(
+      fromJson(data),
+      SourceKey.Single, Some(TransSpec1.Id), groupId, 
+      GroupKeySpecSource(JPathField("tic_a"), Map1(SourceValue.Single, mod2)))
+      
+    val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
+      for {
+        keyIter <- key.toJson
+        group2  <- map(groupId)
+        setIter <- group2.toJson
+      } yield {
+        keyIter must haveSize(1)
+        keyIter.head must beLike {
+          case JObject(JField("tic_a", JNum(i)) :: Nil) => set.map(_ % 2) must contain(i)
+        }
+
+        val histoKey = keyIter.head \ "tic_a"
+        val JNum(histoKey0) = histoKey
+        val histoKeyInt = histoKey0.toInt
+        
+        setIter must not(beEmpty)
+        forall(setIter) { record =>
+          val JNum(v0) = (record \ "value") 
+          histoKeyInt must_== (v0.toInt % 2)
+        }
+        
+        fromJson(JNum(setIter.size) #:: Stream.empty)
+      }
+    }
+    
+    val resultIter = result.flatMap(_.toJson).copoint
+    
+    resultIter must haveSize((set map { _ % 2 } distinct) size)
+    
+    val expectedSet = (set.toSeq groupBy { _ % 2 } values) map { _.length } map { JNum(_) }
+    
+    forall(resultIter) { i => expectedSet must contain(i) }
+  }
+
+  def simpleMultiKeyData = {
+    val JArray(elements) = JsonParser.parse("""[
+      { "key": [0], "value": {"a": 12, "b": 7} },
+      { "key": [1], "value": {"a": 42} },
+      { "key": [2], "value": {"a": 11, "c": true} },
+      { "key": [3], "value": {"a": 12} },
+      { "key": [4], "value": {"b": 15} },
+      { "key": [5], "value": {"b": -1, "c": false} },
+      { "key": [6], "value": {"b": 7} },
+      { "key": [7], "value": {"a": -7, "b": 3, "d": "testing"} },
+    ]""")
+
+    elements.toStream
+  }
+
+  def testHistogramTwoKeysAnd = {
+    val module = emptyTestModule
+    import module._
+    import trans._
+    import constants._
+
+    val table = fromJson(simpleMultiKeyData)
+
+    val groupId = newGroupId
+    
+    val spec = GroupingSource(
+      table,
+      SourceKey.Single, Some(TransSpec1.Id), groupId,
+      GroupKeySpecAnd(
+        GroupKeySpecSource(JPathField("tic_a"), DerefObjectStatic(SourceValue.Single, JPathField("a"))),
+        GroupKeySpecSource(JPathField("tic_b"), DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        
+    val result = Table.merge(spec) { (key, map) =>
+      for {
+        keyJson <- key.toJson
+        group3  <- map(groupId)
+        gs1Json <- group3.toJson
+      } yield {
+        keyJson must haveSize(1)
+        keyJson.head must beLike {
+          case obj: JObject => {
+            val a = obj \ "tic_a"
+            val b = obj \ "tic_b"
             
-        val result = Table.merge(spec) { (key, map) =>
-          for {
-            keyJson <- key.toJson
-            group3  <- map(3)
-            gs1Json <- group3.toJson
-          } yield {
-            keyJson must haveSize(1)
-            
-            keyJson.head must beLike {
-              case obj: JObject => {
-                val a = obj \ "1"
-                val b = obj \ "2"
-                
-                a must beLike {
-                  case JNum(i) if i == 12 => {
-                    b must beLike {
-                      case JNum(i) if i == 7 => ok
-                    }
-                  }
-                  
-                  case JNum(i) if i == -7 => {
-                    b must beLike {
-                      case JNum(i) if i == 3 => ok
-                    }
-                  }
+            a must beLike {
+              case JNum(i) if i == 12 => {
+                b must beLike {
+                  case JNum(i) if i == 7 => ok
+                }
+              }
+              
+              case JNum(i) if i == -7 => {
+                b must beLike {
+                  case JNum(i) if i == 3 => ok
                 }
               }
             }
-            
-            gs1Json must haveSize(1)
-            fromJson(Stream(JNum(gs1Json.size)))
           }
         }
         
-        val resultJson = result.flatMap(_.toJson).copoint
-        
-        resultJson must haveSize(2)
-        
-        forall(resultJson) { v =>
-          v must beLike {
-            case JNum(i) if i == 1 => ok
-          }
-        }
-      }.pendingUntilFixed
+        gs1Json must haveSize(1)
+        fromJson(Stream(JNum(gs1Json.size)))
+      }
+    }
+    
+    val resultJson = result.flatMap(_.toJson).copoint
+    
+    resultJson must haveSize(2)
+    
+    forall(resultJson) { v =>
+      v must beLike {
+        case JNum(i) if i == 1 => ok
+      }
+    }
+  }
+
+  "simple single-key grouping" should {
+    "scalacheck a histogram by value" in check (testHistogramByValue _)
+    "histogram for two of the same value" in testHistogramByValue(Stream(2147483647, 2147483647))
+    "histogram when observing spans of equal values" in testHistogramByValue(Stream(24, -10, 0, -1, -1, 0, 24, 0, 0, 24, -1, 0, 0, 24))
+    "compute a histogram by value (mapping target)" in check (testHistogramByValueMapped _)
+    "compute a histogram by value (mapping target) trivial example" in testHistogramByValueMapped(Stream(0))
+    "compute a histogram by even/odd" in check (testHistogramEvenOdd _)
+    "compute a histogram by even/odd trivial example" in testHistogramEvenOdd(Stream(0))
+  }
+
+  "simple multi-key grouping" should {
+    "compute a histogram on two keys" >> {
+      "and" >> testHistogramTwoKeysAnd
+    }
+  }
+}
+/*
       
       "or" >> {
         val module = emptyTestModule

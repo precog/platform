@@ -28,7 +28,7 @@ import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 
 import scala.annotation.tailrec
-import scala.collection.{breakOut, BitSet}
+import scala.collection.{breakOut, BitSet, mutable}
 import scalaz._
 import scalaz.Ordering._
 import scalaz.Validation._
@@ -340,6 +340,26 @@ trait Slice { source =>
     }
   }
 
+  def filterDefined(filter: Slice, definedness: Definedness) = {
+    new Slice {
+      private val colValues = filter.columns.values
+      private val defined = definedness match {
+        case AnyDefined =>
+          (0 until source.size).foldLeft(new mutable.BitSet()) {
+            case (acc, i) => if (colValues.exists(_.isDefinedAt(i))) acc + i else acc
+          }
+
+        case AllDefined =>
+          (0 until source.size).foldLeft(new mutable.BitSet()) {
+            case (acc, i) => if (colValues.nonEmpty && colValues.forall(_.isDefinedAt(i))) acc + i else acc
+          }
+      }
+
+      val size = source.size
+      val columns: Map[ColumnRef, Column] = source.columns mapValues { col => cf.util.filter(0, source.size, defined)(col).get }
+    }
+  }
+
   def compact(filter: Slice, definedness: Definedness): Slice = {
     new Slice {
       lazy val retained = definedness match {
@@ -514,6 +534,8 @@ trait Slice { source =>
       case l   => Some(l.mkString("[", ", ", "]")) 
     }
   }
+
+  def toJsonString: String = (0 until size).map(toJson).mkString("\n")
 
   override def toString = (0 until size).map(toString).mkString("\n")
 }

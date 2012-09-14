@@ -38,6 +38,7 @@ import java.io.File
 import java.util.SortedMap
 
 import scala.collection.BitSet
+import scala.collection.mutable
 import scala.annotation.tailrec
 
 import scalaz._
@@ -955,14 +956,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
-    /**
-     * Perform the sorts required for the specified node (needed to align this node with each
-     * node to which it is connected) and return as a map from the sort ordering for the connecting
-     * edge to the sorted table with the appropriate dereference transspecs.
-     */
-    def materializeSortOrders(node: MergeNode, requiredSorts: Set[Seq[TicVar]]): M[Map[Seq[TicVar], NodeSubset]] = {
-      import TransSpec.deepMap
-
+    def filteredNodeSubset(node: MergeNode): NodeSubset = {
       val protoGroupKeyTrans = GroupKeyTrans(Universe.sources(node.binding.groupKeySpec))
 
       // Since a transspec for a group key may perform a bunch of work (computing values, etc)
@@ -986,8 +980,48 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
            GroupKeyTrans(TransSpec1.DerefArray1, protoGroupKeyTrans.keyOrder))
       }
 
-      val requireFullGroupKeyTrans = FilterDefined(payloadTrans, groupKeyTrans.spec, AllDefined)
-      val filteredSource: Table = node.binding.source.transform(requireFullGroupKeyTrans)
+      val requireFullGroupKeyTrans = Scan(
+        payloadTrans,
+        new CScanner {
+          type A = Unit
+
+          val init = ()
+          private val keyIndices = (0 until groupKeyTrans.keyOrder.size).toSet
+
+          def scan(a: Unit, cols: Map[ColumnRef, Column], range: Range) = {
+            val (ticVarIndices, groupKeyColumns) = 
+              cols.collect { case (ref @ ColumnRef(JPath(JPathIndex(1), JPathField(ticVarIndex), _ @ _*), _), col) => (ticVarIndex, col) } unzip
+
+            if (ticVarIndices.map(_.toInt).toSet == keyIndices) {
+              // all group key columns are present, so we can use filterDefined
+              val defined = range.foldLeft(new mutable.BitSet()) {
+                case (acc, i) => if (groupKeyColumns.nonEmpty && groupKeyColumns.forall(_.isDefinedAt(i))) acc + i else acc
+              }
+
+              ((), cols.mapValues { col => cf.util.filter(range.start, range.end, defined)(col).get })
+            } else {
+              ((), Map.empty[ColumnRef, Column])
+            }
+          }
+        }
+      )
+
+      NodeSubset(node,
+                 node.binding.source.transform(requireFullGroupKeyTrans),
+                 idTrans,
+                 targetTrans,
+                 groupKeyTrans,
+                 groupKeyTrans.keyOrder)
+    }
+
+
+    /**
+     * Perform the sorts required for the specified node (needed to align this node with each
+     * node to which it is connected) and return as a map from the sort ordering for the connecting
+     * edge to the sorted table with the appropriate dereference transspecs.
+     */
+    def materializeSortOrders(node: MergeNode, requiredSorts: Set[Seq[TicVar]]): M[Map[Seq[TicVar], NodeSubset]] = {
+      val NodeSubset(node0, filteredSource, idTrans, targetTrans, groupKeyTrans, _, _, _) = filteredNodeSubset(node)
 
       val nodeSubsetsM: M[Set[(Seq[TicVar], NodeSubset)]] = requiredSorts.map { ticvars => 
         val sortTransSpec = groupKeyTrans.alignTo(ticvars).prefixTrans(ticvars.length)
@@ -995,7 +1029,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         val sorted: M[Table] = filteredSource.sort(sortTransSpec)
         sorted.map { sortedTable => 
           ticvars ->
-          NodeSubset(node,
+          NodeSubset(node0,
                      sortedTable,
                      idTrans,
                      targetTrans,
@@ -1013,17 +1047,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       if (spanningGraph.edges.isEmpty) {
         assert(spanningGraph.nodes.size == 1)
         val node = spanningGraph.nodes.head
-        val groupKeyTrans = GroupKeyTrans(Universe.sources(node.binding.groupKeySpec))
-        Map(
-          node.binding.groupId -> Set(
-            NodeSubset(node,
-                       node.binding.source,
-                       node.binding.idTrans,
-                       node.binding.targetTrans,
-                       groupKeyTrans,
-                       groupKeyTrans.keyOrder)
-          )
-        ).point[M]
+        Map(node.binding.groupId -> Set(filteredNodeSubset(node))).point[M]
       } else {
         val sortPairs: M[Map[MergeNode, Map[Seq[TicVar], NodeSubset]]] = 
           requiredSorts.map({ case (node, orders) => materializeSortOrders(node, orders) map { node -> _ }}).toStream
@@ -1693,7 +1717,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
         //json <- omniverse.table.toJson
         //_ = println("Omniverse: " + json.mkString("\n"))
-        result <- omniverse.table.partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("groupKeys"))) { partition =>
+        result <- omniverse.table.compact(groupKeySpec(Source)).partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("groupKeys"))) { partition =>
           val groupKeyTrans = OuterObjectConcat(
             omniverse.groupKeys.zipWithIndex map { case (ticvar, i) =>
               WrapObject(
@@ -1707,14 +1731,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             for {
               grouped <- omniverse.groups.map { groupId =>
                            val recordTrans = OuterObjectConcat(
-                             WrapObject(
-                               DerefObjectStatic(identSpec(Source), JPathField(groupId.shows)),
-                               "0"
-                             ),
-                             WrapObject(
-                               DerefObjectStatic(valueSpec(Source), JPathField(groupId.shows)),
-                               "1"
-                             )
+                             WrapObject(DerefObjectStatic(identSpec(Source), JPathField(groupId.shows)), "0"),
+                             WrapObject(DerefObjectStatic(valueSpec(Source), JPathField(groupId.shows)), "1")
                            )
 
                            val sortByTrans = DerefObjectStatic(Leaf(Source), JPathField("0"))
@@ -1731,8 +1749,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             (groupId: GroupId) => for {
               groupIdJson <- groupKeyForBody.toJson
               groupTable <- groups.map(_(groupId))
-              json <- groupTable.toJson
-              _ = println("group id: " + groupId + "\ngroup key:\n" + groupIdJson.mkString("\n") + "\nvalues:\n" + json.mkString("\n"))
+              //json <- groupTable.toJson
+              //_ = println("group id: " + groupId + "\ngroup key:\n" + groupIdJson.mkString("\n") + "\nvalues:\n" + json.mkString("\n"))
             } yield groupTable
           )
         }
@@ -1754,7 +1772,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
 
     def compact(spec: TransSpec1): Table = {
-      transform(FilterDefined(Leaf(Source), spec, AnyDefined)).normalize
+      val specTransform = SliceTransform.composeSliceTransform(spec)
+      val compactTransform = SliceTransform.composeSliceTransform(Leaf(Source)).zip(specTransform) { (s1, s2) => s1.compact(s2, AnyDefined) }
+      Table(Table.transformStream(compactTransform, slices)).normalize
     }
 
     /**
@@ -2316,6 +2336,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
 
     def normalize: Table = Table(slices.filter(!_.isEmpty))
+
+    def printer(prelude: String = ""): Table = {
+      Table(StreamT(StreamT.Skip({println(prelude); slices map { s => println(s.toJsonString); s }}).point[M]))
+    }
 
     def toStrings: M[Iterable[String]] = {
       toEvents { (slice, row) => slice.toString(row) }
