@@ -408,9 +408,9 @@ trait DAG extends Instructions {
         def inner(graph: DepGraph): DepGraph = graph match {
           case x if pf isDefinedAt x => pf(x)
           
-          case dag.SplitParam(_, _) => graph
+          case s @ dag.SplitParam(loc, id) => dag.SplitParam(loc, id)(splits(s.parent))
 
-          case dag.SplitGroup(_, _, _) => graph
+          case s @ dag.SplitGroup(loc, id, identities) => dag.SplitGroup(loc, id, identities)(splits(s.parent))
           
           case dag.Root(_, _) => graph
 
