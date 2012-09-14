@@ -1852,7 +1852,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                    (ibufs: IndexBuffers = new IndexBuffers(leftPosition.key.size, rightPosition.key.size)): M[Option[(Slice, CogroupState)]] = {
             val SlicePosition(lpos0, lkstate, lkey, lhead, ltail) = leftPosition
             val SlicePosition(rpos0, rkstate, rkey, rhead, rtail) = rightPosition
-
+            
             val comparator = Slice.rowComparatorFor(lkey, rkey) { slice => 
               // since we've used the key transforms, and since transforms are contracturally
               // forbidden from changing slice size, we can just use all
@@ -1922,8 +1922,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
             def continue(nextStep: NextStep): M[Option[(Slice, CogroupState)]] = nextStep match {
               case SplitLeft(lpos) =>
-                val (lpref, lsuf) = lhead.split(lpos + 1)
-                val (_, lksuf) = lkey.split(lpos + 1)
+                val (lpref, lsuf) = lhead.split(lpos)
+                val (_, lksuf) = lkey.split(lpos)
                 val (completeSlice, lr0, rr0, br0) = ibufs.cogrouped(lpref, rhead, 
                                                                      SliceTransform1[LR](lr, stlr.f),
                                                                      SliceTransform1[RR](rr, strr.f),
@@ -1944,8 +1944,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 }
 
               case SplitRight(rpos) => 
-                val (rpref, rsuf) = rhead.split(rpos + 1)
-                val (_, rksuf) = rkey.split(rpos + 1)
+                val (rpref, rsuf) = rhead.split(rpos)
+                val (_, rksuf) = rkey.split(rpos)
                 val (completeSlice, lr0, rr0, br0) = ibufs.cogrouped(lhead, rpref, 
                                                                      SliceTransform1[LR](lr, stlr.f),
                                                                      SliceTransform1[RR](rr, strr.f),
