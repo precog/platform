@@ -1029,6 +1029,51 @@ object ProvenanceComputationSpecs extends Specification
             tree.provenance must beLike { case DynamicProvenance(_) => ok }
             tree.errors must beEmpty
           }
+        }        
+        {
+          forall(libReduction) { f =>
+            val tree = compile("%s(//bar.foo) union [1, 9]".format(f.fqn))
+            tree.provenance mustEqual ValueProvenance 
+            tree.errors must beEmpty
+          }
+        }          
+        {
+          forall(libReduction) { f =>
+            val tree = compile("%s(//bar.foo) union //foo".format(f.fqn))
+            tree.provenance mustEqual NullProvenance
+            tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+          }
+        }        
+        {
+          forall(libMorphism1) { f =>
+            val tree = compile("%s(//bar.foo) union //baz".format(f.fqn))
+            if (f.retainIds) {
+              tree.provenance must beLike { case DynamicProvenance(_) => ok }
+              tree.errors must beEmpty
+            } else {
+              tree.provenance mustEqual NullProvenance
+              tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+            }
+          }
+        }        
+        {
+          forall(libMorphism2) { f =>
+            val tree = compile("%s(//bar.foo, //bar.ack) union //baz".format(f.fqn))
+            if (f.retainIds) {
+              tree.provenance must beLike { case DynamicProvenance(_) => ok }
+              tree.errors must beEmpty
+            } else {
+              tree.provenance mustEqual NullProvenance
+              tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+            }
+          }
+        }
+        {
+          forall(libMorphism2) { f =>
+            val tree = compile("%s(//bar, //foo) union //ack".format(f.fqn))
+              tree.provenance mustEqual NullProvenance
+              tree.errors mustEqual Set(OperationOnUnrelatedSets)
+          }
         }
         {
           val tree = compile("f := true union false f")
