@@ -985,10 +985,28 @@ trait EvalStackSpecs extends Specification {
           result must contain(SDecimal(7))
         }
         
+        "subtraction" >> {
+          val result = eval("5 - 2")
+          result must haveSize(1)
+          result must contain(SDecimal(3))
+        }
+        
         "multiplication" >> {
           val result = eval("8 * 2")
           result must haveSize(1)
           result must contain(SDecimal(16))
+        }
+        
+        "division" >> {
+          val result = eval("12 / 3")
+          result must haveSize(1)
+          result must contain(SDecimal(4))
+        }
+        
+        "mod" >> {
+          val result = eval("5 % 2")
+          result must haveSize(1)
+          result must contain(SDecimal(1))
         }
       }
       
