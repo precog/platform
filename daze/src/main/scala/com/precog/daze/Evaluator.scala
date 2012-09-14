@@ -948,6 +948,7 @@ trait Evaluator[M[+_]] extends DAG
     case instructions.Sub => Infix.Sub
     case instructions.Mul => Infix.Mul
     case instructions.Div => Infix.Div
+    case instructions.Mod => Infix.Mod
     
     case instructions.Lt => Infix.Lt
     case instructions.LtEq => Infix.LtEq

@@ -190,6 +190,7 @@ trait Instructions extends Library {
     case object Sub extends NumericBinaryOperation
     case object Mul extends NumericBinaryOperation
     case object Div extends NumericBinaryOperation
+    case object Mod extends NumericBinaryOperation
     
     case object Lt extends NumericComparisonOperation
     case object LtEq extends NumericComparisonOperation

@@ -208,6 +208,9 @@ trait Binder extends parser.AST with Library {
       case Div(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
+      case Mod(_, left, right) =>
+        loop(left, env) ++ loop(right, env)
+      
       case Lt(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
@@ -276,6 +279,7 @@ trait Binder extends parser.AST with Library {
     case Sub(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
     case Mul(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
     case Div(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
+    case Mod(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
     case Lt(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
     case LtEq(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
     case Gt(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)

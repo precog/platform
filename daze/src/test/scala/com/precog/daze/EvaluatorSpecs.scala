@@ -492,7 +492,6 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Root(line, PushNum("5")))
           
         testEval(input) { result =>
-          
           result must haveSize(5)
           
           val result2 = result collect {
@@ -500,6 +499,75 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
           
           result2 must contain(8.4, 2.4, 15.4, 0.2, 2.6)
+        }
+      }      
+
+      "mod both positive" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Mod, CrossLeftSort,
+          Root(line, PushNum("11")),
+          Root(line, PushNum("4")))
+          
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 0 => d.toDouble
+          }
+          
+          result2 must contain(3)
+        }
+      }
+      "mod both negative" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Mod, CrossLeftSort,
+          Root(line, PushNum("-11")),
+          Root(line, PushNum("-4")))
+          
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 0 => d.toDouble
+          }
+          
+          result2 must contain(-3)
+        }
+      }
+      "mod negative left" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Mod, CrossLeftSort,
+          Root(line, PushNum("-11")),
+          Root(line, PushNum("4")))
+          
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 0 => d.toDouble
+          }
+          
+          result2 must contain(1)
+        }
+      }
+      "mod" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Mod, CrossLeftSort,
+          Root(line, PushNum("11")),
+          Root(line, PushNum("-4")))
+          
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 0 => d.toDouble
+          }
+          
+          result2 must contain(-1)
         }
       }
     }
@@ -575,7 +643,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
           result2 must contain(8.4, 2.4, 15.4, 0.2, 2.6)
         }
-      }
+      }      
     }
 
     "count a filtered dataset" in {
