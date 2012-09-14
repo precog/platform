@@ -202,8 +202,6 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       case _ => sys.error("expected JArray")
     }).map { k => { JObject(List(JField("value", k), JField("key", JArray(List(JNum(0)))))) } }.toStream
     
-    println("data: %s\n".format(data.toList))
-
     val sample = SampleData(data)
     val table = fromSample(sample)
 
