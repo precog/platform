@@ -201,7 +201,7 @@ trait EvalStackSpecs extends Specification {
       val results = evalE(input)
 
       results must haveSize(200)
-    }.pendingUntilFixed
+    }
 
     "use the where operator on a unioned set" >> {
       "campaigns.gender" >> {
@@ -266,7 +266,7 @@ trait EvalStackSpecs extends Specification {
 
         results must haveSize(0)
       }
-    }.pendingUntilFixed
+    }
 
     "basic intersect and union queries" >> {
       {
@@ -399,7 +399,7 @@ trait EvalStackSpecs extends Specification {
       val results = evalE(input)
 
       results must haveSize(200)
-    }.pendingUntilFixed
+    }
 
     "use the where operator on a key with string values" in {
       val input = """//campaigns where //campaigns.platform = "android" """

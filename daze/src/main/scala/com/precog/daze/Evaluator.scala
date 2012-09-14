@@ -421,8 +421,6 @@ trait Evaluator[M[+_]] extends DAG
               rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
             } yield {
               val keyValueSpec = TransSpec1.PruneToKeyValue              
-              // using cogroup for identity union will *only* work if there are no duplicate identities; 
-              // if there were, you'd get the cartesian of the duplicates.
               if (union) {
                 leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
               } else {
@@ -448,13 +446,16 @@ trait Evaluator[M[+_]] extends DAG
             val result = for {
               leftPendingTable <- leftPending.table
               rightPendingTable <- rightPending.table
-              val leftTable = leftPendingTable.transform(liftToValues(leftPending.trans))
-              val rightTable = rightPendingTable.transform(liftToValues(rightPending.trans))
-              leftSorted <- ctx.memoizationContext.sort(leftTable, TransSpec1.Id, SortAscending, left.memoId)
-              rightSorted <- ctx.memoizationContext.sort(rightTable, TransSpec1.Id, SortAscending, right.memoId)
+
+              leftTable = leftPendingTable.transform(liftToValues(leftPending.trans))
+              rightTable = rightPendingTable.transform(liftToValues(rightPending.trans))
+              
+              keyValueSpec = TransSpec1.PruneToKeyValue
+
+              leftSorted <- ctx.memoizationContext.sort(leftTable, keyValueSpec, SortAscending, left.memoId)
+              rightSorted <- ctx.memoizationContext.sort(rightTable, keyValueSpec, SortAscending, right.memoId)
             } yield {
               // this transspec prunes everything that is not a key or a value.
-              val keyValueSpec = TransSpec1.PruneToKeyValue              
               val emptySpec1 = trans.ConstLiteral(CEmptyArray, Leaf(Source))
               val emptySpec2 = trans.ConstLiteral(CEmptyArray, Leaf(SourceLeft))
               val fullSpec = trans.WrapArray(Leaf(Source))
