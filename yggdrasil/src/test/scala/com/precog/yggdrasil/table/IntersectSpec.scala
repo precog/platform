@@ -37,10 +37,8 @@ import SampleData._
 trait IntersectSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
   implicit def M: Monad[M] with Copointed[M]
 
-  object module extends BlockStoreTestModule {
-    val projections = Map.empty[ProjectionDescriptor, Projection]
-  }
-
+  val module = BlockStoreTestModule.empty[M]
+  
   def testIntersect(sample: SampleData) = {
     import module._
     import module.trans._

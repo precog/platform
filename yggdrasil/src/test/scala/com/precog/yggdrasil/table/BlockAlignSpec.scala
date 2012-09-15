@@ -51,9 +51,7 @@ import SampleData._
 
 trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
   def testAlign(sample: SampleData) = {
-    object module extends BlockStoreTestModule {
-      val projections = Map.empty[ProjectionDescriptor, Projection]
-    }
+    val module = BlockStoreTestModule.empty[M]
 
     import module._
     import module.trans._
