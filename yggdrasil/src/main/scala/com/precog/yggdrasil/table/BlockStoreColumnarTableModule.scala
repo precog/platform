@@ -83,10 +83,10 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     def memoize(table: Table, memoId: MemoId): M[Table] = {
       val preMemoTable =
         table.transform(
-          OuterObjectConcat(
+          InnerObjectConcat(
             WrapObject(
               Scan(
-                ConstLiteral(CLong(0), Leaf(Source)),
+                Leaf(Source),
                 freshIdScanner),
               memoKey),
             WrapObject(
@@ -95,9 +95,10 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             )
           )
         )
-      
+
       val memoTable = sort(preMemoTable, DerefObjectStatic(Leaf(Source), JPathField(memoKey)), SortAscending, memoId)
-      M.map(memoTable) { _.transform(DerefObjectStatic(Leaf(Source), JPathField(memoValue))) }
+
+      memoTable map { _.transform(DerefObjectStatic(Leaf(Source), JPathField(memoValue))) }
     }
     
     def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table] = {

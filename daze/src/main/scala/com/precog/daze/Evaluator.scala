@@ -388,16 +388,18 @@ trait Evaluator[M[+_]] extends DAG
               grouping2 <- grouping
             
               result <- Table.merge(grouping2) { (key: Table, map: Int => M[Table]) =>
+                ctx.memoizationContext.expire(s.memoId)
+
                 val back = for {
                   pending <- loop(child, splits + (s -> (key -> map)))
                 } yield {
                   for {
                     pendingTable <- pending.table
-                    val table = pendingTable.transform(liftToValues(pending.trans))  
+                    table = pendingTable.transform(liftToValues(pending.trans))  
                     memoized <- ctx.memoizationContext.memoize(table, s.memoId)
                   } yield memoized
                 }
-                
+
                 child.findMemos(s).foreach { ctx.memoizationContext.expire(_) }
                 
                 back.eval(state)  //: M[Table]
@@ -779,7 +781,7 @@ trait Evaluator[M[+_]] extends DAG
                 val table = pendingTable.transform(liftToValues(pending.trans))
                 val shuffled = table.transform(TableTransSpec.makeTransSpec(Map(paths.Key -> idSpec)))
                 // TODO this could be made more efficient by only considering the indexes we care about
-                sorted <- ctx.memoizationContext.sort(shuffled, DerefObjectStatic(Leaf(Source), paths.Key), SortAscending, parent.memoId)
+                sorted <- ctx.memoizationContext.sort(shuffled, DerefObjectStatic(Leaf(Source), paths.Key), SortAscending, s.memoId)
               } yield {                              
                 parent.sorting match {
                   case ValueSort(id) =>
@@ -794,7 +796,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case SortBy(parent, sortField, valueField, id) => {
+        case s @ SortBy(parent, sortField, valueField, id) => {
           if (parent.sorting == ValueSort(id)) {
             loop(parent, splits)
           } else {
@@ -804,7 +806,7 @@ trait Evaluator[M[+_]] extends DAG
               val result = for {
                 pendingTable <- pending.table
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                sorted <- ctx.memoizationContext.sort(table, liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending, parent.memoId)
+                sorted <- ctx.memoizationContext.sort(table, liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending, s.memoId)
               } yield {
                 val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(sortField))
                 val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(valueField))
@@ -833,7 +835,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case ReSortBy(parent, id) => {
+        case s @ ReSortBy(parent, id) => {
           if (parent.sorting == ValueSort(id)) {
             loop(parent, splits)
           } else {
@@ -843,7 +845,7 @@ trait Evaluator[M[+_]] extends DAG
               val result = for {
                 pendingTable <- pending.table
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                sorted <- ctx.memoizationContext.sort(table, DerefObjectStatic(Leaf(Source), JPathField("sort-" + id)), SortAscending, parent.memoId)
+                sorted <- ctx.memoizationContext.sort(table, DerefObjectStatic(Leaf(Source), JPathField("sort-" + id)), SortAscending, s.memoId)
               } yield sorted
               
               PendingTable(result, graph, TransSpec1.Id)
@@ -857,7 +859,7 @@ trait Evaluator[M[+_]] extends DAG
           } yield {
             val result = for {
               pendingTable <- pending.table
-              val table = pendingTable.transform(liftToValues(pending.trans))
+              table = pendingTable.transform(liftToValues(pending.trans))
               memoized <- ctx.memoizationContext.memoize(table, memoId)
             } yield memoized
             
