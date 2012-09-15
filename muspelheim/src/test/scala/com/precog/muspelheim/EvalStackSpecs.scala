@@ -247,7 +247,7 @@ trait EvalStackSpecs extends Specification {
 
         results must haveSize(0)
       }
-    }
+    }.pendingUntilFixed
 
     "basic intersect and union queries" >> {
       {
@@ -800,21 +800,13 @@ trait EvalStackSpecs extends Specification {
     }
  
     "set critical conditions given an empty set in" >> {
-      "characteristic function" >> {
-        val input = """
-          | solve 'a
-          |   //campaigns where //campaigns.foo = 'a""".stripMargin
-
-        eval(input) mustEqual Set()
-      }.pendingUntilFixed
-
       "solve expression" >> {
         val input = """
           | solve 'a
           |   //campaigns where //campaigns.foo = 'a""".stripMargin
 
         eval(input) mustEqual Set()
-      }.pendingUntilFixed
+      }
     }
 
     "use NotEq correctly" in {
