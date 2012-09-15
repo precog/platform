@@ -413,16 +413,17 @@ trait Evaluator[M[+_]] extends DAG
             rightPending <- loop(right, splits)
           } yield {
             val keyValueSpec = TransSpec1.PruneToKeyValue              
+
             val result = for {
               leftPendingTable <- leftPending.table
               rightPendingTable <- rightPending.table
-              val leftTable = leftPendingTable.transform(liftToValues(leftPending.trans)).printer("leftTable")
-              val rightTable = rightPendingTable.transform(liftToValues(rightPending.trans)).printer("rightTable")
+
+              leftTable = leftPendingTable.transform(liftToValues(leftPending.trans))
+              rightTable = rightPendingTable.transform(liftToValues(rightPending.trans))
+
               leftSorted <- ctx.memoizationContext.sort(leftTable, keyValueSpec, SortAscending, left.memoId)
               rightSorted <- ctx.memoizationContext.sort(rightTable, keyValueSpec, SortAscending, right.memoId)
             } yield {
-              println("leftSorted: " + leftSorted)
-              println("rightSorted: " + rightSorted)
               if (union) {
                 leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
               } else {

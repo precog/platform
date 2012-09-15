@@ -1456,7 +1456,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(5)
       }
-    }
+    }.pendingUntilFixed
 
     "compute the iunion of two homogeneous sets" in {
       val line = Line(0, "")
