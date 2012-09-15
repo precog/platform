@@ -729,62 +729,64 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       Table(StreamT(M.point(head))).transform(TransSpec1.DerefArray1)
     }
   }
+  
+  // because I *can*!
+  def load(table: Table, uid: UserId, tpe: JType): Table = {
+    import Table.loadMergeEngine._
+    val metadataView = storage.userMetadataView(uid)
+
+    // Reduce this table to obtain the in-memory set of strings representing the vfs paths
+    // to be loaded.
+    val pathsM = table reduce {
+      new CReducer[Set[Path]] {
+        def reduce(columns: JType => Set[Column], range: Range): Set[Path] = {
+          columns(JTextT) flatMap {
+            case s: StrColumn => range.filter(s.isDefinedAt).map(i => Path(s(i)))
+            case _ => Set()
+          }
+        }
+      }
+    }
+
+    def cellsM(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Stream[M[Option[CellState]]] = {
+      for (((desc, cols), i) <- projections.toStream.zipWithIndex) yield {
+        val succ: Option[Key] => M[Option[BD]] = (key: Option[Key]) => storage.projection(desc) map {
+          case (projection, release) => 
+            val result = projection.getBlockAfter(key, cols)  
+            release.release.unsafePerformIO
+            result
+        }
+
+        succ(None) map { 
+          _ map { nextBlock => CellState(i, nextBlock.maxKey, nextBlock.data, (k: Key) => succ(Some(k))) }
+        }
+      }
+    }
+
+    val head = StreamT.Skip(
+      StreamT.wrapEffect(
+        for {
+          paths               <- pathsM
+          coveringProjections <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
+          cellOptions         <- cellsM(minimalCover(tpe, coveringProjections)).sequence
+        } yield {
+          mergeProjections(SortAscending, // Projections are always sorted in ascending identity order
+                           cellOptions.flatMap(a => a)) { slice => 
+            slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(JPathField("key") :: Nil) }).toList.sorted
+          }
+        }
+      )
+    )
+
+    Table(StreamT(M.point(head)))
+  }
 
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import Table._
     import SliceTransform._
     import trans._
-
-    def load(uid: UserId, tpe: JType): M[Table] = {
-      import loadMergeEngine._
-      val metadataView = storage.userMetadataView(uid)
-
-      // Reduce this table to obtain the in-memory set of strings representing the vfs paths
-      // to be loaded.
-      val pathsM = this.reduce {
-        new CReducer[Set[Path]] {
-          def reduce(columns: JType => Set[Column], range: Range): Set[Path] = {
-            columns(JTextT) flatMap {
-              case s: StrColumn => range.filter(s.isDefinedAt).map(i => Path(s(i)))
-              case _ => Set()
-            }
-          }
-        }
-      }
-
-      def cellsM(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Stream[M[Option[CellState]]] = {
-        for (((desc, cols), i) <- projections.toStream.zipWithIndex) yield {
-          val succ: Option[Key] => M[Option[BD]] = (key: Option[Key]) => storage.projection(desc) map {
-            case (projection, release) => 
-              val result = projection.getBlockAfter(key, cols)  
-              release.release.unsafePerformIO
-              result
-          }
-
-          succ(None) map { 
-            _ map { nextBlock => CellState(i, nextBlock.maxKey, nextBlock.data, (k: Key) => succ(Some(k))) }
-          }
-        }
-      }
-
-      val head = StreamT.Skip(
-        StreamT.wrapEffect(
-          for {
-            paths               <- pathsM
-            coveringProjections <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
-            cellOptions         <- cellsM(minimalCover(tpe, coveringProjections)).sequence
-          } yield {
-            mergeProjections(SortAscending, // Projections are always sorted in ascending identity order
-                             cellOptions.flatMap(a => a)) { slice => 
-              slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(JPathField("key") :: Nil) }).toList.sorted
-            }
-          }
-        )
-      )
-
-      //TODO: it turns out load doesn't actualln need to return a table in M
-      M.point(Table(StreamT(M.point(head))))
-    }
+    
+    def load(uid: UserId, tpe: JType): M[Table] = M.point(self.load(this, uid, tpe))
 
     /**
      * Sorts the KV table by ascending or descending order of a transformation
