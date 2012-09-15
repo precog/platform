@@ -4,6 +4,7 @@ package daze
 import com.precog.common.Path
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.table.BaseBlockStoreTestModule
 import com.precog.yggdrasil.memoization._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.test._
@@ -17,13 +18,14 @@ import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
 import blueeyes.json._
-import JsonAST.{JObject, JField, JArray, JNum}
+import JsonAST._
 
 import java.io._
 import java.util.concurrent.Executors
 
 import scalaz._
 import scalaz.effect._
+import scalaz.syntax.copointed._
 import scalaz.iteratee._
 import scalaz.std.anyVal._
 import scalaz.std.list._
@@ -35,15 +37,50 @@ import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
 
-trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with table.StubColumnarTableModule[M] with IdSourceScannerModule[M] {
+trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestModule[M] with IdSourceScannerModule[M] {
   val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
 
+  val projections = Map.empty[ProjectionDescriptor, Projection]
+
   object yggConfig extends YggConfig
 
-  object Table extends TableCompanion
+  //object Table extends TableCompanion
+
+  private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
+  private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
+  private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
+  
+  override def load(table: Table, uid: UserId, jtpe: JType) = {
+    table.toJson map { events =>
+      fromJson {
+        events.toStream flatMap {
+          case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
+            val path = Path(pathStr)
+      
+            val index = initialIndices get path getOrElse {
+              initialIndices += (path -> currentIndex)
+              currentIndex
+            }
+            
+            val target = path.path.replaceAll("/$", ".json")
+            val src = io.Source fromInputStream getClass.getResourceAsStream(target)
+            val parsed = src.getLines map JsonParser.parse toStream
+            
+            currentIndex += parsed.length
+            
+            parsed zip (Stream from index) map {
+              case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
+            }
+          }
+
+          case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
+        }
+      }
+    } copoint
+  }
   
   trait YggConfig extends EvaluatorConfig with DatasetConsumersConfig {
     val sortBufferSize = 1000
@@ -1400,7 +1437,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(5)
       }
-    }.pendingUntilFixed
+    }
 
     "compute the iunion of two homogeneous sets" in {
       val line = Line(0, "")
@@ -2353,6 +2390,39 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(55, 13, 119, 25)
       }
     }
+
+    "memoize properly in a load" in {
+      val line = Line(0, "")
+
+      val input0 = dag.Memoize(dag.LoadLocal(line, Root(line, PushString("/clicks"))), 1)
+      val input1 = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+
+      testEval(input0) { result0 => {
+        testEval(input1) { result1 =>
+          result0 must_== result1 
+        }
+      }}
+    }
+
+    "memoize properly in an add" in {
+      val line = Line(0, "")
+
+      val input0 = dag.Memoize(
+        dag.Join(line, Add, CrossLeftSort, 
+          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+          Root(line, PushNum("5"))),
+        1)
+
+      val input1 = dag.Join(line, Add, CrossLeftSort, 
+          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+          Root(line, PushNum("5")))
+
+      testEval(input0) { result0 => {
+        testEval(input1) { result1 =>
+          result0 must_== result1 
+        }
+      }}
+    }
     
     "evaluate a histogram function" in {
       val Expected = Map("daniel" -> 9, "kris" -> 8, "derek" -> 7, "nick" -> 17,
@@ -2414,7 +2484,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }
+    }.pendingUntilFixed
 
     "evaluate with on the clicks dataset" in {
       val line = Line(0, "")
