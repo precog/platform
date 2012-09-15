@@ -499,7 +499,7 @@ trait EvalStackSpecs extends Specification {
         |     & clicks = clicks""".stripMargin
         
       eval(input) must not(beEmpty)
-    }
+    }.pendingUntilFixed
 
     "add sets of different types" >> {
       "a set of numbers and a set of strings" >> {
@@ -522,23 +522,6 @@ trait EvalStackSpecs extends Specification {
     }
 
     "return only all possible value results from a" >> {
-      "characteristic function" >> {
-        val input = """
-          | campaigns := //campaigns
-          | solve 'a 
-          |   campaigns.gender where campaigns.platform = 'a""".stripMargin
-          
-        val results = evalE(input)
-        
-        results must haveSize(100)
-        
-        forall(results) {
-          case (VectorCase(_), SString(gender)) =>
-            gender must beOneOf("male", "female")
-          case r => failure("Result has wrong shape: "+r)
-        }
-      }.pendingUntilFixed
-
       "solve expression" >> {
         val input = """
           | campaigns := //campaigns
@@ -558,17 +541,6 @@ trait EvalStackSpecs extends Specification {
     }
     
     "determine a histogram of genders on campaigns" >> {
-      "characteristic function" >> { 
-        val input = """
-          | campaigns := //campaigns
-          | solve 'gender
-          |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }""".stripMargin
-          
-        eval(input) mustEqual Set(
-          SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
-          SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
-      }.pendingUntilFixed
-
       "solve expression" >> { 
         val input = """
           | campaigns := //campaigns
@@ -578,7 +550,7 @@ trait EvalStackSpecs extends Specification {
         eval(input) mustEqual Set(
           SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
           SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
-      }.pendingUntilFixed
+      }
     }
 
     "load a nonexistent dataset with a dot in the name" in {
@@ -824,17 +796,6 @@ trait EvalStackSpecs extends Specification {
     }
 
     "evaluate sliding window in a" >> {
-        "characteristic function" >> {
-        val input = """
-          | campaigns := //campaigns
-          | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
-          | solve 'n
-          |   m := max(nums where nums < 'n)
-          |   (nums where nums = 'n) + m""".stripMargin
-
-        eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
-      }.pendingUntilFixed
-
       "solve expression" >> {
         val input = """
           | campaigns := //campaigns
@@ -844,7 +805,7 @@ trait EvalStackSpecs extends Specification {
           |   (nums where nums = 'n) + m""".stripMargin
 
         eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
-      }.pendingUntilFixed
+      }
     }
 
     "evaluate a quantified characteristic function of two parameters" in {
