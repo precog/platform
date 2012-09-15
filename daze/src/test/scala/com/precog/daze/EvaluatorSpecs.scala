@@ -37,13 +37,14 @@ import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
 import blueeyes.json._
-import JsonAST.{JObject, JField, JArray, JNum}
+import JsonAST._
 
 import java.io._
 import java.util.concurrent.Executors
 
 import scalaz._
 import scalaz.effect._
+import scalaz.syntax.copointed._
 import scalaz.iteratee._
 import scalaz.std.anyVal._
 import scalaz.std.list._
@@ -66,6 +67,39 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
   object yggConfig extends YggConfig
 
   //object Table extends TableCompanion
+
+  private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
+  private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
+  private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
+  
+  override def load(table: Table, uid: UserId, jtpe: JType) = {
+    table.toJson map { events =>
+      fromJson {
+        events.toStream flatMap {
+          case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
+            val path = Path(pathStr)
+      
+            val index = initialIndices get path getOrElse {
+              initialIndices += (path -> currentIndex)
+              currentIndex
+            }
+            
+            val target = path.path.replaceAll("/$", ".json")
+            val src = io.Source fromInputStream getClass.getResourceAsStream(target)
+            val parsed = src.getLines map JsonParser.parse toStream
+            
+            currentIndex += parsed.length
+            
+            parsed zip (Stream from index) map {
+              case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
+            }
+          }
+
+          case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
+        }
+      }
+    } copoint
+  }
   
   trait YggConfig extends EvaluatorConfig with DatasetConsumersConfig {
     val sortBufferSize = 1000
