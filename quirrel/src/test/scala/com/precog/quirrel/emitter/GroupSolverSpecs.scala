@@ -34,7 +34,7 @@ object GroupSolverSpecs extends Specification
         tree @ Solve(_, _, 
           origin @ Where(_, target, pred @ Eq(_, solution, _)))) = compile(input)
           
-      val expected = Group(origin, target, UnfixedSolution("'day", solution))
+      val expected = Group(Some(origin), target, UnfixedSolution("'day", solution))
       tree.errors must beEmpty
       tree.buckets must beSome(expected)
     }
@@ -46,7 +46,7 @@ object GroupSolverSpecs extends Specification
         tree @ Solve(_, _, 
           origin @ Where(_, target, And(_, Eq(_, leftSol, _), Eq(_, rightSol, _))))) = compile(input)
       
-      val expected = Group(origin, target,
+      val expected = Group(Some(origin), target,
         IntersectBucketSpec(
           UnfixedSolution("'day", leftSol),
           UnfixedSolution("'day", rightSol)))
@@ -72,9 +72,9 @@ object GroupSolverSpecs extends Specification
             Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _)))) = compile(input)
       
       val expected = IntersectBucketSpec(
-        Group(originA, targetA,
+        Group(Some(originA), targetA,
           UnfixedSolution("'a", solA)),
-        Group(originB, targetB,
+        Group(Some(originB), targetB,
           UnfixedSolution("'b", solB)))
       
       tree.errors must beEmpty
@@ -101,9 +101,9 @@ object GroupSolverSpecs extends Specification
               Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _))))) = compile(input)
       
       val expected = IntersectBucketSpec(
-        Group(originA, targetA,
+        Group(Some(originA), targetA,
           UnfixedSolution("'a", solA)),
-        Group(originB, targetB,
+        Group(Some(originB), targetB,
           UnfixedSolution("'b", solB)))
       
       tree.errors must beEmpty
@@ -276,6 +276,18 @@ object GroupSolverSpecs extends Specification
               Where(_, left, right))))) = compile(input)
       
       tree.errors must not(beEmpty)
+    }
+
+    "accept a constraint in a solve" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        |
+        | solve 'a = bar.a
+        |   count(foo where foo.a = 'a)
+        | """.stripMargin
+
+      compile(input).errors must beEmpty
     }
   }
 }
