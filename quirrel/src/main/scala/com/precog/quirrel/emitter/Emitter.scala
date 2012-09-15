@@ -260,7 +260,7 @@ trait Emitter extends AST
         nextId { id =>
           emitBucketSpec(solve, forest) >>
             emitExpr(target) >>
-            labelGroup(origin, id) >>
+            (origin map { labelGroup(_, id) } getOrElse mzero[EmitterState]) >>
             emitInstr(Group(id))
         }
       }

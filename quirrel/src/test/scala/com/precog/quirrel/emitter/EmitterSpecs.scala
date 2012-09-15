@@ -715,6 +715,42 @@ object EmitterSpecs extends Specification
           Merge))
     }
 
+    "emit split and merge for solve with constraint" in {
+      testEmit("""
+        | foo := //foo
+        | bar := //bar
+        |
+        | solve 'a = bar.a
+        |   count(foo where foo.a = 'a)
+        | """)(Vector(
+          PushString("/bar"),
+          LoadLocal,
+          Dup,
+          PushString("a"),
+          Map2Cross(DerefObject),
+          KeyPart(1),
+          Swap(1),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          Group(0),
+          PushString("/foo"),
+          LoadLocal,
+          Dup,
+          Swap(2),
+          Swap(1),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          KeyPart(3),
+          Swap(1),
+          Swap(2),
+          Group(2),
+          MergeBuckets(true),
+          Split,
+          PushGroup(2),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
+          Merge))
+    }
+
     "emit merge_buckets & for trivial cf example with conjunction" in {
       testEmit("clicks := //clicks onDay := solve 'day clicks where clicks.day = 'day & clicks.din = 'day onDay")(
         Vector(
