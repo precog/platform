@@ -23,6 +23,7 @@ package daze
 import com.precog.common.Path
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.table.BaseBlockStoreTestModule
 import com.precog.yggdrasil.memoization._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.test._
@@ -54,15 +55,17 @@ import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
 
-trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with table.StubColumnarTableModule[M] with IdSourceScannerModule[M] {
+trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestModule[M] with IdSourceScannerModule[M] {
   val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
 
+  val projections = Map.empty[ProjectionDescriptor, Projection]
+
   object yggConfig extends YggConfig
 
-  object Table extends TableCompanion
+  //object Table extends TableCompanion
   
   trait YggConfig extends EvaluatorConfig with DatasetConsumersConfig {
     val sortBufferSize = 1000

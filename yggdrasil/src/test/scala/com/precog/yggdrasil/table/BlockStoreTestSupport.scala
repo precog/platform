@@ -54,25 +54,33 @@ import org.scalacheck.Arbitrary._
 
 import TableModule._
 
-trait BlockStoreTestSupport[M[+_]] { self =>
-  implicit def M: Monad[M] with Copointed[M]
 
-  abstract class BlockStoreTestModule extends 
-      BlockStoreColumnarTableModule[M] with
-      ColumnarTableModuleTestSupport[M] with 
-      StubStorageModule[M] {
+trait BlockStoreTestModule[M[+_]] extends BaseBlockStoreTestModule[M] {
+  type GroupId = String
+  private val groupId = new java.util.concurrent.atomic.AtomicInteger
+  def newGroupId = "groupId(" + groupId.getAndIncrement + ")"
+
+  type YggConfig = IdSourceConfig
+  val yggConfig = new IdSourceConfig {
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
+    }
+  }
+
+}
+
+trait BaseBlockStoreTestModule[M[+_]] extends 
+  BlockStoreColumnarTableModule[M] with
+  ColumnarTableModuleTestSupport[M] with 
+  StubStorageModule[M] {
 
     import trans._
     import CValueGenerators._
 
-    type YggConfig = IdSourceConfig
     type Key = JArray
-    type GroupId = String
 
-    private val groupId = new java.util.concurrent.atomic.AtomicInteger
-    def newGroupId = "groupId(" + groupId.getAndIncrement + ")"
-
-    implicit def M = self.M
+    implicit def M: Monad[M] with Copointed[M]
 
     object storage extends Storage
 
@@ -120,14 +128,7 @@ trait BlockStoreTestSupport[M[+_]] { self =>
     }
 
     object Table extends TableCompanion
-    
-    val yggConfig = new IdSourceConfig {
-      val idSource = new IdSource {
-        private val source = new java.util.concurrent.atomic.AtomicLong
-        def nextId() = source.getAndIncrement
-      }
-    }
-    
+
     def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
       case (_: JNum, CNum | CLong | CDouble) => true
       case (JNothing, CUndefined) => true
@@ -148,11 +149,19 @@ trait BlockStoreTestSupport[M[+_]] { self =>
         "%09d".format(idx)
       )
     }: _*)
-  }
+}
 
-  def emptyTestModule = new BlockStoreTestModule {
+object BlockStoreTestModule {
+  def empty[M[+_]](implicit M0: Monad[M] with Copointed[M]) = new BlockStoreTestModule[M] {
+    val M = M0 
     val projections = Map.empty[ProjectionDescriptor, Projection]
   }
+}
+
+trait BlockStoreTestSupport[M[+_]] { self =>
+  implicit def M: Monad[M] with Copointed[M]
+
+  def emptyTestModule = BlockStoreTestModule.empty[M]
 }
 
 

@@ -54,10 +54,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   implicit def M: Monad[M] with Copointed[M]
 
   def testSortDense(sample: SampleData, sortOrder: DesiredSortOrder, sortKeys: JPath*) = {
-    object module extends BlockStoreTestModule {
-      val projections = Map.empty[ProjectionDescriptor, Projection]
-    }
-
+    val module = BlockStoreTestModule.empty[M]
     val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
       import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
 
