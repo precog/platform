@@ -916,7 +916,7 @@ trait Evaluator[M[+_]] extends DAG
       trans.WrapObject(DerefObjectStatic(Leaf(Source), JPathField(id.toString)), id.toString)
     }
     
-    parts reduce { (left, right) => trans.InnerObjectConcat(left, right) }
+    parts reduceOption { (left, right) => trans.InnerObjectConcat(left, right) } getOrElse ConstLiteral(CEmptyArray, Leaf(Source))
   }
   
   private def buildChains(graph: DepGraph): Set[List[DepGraph]] = {
@@ -1033,7 +1033,7 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
-    assert(sharedLength > 0)
+    assert(sharedLength > 0) 
     val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
     val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
     
