@@ -58,6 +58,7 @@ trait Emitter extends AST
     marks: Map[MarkType, Mark] = Map(),
     curLine: Option[(Int, String)] = None,
     ticVars: Map[(ast.Solve, TicId), EmitterState] = Map(),
+    keyParts: Map[(ast.Solve, TicId), Int] = Map(),
     formals: Map[(Identifier, ast.Let), EmitterState] = Map(),
     groups: Map[ast.Where, Int] = Map(),
     subResolve: Provenance => Provenance = identity,
@@ -266,10 +267,25 @@ trait Emitter extends AST
       }
       
       case buckets.UnfixedSolution(name, solution) => {
-        nextId { id =>
+        def state(id: Int) = {
           emitExpr(solution) >>
             labelTicVar(solve, name)(emitInstr(PushKey(id))) >>
             emitInstr(KeyPart(id))
+        }
+        
+        StateT.apply[Id, Emission, Unit] { e =>
+          val s = if (e.keyParts contains (solve -> name))
+            state(e.keyParts(solve -> name))
+          else {
+            nextId { id =>
+              state(id) >>
+                (StateT.apply[Id, Emission, Unit] { e =>
+                  (e.copy(keyParts = e.keyParts + ((solve, name) -> id)), ())
+                })
+            }
+          }
+          
+          s(e)
         }
       }
       
