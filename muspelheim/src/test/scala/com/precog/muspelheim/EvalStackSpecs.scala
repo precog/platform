@@ -907,7 +907,7 @@ trait EvalStackSpecs extends Specification {
         | 
         | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
 
-      eval(input) must not(beEmpty)   
+      eval(input) must not(beEmpty)  //TODO need to do better than this   
     }
   
     "evaluate the 'hello, quirrel' examples" >> {

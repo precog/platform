@@ -365,6 +365,22 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(42, 12, 77, 1, 13)
       }
     }
+    
+    "evaluate a new literal" in {
+      val line = Line(0, "")
+      
+      val input = dag.New(line, Root(line, PushString("foo")))
+        
+      testEval(input) { result =>
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (ids, SString(s)) if ids.size == 1 => s
+        }
+        
+        result2 must contain("foo")
+      }
+    }
 
     "evaluate a join of two reductions on the same dataset" in {
       val line = Line(0, "")
@@ -2643,7 +2659,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
     
     "perform a naive cartesian product on the clicks dataset" in {
       val line = Line(0, "")
