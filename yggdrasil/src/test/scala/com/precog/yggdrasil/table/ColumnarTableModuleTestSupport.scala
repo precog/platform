@@ -31,7 +31,7 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
 
     def makeSlice(sampleData: Stream[JValue]): (Slice, Stream[JValue]) = {
       val (prefix, suffix) = sampleData.splitAt(sliceSize)
-  
+
       @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
         from match {
           case jv #:: xs =>
@@ -88,6 +88,8 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
   
                 acc + (ref -> pair)
             }
+
+            //println("Computed " + withIdsAndValues)
   
             buildColArrays(xs, withIdsAndValues, sliceIndex + 1)
   

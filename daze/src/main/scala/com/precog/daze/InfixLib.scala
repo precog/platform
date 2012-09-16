@@ -13,8 +13,8 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
   object Infix {
     val InfixNamespace = Vector("std", "infix")
 
-    object Add extends Op2(InfixNamespace, "add") {
-      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+    val Add = new Op2(InfixNamespace, "add") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
           def apply(row: Int) = c1(row) + c2(row)
@@ -46,8 +46,8 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
 
-    object Sub extends Op2(InfixNamespace, "subtract") {
-      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+    val Sub = new Op2(InfixNamespace, "subtract") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
           def apply(row: Int) = c1(row) - c2(row)
@@ -79,8 +79,8 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
 
-    object Mul extends Op2(InfixNamespace, "multiply") {
-      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+    val Mul = new Op2(InfixNamespace, "multiply") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
           def apply(row: Int) = c1(row) * c2(row)
@@ -112,8 +112,8 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
 
-    object Div extends Op2(InfixNamespace, "divide") {
-      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+    val Div = new Op2(InfixNamespace, "divide") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
@@ -154,8 +154,8 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
 
-    object Mod extends Op2(InfixNamespace, "mod") {
-      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+    val Mod = new Op2(InfixNamespace, "mod") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
@@ -268,7 +268,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
 
-    object Lt extends Op2(InfixNamespace, "lt") {
+    val Lt = new Op2(InfixNamespace, "lt") {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
@@ -301,7 +301,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
 
-    object LtEq extends Op2(InfixNamespace, "lte") {
+    val LtEq = new Op2(InfixNamespace, "lte") {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
@@ -334,7 +334,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
 
-    object Gt extends Op2(InfixNamespace, "gt") {
+    val Gt = new Op2(InfixNamespace, "gt") {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
@@ -367,7 +367,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
 
-    object GtEq extends Op2(InfixNamespace, "gte") {
+    val GtEq = new Op2(InfixNamespace, "gte") {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
@@ -400,7 +400,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
 
-    object And extends Op2(InfixNamespace, "and") {
+    val And = new Op2(InfixNamespace, "and") {
       val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
@@ -409,7 +409,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
 
-    object Or extends Op2(InfixNamespace, "or") {
+    val Or = new Op2(InfixNamespace, "or") {
       val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
@@ -418,7 +418,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       })
     }
     
-    object concatString extends Op2(InfixNamespace, "concatString") {
+    val concatString = new Op2(InfixNamespace, "concatString") {
       val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
       def f2: F2 = new CF2P({
         case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
