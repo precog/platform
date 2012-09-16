@@ -1533,6 +1533,37 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result must haveSize(0)
       }
     }
+
+    "compute the iintersect of mod2 and mod3" in {
+      val line = Line(0, "")
+      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbersmod")))
+
+      val input = IUI(line, false,
+        Filter(line, IdentitySort,
+          numbers,
+          Join(line, Eq, CrossLeftSort,
+            Join(line, Mod, CrossLeftSort,
+              numbers,
+              Root(line, PushNum("2"))),
+            Root(line, PushNum("0")))),
+        Filter(line, IdentitySort,
+          numbers,
+          Join(line, Eq, CrossLeftSort,
+            Join(line, Mod, CrossLeftSort,
+              numbers,
+              Root(line, PushNum("3"))),
+            Root(line, PushNum("0")))))
+
+      testEval(input) { result =>
+        result must haveSize(3)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+
+        result2 must contain(6, 12, 24)
+      }
+    }
     
     "filter homogeneous numeric set by binary operation" >> {
       "less-than" >> {
