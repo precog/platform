@@ -1427,9 +1427,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         clicks2,
         Diff(line,
           clicks2,
-          Join(line, DerefObject, CrossLeftSort,
-            clicks2,
-            Root(line, PushString("time")))))
+          Filter(line, IdentitySort,
+            clicks2, 
+            Join(line, Gt, CrossLeftSort,
+              Join(line, DerefObject, CrossLeftSort,
+                clicks2,
+                Root(line, PushString("time"))),
+              Root(line, PushNum("0"))))))
+
 
       testEval(input) { result =>
         result must haveSize(101)
@@ -1438,13 +1443,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           _ must beLike {
             case (ids, SObject(obj)) if ids.size == 1 => 
               obj must haveKey("time")
-  
-            case (ids, SString(s)) if ids.size == 1 => 
-              s mustEqual "string cheese"
           }
         }
       }
-    }.pendingUntilFixed
+    }
     
     "compute the iunion of a set with itself" in {
       val line = Line(0, "")
