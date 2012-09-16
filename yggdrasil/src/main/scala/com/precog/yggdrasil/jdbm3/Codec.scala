@@ -442,7 +442,7 @@ object Codec {
       var pos = 0
       val len = alen min blen
       while (cmp == 0 && pos < len) {
-        cmp = a.get() - b.get()
+        cmp = (a.get() & 0xFF) - (b.get() & 0xFF)
         pos += 1
       }
 
