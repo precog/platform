@@ -158,20 +158,30 @@ trait GroupSolver extends AST with GroupFinder with Solver {
   }
   
   private def solveForest(b: Solve, forest: Set[GroupTree])(f: (BucketSpec, BucketSpec) => BucketSpec): (Option[BucketSpec], Set[Error]) = {
-    val (conditions, reductions) = forest partition {
-      case c: GroupCondition => true
-      // case r: GroupReduction => false
-    }
-    
     val (spec, condErrors) = {
-      val processed = conditions collect {
+      val processed = forest collect {
         case GroupCondition(origin @ Where(_, target, pred)) => {
           if (listTicVars(b, target).isEmpty) {
-            val (result, errors) = solveGroupCondition(b, pred)
-            (result map { Group(origin, target, _) }, errors)
+            val (result, errors) = solveGroupCondition(b, pred, false)
+            (result map { Group(Some(origin), target, _) }, errors)
           } else {
             (None, Set(Error(origin, GroupTargetSetNotIndependent)))
           }
+        }
+
+        case GroupConstraint(expr) => {
+          val (result, errors) = solveGroupCondition(b, expr, true)
+          val commonality = result map listSolutionExprs flatMap ExprUtils.findCommonality
+          
+          val back = for (r <- result; c <- commonality)
+            yield Group(None, c, r)
+
+          val contribErrors = if (!back.isDefined)
+            Set(Error(expr, GroupTargetSetNotIndependent))
+          else
+            Set()
+
+          (back, errors ++ contribErrors)
         }
       }
       mergeSpecs(processed)(f)
@@ -180,10 +190,10 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     (spec, condErrors)
   }
   
-  private def solveGroupCondition(b: Solve, expr: Expr): (Option[BucketSpec], Set[Error]) = expr match {
+  private def solveGroupCondition(b: Solve, expr: Expr, free: Boolean): (Option[BucketSpec], Set[Error]) = expr match {
     case And(_, left, right) => {
-      val (leftSpec, leftErrors) = solveGroupCondition(b, left)
-      val (rightSpec, rightErrors) = solveGroupCondition(b, right)
+      val (leftSpec, leftErrors) = solveGroupCondition(b, left, free)
+      val (rightSpec, rightErrors) = solveGroupCondition(b, right, free)
       
       val andSpec = for (ls <- leftSpec; rs <- rightSpec)
         yield IntersectBucketSpec(ls, rs)
@@ -192,8 +202,8 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     }
     
     case Or(_, left, right) => {
-      val (leftSpec, leftErrors) = solveGroupCondition(b, left)
-      val (rightSpec, rightErrors) = solveGroupCondition(b, right)
+      val (leftSpec, leftErrors) = solveGroupCondition(b, left, free)
+      val (rightSpec, rightErrors) = solveGroupCondition(b, right, free)
       
       val andSpec = for (ls <- leftSpec; rs <- rightSpec)
         yield UnionBucketSpec(ls, rs)
@@ -208,7 +218,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
         (None, Set(Error(expr, InseparablePairedTicVariables(vars))))
       } else {
         val tv = vars.head
-        val result = solveRelation(expr) { case t @ TicVar(_, `tv`) => t.binding == SolveBinding(b) }
+        val result = solveRelation(expr) { case t @ TicVar(_, `tv`) => !free && t.binding == SolveBinding(b) || free && t.binding == FreeBinding(b) }
         
         if (result.isDefined)
           (result map { UnfixedSolution(tv, _) }, Set())
@@ -224,7 +234,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
         (None, Set(Error(expr, InseparablePairedTicVariables(vars))))
       } else {
         val tv = vars.head
-        val result = solveComplement(expr) { case t @ TicVar(_, `tv`) => t.binding == SolveBinding(b) }
+        val result = solveComplement(expr) { case t @ TicVar(_, `tv`) => !free && t.binding == SolveBinding(b) || free && t.binding == FreeBinding(b) }
         
         if (result.isDefined)
           (result map { UnfixedSolution(tv, _) }, Set())
@@ -261,7 +271,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     case Solve(_, constraints, child) => (constraints map { listTicVars(b, _) } reduce { _ ++ _ }) ++ listTicVars(b, child)
     case New(_, child) => listTicVars(b, child)
     case Relate(_, from, to, in) => listTicVars(b, from) ++ listTicVars(b, to) ++ listTicVars(b, in)
-    case t @ TicVar(_, name) if t.binding == SolveBinding(b) => Set(name)
+    case t @ TicVar(_, name) if t.binding == SolveBinding(b) || t.binding == FreeBinding(b) => Set(name)
     case TicVar(_, _) => Set()
     case StrLit(_, _) => Set()
     case NumLit(_, _) => Set()
@@ -310,6 +320,15 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     case FixedSolution(id, _, _) => Set(id)
     case Extra(_) => Set()
   }
+
+  private def listSolutionExprs(spec: BucketSpec): Set[Expr] = spec match {
+    case UnionBucketSpec(left, right) => listSolutionExprs(left) ++ listSolutionExprs(right)
+    case IntersectBucketSpec(left, right) => listSolutionExprs(left) ++ listSolutionExprs(right)
+    case Group(_, _, forest) => listSolutionExprs(forest)
+    case UnfixedSolution(_, expr) => Set(expr)
+    case FixedSolution(_, solution, _) => Set(solution)
+    case Extra(expr) => Set(expr)
+  }
   
 
   sealed trait BucketSpec {
@@ -343,7 +362,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     case class UnionBucketSpec(left: BucketSpec, right: BucketSpec) extends BucketSpec
     case class IntersectBucketSpec(left: BucketSpec, right: BucketSpec) extends BucketSpec
     
-    case class Group(origin: Where, target: Expr, forest: BucketSpec) extends BucketSpec
+    case class Group(origin: Option[Where], target: Expr, forest: BucketSpec) extends BucketSpec
     
     case class UnfixedSolution(id: TicId, solution: Expr) extends BucketSpec
     case class FixedSolution(id: TicId, solution: Expr, expr: Expr) extends BucketSpec

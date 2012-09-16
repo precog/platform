@@ -814,6 +814,18 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "evaluate a solve constrained by inclusion" in {
+      val input = """
+        | clicks := //clicks
+        | views := //views
+        |
+        | solve 'page = views.pageId
+        |   count(clicks where clicks.pageId = 'page)
+        | """.stripMargin
+      
+      eval(input) must not(beEmpty)
+    }.pendingUntilFixed
+
     "evaluate sliding window in a" >> {
       "solve expression" >> {
         val input = """
@@ -857,7 +869,7 @@ trait EvalStackSpecs extends Specification {
         |   campaigns where g = p""".stripMargin
 
       eval(input) mustEqual Set()
-    }.pendingUntilFixed
+    }
 
     "determine a histogram of a composite key of revenue and campaign" in {
       val input = """
@@ -895,7 +907,7 @@ trait EvalStackSpecs extends Specification {
         | 
         | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
 
-      todo //eval(input) must not(beEmpty)   
+      eval(input) must not(beEmpty)   
     }
   
     "evaluate the 'hello, quirrel' examples" >> {
