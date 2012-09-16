@@ -147,18 +147,29 @@ trait Slice { source =>
     }
   }
 
-  def deref(node: JPathNode): Slice = new Slice {
-    val size = source.size
-    val columns = source.columns.collect {
-      case (ColumnRef(JPath(`node`, xs @ _*), ctype), col) => (ColumnRef(JPath(xs: _*), ctype), col)
+  def deref(node: JPathNode): Slice = {
+    val derefed = new Slice {
+      val size = source.size
+      val columns = source.columns.collect {
+        case (ColumnRef(JPath(`node`, xs @ _*), ctype), col) => (ColumnRef(JPath(xs: _*), ctype), col)
+      }
     }
+
+    //println("derefed: "  + derefed)
+    derefed
   }
 
-  def wrap(wrapper: JPathNode): Slice = new Slice {
-    val size = source.size
-    val columns = source.columns.map {
-      case (ColumnRef(JPath(nodes @ _*), ctype), col) => (ColumnRef(JPath(wrapper +: nodes : _*), ctype), col)
+  def wrap(wrapper: JPathNode): Slice = {
+    //println("Wrapping source:\n" + source)
+    val wrapped = new Slice {
+      val size = source.size
+      val columns = source.columns.map {
+        case (ColumnRef(JPath(nodes @ _*), ctype), col) => (ColumnRef(JPath(wrapper +: nodes : _*), ctype), col)
+      }
     }
+
+    //println("wrapped:\n" + wrapped)
+    wrapped
   }
 
   def delete(jtype: JType): Slice = new Slice {
@@ -200,6 +211,8 @@ trait Slice { source =>
     val sub = Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)
     val columns = {
       if (size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)) {
+        source.columns.filter { case (ColumnRef(path, ctpe), _) => { Schema.includes(jtpe, path, ctpe) } }
+        /*
         val filteredCols = source.columns.filter { case (ColumnRef(path, ctpe), _) => {
           Schema.includes(jtpe, path, ctpe)
         }} 
@@ -215,72 +228,20 @@ trait Slice { source =>
           case CEmptyArray => JArrayFixedT(Map.empty[Int, JType])
           case invalid => sys.error("Cannot group on CType: " + invalid)
         })}
-
+        
         val values = grouped.values map { seq => seq.flatMap { case (path, ctpe) => filteredCols.get(ColumnRef(path, ctpe)) } }
         
-        def defined(row: Int, values: Iterable[Seq[Column]]): Boolean = values.forall { _.exists { _.isDefinedAt(row) }}
-
-        def sdflsd(values: Iterable[Seq[Column]], col: Column): Column = {
-          col match {
-            case c: StrColumn => {
-              new StrColumn {
-                def apply(row: Int) = c(row)
-                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
-              }
-            }
-            case c: LongColumn => {
-              new LongColumn {
-                def apply(row: Int) = c(row)
-                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
-              }
-            }
-            case c: NumColumn => {
-              new NumColumn {
-                def apply(row: Int) = c(row)
-                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
-              }
-            }
-            case c: DoubleColumn => {
-              new DoubleColumn {
-                def apply(row: Int) = c(row)
-                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
-              }
-            }
-            case c: BoolColumn => {
-              new BoolColumn {
-                def apply(row: Int) = c(row)
-                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
-              }
-            }
-            case c: NullColumn => {
-              new NullColumn {
-                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
-              }
-            }
-            case c: EmptyArrayColumn => {
-              new EmptyArrayColumn {
-                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
-              }
-            }
-            case c: EmptyObjectColumn => {
-              new EmptyObjectColumn {
-                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
-              }
-            }
-            case c: DateColumn => {
-              new DateColumn {
-                def apply(row: Int) = c(row)
-                def isDefinedAt(row: Int) = c.isDefinedAt(row) && defined(row, values)
-              }
-            }
-            case invalid => sys.error("sdflsd on invalid column: " + invalid)
-          }
+        val defined = (0 until size).foldLeft(new mutable.BitSet()) {
+          case (acc, i) => if (values.exists(_.exists(_.isDefinedAt(i)))) acc + i else acc
         }
 
-        filteredCols map { case (cref, col) => (cref, sdflsd(values, col)) }
-      }
-      else
+        println("Got defined indices from " + grouped + " values " + values + " : " + defined)
+
+        filteredCols mapValues { col => cf.util.filter(0, size, defined)(col).get }
+        */
+      } else {
         Map.empty[ColumnRef, Column]
+      }
     }
   }
 
@@ -529,7 +490,7 @@ trait Slice { source =>
   }
 
   def toString(row: Int): Option[String] = {
-    (columns.toList.sortBy(_._1) collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }) match {
+    (columns.toList.sortBy(_._1) map { case (ref, col) => ref.toString + ": " + (if (col.isDefinedAt(row)) col.strValue(row) else "(undefined)") }) match {
       case Nil => None
       case l   => Some(l.mkString("[", ", ", "]")) 
     }
@@ -537,7 +498,7 @@ trait Slice { source =>
 
   def toJsonString: String = (0 until size).map(toJson).mkString("\n")
 
-  override def toString = (0 until size).map(toString).mkString("\n")
+  override def toString = (0 until size).map(toString(_).getOrElse("")).mkString("\n")
 }
 
 object Slice {

@@ -183,6 +183,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "perform a trivial type-based filter" in checkTypedTrivial
       "perform a trivial heterogeneous type-based filter" in checkTypedHeterogeneous
       "perform a trivial object type-based filter" in checkTypedObject
+      "retain all object members when typed to unfixed object" in testTypedObjectUnfixed
       "perform another trivial object type-based filter" in checkTypedObject2
       "perform a trivial array type-based filter" in checkTypedArray
       "perform another trivial array type-based filter" in checkTypedArray2

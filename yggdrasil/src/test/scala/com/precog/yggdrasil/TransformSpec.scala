@@ -674,6 +674,22 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     resultStream must_== expected
   } 
 
+  def testTypedObjectUnfixed = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JArray(List(JNum(2), JBool(true)))))),
+        JObject(List(JField("value", JObject(List())))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), JObjectUnfixedT)
+    })
+
+    val resultStream = results.copoint
+    resultStream must_== data
+  }
+
   def checkTypedArray2 = {
     val data: Stream[JValue] = 
       Stream(

@@ -2508,6 +2508,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
               SplitGroup(line, 1, clicks.identities)(input)))))
       
       testEval(input) { result =>
+
+        println(result.mkString("\n"))
         result must haveSize(10)
         
         forall(result) {
@@ -2536,7 +2538,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate with on the clicks dataset" in {
       val line = Line(0, "")

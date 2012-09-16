@@ -380,6 +380,9 @@ trait Evaluator[M[+_]] extends DAG
         }
         
         case s @ dag.Split(line, spec, child) => {
+          val idSpec = TableTransSpec.makeTransSpec(
+            Map(paths.Key -> trans.WrapArray(Scan(DerefArrayStatic(Leaf(Source), JPathIndex(0)), freshIdScanner))))
+
           val table = for {
             grouping <- resolveTopLevelGroup(spec, splits)
             state <- get[EvaluatorState]
@@ -404,7 +407,7 @@ trait Evaluator[M[+_]] extends DAG
                 
                 back.eval(state)  //: M[Table]
               }
-            } yield result
+            } yield result//.transform(idSpec)
           } 
           table map { PendingTable(_, graph, TransSpec1.Id) }
         }

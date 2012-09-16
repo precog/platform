@@ -958,6 +958,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     def filteredNodeSubset(node: MergeNode): NodeSubset = {
       val protoGroupKeyTrans = GroupKeyTrans(Universe.sources(node.binding.groupKeySpec))
+      //println(protoGroupKeyTrans)
 
       // Since a transspec for a group key may perform a bunch of work (computing values, etc)
       // it seems like we really want to do that work only once; prior to the initial sort. 
@@ -989,14 +990,25 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           private val keyIndices = (0 until groupKeyTrans.keyOrder.size).toSet
 
           def scan(a: Unit, cols: Map[ColumnRef, Column], range: Range) = {
-            val (ticVarIndices, groupKeyColumns) = 
-              cols.collect { case (ref @ ColumnRef(JPath(JPathIndex(1), JPathField(ticVarIndex), _ @ _*), _), col) => (ticVarIndex, col) } unzip
+            // Get mappings from each ticvar to columns that define it.
+            val ticVarColumns =
+              cols.toList.collect { 
+                case (ref @ ColumnRef(JPath(JPathIndex(1), JPathField(ticVarIndex), _ @ _*), _), col) => (ticVarIndex, col)
+              }.groupBy(_._1).mapValues(_.unzip._2)
 
-            if (ticVarIndices.map(_.toInt).toSet == keyIndices) {
+            if (ticVarColumns.keySet.map(_.toInt) == keyIndices) {
+              //println("All group key columns present:\n  " + (new Slice { val size = range.end; val columns = cols }))
               // all group key columns are present, so we can use filterDefined
               val defined = range.foldLeft(new mutable.BitSet()) {
-                case (acc, i) => if (groupKeyColumns.nonEmpty && groupKeyColumns.forall(_.isDefinedAt(i))) acc + i else acc
+                case (acc, i) => if (ticVarColumns.forall { 
+                                       case (ticvar, columns) => 
+                                         val ret = columns.map(_.isDefinedAt(i))
+                                         //println(ticvar + ", mapped to " + columns + " => defined at " + i + " = " + ret)
+                                         ret.exists(_ == true)
+                                     }) acc + i else acc
               }
+
+              //println("Defined for " + defined)
 
               ((), cols.mapValues { col => cf.util.filter(range.start, range.end, defined)(col).get })
             } else {
