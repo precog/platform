@@ -151,7 +151,7 @@ trait EvalStackSpecs extends Specification {
         forall(results) {
           case (ids, _) => ids must haveSize(2)
         }
-      }.pendingUntilFixed
+      }
       
       "with the sum plus the RHS" >> {
         val input = """
@@ -166,7 +166,7 @@ trait EvalStackSpecs extends Specification {
         forall(results) {
           case (ids, _) => ids must haveSize(2)
         }
-      }.pendingUntilFixed
+      }
     }
 
     "union two wheres of the same dynamic provenance" >> {
@@ -519,7 +519,7 @@ trait EvalStackSpecs extends Specification {
         |     & clicks = clicks""".stripMargin
         
       eval(input) must not(beEmpty)
-    }.pendingUntilFixed
+    }
 
     "add sets of different types" >> {
       "a set of numbers and a set of strings" >> {
