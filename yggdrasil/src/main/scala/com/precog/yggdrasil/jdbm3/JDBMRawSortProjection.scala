@@ -82,7 +82,8 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
       throw new IllegalArgumentException("JDBM Sort Projections may not be constrained by column descriptor")
     }
 
-    val db = DBMaker.openFile(dbFile.getCanonicalPath).readonly().make()
+    // At this point we have completed all valid writes, so we open readonly + no locks, allowing for concurrent use of sorted data
+    val db = DBMaker.openFile(dbFile.getCanonicalPath).readonly().disableLocking().make()
     try {
       val index: SortedMap[Array[Byte],Array[Byte]] = db.getTreeMap(indexName)
 
