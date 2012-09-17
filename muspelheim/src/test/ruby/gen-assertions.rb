@@ -16,6 +16,10 @@ module Tests
       JSON.parse back
     end
     
+    def mean(arr)
+      arr.inject(0) { |a, b| a + b } / arr.size
+    end
+    
     def test_evaluate_a_solve_constrained_by_inclusion
       # clicks = //clicks
       clicks = load_file 'clicks.json'
@@ -43,11 +47,121 @@ module Tests
         results_must " contain(#{res})"
       end
     end
+    
+    def test_determine_a_histogram_of_a_composite_key_of_revenue_and_campaign
+      # campaigns := //campaigns
+      campaigns = load_file 'campaigns.json'
+      
+      # organizations := //organizations
+      organizations = load_file 'organizations.json'
+      
+      # solve 'revenue, 'campaign
+      #   organizations' := organizations where organizations.revenue = 'revenue
+      #   campaigns' := campaigns where campaigns.campaign = 'campaign
+      #   organizations'' := organizations' where organizations'.campaign = 'campaign
+      #   
+      #   campaigns' ~ organizations''
+      #     { revenue: 'revenue, num: count(campaigns') }
+      
+      organizations_revenue_campaign = organizations.map do |org|
+        [org['revenue'], org['campaign']]
+      end.select { |revenue, campaign| revenue && campaign }.uniq
+      
+      results = organizations_revenue_campaign.map do |revenue, campaign|
+        campaigns_bucket = campaigns.select { |c| c['campaign'] == campaign }
+        { 'revenue' => revenue, 'num' => campaigns_bucket.size }
+      end
+      
+      results_must " haveSize(#{results.size})"
+      
+      results.uniq.each do |res|
+        obj_body = res.map do |key, value|
+          "\"#{key}\" -> SString(\"#{value}\")"
+        end.join ', '
+        
+        results_must " contain(SObject(Map(#{obj_body})))"
+      end
+    end
+    
+    def test_determine_most_isolated_clicks_in_time
+      # clicks := //clicks
+      clicks = load_file 'clicks.json'
+      
+      # spacings := solve 'time
+      #   click := clicks where clicks.time = 'time
+      click_times = clicks.map { |c| c['time'] }.uniq
+      
+      spacings = click_times.map do |time|
+        click = clicks.select { |c| c['time'] == time }
+        
+        #   belowTime := max(clicks.time where clicks.time < 'time)
+        #   aboveTime := min(clicks.time where clicks.time > 'time)
+        below_time = click_times.select { |t| t < time }.max
+        above_time = click_times.select { |t| t > time }.min
+        
+        #   {
+        #     click: click,
+        #     below: click.time - belowTime,
+        #     above: aboveTime - click.time
+        #   }
+        if below_time && above_time && !click.empty?
+          click.map do |c|
+            {
+              'click' => c,
+              'below' => time - below_time,
+              'above' => above_time - time
+            }
+          end
+        else
+          []
+        end
+      end.flatten
+      
+      # meanAbove := mean(spacings.above)
+      mean_above = mean(spacings.map { |s| s['above'] })
+      
+      # meanBelow := mean(spacings.below)
+      mean_below = mean(spacings.map { |s| s['below'] })
+      
+      # spacings.click where spacings.below < meanBelow | spacings.above > meanAbove
+      results = spacings.select do |s|
+        s['below'] > mean_below && s['above'] > mean_above
+      end.map { |s| s['click'] }
+      
+      results_must " haveSize(#{results.size})"
+      
+      results.uniq.each do |res|
+        results_must " contain(#{render_value res})"
+      end
+    end
   end
 end
 
 def results_must(assertion)
   puts "  results must#{assertion}"
+end
+
+# TODO doesn't handle null
+def render_value(value)
+  if Hash === value
+    body = value.map do |key, value|
+      "\"#{key}\" -> #{render_value value}"
+    end.join ', '
+    
+    "SObject(Map(#{body}))"
+  elsif Array === value
+    body = value.map { |v| render_value v}.join ', '
+    
+    "SArray(Vector(#{body}))"
+  elsif String === value
+    "SString(\"#{value}\")"
+  elsif Fixnum === value
+    "SDecimal(BigDecimal(\"#{value}\"))"
+  elsif Boolean === value
+    "SBoolean(#{value})"
+  else
+    ''
+  end
 end
 
 Tests.methods.each do |sym|
