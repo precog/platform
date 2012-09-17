@@ -323,8 +323,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
           // array concats cannot reduce the number of columns except by eliminating empty columns
           elements.map(composeSliceTransform2).reduceLeft { (tacc, t2) => 
             tacc.zip(t2) { (sliceAcc, s2) =>
-              //println("Concatting slice: " + s2)
-              val slice = new Slice {
+              new Slice {
                 val size = sliceAcc.size
                 val columns: Map[ColumnRef, Column] = {
                   val accCols = sliceAcc.columns collect { case (ref @ ColumnRef(JPath(JPathIndex(i), _*), ctype), col) => (i, ref, col) }
@@ -352,9 +351,6 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                   }
                 }
               }
-
-              //println("array concat'ed slice: \n" + slice)
-              slice
             }
           }
 

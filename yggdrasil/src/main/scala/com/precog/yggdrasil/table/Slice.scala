@@ -148,28 +148,21 @@ trait Slice { source =>
   }
 
   def deref(node: JPathNode): Slice = {
-    val derefed = new Slice {
+    new Slice {
       val size = source.size
       val columns = source.columns.collect {
         case (ColumnRef(JPath(`node`, xs @ _*), ctype), col) => (ColumnRef(JPath(xs: _*), ctype), col)
       }
     }
-
-    //println("derefed: "  + derefed)
-    derefed
   }
 
   def wrap(wrapper: JPathNode): Slice = {
-    //println("Wrapping source:\n" + source)
-    val wrapped = new Slice {
+    new Slice {
       val size = source.size
       val columns = source.columns.map {
         case (ColumnRef(JPath(nodes @ _*), ctype), col) => (ColumnRef(JPath(wrapper +: nodes : _*), ctype), col)
       }
     }
-
-    //println("wrapped:\n" + wrapped)
-    wrapped
   }
 
   def delete(jtype: JType): Slice = new Slice {
@@ -206,42 +199,10 @@ trait Slice { source =>
     }
   }
 
-  def typed(jtpe: JType): Slice = new Slice {  //TODO use logicalColumns
-    val size = source.size
-    val sub = Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)
-    val columns = {
-      if (size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe)) {
-        source.columns.filter { case (ColumnRef(path, ctpe), _) => { Schema.includes(jtpe, path, ctpe) } }
-        /*
-        val filteredCols = source.columns.filter { case (ColumnRef(path, ctpe), _) => {
-          Schema.includes(jtpe, path, ctpe)
-        }} 
-
-        val next: Seq[(JPath, CType)] = filteredCols.keys.toList map { case ColumnRef(path, ctpe) => (path, ctpe) }
-
-        val grouped: Map[(JPath, JType), Seq[(JPath, CType)]] = next.groupBy { case (path, ctpe) => (path, ctpe match {
-          case CString => JTextT
-          case CBoolean => JBooleanT
-          case CLong | CDouble | CNum => JNumberT
-          case CNull => JNullT
-          case CEmptyObject => JObjectFixedT(Map.empty[String, JType])
-          case CEmptyArray => JArrayFixedT(Map.empty[Int, JType])
-          case invalid => sys.error("Cannot group on CType: " + invalid)
-        })}
-        
-        val values = grouped.values map { seq => seq.flatMap { case (path, ctpe) => filteredCols.get(ColumnRef(path, ctpe)) } }
-        
-        val defined = (0 until size).foldLeft(new mutable.BitSet()) {
-          case (acc, i) => if (values.exists(_.exists(_.isDefinedAt(i)))) acc + i else acc
-        }
-
-        println("Got defined indices from " + grouped + " values " + values + " : " + defined)
-
-        filteredCols mapValues { col => cf.util.filter(0, size, defined)(col).get }
-        */
-      } else {
-        Map.empty[ColumnRef, Column]
-      }
+  def typed(jtpe: JType): Slice = {
+    new Slice {  
+      val size = source.size
+      val columns = source.columns.filter { case (ColumnRef(path, ctpe), _) => Schema.includes(jtpe, path, ctpe) } 
     }
   }
 

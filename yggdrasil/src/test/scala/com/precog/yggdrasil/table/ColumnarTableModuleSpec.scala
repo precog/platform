@@ -181,18 +181,20 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "concatenate dissimilar arrays" in checkArrayConcat
       "delete elements according to a JType" in checkObjectDelete //.set(minTestsOk -> 5000) TODO: saw an error here once
       "perform a trivial type-based filter" in checkTypedTrivial
-      "perform a trivial heterogeneous type-based filter" in checkTypedHeterogeneous
-      "perform a trivial object type-based filter" in checkTypedObject
-      "retain all object members when typed to unfixed object" in testTypedObjectUnfixed
-      "perform another trivial object type-based filter" in checkTypedObject2
-      "perform a trivial array type-based filter" in checkTypedArray
-      "perform another trivial array type-based filter" in checkTypedArray2
-      "perform yet another trivial array type-based filter" in checkTypedArray3
-      "perform a fourth trivial array type-based filter" in checkTypedArray4
-      "perform a trivial number type-based filter" in checkTypedNumber
-      "perform another trivial number type-based filter" in checkTypedNumber2
-      "perform a filter returning the empty set" in checkTypedEmpty
       "perform a less trivial type-based filter" in checkTyped
+      "perform a type-based filter across slice boundaries" in testTypedAtSliceBoundary
+      "perform a trivial heterogeneous type-based filter" in testTypedHeterogeneous
+      "perform a trivial object type-based filter" in testTypedObject
+      "retain all object members when typed to unfixed object" in testTypedObjectUnfixed
+      "perform another trivial object type-based filter" in testTypedObject2
+      "perform a trivial array type-based filter" in testTypedArray
+      "perform another trivial array type-based filter" in testTypedArray2
+      "perform yet another trivial array type-based filter" in testTypedArray3
+      "perform a fourth trivial array type-based filter" in testTypedArray4
+      "perform a trivial number type-based filter" in testTypedNumber
+      "perform another trivial number type-based filter" in testTypedNumber2
+      "perform a filter returning the empty set" in testTypedEmpty
+
       "perform a summation scan case 1" in testTrivialScan
       "perform a summation scan of heterogeneous data" in testHetScan
       "perform a summation scan" in checkScan
