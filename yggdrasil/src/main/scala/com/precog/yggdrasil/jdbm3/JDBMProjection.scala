@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 package jdbm3
 
-import iterable._
 import table._
 import com.precog.common._ 
 import com.precog.util._ 
@@ -126,12 +125,6 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
       idIndexFile.commit()
     }
   }
-
-  def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = new IterableDataset(descriptor.identities, new Iterable[(Identities,Seq[CValue])] {
-    def iterator = treeMap.entrySet.iterator.asScala.map { case kvEntry =>
-      (kvEntry.getKey, rowFormat.decode(kvEntry.getValue))
-    }
-  })
 
   // Compute the successor to the provided Identities. Assumes that we would never use a VectorCase() for Identities
   private def identitiesAfter(id: Identities) = VectorCase((id.init :+ (id.last + 1)): _*)

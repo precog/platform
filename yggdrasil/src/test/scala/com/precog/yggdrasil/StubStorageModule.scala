@@ -86,12 +86,10 @@ trait DistributedSampleStubStorageModule[M[+_]] extends StubStorageModule[M] {
   def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]): TestDataset
 
   // TODO: This duplicates the same class in com.precog.muspelheim.RawJsonShardComponent
-  case class Projection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends FullProjectionLike[TestDataset] {
+  case class Projection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends ProjectionLike {
     val chunkSize = 2000
 
     def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("Dummy ProjectionLike doesn't support insert")      
-
-    def allRecords(expiresAt: Long): TestDataset = dataset(1, data)
   }
 
   implicit lazy val ordering = IdentitiesOrder.toScalaOrdering
