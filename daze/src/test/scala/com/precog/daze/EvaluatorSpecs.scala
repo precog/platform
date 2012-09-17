@@ -2693,7 +2693,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Distinct(line,
-      dag.LoadLocal(line, Root(line, PushString("/hom/numbers2"))))
+      dag.LoadLocal(line, Root(line, PushString("/hom/numbers2-sorted"))))
       
       testEval(input) { result =>
         result must haveSize(5)
@@ -2704,13 +2704,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(42, 12, 77, 1, 13)
       }
-    }.pendingUntilFixed
-    
+    }
+
     "distinct heterogenous sets" in {
       val line = Line(0, "")
       
       val input = dag.Distinct(line,
-      dag.LoadLocal(line, Root(line, PushString("/het/numbers2"))))
+      dag.LoadLocal(line, Root(line, PushString("/het/numbers2-sorted"))))
       
       testEval(input) { result =>
         result must haveSize(10)
