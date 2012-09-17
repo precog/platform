@@ -2,7 +2,6 @@ package com.precog.yggdrasil
 package util
 
 import actor._
-import iterable._
 import jdbm3._
 import metadata.MetadataStorage
 import metadata.FileMetadataStorage

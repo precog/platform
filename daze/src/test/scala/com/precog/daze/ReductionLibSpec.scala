@@ -3,7 +3,6 @@ package com.precog.daze
 import org.specs2.mutable._
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.memoization._
 import com.precog.common.Path
 import scalaz._
 import scalaz.effect._
@@ -11,7 +10,6 @@ import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
-import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
 trait ReductionLibSpec[M[+_]] extends Specification
@@ -46,7 +44,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(1)
@@ -63,7 +61,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(5)
@@ -80,7 +78,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d.toDouble
+        case (ids, SDecimal(d)) if ids.length == 0  => d.toDouble
       }
       
       result2 must contain(13.822064739747386)
@@ -97,7 +95,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(29)
@@ -114,7 +112,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(77)
@@ -131,7 +129,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(1)
@@ -148,7 +146,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d.toDouble
+        case (ids, SDecimal(d)) if ids.length == 0  => d.toDouble
       }
       
       result2 must contain(27.575351312358652)
@@ -164,7 +162,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 0  => d.toInt
       }
       
       result2 must contain(18)
@@ -181,7 +179,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 0  => d.toInt
       }
       
       result2 must contain(145)
@@ -198,7 +196,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d.toDouble
+        case (ids, SDecimal(d)) if ids.length == 0  => d.toDouble
       }
       
       result2 must contain(8007)
@@ -215,7 +213,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d.toDouble
+        case (ids, SDecimal(d)) if ids.length == 0  => d.toDouble
       }
       
       result2 must contain(760.4)
@@ -235,7 +233,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(10)
@@ -252,7 +250,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(13.822064739747386)
@@ -269,7 +267,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(29)
@@ -286,7 +284,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(77)
@@ -303,7 +301,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(1)
@@ -320,7 +318,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d.toDouble
+        case (ids, SDecimal(d)) if ids.length == 0  => d.toDouble
       }
       
       result2 must contain(27.575351312358652)
@@ -337,7 +335,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(145)
@@ -354,7 +352,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(8007)
@@ -371,7 +369,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(760.4)
@@ -390,7 +388,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(22)
@@ -407,7 +405,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(0)
@@ -424,7 +422,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(1.8888888888888888)
@@ -441,7 +439,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(12)
@@ -458,7 +456,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(-3)
@@ -475,7 +473,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d.toDouble
+        case (ids, SDecimal(d)) if ids.length == 0  => d.toDouble
       }
       
       result2 must contain(4.121608220220312)
@@ -492,7 +490,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(17)
@@ -509,7 +507,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(185)
@@ -526,7 +524,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0  => d
       }
       
       result2 must contain(16.987654320987655)

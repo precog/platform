@@ -1710,7 +1710,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
         //json <- omniverse.table.toJson
         //_ = println("Omniverse: " + json.mkString("\n"))
-        result <- omniverse.table.compact(groupKeySpec(Source)).partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("groupKeys"))) { partition =>
+        sorted <- omniverse.table.compact(groupKeySpec(Source)).sort(groupKeySpec(Source))
+        result <- sorted.partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("groupKeys"))) { partition =>
           val groupKeyTrans = OuterObjectConcat(
             omniverse.groupKeys.zipWithIndex map { case (ticvar, i) =>
               WrapObject(
@@ -1875,7 +1876,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                    (ibufs: IndexBuffers = new IndexBuffers(leftPosition.key.size, rightPosition.key.size)): M[Option[(Slice, CogroupState)]] = {
             val SlicePosition(lpos0, lkstate, lkey, lhead, ltail) = leftPosition
             val SlicePosition(rpos0, rkstate, rkey, rhead, rtail) = rightPosition
-            
+
             val comparator = Slice.rowComparatorFor(lkey, rkey) { slice => 
               // since we've used the key transforms, and since transforms are contracturally
               // forbidden from changing slice size, we can just use all
@@ -1895,7 +1896,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                       buildRemappings(lpos + 1, xrstart, xrstart, rpos, endRight)
                     case GT => 
                       // catch input-out-of-order errors early
-                      if (xrend == -1) sys.error("Inputs are not sorted; value on the left exceeded value on the right at the end of equal span.")
+                      if (xrend == -1) sys.error("Inputs are not sorted; value on the left exceeded value on the right at the end of equal span. lpos = %d, rpos = %d".format(lpos, rpos))
                       buildRemappings(lpos, xrend, Reset, Reset, endRight)
                     case EQ => 
                       ibufs.advanceBoth(lpos, rpos)
@@ -2060,8 +2061,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         } // end of step
 
         val initialState = for {
-          leftUnconsed  <- self.slices.uncons
-          rightUnconsed <- that.slices.uncons
+          // We have to compact both sides to avoid any rows for which the key is completely undefined
+          leftUnconsed  <- self.compact(leftKey).slices.uncons
+          rightUnconsed <- that.compact(rightKey).slices.uncons
         } yield {
           val cogroup = for {
             (leftHead, leftTail)   <- leftUnconsed

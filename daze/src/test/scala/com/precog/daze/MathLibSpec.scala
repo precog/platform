@@ -3,7 +3,6 @@ package com.precog.daze
 import org.specs2.mutable._
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.memoization._
 import com.precog.common.Path
 
 import scalaz._
@@ -12,7 +11,6 @@ import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
-import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
 trait MathLibSpec[M[+_]] extends Specification
@@ -46,7 +44,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(1)
@@ -65,7 +63,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0, 1.1752011936438014, -1.1752011936438014, 8.696374707602505E17, -4.872401723124452E9)
@@ -91,7 +89,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 57.29577951308232, -57.29577951308232, 2406.4227395494577, -1317.8029288008934)
@@ -107,7 +105,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.718281828459045, -0.6321205588285577, 1.73927494152050099E18, -0.9999999998973812)
@@ -123,7 +121,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(1)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(-1.0)
@@ -139,7 +137,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(3)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0, 5)
@@ -155,7 +153,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.5707963267948966, -1.5707963267948966)
@@ -171,7 +169,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(3)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.6232492903979006)
@@ -187,7 +185,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(1.0, 0.5403023058681398, 0.5403023058681398, -0.39998531498835127, -0.5328330203333975)
@@ -203,7 +201,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(1.0, 2.7182818284590455, 0.36787944117144233, 1.73927494152050099E18, 1.026187963170189E-10)
@@ -219,7 +217,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(1)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0)
@@ -235,7 +233,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, 3.4760266448864496, -2.8438669798515654)
@@ -251,7 +249,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.7853981633974483, -0.7853981633974483, 1.5469913006098266, -1.5273454314033659)
@@ -267,7 +265,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, 42.0, -23.0)
@@ -283,7 +281,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, 42.0, -23.0)
@@ -299,7 +297,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.6931471805599453, 3.7612001156935624)
@@ -315,7 +313,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, 6.48074069840786)
@@ -331,7 +329,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, 42.0, -23.0)
@@ -347,7 +345,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.017453292519943295, -0.017453292519943295, 0.7330382858376184, -0.40142572795869574)
@@ -363,7 +361,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.7615941559557649, -0.7615941559557649, 1.0, -1.0)
@@ -379,7 +377,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0, 1, -1, 42, -23)
@@ -395,7 +393,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(1.0, 1.543080634815244, 1.543080634815244, 8.696374707602505E17, 4.872401723124452E9)
@@ -421,7 +419,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.5574077246549023, -1.5574077246549023, 2.2913879924374863, -1.5881530833912738)
@@ -437,7 +435,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0, 1, 42, 23)
@@ -453,7 +451,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.8414709848078965, -0.8414709848078965, -0.9165215479156338, 0.8462204041751706)
@@ -469,7 +467,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(3)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 3.7376696182833684)
@@ -485,7 +483,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0)
@@ -501,7 +499,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(1.5707963267948966, 0.0, 3.141592653589793)
@@ -517,7 +515,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(4.9E-324, 2.220446049250313E-16, 2.220446049250313E-16, 7.105427357601002E-15, 3.552713678800501E-15)
@@ -534,7 +532,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0, 1, -1, 7, -23)
@@ -551,7 +549,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(7.0, 7.0710678118654755, 7.0710678118654755, 42.579337712087536, 24.041630560342615)
@@ -568,7 +566,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, 2.30539333248E11, -3.404825447E9)
@@ -585,7 +583,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(7, 42)
@@ -602,7 +600,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.1418970546041639, -0.1418970546041639, 1.4056476493802699, -1.2753554896511767)
@@ -619,7 +617,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, 42.0, 23.0)
@@ -636,7 +634,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, -2.0)
@@ -655,7 +653,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0, 1.1752011936438014, -1.1752011936438014, 8.696374707602505E17, -4.872401723124452E9)
@@ -671,7 +669,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 57.29577951308232, -57.29577951308232, 2406.4227395494577, -1317.8029288008934)
@@ -687,7 +685,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.718281828459045, -0.6321205588285577, 1.73927494152050099E18, -0.9999999998973812)
@@ -703,7 +701,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(3)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0, 5)
@@ -719,7 +717,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.5707963267948966, -1.5707963267948966)
@@ -735,7 +733,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(3)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.6232492903979006)
@@ -751,7 +749,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(1.0, 0.5403023058681398, 0.5403023058681398, -0.39998531498835127, -0.5328330203333975)
@@ -767,7 +765,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(1.0, 2.7182818284590455, 0.36787944117144233, 1.73927494152050099E18, 1.026187963170189E-10)
@@ -783,7 +781,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, 3.4760266448864496, -2.8438669798515654)
@@ -799,7 +797,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.7853981633974483, -0.7853981633974483, 1.5469913006098266, -1.5273454314033659)
@@ -815,7 +813,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, 42.0, -23.0)
@@ -831,7 +829,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, 42.0, -23.0)
@@ -847,7 +845,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.6931471805599453, 3.7612001156935624)
@@ -863,7 +861,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, 6.48074069840786)
@@ -879,7 +877,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, 42.0, -23.0)
@@ -895,7 +893,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.017453292519943295, -0.017453292519943295, 0.7330382858376184, -0.40142572795869574)
@@ -911,7 +909,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.7615941559557649, -0.7615941559557649, 1.0, -1.0)
@@ -927,7 +925,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0, 1, -1, 42, -23)
@@ -943,7 +941,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(1.0, 1.543080634815244, 1.543080634815244, 8.696374707602505E17, 4.872401723124452E9)
@@ -959,7 +957,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.5574077246549023, -1.5574077246549023, 2.2913879924374863, -1.5881530833912738)
@@ -975,7 +973,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0, 1, 42, 23)
@@ -991,7 +989,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.8414709848078965, -0.8414709848078965, -0.9165215479156338, 0.8462204041751706)
@@ -1007,7 +1005,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(3)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 3.7376696182833684)
@@ -1023,7 +1021,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0)
@@ -1039,7 +1037,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(1.5707963267948966, 0.0, 3.141592653589793)
@@ -1055,7 +1053,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(4.9E-324, 2.220446049250313E-16, 2.220446049250313E-16, 7.105427357601002E-15, 3.552713678800501E-15)
@@ -1072,7 +1070,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0, 1, -1, 7, -23)
@@ -1089,7 +1087,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(7.0, 7.0710678118654755, 7.0710678118654755, 42.579337712087536, 24.041630560342615)
@@ -1106,7 +1104,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, 2.30539333248E11, -3.404825447E9)
@@ -1123,7 +1121,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(7, 42)
@@ -1140,7 +1138,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 0.1418970546041639, -0.1418970546041639, 1.4056476493802699, -1.2753554896511767)
@@ -1157,7 +1155,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, 42.0, 23.0)
@@ -1174,7 +1172,7 @@ trait MathLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1  => d
       }
       
       result2 must contain(0.0, 1.0, -1.0, -2.0)

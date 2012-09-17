@@ -3,7 +3,6 @@ package com.precog.daze
 import org.specs2.mutable._
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.memoization._
 import com.precog.common.Path
 import scalaz._
 import scalaz.effect._
@@ -11,7 +10,6 @@ import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
-import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
 import org.joda.time._
@@ -45,7 +43,7 @@ trait TimeLibSpec[M[+_]] extends Specification
         Root(line, PushString("MMM d, yyyy h:mm:ss a")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 0 => d.toString
       }
 
       result must haveSize(1)
@@ -61,7 +59,7 @@ trait TimeLibSpec[M[+_]] extends Specification
         Root(line, PushString("MMM d, yyyy h:mm:ss a Z")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 0 => d.toString
       }
 
       result must haveSize(1)
@@ -77,7 +75,7 @@ trait TimeLibSpec[M[+_]] extends Specification
         Root(line, PushString("MMM d, yyyy h:mm:ss a Z")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 0 => d.toString
       }
       
       result must beEmpty
@@ -92,7 +90,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("MMM dd yyyy k:mm:ss.SSS"))))
         
       val result = testEval(input) collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
 
       result must haveSize(4)
@@ -108,7 +106,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("MMM dd yyyy k:mm:ss.SSS")))
         
       val result = testEval(input) collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
 
       result must haveSize(4)
@@ -124,7 +122,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("-10:00")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 0 => d.toString
       }
 
       result must haveSize(1)
@@ -140,7 +138,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("-10:00")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 0 => d.toString
       }
 
       result must haveSize(1)
@@ -156,7 +154,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushNum("10")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 0 => d.toString
       }
 
       result must haveSize(1)
@@ -172,7 +170,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushNum("10")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 0 => d.toString
       }
 
       result must haveSize(1)
@@ -188,7 +186,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("2010-06-04T07:04:01+00:00")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 0 => d.toInt
       }
 
       result must haveSize(1)
@@ -204,7 +202,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("2010-06-04T05:04:01+01:00")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 0 => d.toInt
       }
 
       result must haveSize(1)
@@ -219,7 +217,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("2010-06-04T05")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 0 => d.toLong
       }
 
       result must haveSize(1)
@@ -234,7 +232,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("2010-06-04T03-02:00")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 0 => d.toLong
       }
 
       result must haveSize(1)
@@ -249,7 +247,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("2010-06-04T05")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 0 => d.toString
       }
 
       result must haveSize(1)
@@ -264,7 +262,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("2010-06-04T03-02:00")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 0 => d.toString
       }
 
       result must haveSize(1)
@@ -279,7 +277,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("2010-01-04")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 0 => d.toString
       }
 
       result must haveSize(1)
@@ -294,7 +292,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("2010-01-04T-02:00")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 0 => d.toString
       }
 
       result must haveSize(1)
@@ -309,7 +307,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("2010-01-04")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 0 => d.toInt
       }
 
       result must haveSize(1)
@@ -324,7 +322,7 @@ trait TimeLibSpec[M[+_]] extends Specification
           Root(line, PushString("2010-01-04T03-02:00")))
         
       val result = testEval(input) collect {
-        case (VectorCase(), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 0 => d.toInt
       }
 
       result must haveSize(1)
@@ -342,7 +340,7 @@ trait TimeLibSpec[M[+_]] extends Specification
         Root(line, PushString("-10:00")))
         
       val result = testEval(input) collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
       
       result must contain("2011-02-21T01:09:59.165-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00", "2010-04-28T15:37:52.599-10:00", "2012-12-28T06:38:19.430-10:00").only
@@ -360,7 +358,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(time)) => 
+        case (ids, SString(time)) if ids.length == 1 => 
           val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
           newTime.getMillis.toLong
       }
@@ -380,7 +378,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
       
       result2 must contain("2011-02-21T00:39:59.165-10:30", "2012-02-11T05:41:33.394-10:30", "2011-09-06T06:14:52.848-10:30", "2010-04-28T15:07:52.599-10:30", "2012-12-28T06:08:19.430-10:30")
@@ -400,7 +398,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
       
       result2 must contain("2011-02-21T01:09:59.165-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00", "2010-04-28T15:37:52.599-10:00", "2012-12-28T06:38:19.430-10:00")
@@ -418,7 +416,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(time)) => 
+        case (ids, SString(time)) if ids.length == 1 => 
           val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
           newTime.getMillis.toLong
       }
@@ -438,7 +436,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
       
       result2 must contain("2011-02-21T00:39:59.165-10:30", "2012-02-11T05:41:33.394-10:30", "2011-09-06T06:14:52.848-10:30", "2010-04-28T15:07:52.599-10:30", "2012-12-28T06:08:19.430-10:30")
@@ -457,7 +455,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toLong
       }
       
       result2 must contain(1272505072599L, 1315327492848L, 1328976693394L, 1356712699430L, 1298286599165L)
@@ -476,7 +474,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toLong
       }
       
       result2 must contain(1272505072599L, 1315327492848L, 1328976693394L, 1356712699430L, 1298286599165L)
@@ -496,7 +494,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
       
       result2 must contain("2012-02-28T06:44:52.420-10:00", "2012-02-18T06:44:52.780-10:00", "2012-02-21T08:28:42.774-10:00", "2012-02-25T08:01:27.710-10:00", "2012-02-18T06:44:52.854-10:00")      
@@ -519,7 +517,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
       
       result2 must contain("2012-02-28T06:44:52.420-10:00", "2012-02-18T06:44:52.780-10:00", "2012-02-21T08:28:42.774-10:00", "2012-02-25T08:01:27.710-10:00", "2012-02-18T06:44:52.854-10:00")      
@@ -542,7 +540,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -564,7 +562,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -586,7 +584,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -609,7 +607,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -632,7 +630,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -654,7 +652,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -676,7 +674,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -698,7 +696,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -720,7 +718,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -742,7 +740,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -767,7 +765,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -790,7 +788,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -813,7 +811,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -835,7 +833,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -857,7 +855,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -879,7 +877,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -901,7 +899,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -923,7 +921,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(s)) => s
+        case (ids, SString(s)) if ids.length == 1 => s
       }
       
       result2 must contain(
@@ -948,7 +946,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(-2, -1, 0)
@@ -965,7 +963,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(-16, -4, -27, 4, -11)
@@ -982,7 +980,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(-49, -118, -72, -21, 21)
@@ -999,7 +997,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(-505, -347, 148, -826, -150)
@@ -1016,7 +1014,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toLong
       }
       
       result2 must contain(-12131, -3606, -19836, -8340, 3554)
@@ -1033,7 +1031,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toLong
       }
       
       result2 must contain(-727898, 213295, -216396, -500411, -1190164)
@@ -1050,7 +1048,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toLong
       }
       
       result2 must contain(-30024690, -43673890, -12983796, -71409896, 12797729)
@@ -1067,7 +1065,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toLong
       }
       
       result2 must contain(12797729921L, -12983796645L, -30024690328L, -43673890874L, -71409896910L)
@@ -1087,7 +1085,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(-2, -1, 0)
@@ -1104,7 +1102,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(-16, -4, -27, 4, -11)
@@ -1121,7 +1119,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(-49, -118, -72, -21, 21)
@@ -1138,7 +1136,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(-505, -347, 148, -826, -150)
@@ -1155,7 +1153,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toLong
       }
       
       result2 must contain(-12131, -3606, -19836, -8340, 3554)
@@ -1172,7 +1170,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toLong
       }
       
       result2 must contain(-727898, 213295, -216396, -500411, -1190164)
@@ -1189,7 +1187,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toLong
       }
       
       result2 must contain(-30024690, -43673890, -12983796, -71409896, 12797729)
@@ -1206,7 +1204,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toLong
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toLong
       }
       
       result2 must contain(12797729921L, -12983796645L, -30024690328L, -43673890874L, -71409896910L)
@@ -1226,7 +1224,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
       
       result2 must contain("+08:00", "+09:00", "-10:00", "-07:00", "+06:00")
@@ -1243,7 +1241,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
       
       result2 must contain("spring", "winter", "summer")
@@ -1260,7 +1258,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(2010, 2011, 2012)
@@ -1277,7 +1275,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(1, 2, 3, 4)
@@ -1294,7 +1292,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(4, 2, 9, 12)
@@ -1311,7 +1309,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(17, 8, 36, 6, 52)
@@ -1327,7 +1325,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(2, 5, 4)
@@ -1343,7 +1341,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(52, 119, 42, 249, 363)
@@ -1359,7 +1357,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
         
       result2 must contain(21, 29, 11, 6, 28)
@@ -1375,7 +1373,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(1, 2, 6, 5, 4)
@@ -1391,7 +1389,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(20, 6, 9)
@@ -1407,7 +1405,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(9, 44, 11, 37, 38)
@@ -1423,7 +1421,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(19, 59, 52, 33)
@@ -1439,7 +1437,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(430, 165, 848, 394, 599)
@@ -1458,7 +1456,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
       
       result2 must contain("+08:00", "+09:00", "-10:00", "-07:00", "+06:00")
@@ -1475,7 +1473,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d.toString
+        case (ids, SString(d)) if ids.length == 1 => d.toString
       }
       
       result2 must contain("spring", "winter", "summer")
@@ -1492,7 +1490,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(2010, 2011, 2012)
@@ -1509,7 +1507,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(1, 2, 3, 4)
@@ -1526,7 +1524,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(4, 2, 9, 12)
@@ -1543,7 +1541,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(17, 8, 36, 6, 52)
@@ -1559,7 +1557,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(2, 5, 4)
@@ -1575,7 +1573,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(52, 119, 42, 249, 363)
@@ -1591,7 +1589,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
         
       result2 must contain(21, 29, 11, 6, 28)
@@ -1607,7 +1605,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(1, 2, 6, 5, 4)
@@ -1623,7 +1621,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(20, 6, 9)
@@ -1639,7 +1637,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(9, 44, 11, 37, 38)
@@ -1655,7 +1653,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(19, 59, 52, 33)
@@ -1671,7 +1669,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
       
       result2 must contain(430, 165, 848, 394, 599)
@@ -1690,7 +1688,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04-29","2011-02-21","2011-09-06","2012-02-11","2012-12-28")
@@ -1706,7 +1704,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04","2011-02","2011-09","2012-02","2012-12")
@@ -1722,7 +1720,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2012-363", "2011-249", "2012-042", "2010-119", "2011-052")
@@ -1738,7 +1736,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("04-29","02-21","09-06","02-11","12-28")
@@ -1754,7 +1752,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04-29T09","2011-02-21T20","2011-09-06T06","2012-02-11T09","2012-12-28T22")
@@ -1770,7 +1768,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04-29T09:37","2011-02-21T20:09","2011-09-06T06:44","2012-02-11T09:11","2012-12-28T22:38")
@@ -1786,7 +1784,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04-29T09:37:52","2011-02-21T20:09:59","2011-09-06T06:44:52","2012-02-11T09:11:33","2012-12-28T22:38:19")
@@ -1802,7 +1800,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04-29T09:37:52.599","2011-02-21T20:09:59.165","2011-09-06T06:44:52.848","2012-02-11T09:11:33.394","2012-12-28T22:38:19.430")
@@ -1818,7 +1816,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("09:37:52.599+08:00","20:09:59.165+09:00","06:44:52.848-10:00","09:11:33.394-07:00","22:38:19.430+06:00")
@@ -1834,7 +1832,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("09:37:52.599","20:09:59.165","06:44:52.848","09:11:33.394","22:38:19.430")
@@ -1850,7 +1848,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("09:37","20:09","06:44","09:11","22:38")
@@ -1866,7 +1864,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("09:37:52","20:09:59","06:44:52","09:11:33","22:38:19")
@@ -1885,7 +1883,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04-29","2011-02-21","2011-09-06","2012-02-11","2012-12-28")
@@ -1901,7 +1899,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04","2011-02","2011-09","2012-02","2012-12")
@@ -1917,7 +1915,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2012-363", "2011-249", "2012-042", "2010-119", "2011-052")
@@ -1933,7 +1931,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("04-29","02-21","09-06","02-11","12-28")
@@ -1949,7 +1947,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04-29T09","2011-02-21T20","2011-09-06T06","2012-02-11T09","2012-12-28T22")
@@ -1965,7 +1963,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04-29T09:37","2011-02-21T20:09","2011-09-06T06:44","2012-02-11T09:11","2012-12-28T22:38")
@@ -1981,7 +1979,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04-29T09:37:52","2011-02-21T20:09:59","2011-09-06T06:44:52","2012-02-11T09:11:33","2012-12-28T22:38:19")
@@ -1997,7 +1995,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("2010-04-29T09:37:52.599","2011-02-21T20:09:59.165","2011-09-06T06:44:52.848","2012-02-11T09:11:33.394","2012-12-28T22:38:19.430")
@@ -2013,7 +2011,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("09:37:52.599+08:00","20:09:59.165+09:00","06:44:52.848-10:00","09:11:33.394-07:00","22:38:19.430+06:00")
@@ -2029,7 +2027,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("09:37:52.599","20:09:59.165","06:44:52.848","09:11:33.394","22:38:19.430")
@@ -2045,7 +2043,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("09:37","20:09","06:44","09:11","22:38")
@@ -2061,7 +2059,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("09:37:52","20:09:59","06:44:52","09:11:33","22:38:19")
