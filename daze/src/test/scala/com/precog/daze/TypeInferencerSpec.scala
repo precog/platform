@@ -564,7 +564,27 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       result must_== expected
     }
     
-    "propagate type information through wrap->deref" in {
+    "negate type inference from deref by wrap" in {
+      val line = Line(0, "")
+      
+      val clicks = LoadLocal(line, Root(line, PushString("/clicks")))
+      
+      val input =
+        Join(line, DerefObject, CrossLeftSort,
+          Join(line, WrapObject, CrossLeftSort,
+            Root(line, PushString("foo")),
+            clicks),
+          Root(line, PushString("foo")))
+
+      val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
+
+      val expected = Map(
+        "/clicks" -> Map(JPath.Identity -> Set(CLong, CDouble, CNum)))
+
+      result mustEqual expected
+    }
+    
+    "propagate type information through split->wrap->deref" in {
       val line = Line(0, "")
       
       val clicks = LoadLocal(line, Root(line, PushString("/clicks")))
