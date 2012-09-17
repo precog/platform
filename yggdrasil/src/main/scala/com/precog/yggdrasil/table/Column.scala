@@ -139,7 +139,6 @@ trait NullColumn extends Column {
 }
 object NullColumn {
   def apply(definedAt: BitSet) = {
-    println("New NullColumn defined at " + definedAt)
     new BitsetColumn(definedAt) with NullColumn
   }
 }
