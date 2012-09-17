@@ -563,6 +563,36 @@ trait TypeInferencerSpec[M[+_]] extends Specification
 
       result must_== expected
     }
+    
+    "propagate type information through wrap->deref" in {
+      val line = Line(0, "")
+      
+      val clicks = LoadLocal(line, Root(line, PushString("/clicks")))
+      
+      val clicksTime =
+        Join(line, DerefObject, CrossLeftSort,
+          clicks,
+          Root(line, PushString("time")))
+      
+      lazy val split: dag.Split =
+        Split(line,
+          Group(0, clicks, UnfixedSolution(1, clicksTime)),
+          Join(line, WrapObject, CrossLeftSort,
+            Root(line, PushString("foo")),
+            SplitGroup(line, 0, Vector(LoadIds("/clicks")))(split)))
+            
+      val input =
+        Join(line, DerefObject, CrossLeftSort,
+          split,
+          Root(line, PushString("foo")))
+      
+      val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
+      
+      val expected = Map(
+        "/clicks" -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull))
+        
+      result mustEqual expected
+    }
   }
 }
 
