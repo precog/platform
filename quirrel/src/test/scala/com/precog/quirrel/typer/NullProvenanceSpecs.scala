@@ -55,9 +55,15 @@ object NullProvenanceSpecs extends Specification
       }
     }
     
-    "not propagate through new" in {
+    "propagate through new" in {
       val tree = compile("new (//a + //b)")
-      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }    
+
+    "propagate through solve" in {
+      val tree = compile("solve 'foo = //a + //b 'foo")
+      tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     

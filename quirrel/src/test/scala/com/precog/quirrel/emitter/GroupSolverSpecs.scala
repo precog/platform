@@ -46,7 +46,7 @@ object GroupSolverSpecs extends Specification
   import buckets._
       
   "group solver" should {
-    "identify and solve group set for trivial cf example" in {
+    "identify and solve group set for trivial solve example" in {
       val input = "clicks := load(//clicks) solve 'day clicks where clicks.day = 'day"
       
       val Let(_, _, _, _,
@@ -58,7 +58,7 @@ object GroupSolverSpecs extends Specification
       tree.buckets must beSome(expected)
     }
     
-    "identify composite bucket for trivial cf example with conjunction" in {
+    "identify composite bucket for trivial solve example with conjunction" in {
       val input = "clicks := load(//clicks) solve 'day clicks where clicks.day = 'day & clicks.din = 'day"
       
       val Let(_, _, _, _,
@@ -69,6 +69,46 @@ object GroupSolverSpecs extends Specification
         IntersectBucketSpec(
           UnfixedSolution("'day", leftSol),
           UnfixedSolution("'day", rightSol)))
+      
+      tree.errors must beEmpty
+      tree.buckets must beSome(expected)
+    }    
+
+    "identify composite bucket for solve with contraint for 'a in constraints and body" in {
+      val input = """
+        | foo := //foo 
+        | bar := //bar 
+        | solve 'a = bar.a 
+        |   count(foo where foo.a = 'a)
+        """.stripMargin
+      
+      val Let(_, _, _, _,
+        Let(_, _, _, _,
+          tree @ Solve(_,
+            Vector(Eq(_, _, constrSol)), Dispatch(_, _, Vector(origin @ Where(_, target, Eq(_, bodySol, _))))))) = compile(input)
+          
+      val expected = IntersectBucketSpec(
+        Group(None, constrSol,
+          UnfixedSolution("'a", constrSol)),
+        Group(Some(origin), target,
+          UnfixedSolution("'a", bodySol)))
+      
+      tree.errors must beEmpty
+      tree.buckets must beSome(expected)
+    }
+    
+    "identify composite bucket for solve with contraint for 'a only solvable in constrains" in {
+      val input = """
+        | foo := //foo 
+        | solve 'a = foo.a 
+        |   count(foo where foo.a < 'a)
+        """.stripMargin
+      
+      val Let(_, _, _, _,
+        tree @ Solve(_,
+          Vector(Eq(_, _, constrSol)), _)) = compile(input)
+          
+      val expected = Group(None, constrSol, UnfixedSolution("'a", constrSol)) 
       
       tree.errors must beEmpty
       tree.buckets must beSome(expected)
@@ -137,6 +177,51 @@ object GroupSolverSpecs extends Specification
         | """.stripMargin
         
       compile(input).errors must not(beEmpty)
+    }    
+
+    "accept a solve when a single tic-variable has a defining set only in the constraints" in {
+      val input = """
+        | foo := //foo
+        |
+        | solve 'a = foo.a 
+        |   foo where foo.a < 'a
+        | """.stripMargin
+        
+      compile(input).errors must beEmpty
+    }
+
+    "accept a solve when a single tic-variable has a defining set only in the body" in {
+      val input = """
+        | foo := //foo
+        |
+        | solve 'a < foo.a 
+        |   foo where foo.a = 'a
+        | """.stripMargin
+        
+      compile(input).errors must beEmpty
+    }
+
+    "accept a solve when a tic var is constrained in the constraints and the body" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        |
+        | solve 'a = foo.a 
+        |   count(bar where bar.a = 'a)
+        | """.stripMargin
+        
+      compile(input).errors must beEmpty
+    }
+
+    "accept a solve when a tic var is constrained inside a reduction" in {
+      val input = """
+        | foo := //foo
+        |
+        | solve 'a = foo.a 
+        |   {count: count(foo where foo.a < 'a), value: 'a}
+        | """.stripMargin
+        
+      compile(input).errors must beEmpty
     }
     
     "produce an error when a single tic-variable lacks a defining set with extras" in {

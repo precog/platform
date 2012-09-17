@@ -426,6 +426,51 @@ object ProvenanceComputationSpecs extends Specification
         tree.provenance must beLike { case DynamicProvenance(_) => ok }
         tree.errors must beEmpty
       }
+      {
+        val tree = compile("""
+          | foo := //foo
+          | bar := //bar
+          | solve 'a = bar.a
+          |   count(foo where foo.a = 'a)
+          """.stripMargin)
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+      {
+        val tree = compile("""
+          | foo := //foo
+          | solve 'a = foo.a
+          |   {count: count(foo where foo.a < 'a), value: 'a}
+          """.stripMargin)
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+    }
+
+    "determine provenance from constraints of a solve" in {
+      {
+        val tree = compile("""
+          | solve 'a = //foo + //bar
+          |   {a: 'a}
+          """.stripMargin)
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+      {
+        val tree = compile("""
+          | solve (//foo + //bar) 4
+          """.stripMargin)
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(OperationOnUnrelatedSets, SolveLackingFreeVariables)
+      }
+    }
+
+    "determine provenance from new" in {
+      val tree = compile("""
+        | new (//foo + //bar) 
+        """.stripMargin)
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
 
     "identify distinct dispatch" in {

@@ -164,9 +164,12 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           val constrConstr = constrVec reduce { _ ++ _ }
           
           val (errors, constr) = loop(child, relations, constraints)
-          expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+          val errorSet = constrErrors ++ errors
           
-          (constrErrors ++ errors, constrConstr ++ constr)
+          if (errorSet.nonEmpty) expr.provenance = NullProvenance
+          else expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+          
+          (errorSet, constrConstr ++ constr)
         }
         
         case Import(_, _, child) => {
@@ -177,7 +180,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         
         case New(_, child) => {
           val (errors, constr) = loop(child, relations, constraints)
-          expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+
+          if (errors.nonEmpty) expr.provenance = NullProvenance
+          else expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+
           (errors, constr)
         }
         
