@@ -115,7 +115,11 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ FindDescriptorRoot(descriptor, createOk) => 
       logger.trace(msg.toString)
-      sender ! storage.findDescriptorRoot(descriptor, createOk).unsafePerformIO
+      sender ! storage.findDescriptorRoot(descriptor, createOk)
+    
+    case msg @ FindDescriptorArchive(descriptor) => 
+      logger.trace(msg.toString)
+      sender ! storage.findArchiveRoot(descriptor)
     
     case msg @ FlushMetadata => 
       flush(Some(sender)).unsafePerformIO
@@ -237,6 +241,7 @@ case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
 case class FindPathMetadata(path: Path, selector: JPath) extends ShardMetadataAction
 case class FindDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean) extends ShardMetadataAction
+case class FindDescriptorArchive(desc: ProjectionDescriptor) extends ShardMetadataAction
 case class MetadataSaved(saved: Set[ProjectionDescriptor]) extends ShardMetadataAction
 case object GetCurrentCheckpoint
 

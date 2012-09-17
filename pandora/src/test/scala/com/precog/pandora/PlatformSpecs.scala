@@ -88,10 +88,10 @@ class PlatformSpecs
 
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
-    def baseDir(descriptor: ProjectionDescriptor): File =
-      fileMetadataStorage.findDescriptorRoot(descriptor, false).unsafePerformIO getOrElse sys.error("Cannot find base dir. for descriptor: " + descriptor)
-    def archiveDir(descriptor: ProjectionDescriptor): File =
-      fileMetadataStorage.findArchiveRoot(descriptor).unsafePerformIO getOrElse sys.error("Cannot find base dir. for descriptor: " + descriptor)
+    def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
+      fileMetadataStorage.findDescriptorRoot(descriptor, false)
+    def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
+      fileMetadataStorage.findArchiveRoot(descriptor)
   }
 
   override def startup() {

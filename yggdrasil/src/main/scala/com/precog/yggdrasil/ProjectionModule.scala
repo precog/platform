@@ -27,6 +27,7 @@ trait ProjectionModule {
 
   val Projection: ProjectionCompanion
 
+  // TODO: Should these really live here, or run through MetadataActor or ProjectionsActor directly?
   trait ProjectionCompanion {
     def open(descriptor: ProjectionDescriptor): IO[Projection]
 

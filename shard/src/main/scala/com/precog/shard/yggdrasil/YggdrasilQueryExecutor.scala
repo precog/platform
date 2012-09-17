@@ -43,11 +43,14 @@ import com.precog.util.FilesystemFileOps
 
 import akka.actor.ActorSystem
 import akka.dispatch._
+import akka.pattern.ask
 import akka.util.duration._
 import akka.util.Duration
 import akka.util.Timeout
 
 import com.weiglewilczek.slf4s.Logging
+
+import java.io.File
 
 import scalaz._
 import scalaz.Validation._
@@ -111,9 +114,19 @@ trait YggdrasilQueryExecutorComponent {
       val storage = new Storage
 
       object Projection extends JDBMProjectionCompanion {
+        private implicit val askTimeout = yggConfig.projectionRetrievalTimeout
+             
         val fileOps = FilesystemFileOps
-        def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
-        def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+
+        def baseDir(descriptor: ProjectionDescriptor) = {
+          val base = (storage.shardSystemActor ? FindDescriptorRoot(descriptor, true)).mapTo[IO[Option[File]]]
+          Await.result(base, yggConfig.maxEvalDuration)
+        }
+
+        def archiveDir(descriptor: ProjectionDescriptor) = {
+          val archive = (storage.shardSystemActor ? FindDescriptorArchive(descriptor)).mapTo[IO[Option[File]]]
+          Await.result(archive, yggConfig.maxEvalDuration)
+        }
       }
 
       trait TableCompanion extends BlockStoreColumnarTableCompanion {

@@ -718,8 +718,8 @@ object ImportTools extends Command with Logging {
 
         object Projection extends JDBMProjectionCompanion {
           def fileOps = FilesystemFileOps
-          def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
-          def archiveDir(descriptor: ProjectionDescriptor): File = ms.findArchiveRoot(descriptor).unsafePerformIO.get
+          def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findDescriptorRoot(descriptor, true)
+          def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findArchiveRoot(descriptor)
         }
 
         class Storage extends SystemActorStorageLike(ms) {

@@ -53,6 +53,7 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
   var updates: Map[ProjectionDescriptor, Seq[MetadataRecord]] = Map()
 
   def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]] = IO(None)
+  def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]] = IO(None)
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = data.keySet.filter(f)
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = IO {
