@@ -38,8 +38,6 @@ import scalaz.syntax.monad._
 
 trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
   def testHistogramByValue(set: Stream[Int]) = {
-    //println("===========================================================")
-    //println("source: " + set.mkString("[", "," , "]"))
     val module = emptyTestModule
     import module._
     import trans._
@@ -70,7 +68,6 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         val histoKeyInt = histoKey0.toInt
       
         setIter must not(beEmpty)
-        //println("results: " + setIter.mkString("[", "," , "]"))
         forall(setIter) { record =>
           (record \ "value") mustEqual histoKey
         }
@@ -280,6 +277,83 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     }
   }
 
+  def testHistogramTwoKeysOr = {
+    val module = emptyTestModule
+    import module._
+    import trans._
+    import constants._
+
+    val table = fromJson(simpleMultiKeyData)
+    
+    val groupId = newGroupId
+    
+    val spec = GroupingSource(
+      table,
+      SourceKey.Single, Some(TransSpec1.Id), groupId,
+      GroupKeySpecOr(
+        GroupKeySpecSource(JPathField("tic_a"), DerefObjectStatic(SourceValue.Single, JPathField("a"))),
+        GroupKeySpecSource(JPathField("tic_b"), DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        
+    val result = Table.merge(spec) { (key, map) =>
+      for {
+        keyJson <- key.toJson
+        group3  <- map(groupId)
+        gs1Json <- group3.toJson
+      } yield {
+        keyJson must haveSize(1)
+        keyJson.head must beLike {
+          case obj: JObject => {
+            val a = obj \ "tic_a"
+            val b = obj \ "tic_b"
+        
+            if (a == JNothing) {
+              b must beLike {
+                case JNum(i) if i == 7 => gs1Json must haveSize(2)
+                case JNum(i) if i == 15 => gs1Json must haveSize(1)
+                case JNum(i) if i == -1 => gs1Json must haveSize(1)
+                case JNum(i) if i == 3 => gs1Json must haveSize(1)
+              }
+            } else if (b == JNothing) {
+              a must beLike {
+                case JNum(i) if i == 12 => gs1Json must haveSize(2)
+                case JNum(i) if i == 42 => gs1Json must haveSize(1)
+                case JNum(i) if i == 11 => gs1Json must haveSize(1)
+                case JNum(i) if i == -7 => gs1Json must haveSize(1)
+              }
+            } else {
+              a must beLike {
+                case JNum(i) if i == 12 => {
+                  b must beLike {
+                    case JNum(i) if i == 7 => ok
+                  }
+                }
+                  
+                case JNum(i) if i == -7 => {
+                  b must beLike {
+                    case JNum(i) if i == 3 => ok
+                  }
+                }
+              }
+              
+              gs1Json must haveSize(1)
+            }
+          }
+        }
+        
+        fromJson(Stream(JNum(gs1Json.size)))
+      }
+    }
+    
+    val resultJson = result.flatMap(_.toJson).copoint
+    resultJson must haveSize(8)
+    
+    forall(resultJson) { v =>
+      v must beLike {
+        case JNum(i) if i == 2 || i == 1 => ok
+      }
+    }
+  }
+
   "simple single-key grouping" should {
     "scalacheck a histogram by value" in check (testHistogramByValue _)
     "histogram for two of the same value" in testHistogramByValue(Stream(2147483647, 2147483647))
@@ -293,88 +367,11 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
   "simple multi-key grouping" should {
     "compute a histogram on two keys" >> {
       "and" >> testHistogramTwoKeysAnd
+      "or" >> testHistogramTwoKeysOr
     }
   }
 }
 /*
-      
-      "or" >> {
-        val module = emptyTestModule
-        import module._
-        import trans._
-        import constants._
-
-        val table = fromJson(data)
-        
-        val spec = GroupingSource(
-          table,
-          SourceKey.Single, Some(TransSpec1.Id), 3,
-          GroupKeySpecOr(
-            GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
-            
-        val result = Table.merge(spec) { (key, map) =>
-          for {
-            keyJson <- key.toJson
-            group3  <- map(3)
-            gs1Json <- group3.toJson
-          } yield {
-            keyJson must haveSize(1)
-            
-            keyJson.head must beLike {
-              case obj: JObject => {
-                val a = obj \ "1"
-                val b = obj \ "2"
-            
-                if (a == JNothing) {
-                  b must beLike {
-                    case JNum(i) if i == 7 => gs1Json must haveSize(2)
-                    case JNum(i) if i == 15 => gs1Json must haveSize(1)
-                    case JNum(i) if i == -1 => gs1Json must haveSize(1)
-                    case JNum(i) if i == 3 => gs1Json must haveSize(1)
-                  }
-                } else if (b == JNothing) {
-                  a must beLike {
-                    case JNum(i) if i == 12 => gs1Json must haveSize(2)
-                    case JNum(i) if i == 42 => gs1Json must haveSize(1)
-                    case JNum(i) if i == 11 => gs1Json must haveSize(1)
-                    case JNum(i) if i == -7 => gs1Json must haveSize(1)
-                  }
-                } else {
-                  a must beLike {
-                    case JNum(i) if i == 12 => {
-                      b must beLike {
-                        case JNum(i) if i == 7 => ok
-                      }
-                    }
-                      
-                    case JNum(i) if i == -7 => {
-                      b must beLike {
-                        case JNum(i) if i == 3 => ok
-                      }
-                    }
-                  }
-                  
-                  gs1Json must haveSize(1)
-                }
-              }
-            }
-            
-            fromJson(Stream(JNum(gs1Json.size)))
-          }
-        }
-        
-        val resultJson = result.flatMap(_.toJson).copoint
-        resultJson must haveSize(10)
-        
-        forall(resultJson) { v =>
-          v must beLike {
-            case JNum(i) if i == 2 || i == 1 => ok
-          }
-        }
-      }.pendingUntilFixed
-    }
-    
     "compute a histogram on one key with an extra" >> {
       val eq12F1 = new CF1P({
         case c: NumColumn => new Map1Column(c) with BoolColumn {
