@@ -644,9 +644,11 @@ trait Evaluator[M[+_]] extends DAG
             if (pendingTableLeft.graph == pendingTableRight.graph) {
               PendingTable(pendingTableLeft.table, pendingTableLeft.graph, transFromBinOp(op)(pendingTableLeft.trans, pendingTableRight.trans))
             } else {
+              val prefixLength = sharedPrefixLength(left, right)
+              
               val key = joinSort match {
                 case IdentitySort =>
-                  trans.DerefObjectStatic(Leaf(Source), paths.Key)
+                  buildJoinKeySpec(prefixLength)
                 
                 case ValueSort(id) =>
                   trans.DerefObjectStatic(Leaf(Source), JPathField("sort-" + id))
@@ -654,7 +656,7 @@ trait Evaluator[M[+_]] extends DAG
                 case _ => sys.error("unreachable code")
               }
               
-              val spec = buildWrappedJoinSpec(sharedPrefixLength(left, right), left.identities.length, right.identities.length)(transFromBinOp(op))
+              val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op))
 
               val result = for {
                 parentLeftTable <- pendingTableLeft.table 
@@ -1034,19 +1036,26 @@ trait Evaluator[M[+_]] extends DAG
     trans.WrapObject(source, paths.Value.name)
   }
   
+  private def buildJoinKeySpec(sharedLength: Int): TransSpec1 = {
+    val components = for (i <- 0 until sharedLength)
+      yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, JPathIndex(i))): TransSpec1
+    
+    components reduce { trans.ArrayConcat(_, _) }
+  }
+  
   private def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
     assert(sharedLength > 0) 
     val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
     val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
     
     val sharedDerefs = for (i <- 0 until sharedLength)
-      yield DerefArrayStatic(leftIdentitySpec, JPathIndex(i))
+      yield trans.WrapArray(DerefArrayStatic(leftIdentitySpec, JPathIndex(i)))
     
-    val unsharedLeft = for (i <- (sharedLength - 1) until (leftLength - sharedLength))
-      yield DerefArrayStatic(leftIdentitySpec, JPathIndex(i))
+    val unsharedLeft = for (i <- sharedLength until leftLength)
+      yield trans.WrapArray(DerefArrayStatic(leftIdentitySpec, JPathIndex(i)))
     
-    val unsharedRight = for (i <- (sharedLength - 1) until (rightLength - sharedLength))
-      yield DerefArrayStatic(rightIdentitySpec, JPathIndex(i))
+    val unsharedRight = for (i <- sharedLength until rightLength)
+      yield trans.WrapArray(DerefArrayStatic(rightIdentitySpec, JPathIndex(i)))
     
     val derefs: Seq[TransSpec2] = sharedDerefs ++ unsharedLeft ++ unsharedRight
     
@@ -1055,7 +1064,7 @@ trait Evaluator[M[+_]] extends DAG
     else
       derefs reduce { trans.ArrayConcat(_, _) }
     
-    val wrappedIdentitySpec = trans.WrapObject(trans.WrapArray(newIdentitySpec), paths.Key.name)
+    val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, paths.Key.name)
     
     val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), paths.Value)
     val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
