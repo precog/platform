@@ -356,7 +356,7 @@ trait EvalStackSpecs extends Specification {
             Set("c16","c9","c21","c15","c26","c5","c18","c7","c4","c17","c11","c13","c12","c28","c23","c14","c10","c19","c6","c24","c22","c20") must contain(campaign)
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
 
       "union the same set when two different variables are assigned to it" >> {
           val input = """
@@ -386,7 +386,7 @@ trait EvalStackSpecs extends Specification {
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
     }
 
     "union with an object" >> {
