@@ -116,9 +116,16 @@ trait PerfTestSuite extends Logging {
       }
 
       val runner = new JDBMPerfTestRunner(SimpleTimer,
-        optimize = config.optimize, userUID = "dummy", actorSystem = actorSystem)
+        optimize = config.optimize,
+        userUID = "dummy",
+        actorSystem = actorSystem,
+        _rootDir = config.rootDir)
 
       runner.startup()
+
+      config.ingest foreach { case (db, file) =>
+        runner.ingest(db, file).unsafePerformIO
+      }
 
       select(config.select getOrElse ((_, _) => true)) foreach { test =>
         run(test, runner, runs = config.dryRuns, outliers = config.outliers)

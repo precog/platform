@@ -35,7 +35,9 @@ case class RunConfig(
     outliers: Double = 0.05,
     dryRuns: Int = 10,
     optimize: Boolean = true,
-    baseline: Option[File] = None) {
+    baseline: Option[File] = None,
+    rootDir: Option[File] = None,
+    ingest: List[(String, File)] = Nil) {
   def tails: Int = (runs * (outliers / 2)).toInt
 }
 
@@ -104,6 +106,14 @@ object RunConfig {
 
     case "--outliers" :: _ :: args =>
       fromCommandLine(args, config *> "The argument to --outliers must be a real number in [0, 0.5)".failureNel)
+
+    case "--root-dir" :: rootDir :: args =>
+      fromCommandLine(args, config map (_.copy(rootDir = Some(new File(rootDir)))))
+
+    case "--ingest" :: db :: file :: args =>
+      fromCommandLine(args, config map { cfg =>
+        cfg.copy(ingest = cfg.ingest :+ (db -> new File(file)))
+      })
 
     case test :: args =>
       fromCommandLine(args, config map { config =>
