@@ -391,16 +391,7 @@ object KafkaTools extends Command {
     val src = new FileMessageSet(source, false) 
     val dest = new FileMessageSet(destination, true) 
 
-    val outMessages = src.iterator.toList.map { mao =>
-      ingestCodec.toEvent(mao.message) match {
-        case EventMessage(_, event) =>
-          eventCodec.toMessage(event)  
-        case _ => sys.error("Unknown message type")
-      }
-    }
-
-    val outSet = new ByteBufferMessageSet(messages = outMessages.toArray: _*)
-    dest.append(outSet)
+    dest.append(src)
 
     src.close
     dest.close
@@ -457,12 +448,15 @@ object KafkaTools extends Command {
   }
 
   case object LocalFormat extends Format {
-    val codec = new KafkaEventCodec
+    val codec = new KafkaIngestMessageCodec
 
     def dump(i: Int, msg: MessageAndOffset) {
-      val event = codec.toEvent(msg.message)
-      println("Event-%06d Path: %s Token: %s".format(i+1, event.path, event.tokenId))
-      println(pretty(render(event.data)))
+      codec.toEvent(msg.message) match {
+        case EventMessage(EventId(pid, sid), Event(path, tokenId, data, _)) =>
+          println("Event-%06d Id: (%d/%d) Path: %s Token: %s".format(i+1, pid, sid, path, tokenId))
+          println(pretty(render(data)))
+        case _ =>
+      }
     }
   }
 
