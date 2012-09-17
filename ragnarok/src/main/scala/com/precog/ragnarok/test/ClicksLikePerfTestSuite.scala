@@ -91,26 +91,25 @@ trait ClicksLikePerfTestSuite extends PerfTestSuite {
 
     "union and intersect" := {
       q("(data where data.customer.age < 25) union (data where data.customer.age > 50)")
-      q("""data' := new data
-          |highRollers := data.customer where data.product.price > 100.00
-          |highEarners := data'.customer where data.customer.income > 50000
-          |highRollers intersect highEarners""".stripMargin)
+      // q("""data' := new data
+      //     |data ~ data'
+      //     |highRollers := data.customer where data.product.price > 100.00
+      //     |highEarners := data'.customer where data.customer.income > 50000
+      //     |highRollers intersect highEarners""".stripMargin)
     }
   }
 
 
   def groupingQueries() {
-    q("""data := //conversions
-        |solve 'product
+    q("""solve 'product
         |{ productID: 'product,
         |  aveIncome: mean(data.customer.income where data.product.Id = 'product) }""".stripMargin)
 
-    q("""data := //conversions
-      |states := solve 'state
+    q("""states := solve 'state
       | {state: 'state,
       |  stateCount: count(data.customer.state where data.customer.state = 'state) }
       |
-      |rank := std:stats::rank(neg states.stateCount)
+      |rank := std::stats::rank(neg states.stateCount)
       |
       |states where rank <= 5""".stripMargin)
 
@@ -134,7 +133,7 @@ trait ClicksLikePerfTestSuite extends PerfTestSuite {
   }
 
   def advancedGroupingQueries() {
-    q("""data' = new data
+    q("""data' := new data
         |solve 'gender, 'gamer
         |data where data.customer.gender = 'gender | data.customer.isCasualGamer = 'gamer
         |data' where data'.customer.gender = 'gender | data'.customer.isCasualGamer = 'gamer

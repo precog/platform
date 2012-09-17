@@ -28,10 +28,10 @@ object ConversionsTestSuite extends ClicksLikePerfTestSuite {
   "simple" := {
     simpleQueries()
 
-    "cross" := {
-      q("""data' = new data
-          |data ~ data' where std::time::dayOfYear(data.timeStamp) = std::time::dayOfYear(data'.timeStamp) & data.customer.ID != data'.customer.ID""".stripMargin)
-    }
+    // "cross" := {
+    //   q("""data' := new data
+    //       |data ~ data' where ((std::time::dayOfYear(data.timeStamp) = std::time::dayOfYear(data'.timeStamp)) & (data.customer.ID != data'.customer.ID))""".stripMargin)
+    // }
   }
 
   "grouping" := groupingQueries()
