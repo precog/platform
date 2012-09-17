@@ -37,7 +37,7 @@ import java.util.Comparator
 import org.apache.jdbm.DBMaker
 import org.apache.jdbm.DB
 
-import com.weiglewilczek.slf4s.Logger
+import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.Ordering._
@@ -844,7 +844,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   }
 } 
 
-object BlockStoreColumnarTableModule {
+object BlockStoreColumnarTableModule extends Logging {
   /**
    * Find the minimal set of projections (and the relevant columns from each projection) that
    * will be loaded to provide a dataset of the specified type.

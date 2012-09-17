@@ -893,10 +893,11 @@ object TokenTools extends Command with AkkaDefaults with Logging {
   def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager[Future]) = {
     for {
       token <- tokenManager.newToken(tokenName, Set())
-      val ownerGrant = tokenManager.newGrant(None, OwnerPermission(path, None))
-      val readGrant  = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
-      val writeGrant = tokenManager.newGrant(None, WritePermission(path, None))
-      grants <- Future.sequence(List(ownerGrant, readGrant, writeGrant))
+      val ownerGrant  = tokenManager.newGrant(None, OwnerPermission(path, None))
+      val readGrant   = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
+      val writeGrant  = tokenManager.newGrant(None, WritePermission(path, None))
+      val reduceGrant = tokenManager.newGrant(None, ReducePermission(path, token.tid, None))
+      grants <- Future.sequence(List(ownerGrant, readGrant, writeGrant, reduceGrant))
       result <- tokenManager.addGrants(token.tid, grants.map(_.gid).toSet)
     } yield {
       result match {

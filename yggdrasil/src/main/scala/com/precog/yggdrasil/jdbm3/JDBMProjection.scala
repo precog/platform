@@ -117,7 +117,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   })
 
   def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
-    logger.trace("Inserting %s => %s".format(ids, v))
+    logger.trace("Inserting %s => %s".format(ids.mkString("[", ", ", "]"), v))
 
     treeMap.put(ids.toArray, rowFormat.encode(v.toList))
 
@@ -127,6 +127,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   }
 
   def getBlockAfter(id: Option[Identities], desiredColumns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Identities,Slice]] = {
+    logger.trace("Retrieving key after " + id.map(_.mkString("[", ", ", "]")))
     import TableModule.paths._
 
     try {
