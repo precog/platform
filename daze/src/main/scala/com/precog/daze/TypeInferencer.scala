@@ -32,85 +32,113 @@ trait TypeInferencer extends DAG {
   }
   import dag._
 
-  def inferTypes(jtpe: JType)(graph: DepGraph) : DepGraph = {
+  def inferTypes(jtpe: JType)(graph: DepGraph): DepGraph = {
 
     val memotable = mutable.Map[DepGraph, DepGraph]()
 
-    def collectSpecTypes(jtpe: JType, typing: Map[DepGraph, Set[JType]], spec: BucketSpec): Map[DepGraph, Set[JType]] = spec match {
-      case UnionBucketSpec(left, right) =>
-        collectSpecTypes(jtpe, collectSpecTypes(jtpe, typing, left), right) 
-      
-      case IntersectBucketSpec(left, right) =>
-        collectSpecTypes(jtpe, collectSpecTypes(jtpe, typing, left), right) 
-      
-      case Group(id, target, child) =>
-        collectSpecTypes(jtpe, collectTypes(jtpe, typing, target), child)
-      
-      case UnfixedSolution(id, target) =>
-        collectTypes(jtpe, typing, target)
-      
-      case Extra(target) =>
-        collectTypes(jtpe, typing, target)
-    }
-
-    def collectTypes(jtpe: JType, typing: Map[DepGraph, Set[JType]], graph: DepGraph): Map[DepGraph, Set[JType]] = {
-      graph match {
-        case _ : Root => typing 
-  
-        case New(_, parent) => collectTypes(jtpe, typing, parent)
-  
-        case l @ LoadLocal(_, parent, _) =>
-          val typing0 = collectTypes(JTextT, typing, parent)
-          typing0.get(l).map { jtpes => typing + (l -> (jtpes + jtpe)) }.getOrElse(typing + (l -> Set(jtpe)))
-
-        case Operate(_, op, parent) => collectTypes(op.tpe.arg, typing, parent)
-  
-        case Reduce(_, red, parent) => collectTypes(red.tpe.arg, typing, parent)
-
-        case MegaReduce(_, reds, parent) => collectTypes(JType.JUnfixedT, typing, parent)
-  
-        case Morph1(_, m, parent) => collectTypes(m.tpe.arg, typing, parent)
-  
-        case Morph2(_, m, left, right) => collectTypes(m.tpe.arg1, collectTypes(m.tpe.arg0, typing, left), right)
-  
-        case Join(_, DerefObject, CrossLeftSort | CrossRightSort, left, right @ ConstString(str)) =>
-          collectTypes(JObjectFixedT(Map(str -> jtpe)), typing, left)
-  
-        case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, right @ ConstDecimal(d)) =>
-          collectTypes(JArrayFixedT(Map(d.toInt -> jtpe)), typing, left)
-  
-        case Join(_, WrapObject, CrossLeftSort | CrossRightSort, left, right) =>
-          collectTypes(jtpe, collectTypes(JTextT, typing, left), right)
-  
-        case Join(_, ArraySwap, CrossLeftSort | CrossRightSort, left, right) =>
-          collectTypes(JNumberT, collectTypes(jtpe, typing, left), right)
-  
-        case Join(_, op : BinaryOperation, _, left, right) =>
-          collectTypes(op.tpe.arg1, collectTypes(op.tpe.arg0, typing, left), right)
-  
-        case Join(_, _, _, left, right) => collectTypes(jtpe, collectTypes(jtpe, typing, left), right)
-
-        case IUI(_, _, left, right) => collectTypes(jtpe, collectTypes(jtpe, typing, left), right)
-
-        case Diff(_, left, right) => collectTypes(jtpe, collectTypes(jtpe, typing, left), right)
-  
-        case Filter(_, _, target, boolean) =>
-          collectTypes(JBooleanT, collectTypes(jtpe, typing, target), boolean)
-  
-        case Sort(parent, _) => collectTypes(jtpe, typing, parent)
-  
-        case SortBy(parent, _, _, _) => collectTypes(jtpe, typing, parent)
+    def collectTypes(universe: JType, graph: DepGraph): Map[DepGraph, Set[JType]] = {
+      def collectSpecTypes(jtpe: JType, typing: Map[DepGraph, Set[JType]], spec: BucketSpec): Map[DepGraph, Set[JType]] = spec match {
+        case UnionBucketSpec(left, right) =>
+          collectSpecTypes(jtpe, collectSpecTypes(jtpe, typing, left), right) 
         
-        case ReSortBy(parent, _) => collectTypes(jtpe, typing, parent)
-
-        case Memoize(parent, _) => collectTypes(jtpe, typing, parent)
-  
-        case Distinct(_, parent) => collectTypes(jtpe, typing, parent)
-  
-        case s @ Split(_, spec, child) => collectTypes(jtpe, collectSpecTypes(jtpe, typing, spec), child)
-  
-        case _ : SplitGroup | _ : SplitParam => typing
+        case IntersectBucketSpec(left, right) =>
+          collectSpecTypes(jtpe, collectSpecTypes(jtpe, typing, left), right) 
+        
+        case Group(id, target, child) =>
+          collectSpecTypes(jtpe, inner(jtpe, typing, target), child)
+        
+        case UnfixedSolution(id, target) =>
+          inner(jtpe, typing, target)
+        
+        case Extra(target) =>
+          inner(jtpe, typing, target)
       }
+    
+      def inner(jtpe: JType, typing: Map[DepGraph, Set[JType]], graph: DepGraph): Map[DepGraph, Set[JType]] = {
+        graph match {
+          case _: Root => typing 
+    
+          case New(_, parent) => inner(jtpe, typing, parent)
+    
+          case ld @ LoadLocal(_, parent, _) =>
+            val typing0 = inner(JTextT, typing, parent)
+            typing0 get ld map { jtpes => typing + (ld -> (jtpes + jtpe)) } getOrElse (typing + (ld -> Set(jtpe)))
+  
+          case Operate(_, op, parent) => inner(op.tpe.arg, typing, parent)
+    
+          case Reduce(_, red, parent) => inner(red.tpe.arg, typing, parent)
+  
+          case MegaReduce(_, reds, parent) => inner((reds map { _.red.tpe.arg } list) reduce JUnionT, typing, parent)
+    
+          case Morph1(_, m, parent) => inner(m.tpe.arg, typing, parent)
+    
+          case Morph2(_, m, left, right) => inner(m.tpe.arg1, inner(m.tpe.arg0, typing, left), right)
+    
+          case Join(_, DerefObject, CrossLeftSort | CrossRightSort, left, right @ ConstString(str)) =>
+            inner(JObjectFixedT(Map(str -> jtpe)), typing, left)
+    
+          case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, right @ ConstDecimal(d)) =>
+            inner(JArrayFixedT(Map(d.toInt -> jtpe)), typing, left)
+    
+          case Join(_, WrapObject, CrossLeftSort | CrossRightSort, ConstString(str), right) => {
+            val jtpe2 = jtpe match {
+              case JObjectFixedT(map) =>
+                map get str getOrElse universe
+              
+              case _ => universe
+            }
+            
+            inner(jtpe2, typing, right)
+          }
+    
+          case Join(_, ArraySwap, CrossLeftSort | CrossRightSort, left, right) => {
+            val jtpe2 = jtpe match {
+              case JArrayFixedT(_) => jtpe
+              case _ => JArrayUnfixedT
+            }
+            
+            inner(JNumberT, inner(jtpe2, typing, left), right)
+          }
+    
+          case Join(_, op: BinaryOperation, _, left, right) =>
+            inner(op.tpe.arg1, inner(op.tpe.arg0, typing, left), right)
+    
+          case IUI(_, _, left, right) => inner(jtpe, inner(jtpe, typing, left), right)
+  
+          case Diff(_, left, right) => inner(jtpe, inner(jtpe, typing, left), right)
+    
+          case Filter(_, _, target, boolean) =>
+            inner(JBooleanT, inner(jtpe, typing, target), boolean)
+    
+          case Sort(parent, _) => inner(jtpe, typing, parent)
+    
+          case SortBy(parent, _, _, _) => inner(jtpe, typing, parent)
+          
+          case ReSortBy(parent, _) => inner(jtpe, typing, parent)
+  
+          case Memoize(parent, _) => inner(jtpe, typing, parent)
+    
+          case Distinct(_, parent) => inner(jtpe, typing, parent)
+    
+          case s @ Split(_, spec, child) =>
+            inner(jtpe, collectSpecTypes(universe, typing, spec), child)
+          
+          case s @ SplitGroup(_, id, _) => {
+            val Split(_, spec, _) = s.parent
+            findGroup(spec, id) map { inner(jtpe, typing, _) } getOrElse typing
+          }
+          
+          case s @ SplitParam(_, id) => {
+            val Split(_, spec, _) = s.parent
+            
+            findParams(spec, id).foldLeft(typing) { (typing, graph) =>
+              inner(jtpe, typing, graph)
+            }
+          }
+        }
+      }
+      
+      inner(universe, Map(), graph)
     }
 
     def applyTypes(typing: Map[DepGraph, JType], graph: DepGraph): DepGraph = {
@@ -120,7 +148,29 @@ trait TypeInferencer extends DAG {
       }}
     }
     
-    val collectedTypes = collectTypes(jtpe, Map(), graph)
+    def findGroup(spec: BucketSpec, id: Int): Option[DepGraph] = spec match {
+      case UnionBucketSpec(left, right) => findGroup(left, id) orElse findGroup(right, id)
+      case IntersectBucketSpec(left, right) => findGroup(left, id) orElse findGroup(right, id)
+      
+      case Group(`id`, target, _) => Some(target)
+      case Group(_, _, _) => None
+      
+      case UnfixedSolution(_, _) => None
+      case Extra(_) => None
+    }
+    
+    def findParams(spec: BucketSpec, id: Int): Set[DepGraph] = spec match {
+      case UnionBucketSpec(left, right) => findParams(left, id) ++ findParams(right, id)
+      case IntersectBucketSpec(left, right) => findParams(left, id) ++ findParams(right, id)
+      
+      case Group(_, _, child) => findParams(child, id)
+      
+      case UnfixedSolution(`id`, child) => Set(child)
+      case UnfixedSolution(_, _) => Set()
+      case Extra(_) => Set()
+    }
+    
+    val collectedTypes = collectTypes(jtpe, graph)
     val typing = collectedTypes.mapValues(_.reduce(JUnionT)) 
     applyTypes(typing, graph)
   }
