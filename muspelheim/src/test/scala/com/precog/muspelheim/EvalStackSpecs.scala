@@ -540,36 +540,32 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "return only all possible value results from a" >> {
-      "solve expression" >> {
-        val input = """
-          | campaigns := //campaigns
-          | solve 'a 
-          |   campaigns.gender where campaigns.platform = 'a""".stripMargin
-          
-        val results = evalE(input)
+    "return only all possible value results from a" in {
+      val input = """
+        | campaigns := //campaigns
+        | solve 'a 
+        |   campaigns.gender where campaigns.platform = 'a""".stripMargin
         
-        results must haveSize(100)
-        
-        forall(results) {
-          case (VectorCase(_), SString(gender)) =>
-            gender must beOneOf("male", "female")
-          case r => failure("Result has wrong shape: "+r)
-        }
-      }.pendingUntilFixed
-    }
-    
-    "determine a histogram of genders on campaigns" >> {
-      "solve expression" >> { 
-        val input = """
-          | campaigns := //campaigns
-          | solve 'gender 
-          |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }""".stripMargin
-          
-        eval(input) mustEqual Set(
-          SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
-          SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
+      val results = evalE(input)
+      
+      results must haveSize(100)
+      
+      forall(results) {
+        case (VectorCase(_), SString(gender)) =>
+          gender must beOneOf("male", "female")
+        case r => failure("Result has wrong shape: "+r)
       }
+    }.pendingUntilFixed
+    
+    "determine a histogram of genders on campaigns" in {
+      val input = """
+        | campaigns := //campaigns
+        | solve 'gender 
+        |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }""".stripMargin
+        
+      eval(input) mustEqual Set(
+        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
+        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
     }
 
     "load a nonexistent dataset with a dot in the name" in {
