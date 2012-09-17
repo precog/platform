@@ -24,7 +24,6 @@ import com.precog.common.Path
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.table.BaseBlockStoreTestModule
-import com.precog.yggdrasil.memoization._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.test._
 import com.precog.yggdrasil.util._
@@ -226,7 +225,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         testEval(input) { result =>
           result must haveSize(1)
-          result must contain((VectorCase(), SNull))
+          result.map(_._2) must contain(SNull)
         }
       }
       
@@ -2467,7 +2466,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       testEval(input0) { result0 => {
         testEval(input1) { result1 =>
-          result0 must_== result1 
+          result0.map({case (ids, v) => (ids.toSeq, v)}) must_== result1.map({case (ids, v) => (ids.toSeq, v)})
         }
       }}
     }
@@ -2487,7 +2486,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       testEval(input0) { result0 => {
         testEval(input1) { result1 =>
-          result0 must_== result1 
+          result0.map({case (ids, v) => (ids.toSeq, v)}) must_== result1.map({case (ids, v) => (ids.toSeq, v)})
         }
       }}
     }

@@ -44,34 +44,3 @@ class IdentitiesComparator private[jdbm3](val ascending: Boolean) extends Compar
 }
 
 object AscendingIdentitiesComparator extends IdentitiesComparator(true)
-
-object IdentitiesSerializer {
-  def apply(count: Int) = new IdentitiesSerializer(count)
-}
-
-class IdentitiesSerializer private[IdentitiesSerializer](val count: Int) extends Serializer[Identities] with Serializable {
-  private final val serialVersionUID = 20120727l
-
-  override def toString(): String = "IdentitiesSerializer(" + count + ")"
-
-  def serialize(out: DataOutput, ids: Identities) {
-    assert(ids.length == count)
-    ids.foreach { i => out.writeLong(i) }
-  }
-
-  def deserialize(in: DataInput): Identities = {
-    count match {
-      case 0 => Vector0
-      case 1 => Vector1(in.readLong())
-      case 2 => Vector2(in.readLong(), in.readLong())
-      case 3 => Vector3(in.readLong(), in.readLong(), in.readLong())
-      case 4 => Vector4(in.readLong(), in.readLong(), in.readLong(), in.readLong())
-      case length => {
-        val tmp = new Array[Long](length)
-        var i = 0
-        while (i < length) { tmp(i) = in.readLong(); i += 1 }
-        VectorCase(tmp: _*)
-      }
-    }
-  } 
-}

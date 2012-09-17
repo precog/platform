@@ -35,44 +35,35 @@ import scala.collection.JavaConverters._
 
 import blueeyes.json.JPath
 
+import scala.annotation.tailrec
 import JDBMProjection._
 
-/**
- * A slice built from a JDBMProjection with a backing array of key/value pairs
- *
- * @param source A source iterator of Map.Entry[Key,Array[Byte]] pairs, positioned at the first element of the slice
- * @param size How many entries to retrieve in this slice
- */
-trait JDBMSlice[Key] extends Slice with Logging {
-  protected def requestedSize: Int
+object JDBMSlice {
+  def load[Key](size: Int, source: Iterator[java.util.Map.Entry[Key,Array[Byte]]], keyDecoder: (Int, Key) => Unit, valDecoder: ColumnDecoder): (Key, Key, Int) = {
+    var firstKey: Key = null.asInstanceOf[Key]
+    var lastKey: Key  = null.asInstanceOf[Key]
 
-  protected def keyColumns: Array[(ColumnRef, ArrayColumn[_])]
-  protected def valColumns: Array[(ColumnRef, ArrayColumn[_])]
+    @tailrec
+    def consumeRows(source: Iterator[java.util.Map.Entry[Key, Array[Byte]]], row: Int): Int = {
+      if (source.hasNext) {
+        val entry = source.next
+        val rowKey = entry.getKey
+        if (row == 0) { firstKey = rowKey }
+        lastKey = rowKey
 
-  def columnDecoder: ColumnDecoder
-
-  // This method is responsible for loading the data from the key at the given row,
-  // most likely into one or more of the key columns defined above
-  protected def loadRowFromKey(row: Int, key: Key): Unit
-
-  private var row = 0
-
-  protected def load(source: Iterator[java.util.Map.Entry[Key,Array[Byte]]]) {
-    source.take(requestedSize).foreach {
-      entry => {
-        loadRowFromKey(row, entry.getKey)
-        columnDecoder.decodeToRow(row, entry.getValue)
-        row += 1
+        keyDecoder(row, rowKey)
+        valDecoder.decodeToRow(row, entry.getValue)
+        consumeRows(source, row + 1)
+      } else {
+        row
       }
     }
+    
+    val rows = consumeRows(source.take(size), 0)
+
+    (firstKey, lastKey, rows)
   }
 
-  def size = row
-
-  def columns: Map[ColumnRef, Column] = keyColumns.++(valColumns)(collection.breakOut)
-}
-
-object JDBMSlice {
   def columnFor(prefix: JPath, sliceSize: Int)(ref: ColumnRef): (ColumnRef, ArrayColumn[_]) =
     (ref.copy(selector = (prefix \ ref.selector)), (ref.ctype match {
       case CString      => ArrayStrColumn.empty(sliceSize)

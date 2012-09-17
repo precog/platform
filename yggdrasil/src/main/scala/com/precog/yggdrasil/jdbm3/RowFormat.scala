@@ -81,9 +81,7 @@ object RowFormat {
 
   def forValues(columnRefs: Seq[ColumnRef]): RowFormat = ValueRowFormatV1(columnRefs)
 
-
   case class ValueRowFormatV1(_columnRefs: Seq[ColumnRef]) extends ValueRowFormat with RowFormatCodecs {
-
     // This is really stupid, but required to work w/ JDBM.
     @transient lazy val columnRefs: Seq[ColumnRef] = _columnRefs map { ref =>
       ref.copy(ctype = ref.ctype.readResolve())

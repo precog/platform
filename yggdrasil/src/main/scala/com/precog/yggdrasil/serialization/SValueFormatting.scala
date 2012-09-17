@@ -162,15 +162,16 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
   }
 
   def readIdentities(in: DataInputStream, length: Int): Identities = {
-    @tailrec def loop(in: DataInputStream, acc: VectorCase[Long], i: Int): Identities = {
-      if (i > 0) {
-        loop(in, acc :+ in.readLong(), i - 1)
+    @tailrec def loop(in: DataInputStream, acc: Array[Long], i: Int): Identities = {
+      if (i < length) {
+        acc(i) = in.readLong()
+        loop(in, acc, i + 1)
       } else {
         acc
       }
     }
 
-    loop(in, VectorCase.empty[Long], length)
+    loop(in, new Array[Long](length), 0)
   }
 }
 // vim: set ts=4 sw=4 et:

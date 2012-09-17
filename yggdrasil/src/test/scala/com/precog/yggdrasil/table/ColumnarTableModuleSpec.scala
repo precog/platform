@@ -142,6 +142,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "perform yet another simple cogroup" in testAnotherSimpleCogroupSwitched
       "cogroup across slice boundaries" in testCogroupSliceBoundaries
       "error on unsorted inputs" in testUnsortedInputs
+      "cogroup partially defined inputs properly" in testPartialUndefinedCogroup
 
       "survive pathology 1" in testCogroupPathology1
       "survive pathology 2" in testCogroupPathology2

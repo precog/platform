@@ -22,7 +22,6 @@ package com.precog.daze
 import org.specs2.mutable._
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.memoization._
 import com.precog.common.Path
 import scalaz._
 import scalaz.effect._
@@ -30,7 +29,6 @@ import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
-import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
 case class Precision(p: Double)
@@ -73,7 +71,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(13)
@@ -90,7 +88,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(2)
@@ -107,7 +105,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(42)
@@ -124,7 +122,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SArray(d)) => d
+        case (ids, SArray(d)) if ids.length == 0 => d
       }
       
       result2 must contain(Vector(SDecimal(1)))
@@ -141,7 +139,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SArray(d)) => d
+        case (ids, SArray(d)) if ids.length == 0 => d
       }
       
       result2 must contain(Vector(SDecimal(42)))
@@ -158,7 +156,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SArray(d)) => d
+        case (ids, SArray(d)) if ids.length == 0 => d
       }
       
       result2 must contain(Vector(SDecimal(1), SDecimal(12), SDecimal(13), SDecimal(42), SDecimal(77)))
@@ -175,7 +173,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(10)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(1,3,4,5,8,9).only
@@ -197,7 +195,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(3)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(11).only
@@ -216,8 +214,8 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(10)
 
       val (tr, fls) = result partition {
-        case (VectorCase(_), STrue) => true
-        case (VectorCase(_), SFalse) => false
+        case (ids, STrue) if ids.length == 1 => true
+        case (ids, SFalse) if ids.length == 1 => false
         case _ => false
       }
 
@@ -238,7 +236,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(10)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(3,5,6,7,10,11).only  
@@ -257,7 +255,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(13)
@@ -274,7 +272,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SArray(d)) => d
+        case (ids, SArray(d)) if ids.length == 0 => d
       }
       
       result2 must contain(Vector(SDecimal(1)))
@@ -291,7 +289,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SArray(d)) => d
+        case (ids, SArray(d)) if ids.length == 0 => d
       }
       
       result2 must contain(Vector(SDecimal(4), SString("a")))
@@ -308,7 +306,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(10)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(1,3,4,5,8,9).only  
@@ -329,7 +327,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(2)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(34).only
@@ -350,7 +348,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(2)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(-10).only
@@ -372,7 +370,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(7)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(-10,0,5,11).only
@@ -391,7 +389,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(10)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(3,5,6,7,10,11).only  
@@ -410,7 +408,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(10)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(1,2,3,4,5,6).only  
@@ -431,7 +429,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(3)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(11)
@@ -450,7 +448,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(10)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(3,4,5,6,7,8).only  
@@ -469,7 +467,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(10)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(1,2,3,4,5,6).only  
@@ -490,7 +488,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(2)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(34)
@@ -511,7 +509,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(8)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(-10,0,5,11,12).only
@@ -530,7 +528,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(10)
 
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
 
       result2 must contain(3,4,5,6,7,8).only  
@@ -555,7 +553,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => (d.toDouble ~= 0.9998746737089123)
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 0.9998746737089123)
       }
       
       result2 must contain(true).only
@@ -577,7 +575,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => (d.toDouble ~= 400.08)
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 400.08)
       }
       
       result2 must contain(true).only
@@ -599,7 +597,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SObject(fields)) => {
+        case (ids, SObject(fields)) if ids.length == 0 => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 0.6862906545903664
@@ -627,7 +625,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SObject(fields)) => {
+        case (ids, SObject(fields)) if ids.length == 0 => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 38.8678597674246945
@@ -657,7 +655,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => (d.toDouble ~= 0.9998746737089123)
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 0.9998746737089123)
       }
       
       result2 must contain(true).only
@@ -679,7 +677,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => (d.toDouble ~= 400.08)
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 400.08)
       }
       
       result2 must contain(true).only
@@ -701,7 +699,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SObject(fields)) => {
+        case (ids, SObject(fields)) if ids.length == 0 => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 0.6862906545903664
@@ -729,7 +727,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SObject(fields)) => {
+        case (ids, SObject(fields)) if ids.length == 0 => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 38.8678597674246945
@@ -759,7 +757,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => (d.toDouble ~= 1)
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 1)
       }
       
       result2 must contain(true).only //todo test this answer to a certain level of accuracy
@@ -781,7 +779,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => (d.toDouble ~= 582.96)
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 582.96)
       }
       
       result2 must contain(true).only
@@ -803,7 +801,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
 
       val result2 = result collect {
-        case (VectorCase(), SObject(fields)) => {
+        case (ids, SObject(fields)) if ids.length == 0 => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 1
@@ -831,7 +829,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SObject(fields)) => {
+        case (ids, SObject(fields)) if ids.length == 0 => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 56.591540847739639
@@ -861,7 +859,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => (d.toDouble ~= 0.9998746737089123)
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 0.9998746737089123)
       }
       
       result2 must contain(true).only 
@@ -883,7 +881,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => (d.toDouble ~= 400.08)
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 400.08)
       }
       
       result2 must contain(true).only
@@ -905,7 +903,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
        
       val result2 = result collect {
-        case (VectorCase(), SObject(fields)) => {
+        case (ids, SObject(fields)) if ids.length == 0 => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 0.6862906545903664
@@ -933,7 +931,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SObject(fields)) => {
+        case (ids, SObject(fields)) if ids.length == 0 => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 38.8678597674246945
@@ -991,7 +989,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => (d.toDouble ~= 0)
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 0)
       }
       
       result2 must contain(true)
@@ -1011,7 +1009,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       result must haveSize(1)
        
       val result2 = result collect {
-        case (VectorCase(), SObject(fields)) => {
+        case (ids, SObject(fields)) if ids.length == 0 => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 0
@@ -1038,7 +1036,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SObject(fields)) => {
+          case (ids, SObject(fields)) if ids.length == 0 => {
             val SDecimal(slope) = fields("slope")
             val SDecimal(yint) = fields("intercept")
             val bool1 = slope.toDouble ~= 0
@@ -1087,7 +1085,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         result must haveSize(1) 
         
         val result2 = result collect {
-          case (VectorCase(), SObject(fields)) => {
+          case (ids, SObject(fields)) if ids.length == 0 => {
             val SDecimal(slope) = fields("slope")
             val SDecimal(yint) = fields("intercept")
             val bool1 = slope.toDouble ~= 38.8678597674246945

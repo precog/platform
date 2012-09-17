@@ -59,20 +59,6 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
 
   val keyAfterDelta = if (sortOrder.isAscending) 1 else -1
 
-  private def keyAfter(k: Array[Byte]): Array[Byte] = {
-
-    // TODO This won't be nearly as fast as Derek's, since JDBMSlice can no
-    // longer get into the same level of detail about the encoded format. Is
-    // this a problem? Should we allow writes w/ "holes?"
-
-    val vals = keyFormat.decode(k)
-    val last = vals.last match {
-      case CLong(n) => CLong(n + keyAfterDelta)
-      case v => sys.error("Expected a CLong (global ID) in the last position, but found " + v + " (more: " + vals + ")")
-    }
-    keyFormat.encode(vals.init :+ last)
-  }
-
   val rowFormat = RowFormat.forValues(valRefs)
   val keyFormat = RowFormat.forSortingKey(sortKeyRefs)
 
@@ -91,38 +77,27 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
         throw new IllegalArgumentException("No such index in DB: %s:%s".format(dbFile, indexName))
       }
 
-      val constrainedMap = id.map { idKey => index.tailMap(keyAfter(idKey)) }.getOrElse(index)
-      if (constrainedMap.isEmpty) {
+      val constrainedMap = id.map { idKey => index.tailMap(idKey) }.getOrElse(index)
+      val rawIterator = constrainedMap.entrySet.iterator.asScala
+      if (id.isDefined && rawIterator.hasNext) rawIterator.next();
+
+      if (rawIterator.isEmpty) {
         None
       } else {
-        var firstKey: Array[Byte] = null
-        var lastKey: Array[Byte]  = null
+        val keyColumns = sortKeyRefs.map(JDBMSlice.columnFor(JPath("[0]"), sliceSize))
+        val valColumns = valRefs.map(JDBMSlice.columnFor(JPath("[1]"), sliceSize))
 
-        val slice = new JDBMSlice[Array[Byte]] {
-          def requestedSize = sliceSize
+        val keyColumnDecoder = keyFormat.ColumnDecoder(keyColumns.map(_._2)(collection.breakOut))
+        val valColumnDecoder = rowFormat.ColumnDecoder(valColumns.map(_._2)(collection.breakOut))
 
-          val keyColumns: Array[(ColumnRef, ArrayColumn[_])] = sortKeyRefs.map(JDBMSlice.columnFor(JPath("[0]"), sliceSize))(collection.breakOut)
+        val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, rawIterator, keyColumnDecoder.decodeToRow(_: Int, _: Array[Byte], 0), valColumnDecoder)
 
-          val valColumns: Array[(ColumnRef, ArrayColumn[_])] = valRefs.map(JDBMSlice.columnFor(JPath("[1]"), sliceSize))(collection.breakOut)
-
-          val columnDecoder = rowFormat.ColumnDecoder(valColumns map (_._2))
-          val keyColumnDecoder = keyFormat.ColumnDecoder(keyColumns map (_._2))
-
-          def loadRowFromKey(row: Int, rowKey: Array[Byte]) {
-            if (row == 0) { firstKey = rowKey }
-            lastKey = rowKey
-
-            keyColumnDecoder.decodeToRow(row, rowKey)
-          }
-
-          load(constrainedMap.entrySet.iterator.asScala)
+        val slice = new Slice { 
+          val size = rows 
+          val columns = keyColumns.toMap ++ valColumns
         }
 
-        if (firstKey == null) { // Just guard against an empty slice
-          None
-        } else {
-          Some(BlockProjectionData[Array[Byte],Slice](firstKey, lastKey, slice))
-        }
+        Some(BlockProjectionData[Array[Byte],Slice](firstKey, lastKey, slice))
       }
     } finally {
       db.close() // creating the slice should have already read contents into memory

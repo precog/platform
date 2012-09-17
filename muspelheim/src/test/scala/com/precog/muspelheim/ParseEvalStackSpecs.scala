@@ -21,7 +21,6 @@ package com.precog
 package muspelheim
 
 import common.Path
-import common.VectorCase
 import common.kafka._
 
 import daze._

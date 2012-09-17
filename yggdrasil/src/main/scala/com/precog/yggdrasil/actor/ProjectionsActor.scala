@@ -220,7 +220,7 @@ trait ProjectionsActorModule extends ProjectionModule {
         
         try {
           for(Row(eventId, values, _) <- rows)
-            projection.insert(Vector1(eventId.uid), values).unsafePerformIO
+            projection.insert(Array(eventId.uid), values).unsafePerformIO
           
           replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
         } catch {

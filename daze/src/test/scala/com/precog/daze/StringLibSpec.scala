@@ -22,7 +22,6 @@ package com.precog.daze
 import org.specs2.mutable._
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.memoization._
 import com.precog.common.Path
 import scalaz._
 import scalaz.effect._
@@ -30,7 +29,6 @@ import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
-import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
 trait StringLibSpec[M[+_]] extends Specification
@@ -64,7 +62,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(6, 12, 16, 26, 42, 0)
@@ -80,7 +78,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("quirky", "solstice + 7", "Monkey: [Brains]", """("alpha", "beta", "gamma")""", "Whitespace       is   awesome  !!!1!!", "")
@@ -96,7 +94,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("QUIRKY", "SOLSTICE + 7", "MONKEY: [BRAINS]", """("ALPHA", "BETA", "GAMMA")""", "  WHITESPACE       IS   AWESOME  !!!1!!   ", "")
@@ -112,7 +110,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("quirky", "solstice + 7", "monkey: [brains]", """("alpha", "beta", "gamma")""", "  whitespace       is   awesome  !!!1!!   ", "")
@@ -128,7 +126,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
@@ -144,7 +142,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("quirky", "solstice + 7", "Monkey: [Brains]", """("alpha", "beta", "gamma")""", "  Whitespace       is   awesome  !!!1!!   ", "")
@@ -162,7 +160,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(101, 32, 34, 115)
@@ -179,7 +177,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(0)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain()
@@ -196,7 +194,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
@@ -213,7 +211,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(-1, 3, 14, 27)
@@ -230,7 +228,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("quirky7", "solstice + 77", "Monkey: [Brains]7", """("alpha", "beta", "gamma")7""", "  Whitespace       is   awesome  !!!1!!   7", "7")
@@ -247,7 +245,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
@@ -264,7 +262,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(99, 58, 97, 101)
@@ -281,7 +279,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(0)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain()
@@ -298,7 +296,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("e + 7", " [Brains]", """", "beta", "gamma")""", "space       is   awesome  !!!1!!   ")
@@ -315,7 +313,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(0)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain()
@@ -332,7 +330,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
@@ -349,7 +347,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(0, 2, -36, -73, -81, -6)
@@ -366,7 +364,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(0, 2, -4, -73, -81, -6)
@@ -383,7 +381,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
@@ -400,7 +398,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(-1, 7, 4, 12, 6)
@@ -417,7 +415,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
@@ -436,7 +434,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(6, 12, 16, 26, 42, 0)
@@ -452,7 +450,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("quirky", "solstice + 7", "Monkey: [Brains]", """("alpha", "beta", "gamma")""", "Whitespace       is   awesome  !!!1!!", "")
@@ -468,7 +466,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("QUIRKY", "SOLSTICE + 7", "MONKEY: [BRAINS]", """("ALPHA", "BETA", "GAMMA")""", "  WHITESPACE       IS   AWESOME  !!!1!!   ", "")
@@ -484,7 +482,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("quirky", "solstice + 7", "monkey: [brains]", """("alpha", "beta", "gamma")""", "  whitespace       is   awesome  !!!1!!   ", "")
@@ -500,7 +498,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
@@ -516,7 +514,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("quirky", "solstice + 7", "Monkey: [Brains]", """("alpha", "beta", "gamma")""", "  Whitespace       is   awesome  !!!1!!   ", "")
@@ -534,7 +532,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(101, 32, 34, 115)
@@ -551,7 +549,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(0)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain()
@@ -568,7 +566,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
@@ -585,7 +583,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(-1, 3, 14, 27)
@@ -602,7 +600,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("quirky7", "solstice + 77", "Monkey: [Brains]7", """("alpha", "beta", "gamma")7""", "  Whitespace       is   awesome  !!!1!!   7", "7")
@@ -619,7 +617,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
@@ -636,7 +634,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(99, 58, 97, 101)
@@ -653,7 +651,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(0)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain()
@@ -670,7 +668,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
       }
       
       result2 must contain("e + 7", " [Brains]", """", "beta", "gamma")""", "space       is   awesome  !!!1!!   ")
@@ -687,7 +685,8 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(0)
       
       val result2 = result collect {
-        case (VectorCase(_), SString(d)) => d
+        case (ids, SString(d)) if ids.length == 1 => d
+        ids.length must_== 1
       }
       
       result2 must contain()
@@ -704,7 +703,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
@@ -721,7 +720,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(0, 2, -36, -73, -81, -6)
@@ -738,7 +737,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(0, 2, -4, -73, -81, -6)
@@ -755,7 +754,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
@@ -772,7 +771,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
+        case (ids, SDecimal(d)) if ids.length == 1 => d
       }
       
       result2 must contain(-1, 7, 4, 12, 6)
@@ -789,7 +788,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result must haveSize(6)
       
       val result2 = result collect {
-        case (VectorCase(_), SBoolean(d)) => d
+        case (ids, SBoolean(d)) if ids.length == 1 => d
       }
       
       result2 must contain(true, false)
