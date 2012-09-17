@@ -2382,7 +2382,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(0, -377, -780, 6006, -76, 5929, 1, 156, 169, 2, 1764,
           2695, 144, 1806, -360, 1176, -832, 182, 4851, -1470, -13, -41, -24)
       }
-    }.pendingUntilFixed
+    }
     
     "correctly evaluate a match following a cross with equality" in {
       val line = Line(0, "")
@@ -2397,7 +2397,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         Join(line, Eq, IdentitySort, numbers3, numbers3))
       
       testEval(input) { _ must not(beEmpty) }
-    }.pendingUntilFixed
+    }
     
     "correctly order a match following a cross within a new" in {
       val line = Line(0, "")
@@ -2421,7 +2421,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(0, 1260, -1470, 1722, 1218, -360, -780, 132, -12,
           2695, 5005, 5852, 4928, -41, -11, -76, -377, 13, -832, 156)
       }
-    }.pendingUntilFixed
+    }
     
     "split on a homogeneous set" in {
       val line = Line(0, "")
