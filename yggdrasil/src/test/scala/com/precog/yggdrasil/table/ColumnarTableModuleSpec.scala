@@ -228,6 +228,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "select the correct rows across slice boundary" in testTakeRangeAcrossSlices
       "select the correct rows only in second slice" in testTakeRangeSecondSlice
       "select the first slice" in testTakeRangeFirstSliceOnly
+      "select nothing with a negative starting index" in testTakeRangeNegStart
+      "select nothing with a negative number to take" in testTakeRangeNegNumber
     }
   }
 
