@@ -537,7 +537,17 @@ trait EvalStackSpecs extends Specification {
         |     & clicks = clicks
         |     & clicks = clicks""".stripMargin
         
-      eval(input) must not(beEmpty)
+      val results = evalE(input)
+      
+      results must haveSize(100 * 100)
+      
+      forall(results) {
+        case (ids, SBoolean(b)) => {
+          ids must haveSize(2)
+          b mustEqual true
+        }
+        case r => failure("Result has wrong shape: " + r)
+      }
     }.pendingUntilFixed
 
     "add sets of different types" >> {
@@ -818,14 +828,13 @@ trait EvalStackSpecs extends Specification {
       }
     }
  
-    "set critical conditions given an empty set in" >> {
-      "solve expression" >> {
-        val input = """
-          | solve 'a
-          |   //campaigns where //campaigns.foo = 'a""".stripMargin
+    "set critical conditions given an empty set in" in {
+      val input = """
+        | solve 'a
+        |   //campaigns where //campaigns.foo = 'a""".stripMargin
 
-        eval(input) mustEqual Set()
-      }
+      val results = evalE(input)
+      results must beEmpty
     }
 
     "use NotEq correctly" in {
@@ -852,8 +861,19 @@ trait EvalStackSpecs extends Specification {
         |   count(clicks where clicks.pageId = 'page)
         | """.stripMargin
       
-      eval(input) must not(beEmpty)
-    }
+      val results = evalE(input)
+      
+      results must haveSize(5)
+      
+      val stripped = results collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d
+      }
+      
+      stripped must contain(12)
+      stripped must contain(15)
+      stripped must contain(19)
+      stripped must contain(27)
+    }.pendingUntilFixed
 
     "evaluate sliding window in a" >> {
       "solve expression" >> {
@@ -906,16 +926,57 @@ trait EvalStackSpecs extends Specification {
         | campaigns := //campaigns
         | organizations := //organizations
         | 
-        | solve 'revenue, 'campaign
-        |   organizations' := organizations where organizations.revenue = 'revenue
+        | solve 'revenue = organizations.revenue, 'campaign = organizations.campaign
         |   campaigns' := campaigns where campaigns.campaign = 'campaign
-        |   organizations'' := organizations' where organizations'.campaign = 'campaign
-        |   
-        |   campaigns' ~ organizations''
-        |     { revenue: 'revenue, num: count(campaigns') }""".stripMargin
+        |   { revenue: 'revenue, num: count(campaigns') }""".stripMargin
 
-      todo //eval(input) mustEqual Set()   
-    }
+        
+        val resultsE = evalE(input)
+        resultsE must haveSize(70)
+        
+        val results = resultsE collect {
+          case (ids, obj) if ids.length == 1 => obj
+        }
+        
+        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("4"))))
+        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("3"))))
+        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("5"))))
+        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("0"))))
+        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("11"))))
+        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("0"))))
+        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("7"))))
+        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("5"))))
+        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("8"))))
+        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("3"))))
+        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("8"))))
+        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("8"))))
+        results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SString("0"))))
+        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("3"))))
+        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("8"))))
+        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("5"))))
+        results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SString("3"))))
+        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("3"))))
+        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("1"))))
+        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("7"))))
+        results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SString("4"))))
+        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("7"))))
+        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("1"))))
+        results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SString("5"))))
+        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("2"))))
+        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("4"))))
+        results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SString("8"))))
+        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("4"))))
+        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("5"))))
+        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("2"))))
+        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("4"))))
+        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("7"))))
+        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("0"))))
+        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("4"))))
+        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("5"))))
+        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("3"))))
+        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("1"))))
+        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("7"))))
+    }.pendingUntilFixed
      
     "determine most isolated clicks in time" in {
       val input = """
