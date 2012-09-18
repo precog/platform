@@ -527,6 +527,10 @@ object ZookeeperTools extends Command {
       case (path, data) =>
         JsonParser.parse(data).validated[EventRelayState] match {
           case Success(_) =>
+            if (! client.exists(path)) {
+              client.createPersistent(path, true)
+            }
+
             client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
               def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
             })  
