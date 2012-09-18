@@ -20,11 +20,11 @@
 package com.precog
 package daze
 
-import bytecode.RandomLibrary
+import bytecode.StaticLibrary
 
 import org.specs2.mutable._
 
-object MemoizerSpecs extends Specification with Memoizer with RandomLibrary {
+object MemoizerSpecs extends Specification with Memoizer with StaticLibrary {
   import instructions._
   import dag._
   
@@ -45,10 +45,11 @@ object MemoizerSpecs extends Specification with Memoizer with RandomLibrary {
       memoize(input) mustEqual input
     }
     
-    "insert memoization nodes for forcing points referenced by morph1 and cross" in {
+    "insert memoization nodes for morph1 referenced by morph1 and cross" in {
       val line = Line(0, "")
       
-      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks = 
+        dag.Morph1(line, libMorphism1.head, dag.LoadLocal(line, Root(line, PushString("/clicks"))))
       
       val input =
         Join(line, Add, IdentitySort,
@@ -57,7 +58,7 @@ object MemoizerSpecs extends Specification with Memoizer with RandomLibrary {
             clicks,
             clicks))
             
-      val memoClicks = Memoize(clicks, 3)
+      val memoClicks = Memoize(clicks, 2)
       
       val expected =
         Join(line, Add, IdentitySort,
@@ -130,7 +131,5 @@ object MemoizerSpecs extends Specification with Memoizer with RandomLibrary {
             
       memoize(split) mustEqual expectedSplit
     }
-    
-    // TODO check memoize rewrite above a Split
   }
 }

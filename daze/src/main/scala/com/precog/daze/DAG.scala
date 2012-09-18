@@ -398,6 +398,10 @@ trait DAG extends Instructions {
     
     def containsSplitArg: Boolean
 
+    /**
+     * NOTE: Does ''not'' work with `Split` rewrites!  Do not attempt!  Do not
+     * even ''think'' of attempting!  The badness that follows will be...bewildering.
+     */
     def mapDown(body: (DepGraph => DepGraph) => PartialFunction[DepGraph, DepGraph]): DepGraph = {
       val memotable = mutable.Map[DepGraph, DepGraph]()
 
