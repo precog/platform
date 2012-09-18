@@ -1249,6 +1249,544 @@ trait MathLibSpec[M[+_]] extends Specification
     }
   }
 
+  "for homogeneous sets across two slice boundaries (22 elements)" should {
+    "compute sinh" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(sinh),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, 601302.1420819727, -601302.1420819727, 29937.07084924806, -221206.6960033301, 221206.6960033301, 548.3161232732465, -548.3161232732465, -74.20321057778875, -10.017874927409903, 11013.232874703393, 201.71315737027922, -4051.54190208279, 1634508.6862359024, -81377.39570642984)
+    }
+    "compute toDegrees" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(toDegrees),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, 630.2535746439056, 572.9577951308232, -401.07045659157626, 401.07045659157626, 802.1409131831525, -802.1409131831525, 859.4366926962349, -515.662015617741, -687.5493541569879, -744.8451336700703, 744.8451336700703, 343.77467707849394, -286.4788975654116, -171.88733853924697)
+    }
+    "compute expm1" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(expm1),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, -0.9999991684712809, -0.9932620530009145, 3269016.3724721107, 22025.465794806718, -0.950212931632136, 402.4287934927351, -0.9999938557876467, 1095.6331584284585, -0.999997739670593, 59873.14171519782, -0.9998765901959134, 442412.3920089205, -0.9990881180344455, 1202603.2841647768)
+    }
+    "compute getExponent" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(getExponent),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(10)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(3, 2)
+    }
+    "compute asin" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(asin),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0)
+    }
+    "compute log10" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(log10),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(10)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(1.146128035678238, 0.8450980400142568, 1.0, 1.1139433523068367, 1.1760912590556813, 0.7781512503836436, 1.0413926851582251)
+    }
+    "compute cos" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(cos),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.9601702866503661, -0.8390715290764524, 1.0, -0.9111302618846769, 0.1367372182078336, 0.7539022543433046, 0.8438539587324921, -0.9899924966004454, 0.9074467814501962, -0.7596879128588213, 0.28366218546322625, 0.004425697988050785)
+    }
+    "compute exp" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(exp),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.00000614421235332821, 1.0, 0.049787068367863944, 1096.6331584284585, 3269017.3724721107, 442413.3920089205, 0.0000022603294069810542, 1202604.2841647768, 403.4287934927351, 0.0009118819655545162, 8.315287191035679E-7, 0.00012340980408667956, 59874.14171519782, 22026.465794806718, 0.006737946999085467)
+    }
+    "compute cbrt" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(cbrt),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, -1.709975946676697, -1.4422495703074083, -2.2894284851066637, 1.8171205928321397, -1.9129311827723892, 1.9129311827723892, -2.3513346877207573, 2.154434690031884, 2.3513346877207573, 2.4662120743304703, 2.2239800905693157, -2.41014226417523, 2.41014226417523, -2.080083823051904)
+    }
+    "compute atan" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(atan),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, -1.4876550949064553, -1.4994888620096063, 1.4994888620096063, -1.460139105621001, 1.5042281630190728, 1.4288992721907328, -1.4288992721907328, 1.4711276743037347, 1.4056476493802699, -1.4940244355251187, 1.4940244355251187, 1.4801364395941514, -1.2490457723982544, -1.373400766945016)
+    }
+    "compute ceil" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(ceil),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0, 10, -7, 14, -3, -12, 6, 13, -5, 7, -14, 11, -9, -13, 15)
+    }
+    "compute rint" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(rint),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0, 10, -7, 14, -3, -12, 6, 13, -5, 7, -14, 11, -9, -13, 15)
+    }
+    "compute log1p" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(log1p),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(11)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(2.70805020110221, 0.0, 1.9459101490553132, 2.4849066497880004, 2.3978952727983707, 2.0794415416798357, 2.639057329615259, 2.772588722239781)
+    }
+    "compute sqrt" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(sqrt),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(11)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, 3.3166247903554, 2.449489742783178, 2.6457513110645907, 3.7416573867739413, 3.872983346207417, 3.1622776601683795, 3.605551275463989)
+    }
+    "compute floor" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(floor),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0, 10, -7, 14, -3, -12, 6, 13, -5, 7, -14, 11, -9, -13, 15)
+    }
+    "compute toRadians" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(toRadians),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, -0.08726646259971647, -0.20943951023931953, 0.19198621771937624, 0.22689280275926282, 0.10471975511965977, -0.22689280275926282, 0.17453292519943295, -0.12217304763960307, 0.12217304763960307, -0.05235987755982988, -0.15707963267948966, -0.24434609527920614, 0.24434609527920614, 0.2617993877991494)
+    }
+    "compute tanh" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(tanh),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, 0.9999999999998128, -0.9950547536867305, -0.9999999999244973, 0.9999877116507956, -0.9999092042625951, 0.9999999958776927, 0.9999999994421064, 0.9999999999986171, -0.9999999999986171, -0.999999969540041, -0.9999983369439447, 0.9999983369439447, -0.9999999999897818, 0.9999999999897818)
+    }
+    "compute round" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(round),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0, 10, -7, 14, -3, -12, 6, 13, -5, 7, -14, 11, -9, -13, 15)
+    }
+    "compute cosh" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(cosh),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(1634508.6862362083, 4051.5420254925943, 29937.070865949758, 221206.6960055904, 10.067661995777765, 1.0, 81377.39571257407, 548.317035155212, 74.20994852478785, 11013.232920103324, 201.7156361224559, 601302.1420828041)
+    }
+    "compute tan" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(tan),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, -0.8559934009085188, -0.4630211329364896, 0.4630211329364896, -7.2446066160948055, 7.2446066160948055, 0.6483608274590866, 3.380515006246586, -0.8714479827243187, 0.8714479827243187, 0.1425465430742778, 0.45231565944180985, 0.6358599286615808, -0.29100619138474915, -225.95084645419513)
+    }
+    "compute abs" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(abs),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0, 5, 10, 14, 6, 9, 13, 12, 7, 3, 11, 15)
+    }
+    "compute sin" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(sin),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, 0.5365729180004349, -0.4121184852417566, -0.6569865987187891, 0.6569865987187891, -0.9999902065507035, 0.9906073556948704, -0.9906073556948704, -0.5440211108893698, 0.6502878401571168, 0.9589242746631385, 0.4201670368266409, -0.4201670368266409, -0.1411200080598672, -0.27941549819892586)
+    }
+    "compute log" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(log),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(10)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(2.70805020110221, 1.9459101490553132, 2.6390573296152584, 2.3978952727983707, 2.5649493574615367, 2.302585092994046, 1.791759469228055)
+    }
+    "compute signum" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(signum),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0, 1, -1)
+    }
+    "compute acos" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(acos),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(1.5707963267948966)
+    }
+    "compute ulp" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(ulp),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(1.7763568394002505E-15, 8.881784197001252E-16, 4.440892098500626E-16, 4.9E-324)
+    }
+    "compute min" in {
+      val line = Line(0, "")
+
+      val input = Join(line, BuiltInFunction2Op(min), CrossLeftSort,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))),
+        Root(line, PushNum("7")))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0, -7, -3, -12, 6, -5, 7, -14, -9, -13)
+    }
+    "compute hypot" in {
+      val line = Line(0, "")
+
+      val input = Join(line, BuiltInFunction2Op(hypot), CrossLeftSort,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))),
+        Root(line, PushNum("7")))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(13.892443989449804, 11.40175425099138, 8.602325267042627, 12.206555615733702, 16.55294535724685, 9.219544457292887, 15.652475842498529, 14.7648230602334, 7.0, 7.615773105863909, 13.038404810405298, 9.899494936611665)
+    }
+    "compute pow" in {
+      val line = Line(0, "")
+
+      val input = Join(line, BuiltInFunction2Op(pow), CrossLeftSort,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))),
+        Root(line, PushNum("7")))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, 170859375, 62748517, 19487171, -2187.0, -35831808, -4782969.0, 823543.0, -62748517, 279936.0, -105413504, 1.0E+7, -78125.0, -823543.0, 105413504)
+    }
+    "compute max" in {
+      val line = Line(0, "")
+
+      val input = Join(line, BuiltInFunction2Op(max), CrossLeftSort,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))),
+        Root(line, PushNum("7")))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(10, 14, 13, 7, 11, 15)
+    }
+    "compute atan2" in {
+      val line = Line(0, "")
+
+      val input = Join(line, BuiltInFunction2Op(atan2), CrossLeftSort,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))),
+        Root(line, PushNum("7")))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0.0, 1.1341691669813554, -0.6202494859828215, 1.1071487177940904, -1.1071487177940904, -0.9097531579442097, 1.0040671092713902, 0.7086262721276703, -0.4048917862850834, 1.0768549578753155, -1.0768549578753155, 0.960070362405688, -1.042721878368537, 0.7853981633974483, -0.7853981633974483)
+    }
+    "compute copySign" in {
+      val line = Line(0, "")
+
+      val input = Join(line, BuiltInFunction2Op(copySign), CrossLeftSort,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))),
+        Root(line, PushNum("7")))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0, 5, 10, 14, 6, 9, 13, 12, 7, 3, 11, 15)
+    }
+    "compute IEEEremainder" in {
+      val line = Line(0, "")
+
+      val input = Join(line, BuiltInFunction2Op(IEEEremainder), CrossLeftSort,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))),
+        Root(line, PushNum("7")))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(0, -3, 1, 2, -1, -2)
+    }
+  }
+
   "for heterogeneous sets across two slice boundaries (22 elements)" should {
     "compute sinh" in {
       val line = Line(0, "")
