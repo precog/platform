@@ -660,10 +660,10 @@ trait Evaluator[M[+_]] extends DAG
               val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op))
 
               val result = for {
-                parentLeftTable <- pendingTableLeft.table 
+                parentLeftTable <- pendingTableLeft.table
                 val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
                 
-                parentRightTable <- pendingTableRight.table 
+                parentRightTable <- pendingTableRight.table
                 val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
 
               } yield join(leftResult, rightResult)(key, spec)
@@ -802,6 +802,9 @@ trait Evaluator[M[+_]] extends DAG
         }
         
         case s @ SortBy(parent, sortField, valueField, id) => {
+          val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(sortField))
+          val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(valueField))
+                
           if (parent.sorting == ValueSort(id)) {
             loop(parent, splits)
           } else {
@@ -811,11 +814,8 @@ trait Evaluator[M[+_]] extends DAG
               val result = for {
                 pendingTable <- pending.table
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                sorted <- ctx.memoizationContext.sort(table, liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending, s.memoId)
+                sorted <- ctx.memoizationContext.sort(table, sortSpec, SortAscending, s.memoId)
               } yield {
-                val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(sortField))
-                val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(valueField))
-                
                 val wrappedSort = trans.WrapObject(sortSpec, "sort-" + id)
                 val wrappedValue = trans.WrapObject(valueSpec, paths.Value.name)
                 
@@ -850,7 +850,7 @@ trait Evaluator[M[+_]] extends DAG
               val result = for {
                 pendingTable <- pending.table
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                sorted <- ctx.memoizationContext.sort(table, DerefObjectStatic(Leaf(Source), JPathField("sort-" + id)), SortAscending, s.memoId)
+                sorted <- ctx.memoizationContext.sort(table, DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField("sort-" + id)), SortAscending, s.memoId)
               } yield sorted
               
               PendingTable(result, graph, TransSpec1.Id)
@@ -1025,6 +1025,7 @@ trait Evaluator[M[+_]] extends DAG
   private def join(left: Table, right: Table)(key: TransSpec1, spec: TransSpec2): Table = {
     val emptySpec = trans.ConstLiteral(CEmptyArray, Leaf(Source))
     val result = left.cogroup(key, key, right)(emptySpec, emptySpec, trans.WrapArray(spec))
+
     result.transform(trans.DerefArrayStatic(Leaf(Source), JPathIndex(0)))
   }
   
@@ -1045,7 +1046,6 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
-    assert(sharedLength > 0) 
     val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
     val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
     

@@ -2739,25 +2739,40 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         SortBy(clicks2, "time", "time", 0))
         
       testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("time")))) { expected =>
-        val expectedValues = expected collect {
-          case (_, SDecimal(d)) => d * 2
+        val decimalValues = expected.toList map {
+          case (_, SDecimal(d)) => d 
         }
-        
+
+        val cross = 
+          for {
+            x <- decimalValues
+            y <- decimalValues
+          } yield {
+            (x, y) 
+          }
+
+        val expectedResult = cross collect { case (x, y) if x == y => x + y }
+
         testEval(input) { result =>
-          result must haveSize(100)
+          result must haveSize(expectedResult.size)
           
+          val decis = result.toList map { 
+            case (_, SDecimal(d)) => d
+          }
+          decis.sorted mustEqual expectedResult.sorted
+
           forall(result) { result =>
             result must beLike {
               case (ids, SDecimal(d)) => {
-                ids must haveSize(1)
-                expectedValues must contain(d)
+                ids must haveSize(2)
+                expectedResult must contain(d)
               }
             }
           }
         }
       }
-    }.pendingUntilFixed
-    
+    }
+
     "filter two sets according to a value sort" in {
       val line = Line(0, "")
       
@@ -2774,24 +2789,40 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Root(line, PushNum("500"))))
         
       testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("time")))) { expected =>
-        val expectedValues = expected collect {
-          case (ids, SDecimal(d)) if d > 500 => (ids, d)
+        val decimalValues = expected.toList map {
+          case (_, SDecimal(d)) => d
         }
-        
+
+        val cross = 
+          for {
+            x <- decimalValues
+            y <- decimalValues
+          } yield {
+            (x, y) 
+          }
+
+        val expectedResult = cross collect { case (x, y) if x > 500 && x == y  => x }
+
         testEval(input) { result =>
-          result must haveSize(expectedValues.size)
+          result must haveSize(expectedResult.size)
+
+          val decis = result.toList map { 
+            case (_, SDecimal(d)) => d
+          }
+          decis.sorted mustEqual expectedResult.sorted
+
           
           forall(result) { result =>
             result must beLike {
-              case sev @ (ids, SDecimal(_)) => {
-                ids must haveSize(1)
-                expectedValues must contain(sev)
+              case (ids, SDecimal(d)) => {
+                ids must haveSize(2)
+                expectedResult must contain(d)
               }
             }
           }
         }
       }
-    }.pendingUntilFixed
+    }
   }
 }
 

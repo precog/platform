@@ -120,6 +120,57 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     }.set(minTestsOk -> 200)
   }
 
+  def testMod2Filter = {
+  val array: JValue = JsonParser.parse("""
+    [{
+      "value":1505746561572529384,
+      "key":[2.0,6.0,5.0]
+    },
+    {
+      "value":-4611686018427387904,
+      "key":[5.0,7.0,5.0]
+    },
+    {
+      "value":3918473030722287347,
+      "key":[6.0,3.0,3.0]
+    },
+    {
+      "value":-6.846973248137671E+307,
+      "key":[7.0,1.0,2.0]
+    },
+    {
+      "value":-1.0,
+      "key":[7.0,6.0,3.0]
+    }]""")
+
+    val data: Stream[JValue] = (array match {
+      case JArray(li) => li
+      case _ => sys.error("Expected JArray")
+    }).toStream
+
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Filter(
+        Leaf(Source), 
+        Map1(
+          DerefObjectStatic(Leaf(Source), JPathField("value")), 
+          lookupF2(Nil, "mod").applyr(CLong(2)) andThen lookupF2(Nil, "eq").applyr(CLong(0))
+        )
+      )
+    })
+
+    val expected = data flatMap { jv =>
+      (jv \ "value") match { 
+        case JNum(x) if x % 2 == 0 => Some(jv)
+        case _ => None
+      }
+    }
+
+    results.copoint must_== expected
+  }
+
   def checkObjectDeref = {
     implicit val gen = sample(objectSchema(_, 3))
     check { (sample: SampleData) =>

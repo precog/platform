@@ -167,6 +167,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       //"give the identity transform for the trivial filter" in checkTrivialFilter  //why is this commented out?
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
       "give the identity transform for a nontrivial filter" in checkFilter
+      "give a transformation for a big decimal and a long" in testMod2Filter
       "perform an object dereference" in checkObjectDeref
       "perform an array dereference" in checkArrayDeref
       "perform a trivial map2" in checkMap2
