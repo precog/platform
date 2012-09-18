@@ -393,22 +393,22 @@ object StdLib {
       def apply(row: Int) = f(c1(row), c2(row))
     }
   
-    class DL(c1:DoubleColumn, c2:LongColumn, defined:(BigDecimal, BigDecimal) => Boolean, f:(BigDecimal, BigDecimal) => Boolean)
+    class DL(c1:DoubleColumn, c2:LongColumn, defined:(Double, Long) => Boolean, f:(Double, Long) => Boolean)
     extends Map2Column(c1, c2) with BoolColumn {
-      override def isDefinedAt(row:Int) = super.isDefinedAt(row) && defined(BigDecimal(c1(row)), BigDecimal(c2(row)))
-      def apply(row: Int) = f(BigDecimal(c1(row)), BigDecimal(c2(row)))
+      override def isDefinedAt(row:Int) = super.isDefinedAt(row) && defined(c1(row), c2(row))
+      def apply(row: Int) = f(c1(row), c2(row))
     }
   
-    class DN(c1:DoubleColumn, c2:NumColumn, defined:(BigDecimal, BigDecimal) => Boolean, f:(BigDecimal, BigDecimal) => Boolean)
+    class DN(c1:DoubleColumn, c2:NumColumn, defined:(Double, BigDecimal) => Boolean, f:(Double, BigDecimal) => Boolean)
     extends Map2Column(c1, c2) with BoolColumn {
-      override def isDefinedAt(row:Int) = super.isDefinedAt(row) && defined(BigDecimal(c1(row)), c2(row))
-      def apply(row: Int) = f(BigDecimal(c1(row)), c2(row))
+      override def isDefinedAt(row:Int) = super.isDefinedAt(row) && defined(c1(row), c2(row))
+      def apply(row: Int) = f(c1(row), c2(row))
     }
   
-    class LD(c1:LongColumn, c2:DoubleColumn, defined:(BigDecimal, BigDecimal) => Boolean, f:(BigDecimal, BigDecimal) => Boolean)
+    class LD(c1:LongColumn, c2:DoubleColumn, defined:(Long, Double) => Boolean, f:(Long, Double) => Boolean)
     extends Map2Column(c1, c2) with BoolColumn {
-      override def isDefinedAt(row:Int) = super.isDefinedAt(row) && defined(BigDecimal(c1(row)), BigDecimal(c2(row)))
-      def apply(row: Int) = f(BigDecimal(c1(row)), BigDecimal(c2(row)))
+      override def isDefinedAt(row:Int) = super.isDefinedAt(row) && defined(c1(row), c2(row))
+      def apply(row: Int) = f(c1(row), c2(row))
     }
   
     class LL(c1:LongColumn, c2:LongColumn, defined:(Long, Long) => Boolean, f:(Long, Long) => Boolean)
@@ -417,22 +417,22 @@ object StdLib {
       def apply(row: Int) = f(c1(row), c2(row))
     }
   
-    class LN(c1:LongColumn, c2:NumColumn, defined:(BigDecimal, BigDecimal) => Boolean, f:(BigDecimal, BigDecimal) => Boolean)
-    extends Map2Column(c1, c2) with BoolColumn {
-      override def isDefinedAt(row:Int) = super.isDefinedAt(row) && defined(BigDecimal(c1(row)), c2(row))
-      def apply(row: Int) = f(BigDecimal(c1(row)), c2(row))
-    }
-  
-    class ND(c1:NumColumn, c2:DoubleColumn, defined:(BigDecimal, BigDecimal) => Boolean, f:(BigDecimal, BigDecimal) => Boolean)
+    class LN(c1:LongColumn, c2:NumColumn, defined:(Long, BigDecimal) => Boolean, f:(Long, BigDecimal) => Boolean)
     extends Map2Column(c1, c2) with BoolColumn {
       override def isDefinedAt(row:Int) = super.isDefinedAt(row) && defined(c1(row), c2(row))
-      def apply(row: Int) = f(c1(row), BigDecimal(c2(row)))
+      def apply(row: Int) = f(c1(row), c2(row))
     }
   
-    class NL(c1:NumColumn, c2:LongColumn, defined:(BigDecimal, BigDecimal) => Boolean, f:(BigDecimal, BigDecimal) => Boolean)
+    class ND(c1:NumColumn, c2:DoubleColumn, defined:(BigDecimal, Double) => Boolean, f:(BigDecimal, Double) => Boolean)
     extends Map2Column(c1, c2) with BoolColumn {
       override def isDefinedAt(row:Int) = super.isDefinedAt(row) && defined(c1(row), c2(row))
-      def apply(row: Int) = f(c1(row), BigDecimal(c2(row)))
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  
+    class NL(c1:NumColumn, c2:LongColumn, defined:(BigDecimal, Long) => Boolean, f:(BigDecimal, Long) => Boolean)
+    extends Map2Column(c1, c2) with BoolColumn {
+      override def isDefinedAt(row:Int) = super.isDefinedAt(row) && defined(c1(row), c2(row))
+      def apply(row: Int) = f(c1(row), c2(row))
     }
   
     class NN(c1:NumColumn, c2:NumColumn, defined:(BigDecimal, BigDecimal) => Boolean, f:(BigDecimal, BigDecimal) => Boolean)
