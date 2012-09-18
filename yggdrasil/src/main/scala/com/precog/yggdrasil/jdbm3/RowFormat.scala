@@ -127,26 +127,38 @@ trait RowFormatSupport { self: StdCodecs =>
       "Cannot create column encoder, columns of wrong type (expected %s, found %s)." format (cType, col.tpe))
   }
 
+  protected trait ColumnValueDecoder {
+    def decode(row: Int, buf: ByteBuffer): Unit 
+  }
 
-  def getColumnDecoder(cType: CType, col: ArrayColumn[_]): (Int, ByteBuffer) => Unit = (cType, col) match {
-    case (CLong, col: ArrayLongColumn) =>
-      (row: Int, buf: ByteBuffer) => col.update(row, Codec[Long].read(buf))
-    case (CDouble, col: ArrayDoubleColumn) =>
-      (row: Int, buf: ByteBuffer) => col.update(row, Codec[Double].read(buf))
-    case (CNum, col: ArrayNumColumn) =>
-      (row: Int, buf: ByteBuffer) => col.update(row, Codec[BigDecimal].read(buf))
-    case (CBoolean, col: ArrayBoolColumn) =>
-      (row: Int, buf: ByteBuffer) => col.update(row, Codec[Boolean].read(buf))
-    case (CString, col: ArrayStrColumn) =>
-      (row: Int, buf: ByteBuffer) => col.update(row, Codec[String].read(buf))
-    case (CDate, col: ArrayDateColumn) =>
-      (row: Int, buf: ByteBuffer) => col.update(row, Codec[DateTime].read(buf))
-    case (CEmptyObject, col: MutableEmptyObjectColumn) =>
-      (row: Int, buf: ByteBuffer) => col.update(row, true)
-    case (CEmptyArray, col: MutableEmptyArrayColumn) =>
-      (row: Int, buf: ByteBuffer) => col.update(row, true)
-    case (CNull, col: MutableNullColumn) =>
-      (row: Int, buf: ByteBuffer) => col.update(row, true)
+  def getColumnDecoder(cType: CType, col: ArrayColumn[_]): ColumnValueDecoder = (cType, col) match {
+    case (CLong, col: ArrayLongColumn) => new ColumnValueDecoder {
+      def decode(row: Int, buf: ByteBuffer) = col.update(row, Codec[Long].read(buf))
+    }
+    case (CDouble, col: ArrayDoubleColumn) => new ColumnValueDecoder {
+      def decode(row: Int, buf: ByteBuffer) = col.update(row, Codec[Double].read(buf))
+    }
+    case (CNum, col: ArrayNumColumn) => new ColumnValueDecoder {
+      def decode(row: Int, buf: ByteBuffer) = col.update(row, Codec[BigDecimal].read(buf))
+    }
+    case (CBoolean, col: ArrayBoolColumn) => new ColumnValueDecoder {
+      def decode(row: Int, buf: ByteBuffer) = col.update(row, Codec[Boolean].read(buf))
+    }
+    case (CString, col: ArrayStrColumn) => new ColumnValueDecoder {
+      def decode(row: Int, buf: ByteBuffer) = col.update(row, Codec[String].read(buf))
+    }
+    case (CDate, col: ArrayDateColumn) => new ColumnValueDecoder {
+      def decode(row: Int, buf: ByteBuffer) = col.update(row, Codec[DateTime].read(buf))
+    }
+    case (CEmptyObject, col: MutableEmptyObjectColumn) => new ColumnValueDecoder {
+      def decode(row: Int, buf: ByteBuffer) = col.update(row, true)
+    }
+    case (CEmptyArray, col: MutableEmptyArrayColumn) => new ColumnValueDecoder {
+      def decode(row: Int, buf: ByteBuffer) = col.update(row, true)
+    }
+    case (CNull, col: MutableNullColumn) => new ColumnValueDecoder {
+      def decode(row: Int, buf: ByteBuffer) = col.update(row, true)
+    }
     case _ => sys.error("Cannot create column decoder, columns of wrong type.")
   }
 }
@@ -194,17 +206,15 @@ trait ValueRowFormat extends RowFormat with RowFormatSupport { self: StdCodecs =
   def ColumnDecoder(cols: Seq[ArrayColumn[_]]) = {
     require(columnRefs.size == cols.size)
 
-    // TODO Function2 isn't @spec'd in 2.9.2... sigh.
-
-    val decoders: Seq[((Int, ByteBuffer) => Unit, Int)] =
+    val decoders: Seq[(ColumnValueDecoder, Int)] = // Seq[((Int, ByteBuffer) => Unit, Int)] =
       (columnRefs zip cols map { case (ref, col) => getColumnDecoder(ref.ctype, col) }).zipWithIndex
 
     new ColumnDecoder {
       def decodeToRow(row: Int, src: Array[Byte], offset: Int = 0) {
         val buf = ByteBuffer.wrap(src, offset, src.length - offset)
         val undefined = Codec[BitSet].read(buf)
-        for ((decode, i) <- decoders if !undefined(i)) {
-          decode(row, buf)
+        for ((decoder, i) <- decoders if !undefined(i)) {
+          decoder.decode(row, buf)
         }
       }
     }
@@ -352,9 +362,9 @@ trait SortingRowFormat extends RowFormat with StdCodecs with RowFormatSupport {
 
 
   def ColumnDecoder(cols: Seq[ArrayColumn[_]]): ColumnDecoder = {
-    val decoders: List[Map[Byte, (Int, ByteBuffer) => Unit]] =
+    val decoders: List[Map[Byte, ColumnValueDecoder]] =
       zipWithSelectors(cols) map { case (_, colsWithTypes) =>
-        val decoders: Map[Byte, (Int, ByteBuffer) => Unit] =
+        val decoders: Map[Byte, ColumnValueDecoder] =
           (for ((col, cType) <- colsWithTypes) yield {
             (flagForCType(cType), getColumnDecoder(cType, col))
           })(collection.breakOut)
@@ -367,11 +377,11 @@ trait SortingRowFormat extends RowFormat with StdCodecs with RowFormatSupport {
         val buf = ByteBuffer.wrap(src, offset, src.length - offset)
 
         @tailrec
-        def decode(decoders: List[Map[Byte, (Int, ByteBuffer) => Unit]]): Unit = decoders match {
+        def decode(decoders: List[Map[Byte, ColumnValueDecoder]]): Unit = decoders match {
           case selDecoder :: decoders =>
             val flag = buf.get()
             if (flag != FUndefined) {
-              selDecoder(flag)(row, buf)
+              selDecoder(flag).decode(row, buf)
             }
             decode(decoders)
           case Nil =>
