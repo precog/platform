@@ -1117,15 +1117,26 @@ trait EvalStackSpecs extends Specification {
         | meanAbove := mean(spacings.above)
         | meanBelow := mean(spacings.below)
         | 
+        | --[count(spacings.above), count(spacings.below), meanAbove, meanBelow]
+        | --[count(spacings.click), count(spacings.above), count(spacings.below), meanAbove, meanBelow]
+        | --spacings.below > meanBelow 
+        | --spacings.above > meanAbove
+        | --(spacings.above > meanAbove) & (spacings.below > meanBelow)
+        | --spacings where spacings.below > meanBelow & spacings.above > meanAbove
         | spacings.click where spacings.below > meanBelow & spacings.above > meanAbove""".stripMargin
 
         val resultsE = evalE(input)
+
+        val grouped = resultsE.groupBy(_._2).mapValues(_.size)
+
+        println("Counts: " + grouped)
         
-        println(resultsE.toList map {
-          case (_, SObject(fields)) => fields//("time") match { case SDecimal(d) => d }
+        println("results: " + resultsE.toList.map {
+          case (_, SDecimal(count)) => count
+          case (_, other) => other
         })
         
-        //resultsE must haveSize(20)
+        resultsE must haveSize(20)
         
         val results = resultsE collect {
           case (ids, sv) if ids.length == 1 => sv

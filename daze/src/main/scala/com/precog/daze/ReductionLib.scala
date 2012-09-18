@@ -75,6 +75,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
+        //println("max over range " + range.start + " -> " + range.end)
         val max = cols(JNumberT) flatMap {
           case col: LongColumn =>
             val mapped = range filter col.isDefinedAt map { x => col(x) }
@@ -121,6 +122,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
+        //println("min over range " + range.start + " -> " + range.end)
         val min = cols(JType.JUnfixedT) flatMap {
           case col: LongColumn =>
             val mapped = range filter col.isDefinedAt map { x => col(x) }
@@ -206,8 +208,10 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
+        println("Reducing over range from " + range.start + " to " + range.end)
         val result = cols(JNumberT) flatMap {
           case col: LongColumn =>
+            println("Mean over LongColumn: " + col.toString(range))
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
               None
@@ -219,6 +223,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
               Some(foldedMapped)
             }
           case col: DoubleColumn =>
+            println("Mean over DoubleColumn: " + col.toString(range))
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
               None
@@ -230,6 +235,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
               Some(foldedMapped)
             }
           case col: NumColumn =>
+            println("Mean over NumColumn: " + col.toString(range))
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
               None
@@ -251,7 +257,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def extract(res: Result): Table = {
       val filteredResult = res filter { case (_, count) => count != 0 }
-      filteredResult map { case (sum, count) => Table.constDecimal(Set(CNum(sum / count))) } getOrElse Table.empty
+      filteredResult map { case (sum, count) => Table.constDecimal(Set(CNum(sum / count).tap{ mean => println("count: %s, mean: %s".format(count, mean))})) } getOrElse Table.empty
     }
   }
   

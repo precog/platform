@@ -57,7 +57,16 @@ package object util {
     def zero: BigDecimal = BigDecimal(0)
     def append(v1: BigDecimal, v2: => BigDecimal): BigDecimal = v1 + v2
   }
-}
 
+
+  sealed trait Kestrel[A] {
+    protected def a: A
+    def tap(f: A => Unit): A = { f(a); a }
+  }
+
+  implicit def any2Kestrel[A](a0: => A): Kestrel[A] = new Kestrel[A] {
+    lazy val a = a0
+  }
+}
 
 // vim: set ts=4 sw=4 et:

@@ -1799,6 +1799,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       Table(Table.transformStream(composeSliceTransform(spec), slices))
     }
     
+    def force: M[Table] = this.sort(Scan(Leaf(Source), freshIdScanner), SortAscending)
+
     /**
      * Cogroups this table with another table, using equality on the specified
      * transformation on rows of the table.
@@ -2349,9 +2351,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     def normalize: Table = Table(slices.filter(!_.isEmpty))
 
-    def printer(prelude: String = ""): Table = {
-      Table(StreamT(StreamT.Skip({println(prelude); slices map { s => println(s.toJsonString); s }}).point[M]))
+    def slicePrinter(prelude: String)(f: Slice => String): Table = {
+      Table(StreamT(StreamT.Skip({println(prelude); slices map { s => println(f(s)); s }}).point[M]))
     }
+
+    def printer(prelude: String = ""): Table = slicePrinter(prelude)(_.toJsonString)
 
     def toStrings: M[Iterable[String]] = {
       toEvents { (slice, row) => slice.toString(row) }
