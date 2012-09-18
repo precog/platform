@@ -34,7 +34,6 @@ import bytecode.JType
 
 import yggdrasil._
 import yggdrasil.actor._
-import yggdrasil.memoization._
 import yggdrasil.serialization._
 import yggdrasil.table._
 import yggdrasil.util._

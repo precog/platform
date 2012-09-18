@@ -39,7 +39,6 @@ import com.precog.common.security._
 import yggdrasil._
 import yggdrasil.actor._
 import yggdrasil.jdbm3._
-import yggdrasil.memoization._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
