@@ -82,8 +82,7 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
    * DB.
    */
   def ingest(db: String, data: File, tokenId: String = "root", batchSize: Int = 1000): IO[Unit] = IO {
-    // logger.debug
-    println("Ingesting %s to '//%s'." format (data, db))
+    logger.debug("Ingesting %s to '//%s'." format (data, db))
 
     // Same as used by YggUtil's import command.
     val events = readRows(data) map { jval =>
@@ -95,8 +94,7 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
       storage.storeBatch(batch).copoint
     }
 
-    // logger.debug
-    println("Ingested %s." format data)
+    logger.debug("Ingested %s." format data)
   }
 }
 

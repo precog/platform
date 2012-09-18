@@ -113,31 +113,42 @@ trait ClicksLikePerfTestSuite extends PerfTestSuite {
       |
       |states where rank <= 5""".stripMargin)
 
-    q("""salesByProduct := solve 'id
-        |{product: 'id,
-        |  sales: sum(data.product.price where data.product.ID = 'id)}
-        |  rank := std::stats::rank(neg salesByProduct.sales)
-        |  otherProducts := {product: "other",sales: sum(salesByProduct.sales where rank > 5)}
-        |  top5Products := salesByProduct where rank <= 5)
-        |allProducts := otherProducts union top5Products
-        |allProducts""".stripMargin)
+    // q("""salesByProduct := solve 'id
+    //     |  { product: 'id,
+    //     |    sales: sum(data.product.price where data.product.ID = 'id) }
+    //     |rank := std::stats::rank(neg salesByProduct.sales)
+    //     |otherProducts :=
+    //     |  { product: "other",
+    //     |    sales: sum(salesByProduct.sales where rank > 5) }
+    //     |top5Products := salesByProduct where rank <= 5
+    //     |allProducts := otherProducts union top5Products
+    //     |allProducts""".stripMargin)
 
-    q("""import std::time::*
-        |data' := data with
-        |{ month: monthOfYear(data.timeStamp) }
-        |dataByMonth := solve 'month 
-        |{ month: 'month,
-        |  conversions: count(data' where data'.month = 'month),
-        |}
-        |dataByMonth""".stripMargin)
+    // Weird problem w/ different columns / column refs given (ColumnRef is
+    // CString, Column is CLong).
+
+    //q("""import std::time::*
+    //    |data' := data with
+    //    |{ month: monthOfYear(data.timeStamp) }
+    //    |dataByMonth := solve 'month 
+    //    |{ month: 'month,
+    //    |  conversions: count(data' where data'.month = 'month),
+    //    |}
+    //    |dataByMonth""".stripMargin)
   }
 
   def advancedGroupingQueries() {
-    q("""data' := new data
-        |solve 'gender, 'gamer
-        |data where data.customer.gender = 'gender | data.customer.isCasualGamer = 'gamer
-        |data' where data'.customer.gender = 'gender | data'.customer.isCasualGamer = 'gamer
-        |{ gender: 'gender, gamer: 'gamer }""".stripMargin)
+
+    // Pathological, as many universes as there are ages.
+    q("""solve 'age = data.age
+        |{ age: 'age,
+        |  count: count(data where data.age < 'age) }""".stripMargin)
+
+    q("""solve 'gender, 'gamer
+        |{ gender: 'gender,
+        |  gamer: 'gamer,
+        |  count: count(data where data.customer.gender = 'gender |
+        |                          data.customer.isCasualGamer = 'gamer) }""".stripMargin)
   }
 }
 
