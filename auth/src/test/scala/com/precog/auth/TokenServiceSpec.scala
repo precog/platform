@@ -89,6 +89,9 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
 class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
   import TestTokenManager._
 
+  def getTokens(authAPIKey: String) = 
+    authService.query("tokenId", authAPIKey).get("/apikeys/")
+    
   def createToken(authAPIKey: String, request: NewTokenRequest) =
     createTokenRaw(authAPIKey, request.serialize)
 
@@ -117,13 +120,9 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
     addGrantChildRaw(authAPIKey, grantId, permission.serialize)
     
   def addGrantChildRaw(authAPIKey: String, grantId: String, permission: JValue) = 
-<<<<<<< HEAD
     authService.query("apiKey", authAPIKey).post("/grants/"+grantId+"/children/")(permission)
-=======
-    authService.query("tokenId", authAPIKey).post("/grants/"+grantId+"/children/")(permission)
     
   def equalGrant(g1: Grant, g2: Grant) = (g1.gid == g2.gid) && (g1.permission == g2.permission)
->>>>>>> Updated auth API to match latest doc. Removed 'issuer' field from grant details response.
 
   "Token service" should {
     "get existing token" in {
@@ -142,6 +141,14 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       }}
     }
     
+    "enumerate existing tokens" in {
+      getTokens(rootUID) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jts), _) =>
+          val ts = jts.deserialize[List[String]]
+          ts must containTheSameElementsAs(tokens.keys.toSeq)
+      }}
+    }
+
     "create root token with defaults" in {
       val request = NewTokenRequest(grantList(0).map(_.permission))
       createToken(rootUID, request) must whenDelivered { beLike {

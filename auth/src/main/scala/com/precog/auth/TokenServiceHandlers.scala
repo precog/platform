@@ -44,6 +44,17 @@ import scalaz.Validation._
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 
+class GetTokensHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+  val service = (request: HttpRequest[Future[JValue]]) => {
+    Success { (authToken: Token) => 
+      tokenManagement.tokens(authToken.tid).map { tokens =>
+        HttpResponse[JValue](OK, content = Some(JArray(tokens.map(token => JString(token.tid)).toList)))
+      }
+    }
+  }
+  val metadata = None
+}
+
 class CreateTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Token => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (authToken: Token) => 
@@ -291,6 +302,10 @@ class DeleteGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: 
 class TokenManagement(val tokenManager: TokenManager[Future])(implicit val execContext: ExecutionContext)
   extends TokenManagerAccessControl[Future](tokenManager) {
   
+  def tokens(tid: TokenID) : Future[Set[Token]] = {
+    tokenManager.listTokens.map(_.filter(_.cid == tid).toSet)
+  }
+
   def createToken(requestor: Token, request: NewTokenRequest): Future[Validation[String, Token]] = {
     tokenManager.newToken("Anonymous", Set.empty).flatMap { token =>
       val tid = token.tid
