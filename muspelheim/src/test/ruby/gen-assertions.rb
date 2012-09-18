@@ -122,6 +122,9 @@ module Tests
       
       # meanBelow := mean(spacings.below)
       mean_below = mean(spacings.map { |s| s['below'] })
+
+      puts "mean above: #{mean_above}"
+      puts "mean below: #{mean_below}"
       
       # spacings.click where spacings.below < meanBelow | spacings.above > meanAbove
       results = spacings.select do |s|
@@ -131,6 +134,45 @@ module Tests
       results_must " haveSize(#{results.size})"
       
       results.uniq.each do |res|
+        results_must " contain(#{render_value res})"
+      end
+    end
+
+    def test_determine_surrounding_click_times
+      # clicks := //clicks
+      clicks = load_file 'clicks.json'
+      
+      # spacings := solve 'time
+      #   click := clicks where clicks.time = 'time
+      click_times = clicks.map { |c| c['time'] }.uniq
+      
+      surrounding = click_times.map do |time|
+        click = clicks.select { |c| c['time'] == time }
+        
+        #   belowTime := max(clicks.time where clicks.time < 'time)
+        #   aboveTime := min(clicks.time where clicks.time > 'time)
+        below_time = click_times.select { |t| t < time }.max
+        above_time = click_times.select { |t| t > time }.min
+        
+        #   {
+        #     click: click,
+        #     below: click.time - belowTime,
+        #     above: aboveTime - click.time
+        #   }
+        if below_time && above_time && !click.empty?
+          click.map do |c|
+            {
+              'time' => time,
+              'below' => below_time,
+              'above' => above_time
+            }
+          end
+        else
+          []
+        end
+      end.flatten
+      
+      surrounding.each do |res|
         results_must " contain(#{render_value res})"
       end
     end
