@@ -91,6 +91,7 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val userUID: String, val 
     implicit val geq: scalaz.Equal[Int] = intInstance
   }
 
+  yggConfig.dataDir.mkdirs()
   val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
   object Projection extends JDBMProjectionCompanion {
