@@ -28,7 +28,6 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.metadata._
-import com.precog.yggdrasil.memoization._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 
