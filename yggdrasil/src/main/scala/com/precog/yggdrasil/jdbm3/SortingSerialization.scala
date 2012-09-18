@@ -36,6 +36,8 @@ object SortingKeyComparator {
 class SortingKeyComparator private[SortingKeyComparator] (rowFormat: RowFormat, ascending: Boolean)
     extends Comparator[Array[Byte]] with Serializable {
 
-  // TODO: Optimize by going directly to selector-driven ordered raw values (or undefined)
-  def compare(a: Array[Byte], b: Array[Byte]) = rowFormat.compare(a, b)
+  def compare(a: Array[Byte], b: Array[Byte]) = {
+    val ret = rowFormat.compare(a, b)
+    if (ascending) ret else -ret
+  }
 }
