@@ -275,7 +275,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file0" -> Map(JPath("column0") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)),
+        "/file0" -> Map(JPath("column0") -> Set[CType]()),
         "/file1" -> Map(JPath("column1") -> Set(CLong, CDouble, CNum))
       )
 
@@ -449,7 +449,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
               Join(line, DerefObject, CrossLeftSort,
                 clicks,
                 Root(line, PushString("column0"))))),
-          Join(line, Add, IdentitySort,
+          Join(line, Add, CrossLeftSort,
             Join(line, DerefObject, CrossLeftSort,
               SplitParam(line, 0)(input),
               Root(line, PushString("column1"))),
@@ -462,11 +462,13 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val expected = Map(
         "/file" -> Map(
           JPath.Identity -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull),
-          JPath("column0") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)
+          JPath("column0") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull),
+          JPath("column0.column1") -> Set(CLong, CDouble, CNum),
+          JPath("column2") -> Set(CLong, CDouble, CNum)
         )
       )
 
-      result must_== expected
+      result mustEqual expected
     }
     
     "propagate structure/type information through Split nodes (2)" in {
@@ -579,7 +581,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/clicks" -> Map(JPath.Identity -> Set(CLong, CDouble, CNum)))
+        "/clicks" -> Map(JPath.Identity -> Set(CBoolean, CLong, CDouble, CString, CNum, CNull)))
 
       result mustEqual expected
     }
@@ -609,7 +611,9 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
       
       val expected = Map(
-        "/clicks" -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull))
+        "/clicks" -> Map(
+          JPath.Identity -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull),
+          JPath("time") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)))
         
       result mustEqual expected
     }
