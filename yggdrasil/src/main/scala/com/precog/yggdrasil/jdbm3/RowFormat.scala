@@ -55,7 +55,6 @@ trait RowFormat {
   def encode(cValues: List[CValue]): Array[Byte]
   def decode(bytes: Array[Byte], offset: Int = 0): List[CValue]
 
-  // TODO: Optimize by going directly to selector-driven ordered raw values (or undefined)
   def compare(a: Array[Byte], b: Array[Byte]): Int = {
     val selectors = columnRefs map (_.selector)
     val aVals = selectors zip decode(a) groupBy (_._1)
