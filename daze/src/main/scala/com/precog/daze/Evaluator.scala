@@ -389,7 +389,6 @@ trait Evaluator[M[+_]] extends DAG
           } yield {
             for {
               grouping2 <- grouping
-            
               result <- Table.merge(grouping2) { (key: Table, map: Int => M[Table]) =>
                 ctx.memoizationContext.expire(s.memoId)
 
