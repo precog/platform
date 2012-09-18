@@ -108,7 +108,7 @@ trait PerfTestSuite extends Logging {
     try {
 
       implicit val execContext = ExecutionContext.defaultExecutionContext(actorSystem)
-      val testTimeout = Duration(5 * 60, "seconds")
+      val testTimeout = Duration(config.queryTimeout, "seconds")
 
       implicit val futureIsCopointed: Copointed[Future] = new Copointed[Future] {
         def map[A, B](m: Future[A])(f: A => B) = m map f
