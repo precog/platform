@@ -43,11 +43,14 @@ import com.precog.util.FilesystemFileOps
 
 import akka.actor.ActorSystem
 import akka.dispatch._
+import akka.pattern.ask
 import akka.util.duration._
 import akka.util.Duration
 import akka.util.Timeout
 
 import com.weiglewilczek.slf4s.Logging
+
+import java.io.File
 
 import scalaz._
 import scalaz.Validation._
@@ -110,10 +113,22 @@ trait YggdrasilQueryExecutorComponent {
 
       val storage = new Storage
 
-      object Projection extends JDBMProjectionCompanion {
+      object Projection extends JDBMProjectionCompanion with Logging {
+        private implicit val askTimeout = yggConfig.projectionRetrievalTimeout
+             
         val fileOps = FilesystemFileOps
-        def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
-        def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+
+        def baseDir(descriptor: ProjectionDescriptor) = {
+          logger.debug("Finding base dir for " + descriptor)
+          val base = (storage.shardSystemActor ? FindDescriptorRoot(descriptor, true)).mapTo[IO[Option[File]]]
+          Await.result(base, yggConfig.maxEvalDuration)
+        }
+
+        def archiveDir(descriptor: ProjectionDescriptor) = {
+          logger.debug("Finding archive dir for " + descriptor)
+          val archive = (storage.shardSystemActor ? FindDescriptorArchive(descriptor)).mapTo[IO[Option[File]]]
+          Await.result(archive, yggConfig.maxEvalDuration)
+        }
       }
 
       trait TableCompanion extends BlockStoreColumnarTableCompanion {
@@ -208,7 +223,7 @@ trait YggdrasilQueryExecutor
   private def evaluateDag(userUID: String, dag: DepGraph,prefix: Path): Validation[Throwable, JArray] = {
     withContext { ctx =>
       logger.debug("Evaluating DAG for " + userUID)
-      val result = consumeEval(userUID, dag, ctx,prefix) map { events => logger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+      val result = consumeEval(userUID, dag, ctx, prefix) map { events => logger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
       // FIXME: The next line should really handle resource cleanup. Not quite there with current MemoizationContext
       //ctx.memoizationContext.release.unsafePerformIO
       logger.debug("DAG evaluated to " + result)

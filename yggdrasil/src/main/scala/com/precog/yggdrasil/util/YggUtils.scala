@@ -527,6 +527,10 @@ object ZookeeperTools extends Command {
       case (path, data) =>
         JsonParser.parse(data).validated[EventRelayState] match {
           case Success(_) =>
+            if (! client.exists(path)) {
+              client.createPersistent(path, true)
+            }
+
             client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
               def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
             })  
@@ -718,8 +722,8 @@ object ImportTools extends Command with Logging {
 
         object Projection extends JDBMProjectionCompanion {
           def fileOps = FilesystemFileOps
-          def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
-          def archiveDir(descriptor: ProjectionDescriptor): File = ms.findArchiveRoot(descriptor).unsafePerformIO.get
+          def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findDescriptorRoot(descriptor, true)
+          def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findArchiveRoot(descriptor)
         }
 
         class Storage extends SystemActorStorageLike(ms) {
@@ -893,10 +897,11 @@ object TokenTools extends Command with AkkaDefaults with Logging {
   def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager[Future]) = {
     for {
       token <- tokenManager.newToken(tokenName, Set())
-      val ownerGrant = tokenManager.newGrant(None, OwnerPermission(path, None))
-      val readGrant  = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
-      val writeGrant = tokenManager.newGrant(None, WritePermission(path, None))
-      grants <- Future.sequence(List(ownerGrant, readGrant, writeGrant))
+      val ownerGrant  = tokenManager.newGrant(None, OwnerPermission(path, None))
+      val readGrant   = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
+      val writeGrant  = tokenManager.newGrant(None, WritePermission(path, None))
+      val reduceGrant = tokenManager.newGrant(None, ReducePermission(path, token.tid, None))
+      grants <- Future.sequence(List(ownerGrant, readGrant, writeGrant, reduceGrant))
       result <- tokenManager.addGrants(token.tid, grants.map(_.gid).toSet)
     } yield {
       result match {

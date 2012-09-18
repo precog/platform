@@ -25,7 +25,7 @@ import com.precog.util.FileOps
 
 import org.joda.time.DateTime
 
-import java.io.File
+import java.io.{File, FileNotFoundException}
 import java.nio.ByteBuffer
 import java.util.concurrent.{Executors,TimeoutException}
 
@@ -46,23 +46,18 @@ trait JDBMProjectionModule extends ProjectionModule {
   trait JDBMProjectionCompanion extends ProjectionCompanion {
     def fileOps: FileOps
 
-    def baseDir(descriptor: ProjectionDescriptor): File
+    // Must return a directory
+    def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]]
     
-    def archiveDir(descriptor: ProjectionDescriptor): File
+    // Must return a directory  
+    def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]]
 
     def open(descriptor: ProjectionDescriptor): IO[Projection] = {
       pmLogger.debug("Opening JDBM projection for " + descriptor)
-      val base = baseDir(descriptor)
-      val baseDirV: IO[File] = 
-        fileOps.exists(base) flatMap { 
-          case true  => IO(base)
-          case false => fileOps.mkdir(base) map {
-                          case true  => base
-                          case false => throw new RuntimeException("Could not create database basedir " + base)
-                        }
-        }
-
-      baseDirV map { (bd: File) => new Projection(bd, descriptor) }
+      baseDir(descriptor) map { 
+        case Some(bd) => new Projection(bd, descriptor) 
+        case None => throw new FileNotFoundException("Could not locate base for projection: " + descriptor)
+      }
     }
 
     def close(projection: Projection) = {
@@ -73,7 +68,20 @@ trait JDBMProjectionModule extends ProjectionModule {
     def archive(projection: Projection) = {
       pmLogger.debug("Archiving " + projection)
       val descriptor = projection.descriptor
-      close(projection).flatMap(_ => fileOps.rename(baseDir(descriptor), archiveDir(descriptor)))
+      val dirs = 
+        for {
+          _       <- close(projection)
+          base    <- baseDir(descriptor)
+          archive <- archiveDir(descriptor)
+        } yield (base, archive) 
+
+      dirs flatMap {
+        case (b, a) => (b, a) match {
+          case (Some(base), Some(archive)) => fileOps.rename(base, archive)
+          case (Some(base), _)             => throw new FileNotFoundException("Could not locate archive dir for projection: " + projection)
+          case _                           => throw new FileNotFoundException("Could not locate base dir for projection: " + projection)
+        }
+      }
     }
   }
 }

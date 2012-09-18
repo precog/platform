@@ -124,6 +124,8 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
             tokens.findGrant(gid).flatMap( _.map { 
               case g @ Grant(_, _, ReducePermission(p, o, _)) =>
                 isValid(g).map { _ && p.equalOrChild(path) && owner == o }
+              case g @ Grant(_, _, ReadPermission(p, o, _)) =>
+                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
               case _ => M.point(false)
             }.getOrElse(M.point(false))
           )})
