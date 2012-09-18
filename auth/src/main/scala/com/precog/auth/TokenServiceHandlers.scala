@@ -424,16 +424,14 @@ trait GrantDetailsSerialization {
   implicit val grantDetailsExtractor: Extractor[GrantDetails] = new Extractor[GrantDetails] with ValidatedExtraction[GrantDetails] {
     override def validated(obj: JValue): Validation[Error, GrantDetails] =
       ((obj \ "grantId").validated[String] |@|
-       (obj \ "issuer").validated[Option[String]] |@|
-       obj.validated[Permission]).apply((id, issuer, permission) => GrantDetails(Grant(id, issuer, permission)))
+       obj.validated[Permission]).apply((id, permission) => GrantDetails(Grant(id, None, permission)))
   }
 
   implicit val grantDetailsDecomposer: Decomposer[GrantDetails] = new Decomposer[GrantDetails] {
     override def decompose(details: GrantDetails): JValue =
       JObject(List(
-        Some(JField("grantId", details.grant.gid)),
-        details.grant.issuer.map(JField("issuer", _))
-      ).flatten) merge details.grant.permission.serialize
+        JField("grantId", details.grant.gid)
+      )) merge details.grant.permission.serialize
   }
 }
 

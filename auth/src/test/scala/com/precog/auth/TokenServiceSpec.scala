@@ -117,7 +117,13 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
     addGrantChildRaw(authAPIKey, grantId, permission.serialize)
     
   def addGrantChildRaw(authAPIKey: String, grantId: String, permission: JValue) = 
+<<<<<<< HEAD
     authService.query("apiKey", authAPIKey).post("/grants/"+grantId+"/children/")(permission)
+=======
+    authService.query("tokenId", authAPIKey).post("/grants/"+grantId+"/children/")(permission)
+    
+  def equalGrant(g1: Grant, g2: Grant) = (g1.gid == g2.gid) && (g1.permission == g2.permission)
+>>>>>>> Updated auth API to match latest doc. Removed 'issuer' field from grant details response.
 
   "Token service" should {
     "get existing token" in {
@@ -214,7 +220,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgd), _) =>
           val gd = jgd.deserialize[GrantDetails]
           gd must beLike {
-            case GrantDetails(grant) if (grant == grants("user2_read"))=> ok
+            case GrantDetails(grant) if (grant.gid == grants("user2_read").gid) && (grant.permission == grants("user2_read").permission) => ok
           }
       }}
     }
@@ -236,11 +242,11 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgs), _) =>
           val gs = jgs.deserialize[GrantSet]
           gs must beLike {
-            case GrantSet(grants) if grants sameElements rootReadChildren => ok
+            case GrantSet(grants) if grants.forall(g => rootReadChildren.exists(equalGrant(g, _))) => ok
           }
       }}
     }
-    
+
     "add a child grant to the given grant" in {
       val permission = WritePermission(Path("/user1"), None)
       addGrantChild(rootUID, "root_read", permission) must whenDelivered { beLike {
