@@ -622,6 +622,7 @@ trait Evaluator[M[+_]] extends DAG
             pendingTableLeft <- loop(left, splits)
             pendingTableRight <- loop(right, splits)
           } yield {
+
             if (pendingTableLeft.graph == pendingTableRight.graph) {
               PendingTable(pendingTableLeft.table, pendingTableLeft.graph, transFromBinOp(op)(pendingTableLeft.trans, pendingTableRight.trans))
             } else {
@@ -638,6 +639,10 @@ trait Evaluator[M[+_]] extends DAG
               }
               
               val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op))
+              
+              if (op == instructions.And) {
+                println("and trans = " + spec)
+              }
 
               val result = for {
                 parentLeftTable <- pendingTableLeft.table 

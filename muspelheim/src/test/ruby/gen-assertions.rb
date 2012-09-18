@@ -118,11 +118,12 @@ module Tests
       end.flatten
       
       # meanAbove := mean(spacings.above)
-      mean_above = mean(spacings.map { |s| s['above'] })
+      mean_above = mean(spacings.map { |s| s['above'].to_f })
       
       # meanBelow := mean(spacings.below)
-      mean_below = mean(spacings.map { |s| s['below'] })
+      mean_below = mean(spacings.map { |s| s['below'].to_f })
 
+      puts "spacings size: #{spacings.size}"
       puts "mean above: #{mean_above}"
       puts "mean below: #{mean_below}"
       
