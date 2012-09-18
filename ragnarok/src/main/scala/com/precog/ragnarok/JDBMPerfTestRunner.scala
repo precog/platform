@@ -40,6 +40,7 @@ import org.streum.configrity.Configuration
 import blueeyes.bkka.AkkaTypeClasses
 
 import scalaz._
+import scalaz.effect._
 import scalaz.std.anyVal._
 
 
@@ -94,10 +95,13 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val userUID: String, val 
 
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
-    // def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
-    def baseDir(descriptor: ProjectionDescriptor): File =
-      fileMetadataStorage.findDescriptorRoot(descriptor, true).unsafePerformIO getOrElse sys.error("Cannot find base dir. for descriptor: " + descriptor)
-    def archiveDir(descriptor: ProjectionDescriptor): File =
-      fileMetadataStorage.findArchiveRoot(descriptor).unsafePerformIO getOrElse sys.error("Cannot find base dir. for descriptor: " + descriptor)
+
+    def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
+      fileMetadataStorage.findDescriptorRoot(descriptor, true)
+    // map (_ getOrElse sys.error("Cannot find base dir. for descriptor: " + descriptor))
+
+    def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
+      fileMetadataStorage.findArchiveRoot(descriptor)
+    //map (_ getOrElse sys.error("Cannot find base dir. for descriptor: " + descriptor))
   }
 }
