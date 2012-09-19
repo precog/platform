@@ -1098,6 +1098,482 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
     }
   }
+
+  "homogenous sets across two slice boundaries (22 elements)" should {
+    "median with odd number of elements" >> {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, Median,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 0 => d
+      }
+
+      result2 must contain(-1.5)
+    }
+
+    "median with even number of elements" >> {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, Median,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 0 => d
+      }
+
+      result2 must contain(-1.5)
+    }
+
+    "median with singleton" >> {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, Median,
+        Root(line, PushNum("42")))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 0 => d
+      }
+
+      result2 must contain(42)
+    }
+
+    "mode" >> {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, Mode,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SArray(d)) if ids.length == 0 => d
+      }
+
+      result2 must contain(Vector(SDecimal(1)))
+    }.pendingUntilFixed
+
+    "mode with a singleton" >> {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, Mode,
+        Root(line, PushNum("42")))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SArray(d)) if ids.length == 0 => d
+      }
+
+      result2 must contain(Vector(SDecimal(42)))
+    }.pendingUntilFixed
+
+    "mode where each value appears exactly once" >> {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, Mode,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SArray(d)) if ids.length == 0 => d
+      }
+
+      result2 must contain(Vector(SDecimal(1), SDecimal(12), SDecimal(13), SDecimal(42), SDecimal(77)))
+    }.pendingUntilFixed
+
+    "compute rank" in {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, Rank,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(5,14,20,1,6,21,13,2,12,16,11,8,19,4,15).only
+    }
+
+    "compute rank within a filter" in {
+      val line = Line(0, "")
+
+      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices")))
+
+      val input = Filter(line, IdentitySort,
+        numbers,
+        Join(line, Eq, CrossLeftSort,
+          dag.Morph1(line, Rank, numbers),
+          Root(line, PushNum("5"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(-9).only
+    }
+
+    "compute rank resulting in a boolean set" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Eq, CrossLeftSort,
+        dag.Morph1(line, Rank,
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices")))),
+        Root(line, PushNum("5")))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val (tr, fls) = result partition {
+        case (ids, STrue) if ids.length == 1 => true
+        case (ids, SFalse) if ids.length == 1 => false
+        case _ => false
+      }
+
+      tr.size mustEqual 1
+      fls.size mustEqual 21
+    }
+
+    "compute rank within a join" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Add, CrossLeftSort,
+        dag.Morph1(line, Rank,
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices")))),
+        Root(line, PushNum("2")))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(10,14,6,21,13,17,22,7,3,18,16,23,8,4,15).only
+    }
+  }
+
+  "heterogenous sets across two slice boundaries (22 elements)" should {
+    "median" >> {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, Median,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 0 => d
+      }
+
+      result2 must contain(1)
+    }
+
+    "mode in the case there is only one" >> {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, Mode,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SArray(d)) if ids.length == 0 => d
+      }
+
+      result2 must contain(Vector(SDecimal(1)))
+    }.pendingUntilFixed
+
+    "mode in the case there is more than one" >> {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, Mode,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SArray(d)) if ids.length == 0 => d
+      }
+
+      result2 must contain(Vector(SDecimal(4), SString("a")))
+    }.pendingUntilFixed
+
+    "compute rank" in {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, Rank,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(9)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(5,1,9,2,7,3,8).only
+    }
+
+    "compute rank within an equals filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, IdentitySort,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))),
+        Join(line, Eq, CrossLeftSort,
+          dag.Morph1(line, Rank,
+            dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices")))),
+          Root(line, PushNum("9"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(12).only
+    }
+
+    "compute rank within another equals filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, IdentitySort,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))),
+        Join(line, Eq, CrossLeftSort,
+          dag.Morph1(line, Rank,
+            dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices")))),
+          Root(line, PushNum("1"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(-3).only
+
+    }
+
+    "compute rank within a less-than filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, IdentitySort,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))),
+        Join(line, LtEq, CrossLeftSort,
+          dag.Morph1(line, Rank,
+            dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices")))),
+          Root(line, PushNum("5"))))
+
+      val result = testEval(input)
+
+      result must haveSize(6)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(0,-1,1,-3).only
+    }
+
+    "compute rank within a join" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Add, CrossLeftSort,
+        dag.Morph1(line, Rank,
+          dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices")))),
+        Root(line, PushNum("2")))
+
+      val result = testEval(input)
+
+      result must haveSize(9)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(5,10,9,7,3,11,4).only
+    }
+  }
+
+  "homogenous sets across two slice boundaries (22 elements)" should {
+    "compute denseRank" in {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, DenseRank,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(5,10,14,1,6,9,13,2,12,7,3,11,8,4,15).only
+    }
+
+    "compute denseRank within a filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, IdentitySort,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))),
+        Join(line, Eq, CrossLeftSort,
+          dag.Morph1(line, DenseRank,
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices")))),
+          Root(line, PushNum("4"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(-9)
+    }
+
+    "compute denseRank within a join" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Add, CrossLeftSort,
+        dag.Morph1(line, DenseRank,
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices")))),
+        Root(line, PushNum("2")))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(5,10,14,6,9,13,17,12,7,3,16,11,8,4,15).only
+    }
+  }
+
+  "heterogenous sets across two slice boundaries (22 elements)" should {
+    "compute denseRank" in {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, DenseRank,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(9)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(5,1,6,2,7,3,4).only
+    }
+
+    "compute denseRank within an equals filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, IdentitySort,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))),
+        Join(line, Eq, CrossLeftSort,
+          dag.Morph1(line, DenseRank,
+            dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices")))),
+          Root(line, PushNum("6"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(5)
+    }
+
+    "compute denseRank within a less-than filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, IdentitySort,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))),
+        Join(line, LtEq, CrossLeftSort,
+          dag.Morph1(line, DenseRank,
+            dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices")))),
+          Root(line, PushNum("5"))))
+
+      val result = testEval(input)
+
+      result must haveSize(7)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(0,-3,1,2,-1).only
+    }
+
+    "compute denseRank within a join" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Add, CrossLeftSort,
+        dag.Morph1(line, DenseRank,
+          dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices")))),
+        Root(line, PushNum("2")))
+
+      val result = testEval(input)
+
+      result must haveSize(9)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(5,6,9,7,3,8,4).only
+    }
+  }
 }
 
 object StatsLibSpec extends StatsLibSpec[test.YId] with test.YIdInstances
