@@ -1747,7 +1747,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
                            val sortByTrans = DerefObjectStatic(Leaf(Source), JPathField("0"))
                            // transform to get just the information related to the particular groupId,
-                           partition.transform(recordTrans).sort(sortByTrans, unique = false) map {
+                           partition.transform(recordTrans).sort(sortByTrans, unique = true) map {
                              t => groupId -> t.transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
                            }
                          }.sequence

@@ -101,7 +101,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       memoTable map { _.transform(DerefObjectStatic(Leaf(Source), JPathField(memoValue))) }
     }
     
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table] = {
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = false): M[Table] = {
       // yup, we still block the whole world. Yay.
       memoCache.synchronized {
         memoCache.get(memoId) match {
@@ -792,25 +792,35 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     /**
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
+     * 
+     * @see com.precog.yggdrasil.TableModule#sort(TransSpec1, DesiredSortOrder, Boolean)
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = true): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder, unique).map {
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder, unique).map {
       _.headOption getOrElse this // If we start with an empty table, we always end with an empty table
     }
 
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Seq[Table]] = {
+    /**
+     * Sorts the KV table by ascending or descending order based on a seq of transformations
+     * applied to the rows.
+     * 
+     * @see com.precog.yggdrasil.TableModule#groupByN(TransSpec1, DesiredSortOrder, Boolean)
+     */
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = {
       writeSorted(groupKeys, valueSpec, sortOrder, unique) map {
         case (dbFile, indices) => 
           indices.groupBy(_._1.streamId).values.toStream.map(loadTable(dbFile, sortMergeEngine, _, sortOrder))
       }
     }
 
-    protected def writeSorted(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[(File, IndexMap)] = {
+    protected def writeSorted(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[(File, IndexMap)] = {
       import sortMergeEngine._
 
       // Open a JDBM3 DB for use in sorting under a temp directory
       val dbFile = new File(newScratchDir(), "writeSortedSpace")
-
-      val (sourceTrans0, keyTrans0, valueTrans0) = if (unique) {
+      
+      // If we don't want unique key values (e.g. preserve duplicates), we need to add
+      // in a distinct "row id" for each value to disambiguate it
+      val (sourceTrans0, keyTrans0, valueTrans0) = if (! unique) {
         (
           Scan(
             WrapArray(Leaf(Source)), 

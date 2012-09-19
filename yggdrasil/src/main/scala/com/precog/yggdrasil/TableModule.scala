@@ -416,12 +416,29 @@ trait TableModule[M[+_]] extends FNModule {
     /**
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
+     * 
+     * @param sortKey The transspec to use to obtain the values to sort on
+     * @param sortOrder Whether to sort ascending or descending
+     * @param unique If true, the same key values will sort into a single row, otherwise
+     * we assign a unique row ID as part of the key so that multiple equal values are
+     * preserved
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Table]
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Table]
     
     def distinct(spec: TransSpec1): Table
 
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Seq[Table]]
+    /**
+     * Sorts the KV table by ascending or descending order based on a seq of transformations
+     * applied to the rows.
+     * 
+     * @param groupKeys The transspecs to use to obtain the values to sort on
+     * @param valueSpec The transspec to use to obtain the non-sorting values
+     * @param sortOrder Whether to sort ascending or descending
+     * @param unique If true, the same key values will sort into a single row, otherwise
+     * we assign a unique row ID as part of the key so that multiple equal values are
+     * preserved
+     */
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]]
 
     def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table]
     
@@ -448,7 +465,7 @@ trait TableModule[M[+_]] extends FNModule {
     import trans._
     
     def memoize(table: Table, memoId: MemoId): M[Table]
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table]
+    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = false): M[Table]
     
     def expire(memoId: MemoId): Unit
     def purge(): Unit

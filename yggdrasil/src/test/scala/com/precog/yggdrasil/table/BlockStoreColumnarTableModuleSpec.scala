@@ -83,6 +83,7 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
       "sort with a bad schema"        in badSchemaSortSample
       "merges over three cells"       in threeCellMerge
       "empty input"                   in emptySort
+      "with uniqueness for keys"      in uniqueSort
       "arbitrary datasets"            in checkSortDense(SortAscending)
       "arbitrary datasets descending" in checkSortDense(SortDescending)      
     }
