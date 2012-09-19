@@ -218,8 +218,32 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     }
   }
 
-  def checkMap2 = {
-    implicit val gen = sample(_ => Seq(JPath("value1") -> CNum, JPath("value2") -> CNum))
+  def checkMap2Eq = {
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CDouble, JPath("value2") -> CLong))
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+      val results = toJson(table.transform {
+        Map2(
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2")),
+          lookupF2(Nil, "eq")
+        )
+      })
+
+      val expected = sample.data flatMap { jv =>
+        ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
+          case (JNum(x), JNum(y)) if x == y => Some(JBool(true))
+          case (JNum(x), JNum(y)) => Some(JBool(false))
+          case _ => None
+        }
+      }
+
+      results.copoint must_== expected
+    }
+  }
+
+  def checkMap2Add = {
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
