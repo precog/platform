@@ -65,7 +65,7 @@ trait Slice { source =>
 
     val columns: Map[ColumnRef, Column] = {
       val resultColumns = for {
-        col   <- source.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
+        col <- source.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
         result <- f(col)
       } yield result
 
