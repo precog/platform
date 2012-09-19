@@ -146,8 +146,17 @@ trait CrossOrdering extends DAG {
             Join(loc, op, CrossLeftSort, memoized(left, splits), memoized(right, splits))
           else if (left.isSingleton)
             Join(loc, op, CrossRightSort, memoized(left, splits), memoized(right, splits))
-          else
-            Join(loc, op, CrossLeftSort, memoized(left, splits), Memoize(memoized(right, splits), 100))
+          else {
+            val right2 = memoized(right, splits)
+            
+            right2 match {
+              case _: ForcingPoint =>
+                Join(loc, op, CrossLeftSort, memoized(left, splits), right2)
+              
+              case _ =>
+                Join(loc, op, CrossLeftSort, memoized(left, splits), Memoize(right2, 100))
+            }
+          }
         }
 
         case Join(loc, op, joinSort, left, right) =>

@@ -664,7 +664,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JType.JUnfixedT) extends DepGraph {
+    case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JType.JUnfixedT) extends DepGraph with ForcingPoint {
       lazy val identities = parent match {
         case Root(_, PushString(path)) => Vector(LoadIds(path))
         case _ => Vector(SynthIds(IdGen.nextInt()))
