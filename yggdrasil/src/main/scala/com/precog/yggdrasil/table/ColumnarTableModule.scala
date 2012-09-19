@@ -53,6 +53,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
   type Table <: ColumnarTable
   type TableCompanion <: ColumnarTableCompanion
+  case class TableMetrics(startCount: Int, sliceTraversedCount: Int)
 
   def newScratchDir(): File = Files.createTempDir()
   def jdbmCommitInterval: Long = 200000l
@@ -1747,8 +1748,18 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
   }
 
-  abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike { self: Table =>
+  abstract class ColumnarTable(slices0: StreamT[M, Slice]) extends TableLike { self: Table =>
     import SliceTransform._
+
+    private final val readStarts = new java.util.concurrent.atomic.AtomicInteger
+    private final val blockReads = new java.util.concurrent.atomic.AtomicInteger
+
+    val slices = StreamT(
+      StreamT.Skip({
+        readStarts.getAndIncrement
+        slices0.map(s => { blockReads.getAndIncrement; s })
+      }).point[M]
+    )
 
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
@@ -2344,6 +2355,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         (for (slice <- stream; i <- 0 until slice.size) yield f(slice, i)).flatten 
       }
     }
+
+    def metrics = TableMetrics(readStarts.get, blockReads.get)
   }
 }
 // vim: set ts=4 sw=4 et:
