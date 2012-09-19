@@ -428,7 +428,7 @@ trait DAG extends Instructions {
 
           case dag.Reduce(loc, red, parent) => dag.Reduce(loc, red, memoized(splits)(parent))
 
-          case dag.MegaReduce(loc, reds, parent) => dag.MegaReduce(loc, reds map memoized(splits) map { _.asInstanceOf[dag.Reduce] }, memoized(splits)(parent))
+          case dag.MegaReduce(loc, reds, parent) => dag.MegaReduce(loc, reds, memoized(splits)(parent))
   
           case s @ dag.Split(loc, spec, child) => {
             lazy val splits2 = splits + (s -> result)

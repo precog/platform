@@ -33,11 +33,11 @@ trait ReductionFinder extends DAG {
   import instructions._
   import dag._
 
-  def findReductions(node: DepGraph): Map[DepGraph, NonEmptyList[dag.Reduce]] = node.foldDown[Map[DepGraph, NonEmptyList[dag.Reduce]]] {
-    case node @ dag.Reduce(_, _, parent) => Map(parent -> NonEmptyList(node))
+  def findReductions(node: DepGraph): Map[DepGraph, NonEmptyList[Reduction]] = node.foldDown[Map[DepGraph, NonEmptyList[Reduction]]] {
+    case dag.Reduce(_, red, parent) => Map(parent -> NonEmptyList(red))
   }
 
-  def megaReduce(node: DepGraph, reds: Map[DepGraph, NonEmptyList[dag.Reduce]]): DepGraph = {
+  def megaReduce(node: DepGraph, reds: Map[DepGraph, NonEmptyList[Reduction]]): DepGraph = {
     val reduceTable = mutable.Map[DepGraph, dag.MegaReduce]()  //this is a Map from parent node to MegaReduce node
 
     node.mapDown { recurse => {
@@ -47,7 +47,7 @@ trait ReductionFinder extends DAG {
           reduceTable += (parent -> result)
           result
         }
-        val index: Int = reds(parent).list.indexOf(graph)
+        val index: Int = reds(parent).list.indexOf(red)
         dag.Join(loc, DerefArray, CrossLeftSort, left, Root(loc, PushNum(index.toString)))
       }
     }}
