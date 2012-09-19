@@ -412,6 +412,12 @@ trait TableModule[M[+_]] extends FNModule {
      * a single table.
      */
     def cross(that: Table)(spec: TransSpec2): Table
+
+    /**
+     * Force the table to a backing store, and provice a restartable table
+     * over the results.
+     */
+    def force: M[Table]
     
     /**
      * Sorts the KV table by ascending or descending order of a transformation

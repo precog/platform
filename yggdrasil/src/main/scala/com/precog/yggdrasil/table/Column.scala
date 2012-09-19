@@ -40,6 +40,9 @@ sealed trait Column {
   def jValue(row: Int): JValue
   def cValue(row: Int): CValue
   def strValue(row: Int): String
+  
+  def toString(row: Int): String = if (isDefinedAt(row)) strValue(row) else "(undefined)"
+  def toString(range: Range): String = range.map(toString(_: Int)).mkString("(", ",", ")")
 
   def definedAt(from: Int, to: Int): BitSet = BitSet((for (i <- from until to if isDefinedAt(i)) yield i) : _*)
 }
