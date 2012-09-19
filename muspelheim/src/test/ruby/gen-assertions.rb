@@ -177,6 +177,32 @@ module Tests
         results_must " contain(#{render_value res})"
       end
     end
+    
+    def test_perform_a_simple_join_by_value_sorting
+      # clicks := //clicks
+      clicks = load_file 'clicks.json'
+      
+      # views := //views
+      views = load_file 'views.json'
+      
+      # clicks ~ views
+      #   clicks.time + views.time where clicks.pageId = views.pageId
+      results = clicks.map do |click|
+        views.map do |view|
+          if click['userId'] == view['userId']
+            [click['pageId'] + view['pageId']]
+          else
+            []
+          end
+        end
+      end.flatten
+      
+      results_must " haveSize(#{results.size})"
+      
+      results.uniq.each do |result|
+        results_must " contain(#{render_value result})"
+      end
+    end
   end
 end
 
