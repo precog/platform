@@ -60,8 +60,7 @@ trait Slice { source =>
   
   def isDefinedAt(row: Int) = columns.values.exists(_.isDefinedAt(row))
 
-  // FIXME: rename to mapRoot
-  def mapColumns(f: CF1): Slice = new Slice {
+  def mapRoot(f: CF1): Slice = new Slice {
     val size = source.size
 
     val columns: Map[ColumnRef, Column] = {
@@ -76,8 +75,7 @@ trait Slice { source =>
     }
   }
 
-  // FIXME: rename to mapColumns
-  def filterColumns(f: CF1): Slice = new Slice {
+  def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {
       case (ref, col) => 
@@ -89,7 +87,7 @@ trait Slice { source =>
    * Transform this slice such that its columns are only defined for row indices
    * in the given BitSet.
    */
-  def redefineWith(s: BitSet): Slice = filterColumns(cf.util.filter(0, size, s))
+  def redefineWith(s: BitSet): Slice = mapColumns(cf.util.filter(0, size, s))
   
   def definedConst(value: CValue): Slice = new Slice {
     val size = source.size
@@ -231,9 +229,9 @@ trait Slice { source =>
   def map(from: JPath, to: JPath)(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {
-                    case (ref, col) if ref.selector.hasPrefix(from) => f(col) map {v => (ref, v)}
-                    case unchanged => Some(unchanged)
-                  }
+      case (ref, col) if ref.selector.hasPrefix(from) => f(col) map {v => (ref, v)}
+      case unchanged => Some(unchanged)
+    }
   }
 
   def map2(froml: JPath, fromr: JPath, to: JPath)(f: CF2): Slice = new Slice {
@@ -378,7 +376,7 @@ trait Slice { source =>
       arr
     }
 
-    source mapColumns cf.util.Remap(sortedIndices)
+    source mapRoot cf.util.Remap(sortedIndices)
   }
 
   def split(idx: Int): (Slice, Slice) = (

@@ -60,7 +60,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
 
         case Map1(source, f) => 
           composeSliceTransform2(source) map {
-            _ mapColumns f 
+            _ mapRoot f 
           }
 
         case Map2(left, right, f) =>
@@ -97,7 +97,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                 }
               }
 
-              s filterColumns { cf.util.filter(0, s.size, definedAt) }
+              s mapColumns { cf.util.filter(0, s.size, definedAt) }
             }
           }
 
