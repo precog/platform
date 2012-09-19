@@ -231,6 +231,8 @@ trait TableModule[M[+_]] extends FNModule {
       val PruneToKeyValue = InnerObjectConcat(
         WrapObject(SourceKey.Single, paths.Key.name), 
         WrapObject(SourceValue.Single, paths.Value.name))
+
+      val DeleteKeyValue = ObjectDelete(Leaf(Source), Set(paths.Key, paths.Value))
     }
     
     type TransSpec2 = TransSpec[Source2]
@@ -242,6 +244,9 @@ trait TableModule[M[+_]] extends FNModule {
       def DerefArray0(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(0))
       def DerefArray1(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(1))
       def DerefArray2(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(2))
+
+      val DeleteKeyValueLeft = ObjectDelete(Leaf(SourceLeft), Set(paths.Key, paths.Value))
+      val DeleteKeyValueRight = ObjectDelete(Leaf(SourceRight), Set(paths.Key, paths.Value))
     }
   
     sealed trait GroupKeySpec 

@@ -966,7 +966,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       // post the initial sort separate from the values that it was derived from. 
       val (payloadTrans, idTrans, targetTrans, groupKeyTrans) = node.binding.targetTrans match {
         case Some(targetSetTrans) => 
-          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec), WrapArray(targetSetTrans))
+          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), 
+                                         WrapArray(protoGroupKeyTrans.spec), 
+                                         WrapArray(targetSetTrans))
 
           (payloadTrans,
            TransSpec1.DerefArray0, 
@@ -1578,12 +1580,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       assert(connectedSubgraph.nonEmpty)
       if (connectedSubgraph.size == 1) {
         val victim = connectedSubgraph.head
-        resortVictimToBorgResult(victim, victim.groupKeyTrans.keyOrder) flatMap { borgResult =>
-          borgResult.table.toJson map { j =>
-            //println("Got borg result: " + j.mkString("\n"))
-            borgResult
-          }
-        }
+        resortVictimToBorgResult(victim, victim.groupKeyTrans.keyOrder)
       } else {
         val borgNodes = connectedSubgraph.map(BorgVictimNode.apply)
         val victims: Map[MergeNode, BorgNode] = borgNodes.map(s => s.independent.node -> s).toMap
@@ -1762,14 +1759,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             (groupId: GroupId) => for {
               groupIdJson <- groupKeyForBody.toJson
               groupTable <- groups.map(_(groupId))
-              //json <- groupTable.toJson
-              //_ = println("group id: " + groupId + "\ngroup key:\n" + groupIdJson.mkString("\n") + "\nvalues:\n" + json.mkString("\n"))
             } yield groupTable
           )
         }
-        //resultJson <- result.toJson
-        //_ = println("Merged result:\n" + resultJson.mkString("\n"))
-
       } yield result
     }
   }
@@ -1799,6 +1791,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       Table(Table.transformStream(composeSliceTransform(spec), slices))
     }
     
+    def force: M[Table] = this.sort(Scan(Leaf(Source), freshIdScanner), SortAscending)
+
     /**
      * Cogroups this table with another table, using equality on the specified
      * transformation on rows of the table.
@@ -1907,6 +1901,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             // must exit this inner loop and recur through the outer monadic loop
             // xrstart is an int with sentinel value for effieiency, but is Option at the slice level.
             @inline @tailrec def buildRemappings(lpos: Int, rpos: Int, xrstart: Int, xrend: Int, endRight: Boolean): NextStep = {
+              //println((lpos, rpos, xrstart, xrend, endRight))
               if (xrstart != -1) {
                 // We're currently in a cartesian. 
                 if (lpos < lhead.size && rpos < rhead.size) {
@@ -2349,9 +2344,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     def normalize: Table = Table(slices.filter(!_.isEmpty))
 
-    def printer(prelude: String = ""): Table = {
-      Table(StreamT(StreamT.Skip({println(prelude); slices map { s => println(s.toJsonString); s }}).point[M]))
+    def slicePrinter(prelude: String)(f: Slice => String): Table = {
+      Table(StreamT(StreamT.Skip({println(prelude); slices map { s => println(f(s)); s }}).point[M]))
     }
+
+    def printer(prelude: String = ""): Table = slicePrinter(prelude)(_.toJsonString)
 
     def toStrings: M[Iterable[String]] = {
       toEvents { (slice, row) => slice.toString(row) }

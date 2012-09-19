@@ -160,7 +160,7 @@ trait Evaluator[M[+_]] extends DAG
               trans = loop(target, splits).eval(state.copy(assume = state.assume + (reducedTarget -> resultTargetTable))).trans
               subSpec <- resolveLowLevelGroup(resultTargetTable, reducedTarget, forest, splits)
             } yield {
-              resultTargetTable map { GroupingSource(_, SourceKey.Single, Some(trans), id, subSpec) }
+              resultTargetTable map { GroupingSource(_, SourceKey.Single, Some(liftToValues(trans)), id, subSpec) }
             }
           }
           
@@ -227,7 +227,7 @@ trait Evaluator[M[+_]] extends DAG
         state <- get[EvaluatorState]
       } yield state.assume.get(graph)
       
-      lazy val result: StateT[Id, EvaluatorState, PendingTable] = graph match {
+      def result: StateT[Id, EvaluatorState, PendingTable] = { graph match {
         case s @ SplitParam(_, index) => {
           val (key, _) = splits(s.parent)
           
@@ -426,18 +426,13 @@ trait Evaluator[M[+_]] extends DAG
               leftTable = leftPendingTable.transform(liftToValues(leftPending.trans))
               rightTable = rightPendingTable.transform(liftToValues(rightPending.trans))
 
-              leftSorted <- ctx.memoizationContext.sort(leftTable, keyValueSpec, SortAscending, left.memoId)
-              rightSorted <- ctx.memoizationContext.sort(rightTable, keyValueSpec, SortAscending, right.memoId)
+              leftSorted <- leftTable.sort(keyValueSpec, SortAscending)
+              rightSorted <- rightTable.sort(keyValueSpec, SortAscending)
             } yield {
               if (union) {
                 leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
               } else {
-                val emptySpec = trans.ConstLiteral(CEmptyArray, Leaf(Source))
-                val fullSpec = trans.WrapArray(Leaf(SourceLeft))
-              
-                val wrapped = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(emptySpec, emptySpec, fullSpec)
-                
-                wrapped.transform(TransSpec1.DerefArray0)
+                leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(TransSpec1.DeleteKeyValue, TransSpec1.DeleteKeyValue, TransSpec2.LeftId)
               }
             }
 
@@ -458,21 +453,13 @@ trait Evaluator[M[+_]] extends DAG
               leftTable = leftPendingTable.transform(liftToValues(leftPending.trans))
               rightTable = rightPendingTable.transform(liftToValues(rightPending.trans))
               
+              // this transspec prunes everything that is not a key or a value.
               keyValueSpec = TransSpec1.PruneToKeyValue
 
-              leftSorted <- ctx.memoizationContext.sort(leftTable, keyValueSpec, SortAscending, left.memoId)
-              rightSorted <- ctx.memoizationContext.sort(rightTable, keyValueSpec, SortAscending, right.memoId)
+              leftSorted <- leftTable.sort(keyValueSpec, SortAscending)
+              rightSorted <- rightTable.sort(keyValueSpec, SortAscending)
             } yield {
-              // this transspec prunes everything that is not a key or a value.
-              val emptySpec1 = trans.ConstLiteral(CEmptyArray, Leaf(Source))
-              val emptySpec2 = trans.ConstLiteral(CEmptyArray, Leaf(SourceLeft))
-              val fullSpec = trans.WrapArray(Leaf(Source))
-              
-              val wrappedResult = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(fullSpec, emptySpec1, emptySpec2)
-              
-              // this is a clever hack - by derefing to the 0th element, we will get undefined values for the empty 
-              // arrays produced by the right and both transspecs
-              wrappedResult.transform(TransSpec1.DerefArray0)
+              leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(TransSpec1.Id, TransSpec1.DeleteKeyValue, TransSpec2.DeleteKeyValueLeft)
             }
             
             PendingTable(result, graph, TransSpec1.Id)
@@ -870,7 +857,7 @@ trait Evaluator[M[+_]] extends DAG
             
             PendingTable(result, graph, TransSpec1.Id)
           }
-      }
+      } }
 
       assumptionCheck flatMap { assumedResult: Option[M[Table]] =>
         val liftedAssumption = assumedResult map { table =>
