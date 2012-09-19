@@ -219,7 +219,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkMap2 = {
-    implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CNum, JPath("value2") -> CNum))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
@@ -232,7 +232,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
       val expected = sample.data flatMap { jv =>
         ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-          case (JNum(x), JNum(y)) => Some(JNum(x+y))
+          case (JNum(x), JNum(y)) => Some(JNum(x + y))
           case _ => None
         }
       }
