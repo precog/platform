@@ -62,6 +62,29 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
     results.copoint must_== (-10 to 10).map(x => JNum(-x))
   }
+  
+  def checkMap1 = {
+    implicit val gen = sample(schema)
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+
+      val results = toJson(table.transform {
+        Map1(
+          DerefObjectStatic(Leaf(Source), JPathField("value")), 
+          lookupF2(Nil, "mod").applyr(CLong(2)) andThen lookupF2(Nil, "eq").applyr(CLong(0)))
+      })
+
+      val expected = sample.data flatMap { jv =>
+        (jv \ "value") match { 
+          case JNum(x) if x % 2 == 0 => Some(JBool(true))
+          case JNum(_) => Some(JBool(false))
+          case _ => None
+        }
+      }
+
+      results.copoint must_== expected
+    }
+  }
 
   /* Do we want to allow non-boolean sets to be used as filters without an explicit existence predicate?
   def checkTrivialFilter = {
@@ -121,27 +144,15 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testMod2Filter = {
-  val array: JValue = JsonParser.parse("""
-    [{
-      "value":1505746561572529384,
-      "key":[2.0,6.0,5.0]
-    },
-    {
-      "value":-4611686018427387904,
-      "key":[5.0,7.0,5.0]
-    },
-    {
-      "value":3918473030722287347,
-      "key":[6.0,3.0,3.0]
-    },
-    {
-      "value":-6.846973248137671E+307,
-      "key":[7.0,1.0,2.0]
-    },
-    {
-      "value":-1.0,
-      "key":[7.0,6.0,3.0]
-    }]""")
+    val array: JValue = JsonParser.parse("""
+      [{
+        "value":-6.846973248137671E+307,
+        "key":[7.0]
+      },
+      {
+        "value":-4611686018427387904,
+        "key":[5.0]
+      }]""")
 
     val data: Stream[JValue] = (array match {
       case JArray(li) => li
@@ -152,12 +163,10 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     val table = fromSample(sample)
 
     val results = toJson(table.transform {
-      Filter(
-        Leaf(Source), 
-        Map1(
-          DerefObjectStatic(Leaf(Source), JPathField("value")), 
-          lookupF2(Nil, "mod").applyr(CLong(2)) andThen lookupF2(Nil, "eq").applyr(CLong(0))
-        )
+      Filter(Leaf(Source),
+      Map1(
+        DerefObjectStatic(Leaf(Source), JPathField("value")), 
+        lookupF2(Nil, "mod").applyr(CLong(2)) andThen lookupF2(Nil, "eq").applyr(CLong(0)))
       )
     })
 

@@ -164,7 +164,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
       "perform a trivial map1" in testMap1IntLeaf
-      //"give the identity transform for the trivial filter" in checkTrivialFilter  //why is this commented out?
+      "perform a less trvial map1" in checkMap1
+      //"give the identity transform for the trivial filter" in checkTrivialFilter
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
       "give the identity transform for a nontrivial filter" in checkFilter
       "give a transformation for a big decimal and a long" in testMod2Filter

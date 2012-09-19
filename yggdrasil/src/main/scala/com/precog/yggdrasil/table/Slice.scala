@@ -82,10 +82,16 @@ trait Slice { source =>
   // FIXME: rename to mapRoot
   def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
-    val columns = source.columns flatMap {
-      case (ref, col) => 
-        if (ref.selector == JPath.Identity) f(col) map { ncol => (ref.copy(ctype = ncol.tpe), ncol ) }  //{ (ref, _) }
-        else None
+
+    val columns: Map[ColumnRef, Column] = {
+      val resultColumns = for {
+        col   <- source.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
+        result <- f(col)
+      } yield result
+
+      resultColumns.groupBy(_.tpe) map { 
+        case (tpe, cols) => (ColumnRef(JPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+      }
     }
   }
 
@@ -93,7 +99,8 @@ trait Slice { source =>
   def filterColumns(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {
-      case (ref, col) => f(col) map { ncol => (ref.copy(ctype = ncol.tpe), ncol ) }  
+      case (ref, col) => 
+        f(col) map { ncol => (ref.copy(ctype = ncol.tpe), ncol) }  
     }
   }
 
