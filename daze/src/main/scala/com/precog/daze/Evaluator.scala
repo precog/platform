@@ -832,7 +832,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Memoize(parent, _) => {      // TODO remove memoId
+        case Memoize(parent, priority) => {
           for {
             pending <- prepareEval(parent, splits)
             
