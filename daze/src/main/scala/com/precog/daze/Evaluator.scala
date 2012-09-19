@@ -311,6 +311,9 @@ trait Evaluator[M[+_]] extends DAG
         }
         
         case dag.Distinct(_, parent) => {
+          val idSpec = TableTransSpec.makeTransSpec(
+            Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
+
           for {
             pending <- prepareEval(parent, splits)
           } yield {
@@ -322,9 +325,8 @@ trait Evaluator[M[+_]] extends DAG
               table = pendingTable.transform(liftToValues(pending.trans))
               sorted <- table.sort(valueSpec, SortAscending)
               distinct = sorted.distinct(valueSpec) 
-              identitySorted <- distinct.sort(keySpec, SortAscending) 
             } yield {
-              identitySorted
+              distinct.transform(idSpec)
             }
             PendingTable(result, graph, TransSpec1.Id)
           }
