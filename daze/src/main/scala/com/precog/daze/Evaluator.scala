@@ -51,6 +51,8 @@ import scalaz.std.partialFunction._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
+import scala.collection.immutable.Queue
+
 import com.weiglewilczek.slf4s.Logging
 
 trait EvaluatorConfig extends IdSourceConfig {
@@ -878,6 +880,75 @@ trait Evaluator[M[+_]] extends DAG
       loop(rewriteDAG(optimize)(graph), Map()) map { pendingTable => pendingTable.table map { _ transform liftToValues(pendingTable.trans) } }
 
     resultState.eval(EvaluatorState(Map()))
+  }
+  
+  /**
+   * Returns all `Memoize` nodes in the graph, ordered topologically.
+   */
+  private def listMemos(queue: Queue[DepGraph], acc: List[dag.Memoize] = Nil): List[dag.Memoize] = {
+    def listParents(spec: BucketSpec): Set[DepGraph] = spec match {
+      case UnionBucketSpec(left, right) => listParents(left) ++ listParents(right)
+      case IntersectBucketSpec(left, right) => listParents(left) ++ listParents(right)
+      
+      case dag.Group(_, target, forest) => listParents(forest) + target
+      
+      case dag.UnfixedSolution(_, solution) => Set(solution)
+      case dag.Extra(expr) => Set(expr)
+    }
+    
+    if (queue.isEmpty) {
+      acc
+    } else {
+      val (graph, queue2) = queue.dequeue
+      
+      val (queue3, addend) = graph match {
+        case _: dag.SplitParam => (queue2, None)
+        case _: dag.SplitGroup => (queue2, None)
+        case _: dag.Root => (queue2, None)
+        
+        case dag.New(_, parent) => (queue2 enqueue parent, None)
+        
+        case dag.Morph1(_, _, parent) => (queue2 enqueue parent, None)
+        case dag.Morph2(_, _, left, right) => (queue2 enqueue left enqueue right, None)
+        
+        case dag.Distinct(_, parent) => (queue2 enqueue parent, None)
+        
+        case dag.LoadLocal(_, parent, _) => (queue2 enqueue parent, None)
+        
+        case dag.Operate(_, _, parent) => (queue2 enqueue parent, None)
+        
+        case dag.Reduce(_, _, parent) => (queue2 enqueue parent, None)
+        case dag.MegaReduce(_, _, parent) => (queue2 enqueue parent, None)
+        
+        case dag.Split(_, specs, child) => (queue2 enqueue child enqueue listParents(specs), None)
+        
+        case dag.IUI(_, _, left, right) => (queue2 enqueue left enqueue right, None)
+        case dag.Diff(_, left, right) => (queue2 enqueue left enqueue right, None)
+        
+        case dag.Join(_, _, _, left, right) => (queue2 enqueue left enqueue right, None)
+        case dag.Filter(_, _, left, right) => (queue2 enqueue left enqueue right, None)
+        
+        case dag.Sort(parent, _) => (queue2 enqueue parent, None)
+        case dag.SortBy(parent, _, _, _) => (queue2 enqueue parent, None)
+        case dag.ReSortBy(parent, _) => (queue2 enqueue parent, None)
+        
+        case node @ dag.Memoize(parent, _) => (queue2 enqueue parent, Some(node))
+      }
+      
+      listMemos(queue3, addend map { _ :: acc } getOrElse acc)
+    }
+  }
+  
+  private def referencesOnlySplit(graph: DepGraph, split: Option[dag.Split]): Boolean = {
+    implicit val m: Monoid[Boolean] = new Monoid[Boolean] {
+      def zero = true
+      def append(b1: Boolean, b2: => Boolean): Boolean = b1 && b2
+    }
+    
+    graph foldDown {
+      case s: dag.SplitParam => split map (s.parent ==) getOrElse false
+      case s: dag.SplitGroup => split map (s.parent ==) getOrElse false
+    }
   }
   
   private def findCommonality(forest: Set[DepGraph]): Option[DepGraph] = {
