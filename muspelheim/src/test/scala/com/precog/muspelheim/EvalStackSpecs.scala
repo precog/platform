@@ -135,6 +135,50 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "perform a simple join by value sorting" in {
+      val input = """
+        | clicks := //clicks
+        | views := //views
+        |
+        | clicks ~ views
+        |   std::string::concat(clicks.pageId, views.pageId) where clicks.userId = views.userId
+        """.stripMargin
+
+      val resultsE = evalE(input)
+
+      resultsE must haveSize(473)
+
+      val results = resultsE collect {
+        case (ids, str) if ids.length == 2 => str
+      }
+
+      results must contain(SString("page-2page-2"))
+      results must contain(SString("page-2page-1"))
+      results must contain(SString("page-4page-3"))
+      results must contain(SString("page-4page-4"))
+      results must contain(SString("page-3page-4"))
+      results must contain(SString("page-3page-0"))
+      results must contain(SString("page-0page-2"))
+      results must contain(SString("page-0page-4"))
+      results must contain(SString("page-0page-0"))
+      results must contain(SString("page-0page-1"))
+      results must contain(SString("page-4page-2"))
+      results must contain(SString("page-0page-3"))
+      results must contain(SString("page-1page-1"))
+      results must contain(SString("page-1page-4"))
+      results must contain(SString("page-1page-0"))
+      results must contain(SString("page-1page-2"))
+      results must contain(SString("page-1page-3"))
+      results must contain(SString("page-3page-3"))
+      results must contain(SString("page-3page-1"))
+      results must contain(SString("page-4page-0"))
+      results must contain(SString("page-4page-1"))
+      results must contain(SString("page-3page-2"))
+      results must contain(SString("page-2page-3"))
+      results must contain(SString("page-2page-4"))
+      results must contain(SString("page-2page-0")) 
+    }
+
     "union sets coming out of a solve" >> {
       val input = """
         clicks := //clicks
