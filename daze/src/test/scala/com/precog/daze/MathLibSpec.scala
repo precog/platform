@@ -1144,6 +1144,57 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(7, 42)
+    }    
+    "compute max over numeric arrays (doesn't map over arrays)" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, BuiltInFunction2Op(max), CrossLeftSort,
+        dag.LoadLocal(line, Root(line, PushString("/het/arrays"))),
+        Root(line, PushNum("7")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1  => d
+      }
+      
+      result2 must contain(47)
+    }    
+    "compute max over numeric arrays and numeric objects (doesn't map over arrays or objects)" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, BuiltInFunction2Op(max), CrossLeftSort,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers7"))),
+        Root(line, PushNum("7")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1  => d
+      }
+      
+      result2 must contain(7)
+    }    
+    "compute max over numeric arrays and numeric objects (using Map2)" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, BuiltInFunction2Op(max), CrossLeftSort,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers7"))),
+        dag.LoadLocal(line, Root(line, PushString("/het/arrays"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 2  => d
+      }
+      
+      result2 must contain(47)
     }
     "compute atan2" in {
       val line = Line(0, "")
