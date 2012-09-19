@@ -103,7 +103,7 @@ trait Evaluator[M[+_]] extends DAG
 
   def rewriteDAG(optimize: Boolean): DepGraph => DepGraph = {
     (orderCrosses _) andThen
-    (if (optimize) (g => megaReduce(g, findReductions(g))) else identity) andThen
+    (if (false && optimize) (g => megaReduce(g, findReductions(g))) else identity) andThen
     (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
     (if (optimize) (memoize _) else identity)
   }
