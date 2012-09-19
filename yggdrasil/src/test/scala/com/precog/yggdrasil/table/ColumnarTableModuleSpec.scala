@@ -151,6 +151,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
       "perform a trivial map1" in testMap1IntLeaf
+      "fail to map1 into array and object" in testMap1ArrayObject
       "perform a less trvial map1" in checkMap1
       //"give the identity transform for the trivial filter" in checkTrivialFilter
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
@@ -160,6 +161,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "perform an array dereference" in checkArrayDeref
       "perform a trivial map2 add" in checkMap2Add
       "perform a trivial map2 eq" in checkMap2Eq
+      "perform a map2 add over but not into arrays and objects" in testMap2ArrayObject
       "perform a trivial equality check" in checkEqualSelf
       "perform a trivial equality check on an array" in checkEqualSelfArray
       "perform a slightly less trivial equality check" in checkEqual

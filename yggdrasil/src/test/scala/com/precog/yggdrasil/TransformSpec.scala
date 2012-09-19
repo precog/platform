@@ -62,6 +62,21 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
     results.copoint must_== (-10 to 10).map(x => JNum(-x))
   }
+
+  def testMap1ArrayObject = {
+    val data: Stream[JValue] = Stream(
+        JObject(JField("value", JObject(JField("foo", JNum(12)) :: Nil )) :: JField("key", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value", JArray(JNum(30) :: Nil)) :: JField("key", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value", JNum(20)) :: JField("key", JArray(JNum(1) :: Nil)) :: Nil))
+    
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform { Map1(DerefObjectStatic(Leaf(Source), JPathField("value")), lookupF1(Nil, "negate")) })
+    val expected = Stream(JNum(-20))
+
+    results.copoint mustEqual expected
+  }
   
   def checkMap1 = {
     implicit val gen = sample(schema)
@@ -263,6 +278,27 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
       results.copoint must_== expected
     }
+  }
+
+  def testMap2ArrayObject = {
+    val data: Stream[JValue] = Stream(
+        JObject(JField("value1", JObject(JField("foo", JNum(12)) :: Nil )) :: JField("value2", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value1", JArray(JNum(30) :: Nil)) :: JField("value2", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value1", JNum(20)) :: JField("value2", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value1", JObject(JField("foo", JNum(-188)) :: Nil)) :: JField("value2", JNum(77)) :: Nil),
+        JObject(JField("value1", JNum(3)) :: JField("value2", JNum(77)) :: Nil))
+    
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform { Map2(
+      DerefObjectStatic(Leaf(Source), JPathField("value1")),
+      DerefObjectStatic(Leaf(Source), JPathField("value2")),
+      lookupF2(Nil, "add")) 
+    })
+    val expected = Stream(JNum(80))
+
+    results.copoint mustEqual expected
   }
 
   def checkEqualSelf = {
