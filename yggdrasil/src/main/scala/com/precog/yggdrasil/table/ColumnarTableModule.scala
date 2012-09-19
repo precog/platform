@@ -24,6 +24,7 @@ import com.precog.common.{Path, VectorCase}
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
+import com.precog.util._
 
 import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
@@ -891,6 +892,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], sortedByIdentities: Boolean = false, size: Option[Long] = None) {
       def sortedOn = groupKeyTrans.alignTo(groupKeyPrefix).prefixTrans(groupKeyPrefix.size)
+
+      def groupId = node.binding.groupId
     }
 
     /////////////////
@@ -1070,6 +1073,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         
         for {
           sorts <- sortPairs
+          //_ = sorts.map(println)
           groupedSubsets <- {
             val edgeAlignments = spanningGraph.edges flatMap {
               case MergeEdge(a, b) =>
@@ -1350,7 +1354,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         victim.targetTrans.map(t => wrapValueSpec(nestInGroupId(t, groupId))).toList: _*
       )
 
-      victim.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending).map { sorted =>
+      for {
+        sorted <- victim.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending)
+        //json <- sorted.toJson
+        //_ = println("sorted victim " + victim.groupId + ": " + json.mkString("\n"))
+      } yield {
         BorgResult(sorted, newOrder, Set(victim.node.binding.groupId))
       }
     }
@@ -1358,6 +1366,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def join(leftNode: BorgNode, rightNode: BorgNode, requiredOrders: Map[MergeNode, Set[Seq[TicVar]]]): M[BorgResultNode] = {
       import BorgResult._
       import OrderingConstraints._
+
+      //println("\njoin left: \n" + leftNode)
+      //println("\njoin right: \n" + rightNode)
 
       def resortBorgResult(borgResult: BorgResult, newPrefix: Seq[TicVar]): M[BorgResult] = {
         val newAssimilatorOrder = newPrefix ++ (borgResult.groupKeys diff newPrefix)
@@ -1483,6 +1494,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             } else if (right.sortedByIdentities) {
               joinAsymmetric(BorgResult(left), right)
             } else {
+              //println("Joining borg results symmetric.")
               joinSymmetric(BorgResult(left), BorgResult(right))
             }
 
@@ -1595,6 +1607,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         //      case (acc, o) => acc + (o -> (acc.getOrElse(o, Set()) + node))
         //    }
         //}
+        //println("assimilating edges: \n" + borgEdges.mkString("\n"))
         assimilate(borgEdges)
       }
     }
@@ -1726,7 +1739,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       for {
         omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
         //json <- omniverse.table.toJson
-        //_ = println("Omniverse: " + json.mkString("\n"))
+        //_ = println("omniverse: \n" + json.mkString("\n"))
         sorted <- omniverse.table.compact(groupKeySpec(Source)).sort(groupKeySpec(Source))
         result <- sorted.partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("groupKeys"))) { partition =>
           val groupKeyTrans = OuterObjectConcat(
@@ -1748,8 +1761,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
                            val sortByTrans = DerefObjectStatic(Leaf(Source), JPathField("0"))
                            // transform to get just the information related to the particular groupId,
-                           partition.transform(recordTrans).sort(sortByTrans, unique = true) map {
-                             t => groupId -> t.transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
+                           for {
+                             partitionSorted <- partition.transform(recordTrans).sort(sortByTrans, unique = true)
+                             //json <- partitionSorted.toJson
+                             //_ = println("group " + groupId + " partition: " + json.mkString("\n"))
+                           } yield {
+                             groupId -> partitionSorted.transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
                            }
                          }.sequence
             } yield grouped.toMap
@@ -2266,6 +2283,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
      * the values specified by the partitionBy transspec.
      */
     def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = {
+      // Find the first element that compares LT
       @tailrec def findEnd(compare: Int => Ordering, imin: Int, imax: Int): Int = {
         (compare(imin), compare(imax)) match {
           case (LT, LT) => 
@@ -2345,7 +2363,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         WrapObject(Leaf(Source), "1")
       )
 
-      this.transform(keyTrans).slices.uncons map {
+      this.transform(keyTrans).compact(TransSpec1.Id).slices.uncons map {
         case Some((head, tail)) =>
           Table(stepPartition(head, tail))
         case None =>
@@ -2359,7 +2377,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       Table(StreamT(StreamT.Skip({println(prelude); slices map { s => println(f(s)); s }}).point[M]))
     }
 
-    def printer(prelude: String = ""): Table = slicePrinter(prelude)(_.toJsonString)
+    def printer(prelude: String = "", flag: String = ""): Table = slicePrinter(prelude)(s => flag + s.toJsonString)
 
     def toStrings: M[Iterable[String]] = {
       toEvents { (slice, row) => slice.toString(row) }

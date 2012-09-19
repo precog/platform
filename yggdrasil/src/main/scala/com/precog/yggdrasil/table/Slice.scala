@@ -22,6 +22,7 @@ package table
 
 import com.precog.common.VectorCase
 import com.precog.bytecode._
+import com.precog.util._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -40,24 +41,41 @@ trait RowComparator { self =>
   def compare(i1: Int, i2: Int): Ordering
 
   def swap: RowComparator = new RowComparator {
-    def compare(i1: Int, i2: Int) = self.compare(i2, i1)
+    def compare(i1: Int, i2: Int) = self.compare(i2, i1).complement
   }
 
   @tailrec
-  final def nextLeftIndex(lidx: Int, lsize: Int, ridx: Int, step: Int): Int = {
-    if (lidx < lsize) {
-      val ordering = compare(lidx, ridx) 
-      ordering match {
-        case EQ | GT =>
-          if (step <= 1) lidx -1
-          else nextLeftIndex(lidx - (step / 2), lsize, ridx, step / 2)
-
-        case LT => 
-          if (step == 0) lidx + 1
-          else nextLeftIndex(lidx + step, lsize, ridx, step)
-      }
-    } else {
-      lsize
+  final def nextLeftIndex(lmin: Int, lmax: Int, ridx: Int): Int = {
+    compare(lmax, ridx) match {
+      case LT => lmax + 1
+      case GT => 
+        if (lmax - lmin <= 1) {
+          compare(lmin, ridx) match {
+            case LT => lmax
+            case GT | EQ => lmin
+          }
+        } else {
+          val lmid = lmin + ((lmax - lmin) / 2)
+          compare(lmid, ridx) match {
+            case LT => nextLeftIndex(lmid + 1, lmax, ridx)
+            case GT | EQ => nextLeftIndex(lmin, lmid - 1, ridx)
+          }
+        }
+    
+      case EQ => 
+        if (lmax - lmin <= 1) {
+          compare(lmin, ridx) match {
+            case LT => lmax
+            case GT | EQ => lmin
+          }
+        } else {
+          val lmid = lmin + ((lmax - lmin) / 2)
+          compare(lmid, ridx) match {
+            case LT => nextLeftIndex(lmid + 1, lmax, ridx)
+            case GT => sys.error("inputs on the left not sorted.")
+            case EQ => nextLeftIndex(lmin, lmid - 1, ridx)
+          }
+        }
     }
   }
 }

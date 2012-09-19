@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.yggdrasil.util.IdSourceConfig
+import com.precog.yggdrasil.test._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -462,6 +463,82 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     resultJson.toSet must_== expected.toSet
   }
 
+  def testCtr(rawData1: Stream[Int], rawData2: Stream[Int]) = {
+    //val startTime = System.currentTimeMillis
+    //println("started test with data " + (rawData1.toList, rawData2.toList) + " at " + startTime)
+    val module = emptyTestModule
+    import module._
+    import trans._
+    import constants._
+
+    val data1 = rawData1.zipWithIndex map { case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", JNum(v)) :: Nil) }
+    val data2 = rawData2.zipWithIndex map { case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", JNum(v)) :: Nil) }
+    
+    val table1 = fromJson(data1)
+    val table2 = fromJson(data2)
+
+    val groupId1 = newGroupId
+    val groupId2 = newGroupId
+    
+    // t1 where t1 = 'a
+    val spec1 = GroupingSource(
+      table1,
+      SourceKey.Single, Some(SourceValue.Single), groupId1,
+      GroupKeySpecSource(JPathField("tic_a"), SourceValue.Single))
+      
+    // t2 where t2 = 'a
+    val spec2 = GroupingSource(
+      table2,
+      SourceKey.Single, Some(SourceValue.Single), groupId2,
+      GroupKeySpecSource(JPathField("tic_a"), SourceValue.Single))
+      
+    val union = GroupingAlignment(
+      DerefObjectStatic(Leaf(Source), JPathField("tic_a")),
+      DerefObjectStatic(Leaf(Source), JPathField("tic_a")),
+      spec1,
+      spec2, GroupingSpec.Union)
+        
+    val result = Table.merge(union) { (key, map) =>
+      for {
+        keyJson <- key.toJson
+        group2  <- map(groupId1)
+        group3  <- map(groupId2)
+        gs1Json <- group2.toJson
+        gs2Json <- group3.toJson
+      } yield {
+        keyJson must haveSize(1)
+        
+        val JNum(keyBigInt) = keyJson.head \ "tic_a"
+
+        forall(gs1Json) { row =>
+          row must beLike {
+            case JNum(i) => i mustEqual keyBigInt
+          }
+        }
+        
+        gs1Json must haveSize(rawData1.count(_ == keyBigInt.toInt))
+        gs2Json must haveSize(rawData2.count(_ == keyBigInt.toInt))
+
+        fromJson(Stream(
+          JObject(
+            JField("key", keyJson.head \ "tic_a") ::
+            JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
+      }
+    }
+    
+    val resultJson = result.flatMap(_.toJson).copoint
+    
+    resultJson must haveSize((rawData1.distinct.toSet intersect rawData2.distinct.toSet).size)
+    
+    forall(resultJson) { record =>
+      val JNum(k) = record \ "key"
+      val JNum(v) = record \ "value"
+      
+      v mustEqual ((rawData1 ++ rawData2) filter { k == _ } length)
+    }
+    //println("finished test in " + (System.currentTimeMillis - startTime) + " ms")
+  }
+
   "simple single-key grouping" should {
     "scalacheck a histogram by value" in check (testHistogramByValue _)
     "histogram for two of the same value" in testHistogramByValue(Stream(2147483647, 2147483647))
@@ -482,96 +559,17 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       "or" >> testHistogramExtraOr
     }
   }
+
+  "multi-set grouping" should {
+    "compute ctr on value" in propNoShrink (testCtr _)
+    "compute ctr with an empty dataset" in testCtr(Stream(), Stream(1))
+    "compute ctr with singleton datasets" in testCtr(Stream(1), Stream(1))
+    "compute ctr with simple datasets with repeats" in testCtr(Stream(1, 1, 1), Stream(1))
+    "compute ctr with simple datasets" in testCtr(Stream(-565998477, 1911906594, 1), Stream(1948335811, -528723320, 1))
+    "compute ctr with simple datasets" in testCtr(Stream(1, 2147483647, 2126441435, -1, 0, 0), Stream(2006322377, -2147483648, -1456034303, 2147483647, 0, 2147483647, -1904025337))
+  }
 }
 /*
-  "multi-set grouping" should {
-    "compute ctr on value" in check { (rawData1: Stream[Int], rawData2: Stream[Int]) =>
-      val module = emptyTestModule
-      import module._
-      import trans._
-      import constants._
-
-      val data1 = rawData1 map { JNum(_) }
-      val data2 = rawData2 map { JNum(_) }
-      
-      val table1 = fromJson(data1)
-      val table2 = fromJson(data2)
-      
-      val spec1 = GroupingSource(
-        table1,
-        SourceKey.Single, Some(TransSpec1.Id), 2,
-        GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
-        
-      val spec2 = GroupingSource(
-        table2,
-        SourceKey.Single, Some(TransSpec1.Id), 3,
-        GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
-        
-      val union = GroupingAlignment(
-        DerefObjectStatic(Leaf(Source), JPathField("1")),
-        DerefObjectStatic(Leaf(Source), JPathField("1")),
-        spec1,
-        spec2, GroupingSpec.Union)
-          
-      val result = Table.merge(union) { (key, map) =>
-        for {
-          keyJson <- key.toJson
-          group2  <- map(2)
-          group3  <- map(3)
-          gs1Json <- group2.toJson
-          gs2Json <- group3.toJson
-        } yield {
-          keyJson must haveSize(1)
-          
-          keyJson.head must beLike {
-            case obj: JObject => {
-              val a = obj \ "1"
-              
-              a must beLike {
-                case JNum(_) => ok
-              }
-            }
-          }
-          
-          val JNum(keyBigInt) = keyJson.head \ "1"
-          
-          gs1Json must not(beEmpty)
-          gs2Json must not(beEmpty)
-          
-          forall(gs1Json) { row =>
-            row must beLike {
-              case JNum(i) => i mustEqual keyBigInt
-            }
-          }
-          
-          forall(gs2Json) { row =>
-            row must beLike {
-              case JNum(i) => i mustEqual keyBigInt
-            }
-          }
-          
-          fromJson(Stream(
-            JObject(
-              JField("key", keyJson.head \ "1") ::
-              JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
-        }
-      }
-      
-      val resultJson = result.flatMap(_.toJson).copoint
-      
-      resultJson must haveSize((rawData1 ++ rawData2).distinct.length)
-      
-      forall(resultJson) { v =>
-        v must beLike {
-          case obj: JObject => {
-            val JNum(k) = obj \ "key"
-            val JNum(v) = obj \ "value"
-            
-            v mustEqual ((rawData1 ++ rawData2) filter { k == _ } length)
-          }
-        }
-      }
-    }.pendingUntilFixed
     
     "compute pair-sum join" in check { (rawData1: Stream[Int], rawData2: Stream[Int]) =>
       val module = emptyTestModule
@@ -1511,9 +1509,41 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 }
 */
 
-object GrouperSpec extends TableModuleSpec[Free.Trampoline] with GrouperSpec[Free.Trampoline] {
-  implicit def M = Trampoline.trampolineMonad
+//object GrouperSpec extends TableModuleSpec[Free.Trampoline] with GrouperSpec[Free.Trampoline] {
+//  implicit def M = Trampoline.trampolineMonad
+//
+//  type YggConfig = IdSourceConfig
+//  val yggConfig = new IdSourceConfig {
+//    val idSource = new IdSource {
+//      private val source = new java.util.concurrent.atomic.AtomicLong
+//      def nextId() = source.getAndIncrement
+//    }
+//  }
+//}
+//
+//object GrouperSpec extends TableModuleSpec[akka.dispatch.Future] with GrouperSpec[akka.dispatch.Future] {
+//  import akka.actor.ActorSystem
+//  import akka.dispatch._
+//  import akka.util.Duration
+//  import akka.util.duration._
+//
+//  val actorSystem = ActorSystem("grouperSpecActorSystem")
+//  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+//  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
+//    def copoint[A](f: Future[A]) = Await.result(f, Duration(30, "seconds"))
+//  }
+//
+//  type YggConfig = IdSourceConfig
+//  val yggConfig = new IdSourceConfig {
+//    val idSource = new IdSource {
+//      private val source = new java.util.concurrent.atomic.AtomicLong
+//      def nextId() = source.getAndIncrement
+//    }
+//  }
+//}
+//
 
+object GrouperSpec extends TableModuleSpec[YId] with GrouperSpec[YId] with YIdInstances {
   type YggConfig = IdSourceConfig
   val yggConfig = new IdSourceConfig {
     val idSource = new IdSource {
@@ -1522,3 +1552,6 @@ object GrouperSpec extends TableModuleSpec[Free.Trampoline] with GrouperSpec[Fre
     }
   }
 }
+
+
+

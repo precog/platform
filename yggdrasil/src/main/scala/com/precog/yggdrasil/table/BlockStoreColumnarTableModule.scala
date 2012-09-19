@@ -253,6 +253,20 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     private[BlockStoreColumnarTableModule] object loadMergeEngine extends MergeEngine[Key, BD]
     private[BlockStoreColumnarTableModule] object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
 
+    private[BlockStoreColumnarTableModule] def addGlobalId(spec: TransSpec1) = {
+      Scan(
+        WrapArray(spec), 
+        new CScanner {
+          type A = Long
+          val init = 0l
+          def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+            val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
+            (a + range.end + 1, cols + (ColumnRef(JPath(JPathIndex(1)), CLong) -> globalIdColumn))
+          }
+        }
+      )
+    }
+
     def apply(slices: StreamT[M, Slice]) = new Table(slices)
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = {
@@ -272,6 +286,13 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       case class MoreLeft(span: Span, leq: mutable.BitSet, ridx: Int, req: mutable.BitSet) extends NextStep
       case class MoreRight(span: Span, lidx: Int, leq: mutable.BitSet, req: mutable.BitSet) extends NextStep
 
+      // we need a custom row comparator that ignores the global ID introduced to prevent elimination of
+      // duplicate rows in the write to JDBM
+      def buildRowComparator(lkey: Slice, rkey: Slice) = {
+        Slice.rowComparatorFor(lkey.deref(JPathIndex(0)), rkey.deref(JPathIndex(0))) {
+          _.columns.keys.toList.sorted 
+        }
+      }
 
       def writeStreams[A, B](dbFile: File, db: DB, 
                              left: StreamT[M, Slice], leftKeyTrans: SliceTransform1[A],
@@ -286,64 +307,72 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                                     lstate: A, rstate: B, 
                                     leftWriteState: JDBMState, rightWriteState: JDBMState): M[(JDBMState, JDBMState)] = {
 
-          @tailrec def buildFilters(comparator: RowComparator, 
+          def buildFilters(comparator: RowComparator, 
                                     lidx: Int, lsize: Int, lacc: mutable.BitSet, 
                                     ridx: Int, rsize: Int, racc: mutable.BitSet,
                                     span: Span): NextStep = {
 
-            //println(span)
+            @tailrec def buildFilters0(comparator: RowComparator, 
+                                      lidx: Int, lsize: Int, lacc: mutable.BitSet, 
+                                      ridx: Int, rsize: Int, racc: mutable.BitSet,
+                                      span: Span): NextStep = {
 
-            // todo: This is optimized for sparse alignments; if you get into an alignment
-            // where every pair is distinct and equal, you'll do 2*n comparisons.
-            // This should instead be optimized for dense alignments, using an algorithm that
-            // advances both sides after an equal, then backtracks on inequality
-            if (span eq LeftSpan) {
-              // We don't need to compare the index on the right, since it will be left unchanged
-              // throughout the time that we're advancing left, and even if it's beyond the end of
-              // input we can use the next-to-last element for comparison
-              
-              if (lidx < lsize) {
-                comparator.compare(lidx, ridx - 1) match {
-                  case EQ => 
-                    //println("Found equal on left.")
-                    buildFilters(comparator, lidx + 1, lsize, lacc + lidx, ridx, rsize, racc, LeftSpan)
-                  case LT => 
-                    sys.error("Inputs to align are not correctly sorted.")
-                  case GT =>
-                    buildFilters(comparator, lidx, lsize, lacc, ridx, rsize, racc, NoSpan)
+              //println(span)
+
+              // todo: This is optimized for sparse alignments; if you get into an alignment
+              // where every pair is distinct and equal, you'll do 2*n comparisons.
+              // This should instead be optimized for dense alignments, using an algorithm that
+              // advances both sides after an equal, then backtracks on inequality
+              if (span eq LeftSpan) {
+                // We don't need to compare the index on the right, since it will be left unchanged
+                // throughout the time that we're advancing left, and even if it's beyond the end of
+                // input we can use the next-to-last element for comparison
+                
+                if (lidx < lsize) {
+                  comparator.compare(lidx, ridx - 1) match {
+                    case EQ => 
+                      //println("Found equal on left.")
+                      buildFilters0(comparator, lidx + 1, lsize, lacc + lidx, ridx, rsize, racc, LeftSpan)
+                    case LT => 
+                      sys.error("Inputs to align are not correctly sorted.")
+                    case GT =>
+                      buildFilters0(comparator, lidx, lsize, lacc, ridx, rsize, racc, NoSpan)
+                  }
+                } else {
+                  // left is exhausted in the midst of a span
+                  //println("Left exhausted in the middle of a span.")
+                  MoreLeft(LeftSpan, lacc, ridx, racc)
                 }
               } else {
-                // left is exhausted in the midst of a span
-                //println("Left exhausted in the middle of a span.")
-                MoreLeft(LeftSpan, lacc, ridx, racc)
-              }
-            } else {
-              if (lidx < lsize && ridx < rsize) {
-                comparator.compare(lidx, ridx) match {
-                  case EQ => 
-                    //println("Found equal on right.")
-                    buildFilters(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc + ridx, RightSpan)
-                  case LT => 
-                    if (span eq RightSpan) {
-                      // drop into left spanning of equal
-                      buildFilters(comparator, lidx, lsize, lacc, ridx, rsize, racc, LeftSpan)
-                    } else {
-                      // advance the left in the not-left-spanning state
-                      buildFilters(comparator, lidx + 1, lsize, lacc, ridx, rsize, racc, NoSpan)
-                    }
-                  case GT =>
-                    if (span eq RightSpan) sys.error("Inputs to align are not correctly sorted")
-                    else buildFilters(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc, NoSpan)
+                if (lidx < lsize && ridx < rsize) {
+                  comparator.compare(lidx, ridx) match {
+                    case EQ => 
+                      //println("Found equal on right.")
+                      buildFilters0(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc + ridx, RightSpan)
+                    case LT => 
+                      if (span eq RightSpan) {
+                        // drop into left spanning of equal
+                        buildFilters0(comparator, lidx, lsize, lacc, ridx, rsize, racc, LeftSpan)
+                      } else {
+                        // advance the left in the not-left-spanning state
+                        buildFilters0(comparator, lidx + 1, lsize, lacc, ridx, rsize, racc, NoSpan)
+                      }
+                    case GT =>
+                      if (span eq RightSpan) sys.error("Inputs to align are not correctly sorted")
+                      else buildFilters0(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc, NoSpan)
+                  }
+                } else if (lidx < lsize) {
+                  // right is exhausted; span will be RightSpan or NoSpan
+                  //println("Right exhausted, left is not; asking for more right with " + lacc.mkString("[", ",", "]") + ";" + racc.mkString("[", ",", "]") )
+                  MoreRight(span, lidx, lacc, racc)
+                } else {
+                  //println("Both sides exhausted, so emitting with " + lacc.mkString("[", ",", "]") + ";" + racc.mkString("[", ",", "]") )
+                  MoreLeft(NoSpan, lacc, ridx, racc)
                 }
-              } else if (lidx < lsize) {
-                // right is exhausted; span will be RightSpan or NoSpan
-                //println("Right exhausted, left is not; asking for more right with " + lacc.mkString("[", ",", "]") + ";" + racc.mkString("[", ",", "]") )
-                MoreRight(span, lidx, lacc, racc)
-              } else {
-                //println("Both sides exhausted, so emitting with " + lacc.mkString("[", ",", "]") + ";" + racc.mkString("[", ",", "]") )
-                MoreLeft(NoSpan, lacc, ridx, racc)
               }
             }
+
+            buildFilters0(comparator, lidx, lsize, lacc, ridx, rsize, racc, span)
           }
 
           def continue(nextStep: NextStep, comparator: RowComparator, lstate: A, lkey: Slice, rstate: B, rkey: Slice, leftWriteState: JDBMState, rightWriteState: JDBMState): M[(JDBMState, JDBMState)] = nextStep match {
@@ -420,10 +449,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           def findEqual(comparator: RowComparator, leftRow: Int, leq: mutable.BitSet, rightRow: Int, req: mutable.BitSet): NextStep = {
             comparator.compare(leftRow, rightRow) match {
               case EQ => 
+                //println("findEqual is equal at %d, %d".format(leftRow, rightRow))
                 buildFilters(comparator, leftRow, lhead.size, leq, rightRow, rhead.size, req, NoSpan)
 
               case LT => 
-                val leftIdx = comparator.nextLeftIndex(lhead.size - 1, lhead.size, 0, lhead.size - leftRow - 1)
+                val leftIdx = comparator.nextLeftIndex(leftRow + 1, lhead.size - 1, 0)
+                //println("found next left index " + leftIdx + " from " + (lhead.size - 1, lhead.size, 0, lhead.size - leftRow - 1))
                 if (leftIdx == lhead.size) {
                   MoreLeft(NoSpan, leq, rightRow, req)
                 } else {
@@ -431,7 +462,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                 }
             
               case GT => 
-                val rightIdx = comparator.swap.nextLeftIndex(rhead.size - 1, rhead.size, 0, rhead.size - rightRow - 1)
+                val rightIdx = comparator.swap.nextLeftIndex(rightRow + 1, rhead.size - 1, 0)
+                //println("found next right index " + rightIdx + " from " + (rhead.size - 1, rhead.size, 0, rhead.size - rightRow - 1))
                 if (rightIdx == rhead.size) {
                   MoreRight(NoSpan, leftRow, leq, req)
                 } else {
@@ -441,6 +473,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             }
           }
 
+          //println("state: " + state)
           state match {
             case FindEqualAdvancingRight(leftRow, lkey) => 
               // whenever we drop into buildFilters in this case, we know that we will be neither
@@ -448,10 +481,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               // last iteration.
 
               val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
-              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
+              val comparator = buildRowComparator(lkey, rkey)
               
               // do some preliminary comparisons to figure out if we even need to look at the current slice
               val nextState = findEqual(comparator, leftRow, stepleq, 0, stepreq)
+              //println("Next state: " + nextState)
               continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)    
             
             case FindEqualAdvancingLeft(rightRow, rkey) => 
@@ -460,7 +494,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               // last iteration.
 
               val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
-              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
+              val comparator = buildRowComparator(lkey, rkey)
               
               // do some preliminary comparisons to figure out if we even need to look at the current slice
               val nextState = findEqual(comparator, 0, stepleq, rightRow, stepreq)
@@ -468,7 +502,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             
             case RunRight(leftRow, lkey) =>
               val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
-              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }               
+              val comparator = buildRowComparator(lkey, rkey)
 
               val nextState = buildFilters(comparator, leftRow, lhead.size, stepleq, 
                                                        0, rhead.size, new mutable.BitSet(), RightSpan)
@@ -477,7 +511,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             
             case RunLeft(rightRow, rkey) =>
               val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
-              val comparator = Slice.rowComparatorFor(lkey, rkey) { s => s.columns.keys.toList.sorted }
+              val comparator = buildRowComparator(lkey, rkey)
 
               val nextState = buildFilters(comparator, 0, lhead.size, new mutable.BitSet(), 
                                                        rightRow, rhead.size, stepreq, LeftSpan)
@@ -490,6 +524,9 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           case Some((lhead, ltail)) =>
             right.uncons.flatMap {
               case Some((rhead, rtail)) =>
+                //println("Got data from both left and right.")
+                //println("initial left: \n" + lhead + "\n\n")
+                //println("initial right: \n" + rhead + "\n\n")
                 val (lstate, lkey) = leftKeyTrans(lhead)
                 val stepResult  = step(FindEqualAdvancingRight(0, lkey), 
                                        lhead, ltail, new mutable.BitSet(),
@@ -508,25 +545,26 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                 }
 
               case None =>
+                //println("uncons right returned none")
                 (Table.empty, Table.empty).point[M]
             }
 
           case None =>
+            //println("uncons left returned none")
             (Table.empty, Table.empty).point[M]
         }
       }
 
       val dbFile = new File(newScratchDir(), "alignSpace")
       val backingDb = DBMaker.openFile(dbFile.getCanonicalPath).make()
-      val sourceTrans = composeSliceTransform(Leaf(Source))
 
       // We need some id that can be used to memoize then load table for each side.
       val leftWriteState = JDBMState(Map(), 0)
       val rightWriteState = JDBMState(Map(), 0)
 
       writeStreams(dbFile, backingDb, 
-                   sourceLeft.slices, composeSliceTransform(alignOnL), 
-                   sourceRight.slices, composeSliceTransform(alignOnR), 
+                   sourceLeft.slices, composeSliceTransform(addGlobalId(alignOnL)), 
+                   sourceRight.slices, composeSliceTransform(addGlobalId(alignOnR)), 
                    leftWriteState, rightWriteState)
     }
 
@@ -584,9 +622,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     }
 
     protected def writeAlignedSlices(db: DB, kslice: Slice, vslice: Slice, jdbmState: JDBMState, indexNamePrefix: String, sortOrder: DesiredSortOrder) = {
-      //println("Emitting slice for " + indexNamePrefix)
-      //println(vslice)
-
       val (vColumnRefs, vColumns) = vslice.columns.toList.sortBy(_._1).unzip
       val dataRowFormat = RowFormat.forValues(vColumnRefs)
       val dataColumnEncoder = dataRowFormat.ColumnEncoder(vColumns)
@@ -596,20 +631,20 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
       val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
 
+      //M.point(println("writing slice from writeAligned; key: \n" + kslice + "\nvalue\n" + vslice)) >>
       writeRawSlices(db, kslice, keyColumnRefs, keyColumnEncoder, keyComparator,
                          vslice, vColumnRefs, dataColumnEncoder, 
                          indexNamePrefix, jdbmState)  
     }
 
     protected def writeRawSlices(db: DB,
-                             kslice: Slice, krefs: List[ColumnRef], kEncoder: ColumnEncoder, keyComparator: SortingKeyComparator,
-                             vslice: Slice, vrefs: List[ColumnRef], vEncoder: ColumnEncoder,
-                             indexNamePrefix: String, jdbmState: JDBMState): M[JDBMState] = M.point {
+                                 kslice: Slice, krefs: List[ColumnRef], kEncoder: ColumnEncoder, keyComparator: SortingKeyComparator,
+                                 vslice: Slice, vrefs: List[ColumnRef], vEncoder: ColumnEncoder,
+                                 indexNamePrefix: String, jdbmState: JDBMState): M[JDBMState] = M.point {
       // Iterate over the slice, storing each row
-      @tailrec
       // FIXME: This may not actually be tail recursive!
       // FIXME: Determine whether undefined sort keys are valid
-      def storeRow(storage: IndexStore, row: Int, insertCount: Long): Long = {
+      @tailrec def storeRow(storage: IndexStore, row: Int, insertCount: Long): Long = {
         if (row < vslice.size) {
           if (vslice.isDefinedAt(row) || kslice.isDefinedAt(row)) {
             storage.put(kEncoder.encodeFromRow(row), vEncoder.encodeFromRow(row))
@@ -629,7 +664,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       val (index, newIndices) = jdbmState.indices.get(indexMapKey) map { sliceIndex => (sliceIndex, jdbmState.indices) } getOrElse {
         val indexName = indexMapKey.name
         val newSliceIndex = SliceIndex(indexName,
-                                  db.createTreeMap(indexName, keyComparator, ByteArraySerializer, ByteArraySerializer), // nulls indicate to use default serialization for Array[Byte] 
+                                  db.createTreeMap(indexName, keyComparator, ByteArraySerializer, ByteArraySerializer), 
                                   keyComparator,
                                   krefs.toArray,
                                   vrefs.toArray)
@@ -764,17 +799,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       // in a distinct "row id" for each value to disambiguate it
       val (sourceTrans0, keyTrans0, valueTrans0) = if (! unique) {
         (
-          Scan(
-            WrapArray(Leaf(Source)), 
-            new CScanner {
-              type A = Long
-              val init = 0l
-              def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-                val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
-                (a + range.end + 1, cols + (ColumnRef(JPath(JPathIndex(1)), CLong) -> globalIdColumn))
-              }
-            }
-          ),
+          addGlobalId(Leaf(Source)),
           groupKeys map { kt => 
             OuterObjectConcat(WrapObject(deepMap(kt) { case Leaf(_) => TransSpec1.DerefArray0 }, "0"), WrapObject(TransSpec1.DerefArray1, "1")) 
           },
