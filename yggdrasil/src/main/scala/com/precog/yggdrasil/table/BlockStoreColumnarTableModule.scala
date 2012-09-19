@@ -81,43 +81,30 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     private val memoValue = "MemoValue"
     
     def memoize(table: Table, memoId: MemoId): M[Table] = {
-      val preMemoTable =
-        table.transform(
-          InnerObjectConcat(
-            WrapObject(
-              Scan(
-                Leaf(Source),
-                freshIdScanner),
-              memoKey),
-            WrapObject(
-              Leaf(Source),
-              memoValue
-            )
-          )
-        )
-
-      val memoTable = sort(preMemoTable, DerefObjectStatic(Leaf(Source), JPathField(memoKey)), SortAscending, memoId)
-
-      memoTable map { _.transform(DerefObjectStatic(Leaf(Source), JPathField(memoValue))) }
+      sort(table, Scan(Leaf(Source), freshIdScanner), SortAscending, memoId)
     }
     
     def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table] = {
       // yup, we still block the whole world. Yay.
       memoCache.synchronized {
         memoCache.get(memoId) match {
-          case Some(memoTable) => memoTable
-          case None =>
-            val memoTable = table.sort(sortKey, sortOrder, unique)
-            memoCache += (memoId -> memoTable)
+          case Some(memoTable) => 
+            //println("using memoized table in sort")
             memoTable
+          case None =>
+            //println("memoizing in sort")
+          val memoTable = table.sort(sortKey, sortOrder, unique)
+            memoCache += (memoId -> memoTable)
+          memoTable
         }
       }
     }
     
-    def expire(memoId: MemoId): Unit =
+    def expire(memoId: MemoId): Unit = {
       memoCache.synchronized {
         memoCache -= memoId
       }
+    }
     
     def purge() : Unit =
       memoCache.synchronized {

@@ -400,7 +400,6 @@ trait Evaluator[M[+_]] extends DAG
           } yield {
             for {
               grouping2 <- grouping
-            
               result <- Table.merge(grouping2) { (key: Table, map: Int => M[Table]) =>
                 ctx.memoizationContext.expire(s.memoId)
 
@@ -640,6 +639,7 @@ trait Evaluator[M[+_]] extends DAG
             pendingTableLeft <- loop(left, splits)
             pendingTableRight <- loop(right, splits)
           } yield {
+
             if (pendingTableLeft.graph == pendingTableRight.graph) {
               PendingTable(pendingTableLeft.table, pendingTableLeft.graph, transFromBinOp(op)(pendingTableLeft.trans, pendingTableRight.trans))
             } else {
