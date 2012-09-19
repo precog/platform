@@ -428,7 +428,7 @@ trait DAG extends Instructions {
 
           case dag.Reduce(loc, red, parent) => dag.Reduce(loc, red, memoized(splits)(parent))
 
-          case dag.MegaReduce(loc, reds, parent) => dag.MegaReduce(loc, reds map memoized(splits) map { _.asInstanceOf[dag.Reduce] }, memoized(splits)(parent))
+          case dag.MegaReduce(loc, reds, parent) => dag.MegaReduce(loc, reds, memoized(splits)(parent))
   
           case s @ dag.Split(loc, spec, child) => {
             lazy val splits2 = splits + (s -> result)
@@ -556,7 +556,7 @@ trait DAG extends Instructions {
   }
   
   object dag {
-    trait ForcingPoint extends DepGraph
+    sealed trait ForcingPoint extends DepGraph
     
     object ConstString {
       def unapply(graph : DepGraph) : Option[String] = graph.value match {
@@ -698,7 +698,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class MegaReduce(loc: Line, reds: NEL[dag.Reduce], parent: DepGraph) extends DepGraph {
+    case class MegaReduce(loc: Line, reds: NEL[Reduction], parent: DepGraph) extends DepGraph with ForcingPoint {
       lazy val identities = Vector()
       
       val sorting = IdentitySort

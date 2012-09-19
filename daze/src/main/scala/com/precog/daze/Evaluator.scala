@@ -102,7 +102,7 @@ trait Evaluator[M[+_]] extends DAG
 
   def rewriteDAG(optimize: Boolean): DepGraph => DepGraph = {
     (orderCrosses _) andThen
-    (if (false && optimize) (g => megaReduce(g, findReductions(g))) else identity) andThen
+    (if (optimize) (g => megaReduce(g, findReductions(g))) else identity) andThen
     (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
     (if (optimize) (memoize _) else identity)
   }
@@ -221,8 +221,6 @@ trait Evaluator[M[+_]] extends DAG
       
       case dag.Group(_, _, _) => sys.error("assertion error")
     }
-
-    lazy val reductions: Map[DepGraph, NEL[dag.Reduce]] = findReductions(graph)
 
     def prepareEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, PendingTable] = {
       logger.trace("Loop on %s".format(graph))
@@ -369,7 +367,7 @@ trait Evaluator[M[+_]] extends DAG
         returns an array (to be dereferenced later) containing the result of each reduction
         */
         case m @ MegaReduce(_, reds, parent) => {
-          val red: ReductionImpl = coalesce(reds map { _.red })  
+          val red: ReductionImpl = coalesce(reds)  
 
           for {
             pendingTable <- prepareEval(parent, splits)

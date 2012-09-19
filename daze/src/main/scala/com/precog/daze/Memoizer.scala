@@ -94,9 +94,9 @@ trait Memoizer extends DAG {
         
         case node @ dag.MegaReduce(loc, reds, parent) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.MegaReduce(loc, reds map memoized(splits) map { _.asInstanceOf[dag.Reduce] }, memoized(splits)(parent)), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.MegaReduce(loc, reds, memoized(splits)(parent)), scaleMemoPriority(numRefs(node)))
           else
-            dag.MegaReduce(loc, reds map memoized(splits) map { _.asInstanceOf[dag.Reduce] }, memoized(splits)(parent))
+            dag.MegaReduce(loc, reds, memoized(splits)(parent))
         }
         
         case s @ dag.Split(loc, spec, child) => {

@@ -407,7 +407,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers7")))
       
       val mega = dag.MegaReduce(line, 
-        NEL(dag.Reduce(line, Count, parent), dag.Reduce(line, Sum, parent)), 
+        NEL(Count, Sum), 
         parent)
 
       val input = Join(line, Add, CrossRightSort, 
@@ -1244,7 +1244,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
 
       val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      val input = dag.MegaReduce(line, NEL(dag.Reduce(line, Count, parent)), parent)
+      val input = dag.MegaReduce(line, NEL(Count), parent)
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -1265,7 +1265,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val red = Count
       
       val input = Join(line, DerefArray, CrossLeftSort,
-        dag.MegaReduce(line, NEL(dag.Reduce(line, red, parent)), parent),
+        dag.MegaReduce(line, NEL(red), parent),
         Root(line, PushNum("0")))
         
       testEval(input) { result =>

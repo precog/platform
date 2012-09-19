@@ -68,7 +68,7 @@ trait TypeInferencer extends DAG {
     
           case Reduce(_, red, parent) => inner(red.tpe.arg, typing, parent)
   
-          case MegaReduce(_, reds, parent) => inner((reds map { _.red.tpe.arg } list) reduce JUnionT, typing, parent)
+          case MegaReduce(_, reds, parent) => inner((reds map { _.tpe.arg } list) reduce JUnionT, typing, parent)
     
           case Morph1(_, m, parent) => inner(m.tpe.arg, typing, parent)
     
