@@ -827,7 +827,8 @@ trait Evaluator[M[+_]] extends DAG
             }
           }
         }
-        
+       
+        //ReSortBy is untested because, in practice, we cannot reach this case
         case s @ ReSortBy(parent, id) => {
           if (parent.sorting == ValueSort(id)) {
             prepareEval(parent, splits)
@@ -838,7 +839,7 @@ trait Evaluator[M[+_]] extends DAG
               result = for {
                 pendingTable <- pending.table
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                sorted <- table.sort(DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField("sort-" + id)), SortAscending)
+                sorted <- table.sort(DerefObjectStatic(Leaf(Source), JPathField("sort-" + id)), SortAscending)
               } yield sorted
             } yield {
               PendingTable(result, graph, TransSpec1.Id)
