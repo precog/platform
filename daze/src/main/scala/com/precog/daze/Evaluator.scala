@@ -401,20 +401,14 @@ trait Evaluator[M[+_]] extends DAG
             for {
               grouping2 <- grouping
               result <- Table.merge(grouping2) { (key: Table, map: Int => M[Table]) =>
-                ctx.memoizationContext.expire(s.memoId)
-
                 val back = for {
                   pending <- loop(child, splits + (s -> (key -> map)))
                 } yield {
                   for {
                     pendingTable <- pending.table
-                    table = pendingTable.transform(liftToValues(pending.trans))  
-                    memoized <- ctx.memoizationContext.memoize(table, s.memoId)
-                  } yield memoized
+                  } yield pendingTable.transform(liftToValues(pending.trans))
                 }
 
-                child.findMemos(s).foreach { ctx.memoizationContext.expire(_) }
-                
                 back.eval(state)  //: M[Table]
               }
             } yield result.transform(idSpec)
@@ -784,7 +778,7 @@ trait Evaluator[M[+_]] extends DAG
                 val table = pendingTable.transform(liftToValues(pending.trans))
                 val shuffled = table.transform(TableTransSpec.makeTransSpec(Map(paths.Key -> idSpec)))
                 // TODO this could be made more efficient by only considering the indexes we care about
-                sorted <- ctx.memoizationContext.sort(shuffled, DerefObjectStatic(Leaf(Source), paths.Key), SortAscending, s.memoId)
+                sorted <- shuffled.sort(DerefObjectStatic(Leaf(Source), paths.Key), SortAscending)
               } yield {                              
                 parent.sorting match {
                   case ValueSort(id) =>
@@ -811,8 +805,8 @@ trait Evaluator[M[+_]] extends DAG
             } yield {
               val result = for {
                 pendingTable <- pending.table
-                val table = pendingTable.transform(liftToValues(pending.trans))
-                sorted <- ctx.memoizationContext.sort(table, sortSpec, SortAscending, s.memoId)
+                table = pendingTable.transform(liftToValues(pending.trans))
+                sorted <- table.sort(sortSpec, SortAscending)
               } yield {
                 val wrappedSort = trans.WrapObject(sortSpec, "sort-" + id)
                 val wrappedValue = trans.WrapObject(valueSpec, paths.Value.name)
@@ -848,7 +842,7 @@ trait Evaluator[M[+_]] extends DAG
               val result = for {
                 pendingTable <- pending.table
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                sorted <- ctx.memoizationContext.sort(table, DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField("sort-" + id)), SortAscending, s.memoId)
+                sorted <- table.sort(DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField("sort-" + id)), SortAscending)
               } yield sorted
               
               PendingTable(result, graph, TransSpec1.Id)

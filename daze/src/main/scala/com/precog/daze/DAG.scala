@@ -392,10 +392,6 @@ trait DAG extends Instructions {
     
     def isSingleton: Boolean  //true implies that the node is a singleton; false doesn't imply anything 
     
-    lazy val memoId = IdGen.nextInt()
-    
-    def findMemos(parent: dag.Split): Set[Int]
-    
     def containsSplitArg: Boolean
 
     /**
@@ -584,8 +580,6 @@ trait DAG extends Instructions {
       
       val isSingleton = true
       
-      def findMemos(parent: Split) = if (this.parent == parent) Set(memoId) else Set()
-      
       val containsSplitArg = true
     }
     
@@ -596,8 +590,6 @@ trait DAG extends Instructions {
       val sorting = IdentitySort
       
       val isSingleton = false
-      
-      def findMemos(parent: Split) = if (this.parent == parent) Set(memoId) else Set()
       
       val containsSplitArg = true
     }
@@ -619,8 +611,6 @@ trait DAG extends Instructions {
       
       val isSingleton = true
       
-      def findMemos(s: Split) = Set()
-      
       val containsSplitArg = false
     }
     
@@ -632,14 +622,6 @@ trait DAG extends Instructions {
       override lazy val value = parent.value
       
       lazy val isSingleton = parent.isSingleton
-      
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
       
       lazy val containsSplitArg = parent.containsSplitArg
     }
@@ -654,14 +636,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = false
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
 
@@ -675,14 +649,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = false
       
-      def findMemos(s: Split) = {
-        val back = left.findMemos(s) ++ right.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
 
@@ -692,14 +658,6 @@ trait DAG extends Instructions {
       val sorting = IdentitySort
       
       lazy val isSingleton = parent.isSingleton
-      
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
       
       lazy val containsSplitArg = parent.containsSplitArg
     }
@@ -714,14 +672,6 @@ trait DAG extends Instructions {
       
       val isSingleton = false
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
@@ -733,14 +683,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = parent.isSingleton
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
@@ -751,14 +693,6 @@ trait DAG extends Instructions {
       
       val isSingleton = true
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
@@ -769,14 +703,6 @@ trait DAG extends Instructions {
       
       val isSingleton = false
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
@@ -786,30 +712,6 @@ trait DAG extends Instructions {
       val sorting = IdentitySort
       
       lazy val isSingleton = false
-      
-      lazy val memoIds = Vector(IdGen.nextInt())
-      
-      def findMemos(s: Split) = {
-        def loop(spec: BucketSpec): Set[Int] = spec match {
-          case UnionBucketSpec(left, right) =>
-            loop(left) ++ loop(right)
-          
-          case IntersectBucketSpec(left, right) =>
-            loop(left) ++ loop(right)
-          
-          case Group(_, target, child) =>
-            target.findMemos(s) ++ loop(child)
-          
-          case UnfixedSolution(_, target) => target.findMemos(s)
-          case Extra(target) => target.findMemos(s)
-        }
-        
-        val back = loop(spec) ++ child.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
       
       lazy val containsSplitArg = {
         def loop(spec: BucketSpec): Boolean = spec match {
@@ -837,14 +739,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
-      def findMemos(s: Split) = {
-        val back = left.findMemos(s) ++ right.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
     
@@ -854,14 +748,6 @@ trait DAG extends Instructions {
       val sorting = IdentitySort
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
-      
-      def findMemos(s: Split) = {
-        val back = left.findMemos(s) ++ right.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
       
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
@@ -882,14 +768,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
-      def findMemos(s: Split) = {
-        val back = left.findMemos(s) ++ right.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
     
@@ -906,14 +784,6 @@ trait DAG extends Instructions {
       }
       
       lazy val isSingleton = target.isSingleton
-      
-      def findMemos(s: Split) = {
-        val back = target.findMemos(s) ++ boolean.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
       
       lazy val containsSplitArg = target.containsSplitArg || boolean.containsSplitArg
     }
@@ -938,14 +808,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = parent.isSingleton
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
@@ -969,8 +831,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = parent.isSingleton
       
-      def findMemos(s: Split) = parent.findMemos(s)
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
@@ -983,8 +843,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = parent.isSingleton
       
-      def findMemos(s: Split) = parent.findMemos(s)
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
@@ -994,14 +852,6 @@ trait DAG extends Instructions {
       lazy val identities = parent.identities
       lazy val sorting = parent.sorting
       lazy val isSingleton = parent.isSingleton
-      
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
       
       lazy val containsSplitArg = parent.containsSplitArg
     }
