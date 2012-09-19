@@ -62,6 +62,29 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
     results.copoint must_== (-10 to 10).map(x => JNum(-x))
   }
+  
+  def checkMap1 = {
+    implicit val gen = sample(schema)
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+
+      val results = toJson(table.transform {
+        Map1(
+          DerefObjectStatic(Leaf(Source), JPathField("value")), 
+          lookupF2(Nil, "mod").applyr(CLong(2)) andThen lookupF2(Nil, "eq").applyr(CLong(0)))
+      })
+
+      val expected = sample.data flatMap { jv =>
+        (jv \ "value") match { 
+          case JNum(x) if x % 2 == 0 => Some(JBool(true))
+          case JNum(_) => Some(JBool(false))
+          case _ => None
+        }
+      }
+
+      results.copoint must_== expected
+    }
+  }
 
   /* Do we want to allow non-boolean sets to be used as filters without an explicit existence predicate?
   def checkTrivialFilter = {
@@ -120,6 +143,43 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     }.set(minTestsOk -> 200)
   }
 
+  def testMod2Filter = {
+    val array: JValue = JsonParser.parse("""
+      [{
+        "value":-6.846973248137671E+307,
+        "key":[7.0]
+      },
+      {
+        "value":-4611686018427387904,
+        "key":[5.0]
+      }]""")
+
+    val data: Stream[JValue] = (array match {
+      case JArray(li) => li
+      case _ => sys.error("Expected JArray")
+    }).toStream
+
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Filter(Leaf(Source),
+      Map1(
+        DerefObjectStatic(Leaf(Source), JPathField("value")), 
+        lookupF2(Nil, "mod").applyr(CLong(2)) andThen lookupF2(Nil, "eq").applyr(CLong(0)))
+      )
+    })
+
+    val expected = data flatMap { jv =>
+      (jv \ "value") match { 
+        case JNum(x) if x % 2 == 0 => Some(jv)
+        case _ => None
+      }
+    }
+
+    results.copoint must_== expected
+  }
+
   def checkObjectDeref = {
     implicit val gen = sample(objectSchema(_, 3))
     check { (sample: SampleData) =>
@@ -158,7 +218,31 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     }
   }
 
-  def checkMap2 = {
+  def checkMap2Eq = {
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CDouble, JPath("value2") -> CLong))
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+      val results = toJson(table.transform {
+        Map2(
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2")),
+          lookupF2(Nil, "eq")
+        )
+      })
+
+      val expected = sample.data flatMap { jv =>
+        ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
+          case (JNum(x), JNum(y)) if x == y => Some(JBool(true))
+          case (JNum(x), JNum(y)) => Some(JBool(false))
+          case _ => None
+        }
+      }
+
+      results.copoint must_== expected
+    }
+  }
+
+  def checkMap2Add = {
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
@@ -172,7 +256,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
       val expected = sample.data flatMap { jv =>
         ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-          case (JNum(x), JNum(y)) => Some(JNum(x+y))
+          case (JNum(x), JNum(y)) => Some(JNum(x + y))
           case _ => None
         }
       }

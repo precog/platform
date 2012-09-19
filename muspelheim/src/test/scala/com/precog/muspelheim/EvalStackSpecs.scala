@@ -146,16 +146,17 @@ trait EvalStackSpecs extends Specification {
 
       val results = evalE(input)
 
-      results must haveSize(10)
+      results must haveSize(26)
 
       forall(results) {
         case (ids, SObject(obj)) => {
           ids must haveSize(1)
-          obj must haveSize(1)
-          obj must haveKey("bar") or haveKey("baz")
+          obj must haveSize(2)
+          obj must haveKey("userId") or haveKey("pageId")
+          obj must haveKey("size")
         }
       }
-    }.pendingUntilFixed
+    }
     
     "have the correct number of identities and values in a relate" >> {
       "with the sum plus the LHS" >> {
@@ -245,34 +246,28 @@ trait EvalStackSpecs extends Specification {
     }
 
     "basic set difference queries" >> {
-      {
+      "clicks difference campaigns" >> {
         val input = "//clicks difference //campaigns"
         val results = evalE(input)
 
         results must haveSize(100)
       }
-      {
+      "clicks difference clicks" >> {
         val input = "//clicks difference //clicks"
         val results = evalE(input)
 
         results must haveSize(0)
       }
-      {
-        val input = "//clicks difference //clicks.timeString"
+      "clicks.timeString difference clicks.timeString" >> {
+        val input = "//clicks.timeString difference //clicks.timeString"
         val results = evalE(input)
 
         results must haveSize(0)
       }      
-      {
-        val input = "//clicks.time difference //clicks.timeString"
-        val results = evalE(input)
-
-        results must haveSize(0)
-      }
-    }.pendingUntilFixed
+    }
 
     "basic intersect and union queries" >> {
-      {
+      "constant intersection" >> {
         val input = "4 intersect 4"
         val results = evalE(input)
 
@@ -280,12 +275,12 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (ids, SDecimal(d)) => 
-            ids.length must_== 1
+            ids.length must_== 0
             d mustEqual 4 
           case r => failure("Result has wrong shape: "+r)
         }
       }
-      {
+      "constant union" >> {
         val input = "4 union 5"
         val results = evalE(input)
 
@@ -293,18 +288,18 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (ids, SDecimal(d)) => 
-            ids.length must_== 1
+            ids.length must_== 0
             Set(4,5) must contain(d) 
           case r => failure("Result has wrong shape: "+r)
         }
       }
-      {
+      "empty intersection" >> {
         val input = "//clicks intersect //views"
         val results = evalE(input)
 
         results must beEmpty
       }
-      {
+      "heterogeneous union" >> {
         val input = "{foo: 3} union 9"
         val results = evalE(input)
 
@@ -312,15 +307,15 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (ids, SDecimal(d)) => 
-            ids.length must_== 1
-            d mustEqual 4 
+            ids.length must_== 0
+            d mustEqual 9
           case (ids, SObject(obj)) => 
-            ids.length must_== 1
-            obj must contain("foo" -> 3) 
+            ids.length must_== 0
+            obj must contain("foo" -> SDecimal(3)) 
           case r => failure("Result has wrong shape: "+r)
         }
       }
-      {
+      "heterogeneous intersection" >> {
         val input = "obj := {foo: 5} obj.foo intersect 5"
         val results = evalE(input)
 
@@ -328,12 +323,12 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (ids, SDecimal(d)) => 
-            ids.length must_== 1
+            ids.length must_== 0
             d mustEqual 5 
           case r => failure("Result has wrong shape: "+r)
         }
       }
-      {
+      "intersection of differently sized arrays" >> {
         val input = "arr := [1,2,3] arr[0] intersect 1"
         val results = evalE(input)
 
@@ -341,18 +336,18 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (ids, SDecimal(d)) => 
-            ids.length must_== 1
+            ids.length must_== 0
             d mustEqual 1 
           case r => failure("Result has wrong shape: "+r)
         }
       }
-      {
+      "heterogeneous union doing strange things with identities" >> {
         val input = "{foo: //clicks.pageId, bar: //clicks.userId} union //views"
         val results = evalE(input)
 
         results must haveSize(200)
       }
-    }.pendingUntilFixed
+    }
 
     "intersect a union" >> {
       "campaigns.gender" >> {
@@ -571,7 +566,7 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "return only all possible value results from a" in {
+    "return all possible value results from an underconstrained solve" in {
       val input = """
         | campaigns := //campaigns
         | solve 'a 
@@ -587,7 +582,7 @@ trait EvalStackSpecs extends Specification {
           gender must beOneOf("male", "female")
         case r => failure("Result has wrong shape: "+r)
       }
-    }.pendingUntilFixed
+    }
     
     "determine a histogram of genders on campaigns" in {
       val input = """
@@ -1324,6 +1319,7 @@ trait EvalStackSpecs extends Specification {
         eval("//fastspring_nulls") must haveSize(2)
         eval("//fastspring_mixed_type") must haveSize(2)
       }
+
 
       // times out...
 //      "handle chained characteristic functions" in {

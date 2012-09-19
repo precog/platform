@@ -164,12 +164,15 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
       "perform a trivial map1" in testMap1IntLeaf
-      //"give the identity transform for the trivial filter" in checkTrivialFilter  //why is this commented out?
+      "perform a less trvial map1" in checkMap1
+      //"give the identity transform for the trivial filter" in checkTrivialFilter
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
       "give the identity transform for a nontrivial filter" in checkFilter
+      "give a transformation for a big decimal and a long" in testMod2Filter
       "perform an object dereference" in checkObjectDeref
       "perform an array dereference" in checkArrayDeref
-      "perform a trivial map2" in checkMap2
+      "perform a trivial map2 add" in checkMap2Add
+      "perform a trivial map2 eq" in checkMap2Eq
       "perform a trivial equality check" in checkEqualSelf
       "perform a trivial equality check on an array" in checkEqualSelfArray
       "perform a slightly less trivial equality check" in checkEqual
@@ -228,6 +231,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "select the correct rows across slice boundary" in testTakeRangeAcrossSlices
       "select the correct rows only in second slice" in testTakeRangeSecondSlice
       "select the first slice" in testTakeRangeFirstSliceOnly
+      "select nothing with a negative starting index" in testTakeRangeNegStart
+      "select nothing with a negative number to take" in testTakeRangeNegNumber
+      "select the correct rows using scalacheck" in checkTakeRange
     }
   }
 

@@ -79,7 +79,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
 
         case Map1(source, f) => 
           composeSliceTransform2(source) map {
-            _ mapColumns f 
+            _ mapRoot f 
           }
 
         case Map2(left, right, f) =>
@@ -89,14 +89,17 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
           l0.zip(r0) { (sl, sr) =>
             new Slice {
               val size = sl.size
-              val columns: Map[ColumnRef, Column] = 
-                (for {
-                  cl <- sl.valueColumns
-                  cr <- sr.valueColumns
-                  col <- f(cl, cr) // TODO: Unify columns of the same result type
-                } yield {
-                  (ColumnRef(JPath.Identity, col.tpe), col)
-                })(collection.breakOut)
+              val columns: Map[ColumnRef, Column] = {
+                val resultColumns = for {
+                  cl <- sl.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
+                  cr <- sr.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
+                  result <- f(cl, cr)
+                } yield result
+                  
+                resultColumns.groupBy(_.tpe) map { 
+                  case (tpe, cols) => (ColumnRef(JPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+                }
+              }
             }
           }
 
@@ -116,7 +119,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                 }
               }
 
-              s filterColumns { cf.util.filter(0, s.size, definedAt) }
+              s mapColumns { cf.util.filter(0, s.size, definedAt) }
             }
           }
 

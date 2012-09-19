@@ -25,427 +25,196 @@ import bytecode.{ BinaryOperationType, JNumberT, JBooleanT, JTextT, Library }
 import yggdrasil._
 import yggdrasil.table._
 
+import com.precog.util.NumericComparisons
+
 trait InfixLib[M[+_]] extends GenOpcode[M] {
+
+  import StdLib.{BoolFrom, DoubleFrom, LongFrom, NumFrom, StrFrom}
   
   def PrimitiveEqualsF2 = yggdrasil.table.cf.std.Eq
   
   object Infix {
     val InfixNamespace = Vector("std", "infix")
 
-    val Add = new Op2(InfixNamespace, "add") {
+    final def longOk(x: Long, y: Long) = true
+    final def doubleOk(x: Double, y: Double) = true
+    final def numOk(x: BigDecimal, y: BigDecimal) = true
+
+    final def longNeZero(x: Long, y: Long) = y != 0
+    final def doubleNeZero(x: Double, y: Double) = y != 0.0
+    final def numNeZero(x: BigDecimal, y: BigDecimal) = y != 0
+
+    class InfixOp2(name: String, longf: (Long, Long) => Long,
+      doublef: (Double, Double) => Double,
+      numf: (BigDecimal, BigDecimal) => BigDecimal)
+    extends Op2(InfixNamespace, name) {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
       def f2: F2 = new CF2P({
-        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
-          def apply(row: Int) = c1(row) + c2(row)
-        }
-        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = (c1(row): BigDecimal) + c2(row)
-        }
-        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) + c2(row)
-        }
-        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = (c1(row): BigDecimal) + c2(row)
-        }
-        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
-          def apply(row: Int) = c1(row) + c2(row)
-        }
-        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) + c2(row)
-        }
-        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) + c2(row)
-        }
-        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) + c2(row)
-        }
-        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) + c2(row)
-        }
+        case (c1: LongColumn, c2: LongColumn) =>
+          new LongFrom.LL(c1, c2, longOk, longf)
+
+        case (c1: LongColumn, c2: DoubleColumn) =>
+          new NumFrom.LD(c1, c2, numOk, numf)
+
+        case (c1: LongColumn, c2: NumColumn) =>
+          new NumFrom.LN(c1, c2, numOk, numf)
+
+        case (c1: DoubleColumn, c2: LongColumn) =>
+          new NumFrom.DL(c1, c2, numOk, numf)
+
+        case (c1: DoubleColumn, c2: DoubleColumn) =>
+          new DoubleFrom.DD(c1, c2, doubleOk, doublef)
+
+        case (c1: DoubleColumn, c2: NumColumn) =>
+          new NumFrom.DN(c1, c2, numOk, numf)
+
+        case (c1: NumColumn, c2: LongColumn) =>
+          new NumFrom.NL(c1, c2, numOk, numf)
+
+        case (c1: NumColumn, c2: DoubleColumn) =>
+          new NumFrom.ND(c1, c2, numOk, numf)
+
+        case (c1: NumColumn, c2: NumColumn) =>
+          new NumFrom.NN(c1, c2, numOk, numf)
       })
     }
 
-    val Sub = new Op2(InfixNamespace, "subtract") {
-      val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
-      def f2: F2 = new CF2P({
-        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
-          def apply(row: Int) = c1(row) - c2(row)
-        }
-        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = (c1(row): BigDecimal) - c2(row)
-        }
-        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) - c2(row)
-        }
-        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = (c1(row): BigDecimal) - c2(row)
-        }
-        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
-          def apply(row: Int) = c1(row) - c2(row)
-        }
-        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) - c2(row)
-        }
-        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) - c2(row)
-        }
-        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) - c2(row)
-        }
-        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) - c2(row)
-        }
-      })
-    }
+    val Add = new InfixOp2("add", _ + _, _ + _, _ + _)
+    val Sub = new InfixOp2("subtract", _ - _, _ - _, _ - _)
+    val Mul = new InfixOp2("multiply", _ * _, _ * _, _ * _)
 
-    val Mul = new Op2(InfixNamespace, "multiply") {
-      val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
-      def f2: F2 = new CF2P({
-        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
-          def apply(row: Int) = c1(row) * c2(row)
-        }
-        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = (c1(row): BigDecimal) * c2(row)
-        }
-        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) * c2(row)
-        }
-        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = (c1(row): BigDecimal) * c2(row)
-        }
-        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
-          def apply(row: Int) = c1(row) * c2(row)
-        }
-        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) * c2(row)
-        }
-        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) * c2(row)
-        }
-        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) * c2(row)
-        }
-        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          def apply(row: Int) = c1(row) * c2(row)
-        }
-      })
-    }
-
+    // div needs to make sure to use Double even for division with longs
     val Div = new Op2(InfixNamespace, "divide") {
+      def doublef(x: Double, y: Double) = x / y
+      def numf(x: BigDecimal, y: BigDecimal) = x / y
       val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
       def f2: F2 = new CF2P({
-        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = (c1(row): BigDecimal) / c2(row)
-        }
-        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = (c1(row): BigDecimal) / c2(row)
-        }
-        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = c1(row) / c2(row)
-        }
-        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = (c1(row): BigDecimal) / c2(row)
-        }
-        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = c1(row) / c2(row)
-        }
-        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = c1(row) / c2(row)
-        }
-        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = c1(row) / c2(row)
-        }
-        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = c1(row) / c2(row)
-        }
-        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = c1(row) / c2(row)
-        }
+        case (c1: LongColumn, c2: LongColumn) =>
+          new DoubleFrom.LL(c1, c2, doubleNeZero, doublef)
+
+        case (c1: LongColumn, c2: DoubleColumn) =>
+          new NumFrom.LD(c1, c2, numNeZero, numf)
+
+        case (c1: LongColumn, c2: NumColumn) =>
+          new NumFrom.LN(c1, c2, numNeZero, numf)
+
+        case (c1: DoubleColumn, c2: LongColumn) =>
+          new NumFrom.DL(c1, c2, numNeZero, numf)
+
+        case (c1: DoubleColumn, c2: DoubleColumn) =>
+          new DoubleFrom.DD(c1, c2, doubleNeZero, doublef)
+
+        case (c1: DoubleColumn, c2: NumColumn) =>
+          new NumFrom.DN(c1, c2, numNeZero, numf)
+
+        case (c1: NumColumn, c2: LongColumn) =>
+          new NumFrom.NL(c1, c2, numNeZero, numf)
+
+        case (c1: NumColumn, c2: DoubleColumn) =>
+          new NumFrom.ND(c1, c2, numNeZero, numf)
+
+        case (c1: NumColumn, c2: NumColumn) =>
+          new NumFrom.NN(c1, c2, numNeZero, numf)
       })
     }
 
     val Mod = new Op2(InfixNamespace, "mod") {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+
+      def longMod(x: Long, y: Long) = if ((x ^ y) < 0) (x % y) + y else x % y
+
+      def doubleMod(x: Double, y: Double) =
+        if (x.signum * y.signum == -1) x % y + y else x % y
+
+      def numMod(x: BigDecimal, y: BigDecimal) =
+        if (x.signum * y.signum == -1) x % y + y else x % y
+
       def f2: F2 = new CF2P({
-        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = {
-            val c1r = c1(row) 
-            val c2r = c2(row)
+        case (c1: LongColumn, c2: LongColumn) =>
+          new LongFrom.LL(c1, c2, longNeZero, longMod)
 
-            if ((c1r ^ c2r) < 0)
-              (c1r % c2r) + c2r
-            else
-              c1r % c2r
-          }
-        }
-        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = {
-            val c1r = c1(row): BigDecimal 
-            val c2r = c2(row): BigDecimal
+        case (c1: LongColumn, c2: DoubleColumn) =>
+          new NumFrom.LD(c1, c2, numNeZero, numMod)
 
-            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
-              (c1r % c2r) + c2r
-            else
-              c1r % c2r
-          }
-        }
-        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = {
-            val c1r = c1(row): BigDecimal 
-            val c2r = c2(row)
+        case (c1: LongColumn, c2: NumColumn) =>
+          new NumFrom.LN(c1, c2, numNeZero, numMod)
 
-            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
-              (c1r % c2r) + c2r
-            else
-              c1r % c2r
-          }
-        }
-        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = {
-            val c1r = c1(row) 
-            val c2r = c2(row)
+        case (c1: DoubleColumn, c2: LongColumn) =>
+          new NumFrom.DL(c1, c2, numNeZero, numMod)
 
-            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
-              (c1r % c2r) + c2r
-            else
-              c1r % c2r
-          }
-        }
-        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = {
-            val c1r = c1(row): BigDecimal 
-            val c2r = c2(row): BigDecimal
+        case (c1: DoubleColumn, c2: DoubleColumn) =>
+          new DoubleFrom.DD(c1, c2, doubleNeZero, doubleMod)
 
-            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
-              (c1r % c2r) + c2r
-            else
-              c1r % c2r
-          }
-        }
-        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = {
-            val c1r = c1(row): BigDecimal 
-            val c2r = c2(row)
+        case (c1: DoubleColumn, c2: NumColumn) =>
+          new NumFrom.DN(c1, c2, numNeZero, numMod)
 
-            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
-              (c1r % c2r) + c2r
-            else
-              c1r % c2r
-          }
-        }
-        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = {
-            val c1r = c1(row) 
-            val c2r = c2(row)
+        case (c1: NumColumn, c2: LongColumn) =>
+          new NumFrom.NL(c1, c2, numNeZero, numMod)
 
-            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
-              (c1r % c2r) + c2r
-            else
-              c1r % c2r
-          }
-        }
-        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = {
-            val c1r = c1(row) 
-            val c2r = c2(row): BigDecimal
+        case (c1: NumColumn, c2: DoubleColumn) =>
+          new NumFrom.ND(c1, c2, numNeZero, numMod)
 
-            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
-              (c1r % c2r) + c2r
-            else
-              c1r % c2r
-          }
-        }
-        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
-          def apply(row: Int) = {
-            val c1r = c1(row) 
-            val c2r = c2(row): BigDecimal
-
-            if ((c1r < 0 && c2r >= 0) || (c1r >= 0 && c2r < 0))
-              (c1r % c2r) + c2r
-            else
-              c1r % c2r
-          }
-        }
+        case (c1: NumColumn, c2: NumColumn) =>
+          new NumFrom.NN(c1, c2, numNeZero, numMod)
       })
     }
 
-    val Lt = new Op2(InfixNamespace, "lt") {
+    class CompareOp2(name: String, f: Int => Boolean)
+    extends Op2(InfixNamespace, name) {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+      import NumericComparisons.compare
       def f2: F2 = new CF2P({
-        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) < c2(row)
-        }
-        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) < c2(row)
-        }
-        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) < c2(row)
-        }
-        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) < c2(row)
-        }
-        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) < c2(row)
-        }
-        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) < c2(row)
-        }
-        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) < c2(row)
-        }
-        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) < c2(row)
-        }
-        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) < c2(row)
-        }
+        case (c1: LongColumn, c2: LongColumn) =>
+          new BoolFrom.LL(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
+
+        case (c1: LongColumn, c2: DoubleColumn) =>
+          new BoolFrom.LD(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
+
+        case (c1: LongColumn, c2: NumColumn) =>
+          new BoolFrom.LN(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
+
+        case (c1: DoubleColumn, c2: LongColumn) =>
+          new BoolFrom.DL(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
+
+        case (c1: DoubleColumn, c2: DoubleColumn) =>
+          new BoolFrom.DD(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
+
+        case (c1: DoubleColumn, c2: NumColumn) =>
+          new BoolFrom.DN(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
+
+        case (c1: NumColumn, c2: LongColumn) =>
+          new BoolFrom.NL(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
+
+        case (c1: NumColumn, c2: DoubleColumn) =>
+          new BoolFrom.ND(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
+
+        case (c1: NumColumn, c2: NumColumn) =>
+          new BoolFrom.NN(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
       })
     }
 
-    val LtEq = new Op2(InfixNamespace, "lte") {
-      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
-      def f2: F2 = new CF2P({
-        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) <= c2(row)
-        }
-        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) <= c2(row)
-        }
-        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) <= c2(row)
-        }
-        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) <= c2(row)
-        }
-        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) <= c2(row)
-        }
-        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) <= c2(row)
-        }
-        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) <= c2(row)
-        }
-        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) <= c2(row)
-        }
-        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) <= c2(row)
-        }
-      })
-    }
+    val Lt = new CompareOp2("lt", _ < 0)
+    val LtEq = new CompareOp2("lte", _ <= 0)
+    val Gt = new CompareOp2("gt", _ > 0)
+    val GtEq = new CompareOp2("gte", _ >= 0)
 
-    val Gt = new Op2(InfixNamespace, "gt") {
-      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
-      def f2: F2 = new CF2P({
-        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) > c2(row)
-        }
-        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) > c2(row)
-        }
-        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) > c2(row)
-        }
-        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) > c2(row)
-        }
-        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) > c2(row)
-        }
-        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) > c2(row)
-        }
-        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) > c2(row)
-        }
-        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) > c2(row)
-        }
-        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) > c2(row)
-        }
-      })
-    }
-
-    val GtEq = new Op2(InfixNamespace, "gte") {
-      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
-      def f2: F2 = new CF2P({
-        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) >= c2(row)
-        }
-        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) >= c2(row)
-        }
-        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) >= c2(row)
-        }
-        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) >= c2(row)
-        }
-        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) >= c2(row)
-        }
-        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) >= c2(row)
-        }
-        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) >= c2(row)
-        }
-        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) >= c2(row)
-        }
-        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) >= c2(row)
-        }
-      })
-    }
-
-    val And = new Op2(InfixNamespace, "and") {
+    class BoolOp2(name: String, f: (Boolean, Boolean) => Boolean)
+    extends Op2(InfixNamespace, name) {
       val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
       def f2: F2 = new CF2P({
-        case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) && c2(row)
-        }
+        case (c1: BoolColumn, c2: BoolColumn) => new BoolFrom.BB(c1, c2, f)
       })
     }
 
-    val Or = new Op2(InfixNamespace, "or") {
-      val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
-      def f2: F2 = new CF2P({
-        case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
-          def apply(row: Int) = c1(row) || c2(row)
-        }
-      })
-    }
+    val And = new BoolOp2("and", _ && _)
+    val Or = new BoolOp2("or", _ || _)
     
     val concatString = new Op2(InfixNamespace, "concatString") {
       val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
       def f2: F2 = new CF2P({
-        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
-          def apply(row: Int) = c1(row) + c2(row)
-        }
+        case (c1: StrColumn, c2: StrColumn) =>
+          new StrFrom.SS(c1, c2, _ != null && _ != null, _ + _)
       })
     }
-
   }
 }
-

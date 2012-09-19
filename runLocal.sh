@@ -296,6 +296,7 @@ echo "Startup complete, running in $WORKDIR"
 TOKENID=`grep tid $WORKDIR/root_token.json | sed -e 's/.*"tid" : "\(.*\)".*/\1/'`
 echo "============================================================"
 echo "Root token: $TOKENID"
+echo "Base path: $WORKDIR"
 echo "============================================================"
 
 # Wait forever until the user Ctrl-C's the system

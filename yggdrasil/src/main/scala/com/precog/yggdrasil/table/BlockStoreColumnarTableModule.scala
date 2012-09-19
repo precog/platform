@@ -37,7 +37,7 @@ import java.util.Comparator
 import org.apache.jdbm.DBMaker
 import org.apache.jdbm.DB
 
-import com.weiglewilczek.slf4s.Logger
+import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.Ordering._
@@ -394,7 +394,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           def continue(nextStep: NextStep, comparator: RowComparator, lstate: A, lkey: Slice, rstate: B, rkey: Slice, leftWriteState: JDBMState, rightWriteState: JDBMState): M[(JDBMState, JDBMState)] = nextStep match {
             case MoreLeft(span, leq, ridx, req) =>
               //println("Requested more left; emitting left based on bitset " + leq.mkString("[", ",", "]"))
-              val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size, leq)))
+              val lemission = leq.nonEmpty.option(lhead.mapColumns(cf.util.filter(0, lhead.size, leq)))
 
               @inline def next(lbs: JDBMState, rbs: JDBMState): M[(JDBMState, JDBMState)] = ltail.uncons flatMap {
                 case Some((lhead0, ltail0)) =>
@@ -409,7 +409,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   //println("No more data on left; emitting right based on bitset " + req.mkString("[", ",", "]"))
                   // done on left, and we're not in an equal span on the right (since LeftSpan can only
                   // be emitted if we're not in a right span) so we're entirely done.
-                  val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size, req))) 
+                  val remission = req.nonEmpty.option(rhead.mapColumns(cf.util.filter(0, rhead.size, req))) 
                   (remission map { e => writeAlignedSlices(db, rkey, e, rbs, "alignRight", SortAscending) } getOrElse rbs.point[M]) map { (lbs, _) }
               }
 
@@ -423,7 +423,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               //println("Requested more right; emitting right based on bitset " + req.mkString("[", ",", "]"))
               // if span == RightSpan and no more data exists on the right, we need to 
               // continue in buildFilters spanning on the left.
-              val remission = req.nonEmpty.option(rhead.filterColumns(cf.util.filter(0, rhead.size, req)))
+              val remission = req.nonEmpty.option(rhead.mapColumns(cf.util.filter(0, rhead.size, req)))
 
               @inline def next(lbs: JDBMState, rbs: JDBMState): M[(JDBMState, JDBMState)] = rtail.uncons flatMap {
                 case Some((rhead0, rtail0)) => 
@@ -441,7 +441,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                     case NoSpan => 
                       //println("No more data on right and not in a span; emitting left based on bitset " + leq.mkString("[", ",", "]"))
                       // entirely done; just emit both 
-                      val lemission = leq.nonEmpty.option(lhead.filterColumns(cf.util.filter(0, lhead.size, leq)))
+                      val lemission = leq.nonEmpty.option(lhead.mapColumns(cf.util.filter(0, lhead.size, leq)))
                       (lemission map { e => writeAlignedSlices(db, lkey, e, lbs, "alignLeft", SortAscending) } getOrElse lbs.point[M]) map { (_, rbs) }
 
                     case RightSpan => 
@@ -831,7 +831,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   }
 } 
 
-object BlockStoreColumnarTableModule {
+object BlockStoreColumnarTableModule extends Logging {
   /**
    * Find the minimal set of projections (and the relevant columns from each projection) that
    * will be loaded to provide a dataset of the specified type.

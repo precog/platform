@@ -36,7 +36,7 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
   import StdLib.{DoubleFrom, doubleIsDefined}
   import java.lang.Math
 
-  abstract class Op1DD(name:String, defined:Double => Boolean, f:Double => Double)
+  abstract class Op1DD(name: String, defined: Double => Boolean, f: Double => Double)
   extends Op1(MathNamespace, name) {
      val tpe = UnaryOperationType(JNumberT, JNumberT)
      def f1: F1 = new CF1P({
@@ -47,60 +47,113 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
   }
 
   object sinh extends Op1DD("sinh", doubleIsDefined, Math.sinh)
+
   object toDegrees extends Op1DD("toDegrees", doubleIsDefined, Math.toDegrees)
+
   object expm1 extends Op1DD("expm1", doubleIsDefined, Math.expm1)
-  object getExponent extends Op1DD("getExponent", n => doubleIsDefined(n) && n > 0.0, n => Math.getExponent(n).toDouble)
+
+  object getExponent extends Op1DD("getExponent",
+    n => doubleIsDefined(n) && n > 0.0, n => Math.getExponent(n).toDouble)
+
   object asin extends Op1DD("asin", n => -1.0 <= n && n <= 1.0, Math.asin)
-  object log10 extends Op1DD("log10", n => doubleIsDefined(n) && n > 0.0, Math.log10)
+
+  object log10 extends Op1DD("log10",
+    n => doubleIsDefined(n) && n > 0.0, Math.log10)
+
   object cos extends Op1DD("cos", doubleIsDefined, Math.cos)
+
   object exp extends Op1DD("exp", doubleIsDefined, Math.exp)
+
   object cbrt extends Op1DD("cbrt", doubleIsDefined, Math.cbrt)
+
   object atan extends Op1DD("atan", doubleIsDefined, Math.atan)
+
   object ceil extends Op1DD("ceil", doubleIsDefined, Math.ceil)
+
   object rint extends Op1DD("rint", doubleIsDefined, Math.rint)
-  object log1p extends Op1DD("log1p", n => doubleIsDefined(n) && n > -1.0, Math.log1p)
-  object sqrt extends Op1DD("sqrt", n => doubleIsDefined(n) && n >= 0.0, Math.sqrt)
+
+  object log1p extends Op1DD("log1p",
+    n => doubleIsDefined(n) && n > -1.0, Math.log1p)
+
+  object sqrt extends Op1DD("sqrt",
+    n => doubleIsDefined(n) && n >= 0.0, Math.sqrt)
+
   object floor extends Op1DD("floor", doubleIsDefined, Math.floor)
+
   object toRadians extends Op1DD("toRadians", doubleIsDefined, Math.toRadians)
+
   object tanh extends Op1DD("tanh", doubleIsDefined, Math.tanh)
 
   // Math.round returns Long, so we have to improvise.
   // 4503599627370496.0 is the point where Double can't represent fractional
   // values anymore, so beyond that we just pass the value through
-  object round extends Op1DD("round", doubleIsDefined, n => if (Math.abs(n) >= 4503599627370496.0) n else Math.round(n))
+  object round extends Op1DD("round", doubleIsDefined,
+    n => if (Math.abs(n) >= 4503599627370496.0) n else Math.round(n))
 
   object cosh extends Op1DD("cosh", doubleIsDefined, Math.cosh)
+
   object tan extends Op1DD("tan", doubleIsDefined, Math.tan)
+
   object abs extends Op1DD("abs", doubleIsDefined, Math.abs)
+
   object sin extends Op1DD("sin", doubleIsDefined, Math.sin)
+
   object log extends Op1DD("log", n => doubleIsDefined(n) && n > 0.0, Math.log)
+
   object signum extends Op1DD("signum", doubleIsDefined, Math.signum)
-  object acos extends Op1DD("acos", n => doubleIsDefined(n) && -1.0 <= n && n <= 1.0, Math.acos)
+
+  object acos extends Op1DD("acos",
+    n => doubleIsDefined(n) && -1.0 <= n && n <= 1.0, Math.acos)
+
   object ulp extends Op1DD("ulp", doubleIsDefined, Math.ulp)
 
-  abstract class Op2DDD(name:String, defined:(Double, Double) => Boolean, f:(Double, Double) => Double)
-  extends Op2(MathNamespace, name) {
+  abstract class Op2DDD(name: String, defined:(Double, Double) => Boolean,
+    f:(Double, Double) => Double) extends Op2(MathNamespace, name) {
     val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
-      case (c1: DoubleColumn, c2: DoubleColumn) => new DoubleFrom.DD(c1, c2, defined, f)
-      case (c1: DoubleColumn, c2: LongColumn) => new DoubleFrom.DL(c1, c2, defined, f)
-      case (c1: DoubleColumn, c2: NumColumn) => new DoubleFrom.DN(c1, c2, defined, f)
-      case (c1: LongColumn, c2: DoubleColumn) => new DoubleFrom.LD(c1, c2, defined, f)
-      case (c1: NumColumn, c2: DoubleColumn) => new DoubleFrom.ND(c1, c2, defined, f)
-      case (c1: LongColumn, c2: LongColumn) => new DoubleFrom.LL(c1, c2, defined, f)
-      case (c1: LongColumn, c2: NumColumn) => new DoubleFrom.LN(c1, c2, defined, f)
-      case (c1: NumColumn, c2: LongColumn) => new DoubleFrom.NL(c1, c2, defined, f)
-      case (c1: NumColumn, c2: NumColumn) => new DoubleFrom.NN(c1, c2, defined, f)
+      case (c1: DoubleColumn, c2: DoubleColumn) =>
+          new DoubleFrom.DD(c1, c2, defined, f)
+
+      case (c1: DoubleColumn, c2: LongColumn) =>
+        new DoubleFrom.DL(c1, c2, defined, f)
+
+      case (c1: DoubleColumn, c2: NumColumn) =>
+        new DoubleFrom.DN(c1, c2, defined, f)
+
+      case (c1: LongColumn, c2: DoubleColumn) =>
+        new DoubleFrom.LD(c1, c2, defined, f)
+
+      case (c1: NumColumn, c2: DoubleColumn) =>
+        new DoubleFrom.ND(c1, c2, defined, f)
+
+      case (c1: LongColumn, c2: LongColumn) =>
+        new DoubleFrom.LL(c1, c2, defined, f)
+
+      case (c1: LongColumn, c2: NumColumn) =>
+        new DoubleFrom.LN(c1, c2, defined, f)
+
+      case (c1: NumColumn, c2: LongColumn) =>
+        new DoubleFrom.NL(c1, c2, defined, f)
+
+      case (c1: NumColumn, c2: NumColumn) =>
+        new DoubleFrom.NN(c1, c2, defined, f)
     })
   }
 
-  def bothDefined(x:Double, y:Double) = doubleIsDefined(x) && doubleIsDefined(y)
+  def bothDefined(x: Double, y: Double) = doubleIsDefined(x) && doubleIsDefined(y)
 
   object min extends Op2DDD("min", bothDefined, Math.min)
+
   object hypot extends Op2DDD("hypot", bothDefined, Math.hypot)
+
   object pow extends Op2DDD("pow", bothDefined, Math.pow)
+
   object max extends Op2DDD("max", bothDefined, Math.max)
+
   object atan2 extends Op2DDD("atan2", bothDefined, Math.atan2)
+
   object copySign extends Op2DDD("copySign", bothDefined, Math.copySign)
-  object IEEEremainder extends Op2DDD("IEEEremainder", bothDefined, Math.IEEEremainder)
+
+  object IEEEremainder extends Op2DDD("IEEEremainder", bothDefined,
+    Math.IEEEremainder)
 }

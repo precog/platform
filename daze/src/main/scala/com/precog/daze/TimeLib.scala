@@ -67,6 +67,15 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
   )
 
   override def _lib2 = super._lib2 ++ Set(
+    YearsPlus,
+    MonthsPlus,
+    WeeksPlus,
+    DaysPlus,
+    HoursPlus,
+    MinutesPlus,
+    SecondsPlus,
+    MillisPlus,
+
     YearsBetween,
     MonthsBetween,
     WeeksBetween,

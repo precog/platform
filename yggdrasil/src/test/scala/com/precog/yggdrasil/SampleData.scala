@@ -119,7 +119,7 @@ object SampleData extends CValueGenerators {
         SampleData(sampleData.data.sorted, sampleData.schema)
       }
     )
-  }
+  }  
   
   def shuffle(sample: Arbitrary[SampleData]): Arbitrary[SampleData] = {
     val gen =
