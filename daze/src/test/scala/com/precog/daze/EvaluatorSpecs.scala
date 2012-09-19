@@ -2771,6 +2771,32 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
+    }    
+
+    "join two sets according to a value sort and then an identity sort" in {
+      val line = Line(0, "")
+      
+      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks2 = dag.LoadLocal(line, Root(line, PushString("/clicks2")))
+      
+      val input = dag.Join(line, Eq, IdentitySort,
+        dag.Join(line, Add, ValueSort(0),
+          SortBy(clicks, "time", "time", 0),
+          SortBy(clicks2, "time", "time", 0)),
+        dag.Join(line, Mul, CrossLeftSort,
+          dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("time"))),
+          Root(line, PushNum("2"))))
+        
+      testEval(input) { result =>
+        result must haveSize(106)
+
+        val result2 = result collect {
+          case (ids, SBoolean(b)) if ids.size == 2 => b
+        }
+
+        result2 must contain(true)
+        result2 must not(contain(false))
+      }
     }
 
     "filter two sets according to a value sort" in {
