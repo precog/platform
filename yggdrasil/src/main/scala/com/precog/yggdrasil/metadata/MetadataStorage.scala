@@ -37,6 +37,7 @@ trait MetadataStorage {
   import MetadataStorage._
 
   def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]]
+  def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]]
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] 
