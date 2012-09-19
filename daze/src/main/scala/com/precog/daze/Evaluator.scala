@@ -331,11 +331,22 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pending <- loop(parent, splits)
           } yield {
-            val back = pending.table map { _ transform liftToValues(pending.trans) distinct(DerefObjectStatic(Leaf(Source), paths.Value)) }
-            PendingTable(back, graph, TransSpec1.Id)
+            val keySpec   = DerefObjectStatic(Leaf(Source), paths.Key)
+            val valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
+            
+            val result = for {
+              pendingTable <- pending.table
+              table = pendingTable.transform(liftToValues(pending.trans))
+              sorted <- table.sort(valueSpec, SortAscending)
+              distinct = sorted.distinct(valueSpec) 
+              identitySorted <- distinct.sort(keySpec, SortAscending) 
+            } yield {
+              identitySorted
+            }
+            PendingTable(result, graph, TransSpec1.Id)
           }
         }
-        
+
         case Operate(_, instructions.WrapArray, parent) => {
           for {
             pendingTable <- loop(parent, splits)
