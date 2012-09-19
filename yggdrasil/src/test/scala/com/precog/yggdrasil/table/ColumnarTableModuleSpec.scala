@@ -53,6 +53,7 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
 import TableModule._
+import SampleData._
 
 trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] 
     with TableModuleSpec[M]
@@ -554,6 +555,57 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 
       val alignedSpec = trans.alignTo(ticvars("ca")).spec
       fromJson(data.toStream).transform(alignedSpec).toJson.copoint must_== expected
+    }
+
+    "track table metrics" in {
+      "single traversal" >> {
+        implicit val gen = sample(objectSchema(_, 3))
+        check { (sample: SampleData) =>
+          val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
+
+          val table = fromSample(sample)
+          val t0 = table.transform(TransSpec1.Id)
+          t0.toJson.copoint must_== sample.data
+
+          table.metrics.startCount must_== 1
+          table.metrics.sliceTraversedCount must_== expectedSlices
+          t0.metrics.startCount must_== 1
+          t0.metrics.sliceTraversedCount must_== expectedSlices
+        }
+      }
+
+      "multiple transforms" >> {
+        implicit val gen = sample(objectSchema(_, 3))
+        check { (sample: SampleData) =>
+          val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
+
+          val table = fromSample(sample)
+          val t0 = table.transform(TransSpec1.Id).transform(TransSpec1.Id).transform(TransSpec1.Id)
+          t0.toJson.copoint must_== sample.data
+
+          table.metrics.startCount must_== 1
+          table.metrics.sliceTraversedCount must_== expectedSlices
+          t0.metrics.startCount must_== 1
+          t0.metrics.sliceTraversedCount must_== expectedSlices
+        }
+      }
+
+      "multiple forcing calls" >> {
+        implicit val gen = sample(objectSchema(_, 3))
+        check { (sample: SampleData) =>
+          val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
+
+          val table = fromSample(sample)
+          val t0 = table.compact(TransSpec1.Id).compact(TransSpec1.Id).compact(TransSpec1.Id)
+          table.toJson.copoint must_== sample.data
+          t0.toJson.copoint must_== sample.data
+
+          table.metrics.startCount must_== 2
+          table.metrics.sliceTraversedCount must_== (expectedSlices * 2)
+          t0.metrics.startCount must_== 1
+          t0.metrics.sliceTraversedCount must_== expectedSlices
+        }
+      }
     }
   }
 }

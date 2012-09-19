@@ -45,8 +45,10 @@ import TableModule._
 trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] with ColumnarTableModule[M] {
   def newGroupId: GroupId
 
+  def defaultSliceSize = 10
+
   def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
-    val sliceSize = maxSliceSize.getOrElse(10)
+    val sliceSize = maxSliceSize.getOrElse(defaultSliceSize)
 
     def makeSlice(sampleData: Stream[JValue]): (Slice, Stream[JValue]) = {
       val (prefix, suffix) = sampleData.splitAt(sliceSize)

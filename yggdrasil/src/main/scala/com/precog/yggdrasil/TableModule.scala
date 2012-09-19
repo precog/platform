@@ -72,6 +72,7 @@ trait TableModule[M[+_]] extends FNModule {
   type GroupId
   type Scanner
   type Reducer[α]
+  type TableMetrics
 
   implicit def M: Monad[M]
 
@@ -451,5 +452,7 @@ trait TableModule[M[+_]] extends FNModule {
     def takeRange(startIndex: Long, numberToTake: Long): Table
     
     def toJson: M[Iterable[JValue]]
+
+    def metrics: TableMetrics
   }
 }
