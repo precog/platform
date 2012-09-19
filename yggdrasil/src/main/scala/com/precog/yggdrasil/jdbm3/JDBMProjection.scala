@@ -61,7 +61,7 @@ import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 
 object JDBMProjection {
-  private[jdbm3] type IndexTree = SortedMap[Array[Long],Array[Byte]]
+  private[jdbm3] type IndexTree = SortedMap[Array[Byte],Array[Byte]]
 
   final val DEFAULT_SLICE_SIZE = 10000
   final val INDEX_SUBDIR = "jdbm"
@@ -69,11 +69,20 @@ object JDBMProjection {
   def isJDBMProjection(baseDir: File) = (new File(baseDir, INDEX_SUBDIR)).isDirectory
 }
 
-abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Identities, Slice] { projection =>
+abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte], Slice] { projection =>
+  import TableModule.paths._
   import JDBMProjection._
 
   val logger = Logger("col:" + descriptor.shows)
   logger.debug("Opening column index files for projection " + descriptor.shows + " at " + baseDir)
+
+  val keyColRefs = Array.tabulate(descriptor.identities) { i => ColumnRef(JPath(Key :: JPathIndex(i) :: Nil), CLong) }
+
+  val keyFormat: IdentitiesRowFormat = RowFormat.IdentitiesRowFormatV1(keyColRefs)
+
+  val rowFormat: RowFormat = RowFormat.ValueRowFormatV1(descriptor.columns map {
+    case ColumnDescriptor(_, cPath, cType, _) => ColumnRef(cPath, cType)
+  })
 
   override def toString = "JDBMProjection(" + descriptor.columns + ")"
 
@@ -96,7 +105,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     val treeMap: IndexTree = idIndexFile.getTreeMap(treeMapName)
     if (treeMap == null) {
       logger.debug("Creating new projection store")
-      val ret: IndexTree = idIndexFile.createTreeMap(treeMapName, AscendingIdentitiesComparator, null, null)
+      val ret: IndexTree = idIndexFile.createTreeMap(treeMapName, SortingKeyComparator(keyFormat, true), ByteArraySerializer, ByteArraySerializer)
       logger.debug("Created projection store")
       ret
     } else {
@@ -112,23 +121,18 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     logger.debug("Closed column index files")
   }
 
-  val rowFormat: RowFormat = RowFormat.ValueRowFormatV1(descriptor.columns map {
-    case ColumnDescriptor(_, cPath, cType, _) => ColumnRef(cPath, cType)
-  })
-
   def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
     logger.trace("Inserting %s => %s".format(ids.mkString("[", ", ", "]"), v))
 
-    treeMap.put(ids.toArray, rowFormat.encode(v.toList))
+    treeMap.put(keyFormat.encodeIdentities(ids), rowFormat.encode(v.toList))
 
     if (shouldSync) {
       idIndexFile.commit()
     }
   }
 
-  def getBlockAfter(id: Option[Identities], desiredColumns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Identities,Slice]] = {
+  def getBlockAfter(id: Option[Array[Byte]], desiredColumns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Array[Byte],Slice]] = {
     logger.trace("Retrieving key after " + id.map(_.mkString("[", ", ", "]")))
-    import TableModule.paths._
 
     try {
       // tailMap semantics are >=, but we want > the IDs if provided
@@ -139,15 +143,10 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
       if (rawIterator.isEmpty) {
         None 
       } else {
-        val keyColRefs = Array.tabulate(descriptor.identities) { i => ColumnRef(JPath(Key :: JPathIndex(i) :: Nil), CLong) }
         val keyCols = Array.fill(descriptor.identities) { ArrayLongColumn.empty(sliceSize) }
-
         val valColumns = rowFormat.columnRefs.map(JDBMSlice.columnFor(JPath(Value), sliceSize))
-        val keyColumnDecoder = (row: Int, key: Array[Long]) => {
-          var i = 0
-          while (i < key.length) { keyCols(i).update(row, key(i)); i += 1 }
-        }
 
+        val keyColumnDecoder = keyFormat.ColumnDecoder(keyCols)
         val valColumnDecoder = rowFormat.ColumnDecoder(valColumns.map(_._2)(collection.breakOut))
 
         val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, rawIterator, keyColumnDecoder, valColumnDecoder)
@@ -164,7 +163,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
           })
         }
 
-        Some(BlockProjectionData[Identities,Slice](firstKey, lastKey, slice))
+        Some(BlockProjectionData[Array[Byte],Slice](firstKey, lastKey, slice))
       }
     } catch {
       case e: java.util.NoSuchElementException => None

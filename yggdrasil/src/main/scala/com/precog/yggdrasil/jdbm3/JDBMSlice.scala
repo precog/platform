@@ -39,20 +39,21 @@ import scala.annotation.tailrec
 import JDBMProjection._
 
 object JDBMSlice {
-  def load[Key](size: Int, source: Iterator[java.util.Map.Entry[Key,Array[Byte]]], keyDecoder: (Int, Key) => Unit, valDecoder: ColumnDecoder): (Key, Key, Int) = {
-    var firstKey: Key = null.asInstanceOf[Key]
-    var lastKey: Key  = null.asInstanceOf[Key]
+  def load(size: Int, source: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]], keyDecoder: ColumnDecoder, valDecoder: ColumnDecoder): (Array[Byte], Array[Byte], Int) = {
+    var firstKey: Array[Byte] = null.asInstanceOf[Array[Byte]]
+    var lastKey: Array[Byte]  = null.asInstanceOf[Array[Byte]]
 
     @tailrec
-    def consumeRows(source: Iterator[java.util.Map.Entry[Key, Array[Byte]]], row: Int): Int = {
+    def consumeRows(source: Iterator[java.util.Map.Entry[Array[Byte], Array[Byte]]], row: Int): Int = {
       if (source.hasNext) {
         val entry = source.next
         val rowKey = entry.getKey
         if (row == 0) { firstKey = rowKey }
         lastKey = rowKey
 
-        keyDecoder(row, rowKey)
+        keyDecoder.decodeToRow(row, rowKey)
         valDecoder.decodeToRow(row, entry.getValue)
+
         consumeRows(source, row + 1)
       } else {
         row

@@ -79,7 +79,7 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
 
       val constrainedMap = id.map { idKey => index.tailMap(idKey) }.getOrElse(index)
       val rawIterator = constrainedMap.entrySet.iterator.asScala
-      if (id.isDefined && rawIterator.hasNext) rawIterator.next();
+      if (id.isDefined && rawIterator.hasNext) rawIterator.next(); // TODO Ensure first matches id before drop?
 
       if (rawIterator.isEmpty) {
         None
@@ -90,7 +90,7 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
         val keyColumnDecoder = keyFormat.ColumnDecoder(keyColumns.map(_._2)(collection.breakOut))
         val valColumnDecoder = rowFormat.ColumnDecoder(valColumns.map(_._2)(collection.breakOut))
 
-        val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, rawIterator, keyColumnDecoder.decodeToRow(_: Int, _: Array[Byte], 0), valColumnDecoder)
+        val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, rawIterator, keyColumnDecoder, valColumnDecoder)
 
         val slice = new Slice { 
           val size = rows 

@@ -77,9 +77,13 @@ trait RowFormat {
 
 
 object RowFormat {
+  val byteBufferPool = new ByteBufferPool()
+
   def forSortingKey(columnRefs: Seq[ColumnRef]): RowFormat = SortingKeyRowFormatV1(columnRefs)
 
   def forValues(columnRefs: Seq[ColumnRef]): RowFormat = ValueRowFormatV1(columnRefs)
+
+  def forIdentities(columnRefs: Seq[ColumnRef]): RowFormat = IdentitiesRowFormatV1(columnRefs)
 
   case class ValueRowFormatV1(_columnRefs: Seq[ColumnRef]) extends ValueRowFormat with RowFormatCodecs {
     // This is really stupid, but required to work w/ JDBM.
@@ -88,7 +92,7 @@ object RowFormat {
     }
 
     // TODO Get this from somewhere else?
-    @transient lazy val pool = new ByteBufferPool()
+    def pool = byteBufferPool
   }
 
   case class SortingKeyRowFormatV1(_columnRefs: Seq[ColumnRef]) extends RowFormatCodecs with SortingRowFormat {
@@ -96,7 +100,15 @@ object RowFormat {
       ref.copy(ctype = ref.ctype.readResolve())
     }
 
-    @transient lazy val pool = new ByteBufferPool()
+    def pool = byteBufferPool
+  }
+
+  case class IdentitiesRowFormatV1(_columnRefs: Seq[ColumnRef]) extends IdentitiesRowFormat {
+    @transient lazy val columnRefs: Seq[ColumnRef] = _columnRefs map { ref =>
+      ref.copy(ctype = ref.ctype.readResolve())
+    }
+
+    def pool = byteBufferPool
   }
 }
 
@@ -327,7 +339,7 @@ trait SortingRowFormat extends RowFormat with StdCodecs with RowFormatSupport {
     zip(Nil, xs, selectors)
   }
 
-  def ColumnEncoder(cols: Seq[Column]): ColumnEncoder = {
+  def ColumnEncoder(cols: Seq[Column]) = {
     import ByteBufferPool._
 
     val colWriters: List[Int => ByteBufferPoolS[Unit]] = zipWithSelectors(cols) map { case (_, colsAndTypes) =>
@@ -361,7 +373,7 @@ trait SortingRowFormat extends RowFormat with StdCodecs with RowFormatSupport {
   }
 
 
-  def ColumnDecoder(cols: Seq[ArrayColumn[_]]): ColumnDecoder = {
+  def ColumnDecoder(cols: Seq[ArrayColumn[_]])= {
     val decoders: List[Map[Byte, ColumnValueDecoder]] =
       zipWithSelectors(cols) map { case (_, colsWithTypes) =>
         val decoders: Map[Byte, ColumnValueDecoder] =
@@ -602,3 +614,94 @@ object SortingRowFormat {
   private val FNull: Byte = 0x80.toByte
   private val FDate: Byte = 0x90.toByte
 }
+
+trait IdentitiesRowFormat extends RowFormat {
+
+  def pool: ByteBufferPool
+
+  lazy val identities = columnRefs.size
+
+  private final val codec = Codec.PackedLongCodec
+
+  private def withBuffer(f: ByteBuffer => Unit): Array[Byte] = {
+    val buf = pool.acquire
+    f(buf)
+    buf.flip()
+    val bytes = new Array[Byte](buf.remaining())
+    buf.get(bytes)
+    pool.release(buf)
+    bytes
+  }
+
+  def encodeIdentities(xs: Array[Long]) = withBuffer { buf =>
+    var i = 0
+    while (i < xs.length) {
+      codec.writeUnsafe(xs(i), buf)
+      i += 1
+    }
+  }
+
+  def encode(cValues: List[CValue]) = withBuffer { buf =>
+    cValues foreach {
+      case CLong(n) => codec.writeUnsafe(n, buf)
+      case cv => sys.error("Expecting CLong, but found: " + cv)
+    }
+  }
+
+  def decode(bytes: Array[Byte], offset: Int): List[CValue] = {
+    val buf = ByteBuffer.wrap(bytes, offset, bytes.length - offset)
+    columnRefs.map(_ => CLong(codec.read(buf)))(collection.breakOut)
+  }
+
+  def ColumnEncoder(cols: Seq[Column]) = {
+
+    val longCols = cols map {
+      case col: LongColumn => col
+      case col => sys.error("Expecing LongColumn, but found: " + col)
+    }
+
+    new ColumnEncoder {
+      def encodeFromRow(row: Int) = withBuffer { buf =>        
+        longCols foreach { col =>
+          codec.writeUnsafe(col(row), buf)
+        }
+      }
+    }
+  }
+
+  def ColumnDecoder(cols: Seq[ArrayColumn[_]]) = {
+
+    val longCols = cols map {
+      case col: ArrayLongColumn => col
+      case col => sys.error("Expecing ArrayLongColumn, but found: " + col)
+    }
+
+    new ColumnDecoder {
+      def decodeToRow(row: Int, src: Array[Byte], offset: Int = 0) {
+        val buf = ByteBuffer.wrap(src)
+        longCols foreach { col =>
+          col.update(row, codec.read(buf))
+        }
+      }
+    }
+  }
+
+  override def compare(a: Array[Byte], b: Array[Byte]): Int = {
+    val buf1 = ByteBuffer.wrap(a)
+    val buf2 = ByteBuffer.wrap(b)
+
+    val len = identities
+
+    var i = 0
+    var cmp = 0
+    while (cmp == 0 && i < len) {
+      val x = codec.read(buf1)
+      val y = codec.read(buf2)
+      cmp = if (x < y) -1 else if (x == y) 0 else 1
+      i += 1
+    }
+
+    cmp
+  }
+}
+
