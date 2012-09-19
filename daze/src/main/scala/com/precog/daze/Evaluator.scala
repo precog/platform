@@ -789,8 +789,6 @@ trait Evaluator[M[+_]] extends DAG
                   case _ => sorted
                 }
               }
-              
-              _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (graph -> sortedResult)) }
             } yield {
               PendingTable(sortedResult, graph, TransSpec1.Id)
             }
@@ -830,8 +828,6 @@ trait Evaluator[M[+_]] extends DAG
                 
                 sorted.transform(spec)
               }
-              
-              _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (graph -> result)) }
             } yield {
               PendingTable(result, graph, TransSpec1.Id)
             }
@@ -850,8 +846,6 @@ trait Evaluator[M[+_]] extends DAG
                 val table = pendingTable.transform(liftToValues(pending.trans))
                 sorted <- table.sort(DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField("sort-" + id)), SortAscending)
               } yield sorted
-              
-              _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (graph -> result)) }
             } yield {
               PendingTable(result, graph, TransSpec1.Id)
             }
@@ -867,12 +861,21 @@ trait Evaluator[M[+_]] extends DAG
               table = pendingTable.transform(liftToValues(pending.trans))
               forced <- table.force
             } yield forced
-            
-            _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (graph -> result)) }
           } yield {
             PendingTable(result, graph, TransSpec1.Id)
           }
         }
+      }
+      
+      def memoizedResult = graph match {
+        case graph: ForcingPoint => {
+          for {
+            pendingTable <- result
+            _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (graph -> pendingTable.table)) }
+          } yield pendingTable
+        }
+        
+        case _ => result
       }
 
       assumptionCheck flatMap { assumedResult: Option[M[Table]] =>
@@ -881,7 +884,7 @@ trait Evaluator[M[+_]] extends DAG
             PendingTable(table, graph, TransSpec1.Id))
         }
         
-        liftedAssumption getOrElse result
+        liftedAssumption getOrElse memoizedResult
       }
     }
     
@@ -889,7 +892,7 @@ trait Evaluator[M[+_]] extends DAG
       import scalaz.syntax.monad._
       import scalaz.syntax.monoid._
       
-      val toEval = listMemos(Queue(graph)) filter referencesOnlySplit(currentSplit)
+      val toEval = listForcingPoints(Queue(graph)) filter referencesOnlySplit(currentSplit)
       
       val preStates = toEval map { graph =>
         for {
@@ -912,11 +915,9 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   /**
-   * Returns all `Memoize` nodes in the graph, ordered topologically.
-   *
-   * TODO return all *forcing* points, not just `Memoize`
+   * Returns all forcing points in the graph, ordered topologically.
    */
-  private def listMemos(queue: Queue[DepGraph], acc: List[dag.Memoize] = Nil): List[dag.Memoize] = {
+  private def listForcingPoints(queue: Queue[DepGraph], acc: List[dag.ForcingPoint] = Nil): List[dag.ForcingPoint] = {
     def listParents(spec: BucketSpec): Set[DepGraph] = spec match {
       case UnionBucketSpec(left, right) => listParents(left) ++ listParents(right)
       case IntersectBucketSpec(left, right) => listParents(left) ++ listParents(right)
@@ -932,41 +933,49 @@ trait Evaluator[M[+_]] extends DAG
     } else {
       val (graph, queue2) = queue.dequeue
       
-      val (queue3, addend) = graph match {
-        case _: dag.SplitParam => (queue2, None)
-        case _: dag.SplitGroup => (queue2, None)
-        case _: dag.Root => (queue2, None)
+      val (queue3, addend) = {
+        val queue3 = graph match {
+          case _: dag.SplitParam => queue2
+          case _: dag.SplitGroup => queue2
+          case _: dag.Root => queue2
+          
+          case dag.New(_, parent) => queue2 enqueue parent
+          
+          case dag.Morph1(_, _, parent) => queue2 enqueue parent
+          case dag.Morph2(_, _, left, right) => queue2 enqueue left enqueue right
+          
+          case dag.Distinct(_, parent) => queue2 enqueue parent
+          
+          case dag.LoadLocal(_, parent, _) => queue2 enqueue parent
+          
+          case dag.Operate(_, _, parent) => queue2 enqueue parent
+          
+          case dag.Reduce(_, _, parent) => queue2 enqueue parent
+          case dag.MegaReduce(_, _, parent) => queue2 enqueue parent
+          
+          case dag.Split(_, specs, child) => queue2 enqueue child enqueue listParents(specs)
+          
+          case dag.IUI(_, _, left, right) => queue2 enqueue left enqueue right
+          case dag.Diff(_, left, right) => queue2 enqueue left enqueue right
+          
+          case dag.Join(_, _, _, left, right) => queue2 enqueue left enqueue right
+          case dag.Filter(_, _, left, right) => queue2 enqueue left enqueue right
+          
+          case dag.Sort(parent, _) => queue2 enqueue parent
+          case dag.SortBy(parent, _, _, _) => queue2 enqueue parent
+          case dag.ReSortBy(parent, _) => queue2 enqueue parent
+          
+          case node @ dag.Memoize(parent, _) => queue2 enqueue parent
+        }
         
-        case dag.New(_, parent) => (queue2 enqueue parent, None)
+        val addend = Some(graph) collect {
+          case fp: ForcingPoint => fp
+        }
         
-        case dag.Morph1(_, _, parent) => (queue2 enqueue parent, None)
-        case dag.Morph2(_, _, left, right) => (queue2 enqueue left enqueue right, None)
-        
-        case dag.Distinct(_, parent) => (queue2 enqueue parent, None)
-        
-        case dag.LoadLocal(_, parent, _) => (queue2 enqueue parent, None)
-        
-        case dag.Operate(_, _, parent) => (queue2 enqueue parent, None)
-        
-        case dag.Reduce(_, _, parent) => (queue2 enqueue parent, None)
-        case dag.MegaReduce(_, _, parent) => (queue2 enqueue parent, None)
-        
-        case dag.Split(_, specs, child) => (queue2 enqueue child enqueue listParents(specs), None)
-        
-        case dag.IUI(_, _, left, right) => (queue2 enqueue left enqueue right, None)
-        case dag.Diff(_, left, right) => (queue2 enqueue left enqueue right, None)
-        
-        case dag.Join(_, _, _, left, right) => (queue2 enqueue left enqueue right, None)
-        case dag.Filter(_, _, left, right) => (queue2 enqueue left enqueue right, None)
-        
-        case dag.Sort(parent, _) => (queue2 enqueue parent, None)
-        case dag.SortBy(parent, _, _, _) => (queue2 enqueue parent, None)
-        case dag.ReSortBy(parent, _) => (queue2 enqueue parent, None)
-        
-        case node @ dag.Memoize(parent, _) => (queue2 enqueue parent, Some(node))
+        (queue3, addend)
       }
       
-      listMemos(queue3, addend map { _ :: acc } getOrElse acc)
+      listForcingPoints(queue3, addend map { _ :: acc } getOrElse acc)
     }
   }
   
