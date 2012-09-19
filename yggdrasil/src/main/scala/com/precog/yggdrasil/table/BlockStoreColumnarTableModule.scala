@@ -70,55 +70,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
   type BD = BlockProjectionData[Key,Slice]
   
-  def newMemoContext = new MemoContext
-  
-  class MemoContext extends MemoizationContext {
-    import trans._
-    
-    private val memoCache = mutable.HashMap.empty[MemoId, M[Table]]
-    
-    private val memoKey   = "MemoKey"
-    private val memoValue = "MemoValue"
-    
-    def memoize(table: Table, memoId: MemoId): M[Table] = {
-      sort(table, Scan(Leaf(Source), freshIdScanner), SortAscending, memoId)
-    }
-    
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = false): M[Table] = {
-      // yup, we still block the whole world. Yay.
-      memoCache.synchronized {
-        memoCache.get(memoId) match {
-          case Some(memoTable) => 
-            //println("using memoized table in sort")
-            memoTable
-          case None =>
-            //println("memoizing in sort")
-          val memoTable = table.sort(sortKey, sortOrder, unique)
-            memoCache += (memoId -> memoTable)
-          memoTable
-        }
-      }
-    }
-    
-    def expire(memoId: MemoId): Unit = {
-      memoCache.synchronized {
-        memoCache -= memoId
-      }
-    }
-    
-    def purge() : Unit =
-      memoCache.synchronized {
-        memoCache.clear()
-      }
-  }
-
   private class MergeEngine[KeyType, BlockData <: BlockProjectionData[KeyType, Slice]] {
     case class CellState(index: Int, maxKey: KeyType, slice0: Slice, succf: KeyType => M[Option[BlockData]], remap: Array[Int], position: Int) {
       def toCell = {
         new Cell(index, maxKey, slice0)(succf, remap.clone, position)
       }
     }
-  
 
     object CellState {
       def apply(index: Int, maxKey: KeyType, slice0: Slice, succf: KeyType => M[Option[BlockData]]) = {
@@ -127,13 +84,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       }
     }
 
-
     /**
      * A wrapper for a slice, and the function required to get the subsequent
      * block of data.
      */
     case class Cell private[MergeEngine] (index: Int, maxKey: KeyType, slice0: Slice)(succf: KeyType => M[Option[BlockData]], remap: Array[Int], var position: Int) {
-                     
       def advance(i: Int): Boolean = {
         if (position < slice0.size) {
           remap(position) = i

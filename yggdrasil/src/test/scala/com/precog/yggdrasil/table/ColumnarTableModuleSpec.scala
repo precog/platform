@@ -77,17 +77,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
 
-  class MemoContext extends MemoizationContext {
-    import trans._
-    
-    def memoize(table: Table, memoId: MemoId): M[Table] = M.point(table)
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = false): M[Table] =
-      table.sort(sortKey, sortOrder)
-    
-    def expire(memoId: MemoId): Unit = ()
-    def purge(): Unit = ()
-  }
-
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     import trans._
     def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
@@ -103,8 +92,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   }
 
   object Table extends TableCompanion
-
-  def newMemoContext = new MemoContext
 
   "a table dataset" should {
     "verify bijection from static JSON" in {

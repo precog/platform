@@ -452,28 +452,4 @@ trait TableModule[M[+_]] extends FNModule {
     
     def toJson: M[Iterable[JValue]]
   }
-
-  type MemoId
-  type MemoContext <: MemoizationContext
-  
-  def newMemoContext : MemoContext 
-
-  def withMemoizationContext[A](f: MemoContext => A): A = {
-    val ctx = newMemoContext
-    try {
-      f(ctx)
-    } finally {
-      ctx.purge()
-    }
-  }
-
-  trait MemoizationContext {
-    import trans._
-    
-    def memoize(table: Table, memoId: MemoId): M[Table]
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = false): M[Table]
-    
-    def expire(memoId: MemoId): Unit
-    def purge(): Unit
-  }
 }

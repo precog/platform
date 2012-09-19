@@ -87,12 +87,9 @@ trait Evaluator[M[+_]] extends DAG
 
   type YggConfig <: EvaluatorConfig
   
-  def withContext[A](f: Context => A): A = 
-    withMemoizationContext { ctx =>
-      f(new Context {
-          val memoizationContext = ctx
-        })
-      }
+  def withContext[A](f: Context => A): A = {
+    f(new Context { })
+  }
 
   import yggConfig._
 
@@ -1235,7 +1232,6 @@ trait Evaluator[M[+_]] extends DAG
   }
 
   sealed trait Context {
-    def memoizationContext: MemoContext
   }
   
   private case class EvaluatorState(assume: Map[DepGraph, M[Table]] = Map(), extraCount: Int = 0)

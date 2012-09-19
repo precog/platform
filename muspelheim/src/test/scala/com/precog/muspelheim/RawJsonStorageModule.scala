@@ -179,19 +179,6 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
     def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = new Projection(descriptor, data)
   }
 
-  class MemoContext extends MemoizationContext {
-    import trans._
-    
-    def memoize(table: Table, memoId: MemoId): M[Table] = M.point(table)
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table] =
-      table.sort(sortKey, sortOrder)
-    
-    def expire(memoId: MemoId): Unit = ()
-    def purge(): Unit = ()
-  }
-  
-  def newMemoContext = new MemoContext
-
   object storage extends Storage
 }
 

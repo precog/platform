@@ -47,19 +47,6 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
 
   implicit def M: Monad[M] with Copointed[M]
   
-  class MemoContext extends MemoizationContext {
-    import trans._
-    
-    def memoize(table: Table, memoId: MemoId): M[Table] = M.point(table)
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = false): M[Table] =
-      table.sort(sortKey, sortOrder)
-    
-    def expire(memoId: MemoId): Unit = ()
-    def purge(): Unit = ()
-  }
-
-  def newMemoContext = new MemoContext
-
   private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
   private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
   private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
