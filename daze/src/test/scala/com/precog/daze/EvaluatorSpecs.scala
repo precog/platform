@@ -120,7 +120,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       case Failure(error) => throw error
     })
   }
-
+  
   "evaluator" should {
     "evaluate simple two-value multiplication" in {
       val line = Line(0, "")
@@ -2673,7 +2673,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Distinct(line,
-      dag.LoadLocal(line, Root(line, PushString("/hom/numbers2-sorted"))))
+      dag.LoadLocal(line, Root(line, PushString("/hom/numbers2"))))
       
       testEval(input) { result =>
         result must haveSize(5)
@@ -2690,7 +2690,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Distinct(line,
-      dag.LoadLocal(line, Root(line, PushString("/het/numbers2-sorted"))))
+      dag.LoadLocal(line, Root(line, PushString("/het/numbers2"))))
       
       testEval(input) { result =>
         result must haveSize(10)
