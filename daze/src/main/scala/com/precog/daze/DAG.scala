@@ -880,6 +880,7 @@ trait DAG extends Instructions {
     
     case object IdentitySort extends TableSort
     case class ValueSort(id: Int) extends TableSort
+    case object NullSort extends TableSort
     
     case object CrossLeftSort extends JoinSort
     case object CrossRightSort extends JoinSort

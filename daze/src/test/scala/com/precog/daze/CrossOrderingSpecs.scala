@@ -77,7 +77,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
       
       orderCrosses(input) mustEqual expected
     }
-    
+
     // this will eventually be a re-order cross test case
     "insert sorts for match on out-of-order operand set" >> {
       "left" >> {
