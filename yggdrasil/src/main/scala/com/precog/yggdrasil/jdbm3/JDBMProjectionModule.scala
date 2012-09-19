@@ -21,7 +21,8 @@ import com.weiglewilczek.slf4s.Logger
 trait JDBMProjectionModule extends ProjectionModule {
   val pmLogger = Logger("JDBMProjectionModule")
 
-  type Key = Identities
+  // type Key = Identities
+  type Key = Array[Byte]
   class Projection private[JDBMProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends JDBMProjection(baseDir, descriptor)
 
   trait JDBMProjectionCompanion extends ProjectionCompanion {
