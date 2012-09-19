@@ -403,18 +403,12 @@ trait Evaluator[M[+_]] extends DAG
             for {
               grouping2 <- grouping
               result <- Table.merge(grouping2) { (key: Table, map: Int => M[Table]) =>
-                val back = for {
-                  pending <- prepareEval(child, splits + (s -> (key -> map)))
-                } yield {
-                  for {
-                    pendingTable <- pending.table
-                  } yield pendingTable.transform(liftToValues(pending.trans))
-                }
+                val back = fullEval(child, splits + (s -> (key -> map)), Some(s))
 
                 back.eval(state)  //: M[Table]
               }
             } yield result.transform(idSpec)
-          } 
+          }
           table map { PendingTable(_, graph, TransSpec1.Id) }
         }
         
@@ -909,7 +903,7 @@ trait Evaluator[M[+_]] extends DAG
     }
     
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 
-      prepareEval(rewriteDAG(optimize)(graph), Map()) map { pendingTable => pendingTable.table map { _ transform liftToValues(pendingTable.trans) } }
+      fullEval(rewriteDAG(optimize)(graph), Map(), None)
 
     resultState.eval(EvaluatorState(Map()))
   }
