@@ -110,6 +110,11 @@ trait Evaluator[M[+_]] extends DAG
     (if (optimize) (memoize _) else identity)
   }
   
+  /**
+   * The entry point to the evaluator.  The main implementation of the evaluator
+   * is comprised by the inner functions, `fullEval` (the main evaluator function)
+   * and `prepareEval` (which has the primary eval loop).
+   */
   def eval(userUID: UserId, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean): M[Table] = {
     logger.debug("Eval for %s = %s".format(userUID.toString, graph))
   
@@ -882,20 +887,29 @@ trait Evaluator[M[+_]] extends DAG
       }
     }
     
+    /**
+     * The base eval function.  Takes a (rewritten) graph and evaluates the forcing
+     * points at the current Split level in topological order.  The endpoint of the
+     * graph is considered to be a special forcing point, but as it is the endpoint,
+     * it will perforce be evaluated last.
+     */
     def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])], currentSplit: Option[dag.Split]): StateT[Id, EvaluatorState, M[Table]] = {
       import scalaz.syntax.monad._
       import scalaz.syntax.monoid._
       
+      // find the topologically-sorted forcing points (excluding the endpoint)
+      // at the current split level
       val toEval = listForcingPoints(Queue(graph)) filter referencesOnlySplit(currentSplit)
       
       val preStates = toEval map { graph =>
         for {
           _ <- prepareEval(graph, splits)
-        } yield ()
+        } yield ()        // the result is uninteresting, since it has been stored in `assumed`
       }
       
       val preState = preStates reduceOption { _ >> _ } getOrElse StateT.stateT[Id, EvaluatorState, Unit](())
       
+      // run the evaluator on all forcing points *including* the endpoint, in order
       for {
         pendingTable <- preState >> prepareEval(graph, splits)
         table = pendingTable.table map { _ transform liftToValues(pendingTable.trans) }
