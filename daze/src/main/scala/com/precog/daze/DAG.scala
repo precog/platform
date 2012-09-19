@@ -556,7 +556,7 @@ trait DAG extends Instructions {
   }
   
   object dag {
-    trait ForcingPoint extends DepGraph
+    sealed trait ForcingPoint extends DepGraph
     
     object ConstString {
       def unapply(graph : DepGraph) : Option[String] = graph.value match {
@@ -698,7 +698,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class MegaReduce(loc: Line, reds: NEL[dag.Reduce], parent: DepGraph) extends DepGraph {
+    case class MegaReduce(loc: Line, reds: NEL[Reduction], parent: DepGraph) extends DepGraph with ForcingPoint {
       lazy val identities = Vector()
       
       val sorting = IdentitySort
