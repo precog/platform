@@ -227,7 +227,7 @@ trait Evaluator[M[+_]] extends DAG
         state <- get[EvaluatorState]
       } yield state.assume.get(graph)
       
-      def result: StateT[Id, EvaluatorState, PendingTable] = { graph match {
+      def result: StateT[Id, EvaluatorState, PendingTable] = graph match {
         case s @ SplitParam(_, index) => {
           val (key, _) = splits(s.parent)
           
@@ -862,7 +862,7 @@ trait Evaluator[M[+_]] extends DAG
             
             PendingTable(result, graph, TransSpec1.Id)
           }
-      } }
+      }
 
       assumptionCheck flatMap { assumedResult: Option[M[Table]] =>
         val liftedAssumption = assumedResult map { table =>
