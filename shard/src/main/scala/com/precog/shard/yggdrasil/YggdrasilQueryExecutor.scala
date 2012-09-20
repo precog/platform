@@ -119,12 +119,6 @@ trait YggdrasilQueryExecutorComponent {
         }
       }
 
-      // = table.slices -> map to JValue.
-      // table.normalize -> removes empty slices... not necessary.
-      // table.slices.uncons
-      // slice.compact(filter???, AnyDefined)
-      // there is also a table.takeRange(offset, limit)
-
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
         val accessControl = extAccessControl
       }
