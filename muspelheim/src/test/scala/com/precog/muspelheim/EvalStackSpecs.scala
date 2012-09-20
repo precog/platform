@@ -965,7 +965,7 @@ trait EvalStackSpecs extends Specification {
         | campaigns := //campaigns
         | organizations := //organizations
         | 
-        | solve 'revenue = organizations.revenue, 'campaign = organizations.campaign
+        | solve 'revenue = organizations.revenue & 'campaign = organizations.campaign
         |   campaigns' := campaigns where campaigns.campaign = 'campaign
         |   { revenue: 'revenue, num: count(campaigns') }""".stripMargin
 
