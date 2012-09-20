@@ -56,26 +56,6 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
   import scalaz.syntax.apply._
   import scalaz.syntax.validation._
 
-  // def query[A, B](next: HttpService[A, (Token, Path, Query) => Validation[NotServed, Future[B]]]) = {
-  //   new DelegatingService[A, (Token, Path) => Future[B], A, (Token, Path, Query) => Future[B]] {
-  //     val delegate = next
-  //     val metadata = None
-  //     val service = (request: HttpRequest[A]) => {
-  //       val query: Option[String] = request.parameters.get('q).filter(_ != null)
-  //       // val limit: Option[String] = request.parameters.get('limit).filter(_ != null)
-  //       // val offset: Option[String] = request.parameters.get('offset).filter(_ != null)
-
-  //       query map { q =>
-  //         next.service(request) flatMap { f =>
-  //           (token: Token, path: Path) => f(token, path, q)
-  //         }
-  //       } getOrElse {
-  //         failure(inapplicable)
-  //       }
-  //     }
-  //   }
-  // }
-
   private val Limit = """([1-9][0-9]*)""".r
   private val Offset = """(0|[1-9][0-9]*)""".r
 
@@ -87,9 +67,6 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
         val jpaths = JsonParser.parse(paths)
         jpaths match {
           case JArray(elems) =>
-            // Validation.success(elems map { jval =>
-            //   jval.validated[JPath]
-            // }
             Validation.success(elems collect { case JString(path) => JPath(path) })
           case JString(path) =>
             Validation.success(JPath(path) :: Nil)

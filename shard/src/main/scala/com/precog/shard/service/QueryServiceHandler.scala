@@ -73,39 +73,6 @@ Takes a quirrel query and returns the result of evaluating the query.
     """
   ))
 
-// class PathQueryServiceHandler(queryExecutor: QueryExecutor[Future])(implicit dispatcher: MessageDispatcher, m: Monad[Future])
-// extends CustomHttpService[Future[JValue], (Token, Path, String) => Validation[NotServed, Future[HttpResponse[JValue]]]] with Logging {
-// 
-//   // class QueryServiceHandler(queryExecutor: QueryExecutor[Future])(implicit dispatcher: MessageDispatcher)
-//   // extends CustomHttpService[Future[JValue], (Token, Path, String) => Future[HttpResponse[JValue]]] with Logging {
-// 
-// 
-//   val service = (request: HttpRequest[Future[JValue]]) => {
-//     success((t: Token, p: Path, q: String) => 
-//      // if(p != Path("/")) {
-//       //  Future(HttpResponse[JValue](HttpStatus(Unauthorized, "Queries made at non-root paths are not yet available.")))
-//      // } else {
-//         q.trim match {
-//           case Command("ls", arg) => success(list(t.tid, Path(arg.trim)))
-//           case Command("list", arg) => success(list(t.tid, Path(arg.trim)))
-//           case Command("ds", arg) => success(describe(t.tid, Path(arg.trim)))
-//           case Command("describe", arg) => success(describe(t.tid, Path(arg.trim)))
-//           case _ => failure(inapplicable)
-//           // case qt =>
-//           //   Future(queryExecutor.execute(t.tid, qt, p) match {
-//           //     case Success(result)               => HttpResponse[JValue](OK, content = Some(result))
-//           //     case Failure(UserError(errorData)) => HttpResponse[JValue](UnprocessableEntity, content = Some(errorData))
-//           //     case Failure(AccessDenied(reason)) => HttpResponse[JValue](HttpStatus(Unauthorized, reason))
-//           //     case Failure(TimeoutError)         => HttpResponse[JValue](RequestEntityTooLarge)
-//           //     case Failure(SystemError(error))   => 
-//           //       error.printStackTrace() 
-//           //       logger.error("An error occurred processing the query: " + qt, error)
-//           //       HttpResponse[JValue](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
-//           //   })
-//         }
-//       //}
-//       )
-//   }
   
   def list(u: UID, p: Path) = {
     queryExecutor.browse(u, p).map {
@@ -120,10 +87,4 @@ Takes a quirrel query and returns the result of evaluating the query.
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error describing path: " + p))))
     }
   }
-
-//   val metadata = Some(DescriptionMetadata(
-//     """
-// List and describe paths available to query.
-//     """
-//   ))
 }
