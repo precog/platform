@@ -82,11 +82,7 @@ class ArchiveSerialization {
   }  
 }
 
-object Archive extends ArchiveSerialization {
-  def fromJValue(path: Path, data: JValue, ownerToken: String): Archive = {
-    Archive(path, ownerToken)
-  }
-}
+object Archive extends ArchiveSerialization
 
 
 // vim: set ts=4 sw=4 et:

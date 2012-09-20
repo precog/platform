@@ -44,24 +44,17 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[J
     Success { (t: Token, p: Path) =>
       accessControl.mayAccess(t.tid, p, Set(), OwnerPermission) flatMap { mayAccess =>
         if(mayAccess) {
-          request.content map { futureContent =>
-            try { 
-              for {
-                archive <- futureContent
-                _ <- { 
-                  val archiveInstance = Archive.fromJValue(p, archive, t.tid)
-                  logger.trace("Archiving path: " + archiveInstance)
-                  eventStore.save(archiveInstance, archiveTimeout)
-                }
-              } yield {
-                // could return the eventId to the user?
-                HttpResponse[JValue](OK)
-              }
-            } catch {
-              case ex => Future(HttpResponse[JValue](ServiceUnavailable))
+          try { 
+            val archiveInstance = Archive(p, t.tid)
+            logger.trace("Archiving path: " + archiveInstance)
+            eventStore.save(archiveInstance, archiveTimeout).map {
+              _ => HttpResponse[JValue](OK)
             }
-          } getOrElse {
-            Future(HttpResponse[JValue](BadRequest, content=Some(JString("Missing archive data."))))
+          } catch {
+            case ex => {
+              logger.error("Error during archive", ex)
+              Future(HttpResponse[JValue](ServiceUnavailable))
+            }
           }
         } else {
           Future(HttpResponse[JValue](Unauthorized, content=Some(JString("Your token does not have permissions to archive this path."))))
