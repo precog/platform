@@ -113,8 +113,7 @@ trait YggdrasilQueryExecutorComponent {
         })
 
         slices map { slice =>
-          val jVals: List[JValue] =
-            (0 until slice.size).flatMap(slice.toJson(_))(collection.breakOut)
+          val jVals: List[JValue] = (0 until slice.size).flatMap(slice.toJson(_) map (_ \ "value"))(collection.breakOut)
           jVals
         }
       }
