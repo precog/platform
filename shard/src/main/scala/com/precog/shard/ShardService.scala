@@ -82,9 +82,9 @@ trait ShardService extends
                 } ~
                 get(new BrowseServiceHandler(state.queryExecutor, state.accessControl))
               }
-            }/* ~ path("actors/status") {
+            } ~ path("actors/status") {
               get(new ActorStatusHandler(state.queryExecutor))
-            }*/
+            }
           }
         } ->
         shutdown { state => Future[Option[Stoppable]]( None ) }
