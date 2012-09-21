@@ -117,9 +117,16 @@ trait Slice { source =>
 
   def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
-    val columns = source.columns flatMap {
-      case (ref, col) => 
-        f(col) map { ncol => (ref.copy(ctype = ncol.tpe), ncol) }  
+
+    val columns: Map[ColumnRef, Column] = {
+      val resultColumns: Map[ColumnRef, Column] = for {
+        (ref, col) <- source.columns
+        result <- f(col)
+      } yield (ref.copy(ctype = result.tpe), result)
+
+      resultColumns.groupBy(_._1) map {
+        case (ref, pairs) => (ref, pairs.map(_._2).reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+      }
     }
   }
 
