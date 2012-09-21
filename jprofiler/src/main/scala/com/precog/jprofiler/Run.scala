@@ -28,22 +28,14 @@ class Suite(name: String)(qs: List[String]) extends PerfTestSuite {
 
 object Run {
   def main(args: Array[String]): Unit = {
-
     val config = RunConfig.fromCommandLine(args.toList) | sys.error("invalid arguments!")
     val queries = (
-      "count(//clicks)" :: "count(//fs2)" :: "count(//obnoxious)" :: Nil
+      //"count(//clicks)" :: "count(//fs2)" :: "count(//obnoxious)" :: Nil
+      "min(//obnoxious.v)" :: "max(//obnoxious.v)" :: "sum(//obnoxious.v)" :: "mean(//obnoxious.v)" :: Nil
     )
 
-    config.ingest match {
-      case Nil =>
-        println("starting jprofiler")
-        new Suite("jprofiling")(queries).run(config)
-        println("finishing jprofiler")
-
-      case qs =>
-        println("starting ingest")
-        new Suite("jprofiling")(Nil).run(config)
-        println("finishing ingest")
-    }
+    println("starting benchmark")
+    new Suite("jprofiling")(queries).run(config)
+    println("finishing benchmark")
   }
 }
