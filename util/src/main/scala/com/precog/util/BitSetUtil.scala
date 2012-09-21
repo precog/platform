@@ -23,15 +23,37 @@ import scala.annotation.tailrec
 
 object BitSetUtil {
   class BitSetOperations(bs: BitSet) {
-    def toArray() = bitSetToArray(bs)
-    def toList() = bitSetToList(bs)
-    def apply(n: Int): Boolean = bs.get(n)
-    def update(n: Int, b: Boolean): Unit = bs.set(n, b)
+    def toUnboxedArray(): Array[Long] = bitSetToArray(bs)
+    def toList(): List[Long] = bitSetToList(bs)
 
-    def isEmpty(): Boolean = bs.size == 0
-    def min(): Int = 999
-    def max(): Int = 999
-    def foreach(f: Int => Unit) = {}
+    def min(): Int = {
+      val n = bs.nextSetBit(0)
+      if (n < 0) sys.error("can't take min of empty set") else n
+    }
+
+    def max(): Int = {
+      @tailrec
+      def findBit(i: Int, last: Int): Int = {
+        val j = bs.nextSetBit(i)
+        if (j < 0) last else findBit(j + 1, j)
+      }
+
+      val ns = bs.getBits
+      var i = ns.length - 1
+      while (i >= 0) {
+        if (ns(i) != 0) return findBit(i * 64, -1)
+        i -= 1
+      }
+      sys.error("can't find max of empty set")
+    }
+
+    def foreach(f: Int => Unit) = {
+      var b = bs.nextSetBit(0)
+      while (b >= 0) {
+        f(b)
+        b = bs.nextSetBit(b + 1)
+      }
+    }
   }
 
   object Implicits {
@@ -64,9 +86,8 @@ object BitSetUtil {
   }
 
   def bitSetToArray(bs: BitSet): Array[Long] = {
-    val len = bs.getBitsLength
     var j = 0
-    val arr = new Array[Long](len)
+    val arr = new Array[Long](bs.size)
 
     @tailrec
     def loopBits(long: Long, bit: Int, base: Int) {
@@ -85,13 +106,13 @@ object BitSetUtil {
         loopLongs(i + 1, longs, last, base + 64)
     }
 
-    loopLongs(0, bs.getBits, len - 1, 0)
+    loopLongs(0, bs.getBits, bs.getBitsLength - 1, 0)
     arr
   }
 
-  def bitSetToList(bs: BitSet): List[Int] = {
+  def bitSetToList(bs: BitSet): List[Long] = {
     @tailrec
-    def loopBits(long: Long, bit: Int, base: Int, sofar: List[Int]): List[Int] = {
+    def loopBits(long: Long, bit: Int, base: Int, sofar: List[Long]): List[Long] = {
       if (bit < 0)
         sofar
       else if (((long >> bit) & 1) == 1)
@@ -101,7 +122,7 @@ object BitSetUtil {
     }
 
     @tailrec
-    def loopLongs(i: Int, longs: Array[Long], base: Int, sofar: List[Int]): List[Int] = {
+    def loopLongs(i: Int, longs: Array[Long], base: Int, sofar: List[Long]): List[Long] = {
       if (i < 0)
         sofar
       else
