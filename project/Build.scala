@@ -43,7 +43,7 @@ object PlatformBuild extends Build {
       "Typesafe Repository"               at "http://repo.typesafe.com/typesafe/releases/",
       "Maven Repo 1"                      at "http://repo1.maven.org/maven2/",
       "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/",
-      "Sonatype Snapshots"                at "https://oss.sonatype.org/content/repositories/snapshots/"
+      "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/snapshots/"
     ),
 
     credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials"),
