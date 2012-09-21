@@ -241,7 +241,165 @@ trait StatsLibSpec[M[+_]] extends Specification
 
       result2 must contain(3,5,6,7,10,11).only  
     }
-  }  
+
+    "compute denseRank" in {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, DenseRank,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))))
+
+      val result = testEval(input)
+
+      result must haveSize(10)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(1,2,3,4,5,6).only  
+    }
+
+    "compute denseRank within a filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, IdentitySort,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))),
+        Join(line, Eq, CrossLeftSort,
+          dag.Morph1(line, DenseRank,
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
+          Root(line, PushNum("4"))))
+        
+      val result = testEval(input)
+
+      result must haveSize(3)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(11)
+    }
+
+    "compute denseRank within a join" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Add, CrossLeftSort,
+        dag.Morph1(line, DenseRank,
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
+        Root(line, PushNum("2")))
+        
+      val result = testEval(input)
+
+      result must haveSize(10)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(3,4,5,6,7,8).only  
+    }
+
+    "compute linear correlation" in {
+      val line = Line(0, "")
+      val heightWeight = dag.LoadLocal(line, Root(line, PushString("hom/heightWeight")))
+      
+      val input = dag.Morph2(line, LinearCorrelation,
+        Join(line, DerefObject, CrossLeftSort,
+          heightWeight,
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          heightWeight,
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 0.9998746737089123)
+      }
+      
+      result2 must contain(true).only
+    }
+
+    "compute covariance" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, Covariance,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 400.08)
+      }
+      
+      result2 must contain(true).only
+    }
+
+    "compute the correct coefficients in a simple linear regression" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, LinearRegression,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SObject(fields)) if ids.length == 0 => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
+          val bool1 = slope.toDouble ~= 0.6862906545903664
+          val bool2 = yint.toDouble ~= 67.54013997529848
+          Vector(bool1, bool2)
+        }
+      }
+      
+      result2 must contain(Vector(true, true))
+    }
+
+    "compute the correct coefficients in a simple log regression" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, LogarithmicRegression,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SObject(fields)) if ids.length == 0 => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
+          val bool1 = slope.toDouble ~= 38.8678597674246945
+          val bool2 = yint.toDouble ~= -46.97865418113420686
+          Vector(bool1, bool2)
+        }
+      }
+      
+      result2 must contain(Vector(true, true))
+    }
+  }   
   
   "heterogenous sets" should {
     "median" >> {
@@ -394,68 +552,7 @@ trait StatsLibSpec[M[+_]] extends Specification
 
       result2 must contain(3,5,6,7,10,11).only  
     }
-  }  
-  
-  "homogenous sets" should {
-    "compute denseRank" in {
-      val line = Line(0, "")
 
-      val input = dag.Morph1(line, DenseRank,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))))
-
-      val result = testEval(input)
-
-      result must haveSize(10)
-
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
-      }
-
-      result2 must contain(1,2,3,4,5,6).only  
-    }
-
-    "compute denseRank within a filter" in {
-      val line = Line(0, "")
-
-      val input = Filter(line, IdentitySort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))),
-        Join(line, Eq, CrossLeftSort,
-          dag.Morph1(line, DenseRank,
-            dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
-          Root(line, PushNum("4"))))
-        
-      val result = testEval(input)
-
-      result must haveSize(3)
-
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
-      }
-
-      result2 must contain(11)
-    }
-
-    "compute denseRank within a join" in {
-      val line = Line(0, "")
-
-      val input = Join(line, Add, CrossLeftSort,
-        dag.Morph1(line, DenseRank,
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
-        Root(line, PushNum("2")))
-        
-      val result = testEval(input)
-
-      result must haveSize(10)
-
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
-      }
-
-      result2 must contain(3,4,5,6,7,8).only  
-    }
-  }
-
-  "heterogenous sets" should {
     "compute denseRank" in {
       val line = Line(0, "")
 
@@ -533,19 +630,16 @@ trait StatsLibSpec[M[+_]] extends Specification
 
       result2 must contain(3,4,5,6,7,8).only  
     }
-  }
 
-  "for homogenous sets, the appropriate stats function" should {
     "compute linear correlation" in {
       val line = Line(0, "")
-      val heightWeight = dag.LoadLocal(line, Root(line, PushString("hom/heightWeight")))
       
       val input = dag.Morph2(line, LinearCorrelation,
         Join(line, DerefObject, CrossLeftSort,
-          heightWeight,
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, DerefObject, CrossLeftSort,
-          heightWeight,
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -556,7 +650,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 0.9998746737089123)
       }
       
-      result2 must contain(true).only
+      result2 must contain(true).only 
     }
 
     "compute covariance" in {
@@ -564,10 +658,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       
       val input = dag.Morph2(line, Covariance,
         Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -586,16 +680,16 @@ trait StatsLibSpec[M[+_]] extends Specification
       
       val input = dag.Morph2(line, LinearRegression,
         Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
       
       result must haveSize(1)
-      
+       
       val result2 = result collect {
         case (ids, SObject(fields)) if ids.length == 0 => {
           val SDecimal(slope) = fields("slope")
@@ -606,7 +700,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         }
       }
       
-      result2 must contain(Vector(true, true))
+      result2 must contain(Vector(true, true)).only
     }
 
     "compute the correct coefficients in a simple log regression" in {
@@ -614,10 +708,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       
       val input = dag.Morph2(line, LogarithmicRegression,
         Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -636,7 +730,8 @@ trait StatsLibSpec[M[+_]] extends Specification
       
       result2 must contain(Vector(true, true))
     }
-  }   
+  } 
+
   
   "for homogenous sets, in a cross, the appropriate stats function" should {
     "compute linear correlation" in {
@@ -842,111 +937,10 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
   }  
   
-  "for heterogenous sets, the appropriate stats function" should {
-    "compute linear correlation" in {
-      val line = Line(0, "")
-      
-      val input = dag.Morph2(line, LinearCorrelation,
-        Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
-          Root(line, PushString("height"))),
-        Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
-          Root(line, PushString("weight"))))
-
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 0.9998746737089123)
-      }
-      
-      result2 must contain(true).only 
-    }
-
-    "compute covariance" in {
-      val line = Line(0, "")
-      
-      val input = dag.Morph2(line, Covariance,
-        Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
-          Root(line, PushString("height"))),
-        Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
-          Root(line, PushString("weight"))))
-
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 400.08)
-      }
-      
-      result2 must contain(true).only
-    }
-
-    "compute the correct coefficients in a simple linear regression" in {
-      val line = Line(0, "")
-      
-      val input = dag.Morph2(line, LinearRegression,
-        Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
-          Root(line, PushString("height"))),
-        Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
-          Root(line, PushString("weight"))))
-
-      val result = testEval(input)
-      
-      result must haveSize(1)
-       
-      val result2 = result collect {
-        case (ids, SObject(fields)) if ids.length == 0 => {
-          val SDecimal(slope) = fields("slope")
-          val SDecimal(yint) = fields("intercept")
-          val bool1 = slope.toDouble ~= 0.6862906545903664
-          val bool2 = yint.toDouble ~= 67.54013997529848
-          Vector(bool1, bool2)
-        }
-      }
-      
-      result2 must contain(Vector(true, true)).only
-    }
-
-    "compute the correct coefficients in a simple log regression" in {
-      val line = Line(0, "")
-      
-      val input = dag.Morph2(line, LogarithmicRegression,
-        Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
-          Root(line, PushString("height"))),
-        Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
-          Root(line, PushString("weight"))))
-
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (ids, SObject(fields)) if ids.length == 0 => {
-          val SDecimal(slope) = fields("slope")
-          val SDecimal(yint) = fields("intercept")
-          val bool1 = slope.toDouble ~= 38.8678597674246945
-          val bool2 = yint.toDouble ~= -46.97865418113420686
-          Vector(bool1, bool2)
-        }
-      }
-      
-      result2 must contain(Vector(true, true))
-    }
-  } 
 
   "for a homogenous set and a value, the appropriate stats function" should {
-    "compute linear correlation" >> {
-      "with value on the right" >> {
+    "compute linear correlation" in {
+      "with value on the right" in {
         val line = Line(0, "")
         
         val input = dag.Morph2(line, LinearCorrelation,
@@ -960,7 +954,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         result must haveSize(0)
       }
     
-      "with value on the left" >> {
+      "with value on the left" in {
         val line = Line(0, "")
         
         val input = dag.Morph2(line, LinearCorrelation,
@@ -1281,6 +1275,163 @@ trait StatsLibSpec[M[+_]] extends Specification
 
       result2 must contain(10,14,6,21,13,17,22,7,3,18,16,23,8,4,15).only
     }
+
+    "compute denseRank" in {
+      val line = Line(0, "")
+
+      val input = dag.Morph1(line, DenseRank,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(5,10,14,1,6,9,13,2,12,7,3,11,8,4,15).only
+    }
+
+    "compute denseRank within a filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, IdentitySort,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))),
+        Join(line, Eq, CrossLeftSort,
+          dag.Morph1(line, DenseRank,
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices")))),
+          Root(line, PushNum("4"))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(-9)
+    }
+
+    "compute denseRank within a join" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Add, CrossLeftSort,
+        dag.Morph1(line, DenseRank,
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices")))),
+        Root(line, PushNum("2")))
+
+      val result = testEval(input)
+
+      result must haveSize(22)
+
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+
+      result2 must contain(5,10,14,6,9,13,17,12,7,3,16,11,8,4,15).only
+    }
+
+    "compute covariance" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, Covariance,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeightAcrossSlices"))),
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeightAcrossSlices"))),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 301.5)
+      }
+      
+      result2 must contain(true).only
+    }
+
+    "compute linear correlation" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, LinearCorrelation,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeightAcrossSlices"))),
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeightAcrossSlices"))),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 0.2832061115667535364)
+      }
+      
+      result2 must contain(true).only 
+    }
+
+    "compute the correct coefficients in a simple linear regression" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, LinearRegression,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeightAcrossSlices"))),
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeightAcrossSlices"))),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+       
+      val result2 = result collect {
+        case (ids, SObject(fields)) if ids.length == 0 => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
+          val bool1 = slope.toDouble ~= 0.551488261704282626112
+          val bool2 = yint.toDouble ~= 96.337568593067376154
+          Vector(bool1, bool2)
+        }
+      }
+      
+      result2 must contain(Vector(true, true)).only
+    }
+    
+    "compute the correct coefficients in a simple log regression" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, LogarithmicRegression,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeightAcrossSlices"))),
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeightAcrossSlices"))),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+       
+      val result2 = result collect {
+        case (ids, SObject(fields)) if ids.length == 0 => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
+          val bool1 = slope.toDouble ~= 35.885416368041469881
+          val bool2 = yint.toDouble ~= -14.930463966129221
+          Vector(bool1, bool2)
+        }
+      }
+      
+      result2 must contain(Vector(true, true)).only
+    }
   }
 
   "heterogenous sets across two slice boundaries (22 elements)" should {
@@ -1434,68 +1585,7 @@ trait StatsLibSpec[M[+_]] extends Specification
 
       result2 must contain(5,10,9,7,3,11,4).only
     }
-  }
 
-  "homogenous sets across two slice boundaries (22 elements)" should {
-    "compute denseRank" in {
-      val line = Line(0, "")
-
-      val input = dag.Morph1(line, DenseRank,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
-
-      val result = testEval(input)
-
-      result must haveSize(22)
-
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
-      }
-
-      result2 must contain(5,10,14,1,6,9,13,2,12,7,3,11,8,4,15).only
-    }
-
-    "compute denseRank within a filter" in {
-      val line = Line(0, "")
-
-      val input = Filter(line, IdentitySort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))),
-        Join(line, Eq, CrossLeftSort,
-          dag.Morph1(line, DenseRank,
-            dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices")))),
-          Root(line, PushNum("4"))))
-
-      val result = testEval(input)
-
-      result must haveSize(1)
-
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
-      }
-
-      result2 must contain(-9)
-    }
-
-    "compute denseRank within a join" in {
-      val line = Line(0, "")
-
-      val input = Join(line, Add, CrossLeftSort,
-        dag.Morph1(line, DenseRank,
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices")))),
-        Root(line, PushNum("2")))
-
-      val result = testEval(input)
-
-      result must haveSize(22)
-
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
-      }
-
-      result2 must contain(5,10,14,6,9,13,17,12,7,3,16,11,8,4,15).only
-    }
-  }
-
-  "heterogenous sets across two slice boundaries (22 elements)" should {
     "compute denseRank" in {
       val line = Line(0, "")
 
@@ -1572,6 +1662,106 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(5,6,9,7,3,8,4).only
+    }
+
+    "compute covariance" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, Covariance,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeightAcrossSlices"))),
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeightAcrossSlices"))),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 874.2741666666666)
+      }
+      
+      result2 must contain(true).only
+    }
+
+    "compute linear correlation" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, LinearCorrelation,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeightAcrossSlices"))),
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeightAcrossSlices"))),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 0 => (d.toDouble ~= 0.7835742008825)
+      }
+      
+      result2 must contain(true).only 
+    }
+
+    "compute the correct coefficients in a simple linear regression" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, LinearRegression,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeightAcrossSlices"))),
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeightAcrossSlices"))),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+       
+      val result2 = result collect {
+        case (ids, SObject(fields)) if ids.length == 0 => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
+          val bool1 = slope.toDouble ~= 1.454654738762821849
+          val bool2 = yint.toDouble ~= 27.0157291837095112508
+          Vector(bool1, bool2)
+        }
+      }
+      
+      result2 must contain(Vector(true, true)).only
+    }    
+    
+    "compute the correct coefficients in a simple log regression" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, LogarithmicRegression,
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeightAcrossSlices"))),
+          Root(line, PushString("height"))),
+        Join(line, DerefObject, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeightAcrossSlices"))),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+       
+      val result2 = result collect {
+        case (ids, SObject(fields)) if ids.length == 0 => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
+          val bool1 = slope.toDouble ~= 84.092713766496588959
+          val bool2 = yint.toDouble ~= -220.42413606579986360
+          Vector(bool1, bool2)
+        }
+      }
+      
+      result2 must contain(Vector(true, true)).only
     }
   }
 }
