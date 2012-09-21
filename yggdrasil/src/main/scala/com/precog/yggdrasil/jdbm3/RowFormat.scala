@@ -30,8 +30,12 @@ import org.joda.time.DateTime
 
 import java.nio.ByteBuffer
 
-import scala.collection.immutable.BitSet
+//import scala.collection.immutable.BitSet
 import scala.collection.mutable
+import com.precog.util.BitSet
+import com.precog.util.BitSetUtil
+import com.precog.util.BitSetUtil.Implicits._
+
 
 import scala.annotation.tailrec
 import scala.{ specialized => spec }
@@ -197,9 +201,12 @@ trait ValueRowFormat extends RowFormat with RowFormatSupport { self: StdCodecs =
       import scalaz.syntax.monad._
 
       def encodeFromRow(row: Int) = {
-        val undefined = BitSet(cols.zipWithIndex collect {
+        //val undefined = BitSet(cols.zipWithIndex collect {
+        //  case (col, i) if !col.isDefinedAt(row) => i
+        //}: _*)
+        val undefined = BitSetUtil.create(cols.zipWithIndex collect {
           case (col, i) if !col.isDefinedAt(row) => i
-        }: _*)
+        })
 
         val rowWriter = colWriters.foldLeft(Codec[BitSet].write(undefined)) {
           case (acc, (encode, i)) if !undefined(i) => acc *> encode(row)
@@ -218,16 +225,30 @@ trait ValueRowFormat extends RowFormat with RowFormatSupport { self: StdCodecs =
   def ColumnDecoder(cols: Seq[ArrayColumn[_]]) = {
     require(columnRefs.size == cols.size)
 
-    val decoders: Seq[(ColumnValueDecoder, Int)] = // Seq[((Int, ByteBuffer) => Unit, Int)] =
-      (columnRefs zip cols map { case (ref, col) => getColumnDecoder(ref.ctype, col) }).zipWithIndex
+    //val decoders: Seq[(ColumnValueDecoder, Int)] = // Seq[((Int, ByteBuffer) => Unit, Int)] =
+    //  (columnRefs zip cols map { case (ref, col) => getColumnDecoder(ref.ctype, col) }).zipWithIndex
+
+    val decoders: List[ColumnValueDecoder] =
+      (columnRefs zip cols).map {
+        case (ref, col) => getColumnDecoder(ref.ctype, col)
+      }(collection.breakOut)
 
     new ColumnDecoder {
       def decodeToRow(row: Int, src: Array[Byte], offset: Int = 0) {
         val buf = ByteBuffer.wrap(src, offset, src.length - offset)
         val undefined = Codec[BitSet].read(buf)
-        for ((decoder, i) <- decoders if !undefined(i)) {
-          decoder.decode(row, buf)
+        //for ((decoder, i) <- decoders if !undefined(i)) {
+        //  decoder.decode(row, buf)
+        //}
+        @tailrec def helper(i: Int, decs: List[ColumnValueDecoder]) {
+          decs match {
+            case h :: t =>
+              if (!undefined.get(i)) h.decode(row, buf)
+              helper(i + 1, t)
+            case Nil =>
+          }
         }
+        helper(0, decoders)
       }
     }
   }
@@ -244,9 +265,12 @@ trait ValueRowFormat extends RowFormat with RowFormatSupport { self: StdCodecs =
 
     type S = (Either[bitSetCodec.S, StatefulCodec#State], List[CValue])
 
-    private def undefineds(xs: List[CValue]): BitSet = BitSet(xs.zipWithIndex collect {
+    //private def undefineds(xs: List[CValue]): BitSet = BitSet(xs.zipWithIndex collect {
+    //  case (CUndefined, i) => i
+    //}: _*)
+    private def undefineds(xs: List[CValue]): BitSet = BitSetUtil.create(xs.zipWithIndex collect {
       case (CUndefined, i) => i
-    }: _*)
+    })
 
     def encodedSize(xs: List[CValue]) = xs.foldLeft(bitSetCodec.encodedSize(undefineds(xs))) {
       (acc, x) => acc + (x match {

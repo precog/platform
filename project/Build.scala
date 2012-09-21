@@ -63,7 +63,7 @@ object PlatformBuild extends Build {
 
     EclipseKeys.createSrc := EclipseCreateSrc.Default+EclipseCreateSrc.Resource,
     EclipseKeys.withSource := true,
-    (unmanagedSourceDirectories in Compile) <<= (scalaSource in Compile)(Seq(_)),
+    (unmanagedSourceDirectories in Compile) <<= (scalaSource in Compile, javaSource in Compile)(Seq(_) ++ Set(_)),
     (unmanagedSourceDirectories in Test) <<= (scalaSource in Test)(Seq(_)),
 
     libraryDependencies ++= Seq(
@@ -74,7 +74,8 @@ object PlatformBuild extends Build {
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
       "org.specs2"                  %% "specs2"             % "1.12.2-SNAPSHOT" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
-      "javolution"                  %  "javolution"         % "5.5.1"
+      "javolution"                  %  "javolution"         % "5.5.1"//,
+      //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
     )
   )
 
