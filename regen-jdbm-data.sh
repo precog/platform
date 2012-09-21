@@ -20,15 +20,16 @@
 #!/bin/bash
 
 function usage() {
-    echo "Usage: `basename $0` [-t <owner token>] [-s <source directory>] <target data directory> <sbt launcher JAR>"
+    echo "Usage: `basename $0` [-n] [-t <owner token>] [-s <source directory>] <target data directory> <sbt launcher JAR>"
     echo "  For now target is normally pandora/dist/data-jdbm/data/"
+    echo "  -n : don't wipe existing data"
     exit 1
 }
 
 SRCDIR=muspelheim/src/test/resources/test_data
 OWNERTOKEN=C18ED787-BF07-4097-B819-0415C759C8D5
 
-while getopts "t:s:" OPTNAME; do
+while getopts "nt:s:" OPTNAME; do
     case $OPTNAME in
         t)
             OWNERTOKEN=$OPTARG
@@ -39,6 +40,10 @@ while getopts "t:s:" OPTNAME; do
                 exit 2
             }
             SRCDIR=$OPTARG
+            ;;
+        n)
+            echo "Not wiping existing data"
+            DONTWIPE=true
             ;;
         \?)
             usage
@@ -83,6 +88,6 @@ popd > /dev/null
     done
 }
 
-rm -rf $DATADIR/*
+[ -z "$DONTWIPE" ] && rm -rf $DATADIR/*
 
 java -cp yggdrasil/target/yggdrasil-assembly-2.0.0-SNAPSHOT.jar com.precog.yggdrasil.util.YggUtils import -t $OWNERTOKEN -s $DATADIR $SOURCES
