@@ -200,6 +200,28 @@ trait EvalStackSpecs extends Specification {
         }
       }
     }
+
+    "accept covariance inside an object with'd with another object" >> {
+      val input = """
+        clicks := //clicks
+        counts := solve 'time
+          {count: count(clicks where clicks.time = 'time) }
+
+        cov := std::stats::cov(counts.count, counts.count)
+        counts with {covariance: cov}
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(81)  
+
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(1)
+          obj must haveKey("covariance")
+          obj must haveKey("count")
+      }
+    }
     
     "have the correct number of identities and values in a relate" >> {
       "with the sum plus the LHS" >> {
