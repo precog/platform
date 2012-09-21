@@ -270,6 +270,12 @@ public class BitSet extends FastCollection <Index>  implements Set <Index> , Reu
         return (i >= _length) ? false : (bits[i] & (1L << bitIndex)) != 0;
     }
 
+    // added for scala compatibility
+    public boolean apply(int bitIndex) {
+        int i = bitIndex >> 6;
+        return (i >= _length) ? false : (bits[i] & (1L << bitIndex)) != 0;
+    }
+
     /**
      * Returns a new bit set composed of a range of bits from this one.
      *
@@ -421,6 +427,15 @@ public class BitSet extends FastCollection <Index>  implements Set <Index> , Reu
      * @throws IndexOutOfBoundsException if {@code bitIndex < 0}
      */
     public void set(int bitIndex, boolean value) {
+        if (value) {
+            set(bitIndex);
+        } else {
+            clear(bitIndex);
+        }
+    }
+
+    // added for scala compatibility
+    public void update(int bitIndex, boolean value) {
         if (value) {
             set(bitIndex);
         } else {
