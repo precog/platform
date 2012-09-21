@@ -77,11 +77,14 @@ trait JDBMProjectionModule extends ProjectionModule {
         } yield (base, archive) 
 
       dirs flatMap {
-        case (b, a) => (b, a) match {
-          case (Some(base), Some(archive)) => fileOps.rename(base, archive)
-          case (Some(base), _)             => throw new FileNotFoundException("Could not locate archive dir for projection: " + projection)
-          case _                           => throw new FileNotFoundException("Could not locate base dir for projection: " + projection)
-        }
+        case (Some(base), Some(archive)) =>
+          val timeStampedArchive = new File(archive.getParentFile, archive.getName+"-"+System.currentTimeMillis()) 
+          fileOps.rename(base, timeStampedArchive)
+          
+        case (Some(base), _) =>
+          throw new FileNotFoundException("Could not locate archive dir for projection: " + projection)
+        case _ =>
+          throw new FileNotFoundException("Could not locate base dir for projection: " + projection)
       }
     }
   }

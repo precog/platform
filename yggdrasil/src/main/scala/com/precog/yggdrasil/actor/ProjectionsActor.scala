@@ -56,17 +56,19 @@ import scalaz.syntax.std.option._
 // To simplify routing, tag all messages for the ProjectionLike actor
 sealed trait ShardProjectionAction
 
-case class AcquireProjection(descriptor: ProjectionDescriptor, exclusive: Boolean = false) extends ShardProjectionAction
+case class AcquireProjection(descriptor: ProjectionDescriptor, exclusive: Boolean = false, evict: Boolean = false) extends ShardProjectionAction
 case class ReleaseProjection(descriptor: ProjectionDescriptor) extends ShardProjectionAction
 
-object ProjectionUpdate {
-  sealed trait UpdateAction
-  case class Row(id: EventId, values: Seq[CValue], metadata: Seq[Set[Metadata]]) extends UpdateAction
-  case class Archive(id: ArchiveId) extends UpdateAction
+trait ProjectionUpdate extends ShardProjectionAction {
+  def descriptor: ProjectionDescriptor
 }
-import ProjectionUpdate._
 
-case class ProjectionUpdate(descriptor: ProjectionDescriptor, rows: Seq[UpdateAction]) extends ShardProjectionAction
+case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row]) extends ProjectionUpdate
+object ProjectionInsert {
+  case class Row(id: EventId, values: Seq[CValue], metadata: Seq[Set[Metadata]])
+}
+
+case class ProjectionArchive(descriptor: ProjectionDescriptor, id: ArchiveId) extends ProjectionUpdate
 
 case class InsertMetadata(descriptor: ProjectionDescriptor, metadata: ColumnMetadata)
 case class ArchiveMetadata(descriptor: ProjectionDescriptor)
@@ -91,7 +93,7 @@ trait ProjectionsActorModule extends ProjectionModule {
       evict = (descriptor: ProjectionDescriptor, projection: Projection) => Projection.close(projection).unsafePerformIO
     )
 
-    case class AcquisitionRequest(requestor: ActorRef, exclusive: Boolean) 
+    case class AcquisitionRequest(requestor: ActorRef, exclusive: Boolean, evict: Boolean) 
     case class AcquisitionState(exclusive: Boolean, count: Int, queue: List[AcquisitionRequest])
     
     private val acquisitionState = mutable.Map.empty[ProjectionDescriptor, AcquisitionState] 
@@ -105,26 +107,22 @@ trait ProjectionsActorModule extends ProjectionModule {
       case Status =>
         sender ! status
 
-      case AcquireProjection(descriptor, exclusive) => {
-        logger.debug("Attempting to acquiring projection for " + descriptor + (if(exclusive) "(exclusive)" else ""))
-        
+      case AcquireProjection(descriptor, exclusive, evict) => {
         acquisitionState.get(descriptor) match {
           case None =>
             acquisitionState(descriptor) = AcquisitionState(exclusive, 1, Nil)
-            acquired(sender, descriptor, exclusive)
+            acquired(sender, descriptor, exclusive, evict)
             
           case Some(s @ AcquisitionState(false, count0, Nil)) if !exclusive =>
             acquisitionState(descriptor) = s.copy(count = count0+1)
-            acquired(sender, descriptor, exclusive)
+            acquired(sender, descriptor, exclusive, evict)
             
           case Some(s @ AcquisitionState(_, _, queue0)) =>
-            acquisitionState(descriptor) = s.copy(queue = AcquisitionRequest(sender, exclusive) :: queue0)
+            acquisitionState(descriptor) = s.copy(queue = AcquisitionRequest(sender, exclusive, evict) :: queue0)
         }
       }
 
       case ReleaseProjection(descriptor) => {
-        logger.debug("Releasing projection for " + descriptor)
-        
         acquisitionState.get(descriptor) match {
           case None =>
             logger.warn("Extraneous request to release projection descriptor " + descriptor + 
@@ -137,11 +135,11 @@ trait ProjectionsActorModule extends ProjectionModule {
             queue.reverse.span(!_.exclusive) match {
               case (Nil, excl :: rest) =>
                 acquisitionState(descriptor) = AcquisitionState(true, 1, rest)
-                acquired(excl.requestor, descriptor, true)
+                acquired(excl.requestor, descriptor, true, excl.evict)
 
               case (nonExcl, excl) =>
                 acquisitionState(descriptor) = AcquisitionState(false, nonExcl.size, excl)
-                nonExcl map { req => acquired(req.requestor, descriptor, false) }
+                nonExcl map { req => acquired(req.requestor, descriptor, false, req.evict) }
             }
             
           case Some(s @ AcquisitionState(_, count0, _)) =>
@@ -149,30 +147,20 @@ trait ProjectionsActorModule extends ProjectionModule {
         }
       }
 
-      case ProjectionUpdate(descriptor, actions) => {
+      case ProjectionInsert(descriptor, rows) => {
         val coordinator = sender
-        logger.debug(coordinator + " is updating projection for " + descriptor)
+        logger.debug(coordinator + " is inserting into projection " + descriptor)
         
-        @tailrec
-        def dispatch(actions: Seq[UpdateAction]) : Unit = {
-          val (revRows, revArchives) = actions.foldLeft((List.empty[Row], List.empty[UpdateAction])) {
-            case ((rows, archives), row : Row) => (row :: rows, archives)
-            case ((rows, archives), archive : ProjectionUpdate.Archive) => (rows, archive :: archives)
-          }
-          (revRows.reverse, revArchives.reverse) match {
-            case (Nil, Nil) =>
-            case (Nil, archival :: rest) =>
-              val archiveActor = context.actorOf(Props(new ProjectionArchiveActor(coordinator)))
-              self.tell(AcquireProjection(descriptor, true), archiveActor)
-              dispatch(rest)
-            case (insertions, rest) =>
-              val insertActor = context.actorOf(Props(new ProjectionInsertActor(insertions, coordinator)))
-              self.tell(AcquireProjection(descriptor), insertActor)
-              dispatch(rest)
-          }
-        }
+        val insertActor = context.actorOf(Props(new ProjectionInsertActor(rows, coordinator)))
+        self.tell(AcquireProjection(descriptor), insertActor)
+      }
+      
+      case ProjectionArchive(descriptor, archive) => {
+        val coordinator = sender
+        logger.debug(coordinator + " is archiving projection " + descriptor)
         
-        dispatch(actions)
+        val archiveActor = context.actorOf(Props(new ProjectionArchiveActor(coordinator)))
+        self.tell(AcquireProjection(descriptor, true, true), archiveActor)
       }
     }
 
@@ -188,9 +176,14 @@ trait ProjectionsActorModule extends ProjectionModule {
     protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JNum(projections.size)) :: 
                                                                   JField("outstandingReferences", JNum(acquisitionState.size)) :: Nil)) :: Nil)
                                                                   
-    private def acquired(sender: ActorRef, descriptor: ProjectionDescriptor, exclusive: Boolean) : Unit = {
+    private def acquired(sender: ActorRef, descriptor: ProjectionDescriptor, exclusive: Boolean, evict: Boolean)(implicit self: ActorRef) : Unit = {
       logger.debug("Acquiring projection for " + descriptor + (if(exclusive) "(exclusive)" else ""))
       cacheLookup(descriptor) map { p =>
+        if (evict) {
+          logger.debug("Evicting projection for " + descriptor + (if(exclusive) "(exclusive)" else ""))
+          assert(exclusive)
+          projections -= descriptor
+        }
         sender ! ProjectionAcquired(p)
       } except {
         error => IO(sender ! ProjectionError(descriptor, error))
@@ -213,13 +206,13 @@ trait ProjectionsActorModule extends ProjectionModule {
    * an insert on a projection. Replies to the sender of ingest messages when
    * it is done with an insert.
    */
-  class ProjectionInsertActor(rows: Seq[Row], replyTo: ActorRef) extends Actor with Logging {
+  class ProjectionInsertActor(rows: Seq[ProjectionInsert.Row], replyTo: ActorRef) extends Actor with Logging {
     def receive = {
       case ProjectionAcquired(projection) => { 
         logger.debug("Inserting " + rows.size + " rows into " + projection)
         
         try {
-          for(Row(eventId, values, _) <- rows)
+          for(ProjectionInsert.Row(eventId, values, _) <- rows)
             projection.insert(Array(eventId.uid), values).unsafePerformIO
           
           replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))

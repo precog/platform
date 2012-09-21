@@ -87,7 +87,7 @@ abstract class KafkaShardIngestActor(shardId: String,
   def receive = {
     case Status => sender ! status
 
-    case complete @ BatchComplete(checkpoint, projectionMetadata) => 
+    case complete @ BatchComplete(checkpoint, _) => 
       pendingCompletes :+= complete
 
       // the minimum value in the ingest cache is complete, so
@@ -99,8 +99,8 @@ abstract class KafkaShardIngestActor(shardId: String,
         totalConsecutiveFailures = 0
 
         pendingCompletes = pendingCompletes flatMap {
-          case BatchComplete(pendingCheckpoint, metadata) if pendingCheckpoint <= checkpoint =>
-            handleBatchComplete(pendingCheckpoint, metadata)
+          case BatchComplete(pendingCheckpoint, updated) if pendingCheckpoint <= checkpoint =>
+            handleBatchComplete(pendingCheckpoint, updated)
             None
 
           case stillPending => 
@@ -163,7 +163,7 @@ abstract class KafkaShardIngestActor(shardId: String,
   /**
    * This method will be called on each completed batch. Subclasses may perform additional work here.
    */
-  protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint, metadata: Map[ProjectionDescriptor, ColumnMetadata]): Unit
+  protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]): Unit
 
   private def readRemote(fromCheckpoint: YggCheckpoint): Validation[Throwable, (Vector[IngestMessage], YggCheckpoint)] = {
     Validation.fromTryCatch {

@@ -67,9 +67,9 @@ trait ProductionShardSystemActorModule extends ShardSystemActorModule {
   def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef) = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
     Some(() => new KafkaShardIngestActor(yggConfig.shardId, checkpoint, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled) {
-      def handleBatchComplete(pendingCheckpoint: YggCheckpoint, metadata: Map[ProjectionDescriptor, ColumnMetadata]) {
+      def handleBatchComplete(pendingCheckpoint: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]) {
         logger.debug(pendingCheckpoint + " to be updated")
-        metadataActor ! IngestBatchMetadata(metadata, pendingCheckpoint.messageClock, Some(pendingCheckpoint.offset))
+        metadataActor ! IngestBatchMetadata(updates, pendingCheckpoint.messageClock, Some(pendingCheckpoint.offset))
       }
     })
   }

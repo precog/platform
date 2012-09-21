@@ -89,11 +89,20 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
   def receive = {
     case Status => sender ! status
 
-    case IngestBatchMetadata(patch, batchClock, batchOffset) => 
-      projections = projections |+| patch
-      dirty = dirty ++ patch.keySet
+    case IngestBatchMetadata(updates, batchClock, batchOffset) => {
+      for(update <- updates) update match {
+        case (descriptor, Some(metadata)) =>
+          projections += (descriptor -> metadata)
+          dirty += descriptor
+        case (descriptor, None) =>
+          flush(None).unsafePerformIO
+          projections -= descriptor
+          dirty -= descriptor
+      }
+      
       messageClock = messageClock |+| batchClock
       kafkaOffset = batchOffset orElse kafkaOffset
+    }
    
     case msg @ FindChildren(path) => 
       logger.trace(msg.toString)
@@ -188,7 +197,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
 object ProjectionMetadata {
   import metadata._
-  import ProjectionUpdate.Row
+  import ProjectionInsert.Row
 
   def columnMetadata(desc: ProjectionDescriptor, rows: Seq[Row]): ColumnMetadata = {
     rows.foldLeft(ColumnMetadata.Empty) { 
@@ -245,5 +254,5 @@ case class FindDescriptorArchive(desc: ProjectionDescriptor) extends ShardMetada
 case class MetadataSaved(saved: Set[ProjectionDescriptor]) extends ShardMetadataAction
 case object GetCurrentCheckpoint
 
-case class IngestBatchMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], messageClock: VectorClock, kafkaOffset: Option[Long]) extends ShardMetadataAction
+case class IngestBatchMetadata(updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])],  messageClock: VectorClock, kafkaOffset: Option[Long]) extends ShardMetadataAction
 case object FlushMetadata extends ShardMetadataAction
