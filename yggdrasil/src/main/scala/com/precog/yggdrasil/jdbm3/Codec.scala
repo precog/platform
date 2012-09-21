@@ -33,8 +33,6 @@ import java.nio.charset.{ Charset, CharsetEncoder, CoderResult }
 import com.precog.util.BitSet
 import com.precog.util.BitSetUtil
 import com.precog.util.BitSetUtil.Implicits._
-//import scala.collection.immutable.BitSet
-import scala.collection.mutable
 
 import scala.annotation.tailrec
 import scala.{ specialized => spec }
@@ -678,15 +676,6 @@ object Codec {
     }
 
     def readBitSet(src: ByteBuffer): BitSet = {
-      //@tailrec @inline
-      //def readBytes(bs: List[Byte]): Array[Byte] = {
-      //  val b = src.get()
-      //  if ((b & 3) == 0 || (b & 12) == 0 || (b & 48) == 0 || (b & 192) == 0) {
-      //    (b :: bs).reverse.toArray
-      //  } else readBytes(b :: bs)
-      //}
-      //
-      //val bytes = readBytes(Nil)
       def readBytes() = {
         val buf = new Array[Byte](maxBytes)
         var i = 0
@@ -705,8 +694,6 @@ object Codec {
       val bytes = readBytes()
       @inline def get(offset: Int): Boolean = (bytes(offset >>> 3) & (1 << (offset & 7))) != 0
 
-      import collection.mutable
-      //var bits = mutable.BitSet()
       val bits = new BitSet()
       def read(l: Int, r: Int, offset: Int): Int = {
         if (l == r) {
@@ -728,7 +715,6 @@ object Codec {
       }
 
       read(0, size, 0)
-      //bits.toImmutable
       bits
     }
   }
