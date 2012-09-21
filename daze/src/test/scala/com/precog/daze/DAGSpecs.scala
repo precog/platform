@@ -342,6 +342,97 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         }
       }
     }
+
+    "determine a histogram of a composite key of revenue and campaign" in {
+      val line = Line(0, "")
+
+      val result = decorate(Vector(
+        Line(0, ""),
+        PushString("/organizations"),
+        instructions.LoadLocal,
+        Dup,
+        Dup,
+        Dup,
+        PushString("revenue"),
+        Map2Cross(DerefObject),
+        KeyPart(1),
+        Swap(1),
+        PushString("revenue"),
+        Map2Cross(DerefObject),
+        instructions.Group(0),
+        Swap(1),
+        PushString("campaign"),
+        Map2Cross(DerefObject),
+        KeyPart(3),
+        Swap(1),
+        Swap(2),
+        PushString("campaign"),
+        Map2Cross(DerefObject),
+        instructions.Group(2),
+        MergeBuckets(true),
+        PushString("/campaigns"),
+        instructions.LoadLocal,
+        Dup,
+        Swap(2),
+        Swap(1),
+        PushString("campaign"),
+        Map2Cross(DerefObject),
+        KeyPart(3),
+        Swap(1),
+        Swap(2),
+        instructions.Group(4),
+        MergeBuckets(true),
+        instructions.Split,
+        PushString("revenue"),
+        PushKey(1),
+        Map2Cross(WrapObject),
+        PushString("num"),
+        PushGroup(4),
+        instructions.Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x002000))),
+        Map2Cross(WrapObject),
+        Map2Cross(JoinObject),
+        Merge))
+  
+        val JUniverseT = JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JNumberT, JTextT), JBooleanT),JNullT), JObjectUnfixedT), JArrayUnfixedT)
+
+        val expectedSpec = IntersectBucketSpec(
+          IntersectBucketSpec(
+              dag.Group(0,
+                  Join(line,DerefObject,CrossLeftSort,
+                      dag.LoadLocal(line,Root(line,PushString("/organizations")), JUniverseT),
+                      Root(line,PushString("revenue"))),
+                  UnfixedSolution(1,
+                      Join(line,DerefObject,CrossLeftSort,
+                          dag.LoadLocal(line,Root(line,PushString("/organizations")), JUniverseT),
+                          Root(line,PushString("revenue"))))),
+              dag.Group(2,
+                  Join(line,DerefObject,CrossLeftSort,
+                      dag.LoadLocal(line,Root(line,PushString("/organizations")), JUniverseT),
+                      Root(line,PushString("campaign"))),
+                  UnfixedSolution(3,
+                      Join(line,DerefObject,CrossLeftSort,
+                      dag.LoadLocal(line,Root(line,PushString("/organizations")), JUniverseT),
+                      Root(line,PushString("campaign")))))),
+          dag.Group(4,
+              dag.LoadLocal(line,Root(line,PushString("/campaigns")), JUniverseT),
+              UnfixedSolution(3,
+                  Join(line,DerefObject,CrossLeftSort,
+                      dag.LoadLocal(line,Root(line,PushString("/campaigns")), JUniverseT),
+                      Root(line,PushString("campaign"))))))
+    
+    lazy val expectedSplit: dag.Split = dag.Split(line, expectedSpec, expectedTarget)
+      
+    lazy val expectedTarget = Join(line,JoinObject,CrossLeftSort,
+      Join(line,WrapObject,CrossLeftSort,
+        Root(line,PushString("revenue")),
+        SplitParam(line,1)(expectedSplit)),
+      Join(line,WrapObject,CrossLeftSort,
+        Root(line,PushString("num")),
+        dag.Reduce(line, Reduction(Vector(), "count", 0x002000),SplitGroup(line,4,Vector(LoadIds("/campaigns")))(expectedSplit))))
+
+
+      result mustEqual Right(expectedSplit)
+    }
     
     "recognize a join instruction" in {
       "map2_match" >> {

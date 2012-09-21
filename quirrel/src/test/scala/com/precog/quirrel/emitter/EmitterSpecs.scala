@@ -1102,6 +1102,62 @@ object EmitterSpecs extends Specification
         Merge))
     }
 
+    "determine a histogram of a composite key of revenue and campaign" >> {
+      testEmit("""
+        | campaigns := //campaigns
+        | organizations := //organizations
+        | 
+        | solve 'revenue = organizations.revenue, 'campaign = organizations.campaign
+        |   campaigns' := campaigns where campaigns.campaign = 'campaign
+        |   { revenue: 'revenue, num: count(campaigns') }
+        | """.stripMargin)(
+        Vector(
+          PushString("/organizations"),
+          LoadLocal,
+          Dup,
+          Dup,
+          Dup,
+          PushString("revenue"),
+          Map2Cross(DerefObject),
+          KeyPart(1),
+          Swap(1),
+          PushString("revenue"),
+          Map2Cross(DerefObject),
+          Group(0),
+          Swap(1),
+          PushString("campaign"),
+          Map2Cross(DerefObject),
+          KeyPart(3),
+          Swap(1),
+          Swap(2),
+          PushString("campaign"),
+          Map2Cross(DerefObject),
+          Group(2),
+          MergeBuckets(true),
+          PushString("/campaigns"),
+          LoadLocal,
+          Dup,
+          Swap(2),
+          Swap(1),
+          PushString("campaign"),
+          Map2Cross(DerefObject),
+          KeyPart(3),
+          Swap(1),
+          Swap(2),
+          Group(4),
+          MergeBuckets(true),
+          Split,
+          PushString("revenue"),
+          PushKey(1),
+          Map2Cross(WrapObject),
+          PushString("num"),
+          PushGroup(4),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x002000))),
+          Map2Cross(WrapObject),
+          Map2Cross(JoinObject),
+          Merge))
+    }
+
     "emit code in case when an error is supressed" in {
       val input = """
         | clicks := //clicks
