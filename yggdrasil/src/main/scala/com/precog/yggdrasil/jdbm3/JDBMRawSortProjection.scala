@@ -69,6 +69,7 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
     }
 
     // At this point we have completed all valid writes, so we open readonly + no locks, allowing for concurrent use of sorted data
+    //println("opening: " + dbFile.getCanonicalPath)
     val db = DBMaker.openFile(dbFile.getCanonicalPath).readonly().disableLocking().make()
     try {
       val index: SortedMap[Array[Byte],Array[Byte]] = db.getTreeMap(indexName)

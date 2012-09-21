@@ -88,12 +88,12 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
       "arbitrary datasets descending" in checkSortDense(SortDescending)      
     }
 
-    "align" >> {
-      "a simple example" in alignSimple
-      "across slice boundaries" in alignAcrossBoundaries
-      "survive a trivial scalacheck" in checkAlign
-    }
-
+//    "align" >> {
+//      "a simple example" in alignSimple
+//      "across slice boundaries" in alignAcrossBoundaries
+//      "survive a trivial scalacheck" in checkAlign
+//    }
+//
     "intersect by identity" >> {
       "simple data" in testSimpleIntersect
       "survive a trivial scalacheck" in checkIntersect

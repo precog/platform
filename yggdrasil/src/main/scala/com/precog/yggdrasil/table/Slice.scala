@@ -46,13 +46,15 @@ trait RowComparator { self =>
   @tailrec
   final def nextLeftIndex(lidx: Int, lsize: Int, ridx: Int, step: Int): Int = {
     if (lidx < lsize) {
-      compare(lidx, ridx) match {
+      val ordering = compare(lidx, ridx) 
+      ordering match {
         case EQ | GT =>
           if (step <= 1) lidx -1
-          nextLeftIndex(lidx - (step / 2), lsize, ridx, step / 2)
+          else nextLeftIndex(lidx - (step / 2), lsize, ridx, step / 2)
 
         case LT => 
-          nextLeftIndex(lidx + step, lsize, ridx, step)
+          if (step == 0) lidx + 1
+          else nextLeftIndex(lidx + step, lsize, ridx, step)
       }
     } else {
       lsize
@@ -66,6 +68,7 @@ trait Slice { source =>
 
   def size: Int
   def isEmpty: Boolean = size == 0
+  def nonEmpty = !isEmpty
 
   def columns: Map[ColumnRef, Column]
 

@@ -305,4 +305,21 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
   }
 }
 
+object BlockAlignSpec extends TableModuleSpec[Free.Trampoline] with BlockAlignSpec[Free.Trampoline] {
+  implicit def M = Trampoline.trampolineMonad
+
+  type YggConfig = IdSourceConfig
+  val yggConfig = new IdSourceConfig {
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
+    }
+  }
+
+  "align" should {
+    "a simple example" in alignSimple
+    "across slice boundaries" in alignAcrossBoundaries
+    "survive a trivial scalacheck" in checkAlign
+  }
+}
 // vim: set ts=4 sw=4 et:
