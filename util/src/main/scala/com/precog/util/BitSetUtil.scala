@@ -5,7 +5,7 @@ import scala.annotation.tailrec
 object BitSetUtil {
   class BitSetOperations(bs: BitSet) {
     def toUnboxedArray(): Array[Long] = bitSetToArray(bs)
-    def toList(): List[Long] = bitSetToList(bs)
+    def toList(): List[Int] = bitSetToList(bs)
 
     def min(): Int = {
       val n = bs.nextSetBit(0)
@@ -91,9 +91,9 @@ object BitSetUtil {
     arr
   }
 
-  def bitSetToList(bs: BitSet): List[Long] = {
+  def bitSetToList(bs: BitSet): List[Int] = {
     @tailrec
-    def loopBits(long: Long, bit: Int, base: Int, sofar: List[Long]): List[Long] = {
+    def loopBits(long: Long, bit: Int, base: Int, sofar: List[Int]): List[Int] = {
       if (bit < 0)
         sofar
       else if (((long >> bit) & 1) == 1)
@@ -103,7 +103,7 @@ object BitSetUtil {
     }
 
     @tailrec
-    def loopLongs(i: Int, longs: Array[Long], base: Int, sofar: List[Long]): List[Long] = {
+    def loopLongs(i: Int, longs: Array[Long], base: Int, sofar: List[Int]): List[Int] = {
       if (i < 0)
         sofar
       else
