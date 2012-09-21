@@ -659,7 +659,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
               val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
                 case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => {
                   if (v1 > 0) {
-                    (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+                    (count + 1, sum1 + math.log(v1.toDouble), sum2 + v2, sumsq1 + (math.log(v1.toDouble) * math.log(v1.toDouble)), productSum + (math.log(v1.toDouble) * v2))
                   } else {
                   (count, sum1, sum2, sumsq1, productSum)
                   }
@@ -675,7 +675,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
               val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
                 case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => {
                   if (v1 > 0) {
-                    (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+                    (count + 1, sum1 + math.log(v1.toDouble), sum2 + v2, sumsq1 + (math.log(v1.toDouble) * math.log(v1.toDouble)), productSum + (math.log(v1.toDouble) * v2))
                   } else {
                   (count, sum1, sum2, sumsq1, productSum)
                   }
@@ -691,7 +691,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
               val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
                 case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => {
                   if (v1 > 0) {
-                    (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+                    (count + 1, sum1 + math.log(v1.toDouble), sum2 + v2, sumsq1 + (math.log(v1.toDouble) * math.log(v1.toDouble)), productSum + (math.log(v1.toDouble) * v2))
                   } else {
                   (count, sum1, sum2, sumsq1, productSum)
                   }
@@ -707,7 +707,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
               val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
                 case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => {
                   if (v1 > 0) {
-                    (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+                    (count + 1, sum1 + math.log(v1.toDouble), sum2 + v2, sumsq1 + (math.log(v1.toDouble) * math.log(v1.toDouble)), productSum + (math.log(v1.toDouble) * v2))
                   } else {
                   (count, sum1, sum2, sumsq1, productSum)
                   }
@@ -723,7 +723,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
               val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
                 case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => {
                   if (v1 > 0) {
-                    (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+                    (count + 1, sum1 + math.log(v1.toDouble), sum2 + v2, sumsq1 + (math.log(v1.toDouble) * math.log(v1.toDouble)), productSum + (math.log(v1.toDouble) * v2))
                   } else {
                   (count, sum1, sum2, sumsq1, productSum)
                   }
@@ -739,7 +739,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
               val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
                 case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => {
                   if (v1 > 0) {
-                    (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+                    (count + 1, sum1 + math.log(v1.toDouble), sum2 + v2, sumsq1 + (math.log(v1.toDouble) * math.log(v1.toDouble)), productSum + (math.log(v1.toDouble) * v2))
                   } else {
                   (count, sum1, sum2, sumsq1, productSum)
                   }
@@ -755,7 +755,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
               val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
                 case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => {
                   if (v1 > 0) {
-                    (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+                    (count + 1, sum1 + math.log(v1.toDouble), sum2 + v2, sumsq1 + (math.log(v1.toDouble) * math.log(v1.toDouble)), productSum + (math.log(v1.toDouble) * v2))
                   } else {
                   (count, sum1, sum2, sumsq1, productSum)
                   }
@@ -771,7 +771,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
               val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
                 case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => {
                   if (v1 > 0) {
-                    (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+                    (count + 1, sum1 + math.log(v1.toDouble), sum2 + v2, sumsq1 + (math.log(v1.toDouble) * math.log(v1.toDouble)), productSum + (math.log(v1.toDouble) * v2))
                   } else {
                   (count, sum1, sum2, sumsq1, productSum)
                   }
