@@ -70,13 +70,13 @@ module Tests
       results = organizations_revenue_campaign.map do |revenue, campaign|
         campaigns_bucket = campaigns.select { |c| c['campaign'] == campaign }
         { 'revenue' => revenue, 'num' => campaigns_bucket.size }
-      end
+      end.select { |obj| obj['num'].to_i > 0 }
       
       results_must " haveSize(#{results.size})"
       
       results.uniq.each do |res|
         obj_body = res.map do |key, value|
-          "\"#{key}\" -> SString(\"#{value}\")"
+          "\"#{key}\" -> #{render_value(value)}"
         end.join ', '
         
         results_must " contain(SObject(Map(#{obj_body})))"

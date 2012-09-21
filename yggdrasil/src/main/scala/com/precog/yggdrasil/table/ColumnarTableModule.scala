@@ -962,7 +962,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     def filteredNodeSubset(node: MergeNode): NodeSubset = {
       val protoGroupKeyTrans = GroupKeyTrans(Universe.sources(node.binding.groupKeySpec))
-      //println(protoGroupKeyTrans)
 
       // Since a transspec for a group key may perform a bunch of work (computing values, etc)
       // it seems like we really want to do that work only once; prior to the initial sort. 
@@ -1444,23 +1443,34 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
 
       def joinSymmetric(borgLeft: BorgResult, borgRight: BorgResult): M[(BorgResult, BorgResult, Seq[TicVar])] = {
+        def resortLeft(borgLeft: BorgResult, borgRight: BorgResult): Option[M[(BorgResult, BorgResult, Seq[TicVar])]] = {
+          findLongestPrefix(borgLeft.groupKeys.toSet, Set(borgRight.groupKeys)) map { commonPrefix =>
+            resortBorgResult(borgLeft, commonPrefix) map { newBorgLeft =>
+              (newBorgLeft, borgRight, commonPrefix)
+            }
+          }
+        }
+
+        def resortRight(borgLeft: BorgResult, borgRight: BorgResult): Option[M[(BorgResult, BorgResult, Seq[TicVar])]] = {
+          findLongestPrefix(borgRight.groupKeys.toSet, Set(borgLeft.groupKeys)) map { commonPrefix =>
+            resortBorgResult(borgRight, commonPrefix) map { newBorgRight =>
+              (borgLeft, newBorgRight, commonPrefix)
+            }
+          }
+        }
+
         findCompatiblePrefix(Set(borgLeft.groupKeys), Set(borgRight.groupKeys)) map { compatiblePrefix =>
           (borgLeft, borgRight, compatiblePrefix).point[M]
         } orElse {
           // one or the other will require a re-sort
           if (borgLeft.size.exists(s => borgRight.size.exists(_ < s))) {
-            // sort the left
-            findLongestPrefix(borgLeft.groupKeys.toSet, Set(borgRight.groupKeys)) map { commonPrefix =>
-              resortBorgResult(borgLeft, commonPrefix) map { newBorgLeft =>
-                (newBorgLeft, borgRight, commonPrefix)
-              }
-            }
+            resortLeft(borgLeft, borgRight) orElse
+            // Well, that didn't work, so let's at least attempt the reverse constraints
+            resortRight(borgLeft, borgRight)
           } else {
-            findLongestPrefix(borgRight.groupKeys.toSet, Set(borgLeft.groupKeys)) map { commonPrefix =>
-              resortBorgResult(borgRight, commonPrefix) map { newBorgRight =>
-                (borgLeft, newBorgRight, commonPrefix)
-              }
-            }
+            resortRight(borgLeft, borgRight) orElse
+            // Well, that didn't work, so let's at least attempt the reverse constraints
+            resortLeft(borgLeft, borgRight)
           }
         } getOrElse {
           sys.error("Borged sets sharing an edge are incompatible: " + borgLeft.groupKeys + "; " + borgRight.groupKeys)
@@ -1494,7 +1504,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             } else if (right.sortedByIdentities) {
               joinAsymmetric(BorgResult(left), right)
             } else {
-              //println("Joining borg results symmetric.")
               joinSymmetric(BorgResult(left), BorgResult(right))
             }
 
@@ -1607,7 +1616,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         //      case (acc, o) => acc + (o -> (acc.getOrElse(o, Set()) + node))
         //    }
         //}
-        //println("assimilating edges: \n" + borgEdges.mkString("\n"))
         assimilate(borgEdges)
       }
     }
@@ -1929,7 +1937,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             // must exit this inner loop and recur through the outer monadic loop
             // xrstart is an int with sentinel value for effieiency, but is Option at the slice level.
             @inline @tailrec def buildRemappings(lpos: Int, rpos: Int, xrstart: Int, xrend: Int, endRight: Boolean): NextStep = {
-              //println((lpos, rpos, xrstart, xrend, endRight))
               if (xrstart != -1) {
                 // We're currently in a cartesian. 
                 if (lpos < lhead.size && rpos < rhead.size) {

@@ -912,7 +912,7 @@ trait EvalStackSpecs extends Specification {
       stripped must contain(15)
       stripped must contain(19)
       stripped must contain(27)
-    }.pendingUntilFixed
+    }
 
     "evaluate sliding window in a" >> {
       "solve expression" >> {
@@ -969,53 +969,48 @@ trait EvalStackSpecs extends Specification {
         |   campaigns' := campaigns where campaigns.campaign = 'campaign
         |   { revenue: 'revenue, num: count(campaigns') }""".stripMargin
 
-        
-        val resultsE = evalE(input)
-        resultsE must haveSize(70)
-        
-        val results = resultsE collect {
-          case (ids, obj) if ids.length == 1 => obj
-        }
-        
-        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("4"))))
-        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("3"))))
-        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("5"))))
-        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("0"))))
-        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("11"))))
-        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("0"))))
-        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("7"))))
-        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("5"))))
-        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("8"))))
-        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("3"))))
-        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("8"))))
-        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("8"))))
-        results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SString("0"))))
-        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("3"))))
-        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("8"))))
-        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("5"))))
-        results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SString("3"))))
-        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("3"))))
-        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("1"))))
-        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("7"))))
-        results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SString("4"))))
-        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("7"))))
-        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("1"))))
-        results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SString("5"))))
-        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("2"))))
-        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("4"))))
-        results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SString("8"))))
-        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("4"))))
-        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("5"))))
-        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("2"))))
-        results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SString("4"))))
-        results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SString("7"))))
-        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("0"))))
-        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("4"))))
-        results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SString("5"))))
-        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("3"))))
-        results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SString("1"))))
-        results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SString("7"))))
-    }.pendingUntilFixed
+      val resultsE = evalE(input)
+      resultsE must haveSize(63)
+
+      val results = resultsE collect {
+        case (ids, obj) if ids.length == 1 => obj
+      }
+      
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("11")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("7")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("8")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("8")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("8")))))
+      results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SDecimal(BigDecimal("8")))))
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("1")))))
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("7")))))
+      results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SDecimal(BigDecimal("7")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("1")))))
+      results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("2")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SDecimal(BigDecimal("8")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("2")))))
+      results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("7")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("1")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("7")))))
+    }
 
     "determine click times around each click" in {
       val input = """
