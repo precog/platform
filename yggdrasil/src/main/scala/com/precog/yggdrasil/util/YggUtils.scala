@@ -742,17 +742,17 @@ object ImportTools extends Command with Logging {
       logger.info("Using PID: " + pid)
       config.input.foreach {
         case (db, input) =>
-          logger.debug("Inserting batch: %s:%s".format(db, input))
+          logger.info("Inserting batch: %s:%s".format(db, input))
           val reader = new FileReader(new File(input))
           val events = JsonParser.parse(reader).children.map { child =>
             EventMessage(EventId(pid, sid.getAndIncrement), Event(Path(db), config.token, child, Map.empty))
           }
           
-          logger.debug(events.size + " total inserts")
+          logger.info(events.size + " total inserts")
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
               logger.info("Saving batch " + id + " of size " + batch.size)
-              Await.result(storage.storeBatch(batch), Duration(120, "seconds"))
+              Await.result(storage.storeBatch(batch), Duration(300, "seconds"))
               logger.info("Batch saved")
             }
           }
@@ -772,7 +772,7 @@ object ImportTools extends Command with Logging {
 
   class Config(
     var input: Vector[(String, String)] = Vector.empty, 
-    val batchSize: Int = 1000, 
+    val batchSize: Int = 100000,
     var token: TokenID = "root",
     var verbose: Boolean = false ,
     var storageRoot: File = new File("./data"),
