@@ -132,6 +132,10 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   }
 
   def getBlockAfter(id: Option[Array[Byte]], desiredColumns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Array[Byte],Slice]] = {
+    if (idIndexFile.isClosed()) {
+      sys.error("Attempting to retrieve more data from a closed projection")
+    
+}
     logger.trace("Retrieving key after " + id.map(_.mkString("[", ", ", "]")))
 
     try {

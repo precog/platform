@@ -20,7 +20,7 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.common.{Path,VectorCase}
+import com.precog.common.{MetadataStats,Path,VectorCase}
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
@@ -716,7 +716,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   }
   
   // because I *can*!
-  def load(table: Table, uid: UserId, tpe: JType): Table = {
+  def load(table: Table, uid: UserId, tpe: JType): M[Table] = {
     import Table.loadMergeEngine._
     val metadataView = storage.userMetadataView(uid)
 
@@ -748,22 +748,28 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       }
     }
 
-    val head = StreamT.Skip(
-      StreamT.wrapEffect(
-        for {
-          paths               <- pathsM
-          coveringProjections <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
-          cellOptions         <- cellsM(minimalCover(tpe, coveringProjections)).sequence
-        } yield {
-          mergeProjections(SortAscending, // Projections are always sorted in ascending identity order
-                           cellOptions.flatMap(a => a)) { slice => 
-            slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(JPathField("key") :: Nil) }).toList.sorted
+    // In order to get a size, we pre-run the metadata fetch
+    for {
+      paths          <- pathsM
+      projectionData <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
+      val (coveringProjections, colMetadata) = projectionData.unzip
+      val maxSize = colMetadata.toList.flatMap { _.values.flatMap { _.values.collect { case stats: MetadataStats => stats.count } } }.sorted.lastOption
+    } yield {
+      val head = StreamT.Skip(
+        StreamT.wrapEffect(
+          for {
+            cellOptions    <- cellsM(minimalCover(tpe, coveringProjections)).sequence
+          } yield {
+            mergeProjections(SortAscending, // Projections are always sorted in ascending identity order
+                             cellOptions.flatMap(a => a)) { slice => 
+              slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(JPathField("key") :: Nil) }).toList.sorted
+            }
           }
-        }
+        )
       )
-    )
-
-    Table(StreamT(M.point(head)))
+  
+      Table(StreamT(M.point(head)), maxSize)
+    }
   }
 
   class Table(slices: StreamT[M, Slice], size: Option[Long]) extends ColumnarTable(slices, size) {
@@ -771,7 +777,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     import SliceTransform._
     import trans._
     
-    def load(uid: UserId, tpe: JType): M[Table] = M.point(self.load(this, uid, tpe))
+    def load(uid: UserId, tpe: JType): M[Table] = self.load(this, uid, tpe)
 
     /**
      * Sorts the KV table by ascending or descending order of a transformation
@@ -854,25 +860,22 @@ object BlockStoreColumnarTableModule extends Logging {
    * Determine the set of all projections that could potentially provide columns
    * representing the requested dataset.
    */
-  protected def loadable[M[+_]: Monad](metadataView: StorageMetadata[M], path: Path, prefix: JPath, jtpe: JType): M[Set[ProjectionDescriptor]] = {
+  protected def loadable[M[+_]: Monad](metadataView: StorageMetadata[M], path: Path, prefix: JPath, jtpe: JType): M[Set[(ProjectionDescriptor, ColumnMetadata)]] = {
     jtpe match {
-      case p: JPrimitiveType => ctypes(p).map(metadataView.findProjections(path, prefix, _)).sequence map {
-        sources => 
-          sources flatMap { source => source.keySet }
-      }
+      case p: JPrimitiveType => ctypes(p).map(metadataView.findProjections(path, prefix, _)).sequence map { _.flatten }
 
       case JArrayFixedT(elements) =>
         if (elements.isEmpty) {
-          metadataView.findProjections(path, prefix, CEmptyArray) map { _.keySet }
+          metadataView.findProjections(path, prefix, CEmptyArray) map { _.toSet }
         } else {
           (elements map { case (i, jtpe) => loadable(metadataView, path, prefix \ i, jtpe) } toSet).sequence map { _.flatten }
         }
 
       case JArrayUnfixedT =>
-        val emptyM = metadataView.findProjections(path, prefix, CEmptyArray) map { _.keySet }
+        val emptyM = metadataView.findProjections(path, prefix, CEmptyArray) map { _.toSet }
         val nonEmptyM = metadataView.findProjections(path, prefix) map { sources =>
-          sources.keySet filter { 
-            _.columns exists { 
+          sources.toSet filter { 
+            _._1.columns exists { 
               case ColumnDescriptor(`path`, selector, _, _) => 
                 (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathIndex])
             }
@@ -883,16 +886,16 @@ object BlockStoreColumnarTableModule extends Logging {
 
       case JObjectFixedT(fields) =>
         if (fields.isEmpty) {
-          metadataView.findProjections(path, prefix, CEmptyObject) map { _.keySet }
+          metadataView.findProjections(path, prefix, CEmptyObject) map { _.toSet }
         } else {
           (fields map { case (n, jtpe) => loadable(metadataView, path, prefix \ n, jtpe) } toSet).sequence map { _.flatten }
         }
 
       case JObjectUnfixedT =>
-        val emptyM = metadataView.findProjections(path, prefix, CEmptyObject) map { _.keySet }
+        val emptyM = metadataView.findProjections(path, prefix, CEmptyObject) map { _.toSet }
         val nonEmptyM = metadataView.findProjections(path, prefix) map { sources =>
-          sources.keySet filter { 
-            _.columns exists { 
+          sources.toSet filter { 
+            _._1.columns exists { 
               case ColumnDescriptor(`path`, selector, _, _) => 
                 (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathField])
             }
