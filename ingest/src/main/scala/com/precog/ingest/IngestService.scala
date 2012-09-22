@@ -80,9 +80,11 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
         request { (state: IngestState) =>
           jsonpOrChunk {
             token(state.tokenManager) {
-              dataPath("vfs") {
-                post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, 8)(defaultFutureDispatch)) ~
-                delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
+              path("/(?<sync>a?sync)") {
+                dataPath("fs") {
+                  post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, 8)(defaultFutureDispatch)) ~
+                  delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
+                }
               }
             }
           }
