@@ -275,9 +275,16 @@ trait Slice { source =>
 
   def map(from: JPath, to: JPath)(f: CF1): Slice = new Slice {
     val size = source.size
-    val columns = source.columns flatMap {
-      case (ref, col) if ref.selector.hasPrefix(from) => f(col) map {v => (ref, v)}
-      case unchanged => Some(unchanged)
+
+    val columns: Map[ColumnRef, Column] = {
+      val resultColumns = for {
+        col <- source.columns collect { case (ref, col) if ref.selector.hasPrefix(from) => col }
+        result <- f(col)
+      } yield result
+
+      resultColumns.groupBy(_.tpe) map { 
+        case (tpe, cols) => (ColumnRef(to, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+      }
     }
   }
 
