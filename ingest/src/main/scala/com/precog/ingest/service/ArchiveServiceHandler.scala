@@ -28,6 +28,7 @@ import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
 import akka.util.Timeout
 
+import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
@@ -38,9 +39,9 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz.{Validation, Success}
 
-class ArchiveServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, archiveTimeout: Timeout)(implicit dispatcher: MessageDispatcher)
-extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
-  val service = (request: HttpRequest[Future[JValue]]) => {
+class ArchiveServiceHandler[A](accessControl: AccessControl[Future], eventStore: EventStore, archiveTimeout: Timeout)(implicit dispatcher: MessageDispatcher)
+extends CustomHttpService[A, (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
+  val service = (request: HttpRequest[A]) => {
     Success { (t: Token, p: Path) =>
       accessControl.mayAccess(t.tid, p, Set(), OwnerPermission) flatMap { mayAccess =>
         if(mayAccess) {
