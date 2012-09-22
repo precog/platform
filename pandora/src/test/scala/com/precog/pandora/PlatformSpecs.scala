@@ -92,7 +92,7 @@ class TrampolinePlatformSpecs extends PlatformSpecs[YId]
   def newGroupId = groupId.getAndIncrement
 
   override def load(table: Table, uid: UserId, jtpe: JType) = {
-    val tableM = table.toJson map { events =>
+    table.toJson map { events =>
       fromJson {
         events.toStream flatMap {
           case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
@@ -118,8 +118,6 @@ class TrampolinePlatformSpecs extends PlatformSpecs[YId]
         }
       }
     } 
-    
-    M.copoint(tableM)
   }
 }
 

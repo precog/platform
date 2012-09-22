@@ -97,7 +97,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
           case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
         }
       }
-    } copoint
+    }
   }
   
   trait YggConfig extends EvaluatorConfig with DatasetConsumersConfig {
