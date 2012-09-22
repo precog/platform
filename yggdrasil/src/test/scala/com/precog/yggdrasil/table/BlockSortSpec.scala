@@ -66,13 +66,6 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
     val desiredJValueOrder = if (sortOrder.isAscending) jvalueOrdering else jvalueOrdering.reverse
 
-    val resultM = for {
-      sorted <- module.fromSample(sample).sort(module.sortTransspec(sortKeys: _*), sortOrder)
-      json <- sorted.toJson
-    } yield json
-
-    val result = resultM.copoint.toList
-    
     val globalIdPath = JPath(".globalId")
 
     val original = if (unique) {
@@ -89,14 +82,21 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     }.sortBy({ v => { JArray(sortKeys.map(_.extract(v \ "value")).toList ::: List(v \ "globalId")).asInstanceOf[JValue] }       
     })(desiredJValueOrder).map(_.delete(globalIdPath).get).toList
 
-      
+    val resultM = for {
+      sorted <- module.fromSample(sample).sort(module.sortTransspec(sortKeys: _*), sortOrder)
+      json <- sorted.toJson
+    } yield (json, sorted)
+
+    val (result, resultTable) = resultM.copoint
+
     //if (result != original) {
     //   result zip original foreach {
     //     case (r, o) => if (r != o) { println("%s != %s".format(r, o)) }
     //   }
     //}
 
-    result must_== sorted
+    result.toList must_== sorted
+    resultTable.size must beSome(sorted.size)
   }
 
   def checkSortDense(sortOrder: DesiredSortOrder) = {

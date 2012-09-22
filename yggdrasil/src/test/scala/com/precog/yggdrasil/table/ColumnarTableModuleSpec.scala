@@ -78,7 +78,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
 
-  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+  class Table(slices: StreamT[M, Slice], size: Option[Long]) extends ColumnarTable(slices, size) {
     import trans._
     def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false) = sys.error("todo")
@@ -86,7 +86,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   }
   
   trait TableCompanion extends ColumnarTableCompanion {
-    def apply(slices: StreamT[M, Slice]) = new Table(slices)
+    def apply(slices: StreamT[M, Slice], size: Option[Long] = None) = new Table(slices, size)
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = 
       sys.error("not implemented here")

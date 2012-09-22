@@ -91,50 +91,50 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
   }
 
   trait ColumnarTableCompanion extends TableCompanionLike {
-    def apply(slices: StreamT[M, Slice]): Table
+    def apply(slices: StreamT[M, Slice], size: Option[Long] = None): Table
 
     implicit def groupIdShow: Show[GroupId] = Show.showFromToString[GroupId]
 
-    def empty: Table = Table(StreamT.empty[M, Slice])
+    def empty: Table = Table(StreamT.empty[M, Slice], Some(0))
     
     def constBoolean(v: collection.Set[CBoolean]): Table = {
       val column = ArrayBoolColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice])
+      Table(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constLong(v: collection.Set[CLong]): Table = {
       val column = ArrayLongColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice])
+      Table(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constDouble(v: collection.Set[CDouble]): Table = {
       val column = ArrayDoubleColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice])
+      Table(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constDecimal(v: collection.Set[CNum]): Table = {
       val column = ArrayNumColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice])
+      Table(Slice(Map(ColumnRef(JPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constString(v: collection.Set[CString]): Table = {
       val column = ArrayStrColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice])
+      Table(Slice(Map(ColumnRef(JPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constDate(v: collection.Set[CDate]): Table =  {
       val column = ArrayDateColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice])
+      Table(Slice(Map(ColumnRef(JPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constNull: Table = 
-      Table(Slice(Map(ColumnRef(JPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice])
+      Table(Slice(Map(ColumnRef(JPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice], Some(1))
 
     def constEmptyObject: Table = 
-      Table(Slice(Map(ColumnRef(JPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice])
+      Table(Slice(Map(ColumnRef(JPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice], Some(1))
 
     def constEmptyArray: Table = 
-      Table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice])
+      Table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice], Some(1))
 
     def transformStream[A](sliceTransform: SliceTransform1[A], slices: StreamT[M, Slice]): StreamT[M, Slice] = {
       def stream(state: A, slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT(
@@ -1028,7 +1028,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                  idTrans,
                  targetTrans,
                  groupKeyTrans,
-                 groupKeyTrans.keyOrder)
+                 groupKeyTrans.keyOrder,
+                 size = node.binding.source.size)
     }
 
 
@@ -1051,7 +1052,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                      idTrans,
                      targetTrans,
                      groupKeyTrans,
-                     ticvars)
+                     ticvars,
+                     size = sortedTable.size)
         }
       }.sequence
 
@@ -1792,7 +1794,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
   }
 
-  abstract class ColumnarTable(slices0: StreamT[M, Slice]) extends TableLike { self: Table =>
+  abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: Option[Long]) extends TableLike { self: Table =>
     import SliceTransform._
 
     private final val readStarts = new java.util.concurrent.atomic.AtomicInteger
@@ -1824,7 +1826,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
      * unknown sort order.
      */
     def transform(spec: TransSpec1): Table = {
-      Table(Table.transformStream(composeSliceTransform(spec), slices))
+      Table(Table.transformStream(composeSliceTransform(spec), slices), this.size)
     }
     
     def force: M[Table] = this.sort(Scan(Leaf(Source), freshIdScanner), SortAscending)

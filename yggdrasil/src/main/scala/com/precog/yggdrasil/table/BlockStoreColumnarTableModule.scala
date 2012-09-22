@@ -235,7 +235,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     type SortBlockData = BlockProjectionData[SortingKey,Slice]
 
     type IndexStore = SortedMap[SortingKey, Array[Byte]]
-    case class SliceIndex(name: String, storage: IndexStore, keyComparator: Comparator[SortingKey], keyRefs: Array[ColumnRef], valRefs: Array[ColumnRef])
+    case class SliceIndex(name: String, storage: IndexStore, keyComparator: Comparator[SortingKey], keyRefs: Array[ColumnRef], valRefs: Array[ColumnRef], count: Long = 0)
 
     case class IndexKey(streamId: String, keyRefs: List[ColumnRef], valRefs: List[ColumnRef]) {
       val name = streamId + ";krefs=" + keyRefs.mkString("[", ",", "]") + ";vrefs=" + valRefs.mkString("[", ",", "]")
@@ -267,7 +267,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       )
     }
 
-    def apply(slices: StreamT[M, Slice]) = new Table(slices)
+    def apply(slices: StreamT[M, Slice], size: Option[Long] = None) = new Table(slices, size)
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = {
       sealed trait AlignState
@@ -672,17 +672,24 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         (newSliceIndex, jdbmState.indices + (indexMapKey -> newSliceIndex))
       }
 
-      val newInsertCount = storeRow(index.storage, 0, jdbmState.insertCount) 
+      val newInsertCount = storeRow(index.storage, 0, jdbmState.insertCount)
 
-      JDBMState(newIndices, newInsertCount)
+      // Although we have a global count of inserts, we also want to
+      // specifically track counts on the index since some operations
+      // may not use all indices (e.g. groupByN)
+      val newIndex = index.copy(count = index.count + (newInsertCount - jdbmState.insertCount))
+
+      JDBMState(newIndices + (indexMapKey -> newIndex), newInsertCount)
     }
 
     def loadTable(dbFile: File, mergeEngine: MergeEngine[SortingKey, SortBlockData], indices: IndexMap, sortOrder: DesiredSortOrder, notes: String = ""): Table = {
       import mergeEngine._
 
+      val totalCount = indices.toList.map { case (_, sliceIndex) => sliceIndex.count }.sum
+
       // Map the distinct indices into SortProjections/Cells, then merge them
       def cellsMs: Stream[M[Option[CellState]]] = indices.values.toStream.zipWithIndex map {
-        case (SliceIndex(name, _, _, keyColumns, valColumns), index) => 
+        case (SliceIndex(name, _, _, keyColumns, valColumns, _), index) => 
           val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns, sortOrder)
           val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
           
@@ -704,7 +711,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         )
       )
       
-      Table(StreamT(M.point(head))).transform(TransSpec1.DerefArray1)
+      Table(StreamT(M.point(head)), Some(totalCount)).transform(TransSpec1.DerefArray1)
     }
   }
   
@@ -759,7 +766,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     Table(StreamT(M.point(head)))
   }
 
-  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+  class Table(slices: StreamT[M, Slice], size: Option[Long]) extends ColumnarTable(slices, size) {
     import Table._
     import SliceTransform._
     import trans._
@@ -773,7 +780,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
      * @see com.precog.yggdrasil.TableModule#sort(TransSpec1, DesiredSortOrder, Boolean)
      */
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder, unique).map {
-      _.headOption getOrElse this // If we start with an empty table, we always end with an empty table
+      _.headOption getOrElse Table(this.slices, Some(0)) // If we start with an empty table, we always end with an empty table (but then we know that we have zero size)
     }
 
     /**
