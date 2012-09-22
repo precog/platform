@@ -28,13 +28,17 @@ import akka.dispatch.{ Future, Promise }
 import akka.dispatch.MessageDispatcher
 import akka.util.Timeout
 
-import blueeyes.core.ByteChunk
+import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 
+import blueeyes.json.JsonParser
 import blueeyes.json.JsonAST._
 
+import java.util.concurrent.{ ThreadPoolExecutor, TimeUnit, ArrayBlockingQueue, RejectedExecutionException }
+
+import java.io.{ File, BufferedReader, FileInputStream, FileOutputStream }
 import java.nio.channels._
 import java.nio.ByteBuffer
 
@@ -42,19 +46,26 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz.{Validation, Success}
 
-class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout)(implicit dispatcher: MessageDispatcher)
-extends CustomHttpService[Future[ByteChunk], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
+class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout, maxReadThreads: Int)(implicit dispatcher: MessageDispatcher)
+extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
 
-  def threadPool: ThreadPoolExecutor
+  // TODO Make this more configurable?
+  def threadPool: ThreadPoolExecutor = new ThreadPoolExecutor(2, maxReadThreads, 5, TimeUnit.SECONDS, new ArrayBlockingQueue(50))
 
-  def writeChunkStream(chan: WriteableByteChannel, chunk: ByteChunk): Future[Unit] = {
+  def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[Unit] = {
     chan.write(ByteBuffer.wrap(chunk.data))
     chunk.next match {
-      case Some(future) => future flatMap (writeChunk(chan, _))
+      case Some(future) => future flatMap (writeChunkStream(chan, _))
       case None => Future {
         chan.close()
       }
     }
+  }
+
+  def ingest(p: Path, t: Token, event: JValue): Future[Unit] = {
+    val eventInstance = Event.fromJValue(p, event, t.tid)
+    logger.trace("Saving event: " + eventInstance)
+    eventStore.save(eventInstance, insertTimeout)
   }
 
   class EventQueueInserter(p: Path, t: Token, chan: ReadableByteChannel, batchComplete: List[Int] => Unit) extends Runnable {
@@ -63,15 +74,11 @@ extends CustomHttpService[Future[ByteChunk], (Token, Path) => Future[HttpRespons
       val lines = Iterator.continually(reader.readLine()).takeWhile(_ != null)
 
       val futures: List[Future[Option[Int]]] = lines.map(JsonParser.parseOpt(_)).zipWithIndex.map {
-        case (Some(event), _) =>
-          val eventInstance = Event.fromJValue(p, event, t.tid)
-          logger.trace("Saving event: " + eventInstance)
-          eventStore.save(eventInstance, insertTimeout)
-        case (_, line) =>
-          Future { Some(line) }
+        case (Some(event), _) => ingest(p, t, event) map (_ => None)
+        case (_, line) => Future { Some(line) }
       }.toList
 
-      Future.sequence(futures) foreach { reuslts =>
+      Future.sequence(futures) foreach { results =>
         chan.close()
         val errors = results collect { case Some(line) => line }
         batchComplete(errors)
@@ -79,53 +86,74 @@ extends CustomHttpService[Future[ByteChunk], (Token, Path) => Future[HttpRespons
     }
   }
 
-  val service = (request: HttpRequest[Future[ByteChunk]]) => {
+  def asyncIngest(byteStream: ByteChunk, t: Token, p: Path): Future[HttpResponse[JValue]] = {
+    val file = File.createTempFile("async-ingest-", null)
+    val outChannel = new FileOutputStream(file).getChannel()
+    for {
+      _ <- writeChunkStream(outChannel, byteStream)
+    } yield {
+      val inChannel = new FileInputStream(file).getChannel()
+      try {
+        threadPool.execute(new EventQueueInserter(p, t, inChannel, _ => ()))
+        HttpResponse[JValue](Accepted)
+      } catch {
+        case _: RejectedExecutionException => HttpResponse[JValue](ServiceUnavailable)
+      }
+    }
+  }
+
+  def syncIngest(byteStream: ByteChunk, t: Token, p: Path): Future[HttpResponse[JValue]] = {
+    try {
+      val pipe = Pipe.open()
+      val promise = Promise[List[Int]]()
+      val inserter = new EventQueueInserter(p, t, pipe.source(), { errors =>
+        promise.complete(Right(errors))
+      })
+      threadPool.execute(inserter)
+
+      for {
+        _ <- writeChunkStream(pipe.sink(), byteStream)
+        errors <- promise
+      } yield {
+        if (errors.isEmpty) {
+          HttpResponse[JValue](OK)
+        } else {
+          HttpResponse[JValue](BadRequest, content = Some(JObject(JField("errors", JArray(errors map (JNum(_)))) :: Nil)))
+        }
+      }
+    } catch {
+      case _: RejectedExecutionException => Future(HttpResponse[JValue](ServiceUnavailable))
+    }
+  }
+
+  val service = (request: HttpRequest[Either[Future[JValue], ByteChunk]]) => {
     Success { (t: Token, p: Path) =>
-      accessControl.mayAccess(t.tid, p, Set(), WritePermission) flatMap { mayAccess =>
-        if(mayAccess) {
-          request.content map { futureContent =>
-            try {
-              if (sync) {
-                val pipe = Pipe.open()
-                val promise = Promise[List[Int]]()
-                val inserter = new EventQueueInserter(p, t, pipe.source(), {
-                  x => promise.complete(Right(x))
-                })
-                threadPool.execute(inserter)
+      accessControl.mayAccess(t.tid, p, Set(), WritePermission) flatMap {
+        case true => try {
+          request.content map {
+            case Left(futureEvent) =>
+              for {
+                event <- futureEvent
+                _ <- ingest(p, t, event)
+              } yield HttpResponse[JValue](OK)
 
-                for {
-                  byteStream <- futureContent
-                  _ <- writeChunkStream(pipe.sink(), byteStream)
-                  errors <- promise
-                } yield {
-                  if (errors.isEmpty) {
-                    HttpResponse[JValue](OK)
-                  } else {
-                    HttpResponse[JValue](BadRequest, JObject(JField("errors", JArray(errors map (JNum(_))))))
-                  }
-                }
-
-              } else {
-                val file = File.createTempFile("async-ingest-", null)
-                val outChannel = new FileOutputStream(file).getChannel()
-                for {
-                  bytesStream <- futureContent
-                  _ <- writeChunkStream(outChannel, byteStream)
-                } yield {
-                  val inChannel = new FileInputStream(file).getChannel()
-                  threadPool.execute(new EventQueueInserter(p, t, inChannel, _ => ()))
-                  HttpResponse[JValue](Accepted)
-                }
+            case Right(byteStream) =>
+              val async = request.parameters.get('sync) map (_ == "async") getOrElse false
+              if (async) {
+                asyncIngest(byteStream, t, p)
+              } else  {
+                syncIngest(byteStream, t, p)
               }
-            } catch {
-              case ex => Future(HttpResponse[JValue](ServiceUnavailable))
-            }
+
           } getOrElse {
             Future(HttpResponse[JValue](BadRequest, content=Some(JString("Missing event data."))))
           }
-        } else {
-          Future(HttpResponse[JValue](Unauthorized, content=Some(JString("Your token does not have permissions to write at this location."))))
+        } catch {
+          case _ => Future(HttpResponse[JValue](ServiceUnavailable))
         }
+
+        case false =>
+          Future(HttpResponse[JValue](Unauthorized, content=Some(JString("Your token does not have permissions to write at this location."))))
       }
     }
   }

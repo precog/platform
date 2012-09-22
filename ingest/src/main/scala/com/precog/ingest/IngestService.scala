@@ -34,6 +34,9 @@ import blueeyes.BlueEyesServiceBuilder
 import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
 import blueeyes.health.metrics.{eternity}
 
+import blueeyes.core.http._
+import blueeyes.json.JsonAST._
+
 import org.streum.configrity.Configuration
 
 import scalaz.Monad
@@ -75,11 +78,11 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           }
         } ->
         request { (state: IngestState) =>
-          jsonp[ByteChunk] {
+          jsonpOrChunk {
             token(state.tokenManager) {
               dataPath("vfs") {
-                post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout)(defaultFutureDispatch)) ~
-                delete(new ArchiveServiceHandler(state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
+                post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, 8)(defaultFutureDispatch)) ~
+                delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
               }
             }
           }
