@@ -101,8 +101,11 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
 
   override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
 
-  lazy val shardService = service.contentType[QueryResult](application/(MimeTypes.json))
-                                 .path("/vfs/")
+  lazy val queryService = service.contentType[QueryResult](application/(MimeTypes.json))
+                                 .path("/analytics/fs/")
+
+  lazy val metaService = service.contentType[QueryResult](application/(MimeTypes.json))
+                                .path("/meta/fs/")
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
@@ -111,7 +114,7 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
 class ShardServiceSpec extends TestShardService with FutureMatchers {
 
   def query(query: String, token: Option[String] = Some(TestTokenUID), path: String = ""): Future[HttpResponse[QueryResult]] = {
-    token.map{ shardService.query("tokenId", _) }.getOrElse(shardService).query("q", query).get(path)
+    token.map{ queryService.query("tokenId", _) }.getOrElse(queryService).query("q", query).get(path)
   }
 
   val testQuery = "1 + 1"
@@ -148,7 +151,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   }
   
   def browse(token: Option[String] = Some(TestTokenUID), path: String = "unittest/"): Future[HttpResponse[QueryResult]] = {
-    token.map{ shardService.query("tokenId", _) }.getOrElse(shardService).get(path)
+    token.map{ metaService.query("tokenId", _) }.getOrElse(metaService).get(path)
   }
  
   "Shard browse service" should {

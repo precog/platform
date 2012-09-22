@@ -94,7 +94,7 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
       case _ => Validation.failure("The limit query parameter must be a positive integer.")
     } getOrElse Validation.success(None)
 
-    val offset: Validation[String, Option[Int]] = request.parameters.get('offset).filter(_ != null) map {
+    val offset: Validation[String, Option[Int]] = request.parameters.get('skip).filter(_ != null) map {
       case Offset(str) if limit.map(_.isDefined) | true => Validation.success(Some(str.toInt))
       case Offset(str) => Validation.failure("The offset query parameter cannot be used without a limit.")
       case _ => Validation.failure("The offset query parameter must be a non-negative integer.")

@@ -95,10 +95,12 @@ trait ShardService extends
             }
           } ~ jsonpcb[QueryResult] {
             token(state.tokenManager) {
-              dataPath("vfs") {
+              dataPath("analytics/fs") {
                 query {
                   get(new QueryServiceHandler(state.queryExecutor))
-                } ~
+                }
+              } ~
+              dataPath("meta/fs") {
                 get(new BrowseServiceHandler(state.queryExecutor, state.accessControl))
               }
             } ~ path("actors/status") {
