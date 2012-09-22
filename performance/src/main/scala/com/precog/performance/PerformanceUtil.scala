@@ -83,7 +83,7 @@ class PerformanceUtil(apiEndpoint: String, token: String, path: String) {
  
     val client = new HttpClientXLightWeb 
     val result = client.path(baseUrl)
-      .query("tokenId", token) 
+      .query("apiKey", token) 
       .contentType(application/MimeTypes.json)
       .post[JValue](testId)(content)
 

@@ -127,13 +127,13 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
 class IngestServiceSpec extends TestIngestService with FutureMatchers {
 
   def asyncTrack(data: ByteChunk, token: Option[String] = Some(TestTokenUID), path: String = "unittest") =
-    token.map(asyncIngestService.query("tokenId", _)).getOrElse(asyncIngestService).post[ByteChunk](path)(data)
+    token.map(asyncIngestService.query("apiKey", _)).getOrElse(asyncIngestService).post[ByteChunk](path)(data)
 
   def syncTrack(data: ByteChunk, token: Option[String] = Some(TestTokenUID), path: String = "unittest") =
-    token.map(syncIngestService.query("tokenId", _)).getOrElse(syncIngestService).post[ByteChunk](path)(data)
+    token.map(syncIngestService.query("apiKey", _)).getOrElse(syncIngestService).post[ByteChunk](path)(data)
 
   def track(data: JValue, token: Option[String] = Some(TestTokenUID), path: String = "unittest"): Future[HttpResponse[JValue]] = {
-    token.map{ ingestService.query("tokenId", _) }.getOrElse(ingestService).post(path)(data)
+    token.map{ ingestService.query("apiKey", _) }.getOrElse(ingestService).post(path)(data)
   }
 
   def testValue = JObject(List(JField("testing", JNum(123))))

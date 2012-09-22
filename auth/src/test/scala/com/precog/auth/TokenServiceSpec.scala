@@ -93,31 +93,31 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
     createTokenRaw(authAPIKey, request.serialize)
 
   def createTokenRaw(authAPIKey: String, request: JValue) = 
-    authService.query("tokenId", authAPIKey).post("/apikeys/")(request)
+    authService.query("apiKey", authAPIKey).post("/apikeys/")(request)
 
   def getTokenDetails(authAPIKey: String, queryKey: String) = 
-    authService.query("tokenId", authAPIKey).get("/apikeys/"+queryKey)
+    authService.query("apiKey", authAPIKey).get("/apikeys/"+queryKey)
 
   def getTokenGrants(authAPIKey: String, queryKey: String) = 
-    authService.query("tokenId", authAPIKey).get("/apikeys/"+queryKey+"/grants/")
+    authService.query("apiKey", authAPIKey).get("/apikeys/"+queryKey+"/grants/")
 
   def addTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
-    authService.query("tokenId", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(JString(grantId) : JValue)
+    authService.query("apiKey", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(JString(grantId) : JValue)
 
   def removeTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
-    authService.query("tokenId", authAPIKey).delete("/apikeys/"+updateKey+"/grants/"+grantId)
+    authService.query("apiKey", authAPIKey).delete("/apikeys/"+updateKey+"/grants/"+grantId)
 
   def getGrantDetails(authAPIKey: String, grantId: String) = 
-    authService.query("tokenId", authAPIKey).get("/grants/"+grantId)
+    authService.query("apiKey", authAPIKey).get("/grants/"+grantId)
 
   def getGrantChildren(authAPIKey: String, grantId: String) = 
-    authService.query("tokenId", authAPIKey).get("/grants/"+grantId+"/children/")
+    authService.query("apiKey", authAPIKey).get("/grants/"+grantId+"/children/")
 
   def addGrantChild(authAPIKey: String, grantId: String, permission: Permission) =
     addGrantChildRaw(authAPIKey, grantId, permission.serialize)
     
   def addGrantChildRaw(authAPIKey: String, grantId: String, permission: JValue) = 
-    authService.query("tokenId", authAPIKey).post("/grants/"+grantId+"/children/")(permission)
+    authService.query("apiKey", authAPIKey).post("/grants/"+grantId+"/children/")(permission)
 
   "Token service" should {
     "get existing token" in {
