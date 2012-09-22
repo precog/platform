@@ -140,7 +140,7 @@ verboseErrors - whether to print verbose error messages (default: false)
               val started = System.nanoTime()
              
               val f: Future[HttpResponse[JValue]] = client.path(apiUrl)
-                                                          .query("tokenId", token)
+                                                          .query("apiKey", token)
                                                           .query("q", query)
                                                           .contentType(application/MimeTypes.json)
                                                           .get[JValue]("")
@@ -160,7 +160,7 @@ verboseErrors - whether to print verbose error messages (default: false)
               case e =>
                 if(verboseErrors) {
                   println("QUERY - ERROR")
-                  println("URL: " + apiUrl + "?tokenId="+token)
+                  println("URL: " + apiUrl + "?apiKey="+token)
                   println("QUERY: " + query)
                   println()
                   println("ERROR MESSAGE")

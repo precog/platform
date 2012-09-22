@@ -95,7 +95,7 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
 class ShardServiceSpec extends TestShardService with FutureMatchers {
 
   def query(query: String, token: Option[String] = Some(TestTokenUID), path: String = ""): Future[HttpResponse[QueryResult]] = {
-    token.map{ queryService.query("tokenId", _) }.getOrElse(queryService).query("q", query).get(path)
+    token.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query).get(path)
   }
 
   val testQuery = "1 + 1"
@@ -116,7 +116,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     }
     "reject query when no token provided" in {
       query(testQuery, None) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, "A tokenId query parameter is required to access this URL"), _, None, _) => ok
+        case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
       }}
     }
     "reject query when token not found" in {
@@ -132,7 +132,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   }
   
   def browse(token: Option[String] = Some(TestTokenUID), path: String = "unittest/"): Future[HttpResponse[QueryResult]] = {
-    token.map{ metaService.query("tokenId", _) }.getOrElse(metaService).get(path)
+    token.map{ metaService.query("apiKey", _) }.getOrElse(metaService).get(path)
   }
  
   "Shard browse service" should {
@@ -150,7 +150,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     }
     "reject browse when no token provided" in {
       browse(None) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, "A tokenId query parameter is required to access this URL"), _, None, _) => ok
+        case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
       }}
     }
     "reject browse when token not found" in {
