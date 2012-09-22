@@ -157,7 +157,9 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   "Shard browse service" should {
     "handle browse for token accessible path" in {
       browse() must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(Left(JArray(JString("foo")::JString("bar")::Nil))), _) => ok
+        case HttpResponse(HttpStatus(OK, _), _, Some(Left(JObject(
+          JField("children", JArray(JString("foo")::JString("bar")::Nil)):: Nil
+        ))), _) => ok
       }}
     }
     "reject browse for non-token accessible path" in {

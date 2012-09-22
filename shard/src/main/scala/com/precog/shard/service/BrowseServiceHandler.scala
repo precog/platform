@@ -45,9 +45,25 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[Q
     success((t: Token, p: Path) => {
       accessControl.mayAccess(t.tid, p, Set(t.tid), ReadPermission).flatMap { 
         case true =>
-          queryExecutor.browse(t.tid, p) map {
-            case Success(result) => HttpResponse[QueryResult](OK, content = Some(Left(result)))
-            case Failure(error) => HttpResponse[QueryResult](HttpStatus(BadRequest, error))
+          import scalaz.std.string._
+          import scalaz.syntax.validation._
+          import scalaz.syntax.apply._
+
+          queryExecutor.browse(t.tid, p) flatMap { browseResult =>
+            queryExecutor.structure(t.tid, p) map { structureResult =>
+              (browseResult |@| structureResult) { (children, structure) =>
+                JObject(
+                  JField("children", children) ::
+                  // JField("structure", structure) ::
+                  Nil
+                )
+              } match {
+                case Success(response) =>
+                  HttpResponse[QueryResult](OK, content = Some(Left(response)))
+                 case Failure(error) =>
+                  HttpResponse[QueryResult](HttpStatus(BadRequest, error))
+              }
+            }
           }
         case false =>
           Future(HttpResponse[QueryResult](HttpStatus(Unauthorized, "The specified token may not browse this location")))
