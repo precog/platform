@@ -91,7 +91,7 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID, yg
     // sequential nodes created by zookeeper will be suffixed with a new 10-character
     // integer that represents a montonic increase of the underlying counter.
     val data = toNodeData(ProducerState(initialSequenceId).serialize)
-    val createdPath = zkc.createPersistentSequential(producerIdPath,  data)
+    val createdPath = zkc.createPersistentSequential(producerIdPath, data)
     createdPath.substring(createdPath.length - 10).toInt
   }
 

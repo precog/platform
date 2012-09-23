@@ -83,6 +83,7 @@ object PlatformBuild extends Build {
   val jprofilerSettings = Seq(
     fork in profileTask := true,
 
+
     jprofilerLib := "/Applications/jprofiler7/bin/macos/libjprofilerti.jnilib",
     jprofilerConf := "src/main/resources/jprofile.xml",
     jprofilerId := "116",
@@ -134,6 +135,9 @@ object PlatformBuild extends Build {
   lazy val auth = Project(id = "auth", base = file("auth")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test")
 
+  lazy val accounts     = Project(id = "accounts", base = file("accounts")).
+    settings(commonAssemblySettings: _*) dependsOn (common % "compile->compile;test->test", auth, common)
+ 
   lazy val performance = Project(id = "performance", base = file("performance")).
     settings(commonNexusSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard)
 
