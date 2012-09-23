@@ -63,6 +63,10 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
   def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = IO {
     updates += (desc -> (updates.getOrElse(desc, Vector.empty[MetadataRecord]) :+ metadata))
   }
+
+  def archiveMetadata(desc: ProjectionDescriptor): IO[Unit] = IO {
+    updates -= desc
+  }
 }
 
 object MetadataActorSpec extends Specification with FutureMatchers with Mockito {

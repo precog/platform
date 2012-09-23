@@ -96,7 +96,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
           projections += (descriptor -> metadata)
           dirty += descriptor
         case (descriptor, None) =>
-          flush(None).unsafePerformIO
+          flush(None).flatMap(_ => storage.archiveMetadata(descriptor)).unsafePerformIO
           projections -= descriptor
           dirty -= descriptor
       }
