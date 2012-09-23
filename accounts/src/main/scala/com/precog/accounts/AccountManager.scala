@@ -86,11 +86,11 @@ trait ZkMongoAccountManagerComponent extends Logging {
   implicit def asyncContext: ExecutionContext
   implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
-  def AccountManagerFactory(config: Configuration): AccountManager[Future] = {
+  def accountManager(config: Configuration): AccountManager[Future] = {
     val mongo = RealMongo(config.detach("mongo"))
     
-    val zkHosts = config[String]("zookeeper.hosts")
-    val database = config[String]("mongo.database", "auth_v1")
+    val zkHosts = config[String]("zookeeper.hosts", "localhost:2181")
+    val database = config[String]("mongo.database", "accounts_v1")
 
     val settings0 = new MongoAccountManagerSettings with ZkAccountManagerSettings {
       val zkAccountIdPath = config[String]("zookeeper.accountId.path")

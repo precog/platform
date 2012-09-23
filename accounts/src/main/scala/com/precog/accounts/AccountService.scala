@@ -68,7 +68,7 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Accou
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
-  def AccountManagerFactory(config: Configuration): AccountManager[Future]
+  def accountManager(config: Configuration): AccountManager[Future]
 
   def clock: Clock
 
@@ -77,11 +77,10 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Accou
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
-          val accountConfig = config.detach("accountConfig")
-          Future(AccountServiceState(new AccountManagement(AccountManagerFactory(accountConfig)), 
+          Future(AccountServiceState(new AccountManagement(accountManager(config)), 
                                      clock,
-                                     accountConfig[String]("security.service"),
-                                     accountConfig[String]("security.rootKey"))) 
+                                     config[String]("security.service"),
+                                     config[String]("security.rootKey"))) 
         } ->
         request { (state: AccountServiceState) =>
           jsonp[ByteChunk] {
@@ -92,7 +91,7 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Accou
                 get(new GetAccountDetailsHandler(state.accountManagement)) ~ 
                 delete(new DeleteAccountHandler(state.accountManagement)) ~
                 path("/grants") {
-                  post(new CreateAccountGrantHandler(state.accountManagement))
+                  post(new CreateAccountGrantHandler(state.accountManagement, state.securityServiceRoot))
                 } ~
                 path("/plan") {
                   get(new GetAccountPlanHandler(state.accountManagement)) ~

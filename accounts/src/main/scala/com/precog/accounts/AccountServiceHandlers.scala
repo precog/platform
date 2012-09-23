@@ -118,8 +118,6 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                   existingAccountOpt map { account =>
                     Future(HttpResponse[JValue](OK, content = Some(JObject(List(JField("accountId", account.accountId))))))
                   } getOrElse {
-                    val client = new HttpClientXLightWeb 
-
                     def baseGrant(grantType: String, accountId: String) = JObject(
                       JField("type", grantType) ::
                       JField("path", Path(accountId)) ::
@@ -137,6 +135,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                         )) :: Nil
                       ) 
                      
+                      val client = new HttpClientXLightWeb 
                       client.path(securityServiceRoot).query("apiKey", rootKey)  
                                                       .contentType(application/MimeTypes.json)
                                                       .post[JValue]("apikeys")(createBody) map {
@@ -166,10 +165,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
 }
 
 
-//For all items below, if there is no way of getting teh delegate for account id hten do it manually inside here..
-//and then rename account: Account to auth: Account and get accountId parameter and get account
-
-class CreateAccountGrantHandler(accountManagement: AccountManagement)(implicit ctx: ExecutionContext) 
+class CreateAccountGrantHandler(accountManagement: AccountManagement, securityServiceRoot: String)(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
@@ -179,14 +175,13 @@ extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue
       } yield {
         accountManagement.findAccountById(accountId) flatMap {
           case Some(account) => 
-            val client = new HttpClientXLightWeb 
-            val securityURL  = "/auth/"  
-            val request = JObject(List(JField("grantId", JString(grantId)))) 
+            val createBody = JObject(List(JField("grantId", JString(grantId)))) 
         
-            client.path(securityURL).query("tokenId", account.apiKey)
-                                    .contentType(application/MimeTypes.json)
-                                    .post[JValue]("auth/apikeys/" + account.apiKey)(request) map {
-                                      
+            val client = new HttpClientXLightWeb 
+            client.path(securityServiceRoot).query("apiKey", auth.apiKey)
+                                            .contentType(application/MimeTypes.json)
+                                            .post[JValue]("apikeys/" + account.apiKey + "/grants")(createBody) map {
+                                              
               case HttpResponse(HttpStatus(Created, _), _, None, _) => 
                 HttpResponse[JValue](OK, content = Some(""))
               
