@@ -1,6 +1,6 @@
-/etc/precog/shard-v1.conf=dev/dev-shard-v1.conf
-default=dev/dev-shard-v1.default
-init=dev/dev-shard-v1.init
-/etc/monit/conf.d/shard-v1.monit=dev/dev-shard-v1.monit
-/etc/precog/shard-v1.logging.xml=dev/dev-shard-v1.logging.xml
+/etc/precog/shard-v1.conf=dev/shard-v1.conf
+default=dev/shard-v1.default
+init=dev/shard-v1.init
+/etc/monit/conf.d/shard-v1.monit=dev/shard-v1.monit
+/etc/precog/shard-v1.logging.xml=dev/shard-v1.logging.xml
 postinstall=dev/postinstall.sh
