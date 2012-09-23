@@ -35,6 +35,8 @@ BASEDIR=$(path-canonical-simple `dirname $0`)
 
 VERSION=`grep "version :=" project/Build.scala | sed 's/.*"\(.*\)".*/\1/'`
 INGEST_ASSEMBLY=$BASEDIR/ingest/target/ingest-assembly-$VERSION.jar
+AUTH_ASSEMBLY=$BASEDIR/auth/target/auth-assembly-$VERSION.jar
+ACCOUNTS_ASSEMBLY=$BASEDIR/accounts/target/accounts-assembly-$VERSION.jar
 SHARD_ASSEMBLY=$BASEDIR/shard/target/shard-assembly-$VERSION.jar
 YGGDRASIL_ASSEMBLY=$BASEDIR/yggdrasil/target/yggdrasil-assembly-$VERSION.jar
 
@@ -166,6 +168,18 @@ function on_exit() {
         wait $SHARDPID
     fi
 
+    if is_running $ACCOUNTSPID; then
+        echo "Stopping accounts..."
+        kill $ACCOUNTSPID
+        wait $ACCOUNTSPID
+    fi
+
+    if is_running $AUTHPID; then
+        echo "Stopping auth..."
+        kill $AUTHPID
+        wait $AUTHPID
+    fi
+
     if is_running $MONGOPID; then
         echo "Stopping mongo..."
         kill $MONGOPID
@@ -262,11 +276,17 @@ if [ ! -e $WORKDIR/root_token.json ]; then
 fi
 
 # Set up ingest and shard services
-sed -e "s#/var/log#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev/dev-ingest-v1.conf > $WORKDIR/configs/ingest-v1.conf
-sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev/dev-ingest-v1.logging.xml > $WORKDIR/configs/ingest-v1.logging.xml
+sed -e "s#/var/log#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.conf > $WORKDIR/configs/ingest-v1.conf
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.logging.xml > $WORKDIR/configs/ingest-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#/opt/precog/shard#$WORKDIR/shard-data#" < $BASEDIR/shard/configs/dev/dev/dev-shard-v1.conf > $WORKDIR/configs/shard-v1.conf
-sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/shard/configs/dev/dev/dev-shard-v1.logging.xml > $WORKDIR/configs/shard-v1.logging.xml
+sed -e "s#/var/log#$WORKDIR/logs#; s#/opt/precog/shard#$WORKDIR/shard-data#" < $BASEDIR/shard/configs/dev/shard-v1.conf > $WORKDIR/configs/shard-v1.conf
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/shard/configs/dev/shard-v1.logging.xml > $WORKDIR/configs/shard-v1.logging.xml
+
+sed -e "s#/var/log#$WORKDIR/logs#" < $BASEDIR/auth/configs/dev/dev-auth-v1.conf > $WORKDIR/configs/auth-v1.conf
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/auth/configs/dev/dev-auth-v1.logging.xml > $WORKDIR/configs/auth-v1.logging.xml
+
+sed -e "s#/var/log#$WORKDIR/logs#" < $BASEDIR/accounts/configs/dev/accounts-v1.conf > $WORKDIR/configs/accounts-v1.conf
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/accounts/configs/dev/accounts-v1.logging.xml > $WORKDIR/configs/accounts-v1.logging.xml
 
 cd $BASEDIR
 
@@ -287,8 +307,18 @@ echo "Starting shard service"
 java -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf &
 SHARDPID=$!
 
-# Let the ingest/shard services startup in parallel
+echo "Starting accounts service"
+java -Dlogback.configurationFile=$WORKDIR/configs/accounts-v1.logging.xml -jar $ACCOUNTS_ASSEMBLY --configFile $WORKDIR/configs/accounts-v1.conf &
+ACCOUNTSPID=$!
+
+echo "Starting auth service"
+java -Dlogback.configurationFile=$WORKDIR/configs/auth-v1.logging.xml -jar $AUTH_ASSEMBLY --configFile $WORKDIR/configs/auth-v1.conf &
+AUTHPID=$!
+
+# Let the ingest//auth/accounts/shard services startup in parallel
 wait_until_port_open 30060
+wait_until_port_open 30062
+wait_until_port_open 30064
 wait_until_port_open 30070
 
 echo "Startup complete, running in $WORKDIR"
