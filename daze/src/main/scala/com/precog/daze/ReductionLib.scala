@@ -36,7 +36,14 @@ import scalaz.syntax.foldable._
 import scalaz.syntax.std.option._
 import scalaz.syntax.std.boolean._
 
+import scala.annotation.tailrec
+import scala.collection.mutable
+
 object RangeUtil {
+  /**
+   * Loops through a Range much more efficiently than Range#foreach, running
+   * the provided callback 'f' on each position. Assumes that step is 1.
+   */
   def loop(r: Range, f: Int => Unit) {
     var i = r.start
     val limit = r.end
@@ -45,6 +52,53 @@ object RangeUtil {
       i += 1
     }
   }
+
+  /**
+   * Like loop but also includes a built-in check for whether the given Column
+   * is defined for this particular row.
+   */
+  def loopDefined(r: Range, col: Column, f: Int => Unit): Boolean = {
+    @tailrec def unseen(i: Int, limit: Int): Boolean = if (i < limit) {
+      if (col.isDefinedAt(i)) { f(i); seen(i + 1, limit) }
+      else unseen(i + 1, limit)
+    } else {
+      false
+    }
+
+    @tailrec def seen(i: Int, limit: Int): Boolean = if (i < limit) {
+      if (col.isDefinedAt(i)) f(i)
+      seen(i + 1, limit)
+    } else {
+      true
+    }
+
+    unseen(r.start, r.end)
+  }
+}
+
+class LongAdder {
+  var t = 0L
+  val ts = mutable.ArrayBuffer.empty[BigDecimal]
+
+  final def maxLongSqrt = 3037000499L
+
+  def add(x: BigDecimal): Unit = ts.append(x)
+
+  def addSquare(x: Long) = if (x < maxLongSqrt)
+    add(x * x)
+  else
+    add(BigDecimal(x) pow 2)
+
+  def add(x: Long): Unit = {
+    val y = t + x
+    if ((~(x ^ t) & (x ^ y)) >= 0L) {
+      t = y
+    } else {
+      ts.append(BigDecimal(t))
+      t = x
+    }
+  }
+  def total(): BigDecimal = ts.sum + t
 }
 
 trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Evaluator[M] {
@@ -55,7 +109,8 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
   // TODO swap to Reduction
   val CountMonoid = implicitly[Monoid[Count.Result]]
   object Count extends Reduction(ReductionNamespace, "count") {
-    type Result = BigDecimal
+    // limiting ourselves to 9.2e18 rows doesn't seem like a problem.
+    type Result = Long
     
     implicit val monoid = CountMonoid
 
@@ -64,8 +119,8 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range) = {
         val cx = cols(JType.JUnfixedT)
-        var count = 0
-        RangeUtil.loop(range, i => if (cx.exists(_.isDefinedAt(i))) count += 1)
+        var count = 0L
+        RangeUtil.loop(range, i => if (cx.exists(_.isDefinedAt(i))) count += 1L)
         count
       }
     }
@@ -87,28 +142,32 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val max = cols(JNumberT) flatMap {
+        val maxs = cols(JNumberT) flatMap {
           case col: LongColumn =>
+            // for longs, we'll use a Boolean to track whether zmax was really
+            // seen or not.
             var zmax = Long.MinValue
-            var seen = false
-            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
-              seen = true
+            val seen = RangeUtil.loopDefined(range, col, i => {
               val z = col(i)
               if (z > zmax) zmax = z
             })
             if (seen) Some(BigDecimal(zmax)) else None
 
           case col: DoubleColumn =>
+            // since -inf is not a legal value, it's a great starting point for
+            // finding the max because any legal value will be greater.
             var zmax = Double.NegativeInfinity
-            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+            val seen = RangeUtil.loopDefined(range, col, i => {
               val z = col(i)
               if (z > zmax) zmax = z
             })
             if (zmax > Double.NegativeInfinity) Some(BigDecimal(zmax)) else None
 
           case col: NumColumn =>
+            // we can just use a null BigDecimal to signal that we haven't
+            // found a value yet.
             var zmax: BigDecimal = null
-            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+            RangeUtil.loopDefined(range, col, i => {
               val z = col(i)
               if (zmax == null || z > zmax) zmax = z
             })
@@ -117,7 +176,8 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         }
 
-        if (max.isEmpty) None else Some(max.suml)
+        // now we just find the max out of all of our column types
+        if (maxs.isEmpty) None else Some(maxs.suml)
       }
     }
 
@@ -139,28 +199,32 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val min = cols(JType.JUnfixedT) flatMap {
+        val mins = cols(JType.JUnfixedT) flatMap {
           case col: LongColumn =>
+            // for longs, we'll use a Boolean to track whether zmin was really
+            // seen or not.
             var zmin = Long.MaxValue
-            var seen = false
-            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
-              seen = true
+            val seen = RangeUtil.loopDefined(range, col, i => {
               val z = col(i)
               if (z < zmin) zmin = z
             })
             if (seen) Some(BigDecimal(zmin)) else None
 
           case col: DoubleColumn =>
+            // since +inf is not a legal value, it's a great starting point for
+            // finding the min because any legal value will be less.
             var zmin = Double.PositiveInfinity
-            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+            RangeUtil.loopDefined(range, col, i => {
               val z = col(i)
-              if (z > zmin) zmin = z
+              if (z < zmin) zmin = z
             })
             if (zmin < Double.PositiveInfinity) Some(BigDecimal(zmin)) else None
 
           case col: NumColumn =>
+            // we can just use a null BigDecimal to signal that we haven't
+            // found a value yet.
             var zmin: BigDecimal = null
-            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+            RangeUtil.loopDefined(range, col, i => {
               val z = col(i)
               if (zmin == null || z < zmin) zmin = z
             })
@@ -169,7 +233,8 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         }
 
-        if (min.isEmpty) None else Some(min.suml)
+        // now we just find the min out of all of our column types
+        if (mins.isEmpty) None else Some(mins.suml)
       }
     }
 
@@ -189,31 +254,21 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
       def reduce(cols: JType => Set[Column], range: Range) = {
 
         val sum = cols(JNumberT) flatMap {
-          case col: LongColumn =>
-            var t = 0L
-            var seen = false
-            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
-              t += col(i)
-              seen = true
-            })
-            if (seen) Some(BigDecimal(t)) else None
 
+          case col: LongColumn =>
+            val ls = new LongAdder()
+            val seen = RangeUtil.loopDefined(range, col, i => ls.add(col(i)))
+            if (seen) Some(ls.total) else None
+
+          // TODO: exactness + overflow
           case col: DoubleColumn =>
             var t = 0.0
-            var seen = false
-            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
-              t += col(i)
-              seen = true
-            })
+            var seen = RangeUtil.loopDefined(range, col, i => t += col(i))
             if (seen) Some(BigDecimal(t)) else None
 
           case col: NumColumn =>
             var t = BigDecimal(0)
-            var seen = false
-            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
-              t += col(i)
-              seen = true
-            })
+            val seen = RangeUtil.loopDefined(range, col, i => t += col(i))
             if (seen) Some(t) else None
 
           case _ => None
@@ -226,11 +281,11 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     def extract(res: Result): Table =
       res map { r => Table.constDecimal(Set(CNum(r))) } getOrElse Table.empty
   }
-  
+
   val MeanMonoid = implicitly[Monoid[Mean.Result]]
   object Mean extends Reduction(ReductionNamespace, "mean") {
     type Result = Option[InitialResult]
-    type InitialResult = (BigDecimal, BigDecimal) // (sum, count)
+    type InitialResult = (BigDecimal, Long) // (sum, count)
     
     implicit val monoid = MeanMonoid
     
@@ -238,64 +293,52 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        //println("Reducing over range from " + range.start + " to " + range.end)
-        val result = cols(JNumberT) flatMap {
+        val results = cols(JNumberT) flatMap {
+
           case col: LongColumn =>
-            //println("Mean over LongColumn: " + col.toString(range))
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
-                case ((sum, count), value) => (sum + value: BigDecimal, count + 1: BigDecimal)
-              }
+            val ls = new LongAdder()
+            var count = 0L
+            RangeUtil.loopDefined(range, col, i => {
+                ls.add(col(i))
+                count += 1L
+            })
+            if (count > 0L) Some((ls.total, count)) else None
 
-              Some(foldedMapped)
-            }
           case col: DoubleColumn =>
-            //println("Mean over DoubleColumn: " + col.toString(range))
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
-                case ((sum, count), value) => (sum + value: BigDecimal, count + 1: BigDecimal)
-              }
+            var count = 0L
+            var t = BigDecimal(0)
+            RangeUtil.loopDefined(range, col, i => {
+                t += col(i)
+                count += 1L
+            })
+            if (count > 0L) Some((t, count)) else None
 
-              Some(foldedMapped)
-            }
           case col: NumColumn =>
-            //println("Mean over NumColumn: " + col.toString(range))
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
-                case ((sum, count), value) => (sum + value: BigDecimal, count + 1: BigDecimal)
-              }
-
-              Some(foldedMapped)
-            }
+            var count = 0L
+            var t = BigDecimal(0)
+            RangeUtil.loopDefined(range, col, i => {
+                t += col(i)
+                count += 1L
+            })
+            if (count > 0L) Some((t, count)) else None
 
           case _ => None
         }
 
-        if (result.isEmpty) None
-        else Some(result.suml)
+        if (results.isEmpty) None else Some(results.suml)
       }
     }
 
-    def extract(res: Result): Table = {
-      val filteredResult = res filter { case (_, count) => count != 0 }
-      filteredResult map { case (sum, count) => Table.constDecimal(Set(CNum(sum / count)/*.tap{ mean => println("count: %s, mean: %s".format(count, mean))}*/)) } getOrElse Table.empty
-    }
+    def extract(res: Result): Table = res map {
+      case (sum, count) => Table.constDecimal(Set(CNum(sum / count)))
+    } getOrElse Table.empty
   }
   
   object GeometricMean extends Reduction(ReductionNamespace, "geometricMean") {
     type Result = Option[InitialResult]
-    type InitialResult = (BigDecimal, BigDecimal)
+    type InitialResult = (BigDecimal, Long)
     
-    implicit val monoid = new Monoid[Result] { //(product, count)
+    implicit val monoid = new Monoid[Result] {
       def zero = None
       def append(left: Result, right: => Result) = {
         val both = for ((l1, l2) <- left; (r1, r2) <- right) yield (l1 * r1, l2 + r2)
@@ -305,54 +348,49 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new Reducer[Option[(BigDecimal, BigDecimal)]] {
+    def reducer: Reducer[Result] = new Reducer[Option[(BigDecimal, Long)]] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val result = cols(JNumberT) flatMap {
+        val results = cols(JNumberT) flatMap {
           case col: LongColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(1), BigDecimal(0))) {
-                case ((prod, count), value) => (prod * value: BigDecimal, count + 1: BigDecimal)
-              }
+            var prod = BigDecimal(1)
+            var count = 0L
+            RangeUtil.loopDefined(range, col, i => {
+                prod *= col(i)
+                count += 1L
+            })
+            if (count > 0) Some((prod, count)) else None
 
-              Some(foldedMapped)
-            }
           case col: DoubleColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(1), BigDecimal(0))) {
-                case ((prod, count), value) => (prod * value: BigDecimal, count + 1: BigDecimal)
-              }
+            var prod = BigDecimal(1)
+            var count = 0L
+            RangeUtil.loopDefined(range, col, i => {
+                prod *= col(i)
+                count += 1L
+            })
+            if (count > 0) Some((prod, count)) else None
 
-              Some(foldedMapped)
-            }
           case col: NumColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(1), BigDecimal(0))) {
-                case ((prod, count), value) => (prod * value: BigDecimal, count + 1: BigDecimal)
-              }
-
-              Some(foldedMapped)
-            }
+            var prod = BigDecimal(1)
+            var count = 0L
+            RangeUtil.loopDefined(range, col, i => {
+                prod *= col(i)
+                count += 1L
+            })
+            if (count > 0) Some((prod, count)) else None
 
           case _ => None
         }
 
-        if (result.isEmpty) None
-        else Some(result.suml)
+        if (results.isEmpty) None else Some(results.suml)
       }
     }
 
-    def extract(res: Result): Table = { //TODO division by zero
-      val filteredResult = res filter { case (_, count) => count != 0 }
-      filteredResult map { case (prod, count) => Table.constDecimal(Set(CNum(math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse Table.empty
+    def extract(res: Result): Table = res map {
+      case (prod, count) => math.pow(prod.toDouble, 1 / count.toDouble)
+    } filter(StdLib.doubleIsDefined) map {
+      mean => Table.constDecimal(Set(CNum(mean)))
+    } getOrElse {
+      Table.empty
     }
   }
   
@@ -367,167 +405,125 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         val result = cols(JNumberT) flatMap {
+
           case col: LongColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: BigDecimal = mapped.foldLeft(BigDecimal(0)) {
-                case (sumsq, value) => (sumsq + (value * value): BigDecimal)
-              }
+            val ls = new LongAdder()
+            val seen = RangeUtil.loopDefined(range, col, i => {
+              ls.addSquare(col(i))
+            })
+            if (seen) Some(ls.total) else None
 
-              Some(foldedMapped)
-            }
           case col: DoubleColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: BigDecimal = mapped.foldLeft(BigDecimal(0)) {
-                case (sumsq, value) => (sumsq + (value * value): BigDecimal)
-              }
+            var t = BigDecimal(0)
+            val seen = RangeUtil.loopDefined(range, col, i => {
+              t += BigDecimal(col(i)) pow 2
+            })
+            if (seen) Some(t) else None
 
-              Some(foldedMapped)
-            }
           case col: NumColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: BigDecimal = mapped.foldLeft(BigDecimal(0)) {
-                case (sumsq, value) => (sumsq + (value * value): BigDecimal)
-              }
-
-              Some(foldedMapped)
-            }
+            var t = BigDecimal(0)
+            val seen = RangeUtil.loopDefined(range, col, i => {
+              t += col(i) pow 2
+            })
+            if (seen) Some(t) else None
 
           case _ => None
         }
           
-        if (result.isEmpty) None
-        else Some(result.suml)
+        if (result.isEmpty) None else Some(result.suml)
       }
     }
 
     def extract(res: Result): Table =
       res map { r => Table.constDecimal(Set(CNum(r))) } getOrElse Table.empty
   }
-  
+
+  class CountSumSumSqReducer extends Reducer[Option[(Long, BigDecimal, BigDecimal)]] {
+    def reduce(cols: JType => Set[Column], range: Range):
+      Option[(Long, BigDecimal, BigDecimal)] = {
+      val result = cols(JNumberT) flatMap {
+        case col: LongColumn =>
+          var count = 0L
+          var sum = new LongAdder()
+          var sumsq = new LongAdder()
+          val seen = RangeUtil.loopDefined(range, col, i => {
+              val z = col(i)
+              count += 1
+              sum.add(z)
+              sumsq.addSquare(z)
+          })
+
+          if (seen) Some((count, sum.total, sumsq.total)) else None
+
+        case col: DoubleColumn =>
+          var count = 0L
+          var sum = BigDecimal(0)
+          var sumsq = BigDecimal(0)
+          val seen = RangeUtil.loopDefined(range, col, i => {
+              val z = BigDecimal(col(i))
+              count += 1
+              sum += z
+              sumsq += z pow 2
+          })
+
+          if (seen) Some((count, sum, sumsq)) else None
+
+        case col: NumColumn =>
+          var count = 0L
+          var sum = BigDecimal(0)
+          var sumsq = BigDecimal(0)
+          val seen = RangeUtil.loopDefined(range, col, i => {
+              val z = col(i)
+              count += 1
+              sum += z
+              sumsq += z pow 2
+          })
+
+          if (seen) Some((count, sum, sumsq)) else None
+
+        case _ => None
+      }
+
+      if (result.isEmpty) None else Some(result.suml)
+    }
+  }
+
   val VarianceMonoid = implicitly[Monoid[Variance.Result]]
   object Variance extends Reduction(ReductionNamespace, "variance") {
     type Result = Option[InitialResult]
-    type InitialResult = (BigDecimal, BigDecimal, BigDecimal) // (count, sum, sumsq)
+
+    type InitialResult = (Long, BigDecimal, BigDecimal) 
 
     implicit val monoid = VarianceMonoid
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
     
-    def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val result = cols(JNumberT) flatMap {
-          case col: LongColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
-              }
+    def reducer: Reducer[Result] = new CountSumSumSqReducer()
 
-              Some(foldedMapped)
-            }
-          case col: DoubleColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
-              }
-
-              Some(foldedMapped)
-            }
-          case col: NumColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
-              }
-
-              Some(foldedMapped)
-            }
-          case _ => None
-        }
-
-        if (result.isEmpty) None
-        else Some(result.suml)
-      }
-    }
-
-    def extract(res: Result): Table = {
-      val filteredResult = res filter { case (count, _, _) => count != 0 }
-      filteredResult map { case (count, sum, sumsq) => Table.constDecimal(Set(CNum((sumsq - (sum * (sum / count))) / count))) } getOrElse Table.empty //todo using toDouble is BAD
-    }
+    // todo using toDouble is BAD
+    def extract(res: Result): Table = res map {
+      case (count, sum, sumsq) if count > 0 =>
+        val n = (sumsq - (sum * sum / count)) / count
+        Table.constDecimal(Set(CNum(n)))
+    } getOrElse Table.empty
   }
   
   val StdDevMonoid = implicitly[Monoid[StdDev.Result]]
   object StdDev extends Reduction(ReductionNamespace, "stdDev") {
     type Result = Option[InitialResult]
-    type InitialResult = (BigDecimal, BigDecimal, BigDecimal) // (count, sum, sumsq)
+    type InitialResult = (Long, BigDecimal, BigDecimal) // (count, sum, sumsq)
     
     implicit val monoid = StdDevMonoid
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val result = cols(JNumberT) flatMap {
-          case col: LongColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
-              }
+    def reducer: Reducer[Result] = new CountSumSumSqReducer()
 
-              Some(foldedMapped)
-            }
-          case col: DoubleColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
-              }
-
-              Some(foldedMapped)
-            }
-          case col: NumColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) {
-              None
-            } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
-              }
-
-              Some(foldedMapped)
-            }
-          case _ => None
-        }
-
-        if (result.isEmpty) None
-        else Some(result.suml)
-      }
-    }
-
-    def extract(res: Result): Table = {
-      val filteredResult = res filter { case (count, _, _) => count != 0 }
-      filteredResult map { case (count, sum, sumsq) => Table.constDecimal(Set(CNum(sqrt(count * sumsq - sum * sum) / count))) } getOrElse Table.empty //todo using toDouble is BAD
-    }
+    // todo using toDouble is BAD
+    def extract(res: Result): Table = res map {
+      case (count, sum, sumsq) if count > 0 =>
+        val n = sqrt(count * sumsq - sum * sum) / count
+        Table.constDecimal(Set(CNum(n)))
+    } getOrElse Table.empty 
   }
 }

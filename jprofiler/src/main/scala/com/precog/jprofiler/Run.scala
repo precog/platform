@@ -31,7 +31,8 @@ object Run {
     val config = RunConfig.fromCommandLine(args.toList) | sys.error("invalid arguments!")
     val queries = (
       //"count(//clicks)" :: "count(//fs2)" :: "count(//obnoxious)" :: Nil
-      "min(//obnoxious.v)" :: "max(//obnoxious.v)" :: "sum(//obnoxious.v)" :: "mean(//obnoxious.v)" :: Nil
+      //"min(//obnoxious.v)" :: "max(//obnoxious.v)" :: "sum(//obnoxious.v)" :: "mean(//obnoxious.v)" :: Nil
+      "geometricMean(//obnoxious.v)" :: "sumSq(//obnoxious.v)" :: "variance(//obnoxious.v)" :: "stdDev(//obnoxious.v)" :: Nil
     )
 
     println("starting benchmark")
