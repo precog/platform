@@ -87,7 +87,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
   }
 
   def receive = {
-    case Status => logger.trace(Status); sender ! status
+    case Status => logger.trace(Status.toString); sender ! status
 
     case msg @ IngestBatchMetadata(updates, batchClock, batchOffset) => {
       logger.trace(msg.toString)
