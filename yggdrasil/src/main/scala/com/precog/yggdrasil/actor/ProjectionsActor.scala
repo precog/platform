@@ -247,7 +247,7 @@ trait ProjectionsActorModule extends ProjectionModule {
           
           replyTo ! ArchiveMetadata(projection.descriptor)
         } catch {
-          case t: Throwable => logger.error("Error during insert, aborting batch", t)
+          case t: Throwable => logger.error("Error during archive on %s, aborting batch".format(projection), t)
         }
 
         sender ! ReleaseProjection(projection.descriptor)
