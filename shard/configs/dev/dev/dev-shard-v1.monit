@@ -11,6 +11,8 @@ check process shard-v1 with pidfile /var/run/precog/shard-v1.pid
 # Watch server log for issues
 check file shard-v1.server.log with path /var/log/precog/shard-v1.server.log
   if match "Exception" for 3 cycles then alert
+  if match "Halting ingest" for 1 cycle then restart
+  if match "Halting ingest" for 1 cycle then alert
   depends on shard-v1
   group shard-v1
 
