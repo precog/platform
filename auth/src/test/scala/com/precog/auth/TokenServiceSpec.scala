@@ -53,7 +53,7 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
         servers = [localhost]
         database = test
       }
-    }   
+    }
   """
 
   override val configuration = "services { auth { v1 { " + config + " } } }"
@@ -71,7 +71,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
   import TestTokenManager._
 
   def getTokens(authAPIKey: String) = 
-    authService.query("tokenId", authAPIKey).get("/apikeys/")
+    authService.query("apiKey", authAPIKey).get("/apikeys/")
     
   def createToken(authAPIKey: String, request: NewTokenRequest) =
     createTokenRaw(authAPIKey, request.serialize)
@@ -125,8 +125,8 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
     "enumerate existing tokens" in {
       getTokens(rootUID) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jts), _) =>
-          val ts = jts.deserialize[List[String]]
-          ts must containTheSameElementsAs(tokens.keys.toSeq)
+          val ks = jts.deserialize[APIKeySet]
+          ks.apiKeys must containTheSameElementsAs(tokens.values.filter(_.cid == rootUID).map(_.tid).toSeq)
       }}
     }
 
