@@ -124,6 +124,7 @@ trait ZkAccountIdSource extends AccountManager[Future] {
 }
 
 abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val execContext: ExecutionContext) extends AccountManager[Future] with Logging {
+  import Account._
   private implicit val impTimeout = settings.timeout
   private val randomSource = new java.security.SecureRandom
 
@@ -155,7 +156,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
           creationDate,
           apiKey, path, plan)
         
-        database(insert(account0.serialize.asInstanceOf[JObject]).into(settings.accounts)) map {
+        database(insert(account0.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]).into(settings.accounts)) map {
           _ => account0
         } 
       }
@@ -202,7 +203,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
     findAccountById(account.accountId).flatMap {
       case Some(existingAccount) =>
         database {
-          val updateObj = account.serialize(Account.AccountDecomposer).asInstanceOf[JObject]
+          val updateObj = account.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]
           update(settings.accounts).set(updateObj).where("accountId" === account.accountId)
         } map {
           _ => true
@@ -217,7 +218,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
     findAccountById(accountId).flatMap { 
       case ot @ Some(account) =>
         for {
-          _ <- database(insert(account.serialize(Account.AccountDecomposer).asInstanceOf[JObject]).into(settings.deletedAccounts))
+          _ <- database(insert(account.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]).into(settings.deletedAccounts))
            _ <- database(remove.from(settings.accounts).where("accountId" === accountId))
         } yield { ot }
       case None    => Future(None)

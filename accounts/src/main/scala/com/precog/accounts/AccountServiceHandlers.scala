@@ -122,10 +122,11 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                     Future(HttpResponse[JValue](OK, content = Some(JObject(List(JField("accountId", account.accountId))))))
                   } getOrElse {
                     accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free) { (accountId, path) =>
-                      logger.debug("Creating new account with id " + accountId)
                       val permissions = Permission.permissions(path, accountId, None, Permission.ALL)
                       val createBody = JObject(JField("grants", permissions.serialize) :: Nil) 
-                     
+
+                      logger.debug("Creating new account with id " + accountId + " and request body " + createBody)
+
                       securityService.withRootClient { client =>
                         client.contentType(application/MimeTypes.json).path("apikeys/").post[JValue]("")(createBody) map {
                           case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
