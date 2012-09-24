@@ -54,12 +54,12 @@ import scalaz.syntax.std.option._
 case class SecurityService(protocol: String, host: String, port: Int, path: String, rootKey: String) {
   def withClient[A](f: HttpClient[ByteChunk] => A): A = {
     val client = new HttpClientXLightWeb 
-    f(client.protocol(protocol).host(host).port(port))
+    f(client.protocol(protocol).host(host).port(port).path(path))
   }
   
   def withRootClient[A](f: HttpClient[ByteChunk] => A): A = {
     val client = new HttpClientXLightWeb 
-    f(client.protocol(protocol).host(host).port(port).query("apiKey", rootKey))
+    f(client.protocol(protocol).host(host).port(port).path(path).query("apiKey", rootKey))
   }
 }
 

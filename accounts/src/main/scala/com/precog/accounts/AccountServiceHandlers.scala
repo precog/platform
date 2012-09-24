@@ -107,7 +107,7 @@ class PostAccountHandler(accountManagement: AccountManagement, clock: Clock, sec
 extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
    
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
-    logger.debug("Got request in PostAccountHandler: " + request)
+    logger.trace("Got request in PostAccountHandler: " + request)
     request.content map { futureContent => 
       Success(
         futureContent flatMap { jv =>
@@ -129,7 +129,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                     )
 
                     accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free) { (accountId, path) =>
-                      logger.debug("Creaing new account with id " + accountId)
+                      logger.debug("Creating new account with id " + accountId)
                       val createBody = JObject(
                         JField("grants", JArray(
                           baseGrant("owner", accountId) ::
@@ -140,14 +140,14 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                       ) 
                      
                       securityService.withRootClient { client =>
-                        client.contentType(application/MimeTypes.json).post[JValue]("apikeys")(createBody) map {
+                        client.contentType(application/MimeTypes.json).path("apikeys/").post[JValue]("")(createBody) map {
                           case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
                             logger.debug("Created new api key: " + jid)
                             jid.deserialize[String]
 
                           case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) => 
                             logger.error("Fatal error attempting to create api key: " + failure + ": " + content)
-                            throw new HttpException(failure, reason)
+                            throw HttpException(failure, reason)
 
                           case x => 
                             logger.error("Unexpected response from api provisioning service: " + x)
