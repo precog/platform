@@ -137,9 +137,6 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                               logger.error("Unexpected response to token creation request: " + err)
                               throw HttpException(BadGateway, "Unexpected response to token creation request: " + err)
                            }
-                            val apiKey = "foo"
-                            logger.debug("Created new api key: " + apiKey)
-                            apiKey
 
                           case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) => 
                             logger.error("Fatal error attempting to create api key: " + failure + ": " + content)
