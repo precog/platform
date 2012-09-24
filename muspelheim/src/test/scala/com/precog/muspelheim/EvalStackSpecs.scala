@@ -737,6 +737,22 @@ trait EvalStackSpecs extends Specification {
         
         results mustEqual Set(SDecimal(38))
       }
+
+      "using a solve" >> {
+        val input = """
+          | import std::stats::denseRank
+          |
+          | campaigns := //campaigns
+          |
+          | histogram := solve 'cpm
+          |  {count: count(campaigns.cpm where campaigns.cpm = 'cpm), age: 'cpm}
+          |
+          | histogram with {rank: std::stats::rank(neg histogram.count)}""".stripMargin
+
+        val results = eval(input)
+
+        results must not be empty
+      }
       
       "on a set of strings" >> {
         val input = """
