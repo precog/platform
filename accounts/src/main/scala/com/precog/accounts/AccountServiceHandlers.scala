@@ -123,13 +123,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                   } getOrElse {
                     accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free) { (accountId, path) =>
                       logger.debug("Creating new account with id " + accountId)
-                      val permissions: List[Permission] = List(
-                        OwnerPermission(path, None),
-                        ReadPermission(path, accountId, None),
-                        WritePermission(path, None),
-                        ReducePermission(path, accountId, None)
-                      )
-
+                      val permissions = Permission.permissions(path, accountId, None, Permission.ALL)
                       val createBody = JObject(JField("grants", permissions.serialize) :: Nil) 
                      
                       securityService.withRootClient { client =>

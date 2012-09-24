@@ -47,26 +47,29 @@ import org.joda.time.format.ISODateTimeFormat
 class CreateTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Token => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (authToken: Token) => 
-      request.content.map { _.flatMap { _.validated[NewTokenRequest] match {
-        case Success(r) =>
-          if (r.grants.exists(_.isExpired(new DateTime())))
-            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new token."), content = Some(JObject(List(
-              JField("error", "Unable to create token with expired permission")
+      request.content.map { _.flatMap { jvalue =>
+        jvalue.validated[NewTokenRequest] match {
+          case Success(r) =>
+            if (r.grants.exists(_.isExpired(new DateTime())))
+              Future(HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new token."), content = Some(JObject(List(
+                JField("error", "Unable to create token with expired permission")
+              )))))
+            else
+              tokenManagement.createToken(authToken, r).map { 
+                case Success(token) => 
+                  HttpResponse[JValue](OK, content = Some(token.tid.serialize))
+                case Failure(e) => 
+                  HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new token."), content = Some(JObject(List(
+                    JField("error", "Error creating new token: " + e)
+                  ))))
+              }
+          case Failure(e) =>
+            logger.warn("The token request body \n" + jvalue + "\n was invalid: " + e)
+            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new token request body."), content = Some(JObject(List(
+              JField("error", "Invalid new token request body: " + e)
             )))))
-          else
-            tokenManagement.createToken(authToken, r).map { 
-              case Success(token) => 
-                HttpResponse[JValue](OK, content = Some(token.tid.serialize))
-              case Failure(e) => 
-                HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new token."), content = Some(JObject(List(
-                  JField("error", "Error creating new token: " + e)
-                ))))
-            }
-        case Failure(e) =>
-          Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new token request body."), content = Some(JObject(List(
-            JField("error", "Invalid new token request body: " + e)
-          )))))
-      }}}.getOrElse {
+          }
+        }}.getOrElse {
         Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing new token request body."), content = Some(JString("Missing new token request body."))))
       }
     }
