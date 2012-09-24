@@ -79,7 +79,7 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
 
   override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
 
-  lazy val authService = service.contentType[JValue](application/(MimeTypes.json)).path("/auth")
+  lazy val authService = service.contentType[JValue](application/(MimeTypes.json))
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(0, Duration(1, "second"))
 

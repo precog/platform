@@ -174,15 +174,15 @@ trait WritePermissionSerialization {
   implicit val WritePermissionDecomposer: Decomposer[WritePermission] = new Decomposer[WritePermission] {
     override def decompose(g: WritePermission): JValue = JObject(List(
       JField("type", WritePermission.name),
-      JField("directory", g.path),
-      JField("expires", g.expiration.serialize)
+      JField("path", g.path),
+      JField("expirationDate", g.expiration.serialize)
     )) 
   }
 
   implicit val WritePermissionExtractor: Extractor[WritePermission] = new Extractor[WritePermission] with ValidatedExtraction[WritePermission] {    
     override def validated(obj: JValue): Validation[Error, WritePermission] = 
-      ((obj \ "directory").validated[Path] |@|
-       (obj \ "expires").validated[Option[DateTime]]).apply(WritePermission(_,_))
+      ((obj \ "path").validated[Path] |@|
+       (obj \ "expirationDate").validated[Option[DateTime]]).apply(WritePermission(_,_))
   }
 }
 
@@ -202,15 +202,15 @@ trait OwnerPermissionSerialization {
   implicit val OwnerPermissionDecomposer: Decomposer[OwnerPermission] = new Decomposer[OwnerPermission] {
     override def decompose(g: OwnerPermission): JValue = JObject(List(
       JField("type", OwnerPermission.name),
-      JField("directory", g.path),
-      JField("expires", g.expiration.serialize)
+      JField("path", g.path),
+      JField("expirationDate", g.expiration.serialize)
     )) 
   }
 
   implicit val OwnerPermissionExtractor: Extractor[OwnerPermission] = new Extractor[OwnerPermission] with ValidatedExtraction[OwnerPermission] {    
     override def validated(obj: JValue): Validation[Error, OwnerPermission] = 
-      ((obj \ "directory").validated[Path] |@|
-       (obj \ "expires").validated[Option[DateTime]]).apply(OwnerPermission(_,_))
+      ((obj \ "path").validated[Path] |@|
+       (obj \ "expirationDate").validated[Option[DateTime]]).apply(OwnerPermission(_,_))
   }
 
 }
@@ -230,17 +230,17 @@ trait ReadPermissionSerialization {
   implicit val ReadPermissionDecomposer: Decomposer[ReadPermission] = new Decomposer[ReadPermission] {
     override def decompose(g: ReadPermission): JValue = JObject(List(
       JField("type", ReadPermission.name),
-      JField("directory", g.path),
-      JField("owner", g.owner),
-      JField("expires", g.expiration.serialize)
+      JField("path", g.path),
+      JField("ownerAccountId", g.owner),
+      JField("expirationDate", g.expiration.serialize)
     )) 
   }
 
   implicit val ReadPermissionExtractor: Extractor[ReadPermission] = new Extractor[ReadPermission] with ValidatedExtraction[ReadPermission] {    
     override def validated(obj: JValue): Validation[Error, ReadPermission] = 
-      ((obj \ "directory").validated[Path] |@|
-       (obj \ "owner").validated[TokenID] |@|
-       (obj \ "expires").validated[Option[DateTime]]).apply(ReadPermission(_,_,_))
+      ((obj \ "path").validated[Path] |@|
+       (obj \ "ownerAccountId").validated[TokenID] |@|
+       (obj \ "expirationDate").validated[Option[DateTime]]).apply(ReadPermission(_,_,_))
   }
 
 }
@@ -261,17 +261,17 @@ trait ReducePermissionSerialization {
   implicit val ReducePermissionDecomposer: Decomposer[ReducePermission] = new Decomposer[ReducePermission] {
     override def decompose(g: ReducePermission): JValue = JObject(List(
       JField("type", ReducePermission.name),
-      JField("directory", g.path),
-      JField("owner", g.owner),
-      JField("expires", g.expiration.serialize)
+      JField("path", g.path),
+      JField("ownerAccountId", g.owner),
+      JField("expirationDate", g.expiration.serialize)
     )) 
   }
 
   implicit val ReducePermissionExtractor: Extractor[ReducePermission] = new Extractor[ReducePermission] with ValidatedExtraction[ReducePermission] {    
     override def validated(obj: JValue): Validation[Error, ReducePermission] = 
-      ((obj \ "directory").validated[Path] |@|
-       (obj \ "owner").validated[TokenID] |@|
-       (obj \ "expires").validated[Option[DateTime]]).apply(ReducePermission(_,_,_))
+      ((obj \ "path").validated[Path] |@|
+       (obj \ "ownerAccountId").validated[TokenID] |@|
+       (obj \ "expirationDate").validated[Option[DateTime]]).apply(ReducePermission(_,_,_))
   }
 
 }

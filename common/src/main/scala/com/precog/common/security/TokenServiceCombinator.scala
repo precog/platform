@@ -33,6 +33,6 @@ trait TokenServiceCombinators extends HttpRequestHandlerCombinators {
   implicit val jsonErrorTransform = (failure: HttpFailure, s: String) => HttpResponse(failure, content = Some(s.serialize))
 
   def token[A, B](tokenManager: TokenManager[Future])(service: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) = {
-      new TokenRequiredService[A, B](tokenManager, service)
+    new TokenRequiredService[A, B](tokenManager, service)
   }
 }
