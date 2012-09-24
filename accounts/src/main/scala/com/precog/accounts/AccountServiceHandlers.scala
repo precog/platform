@@ -21,6 +21,8 @@ package com.precog
 package accounts
 
 import com.precog.common.Path
+import com.precog.common.security._
+
 import blueeyes.bkka.AkkaTypeClasses._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
@@ -50,8 +52,6 @@ import HttpHeaders.Authorization
 import akka.dispatch.{ ExecutionContext, Future, Await }
 import akka.util.Timeout
 import akka.util.duration._
-
-import java.security._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -121,23 +121,16 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                     logger.debug("Found existing account: " + account.accountId)
                     Future(HttpResponse[JValue](OK, content = Some(JObject(List(JField("accountId", account.accountId))))))
                   } getOrElse {
-                    def baseGrant(grantType: String, accountId: String) = JObject(
-                      JField("type", grantType) ::
-                      JField("path", Path(accountId)) ::
-                      JField("ownerAccountId", accountId) ::
-                      JField("expirationDate", 0) :: Nil
-                    )
-
                     accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free) { (accountId, path) =>
                       logger.debug("Creating new account with id " + accountId)
-                      val createBody = JObject(
-                        JField("grants", JArray(
-                          baseGrant("owner", accountId) ::
-                          baseGrant("read", accountId) :: 
-                          baseGrant("write", accountId) ::
-                          baseGrant("reduce", accountId) :: Nil
-                        )) :: Nil
-                      ) 
+                      val permissions: List[Permission] = List(
+                        OwnerPermission(path, None),
+                        ReadPermission(path, accountId, None),
+                        WritePermission(path, None),
+                        ReducePermission(path, accountId, None)
+                      )
+
+                      val createBody = JObject(JField("grants", permissions.serialize) :: Nil) 
                      
                       securityService.withRootClient { client =>
                         client.contentType(application/MimeTypes.json).path("apikeys/").post[JValue]("")(createBody) map {
