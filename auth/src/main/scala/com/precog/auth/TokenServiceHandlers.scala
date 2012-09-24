@@ -90,7 +90,8 @@ class GetTokenDetailsHandler(tokenManagement: TokenManagement)(implicit dispatch
             HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find token "+tid)))
         }
       }.getOrElse {
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."),
+                                    content = Some(JString("Missing token id in request URI."))))
       }
     }
   }
@@ -108,7 +109,8 @@ class GetTokenGrantsHandler(tokenManagement: TokenManagement)(implicit dispatche
             HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("The specified token does not exist")))
         }
       }.getOrElse {
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), 
+                                    content = Some(JString("Missing token id in request URI."))))
       }
     }
   }
@@ -120,21 +122,26 @@ class AddTokenGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher
     Success { (authToken: Token) => 
       (for {
         tid <- request.parameters.get('apikey) 
-        content <- request.content 
+        contentFuture <- request.content 
       } yield {
-        content.flatMap { _.validated[String] match {
-          case Success(gid) =>
-            tokenManagement.addTokenGrant(tid, gid).map {
-              case Success(_)   => HttpResponse[JValue](Created)
-              case Failure(msg) => HttpResponse[JValue](HttpStatus(BadRequest), content = Some(JString(msg)))
-            }
-          case Failure(e) =>
-            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid add grant request body."), content = Some(JObject(List(
-              JField("error", "Invalid add grant request body: " + e)
-            )))))
-        }}
+        contentFuture flatMap { jv =>
+          (jv \ "grantId").validated[String] match {
+            case Success(gid) =>
+              // TODO: Shouldn't this be using the auth token somehow???
+              tokenManagement.addTokenGrant(tid, gid).map {
+                case Success(_)   => HttpResponse[JValue](Created)
+                case Failure(msg) => HttpResponse[JValue](HttpStatus(BadRequest), content = Some(JString(msg)))
+              }
+            case Failure(e) =>
+              logger.warn("Unable to parse grant ID from " + jv + ": " + e)
+              Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid add grant request body."), 
+                                          content = Some(JObject(List(JField("error", "Invalid add grant request body: " + e)
+              )))))
+          }
+        }
       }).getOrElse {
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), content = Some(JString("Missing token id in request URI."))))
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing token id in request URI."), 
+                                    content = Some(JString("Missing token id in request URI."))))
       }
     }
   }

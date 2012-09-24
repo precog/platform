@@ -102,7 +102,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
     authService.query("apiKey", authAPIKey).get("/apikeys/"+queryKey+"/grants/")
 
   def addTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
-    authService.query("apiKey", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(JString(grantId) : JValue)
+    authService.query("apiKey", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(JObject(JField("grantId", JString(grantId)) :: Nil) : JValue)
 
   def removeTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
     authService.query("apiKey", authAPIKey).delete("/apikeys/"+updateKey+"/grants/"+grantId)

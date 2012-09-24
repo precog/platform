@@ -88,7 +88,7 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
   val service: HttpRequest[Future[JValue]] => Validation[NotServed,Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
       //TODO, if root then can see more
-      accountManagement.listAccountIds(auth.accountId).map { 
+      accountManagement.listAccountIds(auth.apiKey).map { 
         case accounts => 
           HttpResponse[JValue](OK, 
                                content = Some(JObject(accounts.map(account => JField("accountId", account.accountId))(collection.breakOut))))
@@ -171,31 +171,36 @@ extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue
     Success { (auth: Account) =>
       (for {
         accountId <- request.parameters.get('accountId)
-        grantId <- request.parameters.get('grantId)
       } yield {
         accountManagement.findAccountById(accountId) flatMap {
           case Some(account) => 
-            val createBody = JObject(List(JField("grantId", JString(grantId)))) 
-        
-            securityService.withClient { client =>
-              client.query("apiKey", auth.apiKey)
-                    .contentType(application/MimeTypes.json)
-                    .post[JValue]("apikeys/" + account.apiKey + "/grants")(createBody) map {
-                                                
-                case HttpResponse(HttpStatus(Created, _), _, None, _) => 
-                  HttpResponse[JValue](OK, content = Some(""))
-                
-                case _ =>
-                  HttpResponse[JValue](HttpStatus(InternalServerError), content = Some(JString("could not create grants")))
+            request.content map { futureContent => 
+              futureContent flatMap { jvalue =>
+                //todo: validate the jvalue?
+                securityService.withClient { client =>
+                  client.query("apiKey", auth.apiKey)
+                        .contentType(application/MimeTypes.json)
+                        .post[JValue]("apikeys/" + account.apiKey + "/grants/")(jvalue) map {
+                                                    
+                    case HttpResponse(HttpStatus(Created, _), _, None, _) => 
+                      HttpResponse[JValue](OK, content = Some(""))
+                    
+                    case _ =>
+                      HttpResponse[JValue](HttpStatus(InternalServerError), content = Some(JString("could not create grants")))
+                  }
+                }
               }
+            } getOrElse {
+              Future(HttpResponse(HttpStatus(BadRequest, "Missing request body."),
+                                  content = Some(JString("Missing request body"))))
             }
                 
           case _  => 
             Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find account "+ accountId))))
         }
       }) getOrElse {
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing account or grant id from request parameters."), 
-                                    content = Some(JString("Missing account or grant id from request parameters."))))
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing account id."), 
+                                    content = Some(JString("Missing account id."))))
       }
     }
   }
@@ -251,8 +256,8 @@ extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]
             Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId))))
         }
       }) getOrElse {
-        sys.error("fixme")
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing type in request URI."), content = Some(JString("Missing type in request URI."))))
+        val errmsg = "Missing accountId and/or type request parameters."
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, errmsg), content = Some(JString(errmsg))))
       }
     }
   }
@@ -349,12 +354,8 @@ class AccountManagement(val accountManager: AccountManager[Future])(implicit exe
     accountManager.findAccountById(accountId)
   }
 
-  def listAccountIds(apiKey: String)  = {
-    if (apiKey == sys.error("what goes here?")) {
-      accountManager.listAccountIds("_")
-    } else {
-      accountManager.listAccountIds(apiKey)
-    }
+  def listAccountIds(apiKey: String) = {
+    accountManager.listAccountIds(apiKey)
   }
  
   def deleteAccount(accountId: String): Future[Boolean] = {
