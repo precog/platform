@@ -21,6 +21,7 @@ package com.precog
 package accounts
 
 import com.precog.common.Path
+import com.precog.auth.WrappedAPIKey
 import com.precog.common.security._
 
 import blueeyes.bkka.AkkaTypeClasses._
@@ -129,9 +130,16 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
 
                       securityService.withRootClient { client =>
                         client.contentType(application/MimeTypes.json).path("apikeys/").post[JValue]("")(createBody) map {
-                          case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
-                            logger.debug("Created new api key: " + jid)
-                            jid.deserialize[String]
+                          case HttpResponse(HttpStatus(OK, _), _, Some(wrappedKey), _) =>
+                           wrappedKey.validated[WrappedAPIKey] match {
+                             case Success(WrappedAPIKey(apiKey)) => apiKey
+                             case Failure(err) =>
+                              logger.error("Unexpected response to token creation request: " + err)
+                              throw HttpException(BadGateway, "Unexpected response to token creation request: " + err)
+                           }
+                            val apiKey = "foo"
+                            logger.debug("Created new api key: " + apiKey)
+                            apiKey
 
                           case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) => 
                             logger.error("Fatal error attempting to create api key: " + failure + ": " + content)

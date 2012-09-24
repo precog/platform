@@ -69,7 +69,7 @@ class CreateTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: 
             else
               tokenManagement.createToken(authToken, r).map { 
                 case Success(token) => 
-                  HttpResponse[JValue](OK, content = Some(token.tid.serialize))
+                  HttpResponse[JValue](OK, content = Some(WrappedAPIKey(token.tid).serialize))
                 case Failure(e) => 
                   logger.warn("Failed to create token: " + e)
                   HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new token."), content = Some(JObject(List(

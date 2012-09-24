@@ -153,8 +153,8 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       val request = NewTokenRequest(grantList(0).map(_.permission))
       createToken(rootUID, request) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
-          val id = jid.deserialize[String]
-          id.length must be_>(0)
+          val id = jid.deserialize[WrappedAPIKey]
+          id.apiKey.length must be_>(0)
       }}
     }
 
@@ -162,7 +162,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       val request = NewTokenRequest(grantList(1).map(_.permission))
       createToken(testUID, request) flatMap {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => ok 
-          val id = jid.deserialize[String]
+          val WrappedAPIKey(id) = jid.deserialize[WrappedAPIKey]
           getTokenDetails(rootUID, id) map ((Some(id), _))
         case other => Future((None, other))
       } must whenDelivered { beLike {
