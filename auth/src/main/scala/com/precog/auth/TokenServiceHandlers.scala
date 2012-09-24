@@ -44,6 +44,17 @@ import scalaz.Validation._
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 
+class GetTokensHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+  val service = (request: HttpRequest[Future[JValue]]) => {
+    Success { (authToken: Token) => 
+      tokenManagement.tokens(authToken.tid).map { tokens =>
+        HttpResponse[JValue](OK, content = Some(APIKeySet(tokens.map(_.tid)).serialize))
+      }
+    }
+  }
+  val metadata = None
+}
+
 class CreateTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Token => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (authToken: Token) => 
@@ -58,7 +69,7 @@ class CreateTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: 
             else
               tokenManagement.createToken(authToken, r).map { 
                 case Success(token) => 
-                  HttpResponse[JValue](OK, content = Some(token.tid.serialize))
+                  HttpResponse[JValue](OK, content = Some(WrappedAPIKey(token.tid).serialize))
                 case Failure(e) => 
                   logger.warn("Failed to create token: " + e)
                   HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new token."), content = Some(JObject(List(
@@ -125,8 +136,8 @@ class AddTokenGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher
         contentFuture <- request.content 
       } yield {
         contentFuture flatMap { jv =>
-          (jv \ "grantId").validated[String] match {
-            case Success(gid) =>
+          jv.validated[WrappedGrantId] match {
+            case Success(WrappedGrantId(gid)) =>
               // TODO: Shouldn't this be using the auth token somehow???
               tokenManagement.addTokenGrant(tid, gid).map {
                 case Success(_)   => HttpResponse[JValue](Created)
@@ -254,7 +265,7 @@ class AddGrantChildHandler(tokenManagement: TokenManagement)(implicit dispatcher
         content.flatMap { _.validated[Permission] match {
           case Success(permission) => tokenManagement.addGrantChild(gid, permission) map {
             case Success(grant) => 
-              HttpResponse[JValue](OK, content = Some(grant.gid.serialize))
+              HttpResponse[JValue](OK, content = Some(WrappedGrantId(grant.gid).serialize))
             case Failure(e) => 
               HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new child grant."), content = Some(JObject(List(
                 JField("error", "Error creating new child grant: " + e)
@@ -291,6 +302,10 @@ class DeleteGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: 
 class TokenManagement(val tokenManager: TokenManager[Future])(implicit val execContext: ExecutionContext)
   extends TokenManagerAccessControl[Future](tokenManager) {
   
+  def tokens(tid: TokenID) : Future[Set[Token]] = {
+    tokenManager.listTokens.map(_.filter(_.cid == tid).toSet)
+  }
+
   def createToken(requestor: Token, request: NewTokenRequest): Future[Validation[String, Token]] = {
     tokenManager.newToken("Anonymous", Set.empty).flatMap { token =>
       val tid = token.tid
@@ -403,6 +418,55 @@ trait TokenDetailsSerialization {
 
 object TokenDetails extends TokenDetailsSerialization
 
+case class WrappedAPIKey(apiKey: String)
+
+trait WrappedAPIKeySerialization {
+  implicit val wrappedAPIKeyExtractor: Extractor[WrappedAPIKey] = new Extractor[WrappedAPIKey] with ValidatedExtraction[WrappedAPIKey] {
+    override def validated(obj: JValue): Validation[Error, WrappedAPIKey] =
+      (obj \ "apiKey").validated[String].map(WrappedAPIKey(_))
+  }
+  
+  implicit val wrappedAPIKeyDecomposer: Decomposer[WrappedAPIKey] = new Decomposer[WrappedAPIKey] {
+    override def decompose(wrappedAPIKey: WrappedAPIKey): JValue = JObject(List(
+      JField("apiKey", wrappedAPIKey.apiKey)
+    ))
+  }
+}
+
+object WrappedAPIKey extends WrappedAPIKeySerialization 
+
+case class APIKeySet(apiKeys: Set[TokenID])
+
+trait APIKeySetSerialization {
+  implicit val tokenSetExtractor: Extractor[APIKeySet] = new Extractor[APIKeySet] with ValidatedExtraction[APIKeySet] {
+    override def validated(obj: JValue): Validation[Error, APIKeySet] =
+      obj.validated[Set[WrappedAPIKey]].map(wrappedKeys => APIKeySet(wrappedKeys.map(_.apiKey)))
+  }
+
+  implicit val tokenSetDecomposer: Decomposer[APIKeySet] = new Decomposer[APIKeySet] {
+    override def decompose(apiKeySet: APIKeySet): JValue = JArray(apiKeySet.apiKeys.map(apiKey => WrappedAPIKey(apiKey).serialize).toList)
+  }
+}
+
+object APIKeySet extends APIKeySetSerialization
+
+case class WrappedGrantId(grantId: String)
+
+trait WrappedGrantIdSerialization {
+  implicit val wrappedGrantIdExtractor: Extractor[WrappedGrantId] = new Extractor[WrappedGrantId] with ValidatedExtraction[WrappedGrantId] {
+    override def validated(obj: JValue): Validation[Error, WrappedGrantId] =
+      (obj \ "grantId").validated[String].map(WrappedGrantId(_))
+  }
+  
+  implicit val wrappedGrantIdDecomposer: Decomposer[WrappedGrantId] = new Decomposer[WrappedGrantId] {
+    override def decompose(wrappedGrantId: WrappedGrantId): JValue = JObject(List(
+      JField("grantId", wrappedGrantId.grantId)
+    ))
+  }
+}
+
+object WrappedGrantId extends WrappedGrantIdSerialization 
+
 case class GrantSet(grants: Set[Grant])
 
 trait GrantSetSerialization {
@@ -424,16 +488,14 @@ trait GrantDetailsSerialization {
   implicit val grantDetailsExtractor: Extractor[GrantDetails] = new Extractor[GrantDetails] with ValidatedExtraction[GrantDetails] {
     override def validated(obj: JValue): Validation[Error, GrantDetails] =
       ((obj \ "grantId").validated[String] |@|
-       (obj \ "issuer").validated[Option[String]] |@|
-       obj.validated[Permission]).apply((id, issuer, permission) => GrantDetails(Grant(id, issuer, permission)))
+       obj.validated[Permission]).apply((id, permission) => GrantDetails(Grant(id, None, permission)))
   }
 
   implicit val grantDetailsDecomposer: Decomposer[GrantDetails] = new Decomposer[GrantDetails] {
     override def decompose(details: GrantDetails): JValue =
       JObject(List(
-        Some(JField("grantId", details.grant.gid)),
-        details.grant.issuer.map(JField("issuer", _))
-      ).flatten) merge details.grant.permission.serialize
+        JField("grantId", details.grant.gid)
+      )) merge details.grant.permission.serialize
   }
 }
 

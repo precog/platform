@@ -72,7 +72,7 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
         servers = [localhost]
         database = test
       }
-    }   
+    }
   """
 
   override val configuration = "services { auth { v1 { " + config + " } } }"
@@ -89,6 +89,9 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
 class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
   import TestTokenManager._
 
+  def getTokens(authAPIKey: String) = 
+    authService.query("apiKey", authAPIKey).get("/apikeys/")
+    
   def createToken(authAPIKey: String, request: NewTokenRequest) =
     createTokenRaw(authAPIKey, request.serialize)
 
@@ -101,8 +104,11 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
   def getTokenGrants(authAPIKey: String, queryKey: String) = 
     authService.query("apiKey", authAPIKey).get("/apikeys/"+queryKey+"/grants/")
 
-  def addTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
-    authService.query("apiKey", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(JObject(JField("grantId", JString(grantId)) :: Nil) : JValue)
+  def addTokenGrant(authAPIKey: String, updateKey: String, grantId: WrappedGrantId) = 
+    addTokenGrantRaw(authAPIKey, updateKey, grantId.serialize)
+
+  def addTokenGrantRaw(authAPIKey: String, updateKey: String, grantId: JValue) = 
+    authService.query("apiKey", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(grantId)
 
   def removeTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
     authService.query("apiKey", authAPIKey).delete("/apikeys/"+updateKey+"/grants/"+grantId)
@@ -118,6 +124,8 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
     
   def addGrantChildRaw(authAPIKey: String, grantId: String, permission: JValue) = 
     authService.query("apiKey", authAPIKey).post("/grants/"+grantId+"/children/")(permission)
+    
+  def equalGrant(g1: Grant, g2: Grant) = (g1.gid == g2.gid) && (g1.permission == g2.permission)
 
   "Token service" should {
     "get existing token" in {
@@ -136,12 +144,20 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       }}
     }
     
+    "enumerate existing tokens" in {
+      getTokens(rootUID) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jts), _) =>
+          val ks = jts.deserialize[APIKeySet]
+          ks.apiKeys must containTheSameElementsAs(tokens.values.filter(_.cid == rootUID).map(_.tid).toSeq)
+      }}
+    }
+
     "create root token with defaults" in {
       val request = NewTokenRequest(grantList(0).map(_.permission))
       createToken(rootUID, request) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
-          val id = jid.deserialize[String]
-          id.length must be_>(0)
+          val id = jid.deserialize[WrappedAPIKey]
+          id.apiKey.length must be_>(0)
       }}
     }
 
@@ -149,7 +165,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       val request = NewTokenRequest(grantList(1).map(_.permission))
       createToken(testUID, request) flatMap {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => ok 
-          val id = jid.deserialize[String]
+          val WrappedAPIKey(id) = jid.deserialize[WrappedAPIKey]
           getTokenDetails(rootUID, id) map ((Some(id), _))
         case other => Future((None, other))
       } must whenDelivered { beLike {
@@ -204,7 +220,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
     }
     
     "add a specified grant to a token" in {
-      addTokenGrant(cust1UID, testUID, "user1_read") must whenDelivered { beLike {
+      addTokenGrant(cust1UID, testUID, WrappedGrantId("user1_read")) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(Created, _), _, None, _) => ok
       }}
     }
@@ -214,7 +230,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgd), _) =>
           val gd = jgd.deserialize[GrantDetails]
           gd must beLike {
-            case GrantDetails(grant) if (grant == grants("user2_read"))=> ok
+            case GrantDetails(grant) if (grant.gid == grants("user2_read").gid) && (grant.permission == grants("user2_read").permission) => ok
           }
       }}
     }
@@ -236,17 +252,17 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgs), _) =>
           val gs = jgs.deserialize[GrantSet]
           gs must beLike {
-            case GrantSet(grants) if grants sameElements rootReadChildren => ok
+            case GrantSet(grants) if grants.forall(g => rootReadChildren.exists(equalGrant(g, _))) => ok
           }
       }}
     }
-    
+
     "add a child grant to the given grant" in {
       val permission = WritePermission(Path("/user1"), None)
       addGrantChild(rootUID, "root_read", permission) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) =>
-          val id = jid.deserialize[String]
-          id.length must be_>(0)
+          val id = jid.deserialize[WrappedGrantId]
+          id.grantId.length must be_>(0)
       }}
     }
   }

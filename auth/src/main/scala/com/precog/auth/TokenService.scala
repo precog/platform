@@ -59,6 +59,7 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
           jsonp[ByteChunk] {
             token(state.tokenManagement.tokenManager) {
               path("/apikeys/") {
+                get(new GetTokensHandler(state.tokenManagement)) ~
                 post(new CreateTokenHandler(state.tokenManagement)) ~
                 path("'apikey") {
                   get(new GetTokenDetailsHandler(state.tokenManagement)) ~
