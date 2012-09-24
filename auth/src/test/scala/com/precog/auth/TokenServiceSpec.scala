@@ -261,8 +261,8 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       val permission = WritePermission(Path("/user1"), None)
       addGrantChild(rootUID, "root_read", permission) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) =>
-          val id = jid.deserialize[String]
-          id.length must be_>(0)
+          val id = jid.deserialize[WrappedGrantId]
+          id.grantId.length must be_>(0)
       }}
     }
   }

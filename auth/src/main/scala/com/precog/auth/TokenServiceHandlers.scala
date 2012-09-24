@@ -265,7 +265,7 @@ class AddGrantChildHandler(tokenManagement: TokenManagement)(implicit dispatcher
         content.flatMap { _.validated[Permission] match {
           case Success(permission) => tokenManagement.addGrantChild(gid, permission) map {
             case Success(grant) => 
-              HttpResponse[JValue](OK, content = Some(grant.gid.serialize))
+              HttpResponse[JValue](OK, content = Some(WrappedGrantId(grant.gid).serialize))
             case Failure(e) => 
               HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new child grant."), content = Some(JObject(List(
                 JField("error", "Error creating new child grant: " + e)
