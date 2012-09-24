@@ -82,8 +82,8 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
 
   private def getSortOrder(request: HttpRequest[_]): Validation[String, DesiredSortOrder] = {
     request.parameters.get('sortOrder) filter (_ != null) map (_.toLowerCase) map {
-      case "asc" | "ascending" => success(TableModule.SortAscending)
-      case "desc" | "descending" => success(TableModule.SortDescending)
+      case "asc" | "\"asc\"" | "ascending" | "\"ascending\"" => success(TableModule.SortAscending)
+      case "desc" | "\"desc\"" |  "descending" | "\"descending\"" => success(TableModule.SortDescending)
       case badOrder => failure("Unknown sort ordering: %s." format badOrder)
     } getOrElse success(TableModule.SortAscending)
   }
