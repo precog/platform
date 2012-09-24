@@ -275,6 +275,9 @@ if [ ! -e $WORKDIR/root_token.json ]; then
     }
 fi
 
+TOKENID=`grep tid $WORKDIR/root_token.json | sed -e 's/.*"tid" : "\(.*\)".*/\1/'`
+echo $TOKENID > $WORKDIR/root_token.txt
+
 # Set up ingest and shard services
 sed -e "s#/var/log#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.conf > $WORKDIR/configs/ingest-v1.conf
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.logging.xml > $WORKDIR/configs/ingest-v1.logging.xml
@@ -285,7 +288,7 @@ sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/shard/configs/dev/shard-v1.
 sed -e "s#/var/log#$WORKDIR/logs#" < $BASEDIR/auth/configs/dev/dev-auth-v1.conf > $WORKDIR/configs/auth-v1.conf
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/auth/configs/dev/dev-auth-v1.logging.xml > $WORKDIR/configs/auth-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#" < $BASEDIR/accounts/configs/dev/accounts-v1.conf > $WORKDIR/configs/accounts-v1.conf
+sed -e "s#/var/log#$WORKDIR/logs#; s/port = 80/port = 30062/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < $BASEDIR/accounts/configs/dev/accounts-v1.conf > $WORKDIR/configs/accounts-v1.conf
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/accounts/configs/dev/accounts-v1.logging.xml > $WORKDIR/configs/accounts-v1.logging.xml
 
 cd $BASEDIR
