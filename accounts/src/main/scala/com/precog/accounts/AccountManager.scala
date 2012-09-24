@@ -114,6 +114,10 @@ trait ZkAccountIdSource extends AccountManager[Future] {
   def settings: ZkAccountManagerSettings
 
   def newAccountId: Future[String] = Future {
+    if (!zkc.exists(settings.zkAccountIdPath)) {
+      zkc.createPersistent(settings.zkAccountIdPath, true)
+    }
+
     val createdPath = zkc.createPersistentSequential(settings.zkAccountIdPath, Array.empty[Byte])
     createdPath.substring(createdPath.length - 10) //last 10 characters are a sequential int
   }

@@ -103,19 +103,22 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
 //returns accountId of account if exists, else creates account, 
 //we are working on path accountId.. do we use this to get the account the user wants to create?
 //because we also need auth at this stage.. auth will give us the root key for permmissions
-class PostAccountHandler(accountManagement: AccountManagement, clock: Clock, securityServiceRoot: String, rootKey: String)(implicit ctx: ExecutionContext) 
+class PostAccountHandler(accountManagement: AccountManagement, clock: Clock, securityService: SecurityService)(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
    
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
+    logger.debug("Got request in PostAccountHandler: " + request)
     request.content map { futureContent => 
       Success(
         futureContent flatMap { jv =>
           (jv \ "email", jv \ "password") match {
             case (JString(email), JString(password)) =>
+              logger.debug("About to create account for email " + email)
               for {
                 existingAccountOpt <- accountManagement.findAccountByEmail(email)
                 accountResponse <- 
                   existingAccountOpt map { account =>
+                    logger.debug("Found existing account: " + account.accountId)
                     Future(HttpResponse[JValue](OK, content = Some(JObject(List(JField("accountId", account.accountId))))))
                   } getOrElse {
                     def baseGrant(grantType: String, accountId: String) = JObject(
@@ -126,6 +129,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                     )
 
                     accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free) { (accountId, path) =>
+                      logger.debug("Creaing new account with id " + accountId)
                       val createBody = JObject(
                         JField("grants", JArray(
                           baseGrant("owner", accountId) ::
@@ -135,16 +139,24 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                         )) :: Nil
                       ) 
                      
-                      val client = new HttpClientXLightWeb 
-                      client.path(securityServiceRoot).query("apiKey", rootKey)  
-                                                      .contentType(application/MimeTypes.json)
-                                                      .post[JValue]("apikeys")(createBody) map {
-                        case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => jid.deserialize[String]
-                        case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, _, _) => throw new HttpException(failure, reason)
-                        case x => throw HttpException(BadGateway, "Unexpected response from the api provisioning service: " + x)
+                      securityService.withRootClient { client =>
+                        client.contentType(application/MimeTypes.json).post[JValue]("apikeys")(createBody) map {
+                          case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
+                            logger.debug("Created new api key: " + jid)
+                            jid.deserialize[String]
+
+                          case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) => 
+                            logger.error("Fatal error attempting to create api key: " + failure + ": " + content)
+                            throw new HttpException(failure, reason)
+
+                          case x => 
+                            logger.error("Unexpected response from api provisioning service: " + x)
+                            throw HttpException(BadGateway, "Unexpected response from the api provisioning service: " + x)
+                        }
                       }
                     } map { account =>
                       // todo: send email ?
+                      logger.debug("Account successfully created: " + account.accountId)
                       HttpResponse[JValue](OK, content = Some(JObject(JField("accountId", account.accountId) :: Nil)))
                     }
                   }
@@ -165,7 +177,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
 }
 
 
-class CreateAccountGrantHandler(accountManagement: AccountManagement, securityServiceRoot: String)(implicit ctx: ExecutionContext) 
+class CreateAccountGrantHandler(accountManagement: AccountManagement, securityService: SecurityService)(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
@@ -177,17 +189,18 @@ extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue
           case Some(account) => 
             val createBody = JObject(List(JField("grantId", JString(grantId)))) 
         
-            val client = new HttpClientXLightWeb 
-            client.path(securityServiceRoot).query("apiKey", auth.apiKey)
-                                            .contentType(application/MimeTypes.json)
-                                            .post[JValue]("apikeys/" + account.apiKey + "/grants")(createBody) map {
-                                              
-              case HttpResponse(HttpStatus(Created, _), _, None, _) => 
-                HttpResponse[JValue](OK, content = Some(""))
-              
-              case _ =>
-                HttpResponse[JValue](HttpStatus(InternalServerError), content = Some(JString("could not create grants")))
-            }   
+            securityService.withClient { client =>
+              client.query("apiKey", auth.apiKey)
+                    .contentType(application/MimeTypes.json)
+                    .post[JValue]("apikeys/" + account.apiKey + "/grants")(createBody) map {
+                                                
+                case HttpResponse(HttpStatus(Created, _), _, None, _) => 
+                  HttpResponse[JValue](OK, content = Some(""))
+                
+                case _ =>
+                  HttpResponse[JValue](HttpStatus(InternalServerError), content = Some(JString("could not create grants")))
+              }
+            }
                 
           case _  => 
             Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find account "+ accountId))))
