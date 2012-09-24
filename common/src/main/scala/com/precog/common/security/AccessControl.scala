@@ -91,6 +91,7 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
             case _ => M.point(false)
           }.getOrElse(M.point(false))
         )})
+
       case OwnerPermission =>
         exists(t.grants.map{ gid =>
           tokens.findGrant(gid).flatMap( _.map { 
@@ -99,37 +100,39 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
             case _ => M.point(false)
           }.getOrElse(M.point(false))
         )})
+
       case ReadPermission =>
-        if(owners.isEmpty) { logger.debug("Empty owners == no read permission"); M.point(false) }
-        else {
-          forall(owners.map { owner =>
+        //if(owners.isEmpty) { logger.debug("Empty owners == no read permission"); M.point(false) }
+        //else {
+        //  forall(owners.map { owner =>
             exists(t.grants.map{ gid =>
               tokens.findGrant(gid).flatMap( _.map {
                 case g @ Grant(_, _, ReadPermission(p, o, _)) =>
                   isValid(g).map { valid =>
                     val equalOrChild = p.equalOrChild(path)
-                    val goodOwnership = owner == o
-                    logger.debug("Got grant %s > valid: %s, equalOrChild: %s, goodOwnership: %s".format(gid.take(10) + "...", valid, equalOrChild, goodOwnership))
-                    valid && equalOrChild && goodOwnership
+                    //val goodOwnership = owner == o
+                    logger.debug("Got grant %s > valid: %s, equalOrChild: %s, goodOwnership: %s".format(gid.take(10) + "...", valid, equalOrChild, "not checked")) //, goodOwnership))
+                    valid && equalOrChild //&& goodOwnership
                   }
                 case other => M.point(false)
               }.getOrElse { logger.debug("Could not locate grant " + gid); M.point(false) }
             )})
-          })
-        }
+        //  })
+        //}
+
       case ReducePermission =>
-        if(owners.isEmpty) M.point(false)
-        else forall( owners.map { owner =>
+        //if(owners.isEmpty) M.point(false)
+        //else forall( owners.map { owner =>
           exists(t.grants.map{ gid =>
             tokens.findGrant(gid).flatMap( _.map { 
               case g @ Grant(_, _, ReducePermission(p, o, _)) =>
-                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
+                isValid(g).map { _ && p.equalOrChild(path)/* && owner == o */ }
               case g @ Grant(_, _, ReadPermission(p, o, _)) =>
-                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
+                isValid(g).map { _ && p.equalOrChild(path)/* && owner == o */ }
               case _ => M.point(false)
             }.getOrElse(M.point(false))
           )})
-        })
+        //})
     }
   }
 

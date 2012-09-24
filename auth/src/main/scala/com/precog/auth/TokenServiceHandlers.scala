@@ -48,6 +48,7 @@ class CreateTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: 
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Token => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (authToken: Token) => 
       request.content.map { _.flatMap { jvalue =>
+        logger.debug("Creating token in response to request with auth token " + authToken + ":\n" + jvalue)
         jvalue.validated[NewTokenRequest] match {
           case Success(r) =>
             if (r.grants.exists(_.isExpired(new DateTime())))
@@ -59,6 +60,7 @@ class CreateTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: 
                 case Success(token) => 
                   HttpResponse[JValue](OK, content = Some(token.tid.serialize))
                 case Failure(e) => 
+                  logger.warn("Failed to create token: " + e)
                   HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new token."), content = Some(JObject(List(
                     JField("error", "Error creating new token: " + e)
                   ))))
@@ -296,7 +298,7 @@ class TokenManagement(val tokenManager: TokenManager[Future])(implicit val execC
             case None => failure("Unable to assign given grants to token "+tid)
           }
         } else {
-          Future(failure("Unable to assign given grants to token "+tid))
+          Future(failure("Requestor lacks permissions to give grants to token "+tid))
         }
       }
     }
