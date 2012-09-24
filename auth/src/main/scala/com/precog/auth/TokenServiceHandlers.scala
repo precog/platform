@@ -48,7 +48,7 @@ class GetTokensHandler(tokenManagement: TokenManagement)(implicit dispatcher: Me
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authToken: Token) => 
       tokenManagement.tokens(authToken.tid).map { tokens =>
-        HttpResponse[JValue](OK, content = Some(JArray(tokens.map(token => JString(token.tid)).toList)))
+        HttpResponse[JValue](OK, content = Some(APIKeySet(tokens.map(_.tid)).serialize))
       }
     }
   }
@@ -417,6 +417,38 @@ trait TokenDetailsSerialization {
 }
 
 object TokenDetails extends TokenDetailsSerialization
+
+case class WrappedAPIKey(apiKey: String)
+
+trait WrappedAPIKeySerialization {
+  implicit val wrappedAPIKeyExtractor: Extractor[WrappedAPIKey] = new Extractor[WrappedAPIKey] with ValidatedExtraction[WrappedAPIKey] {
+    override def validated(obj: JValue): Validation[Error, WrappedAPIKey] =
+      (obj \ "apiKey").validated[String].map(WrappedAPIKey(_))
+  }
+  
+  implicit val wrappedAPIKeyDecomposer: Decomposer[WrappedAPIKey] = new Decomposer[WrappedAPIKey] {
+    override def decompose(wrappedAPIKey: WrappedAPIKey): JValue = JObject(List(
+      JField("apiKey", wrappedAPIKey.apiKey)
+    ))
+  }
+}
+
+object WrappedAPIKey extends WrappedAPIKeySerialization 
+
+case class APIKeySet(apiKeys: Set[TokenID])
+
+trait APIKeySetSerialization {
+  implicit val tokenSetExtractor: Extractor[APIKeySet] = new Extractor[APIKeySet] with ValidatedExtraction[APIKeySet] {
+    override def validated(obj: JValue): Validation[Error, APIKeySet] =
+      obj.validated[Set[WrappedAPIKey]].map(wrappedKeys => APIKeySet(wrappedKeys.map(_.apiKey)))
+  }
+
+  implicit val tokenSetDecomposer: Decomposer[APIKeySet] = new Decomposer[APIKeySet] {
+    override def decompose(apiKeySet: APIKeySet): JValue = JArray(apiKeySet.apiKeys.map(apiKey => WrappedAPIKey(apiKey).serialize).toList)
+  }
+}
+
+object APIKeySet extends APIKeySetSerialization
 
 case class GrantSet(grants: Set[Grant])
 
