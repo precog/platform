@@ -136,8 +136,8 @@ class AddTokenGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher
         contentFuture <- request.content 
       } yield {
         contentFuture flatMap { jv =>
-          (jv \ "grantId").validated[String] match {
-            case Success(gid) =>
+          jv.validated[WrappedGrantId] match {
+            case Success(WrappedGrantId(gid)) =>
               // TODO: Shouldn't this be using the auth token somehow???
               tokenManagement.addTokenGrant(tid, gid).map {
                 case Success(_)   => HttpResponse[JValue](Created)
@@ -449,6 +449,23 @@ trait APIKeySetSerialization {
 }
 
 object APIKeySet extends APIKeySetSerialization
+
+case class WrappedGrantId(grantId: String)
+
+trait WrappedGrantIdSerialization {
+  implicit val wrappedGrantIdExtractor: Extractor[WrappedGrantId] = new Extractor[WrappedGrantId] with ValidatedExtraction[WrappedGrantId] {
+    override def validated(obj: JValue): Validation[Error, WrappedGrantId] =
+      (obj \ "grantId").validated[String].map(WrappedGrantId(_))
+  }
+  
+  implicit val wrappedGrantIdDecomposer: Decomposer[WrappedGrantId] = new Decomposer[WrappedGrantId] {
+    override def decompose(wrappedGrantId: WrappedGrantId): JValue = JObject(List(
+      JField("grantId", wrappedGrantId.grantId)
+    ))
+  }
+}
+
+object WrappedGrantId extends WrappedGrantIdSerialization 
 
 case class GrantSet(grants: Set[Grant])
 

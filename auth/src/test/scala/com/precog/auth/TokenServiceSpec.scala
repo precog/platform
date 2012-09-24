@@ -104,8 +104,11 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
   def getTokenGrants(authAPIKey: String, queryKey: String) = 
     authService.query("apiKey", authAPIKey).get("/apikeys/"+queryKey+"/grants/")
 
-  def addTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
-    authService.query("apiKey", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(JObject(JField("grantId", JString(grantId)) :: Nil) : JValue)
+  def addTokenGrant(authAPIKey: String, updateKey: String, grantId: WrappedGrantId) = 
+    addTokenGrantRaw(authAPIKey, updateKey, grantId.serialize)
+
+  def addTokenGrantRaw(authAPIKey: String, updateKey: String, grantId: JValue) = 
+    authService.query("apiKey", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(grantId)
 
   def removeTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
     authService.query("apiKey", authAPIKey).delete("/apikeys/"+updateKey+"/grants/"+grantId)
@@ -217,7 +220,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
     }
     
     "add a specified grant to a token" in {
-      addTokenGrant(cust1UID, testUID, "user1_read") must whenDelivered { beLike {
+      addTokenGrant(cust1UID, testUID, WrappedGrantId("user1_read")) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(Created, _), _, None, _) => ok
       }}
     }
