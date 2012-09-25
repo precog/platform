@@ -115,7 +115,7 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Accou
                 path("'accountId") {
                   get(new GetAccountDetailsHandler(state.accountManagement)) ~ 
                   delete(new DeleteAccountHandler(state.accountManagement)) ~
-                  path("/grants") {
+                  path("/grants/") {
                     post(new CreateAccountGrantHandler(state.accountManagement, state.securityService))
                   } ~
                   path("/plan") {

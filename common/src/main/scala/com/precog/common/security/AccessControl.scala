@@ -102,9 +102,9 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
         )})
 
       case ReadPermission =>
-        //if(owners.isEmpty) { logger.debug("Empty owners == no read permission"); M.point(false) }
-        //else {
-        //  forall(owners.map { owner =>
+        if(owners.isEmpty) { logger.debug("Empty owners == no read permission"); M.point(false) }
+        else {
+          forall(owners.map { owner =>
             exists(t.grants.map{ gid =>
               tokens.findGrant(gid).flatMap( _.map {
                 case g @ Grant(_, _, ReadPermission(p, o, _)) =>
@@ -117,12 +117,12 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
                 case other => M.point(false)
               }.getOrElse { logger.debug("Could not locate grant " + gid); M.point(false) }
             )})
-        //  })
-        //}
+          })
+        }
 
       case ReducePermission =>
-        //if(owners.isEmpty) M.point(false)
-        //else forall( owners.map { owner =>
+        if(owners.isEmpty) M.point(false)
+        else forall( owners.map { owner =>
           exists(t.grants.map{ gid =>
             tokens.findGrant(gid).flatMap( _.map { 
               case g @ Grant(_, _, ReducePermission(p, o, _)) =>
@@ -132,7 +132,7 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
               case _ => M.point(false)
             }.getOrElse(M.point(false))
           )})
-        //})
+        })
     }
   }
 

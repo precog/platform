@@ -205,10 +205,10 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       createToken(cust1UID, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new token: Unable to assign given grants to token" => ok
+            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new token: Requestor lacks permissions to give grants to token" => ok
       }}
-    }.pendingUntilFixed
-    
+    }
+
     "retrieve the grants associated with a given token" in {
       getTokenGrants(rootUID, rootUID) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgs), _) =>
