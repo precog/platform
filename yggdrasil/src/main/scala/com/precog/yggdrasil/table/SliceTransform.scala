@@ -156,7 +156,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                         }
                         def apply(row: Int) = {
                           numEq exists { 
-                            case col: BoolColumn => col.isDefinedAt(row) && col(row) 
+                            case (col: BoolColumn) => col.isDefinedAt(row) && col(row)
                             case _ => sys.error("Unreachable code - only boolean columns can be derived from equality.")
                           }
                         }
@@ -185,28 +185,22 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                     if !tpe.isNumeric && !sl.columns.contains(ref) => col
                 })
 
-                val allColumns = sl.columns ++ sr.columns
-                
                 val resultCol = new MemoBoolColumn(
                   new BoolColumn {
                     def isDefinedAt(row: Int): Boolean = {
-                      allColumns exists { case (_, c) => c.isDefinedAt(row) } 
+                      (sl.columns exists { case (_, c) => c.isDefinedAt(row) }) || (sr.columns exists { case (_, c) => c.isDefinedAt(row) }) 
                     }
 
                     def apply(row: Int): Boolean = {
-                      !(
-                        // if any excluded column exists for the row, unequal
-                        excluded.exists(_.isDefinedAt(row)) || 
-                         // if any paired column compares unequal, unequal
-                        paired.exists { 
-                          case (_, equal: BoolColumn) => equal.isDefinedAt(row) && !equal(row) 
-
-                          case _ => false
-                        }
-                      )
+                      // if any excluded column exists for the row, unequal
+                      !excluded.exists(_.isDefinedAt(row)) && 
+                       // if any paired column compares unequal, unequal
+                      paired.exists { 
+                        case (_, equal: BoolColumn) if equal.isDefinedAt(row) => equal(row)
+                        case _ => false
+                      }
                     }
-                  }
-                )
+                  })
                 
                 Map(ColumnRef(JPath.Identity, CBoolean) -> resultCol)
               }

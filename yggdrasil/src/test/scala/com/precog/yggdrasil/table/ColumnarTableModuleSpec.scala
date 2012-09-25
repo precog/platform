@@ -166,6 +166,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "perform a trivial equality check" in checkEqualSelf
       "perform a trivial equality check on an array" in checkEqualSelfArray
       "perform a slightly less trivial equality check" in checkEqual
+      "perform a simple equality check" in testSimpleEqual
+      "perform another simple equality check" in testAnotherSimpleEqual
+      "perform yet another simple equality check" in testYetAnotherSimpleEqual
+      "perform a equal-literal check" in checkEqualLiteral
+      "perform a not-equal-literal check" in checkNotEqualLiteral
       "wrap the results of a transform in an object as the specified field" in checkWrapObject
       "give the identity transform for self-object concatenation" in checkObjectConcatSelf
       "use a right-biased overwrite strategy in object concat conflicts" in checkObjectConcatOverwrite
