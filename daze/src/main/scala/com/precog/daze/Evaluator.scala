@@ -390,7 +390,8 @@ trait Evaluator[M[+_]] extends DAG
 
                 back.eval(state)  //: M[Table]
               }
-            } yield result.transform(idSpec)
+              forced <- result.transform(idSpec).force
+            } yield forced
           }
           table map { PendingTable(_, graph, TransSpec1.Id) }
         }
@@ -606,13 +607,14 @@ trait Evaluator[M[+_]] extends DAG
         // end: annoyance
         
         case Join(_, op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => {
+          //println("left: " + left)
+          //println("right: " + right)
           // TODO binary typing
 
           for {
             pendingTableLeft <- prepareEval(left, splits)
             pendingTableRight <- prepareEval(right, splits)
           } yield {
-
             if (pendingTableLeft.graph == pendingTableRight.graph) {
               PendingTable(pendingTableLeft.table, pendingTableLeft.graph, transFromBinOp(op)(pendingTableLeft.trans, pendingTableRight.trans))
             } else {
@@ -632,10 +634,10 @@ trait Evaluator[M[+_]] extends DAG
 
               val result = for {
                 parentLeftTable <- pendingTableLeft.table
-                val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
+                val leftResult = parentLeftTable/*.printer("left before transform: ")*/.transform(liftToValues(pendingTableLeft.trans))//.printer("left transformed: ")
                 
                 parentRightTable <- pendingTableRight.table
-                val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
+                val rightResult = parentRightTable/*.printer("right before transform: ")*/.transform(liftToValues(pendingTableRight.trans))//.printer("right transformed: ")
 
               } yield join(leftResult, rightResult)(key, spec)
 
@@ -858,8 +860,7 @@ trait Evaluator[M[+_]] extends DAG
 
       assumptionCheck flatMap { assumedResult: Option[M[Table]] =>
         val liftedAssumption = assumedResult map { table =>
-          state[EvaluatorState, PendingTable](
-            PendingTable(table, graph, TransSpec1.Id))
+          state[EvaluatorState, PendingTable](PendingTable(table, graph, TransSpec1.Id))
         }
         
         liftedAssumption getOrElse memoizedResult
