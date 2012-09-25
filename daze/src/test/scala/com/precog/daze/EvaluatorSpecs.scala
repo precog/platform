@@ -133,11 +133,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     (consumeEval(testUID, graph, ctx, path, true) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
-    }) and 
+    })/* and 
     (consumeEval(testUID, graph, ctx, path, false) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
-    })
+    })*/
   }
   
   "evaluator" should {
@@ -2655,6 +2655,63 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             obj("num") must beLike { case SDecimal(d) => d mustEqual 9 }
           }
         }
+      }
+    }
+
+    "evaluate with on the results of a histogram function" in {
+      val line = Line(0, "")
+      
+      // 
+      // clicks := //clicks
+      // histogram('user) :=
+      //   { user: 'user, num: count(clicks where clicks.user = 'user) }
+      // histogram with {rank: std::stats::rank(histogram.num)}
+      // 
+
+      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+       
+      lazy val histogram: dag.Split = dag.Split(line,
+        dag.Group(1,
+          clicks,
+          UnfixedSolution(0,
+            Join(line, DerefObject, CrossLeftSort,
+              clicks,
+              Root(line, PushString("user"))))),
+        Join(line, JoinObject, CrossLeftSort,
+          Join(line, WrapObject, CrossLeftSort,
+            Root(line, PushString("user")),
+            SplitParam(line, 0)(histogram)),
+          Join(line, WrapObject, CrossLeftSort,
+            Root(line, PushString("num")),
+            dag.Reduce(line, Count,
+              SplitGroup(line, 1, clicks.identities)(histogram)))))
+
+      val input = Join(line, JoinObject, IdentitySort,
+        histogram,
+        Join(line, WrapObject, CrossLeftSort,
+          Root(line, PushString("rank")),
+          dag.Morph1(line, Rank, 
+            Join(line, DerefObject, CrossLeftSort,
+              histogram,
+              Root(line, PushString("num"))))))
+
+      testEval(input) { resultsE =>
+        resultsE must haveSize(10)
+        
+        val results = resultsE collect {
+          case (ids, sv) if ids.length == 1 => sv
+        }
+
+        results must contain(SObject(Map("user" -> SString("daniel"), "num" -> SDecimal(BigDecimal("9")), "rank" -> SDecimal(BigDecimal("5")))))
+        results must contain(SObject(Map("user" -> SString("kris"), "num" -> SDecimal(BigDecimal("8")), "rank" -> SDecimal(BigDecimal("4")))))
+        results must contain(SObject(Map("user" -> SString("derek"), "num" -> SDecimal(BigDecimal("7")), "rank" -> SDecimal(BigDecimal("2")))))
+        results must contain(SObject(Map("user" -> SString("nick"), "num" -> SDecimal(BigDecimal("17")), "rank" -> SDecimal(BigDecimal("10")))))
+        results must contain(SObject(Map("user" -> SString("john"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("7")))))
+        results must contain(SObject(Map("user" -> SString("alissa"), "num" -> SDecimal(BigDecimal("7")), "rank" -> SDecimal(BigDecimal("2")))))
+        results must contain(SObject(Map("user" -> SString("franco"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("7")))))
+        results must contain(SObject(Map("user" -> SString("matthew"), "num" -> SDecimal(BigDecimal("10")), "rank" -> SDecimal(BigDecimal("6")))))
+        results must contain(SObject(Map("user" -> SString("jason"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("7")))))
+        results must contain(SObject(Map("user" -> SNull, "num" -> SDecimal(BigDecimal("3")), "rank" -> SDecimal(BigDecimal("1")))))
       }
     }
     
