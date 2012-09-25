@@ -21,6 +21,7 @@ package com.precog
 package muspelheim
 
 import yggdrasil._
+import blueeyes.json.JsonAST._
 import com.precog.common._
 import org.specs2.mutable._
 
@@ -1032,6 +1033,53 @@ trait EvalStackSpecs extends Specification {
       results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("3")))))
       results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("1")))))
       results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("7")))))
+    }
+
+    "evaluate a function of multiple counts" in {
+      val input = """
+        | import std::math::floor
+        | clicks := //clicks
+        | 
+        | solve 'timeZone
+        |   page0 := count(clicks.pageId where clicks.pageId = "page-0" & clicks.timeZone = 'timeZone)
+        |   page1 := count(clicks.pageId where clicks.pageId = "page-1" & clicks.timeZone = 'timeZone)
+        |   
+        |   { timeZone: 'timeZone, ratio: floor(100 * (page0 / page1)) }
+        """.stripMargin
+
+      val resultsE = evalE(input)
+      val results = resultsE.map(_._2)
+
+      results must haveSize(11)
+      results must contain(SObject(Map("timeZone" -> SString("+14:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-02:00"), "ratio" -> SDecimal(BigDecimal("50.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-03:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+11:00"), "ratio" -> SDecimal(BigDecimal("200.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+12:00"), "ratio" -> SDecimal(BigDecimal("33.0"))))) //TODO: this should be 33.3333 - find out why precision is hosed
+      results must contain(SObject(Map("timeZone" -> SString("+04:00"), "ratio" -> SDecimal(BigDecimal("200.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+01:00"), "ratio" -> SDecimal(BigDecimal("25.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-01:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-06:00"), "ratio" -> SDecimal(BigDecimal("300.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+02:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-05:00"), "ratio" -> SDecimal(BigDecimal("50.0")))))
+    }
+
+    "evaluate reductions inside and outside of solves" in {
+      val input = """
+        | clicks := //clicks
+        |
+        | countsForTimezone := solve 'timeZone
+        |   clicksForZone := clicks where clicks.timeZone = 'timeZone
+        |   {timeZone: 'timeZone, clickCount: count(clicksForZone)}
+        |
+        | mostClicks := max(countsForTimezone.clickCount)
+        |
+        | countsForTimezone where countsForTimezone.clickCount = mostClicks
+        """.stripMargin
+
+      val resultsE = evalE(input)
+
+      println(resultsE)
     }
 
     "determine click times around each click" in {

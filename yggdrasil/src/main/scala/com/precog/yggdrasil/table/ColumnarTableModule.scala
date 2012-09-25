@@ -1368,8 +1368,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       import BorgResult._
       import OrderingConstraints._
 
-      //println("\njoin left: \n" + leftNode)
-      //println("\njoin right: \n" + rightNode)
+      //println("\n\njoin left: \n" + leftNode)
+      //println("\n\njoin right: \n" + rightNode)
 
       def resortBorgResult(borgResult: BorgResult, newPrefix: Seq[TicVar]): M[BorgResult] = {
         val newAssimilatorOrder = newPrefix ++ (borgResult.groupKeys diff newPrefix)
@@ -1506,7 +1506,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             } else if (right.sortedByIdentities) {
               joinAsymmetric(BorgResult(left), right)
             } else {
-              joinSymmetric(BorgResult(left), BorgResult(right))
+              // TODO: joinSymmetric needs a "resortBoth" case to handle this correctly.
+              joinAsymmetric(BorgResult(left), right)
             }
 
           case (BorgResultNode(left), BorgVictimNode(right)) => joinAsymmetric(left, right)
@@ -1579,6 +1580,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
     def borg(spanningGraph: MergeGraph, connectedSubgraph: Set[NodeSubset], requiredOrders: Map[MergeNode, Set[Seq[TicVar]]]): M[BorgResult] = {
       def assimilate(edges: Set[BorgEdge]): M[BorgResult] = {
+        //println("assimilate: edges = " + edges)
         val largestEdge = edges.maxBy(_.sharedKeys.size)
 
         //val prunedRequirements = orderingIndex.foldLeft(Map.empty[MergeNode, Set[Seq[TicVar]]]) {
