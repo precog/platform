@@ -92,7 +92,7 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
       accountManagement.listAccountIds(auth.apiKey).map { 
         case accounts => 
           HttpResponse[JValue](OK, 
-                               content = Some(JObject(accounts.map(account => JField("accountId", account.accountId))(collection.breakOut))))
+                               content = Some(JArray(accounts.map(account => JObject(List(JField("accountId", account.accountId))))(collection.breakOut))))
       }
     }
   }
