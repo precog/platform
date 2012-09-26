@@ -125,6 +125,9 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
   def addGrantChildRaw(authAPIKey: String, grantId: String, permission: JValue) = 
     authService.query("apiKey", authAPIKey).post("/grants/"+grantId+"/children/")(permission)
     
+  def deleteGrant(authAPIKey: String, grantId: String) =
+    authService.query("apiKey", authAPIKey).delete("/grants/"+grantId)
+
   def equalGrant(g1: Grant, g2: Grant) = (g1.gid == g2.gid) && (g1.permission == g2.permission)
 
   "Token service" should {
@@ -261,6 +264,20 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
           val id = jid.deserialize[WrappedGrantId]
           id.grantId.length must be_>(0)
       }}
+    }
+    
+    "delete a grant" in {
+      val permission = WritePermission(Path("/user1"), None)
+      (for {
+        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)      <- addGrantChild(rootUID, "root_read", permission)
+        WrappedGrantId(id) = jid.deserialize[WrappedGrantId]
+        HttpResponse(HttpStatus(OK, _), _, Some(jgs), _)      <- getGrantChildren(rootUID, "root_read")
+        GrantSet(beforeDelete) = jgs.deserialize[GrantSet]
+        if beforeDelete.exists(_.gid == id)
+        HttpResponse(HttpStatus(NoContent, _), _, None, _)    <- deleteGrant(rootUID, id)
+        HttpResponse(HttpStatus(OK, _), _, Some(jgs), _)      <- getGrantChildren(rootUID, "root_read")
+        GrantSet(afterDelete) = jgs.deserialize[GrantSet]
+      } yield !afterDelete.exists(_.gid == id)) must whenDelivered { beTrue }
     }
   }
 }
