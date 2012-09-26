@@ -163,23 +163,20 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
 
     "create non-root token with overrides" in {
       val request = NewTokenRequest(grantList(1).map(_.permission))
-      createToken(testUID, request) flatMap {
-        case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => ok 
-          val WrappedAPIKey(id) = jid.deserialize[WrappedAPIKey]
-          getTokenDetails(rootUID, id) map ((Some(id), _))
-        case other => Future((None, other))
-      } must whenDelivered { beLike {
-        case (Some(id), HttpResponse(HttpStatus(OK, _), _, Some(jtd), _)) =>
-          val td = jtd.deserialize[TokenDetails]
-          td must beLike {
-            case TokenDetails(token, grants) if (token.tid == id) && grantList(1).map(_.permission).forall {
-              case Permission(accessType, path, _, expiration) =>
-                grants.map(_.permission).exists {
-                  case Permission(`accessType`, `path`, _, `expiration`) => true
-                  case _ => false
-                }} => ok
-          }
-      }}
+      (for {
+        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)    <- createToken(testUID, request)
+        WrappedAPIKey(id) = jid.deserialize[WrappedAPIKey]
+        HttpResponse(HttpStatus(OK, _), _, Some(jtd), _)    <- getTokenDetails(rootUID, id)
+        TokenDetails(token, grants) = jtd.deserialize[TokenDetails]
+        if (token.tid == id)
+      } yield
+        grantList(1).map(_.permission).forall {
+          case Permission(accessType, path, _, expiration) =>
+            grants.map(_.permission).exists {
+              case Permission(`accessType`, `path`, _, `expiration`) => true
+              case _ => false
+            }
+        }) must whenDelivered { beTrue }
     }
 
     "don't create when new token is invalid" in {
