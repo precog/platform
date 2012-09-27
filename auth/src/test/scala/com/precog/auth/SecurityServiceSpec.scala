@@ -58,7 +58,7 @@ import blueeyes.json.JsonAST._
 
 import blueeyes.util.Clock
 
-trait TestTokenService extends BlueEyesServiceSpecification with TokenService with AkkaDefaults with MongoTokenManagerComponent {
+trait TestAPIKeyService extends BlueEyesServiceSpecification with SecurityService with AkkaDefaults with MongoAPIKeyManagerComponent {
 
   val asyncContext = defaultFutureDispatch
 
@@ -77,7 +77,7 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
 
   override val configuration = "services { auth { v1 { " + config + " } } }"
 
-  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
+  override def apiKeyManagerFactory(config: Configuration) = TestAPIKeyManager.testAPIKeyManager[Future]
 
   lazy val authService = service.contentType[JValue](application/(MimeTypes.json))
 
@@ -86,37 +86,37 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 }
 
-class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
-  import TestTokenManager._
+class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tags {
+  import TestAPIKeyManager._
 
-  def getTokens(authAPIKey: String) = 
+  def getAPIKeys(authAPIKey: String) = 
     authService.query("apiKey", authAPIKey).get("/apikeys/")
     
-  def createToken(authAPIKey: String, request: NewTokenRequest) =
-    createTokenRaw(authAPIKey, request.serialize)
+  def createAPIKey(authAPIKey: String, request: NewAPIKeyRequest) =
+    createAPIKeyRaw(authAPIKey, request.serialize)
 
-  def createTokenRaw(authAPIKey: String, request: JValue) = 
+  def createAPIKeyRaw(authAPIKey: String, request: JValue) = 
     authService.query("apiKey", authAPIKey).post("/apikeys/")(request)
 
-  def getTokenDetails(authAPIKey: String, queryKey: String) = 
+  def getAPIKeyDetails(authAPIKey: String, queryKey: String) = 
     authService.query("apiKey", authAPIKey).get("/apikeys/"+queryKey)
 
-  def getTokenGrants(authAPIKey: String, queryKey: String) = 
+  def getAPIKeyGrants(authAPIKey: String, queryKey: String) = 
     authService.query("apiKey", authAPIKey).get("/apikeys/"+queryKey+"/grants/")
 
-  def addTokenGrant(authAPIKey: String, updateKey: String, grantId: WrappedGrantId) = 
-    addTokenGrantRaw(authAPIKey, updateKey, grantId.serialize)
+  def addAPIKeyGrant(authAPIKey: String, updateKey: String, grantId: WrappedGrantId) = 
+    addAPIKeyGrantRaw(authAPIKey, updateKey, grantId.serialize)
 
-  def addTokenGrantRaw(authAPIKey: String, updateKey: String, grantId: JValue) = 
+  def addAPIKeyGrantRaw(authAPIKey: String, updateKey: String, grantId: JValue) = 
     authService.query("apiKey", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(grantId)
 
-  def createTokenGrant(authAPIKey: String, permission: Permission) = 
-    createTokenGrantRaw(authAPIKey, permission.serialize)
+  def createAPIKeyGrant(authAPIKey: String, permission: Permission) = 
+    createAPIKeyGrantRaw(authAPIKey, permission.serialize)
 
-  def createTokenGrantRaw(authAPIKey: String, permission: JValue) = 
+  def createAPIKeyGrantRaw(authAPIKey: String, permission: JValue) = 
     authService.query("apiKey", authAPIKey).post("/grants/")(permission)
 
-  def removeTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
+  def removeAPIKeyGrant(authAPIKey: String, updateKey: String, grantId: String) = 
     authService.query("apiKey", authAPIKey).delete("/apikeys/"+updateKey+"/grants/"+grantId)
 
   def getGrantDetails(authAPIKey: String, grantId: String) = 
@@ -136,48 +136,48 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
 
   def equalGrant(g1: Grant, g2: Grant) = (g1.gid == g2.gid) && (g1.permission == g2.permission)
 
-  "Token service" should {
-    "get existing token" in {
-      getTokenDetails(rootUID, rootUID) must whenDelivered { beLike {
+  "Security service" should {
+    "get existing API key" in {
+      getAPIKeyDetails(rootUID, rootUID) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jtd), _) =>
-          val td = jtd.deserialize[TokenDetails]
+          val td = jtd.deserialize[APIKeyDetails]
           td must beLike {
-            case TokenDetails(token, grants) if (token.tid == rootUID) && (grants sameElements grantList(0)) => ok
+            case APIKeyDetails(apiKey, grants) if (apiKey.tid == rootUID) && (grants sameElements grantList(0)) => ok
           }
       }}
     }
 
-    "return error on get and token not found" in {
-      getTokenDetails(rootUID, "not-gonna-find-it") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(NotFound, _), _, Some(JString("Unable to find token not-gonna-find-it")), _) => ok
+    "return error on get and API key not found" in {
+      getAPIKeyDetails(rootUID, "not-gonna-find-it") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(NotFound, _), _, Some(JString("Unable to find API key not-gonna-find-it")), _) => ok
       }}
     }
     
-    "enumerate existing tokens" in {
-      getTokens(rootUID) must whenDelivered { beLike {
+    "enumerate existing API keys" in {
+      getAPIKeys(rootUID) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jts), _) =>
           val ks = jts.deserialize[APIKeySet]
-          ks.apiKeys must containTheSameElementsAs(tokens.values.filter(_.cid == rootUID).map(t => WrappedAPIKey(t.name, t.tid)).toSeq)
+          ks.apiKeys must containTheSameElementsAs(apiKeys.values.filter(_.cid == rootUID).map(t => WrappedAPIKey(t.name, t.tid)).toSeq)
       }}
     }
 
-    "create root token with defaults" in {
-      val request = NewTokenRequest("root", grantList(0).map(_.permission))
-      createToken(rootUID, request) must whenDelivered { beLike {
+    "create root API key with defaults" in {
+      val request = NewAPIKeyRequest("root", grantList(0).map(_.permission))
+      createAPIKey(rootUID, request) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
           val id = jid.deserialize[WrappedAPIKey]
           id.apiKey.length must be_>(0)
       }}
     }
 
-    "create non-root token with overrides" in {
-      val request = NewTokenRequest("non-root", grantList(1).map(_.permission))
+    "create non-root API key with overrides" in {
+      val request = NewAPIKeyRequest("non-root", grantList(1).map(_.permission))
       (for {
-        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)    <- createToken(testUID, request)
+        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)    <- createAPIKey(testUID, request)
         WrappedAPIKey("non-root", id) = jid.deserialize[WrappedAPIKey]
-        HttpResponse(HttpStatus(OK, _), _, Some(jtd), _)    <- getTokenDetails(rootUID, id)
-        TokenDetails(token, grants) = jtd.deserialize[TokenDetails]
-        if (token.tid == id)
+        HttpResponse(HttpStatus(OK, _), _, Some(jtd), _)    <- getAPIKeyDetails(rootUID, id)
+        APIKeyDetails(apiKey, grants) = jtd.deserialize[APIKeyDetails]
+        if (apiKey.tid == id)
       } yield
         grantList(1).map(_.permission).forall {
           case Permission(accessType, path, _, expiration) =>
@@ -188,35 +188,35 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
         }) must whenDelivered { beTrue }
     }
 
-    "don't create when new token is invalid" in {
+    "don't create when new API key is invalid" in {
       val request = JObject(List(JField("create", JString("invalid")))) 
-      createTokenRaw(rootUID, request) must whenDelivered { beLike {
+      createAPIKeyRaw(rootUID, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Invalid new token request body" => ok
+            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Invalid new API key request body" => ok
       }}
     }
 
-    "don't create if token is expired" in {
-      val request = NewTokenRequest("expired", grantList(5).map(_.permission))
-      createToken(expiredUID, request) must whenDelivered { beLike {
+    "don't create if API key is expired" in {
+      val request = NewAPIKeyRequest("expired", grantList(5).map(_.permission))
+      createAPIKey(expiredUID, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString("Unable to create token with expired permission"))))), _) => ok
+            Some(JObject(List(JField("error", JString("Unable to create API key with expired permission"))))), _) => ok
       }}
     }
 
-    "don't create if token cannot grant permissions" in {
-      val request = NewTokenRequest("unauthorized", grantList(0).map(_.permission))
-      createToken(cust1UID, request) must whenDelivered { beLike {
+    "don't create if API key cannot grant permissions" in {
+      val request = NewAPIKeyRequest("unauthorized", grantList(0).map(_.permission))
+      createAPIKey(cust1UID, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new token: Requestor lacks permissions to give grants to token" => ok
+            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new API key: Requestor lacks permissions to give grants to API key" => ok
       }}
     }
 
-    "retrieve the grants associated with a given token" in {
-      getTokenGrants(rootUID, rootUID) must whenDelivered { beLike {
+    "retrieve the grants associated with a given API key" in {
+      getAPIKeyGrants(rootUID, rootUID) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgs), _) =>
           val gs = jgs.deserialize[GrantSet]
           gs must beLike {
@@ -225,8 +225,8 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       }}
     }
     
-    "add a specified grant to a token" in {
-      addTokenGrant(cust1UID, testUID, WrappedGrantId("user1_read")) must whenDelivered { beLike {
+    "add a specified grant to an API key" in {
+      addAPIKeyGrant(cust1UID, testUID, WrappedGrantId("user1_read")) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(Created, _), _, None, _) => ok
       }}
     }
@@ -247,24 +247,24 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       }}
     }
 
-    "create a new grant derived from the grants of the authorization token" in {
-      createTokenGrant(cust1UID, ReadPermission(Path("/user1/read-me"), cust1UID, None)) must whenDelivered { beLike {
+    "create a new grant derived from the grants of the authorization API key" in {
+      createAPIKeyGrant(cust1UID, ReadPermission(Path("/user1/read-me"), cust1UID, None)) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) =>
           val id = jid.deserialize[WrappedGrantId]
           id.grantId.length must be_>(0)
       }}
     }
     
-    "don't create a new grant if it can't be derived from the authorization tokens grants" in {
-      createTokenGrant(cust1UID, ReadPermission(Path("/user2/secret"), cust1UID, None)) must whenDelivered { beLike {
+    "don't create a new grant if it can't be derived from the authorization API keys grants" in {
+      createAPIKeyGrant(cust1UID, ReadPermission(Path("/user2/secret"), cust1UID, None)) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new grant: Requestor lacks permissions to give grants to token" => ok
+            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new grant: Requestor lacks permissions to give grants to API key" => ok
       }}
     }
     
-    "remove a specified grant from a token" in {
-      removeTokenGrant(cust1UID, cust1UID, "user1_read") must whenDelivered { beLike {
+    "remove a specified grant from an API key" in {
+      removeAPIKeyGrant(cust1UID, cust1UID, "user1_read") must whenDelivered { beLike {
         case HttpResponse(HttpStatus(NoContent, _), _, None, _) => ok
       }}
     }

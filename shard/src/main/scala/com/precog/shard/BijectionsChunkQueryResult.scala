@@ -35,7 +35,7 @@ import scalaz._
 
 object BijectionsChunkQueryResult {
 
-  // Required by TokenServiceCombinator's `token` combinator.
+  // Required by APIKeyServiceCombinator's `apiKey` combinator.
   implicit val queryResultErrorTransform = (failure: HttpFailure, s: String) =>
     HttpResponse[QueryResult](failure, content = Some(Left(s.serialize)))
 

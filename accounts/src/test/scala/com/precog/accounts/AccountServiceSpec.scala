@@ -60,9 +60,9 @@ import blueeyes.json.JsonAST._
 import blueeyes.util.Clock
 
 /*
-//we need to create a token server as well as the accounts server, because the accounts server relies on the token server
+//we need to create a security server as well as the accounts server, because the accounts server relies on the security server
 
-trait TestTokenService extends BlueEyesServiceSpecification with TokenService with AkkaDefaults with MongoTokenManagerComponent {
+trait TestAPIKeyService extends BlueEyesServiceSpecification with APIKeyService with AkkaDefaults with MongoAPIKeyManagerComponent {
 
   val asyncContext = defaultFutureDispatch
 
@@ -81,7 +81,7 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
 
   override val configuration = "services { auth { v1 { " + config + " } } }"
 
-  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
+  override def apiKeyManagerFactory(config: Configuration) = TestAPIKeyManager.testAPIKeyManager[Future]
 
   lazy val authService = service.contentType[JValue](application/(MimeTypes.json)).path("/auth")
 
@@ -91,7 +91,7 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
 }
 
 
-//object TestTokenServer extends TestTokenService
+//object TestAPIKeyServer extends TestAPIKeyService
 
 trait TestAccountService extends BlueEyesServiceSpecification with AccountService  with AkkaDefaults with ZKMongoAccountManagerComponent {
 
@@ -125,8 +125,8 @@ trait TestAccountService extends BlueEyesServiceSpecification with AccountServic
 
 //not complete
 
-class TServiceSpec extends TestTokenService with  FutureMatchers with Tags {
-import TestTokenManager._
+class TServiceSpec extends TestAPIKeyService with  FutureMatchers with Tags {
+import TestAPIKeyManager._
  
 }
 object TServiceSpec
@@ -203,7 +203,7 @@ class AccountServiceSpec extends TestAccountService with  FutureMatchers with Ta
       }}
     }
     
-    //TODO : more to add here once Token Server can be started
+    //TODO : more to add here once APIKey Server can be started
     
   }
   

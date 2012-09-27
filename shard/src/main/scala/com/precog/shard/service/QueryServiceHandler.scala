@@ -40,14 +40,14 @@ import com.precog.common.security._
 
 
 class QueryServiceHandler(queryExecutor: QueryExecutor[Future])(implicit dispatcher: MessageDispatcher, m: Monad[Future])
-extends CustomHttpService[Future[JValue], (Token, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
+extends CustomHttpService[Future[JValue], (APIKeyRecord, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
 with Logging {
   import scalaz.syntax.monad._
 
   val Command = """:(\w+)\s+(.+)""".r
 
   val service = (request: HttpRequest[Future[JValue]]) => {
-    success((t: Token, p: Path, q: String, opts: QueryOptions) => q.trim match {
+    success((t: APIKeyRecord, p: Path, q: String, opts: QueryOptions) => q.trim match {
       case Command("ls", arg) => list(t.tid, Path(arg.trim))
       case Command("list", arg) => list(t.tid, Path(arg.trim))
       case Command("ds", arg) => describe(t.tid, Path(arg.trim))

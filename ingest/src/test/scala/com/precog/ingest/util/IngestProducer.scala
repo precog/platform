@@ -164,28 +164,28 @@ object JsonLoader extends App {
 """
 Usage:
 
-  command {host} {token} {json data file}
+  command {host} {API key} {json data file}
 """
     )
   }
 
   val client = new HttpClientXLightWeb
 
-  def run(url: String, token: String, datafile: String) {
+  def run(url: String, apiKey: String, datafile: String) {
     val data = IOUtils.readFileToString(new File(datafile)).unsafePerformIO
     val json = JsonParser.parse(data)
     json match {
-      case JArray(elements) => elements.foreach { send(url, token, _ ) } 
+      case JArray(elements) => elements.foreach { send(url, apiKey, _ ) } 
       case _                =>
         println("Error the input file must contain an array of elements to insert")
         System.exit(1)
     }
   }
 
-  def send(url: String, token: String, event: JValue) {
+  def send(url: String, apiKey: String, event: JValue) {
     
     val f: Future[HttpResponse[JValue]] = client.path(url)
-                                                .query("apiKey", token)
+                                                .query("apiKey", apiKey)
                                                 .contentType(application/MimeTypes.json)
                                                 .post[JValue]("")(event)
     Await.ready(f, 10 seconds) 
@@ -212,13 +212,13 @@ Usage:
 
 class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
-  lazy val token = config.getProperty("token", TestTokenManager.rootUID)
+  lazy val apiKey = config.getProperty("token", TestAPIKeyManager.rootUID)
   val client = new HttpClientXLightWeb 
 
   def send(event: Event, timeout: Timeout) {
     
     val f: Future[HttpResponse[JValue]] = client.path(base)
-                                                .query("apiKey", token)
+                                                .query("apiKey", apiKey)
                                                 .contentType(application/MimeTypes.json)
                                                 .post[JValue](event.path.toString)(event.data)
     Await.ready(f, 10 seconds) 

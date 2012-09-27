@@ -40,9 +40,9 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz.{Validation, Success}
 
 class ArchiveServiceHandler[A](accessControl: AccessControl[Future], eventStore: EventStore, archiveTimeout: Timeout)(implicit dispatcher: MessageDispatcher)
-extends CustomHttpService[A, (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
+extends CustomHttpService[A, (APIKeyRecord, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[A]) => {
-    Success { (t: Token, p: Path) =>
+    Success { (t: APIKeyRecord, p: Path) =>
       accessControl.mayAccess(t.tid, p, Set(), OwnerPermission) flatMap { mayAccess =>
         if(mayAccess) {
           try { 
@@ -58,7 +58,7 @@ extends CustomHttpService[A, (Token, Path) => Future[HttpResponse[JValue]]] with
             }
           }
         } else {
-          Future(HttpResponse[JValue](Unauthorized, content=Some(JString("Your token does not have permissions to archive this path."))))
+          Future(HttpResponse[JValue](Unauthorized, content=Some(JString("Your API key does not have permissions to archive this path."))))
         }
       }
     }

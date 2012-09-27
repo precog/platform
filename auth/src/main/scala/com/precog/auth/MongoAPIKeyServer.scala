@@ -17,22 +17,14 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.common
-package security
+package com.precog
+package auth
 
-import blueeyes._
-import blueeyes.core.http._
-import blueeyes.core.service._
-import blueeyes.json._
-import blueeyes.json.serialization.DefaultSerialization._
+import common.security._
 
-import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
+import blueeyes.BlueEyesServer
 
-trait TokenServiceCombinators extends HttpRequestHandlerCombinators {
-  implicit val jsonErrorTransform = (failure: HttpFailure, s: String) => HttpResponse(failure, content = Some(s.serialize))
-
-  def token[A, B](tokenManager: TokenManager[Future])(service: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) = {
-    new TokenRequiredService[A, B](tokenManager, service)
-  }
+object MongoAPIKeyServer extends BlueEyesServer with SecurityService with MongoAPIKeyManagerComponent {
+  implicit val asyncContext = defaultFutureDispatch
 }
+

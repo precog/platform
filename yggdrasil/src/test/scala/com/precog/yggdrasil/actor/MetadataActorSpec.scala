@@ -127,48 +127,48 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
 object MetadataActorStateSpec extends Specification {
   implicit val system = ActorSystem("shardMetadataTest")
 
-  def projectionDescriptor(path: Path, selector: CPath, cType: CType, token: String) = {
-    val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(token)))
+  def projectionDescriptor(path: Path, selector: CPath, cType: CType, apiKey: String) = {
+    val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(apiKey)))
     val desc = ProjectionDescriptor(1, colDesc :: Nil)
     val metadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (colDesc -> Map[MetadataType, Metadata]())
     Map((desc -> metadata))
   }
 
-  val token1 = "TOKEN"
+  val apiKey1 = "APIKEY"
 
   val data: Map[ProjectionDescriptor, ColumnMetadata] = {
-    projectionDescriptor(Path("/abc/"), CPath(""), CBoolean, token1) ++
-    projectionDescriptor(Path("/abc/"), CPath(".foo"), CBoolean, token1) ++
-    projectionDescriptor(Path("/abc/"), CPath(".foo"), CString, token1) ++
-    projectionDescriptor(Path("/abc/"), CPath(".foo.bar"), CBoolean, token1) ++
-    projectionDescriptor(Path("/abc/"), CPath(".foo[0]"), CString, token1) ++
-    projectionDescriptor(Path("/def/"), CPath(".foo"), CBoolean, token1) ++
-    projectionDescriptor(Path("/def/"), CPath(".foo.bar"), CBoolean, token1) ++
-    projectionDescriptor(Path("/def/"), CPath(".foo.bar.baz.buz"), CBoolean, token1)
+    projectionDescriptor(Path("/abc/"), CPath(""), CBoolean, apiKey1) ++
+    projectionDescriptor(Path("/abc/"), CPath(".foo"), CBoolean, apiKey1) ++
+    projectionDescriptor(Path("/abc/"), CPath(".foo"), CString, apiKey1) ++
+    projectionDescriptor(Path("/abc/"), CPath(".foo.bar"), CBoolean, apiKey1) ++
+    projectionDescriptor(Path("/abc/"), CPath(".foo[0]"), CString, apiKey1) ++
+    projectionDescriptor(Path("/def/"), CPath(".foo"), CBoolean, apiKey1) ++
+    projectionDescriptor(Path("/def/"), CPath(".foo.bar"), CBoolean, apiKey1) ++
+    projectionDescriptor(Path("/def/"), CPath(".foo.bar.baz.buz"), CBoolean, apiKey1)
   }
 
   val rootAbc = PathRoot(Set(
-    PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), CPath(""), CBoolean, token1)),
+    PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/abc/"), CPath(""), CBoolean, apiKey1)),
     PathField("foo", Set(
-      PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), CPath(".foo"), CBoolean, token1)),
-      PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), CPath(".foo"), CString, token1)),
+      PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/abc/"), CPath(".foo"), CBoolean, apiKey1)),
+      PathValue(CString, Authorities(Set(apiKey1)), projectionDescriptor(Path("/abc/"), CPath(".foo"), CString, apiKey1)),
       PathField("bar", Set(
-        PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), CPath(".foo.bar"), CBoolean, token1))
+        PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/abc"), CPath(".foo.bar"), CBoolean, apiKey1))
       )),
       PathIndex(0, Set(
-        PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), CPath(".foo[0]"), CString, token1))
+        PathValue(CString, Authorities(Set(apiKey1)), projectionDescriptor(Path("/abc"), CPath(".foo[0]"), CString, apiKey1))
       ))
     ))
   ))
 
   val rootDef = PathRoot(Set(
     PathField("foo", Set(
-      PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def/"), CPath(".foo"), CBoolean, token1)),
+      PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/def/"), CPath(".foo"), CBoolean, apiKey1)),
       PathField("bar", Set(
-        PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), CPath(".foo.bar"), CBoolean, token1)),
+        PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/def"), CPath(".foo.bar"), CBoolean, apiKey1)),
         PathField("baz", Set(
           PathField("buz", Set(
-            PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), CPath(".foo.bar.baz.buz"), CBoolean, token1))
+            PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/def"), CPath(".foo.bar.baz.buz"), CBoolean, apiKey1))
           ))
         ))
       ))
@@ -214,13 +214,13 @@ object MetadataActorStateSpec extends Specification {
       val result = source.findPathMetadata(Path("/abc/"), CPath(".foo")).unsafePerformIO
      
       val expected = PathRoot(Set(
-        PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), CPath(".foo"), CBoolean, token1)),
-        PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), CPath(".foo"), CString, token1)),
+        PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/abc/"), CPath(".foo"), CBoolean, apiKey1)),
+        PathValue(CString, Authorities(Set(apiKey1)), projectionDescriptor(Path("/abc/"), CPath(".foo"), CString, apiKey1)),
         PathField("bar", Set(
-          PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), CPath(".foo.bar"), CBoolean, token1))
+          PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/abc"), CPath(".foo.bar"), CBoolean, apiKey1))
         )),
         PathIndex(0, Set(
-          PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), CPath(".foo[0]"), CString, token1))
+          PathValue(CString, Authorities(Set(apiKey1)), projectionDescriptor(Path("/abc"), CPath(".foo[0]"), CString, apiKey1))
         ))
       ))
 
@@ -231,12 +231,12 @@ object MetadataActorStateSpec extends Specification {
       val result = source.findPathMetadata(Path("/def/"), CPath(".foo")).unsafePerformIO
      
       val expected = PathRoot(Set(
-        PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def/"), CPath(".foo"), CBoolean, token1)),
+        PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/def/"), CPath(".foo"), CBoolean, apiKey1)),
         PathField("bar", Set(
-          PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), CPath(".foo.bar"), CBoolean, token1)),
+          PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/def"), CPath(".foo.bar"), CBoolean, apiKey1)),
           PathField("baz", Set(
             PathField("buz", Set(
-              PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), CPath(".foo.bar.baz.buz"), CBoolean, token1))
+              PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/def"), CPath(".foo.bar.baz.buz"), CBoolean, apiKey1))
             ))
           ))
         ))
@@ -249,7 +249,7 @@ object MetadataActorStateSpec extends Specification {
       val result = source.findPathMetadata(Path("/abc/"), CPath(".foo[0]")).unsafePerformIO
      
       val expected = PathRoot(Set(
-        PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), CPath(".foo[0]"), CString, token1))
+        PathValue(CString, Authorities(Set(apiKey1)), projectionDescriptor(Path("/abc"), CPath(".foo[0]"), CString, apiKey1))
       ))
 
       result must_== expected
@@ -259,7 +259,7 @@ object MetadataActorStateSpec extends Specification {
       val result = source.findPathMetadata(Path("/def/"), CPath(".foo.bar.baz.buz")).unsafePerformIO
      
       val expected = PathRoot(Set(
-        PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), CPath(".foo.bar.baz.buz"), CBoolean, token1))
+        PathValue(CBoolean, Authorities(Set(apiKey1)), projectionDescriptor(Path("/def"), CPath(".foo.bar.baz.buz"), CBoolean, apiKey1))
       ))
 
       result must_== expected 

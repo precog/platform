@@ -68,13 +68,13 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def nanoTime = sys.error("nanotime not available in the past")
 }
 
-trait TestTokens {
-  import TestTokenManager._
-  val TestTokenUID = testUID
-  val ExpiredTokenUID = expiredUID
+trait TestAPIKeys {
+  import TestAPIKeyManager._
+  val TestAPIKeyUID = testUID
+  val ExpiredAPIKeyUID = expiredUID
 }
 
-trait TestShardService extends BlueEyesServiceSpecification with ShardService with TestTokens with AkkaDefaults with MongoTokenManagerComponent { self =>
+trait TestShardService extends BlueEyesServiceSpecification with ShardService with TestAPIKeys with AkkaDefaults with MongoAPIKeyManagerComponent { self =>
 
   import BijectionsChunkJson._
   import BijectionsChunkQueryResult._
@@ -98,10 +98,10 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
   def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]) = new TestQueryExecutor {
     val actorSystem = self.actorSystem
     val executionContext = self.asyncContext
-    val allowedUID = TestTokenUID
+    val allowedUID = TestAPIKeyUID
   }
 
-  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
+  override def apiKeyManagerFactory(config: Configuration) = TestAPIKeyManager.testAPIKeyManager[Future]
 
   lazy val queryService = service.contentType[QueryResult](application/(MimeTypes.json))
                                  .path("/analytics/fs/")
@@ -115,8 +115,8 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
 
 class ShardServiceSpec extends TestShardService with FutureMatchers {
 
-  def query(query: String, token: Option[String] = Some(TestTokenUID), path: String = ""): Future[HttpResponse[QueryResult]] = {
-    token.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query).get(path)
+  def query(query: String, apiKey: Option[String] = Some(TestAPIKeyUID), path: String = ""): Future[HttpResponse[QueryResult]] = {
+    apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query).get(path)
   }
 
   val testQuery = "1 + 1"
@@ -135,53 +135,53 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
       //  }
       //}
     }
-    "reject query when no token provided" in {
+    "reject query when no API key provided" in {
       query(testQuery, None) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
       }}
     }
-    "reject query when token not found" in {
+    "reject query when API key not found" in {
       query(testQuery, Some("not-gonna-find-it")) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified token does not exist"))), _) => ok
+        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified API key does not exist"))), _) => ok
       }}
     }
     "reject query when grant is expired" in {
-      query(testQuery, Some(ExpiredTokenUID)) must whenDelivered { beLike {
+      query(testQuery, Some(ExpiredAPIKeyUID)) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(UnprocessableEntity, _), _, Some(Left(JArray(List(JString("No data accessable at the specified path."))))), _) => ok
       }}
     }
   }
   
-  def browse(token: Option[String] = Some(TestTokenUID), path: String = "unittest/"): Future[HttpResponse[QueryResult]] = {
-    token.map{ metaService.query("apiKey", _) }.getOrElse(metaService).get(path)
+  def browse(apiKey: Option[String] = Some(TestAPIKeyUID), path: String = "unittest/"): Future[HttpResponse[QueryResult]] = {
+    apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metaService).get(path)
   }
  
   "Shard browse service" should {
-    "handle browse for token accessible path" in {
+    "handle browse for API key accessible path" in {
       browse() must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(Left(JObject(
           JField("children", JArray(JString("foo")::JString("bar")::Nil)):: Nil
         ))), _) => ok
       }}
     }
-    "reject browse for non-token accessible path" in {
+    "reject browse for non-API key accessible path" in {
       browse(path = "") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, "The specified token may not browse this location"), _, None, _) => ok
+        case HttpResponse(HttpStatus(Unauthorized, "The specified API key may not browse this location"), _, None, _) => ok
       }}
     }
-    "reject browse when no token provided" in {
+    "reject browse when no API key provided" in {
       browse(None) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
       }}
     }
-    "reject browse when token not found" in {
+    "reject browse when API key not found" in {
       browse(Some("not-gonna-find-it")) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified token does not exist"))), _) => ok
+        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified API key does not exist"))), _) => ok
       }}
     }
     "reject browse when grant expired" in {
-      browse(Some(ExpiredTokenUID), path = "/expired") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, "The specified token may not browse this location"), _, None, _) => ok
+      browse(Some(ExpiredAPIKeyUID), path = "/expired") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Unauthorized, "The specified API key may not browse this location"), _, None, _) => ok
       }}
     }
   }

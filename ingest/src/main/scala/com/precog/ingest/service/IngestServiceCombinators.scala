@@ -35,7 +35,7 @@ import akka.dispatch.MessageDispatcher
 import com.precog.common.Path
 import com.precog.common.security._
 
-trait IngestServiceCombinators extends TokenServiceCombinators {
+trait IngestServiceCombinators extends APIKeyServiceCombinators {
 
   import BijectionsChunkJson._
   import BijectionsChunkString._
@@ -78,13 +78,13 @@ trait IngestServiceCombinators extends TokenServiceCombinators {
     }
   }
 
-  def dataPath[A, B](prefix: String)(next: HttpService[A, (Token, Path) => Future[B]]) = {
+  def dataPath[A, B](prefix: String)(next: HttpService[A, (APIKeyRecord, Path) => Future[B]]) = {
     path("""/%s/(?:(?<prefixPath>(?:[^\n.](?:[^\n/]|/[^\n\.])*)/?)?)""".format(prefix)) { 
-      new DelegatingService[A, Token => Future[B], A, (Token, Path) => Future[B]] {
+      new DelegatingService[A, APIKeyRecord => Future[B], A, (APIKeyRecord, Path) => Future[B]] {
         val delegate = next
         val service = (request: HttpRequest[A]) => {
           val path: Option[String] = request.parameters.get('prefixPath).filter(_ != null) 
-          next.service(request) map { f => (token: Token) => f(token, Path(path.getOrElse(""))) }
+          next.service(request) map { f => (apiKey: APIKeyRecord) => f(apiKey, Path(path.getOrElse(""))) }
         }
 
         val metadata = None
