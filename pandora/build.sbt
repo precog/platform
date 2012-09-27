@@ -80,9 +80,7 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
   target.getCanonicalPath
 }
 
-definedTests in Test <<= (definedTests in Test, mainTest) map { (tests, name) =>
-  tests filter { _.name != name }
-}
+definedTests in Test := Seq()
 
 test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData, mainTest) map { (s, cp, os, dataDir, testName) =>
   val delim = java.io.File.pathSeparator
