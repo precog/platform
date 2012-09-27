@@ -13,7 +13,7 @@ import org.joda.time.format.ISODateTimeFormat
 import scalaz._
 
 package object security {
-  type TokenID = String
+  type APIKey = String
   type GrantID = String
   type UID = String
 

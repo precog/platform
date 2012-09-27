@@ -5,7 +5,7 @@ import common.security._
 
 import blueeyes.BlueEyesServer
 
-object MongoTokenServer extends BlueEyesServer with TokenService with MongoTokenManagerComponent {
+object MongoAPIKeyServer extends BlueEyesServer with SecurityService with MongoAPIKeyManagerComponent {
   implicit val asyncContext = defaultFutureDispatch
 }
 
