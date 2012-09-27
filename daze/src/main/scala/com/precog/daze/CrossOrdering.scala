@@ -113,13 +113,13 @@ trait CrossOrdering extends DAG {
           val left2 = memoized(left, splits)
           val right2 = memoized(right, splits)
           
-          val (leftIndexes, rightIndexes) = determineSort(left2, right2)
+          val (leftIndices, rightIndices) = determineSort(left2, right2)
           
-          val leftPrefix = leftIndexes zip (Stream from 0) forall { case (a, b) => a == b }
-          val rightPrefix = rightIndexes zip (Stream from 0) forall { case (a, b) => a == b }
+          val leftPrefix = leftIndices zip (Stream from 0) forall { case (a, b) => a == b }
+          val rightPrefix = rightIndices zip (Stream from 0) forall { case (a, b) => a == b }
           
-          def sortLeft = Sort(left2, leftIndexes)
-          def sortRight = Sort(right2, rightIndexes)
+          def sortLeft = Sort(left2, leftIndices)
+          def sortRight = Sort(right2, rightIndices)
           
           def sortLeftAux = Sort(left2, Vector(0 until left2.identities.length: _*))
           def sortRightAux = Sort(right2, Vector(0 until right2.identities.length: _*))
@@ -146,8 +146,17 @@ trait CrossOrdering extends DAG {
             Join(loc, op, CrossLeftSort, memoized(left, splits), memoized(right, splits))
           else if (left.isSingleton)
             Join(loc, op, CrossRightSort, memoized(left, splits), memoized(right, splits))
-          else
-            Join(loc, op, CrossLeftSort, memoized(left, splits), Memoize(memoized(right, splits), 100))
+          else {
+            val right2 = memoized(right, splits)
+            
+            right2 match {
+              case _: ForcingPoint =>
+                Join(loc, op, CrossLeftSort, memoized(left, splits), right2)
+              
+              case _ =>
+                Join(loc, op, CrossLeftSort, memoized(left, splits), Memoize(right2, 100))
+            }
+          }
         }
 
         case Join(loc, op, joinSort, left, right) =>
@@ -227,14 +236,14 @@ trait CrossOrdering extends DAG {
     val leftPairs = left2.identities.zipWithIndex filter {
       case (p, i) => right2.identities contains p
     }
-    
+
     val rightPairs = right2.identities.zipWithIndex filter {
       case (p, i) => left2.identities contains p
     }
     
-    val (_, leftIndexes) = leftPairs.unzip
+    val (_, leftIndices) = leftPairs.unzip
     
-    val (_, rightIndexes) = rightPairs sortWith {
+    val (_, rightIndices) = rightPairs sortWith {
       case ((p1, i1), (p2, i2)) => {
         val leftIndex = leftPairs indexWhere {
           case (`p1`, _) => true
@@ -250,6 +259,6 @@ trait CrossOrdering extends DAG {
       }
     } unzip
 
-    (leftIndexes, rightIndexes)
+    (leftIndices, rightIndices)
   }
 }

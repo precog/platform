@@ -696,6 +696,22 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
     }
     
+    "forward binding through mod" in {
+      {
+        val e @ Let(_, _, _, _, Mod(_, d: Dispatch, _)) = parse("a := 42 a % 1")
+        d.binding mustEqual LetBinding(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, Mod(_, _, d: Dispatch)) = parse("a := 42 1 % a")
+        d.binding mustEqual LetBinding(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+    }
+    
     "forward binding through less-than" in {
       {
         val e @ Let(_, _, _, _, Lt(_, d: Dispatch, _)) = parse("a := 42 a < 1")

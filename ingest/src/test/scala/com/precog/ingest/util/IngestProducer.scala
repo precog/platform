@@ -185,7 +185,7 @@ Usage:
   def send(url: String, token: String, event: JValue) {
     
     val f: Future[HttpResponse[JValue]] = client.path(url)
-                                                .query("tokenId", token)
+                                                .query("apiKey", token)
                                                 .contentType(application/MimeTypes.json)
                                                 .post[JValue]("")(event)
     Await.ready(f, 10 seconds) 
@@ -218,7 +218,7 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
   def send(event: Event, timeout: Timeout) {
     
     val f: Future[HttpResponse[JValue]] = client.path(base)
-                                                .query("tokenId", token)
+                                                .query("apiKey", token)
                                                 .contentType(application/MimeTypes.json)
                                                 .post[JValue](event.path.toString)(event.data)
     Await.ready(f, 10 seconds) 

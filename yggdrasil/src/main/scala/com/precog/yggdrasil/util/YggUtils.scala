@@ -22,7 +22,6 @@ package util
 
 import com.precog.common.json._
 import actor._
-import iterable._
 import jdbm3._
 import metadata.MetadataStorage
 import metadata.FileMetadataStorage
@@ -391,16 +390,7 @@ object KafkaTools extends Command {
     val src = new FileMessageSet(source, false) 
     val dest = new FileMessageSet(destination, true) 
 
-    val outMessages = src.iterator.toList.map { mao =>
-      ingestCodec.toEvent(mao.message) match {
-        case EventMessage(_, event) =>
-          eventCodec.toMessage(event)  
-        case _ => sys.error("Unknown message type")
-      }
-    }
-
-    val outSet = new ByteBufferMessageSet(messages = outMessages.toArray: _*)
-    dest.append(outSet)
+    dest.append(src)
 
     src.close
     dest.close
@@ -457,12 +447,15 @@ object KafkaTools extends Command {
   }
 
   case object LocalFormat extends Format {
-    val codec = new KafkaEventCodec
+    val codec = new KafkaIngestMessageCodec
 
     def dump(i: Int, msg: MessageAndOffset) {
-      val event = codec.toEvent(msg.message)
-      println("Event-%06d Path: %s Token: %s".format(i+1, event.path, event.tokenId))
-      println(pretty(render(event.data)))
+      codec.toEvent(msg.message) match {
+        case EventMessage(EventId(pid, sid), Event(path, tokenId, data, _)) =>
+          println("Event-%06d Id: (%d/%d) Path: %s Token: %s".format(i+1, pid, sid, path, tokenId))
+          println(pretty(render(data)))
+        case _ =>
+      }
     }
   }
 
@@ -534,6 +527,10 @@ object ZookeeperTools extends Command {
       case (path, data) =>
         JsonParser.parse(data).validated[EventRelayState] match {
           case Success(_) =>
+            if (! client.exists(path)) {
+              client.createPersistent(path, true)
+            }
+
             client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
               def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
             })  
@@ -725,8 +722,8 @@ object ImportTools extends Command with Logging {
 
         object Projection extends JDBMProjectionCompanion {
           def fileOps = FilesystemFileOps
-          def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
-          def archiveDir(descriptor: ProjectionDescriptor): File = ms.findArchiveRoot(descriptor).unsafePerformIO.get
+          def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findDescriptorRoot(descriptor, true)
+          def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findArchiveRoot(descriptor)
         }
 
         class Storage extends SystemActorStorageLike(ms) {
@@ -745,17 +742,17 @@ object ImportTools extends Command with Logging {
       logger.info("Using PID: " + pid)
       config.input.foreach {
         case (db, input) =>
-          logger.debug("Inserting batch: %s:%s".format(db, input))
+          logger.info("Inserting batch: %s:%s".format(db, input))
           val reader = new FileReader(new File(input))
           val events = JsonParser.parse(reader).children.map { child =>
             EventMessage(EventId(pid, sid.getAndIncrement), Event(Path(db), config.token, child, Map.empty))
           }
           
-          logger.debug(events.size + " total inserts")
+          logger.info(events.size + " total inserts")
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
               logger.info("Saving batch " + id + " of size " + batch.size)
-              Await.result(storage.storeBatch(batch), Duration(120, "seconds"))
+              Await.result(storage.storeBatch(batch), Duration(300, "seconds"))
               logger.info("Batch saved")
             }
           }
@@ -775,7 +772,7 @@ object ImportTools extends Command with Logging {
 
   class Config(
     var input: Vector[(String, String)] = Vector.empty, 
-    val batchSize: Int = 1000, 
+    val batchSize: Int = 100000,
     var token: TokenID = "root",
     var verbose: Boolean = false ,
     var storageRoot: File = new File("./data"),
@@ -900,10 +897,11 @@ object TokenTools extends Command with AkkaDefaults with Logging {
   def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager[Future]) = {
     for {
       token <- tokenManager.newToken(tokenName, Set())
-      val ownerGrant = tokenManager.newGrant(None, OwnerPermission(path, None))
-      val readGrant  = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
-      val writeGrant = tokenManager.newGrant(None, WritePermission(path, None))
-      grants <- Future.sequence(List(ownerGrant, readGrant, writeGrant))
+      val ownerGrant  = tokenManager.newGrant(None, OwnerPermission(path, None))
+      val readGrant   = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
+      val writeGrant  = tokenManager.newGrant(None, WritePermission(path, None))
+      val reduceGrant = tokenManager.newGrant(None, ReducePermission(path, token.tid, None))
+      grants <- Future.sequence(List(ownerGrant, readGrant, writeGrant, reduceGrant))
       result <- tokenManager.addGrants(token.tid, grants.map(_.gid).toSet)
     } yield {
       result match {

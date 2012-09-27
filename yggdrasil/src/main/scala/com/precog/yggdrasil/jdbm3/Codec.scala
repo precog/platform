@@ -30,8 +30,9 @@ import org.joda.time.DateTime
 import java.nio.{ ByteBuffer, CharBuffer }
 import java.nio.charset.{ Charset, CharsetEncoder, CoderResult }
 
-import scala.collection.immutable.BitSet
-import scala.collection.mutable
+import com.precog.util.BitSet
+import com.precog.util.BitSetUtil
+import com.precog.util.BitSetUtil.Implicits._
 
 import scala.annotation.tailrec
 import scala.{ specialized => spec }
@@ -461,7 +462,7 @@ object Codec {
       var pos = 0
       val len = alen min blen
       while (cmp == 0 && pos < len) {
-        cmp = a.get() - b.get()
+        cmp = (a.get() & 0xFF) - (b.get() & 0xFF)
         pos += 1
       }
 
@@ -574,14 +575,14 @@ object Codec {
 
   private def bitSet2Array(bs: BitSet): Array[Long] = {
     val size = if (bs.isEmpty) 0 else { (bs.max >>> 6) + 1 }
-    val bytes = Array.ofDim[Long](size)
+    val bytes = new Array[Long](size)
     bs foreach { i =>
       bytes(i >>> 6) |= 1L << (i & 0x3F)
     }
     bytes
   }
 
-  implicit val BitSetCodec = Codec[Array[Long]].as[BitSet](bitSet2Array(_), BitSet.fromArray(_))
+  implicit val BitSetCodec = ArrayCodec[Long](LongCodec, implicitly).as[BitSet](_.getBits, BitSetUtil.fromArray)
 
   case class SparseBitSetCodec(size: Int) extends Codec[BitSet] {
 
@@ -634,7 +635,7 @@ object Codec {
     }
 
     def writeBitSet(bs: BitSet): Array[Byte] = {
-      val bytes = Array.ofDim[Byte](maxBytes)
+      val bytes = new Array[Byte](maxBytes)
 
       def set(offset: Int) {
         val i = offset >>> 3
@@ -675,19 +676,25 @@ object Codec {
     }
 
     def readBitSet(src: ByteBuffer): BitSet = {
-      @tailrec @inline
-      def readBytes(bs: List[Byte]): Array[Byte] = {
-        val b = src.get()
-        if ((b & 3) == 0 || (b & 12) == 0 || (b & 48) == 0 || (b & 192) == 0) {
-          (b :: bs).reverse.toArray
-        } else readBytes(b :: bs)
+      def readBytes() = {
+        val buf = new Array[Byte](maxBytes)
+        var i = 0
+        var b = src.get()
+        while ((b & 3) != 0 && (b & 12) != 0 && (b & 48) != 0 && (b & 192) != 0) {
+          buf(i) = b
+          i += 1
+          b = src.get()
+        }
+        buf(i) = b
+        i += 1
+        val arr = new Array[Byte](i)
+        System.arraycopy(buf, 0, arr, 0, i)
+        arr
       }
-
-      val bytes = readBytes(Nil)
+      val bytes = readBytes()
       @inline def get(offset: Int): Boolean = (bytes(offset >>> 3) & (1 << (offset & 7))) != 0
 
-      import collection.mutable
-      var bits = mutable.BitSet()
+      val bits = new BitSet()
       def read(l: Int, r: Int, offset: Int): Int = {
         if (l == r) {
           offset
@@ -708,7 +715,7 @@ object Codec {
       }
 
       read(0, size, 0)
-      bits.toImmutable
+      bits
     }
   }
 }

@@ -136,15 +136,15 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
   import TableModule._
 
   trait TableCompanion extends ColumnarTableCompanion {
-    def apply(slices: StreamT[M, Slice]) = new Table(slices)
+    def apply(slices: StreamT[M, Slice], size: Option[Long] = None) = new Table(slices, size)
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = sys.error("Feature not implemented in test stub.")
   }
   
-  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+  class Table(slices: StreamT[M, Slice], size: Option[Long]) extends ColumnarTable(slices, size) {
     import trans._
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = true) = sys.error("Feature not implemented in test stub")
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false) = sys.error("Feature not implemented in test stub")
     
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Seq[Table]] = sys.error("Feature not implemented in test stub.")
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("Feature not implemented in test stub.")
 
     def load(uid: UserId, tpe: JType): M[Table] = {
       val pathsM = this.reduce {
@@ -178,19 +178,6 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
   object Projection extends ProjectionCompanion {
     def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = new Projection(descriptor, data)
   }
-
-  class MemoContext extends MemoizationContext {
-    import trans._
-    
-    def memoize(table: Table, memoId: MemoId): M[Table] = M.point(table)
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table] =
-      table.sort(sortKey, sortOrder)
-    
-    def expire(memoId: MemoId): Unit = ()
-    def purge(): Unit = ()
-  }
-  
-  def newMemoContext = new MemoContext
 
   object storage extends Storage
 }

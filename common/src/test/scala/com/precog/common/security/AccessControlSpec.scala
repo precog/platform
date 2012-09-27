@@ -210,7 +210,7 @@ class AccessControlUseCasesSpec extends Specification with UseCasesTokenManagerT
       }
       "ability to grant revokable public access" in {
         mayAccess(customer.tid, "/addon/public", Set(addon.tid), ReadPermission) must beTrue
-        mayAccess(customer.tid, "/addon/revoked_public", Set(addon.tid), ReadPermission) must beFalse
+        mayAccess(customer.tid, "/addon/public_revoked", Set(addon.tid), ReadPermission) must beFalse
       }
     }
   }
@@ -350,7 +350,7 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults { self : Specification
             case Grant(gid, _, oi: OwnerIgnorantPermission) => 
               oi.derive(path = "/" + name)
             case Grant(gid, _, oa: OwnerAwarePermission) => 
-              oa.derive(path = "/", owner = t.tid)
+              oa.derive(path = "/" + name, owner = t.tid)
           }).map { _.gid }
           case _ => failure("Grant not found")
         }

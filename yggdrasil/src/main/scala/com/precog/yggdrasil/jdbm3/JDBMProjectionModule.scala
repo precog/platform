@@ -20,13 +20,12 @@
 package com.precog.yggdrasil
 package jdbm3
 
-import iterable.IterableDataset
 import table._
 import com.precog.util.FileOps
 
 import org.joda.time.DateTime
 
-import java.io.File
+import java.io.{File, FileNotFoundException}
 import java.nio.ByteBuffer
 import java.util.concurrent.{Executors,TimeoutException}
 
@@ -41,31 +40,25 @@ import com.weiglewilczek.slf4s.Logger
 trait JDBMProjectionModule extends ProjectionModule {
   val pmLogger = Logger("JDBMProjectionModule")
 
-  type Key = Identities
-  class Projection private[JDBMProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends JDBMProjection(baseDir, descriptor) {
-    def traverseIndex(expiresAt: Long): IterableDataset[Seq[CValue]] = allRecords(expiresAt)
-  }
+  // type Key = Identities
+  type Key = Array[Byte]
+  class Projection private[JDBMProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends JDBMProjection(baseDir, descriptor)
 
   trait JDBMProjectionCompanion extends ProjectionCompanion {
     def fileOps: FileOps
 
-    def baseDir(descriptor: ProjectionDescriptor): File
+    // Must return a directory
+    def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]]
     
-    def archiveDir(descriptor: ProjectionDescriptor): File
+    // Must return a directory  
+    def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]]
 
     def open(descriptor: ProjectionDescriptor): IO[Projection] = {
       pmLogger.debug("Opening JDBM projection for " + descriptor)
-      val base = baseDir(descriptor)
-      val baseDirV: IO[File] = 
-        fileOps.exists(base) flatMap { 
-          case true  => IO(base)
-          case false => fileOps.mkdir(base) map {
-                          case true  => base
-                          case false => throw new RuntimeException("Could not create database basedir " + base)
-                        }
-        }
-
-      baseDirV map { (bd: File) => new Projection(bd, descriptor) }
+      baseDir(descriptor) map { 
+        case Some(bd) => new Projection(bd, descriptor) 
+        case None => throw new FileNotFoundException("Could not locate base for projection: " + descriptor)
+      }
     }
 
     def close(projection: Projection) = {
@@ -76,7 +69,23 @@ trait JDBMProjectionModule extends ProjectionModule {
     def archive(projection: Projection) = {
       pmLogger.debug("Archiving " + projection)
       val descriptor = projection.descriptor
-      close(projection).flatMap(_ => fileOps.rename(baseDir(descriptor), archiveDir(descriptor)))
+      val dirs = 
+        for {
+          _       <- close(projection)
+          base    <- baseDir(descriptor)
+          archive <- archiveDir(descriptor)
+        } yield (base, archive) 
+
+      dirs flatMap {
+        case (Some(base), Some(archive)) =>
+          val timeStampedArchive = new File(archive.getParentFile, archive.getName+"-"+System.currentTimeMillis()) 
+          fileOps.rename(base, timeStampedArchive)
+          
+        case (Some(base), _) =>
+          throw new FileNotFoundException("Could not locate archive dir for projection: " + projection)
+        case _ =>
+          throw new FileNotFoundException("Could not locate base dir for projection: " + projection)
+      }
     }
   }
 }

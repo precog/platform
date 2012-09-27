@@ -54,6 +54,7 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
   var updates: Map[ProjectionDescriptor, Seq[MetadataRecord]] = Map()
 
   def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]] = IO(None)
+  def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]] = IO(None)
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = data.keySet.filter(f)
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = IO {
@@ -62,6 +63,10 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
 
   def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = IO {
     updates += (desc -> (updates.getOrElse(desc, Vector.empty[MetadataRecord]) :+ metadata))
+  }
+
+  def archiveMetadata(desc: ProjectionDescriptor): IO[Unit] = IO {
+    updates -= desc
   }
 }
 
@@ -96,10 +101,10 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
       val values = Vector[CValue](CString("Test123"))
       val metadata = Vector(Set[Metadata]())
 
-      val row1 = ProjectionUpdate.Row(EventId(0,1), values, metadata)
-      val row2 = ProjectionUpdate.Row(EventId(0,2), values, metadata)
+      val row1 = ProjectionInsert.Row(EventId(0,1), values, metadata)
+      val row2 = ProjectionInsert.Row(EventId(0,2), values, metadata)
 
-      actorRef ! IngestBatchMetadata(Map(descriptor -> ProjectionMetadata.columnMetadata(descriptor, Seq(row1, row2))), VectorClock.empty.update(0, 1).update(0, 2), Some(0l))
+      actorRef ! IngestBatchMetadata(Seq(descriptor -> Option(ProjectionMetadata.columnMetadata(descriptor, Seq(row1, row2)))), VectorClock.empty.update(0, 1).update(0, 2), Some(0l))
       (actorRef ? FlushMetadata) must whenDelivered {
         beLike {
           case _ => 

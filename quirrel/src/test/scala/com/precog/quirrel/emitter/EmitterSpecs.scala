@@ -724,6 +724,42 @@ object EmitterSpecs extends Specification
           Merge))
     }
 
+    "emit split and merge for solve with constraint" in {
+      testEmit("""
+        | foo := //foo
+        | bar := //bar
+        |
+        | solve 'a = bar.a
+        |   count(foo where foo.a = 'a)
+        | """)(Vector(
+          PushString("/bar"),
+          LoadLocal,
+          Dup,
+          PushString("a"),
+          Map2Cross(DerefObject),
+          KeyPart(1),
+          Swap(1),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          Group(0),
+          PushString("/foo"),
+          LoadLocal,
+          Dup,
+          Swap(2),
+          Swap(1),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          KeyPart(1),
+          Swap(1),
+          Swap(2),
+          Group(2),
+          MergeBuckets(true),
+          Split,
+          PushGroup(2),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
+          Merge))
+    }
+
     "emit merge_buckets & for trivial cf example with conjunction" in {
       testEmit("clicks := //clicks onDay := solve 'day clicks where clicks.day = 'day & clicks.din = 'day onDay")(
         Vector(
@@ -737,7 +773,7 @@ object EmitterSpecs extends Specification
           Swap(1),
           PushString("din"),
           Map2Cross(DerefObject),
-          KeyPart(2),
+          KeyPart(1),
           MergeBuckets(true),
           Swap(1),
           Group(0),
@@ -759,7 +795,7 @@ object EmitterSpecs extends Specification
           Swap(1),
           PushString("din"),
           Map2Cross(DerefObject),
-          KeyPart(2),
+          KeyPart(1),
           MergeBuckets(false),
           Swap(1),
           Group(0),
@@ -832,7 +868,7 @@ object EmitterSpecs extends Specification
           Swap(1),
           PushString("b"),
           Map2Cross(DerefObject),
-          KeyPart(3),
+          KeyPart(1),
           Swap(1),
           Swap(2),
           Group(2),
@@ -968,15 +1004,15 @@ object EmitterSpecs extends Specification
         |     clicks where clicks.externalSessionId = 'time & clicks.datetime = sessionId
         |   
         | totalPairs("fubar")""".stripMargin)(Vector())
-    }.pendingUntilFixed
+    }.pendingUntilFixed     // TODO this *really* should be working
 
     "emit split and merge for ctr example" in {
       testEmit("""
         | clicks := //clicks
         | imps := //impressions
-        | ctr := solve 'day
+        | solve 'day
         |   count(clicks where clicks.day = 'day) / count(imps where imps.day = 'day)
-        | ctr""".stripMargin)(
+        | """.stripMargin)(
         Vector(
           PushString("/clicks"),
           LoadLocal,
@@ -993,7 +1029,7 @@ object EmitterSpecs extends Specification
           Swap(1),
           PushString("day"),
           Map2Cross(DerefObject),
-          KeyPart(3),
+          KeyPart(1),
           Swap(1),
           Swap(2),
           Group(2),
@@ -1075,16 +1111,72 @@ object EmitterSpecs extends Specification
         Merge))
     }
 
+    "determine a histogram of a composite key of revenue and campaign" >> {
+      testEmit("""
+        | campaigns := //campaigns
+        | organizations := //organizations
+        | 
+        | solve 'revenue = organizations.revenue, 'campaign = organizations.campaign
+        |   campaigns' := campaigns where campaigns.campaign = 'campaign
+        |   { revenue: 'revenue, num: count(campaigns') }
+        | """.stripMargin)(
+        Vector(
+          PushString("/organizations"),
+          LoadLocal,
+          Dup,
+          Dup,
+          Dup,
+          PushString("revenue"),
+          Map2Cross(DerefObject),
+          KeyPart(1),
+          Swap(1),
+          PushString("revenue"),
+          Map2Cross(DerefObject),
+          Group(0),
+          Swap(1),
+          PushString("campaign"),
+          Map2Cross(DerefObject),
+          KeyPart(3),
+          Swap(1),
+          Swap(2),
+          PushString("campaign"),
+          Map2Cross(DerefObject),
+          Group(2),
+          MergeBuckets(true),
+          PushString("/campaigns"),
+          LoadLocal,
+          Dup,
+          Swap(2),
+          Swap(1),
+          PushString("campaign"),
+          Map2Cross(DerefObject),
+          KeyPart(3),
+          Swap(1),
+          Swap(2),
+          Group(4),
+          MergeBuckets(true),
+          Split,
+          PushString("revenue"),
+          PushKey(1),
+          Map2Cross(WrapObject),
+          PushString("num"),
+          PushGroup(4),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x002000))),
+          Map2Cross(WrapObject),
+          Map2Cross(JoinObject),
+          Merge))
+    }
+
     "emit code in case when an error is supressed" in {
       val input = """
         | clicks := //clicks
         | views := //views
-        | a := solve 'b
+        | solve 'b
         |   k := clicks.time where clicks.time = 'b
         |   j := views.time where views.time > 'b
         |   k ~ j
-        |   {kay: k, jay: j}
-        | a""".stripMargin
+        |     { kay: k, jay: j }
+        | """.stripMargin
 
       testEmit(input)(
         Vector(
@@ -1228,7 +1320,7 @@ object EmitterSpecs extends Specification
             Swap(1),
             PushString("userId"),
             Map2Cross(DerefObject),
-            KeyPart(3),
+            KeyPart(1),
             Swap(1),
             Swap(2),
             Group(2),
@@ -1239,15 +1331,15 @@ object EmitterSpecs extends Specification
             Dup,
             PushString("time"),
             Map2Cross(DerefObject),
-            KeyPart(5),
+            KeyPart(4),
             Swap(1),
             PushString("time"),
             Map2Cross(DerefObject),
-            Group(4),
+            Group(3),
             Split,
             PushString("impression"),
             Swap(1),
-            PushGroup(4),
+            PushGroup(3),
             Dup,
             Map2Match(Eq),
             FilterMatch,
@@ -1296,7 +1388,7 @@ object EmitterSpecs extends Specification
             Swap(6),
             PushString("time"),
             Map2Cross(DerefObject),
-            PushKey(5),
+            PushKey(4),
             Map2Cross(Gt),
             FilterMatch,
             Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),

@@ -68,12 +68,16 @@ class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDi
     props
   }
 
-  private val producer = new Producer[String, Action](new ProducerConfig(localProperties))
+  private val producer = new Producer[String, IngestMessage](new ProducerConfig(localProperties))
 
   def start(): Future[Unit] = Future { () } 
 
   def save(action: Action, timeout: Timeout) = Future {
-    val data = new ProducerData[String, Action](localTopic, action)
+    val msg = action match {
+      case event : Event => EventMessage(-1, -1, event)
+      case archive : Archive => ArchiveMessage(-1, -1, archive)
+    }
+    val data = new ProducerData[String, IngestMessage](localTopic, msg)
     producer.send(data)
   }
 

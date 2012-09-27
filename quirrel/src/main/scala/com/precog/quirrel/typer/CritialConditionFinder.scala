@@ -117,6 +117,9 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       case Div(_, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
+      case Mod(_, left, right) =>
+        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+      
       case Lt(_, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
@@ -173,6 +176,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
         case Sub(_, left, right) => listVars(left) ++ listVars(right)
         case Mul(_, left, right) => listVars(left) ++ listVars(right)
         case Div(_, left, right) => listVars(left) ++ listVars(right)
+        case Mod(_, left, right) => listVars(left) ++ listVars(right)
         case Lt(_, left, right) => listVars(left) ++ listVars(right)
         case LtEq(_, left, right) => listVars(left) ++ listVars(right)
         case Gt(_, left, right) => listVars(left) ++ listVars(right)
@@ -281,6 +285,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
     case Mul(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     
     case Div(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
+    
+    case Mod(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     
     case Lt(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     

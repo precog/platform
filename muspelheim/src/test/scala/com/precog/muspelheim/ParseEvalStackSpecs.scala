@@ -21,7 +21,6 @@ package com.precog
 package muspelheim
 
 import common.Path
-import common.VectorCase
 import common.kafka._
 
 import daze._
@@ -35,7 +34,6 @@ import bytecode.JType
 
 import yggdrasil._
 import yggdrasil.actor._
-import yggdrasil.memoization._
 import yggdrasil.serialization._
 import yggdrasil.table._
 import yggdrasil.util._
@@ -70,7 +68,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
 
   val sliceSize = 10
   
-  def controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
+  def controlTimeout = Duration(90, "seconds")      // it's just unreasonable to run tests longer than this
   
   implicit val actorSystem = ActorSystem("platformSpecsActorSystem")
 

@@ -633,6 +633,24 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    "reject mod on different loads" in {
+      val tree = compile("//foo % //bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "reject mod on static and dynamic provenances" in {
+      val tree = compile("//foo % new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "reject mod on differing dynamic provenances" in {
+      val tree = compile("(new 1) % (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
     "reject less-than on different loads" in {
       val tree = compile("//foo < //bar")
       tree.provenance mustEqual NullProvenance

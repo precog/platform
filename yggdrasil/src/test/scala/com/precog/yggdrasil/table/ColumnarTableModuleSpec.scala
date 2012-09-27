@@ -53,6 +53,7 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
 import TableModule._
+import SampleData._
 
 trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] 
     with TableModuleSpec[M]
@@ -60,6 +61,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with CrossSpec[M]
     with TransformSpec[M]
     with CompactSpec[M] 
+    with TakeRangeSpec[M]
     with PartitionMergeSpec[M]
     with UnionAllSpec[M]
     with CrossAllSpec[M]
@@ -76,34 +78,21 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
 
-  class MemoContext extends MemoizationContext {
-    import trans._
-    
-    def memoize(table: Table, memoId: MemoId): M[Table] = M.point(table)
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table] =
-      table.sort(sortKey, sortOrder)
-    
-    def expire(memoId: MemoId): Unit = ()
-    def purge(): Unit = ()
-  }
-
-  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+  class Table(slices: StreamT[M, Slice], size: Option[Long]) extends ColumnarTable(slices, size) {
     import trans._
     def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = true) = sys.error("todo")
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Seq[Table]] = sys.error("todo")
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false) = sys.error("todo")
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("todo")
   }
   
   trait TableCompanion extends ColumnarTableCompanion {
-    def apply(slices: StreamT[M, Slice]) = new Table(slices)
+    def apply(slices: StreamT[M, Slice], size: Option[Long] = None) = new Table(slices, size)
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = 
       sys.error("not implemented here")
   }
 
   object Table extends TableCompanion
-
-  def newMemoContext = new MemoContext
 
   "a table dataset" should {
     "verify bijection from static JSON" in {
@@ -137,9 +126,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "in cogroup" >> {
       "perform a simple cogroup" in testSimpleCogroup
       "perform another simple cogroup" in testAnotherSimpleCogroup
+      "cogroup for unions" in testUnionCogroup
       "perform yet another simple cogroup" in testAnotherSimpleCogroupSwitched
       "cogroup across slice boundaries" in testCogroupSliceBoundaries
       "error on unsorted inputs" in testUnsortedInputs
+      "cogroup partially defined inputs properly" in testPartialUndefinedCogroup
 
       "survive pathology 1" in testCogroupPathology1
       "survive pathology 2" in testCogroupPathology2
@@ -161,15 +152,25 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
       "perform a trivial map1" in testMap1IntLeaf
-      //"give the identity transform for the trivial filter" in checkTrivialFilter  //why is this commented out?
+      "fail to map1 into array and object" in testMap1ArrayObject
+      "perform a less trvial map1" in checkMap1
+      //"give the identity transform for the trivial filter" in checkTrivialFilter
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
       "give the identity transform for a nontrivial filter" in checkFilter
+      "give a transformation for a big decimal and a long" in testMod2Filter
       "perform an object dereference" in checkObjectDeref
       "perform an array dereference" in checkArrayDeref
-      "perform a trivial map2" in checkMap2
+      "perform a trivial map2 add" in checkMap2Add
+      "perform a trivial map2 eq" in checkMap2Eq
+      "perform a map2 add over but not into arrays and objects" in testMap2ArrayObject
       "perform a trivial equality check" in checkEqualSelf
       "perform a trivial equality check on an array" in checkEqualSelfArray
       "perform a slightly less trivial equality check" in checkEqual
+      "perform a simple equality check" in testSimpleEqual
+      "perform another simple equality check" in testAnotherSimpleEqual
+      "perform yet another simple equality check" in testYetAnotherSimpleEqual
+      "perform a equal-literal check" in checkEqualLiteral
+      "perform a not-equal-literal check" in checkNotEqualLiteral
       "wrap the results of a transform in an object as the specified field" in checkWrapObject
       "give the identity transform for self-object concatenation" in checkObjectConcatSelf
       "use a right-biased overwrite strategy in object concat conflicts" in checkObjectConcatOverwrite
@@ -177,19 +178,22 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "test inner object concat with a boolean and an empty object" in testObjectConcatTrivial
       "concatenate dissimilar objects" in checkObjectConcat
       "concatenate dissimilar arrays" in checkArrayConcat
-      "delete elements according to a JType" in checkObjectDelete
+      "delete elements according to a JType" in checkObjectDelete //.set(minTestsOk -> 5000) TODO: saw an error here once
       "perform a trivial type-based filter" in checkTypedTrivial
-      "perform a trivial heterogeneous type-based filter" in checkTypedHeterogeneous
-      "perform a trivial object type-based filter" in checkTypedObject
-      "perform another trivial object type-based filter" in checkTypedObject2
-      "perform a trivial array type-based filter" in checkTypedArray
-      "perform another trivial array type-based filter" in checkTypedArray2
-      "perform yet another trivial array type-based filter" in checkTypedArray3
-      "perform a fourth trivial array type-based filter" in checkTypedArray4
-      "perform a trivial number type-based filter" in checkTypedNumber
-      "perform another trivial number type-based filter" in checkTypedNumber2
-      "perform a filter returning the empty set" in checkTypedEmpty
       "perform a less trivial type-based filter" in checkTyped
+      "perform a type-based filter across slice boundaries" in testTypedAtSliceBoundary
+      "perform a trivial heterogeneous type-based filter" in testTypedHeterogeneous
+      "perform a trivial object type-based filter" in testTypedObject
+      "retain all object members when typed to unfixed object" in testTypedObjectUnfixed
+      "perform another trivial object type-based filter" in testTypedObject2
+      "perform a trivial array type-based filter" in testTypedArray
+      "perform another trivial array type-based filter" in testTypedArray2
+      "perform yet another trivial array type-based filter" in testTypedArray3
+      "perform a fourth trivial array type-based filter" in testTypedArray4
+      "perform a trivial number type-based filter" in testTypedNumber
+      "perform another trivial number type-based filter" in testTypedNumber2
+      "perform a filter returning the empty set" in testTypedEmpty
+
       "perform a summation scan case 1" in testTrivialScan
       "perform a summation scan of heterogeneous data" in testHetScan
       "perform a summation scan" in checkScan
@@ -213,6 +217,18 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "peform properly when the same row appears in two different slices" in testDistinctAcrossSlices
       "peform properly again when the same row appears in two different slices" in testDistinctAcrossSlices2
       "have no duplicate rows" in testDistinct
+    }
+
+    "in takeRange" >> {
+      "select the correct rows in a trivial case" in testTakeRange
+      "select the correct rows when we take past the end of the table" in testTakeRangeLarger
+      "select the correct rows when we start at an index larger than the size of the table" in testTakeRangeEmpty
+      "select the correct rows across slice boundary" in testTakeRangeAcrossSlices
+      "select the correct rows only in second slice" in testTakeRangeSecondSlice
+      "select the first slice" in testTakeRangeFirstSliceOnly
+      "select nothing with a negative starting index" in testTakeRangeNegStart
+      "select nothing with a negative number to take" in testTakeRangeNegNumber
+      "select the correct rows using scalacheck" in checkTakeRange
     }
   }
 
@@ -544,6 +560,57 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 
       val alignedSpec = trans.alignTo(ticvars("ca")).spec
       fromJson(data.toStream).transform(alignedSpec).toJson.copoint must_== expected
+    }
+
+    "track table metrics" in {
+      "single traversal" >> {
+        implicit val gen = sample(objectSchema(_, 3))
+        check { (sample: SampleData) =>
+          val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
+
+          val table = fromSample(sample)
+          val t0 = table.transform(TransSpec1.Id)
+          t0.toJson.copoint must_== sample.data
+
+          table.metrics.startCount must_== 1
+          table.metrics.sliceTraversedCount must_== expectedSlices
+          t0.metrics.startCount must_== 1
+          t0.metrics.sliceTraversedCount must_== expectedSlices
+        }
+      }
+
+      "multiple transforms" >> {
+        implicit val gen = sample(objectSchema(_, 3))
+        check { (sample: SampleData) =>
+          val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
+
+          val table = fromSample(sample)
+          val t0 = table.transform(TransSpec1.Id).transform(TransSpec1.Id).transform(TransSpec1.Id)
+          t0.toJson.copoint must_== sample.data
+
+          table.metrics.startCount must_== 1
+          table.metrics.sliceTraversedCount must_== expectedSlices
+          t0.metrics.startCount must_== 1
+          t0.metrics.sliceTraversedCount must_== expectedSlices
+        }
+      }
+
+      "multiple forcing calls" >> {
+        implicit val gen = sample(objectSchema(_, 3))
+        check { (sample: SampleData) =>
+          val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
+
+          val table = fromSample(sample)
+          val t0 = table.compact(TransSpec1.Id).compact(TransSpec1.Id).compact(TransSpec1.Id)
+          table.toJson.copoint must_== sample.data
+          t0.toJson.copoint must_== sample.data
+
+          table.metrics.startCount must_== 2
+          table.metrics.sliceTraversedCount must_== (expectedSlices * 2)
+          t0.metrics.startCount must_== 1
+          t0.metrics.sliceTraversedCount must_== expectedSlices
+        }
+      }
     }
   }
 }

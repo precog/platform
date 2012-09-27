@@ -65,6 +65,44 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     results.copoint must_== (-10 to 10).map(x => JNum(-x))
   }
 
+  def testMap1ArrayObject = {
+    val data: Stream[JValue] = Stream(
+        JObject(JField("value", JObject(JField("foo", JNum(12)) :: Nil )) :: JField("key", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value", JArray(JNum(30) :: Nil)) :: JField("key", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value", JNum(20)) :: JField("key", JArray(JNum(1) :: Nil)) :: Nil))
+    
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform { Map1(DerefObjectStatic(Leaf(Source), JPathField("value")), lookupF1(Nil, "negate")) })
+    val expected = Stream(JNum(-20))
+
+    results.copoint mustEqual expected
+  }
+  
+  def checkMap1 = {
+    implicit val gen = sample(schema)
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+
+      val results = toJson(table.transform {
+        Map1(
+          DerefObjectStatic(Leaf(Source), JPathField("value")), 
+          lookupF2(Nil, "mod").applyr(CLong(2)) andThen lookupF2(Nil, "eq").applyr(CLong(0)))
+      })
+
+      val expected = sample.data flatMap { jv =>
+        (jv \ "value") match { 
+          case JNum(x) if x % 2 == 0 => Some(JBool(true))
+          case JNum(_) => Some(JBool(false))
+          case _ => None
+        }
+      }
+
+      results.copoint must_== expected
+    }
+  }
+
   /* Do we want to allow non-boolean sets to be used as filters without an explicit existence predicate?
   def checkTrivialFilter = {
     implicit val gen = sample(schema)
@@ -122,6 +160,43 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     }.set(minTestsOk -> 200)
   }
 
+  def testMod2Filter = {
+    val array: JValue = JsonParser.parse("""
+      [{
+        "value":-6.846973248137671E+307,
+        "key":[7.0]
+      },
+      {
+        "value":-4611686018427387904,
+        "key":[5.0]
+      }]""")
+
+    val data: Stream[JValue] = (array match {
+      case JArray(li) => li
+      case _ => sys.error("Expected JArray")
+    }).toStream
+
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Filter(Leaf(Source),
+      Map1(
+        DerefObjectStatic(Leaf(Source), JPathField("value")), 
+        lookupF2(Nil, "mod").applyr(CLong(2)) andThen lookupF2(Nil, "eq").applyr(CLong(0)))
+      )
+    })
+
+    val expected = data flatMap { jv =>
+      (jv \ "value") match { 
+        case JNum(x) if x % 2 == 0 => Some(jv)
+        case _ => None
+      }
+    }
+
+    results.copoint must_== expected
+  }
+
   def checkObjectDeref = {
     implicit val gen = sample(objectSchema(_, 3))
     check { (sample: SampleData) =>
@@ -160,7 +235,31 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     }
   }
 
-  def checkMap2 = {
+  def checkMap2Eq = {
+    implicit val gen = sample(_ => Seq(CPath("value1") -> CDouble, CPath("value2") -> CLong))
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+      val results = toJson(table.transform {
+        Map2(
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2")),
+          lookupF2(Nil, "eq")
+        )
+      })
+
+      val expected = sample.data flatMap { jv =>
+        ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
+          case (JNum(x), JNum(y)) if x == y => Some(JBool(true))
+          case (JNum(x), JNum(y)) => Some(JBool(false))
+          case _ => None
+        }
+      }
+
+      results.copoint must_== expected
+    }
+  }
+
+  def checkMap2Add = {
     implicit val gen = sample(_ => Seq(CPath("value1") -> CLong, CPath("value2") -> CLong))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
@@ -174,13 +273,34 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
       val expected = sample.data flatMap { jv =>
         ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-          case (JNum(x), JNum(y)) => Some(JNum(x+y))
+          case (JNum(x), JNum(y)) => Some(JNum(x + y))
           case _ => None
         }
       }
 
       results.copoint must_== expected
     }
+  }
+
+  def testMap2ArrayObject = {
+    val data: Stream[JValue] = Stream(
+        JObject(JField("value1", JObject(JField("foo", JNum(12)) :: Nil )) :: JField("value2", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value1", JArray(JNum(30) :: Nil)) :: JField("value2", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value1", JNum(20)) :: JField("value2", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value1", JObject(JField("foo", JNum(-188)) :: Nil)) :: JField("value2", JNum(77)) :: Nil),
+        JObject(JField("value1", JNum(3)) :: JField("value2", JNum(77)) :: Nil))
+    
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform { Map2(
+      DerefObjectStatic(Leaf(Source), JPathField("value1")),
+      DerefObjectStatic(Leaf(Source), JPathField("value2")),
+      lookupF2(Nil, "add")) 
+    })
+    val expected = Stream(JNum(80))
+
+    results.copoint mustEqual expected
   }
 
   def checkEqualSelf = {
@@ -204,8 +324,6 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       case _ => sys.error("expected JArray")
     }).map { k => { JObject(List(JField("value", k), JField("key", JArray(List(JNum(0)))))) } }.toStream
     
-    println("data: %s\n".format(data.toList))
-
     val sample = SampleData(data)
     val table = fromSample(sample)
 
@@ -240,6 +358,126 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     results.copoint must_== expected
   }
 
+  def testSimpleEqual = {
+    val array: JValue = JsonParser.parse("""
+      [{
+        "value":{
+          "value2":-2874857152017741205
+        },
+        "key":[2.0,1.0,2.0]
+      },
+      {
+        "value":{
+          "value1":2354405013357379940,
+          "value2":2354405013357379940
+        },
+        "key":[2.0,2.0,1.0]
+      }]""")
+    
+    val data: Stream[JValue] = (array match {
+      case JArray(li) => li
+      case _ => sys.error("Expected JArray")
+    }).toStream
+
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+        Equal(
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2"))
+        )
+    })
+
+    val expected = data flatMap { jv =>
+      ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
+        case (JNothing, JNothing) => None
+        case (x, y) => Some(JBool(x == y))
+      }
+    }
+
+    results.copoint mustEqual expected
+  }
+
+  def testAnotherSimpleEqual = {
+    val array: JValue = JsonParser.parse("""
+      [{
+        "value":{
+          "value2":-2874857152017741205
+        },
+        "key":[2.0,1.0,2.0]
+      },
+      {
+        "value":null,
+        "key":[2.0,2.0,2.0]
+      }]""")
+    
+    val data: Stream[JValue] = (array match {
+      case JArray(li) => li
+      case _ => sys.error("Expected JArray")
+    }).toStream
+
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+        Equal(
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2"))
+        )
+    })
+
+    val expected = data flatMap { jv =>
+      ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
+        case (JNothing, JNothing) => None
+        case (x, y) => Some(JBool(x == y))
+      }
+    }
+
+    results.copoint mustEqual expected
+  }
+
+  def testYetAnotherSimpleEqual = {
+    val array: JValue = JsonParser.parse("""
+      [{
+        "value":{
+          "value1":-1380814338912438254,
+          "value2":-1380814338912438254
+        },
+        "key":[2.0,1.0]
+      },
+      {
+        "value":{
+          "value1":1
+        },
+        "key":[2.0,2.0]
+      }]""")
+    
+    val data: Stream[JValue] = (array match {
+      case JArray(li) => li
+      case _ => sys.error("Expected JArray")
+    }).toStream
+
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+        Equal(
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2"))
+        )
+    })
+
+    val expected = data flatMap { jv =>
+      ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
+        case (JNothing, JNothing) => None
+        case (x, y) => Some(JBool(x == y))
+      }
+    }
+
+    results.copoint mustEqual expected
+  }
+
   def checkEqual = {
     val genBase: Gen[SampleData] = sample(_ => Seq(CPath("value1") -> CLong, CPath("value2") -> CLong)).arbitrary
     implicit val gen: Arbitrary[SampleData] = Arbitrary {
@@ -247,14 +485,25 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         SampleData(
           sd.data.zipWithIndex map {
             case (jv, i) if i%2 == 0 => 
-              // construct object with value1 == value2
-              jv.set(CPath("value/value2"), jv(CPath("value/value1")))
+              jv match {
+                case JObject(JField("value", JObject(JField("value2", _) :: JField("value1", _) :: Nil)) :: _ :: Nil) =>
+                  jv.set(CPath(CPathField("value"), CPathField("value1")), jv(CPath(CPathField("value"), CPathField("value2"))))
+                case _ => jv
+              }
 
-            case (jv, i) if i%5 == 0 => // delete value1
-              jv.set(CPath("value/value1"), JNothing)
+            case (jv, i) if i%5 == 0 =>
+              jv match {
+                case JObject(JField("value", JObject(JField("value2", _) :: JField("value1", _) :: Nil)) :: _ :: Nil) =>
+                  jv.set(CPath(CPathField("value"), CPathField("value1")), JNothing)
+                case _ => jv
+              }
 
-            case (jv, i) if i%5 == 3 => // delete value2
-              jv.set(CPath("value/value2"), JNothing)
+            case (jv, i) if i%5 == 3 =>
+              jv match {
+                case JObject(JField("value", JObject(JField("value2", _) :: JField("value1", _) :: Nil)) :: _ :: Nil) =>
+                  jv.set(CPath(CPathField("value"), CPathField("value2")), JNothing)
+                case _ => jv
+              }
 
             case (jv, _) => jv
           }
@@ -273,9 +522,99 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
       val expected = sample.data flatMap { jv =>
         ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-          case (JNothing, _) => None
-          case (_, JNothing) => None
+          case (JNothing, JNothing) => None
           case (x, y) => Some(JBool(x == y))
+        }
+      }
+
+      results.copoint must_== expected
+    }
+  }
+
+  def checkEqualLiteral = {
+    val genBase: Gen[SampleData] = sample(_ => Seq(JPath("value1") -> CLong)).arbitrary
+    implicit val gen: Arbitrary[SampleData] = Arbitrary {
+      genBase map { sd =>
+        SampleData(
+          sd.data.zipWithIndex map {
+            case (jv, i) if i%2 == 0 => 
+              jv match {
+                case JObject(JField("value", JObject(JField("value1", _) :: Nil)) :: _ :: Nil) =>
+                  jv.set(JPath(JPathField("value"), JPathField("value1")), JNum(0))
+                case _ => jv
+              }
+
+            case (jv, i) if i%5 == 0 =>
+              jv match {
+                case JObject(JField("value", JObject(JField("value1", _) :: Nil)) :: _ :: Nil) =>
+                  jv.set(JPath(JPathField("value"), JPathField("value1")), JNothing)
+                case _ => jv
+              }
+
+            case (jv, _) => jv
+          }
+        )
+      }
+    }
+
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+      val results = toJson(table.transform {
+        EqualLiteral(
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
+          CLong(0),
+          false)
+      })
+
+      val expected = sample.data flatMap { jv =>
+        jv \ "value" \ "value1" match {
+          case JNothing => None
+          case x => Some(JBool(x == JNum(0)))
+        }
+      }
+
+      results.copoint must_== expected
+    }
+  }
+  def checkNotEqualLiteral = {
+    val genBase: Gen[SampleData] = sample(_ => Seq(JPath("value1") -> CLong)).arbitrary
+    implicit val gen: Arbitrary[SampleData] = Arbitrary {
+      genBase map { sd =>
+        SampleData(
+          sd.data.zipWithIndex map {
+            case (jv, i) if i%2 == 0 => 
+              jv match {
+                case JObject(JField("value", JObject(JField("value1", _) :: Nil)) :: _ :: Nil) =>
+                  jv.set(JPath(JPathField("value"), JPathField("value1")), JNum(0))
+                case _ => jv
+              }
+
+            case (jv, i) if i%5 == 0 =>
+              jv match {
+                case JObject(JField("value", JObject(JField("value1", _) :: Nil)) :: _ :: Nil) =>
+                  jv.set(JPath(JPathField("value"), JPathField("value1")), JNothing)
+                case _ => jv
+              }
+
+            case (jv, _) => jv
+          }
+        )
+      }
+    }
+
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+      val results = toJson(table.transform {
+        EqualLiteral(
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
+          CLong(0),
+          true)
+      })
+
+      val expected = sample.data flatMap { jv =>
+        jv \ "value" \ "value1" match {
+          case JNothing => None
+          case x => Some(JBool(x != JNum(0)))
         }
       }
 
@@ -322,7 +661,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testObjectConcatTrivial = {
-    val data: Stream[JValue] = Stream(JBool(true), JObject(List()))
+    val data: Stream[JValue] = Stream(JBool(true), JObject(Nil))
     val sample = SampleData(data)
     val table = fromSample(sample)
 
@@ -330,7 +669,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       InnerObjectConcat(Leaf(Source))
     })
 
-    results.copoint must beEmpty
+    results.copoint must_== Stream(JObject(Nil))
   }
 
   def checkObjectConcat = {
@@ -619,12 +958,61 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     }
   }
 
-  def checkTypedHeterogeneous = {
-    val data: Stream[JValue] = 
-      Stream(
-        JObject(List(JField("value", JString("value1")), JField("key", JArray(List(JNum(1)))))), 
-        JObject(List(JField("value", JNum(23)), JField("key", JArray(List(JNum(2)))))))
-    val sample = SampleData(data)
+  def testTyped(sample: SampleData) = {
+    val (_, schema) = sample.schema.getOrElse(0 -> List())
+
+    // using a generator with heterogeneous data, we're just going to produce
+    // the jtype that chooses all of the elements of the non-random data.
+    val jtpe = JObjectFixedT(Map(
+      "value" -> Schema.mkType(schema).getOrElse(sys.error("Could not generate JType from schema " + schema)),
+      "key" -> JArrayUnfixedT
+    ))
+
+    val table = fromSample(sample)
+    val results = toJson(table.transform(
+      Typed(Leaf(Source), jtpe)))
+
+    val included = schema.groupBy(_._1).mapValues(_.map(_._2).toSet)
+
+    val sampleSchema = inferSchema(sample.data.toSeq)
+    val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
+    val expected = expectedResult(sample.data, included, subsumes)
+
+    results.copoint must_== expected
+  }
+
+  def checkTyped = {
+    implicit val gen = sample(schema)
+    check { testTyped _ }.set(minTestsOk -> 10000)
+  }
+
+  def testTypedAtSliceBoundary = {
+    val JArray(data) = JsonParser.parse("""[
+        { "value":{ "n":{ } }, "key":[1,1,1] },
+        { "value":{ "lvf":2123699568254154891, "vbeu":false, "dAc":4611686018427387903 }, "key":[1,1,3] },
+        { "value":{ "lvf":1, "vbeu":true, "dAc":0 }, "key":[2,1,1] },
+        { "value":{ "lvf":1, "vbeu":true, "dAc":-1E-28506 }, "key":[2,2,1] },
+        { "value":{ "n":{ } }, "key":[2,2,2] },
+        { "value":{ "n":{ } }, "key":[2,3,2] },
+        { "value":{ "n":{ } }, "key":[2,4,4] },
+        { "value":{ "n":{ } }, "key":[3,1,3] },
+        { "value":{ "n":{ } }, "key":[3,2,2] },
+        { "value":{ "n":{ } }, "key":[4,3,1] },
+        { "value":{ "lvf":-1, "vbeu":true, "dAc":0 }, "key":[4,3,4] }
+      ]""")
+
+      val sample = SampleData(data.toStream, Some((3,List((JPath(".n"),CEmptyObject)))))
+
+      testTyped(sample)
+  }
+  
+  def testTypedHeterogeneous = {
+    val JArray(elements) = JsonParser.parse("""[
+      {"key":[1], "value":"value1"}
+      {"key":[2], "value":23}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
     val table = fromSample(sample)
 
     val jtpe = JObjectFixedT(Map("value" -> JTextT, "key" -> JArrayUnfixedT))
@@ -632,20 +1020,21 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       Typed(Leaf(Source), jtpe)
     })
     
-    val included: Map[CPath, CType] = Map(CPath(List()) -> CString)
+    val JArray(expected) = JsonParser.parse("""[
+      {"key":[1], "value":"value1"},
+      {"key":[2]}
+    ]""")
 
-    val sampleSchema = inferSchema(data.toSeq)
-    val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
-
-    results.copoint must_== expectedResult(data, included, subsumes)
+    results.copoint must_== expected.toStream
   }
 
-  def checkTypedObject = {
-    val data: Stream[JValue] = 
-      Stream(
-        JObject(List(JField("value", JObject(List(JField("foo", JNum(23))))), JField("key", JArray(List(JNum(1), JNum(3)))))),
-        JObject(List(JField("value", JObject(Nil)), JField("key", JArray(List(JNum(2), JNum(4)))))))
-    val sample = SampleData(data)
+  def testTypedObject = {
+    val JArray(elements) = JsonParser.parse("""[
+      {"key":[1, 3], "value": {"foo": 23}},
+      {"key":[2, 4], "value": {}}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
     val table = fromSample(sample)
 
     val results = toJson(table.transform {
@@ -653,96 +1042,15 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         JObjectFixedT(Map("value" -> JObjectFixedT(Map("foo" -> JNumberT)), "key" -> JArrayUnfixedT)))
     })
 
-    val expected = Stream(JObject(List(JField("value", JObject(List(JField("foo", JNum(23))))), JField("key", JArray(List(JNum(1), JNum(3)))))))
+    val JArray(expected) = JsonParser.parse("""[
+      {"key":[1, 3], "value": {"foo": 23}},
+      {"key":[2, 4]}
+    ]""")
 
-    results.copoint must_== expected
+    results.copoint must_== expected.toStream
   } 
 
-  def checkTypedArray = {
-    val data: Stream[JValue] = 
-      Stream(
-        JObject(List(JField("value", JArray(List(JNum(2), JBool(true)))), JField("key", JArray(List(JNum(1), JNum(2)))))),
-        JObject(List(JField("value", JObject(List())), JField("key", JArray(List(JNum(3), JNum(4)))))))
-    val sample = SampleData(data)
-    val table = fromSample(sample)
-
-    val results = toJson(table.transform {
-      Typed(Leaf(Source), 
-        JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JNumberT, 1 -> JBooleanT)), "key" -> JArrayUnfixedT)))
-    })
-
-    val expected = Stream(JObject(List(JField("value", JArray(List(JNum(2), JBool(true)))), JField("key", JArray(List(JNum(1), JNum(2)))))))
-
-    val resultStream = results.copoint
-    resultStream must haveSize(1)
-    resultStream must_== expected
-  } 
-
-  def checkTypedArray2 = {
-    val data: Stream[JValue] = 
-      Stream(
-        JObject(List(JField("value", JArray(List(JNum(2), JBool(true)))), JField("key", JArray(List(JNum(1)))))))
-    val sample = SampleData(data)
-    val table = fromSample(sample)
-    val jtpe = JObjectFixedT(Map("value" -> JArrayFixedT(Map(1 -> JBooleanT)), "key" -> JArrayUnfixedT))
-
-    val results = toJson(table.transform {
-      Typed(Leaf(Source), jtpe)
-    })
-   
-    val included: Map[CPath, CType] = Map(CPath(List(CPathIndex(1))) -> CBoolean)
-
-    val sampleSchema = inferSchema(data.toSeq)
-    val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
-
-    results.copoint must_== expectedResult(data, included, subsumes)
-  }
-
-  def checkTypedArray4 = {
-    val data: Stream[JValue] = 
-      Stream(
-        JObject(List(JField("value", JArray(List(JNum(2.4), JNum(12), JBool(true), JArray(List())))), JField("key", JArray(List(JNum(1)))))),
-        JObject(List(JField("value", JArray(List(JNum(3.5), JNull, JBool(false)))), JField("key", JArray(List(JNum(2)))))))
-    val sample = SampleData(data)
-    val table = fromSample(sample)
-
-    val jtpe = JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JNumberT, 1 -> JNumberT, 2 -> JBooleanT, 3 -> JArrayFixedT(Map()))), "key" -> JArrayUnfixedT))
-    val results = toJson(table.transform {
-      Typed(Leaf(Source), jtpe)
-    })
-    
-    val included: Map[CPath, CType] = 
-      Map(CPath(List(CPathIndex(0))) -> CNum, CPath(List(CPathIndex(1))) -> CNum, CPath(List(CPathIndex(2))) -> CBoolean, CPath(List(CPathIndex(3))) -> CEmptyArray)
-
-    val sampleSchema = inferSchema(data.toSeq)
-    val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
-
-    results.copoint must_== expectedResult(data, included, subsumes)
-  }
-
-  def checkTypedArray3 = {
-    val data: Stream[JValue] = 
-      Stream(
-        JObject(List(JField("value", JArray(List(JArray(List()), JNum(23), JNull))), JField("key", JArray(List(JNum(1)))))),
-        JObject(List(JField("value", JArray(List(JArray(List()), JArray(List()), JNull))), JField("key", JArray(List(JNum(2)))))))
-    val sample = SampleData(data)
-    val table = fromSample(sample)
-
-    val jtpe = JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JArrayFixedT(Map()), 1 -> JArrayFixedT(Map()), 2 -> JNullT)), "key" -> JArrayUnfixedT))
-
-    val results = toJson(table.transform {
-      Typed(Leaf(Source), jtpe)
-    })
-      
-    val included: Map[CPath, CType] = Map(CPath(List(CPathIndex(0))) -> CEmptyArray, CPath(List(CPathIndex(1))) -> CEmptyArray, CPath(List(CPathIndex(2))) -> CNull)
-
-    val sampleSchema = inferSchema(data.toSeq)
-    val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
-
-    results.copoint must_== expectedResult(data, included, subsumes)
-  }
-
-  def checkTypedObject2 = {
+  def testTypedObject2 = {
     val data: Stream[JValue] = 
       Stream(
         JObject(List(JField("value", JObject(List(JField("foo", JBool(true)), JField("bar", JNum(77))))), JField("key", JArray(List(JNum(1)))))))
@@ -757,13 +1065,122 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     val expected = Stream(JObject(List(JField("value", JObject(List(JField("bar", JNum(77))))), JField("key", JArray(List(JNum(1)))))))
     results.copoint must_== expected
   }  
-  
-  def checkTypedNumber = {
+
+  def testTypedObjectUnfixed = {
     val data: Stream[JValue] = 
       Stream(
-        JObject(List(JField("value", JNum(23)), JField("key", JArray(List(JNum(1), JNum(3)))))),
-        JObject(List(JField("value", JString("foo")), JField("key", JArray(List(JNum(2), JNum(4)))))))
+        JObject(List(JField("value", JArray(List(JNum(2), JBool(true)))))),
+        JObject(List(JField("value", JObject(List())))))
     val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), JObjectUnfixedT)
+    })
+
+    val resultStream = results.copoint
+    resultStream must_== data
+  }
+
+  def testTypedArray = {
+    val JArray(data) = JsonParser.parse("""[
+      {"key": [1, 2], "value": [2, true] },
+      {"key": [3, 4], "value": {} }
+    ]""")
+    val sample = SampleData(data.toStream)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), 
+        JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JNumberT, 1 -> JBooleanT)), "key" -> JArrayUnfixedT)))
+    })
+
+    val JArray(expected) = JsonParser.parse("""[
+      {"key": [1, 2], "value": [2, true] },
+      {"key": [3, 4] }
+    ]""")
+    
+    results.copoint must_== expected.toStream
+  } 
+
+  def testTypedArray2 = {
+    val JArray(data) = JsonParser.parse("""[
+      {"key": [1], "value": [2, true] }
+    ]""")
+
+    val sample = SampleData(data.toStream)
+    val table = fromSample(sample)
+    val jtpe = JObjectFixedT(Map("value" -> JArrayFixedT(Map(1 -> JBooleanT)), "key" -> JArrayUnfixedT))
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), jtpe)
+    })
+   
+    val expected = Stream(
+      JObject(JField("key", JArray(JNum(1) :: Nil)) :: 
+              JField("value", JArray(JNothing :: JBool(true) :: Nil)) ::
+              Nil))
+
+    results.copoint must_== expected
+  }
+
+  def testTypedArray3 = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JArray(List(JArray(List()), JNum(23), JNull))), JField("key", JArray(List(JNum(1)))))),
+        JObject(List(JField("value", JArray(List(JArray(List()), JArray(List()), JNull))), JField("key", JArray(List(JNum(2)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val jtpe = JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JArrayFixedT(Map()), 1 -> JArrayFixedT(Map()), 2 -> JNullT)), "key" -> JArrayUnfixedT))
+
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), jtpe)
+    })
+      
+    val included: Map[JPath, Set[CType]] = Map(
+      CPath(List(CPathIndex(0))) -> Set(CEmptyArray), 
+      CPath(List(CPathIndex(1))) -> Set(CEmptyArray), 
+      CPath(List(CPathIndex(2))) -> Set(CNull))
+
+    val sampleSchema = inferSchema(data.toSeq)
+    val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
+
+    results.copoint must_== expectedResult(data, included, subsumes)
+  }
+
+  def testTypedArray4 = {
+    val data: Stream[JValue] = 
+      Stream(
+        JObject(List(JField("value", JArray(List(JNum(2.4), JNum(12), JBool(true), JArray(List())))), JField("key", JArray(List(JNum(1)))))),
+        JObject(List(JField("value", JArray(List(JNum(3.5), JNull, JBool(false)))), JField("key", JArray(List(JNum(2)))))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val jtpe = JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JNumberT, 1 -> JNumberT, 2 -> JBooleanT, 3 -> JArrayFixedT(Map()))), "key" -> JArrayUnfixedT))
+    val results = toJson(table.transform {
+      Typed(Leaf(Source), jtpe)
+    })
+    
+    val included: Map[JPath, Set[CType]] = Map(
+      JPath(List(JPathIndex(0))) -> Set(CNum), 
+      JPath(List(JPathIndex(1))) -> Set(CNum), 
+      JPath(List(JPathIndex(2))) -> Set(CBoolean), 
+      JPath(List(JPathIndex(3))) -> Set(CEmptyArray))
+
+    val sampleSchema = inferSchema(data.toSeq)
+    val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
+
+    results.copoint must_== expectedResult(data, included, subsumes)
+  }
+  
+  def testTypedNumber = {
+    val JArray(data) = JsonParser.parse("""[
+      {"key": [1, 2], "value": 23 },
+      {"key": [3, 4], "value": "foo" }
+    ]""")
+
+    val sample = SampleData(data.toStream)
     val table = fromSample(sample)
 
     val results = toJson(table.transform {
@@ -771,12 +1188,15 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         JObjectFixedT(Map("value" -> JNumberT, "key" -> JArrayUnfixedT)))
     })
 
-    val expected = Stream(JObject(List(JField("value", JNum(23)), JField("key", JArray(List(JNum(1), JNum(3)))))))
+    val JArray(expected) = JsonParser.parse("""[
+      {"key": [1, 2], "value": 23 },
+      {"key": [3, 4], }
+    ]""")
 
-    results.copoint must_== expected
+    results.copoint must_== expected.toStream
   }  
 
-  def checkTypedNumber2 = {
+  def testTypedNumber2 = {
     val data: Stream[JValue] = 
       Stream(
         JObject(List(JField("value", JNum(23)), JField("key", JArray(List(JNum(1), JNum(3)))))),
@@ -794,11 +1214,11 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     results.copoint must_== expected
   }
 
-  def checkTypedEmpty = {
-    val data: Stream[JValue] = 
-      Stream(
-        JObject(List(JField("value", JField("foo", JArray(List()))), JField("key", JArray(List(JNum(1)))))))
-    val sample = SampleData(data)
+  def testTypedEmpty = {
+    val JArray(data) = JsonParser.parse("""[
+      {"key":[1], "value":{"foo":[]}}
+    ]""")
+    val sample = SampleData(data.toStream)
     val table = fromSample(sample)
 
     val results = toJson(table.transform {
@@ -806,33 +1226,13 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         JObjectFixedT(Map("value" -> JArrayFixedT(Map()), "key" -> JArrayUnfixedT)))
     })
 
-    results.copoint must beEmpty
+    val JArray(expected) = JsonParser.parse("""[
+      {"key":[1] }
+    ]""")
+
+    results.copoint must_== expected.toStream
   }
 
-  def checkTyped = {
-    implicit val gen = sample(schema)
-    check { (sample: SampleData) =>
-      val schema = sample.schema.getOrElse(0 -> List())._2
-      //val reducedSchema = schema.zipWithIndex.collect { case (ctpe, i) if i%2 == 0 => ctpe }
-      val valuejtpe = Schema.mkType(schema).getOrElse(JObjectFixedT(Map()))  //reducedSchema
-      val jtpe = JObjectFixedT(Map(
-        "value" -> valuejtpe,
-        "key" -> JArrayUnfixedT
-      ))
-
-      val table = fromSample(sample)
-      val results = toJson(table.transform(
-        Typed(Leaf(Source), jtpe)))
-
-      val included = schema.toMap  //reducedSchema
-
-      val sampleSchema = inferSchema(sample.data.toSeq)
-      val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
-
-      results.copoint must_== expectedResult(sample.data, included, subsumes)
-    }.set(minTestsOk -> 10000)
-  }
-  
   def testTrivialScan = {
     val data = JObject(JField("value", JNum(BigDecimal("2705009941739170689"))) :: JField("key", JArray(JNum(1) :: Nil)) :: Nil) #::
                JObject(JField("value", JString("")) :: JField("key", JArray(JNum(2) :: Nil)) :: Nil) #::
@@ -968,23 +1368,43 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     }
   }
 
-  def expectedResult(data: Stream[JValue], included: Map[CPath, CType], subsumes: Boolean): Stream[JValue] = {
-    if (subsumes) { 
-      data flatMap { jv =>
+  def expectedResult(data: Stream[JValue], included: Map[CPath, Set[CType]], subsumes: Boolean): Stream[JValue] = {
+    //if (subsumes) { 
+      data map { jv =>
         val paths = jv.flattenWithPath.toMap.keys.toList
 
+/*
         val includes: Boolean = included.keys forall {
           case CPath(tail) => paths.contains(CPath(CPathField("value"), tail)) 
           case _ => true
         } 
+        */
 
         val filtered = jv.flattenWithPath filter {
-          case (CPath(CPathField("value"), tail @ _*), _) if included.contains(CPath(tail: _*)) => true
+          case (CPath(CPathField("value"), tail @ _*), leaf) =>
+            included.get(CPath(tail: _*)).exists { ctpes =>
+              leaf match {
+                case JBool(_) => ctpes.contains(CBoolean)
+                case JString(_) => ctpes.contains(CString)
+                case JNum(_) => ctpes.contains(CLong) || ctpes.contains(CDouble) || ctpes.contains(CNum)
+                case JNull => ctpes.contains(CNull)
+                case JObject(elements) => 
+                  // if elements is nonempty, then leaf is a nonempty object and consequently can't conform
+                  // to any leaf type.
+                  elements.isEmpty && ctpes.contains(CEmptyObject)
+
+                case JArray(elements) => 
+                  // if elements is nonempty, then leaf is a nonemtpy array and consequently can't conform
+                  // to any leaf type.
+                  elements.isEmpty && ctpes.contains(CEmptyArray)
+              }
+            }
+            
           case (CPath(CPathField("key"), _*), _) => true
-          case _ => false
+          case _ => sys.error("Unexpected JValue schema for " + jv)
         }
 
-        lazy val back = JValue.unflatten(
+        JValue.unflatten(filtered) /*JValue.unflatten(
           if (filtered forall {
             case (path @ CPath(CPathField("key"), _*), _) => true
             case (path @ CPath(CPathField("value"), tail @ _*), value) => {
@@ -1001,6 +1421,8 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
             }
             case _ => false
           }) filtered else List())
+        */
+        /*
 
         if (includes) 
           if (back \ "value" == JNothing)
@@ -1008,10 +1430,13 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
           else
             Some(back)
         else None
+          */
       }
+      /*
     } else {
       Stream()
     }
+    */
   }
 }
 

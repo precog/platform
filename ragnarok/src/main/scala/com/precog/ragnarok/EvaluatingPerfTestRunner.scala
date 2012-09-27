@@ -74,7 +74,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
     }
   }
 
-  def eval(query: String): M[Result] = {
+  def eval(query: String): M[Result] = try {
     val tree = compile(query)
 
     if (!tree.errors.isEmpty) {
@@ -93,6 +93,9 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
           } yield json.size
         }
     }
+  } catch {
+    case e: com.precog.quirrel.parser.Parser$ParseException =>
+      sys.error("Error parsing query:\n\n%s\n\n%s" format (query, e.getMessage()))
   }
 }
 

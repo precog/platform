@@ -43,16 +43,11 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
 
 
   // This should generate some jpath ids, then generate CTypes for these.
-  // def genColumnRefs: Gen[List[ColumnRef]] = 
   def genColumnRefs: Gen[List[ColumnRef]] = Gen.listOf(Gen.alphaStr filter (_.size > 0)) flatMap { paths =>
     Gen.sequence[List, List[ColumnRef]](paths.distinct.map { name =>
       Gen.listOf(genCType) map { _.distinct map (ColumnRef(JPath(name), _)) }
     }).map(_.flatten)
   }
-
-  // def genColumnRefs: Gen[List[ColumnRef]] = Gen.listOf(genCType) map (_.zipWithIndex map {
-  //   case (cType, i) => ColumnRef(JPath(JPathIndex(i)), cType)
-  // })
 
   def groupConsecutive[A, B](as: List[A])(f: A => B) = {
     @tailrec
@@ -67,18 +62,16 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
     build(as, Nil)
   }
 
-  def genCValuesForColumnRefs(refs: List[ColumnRef]): Gen[List[CValue]] = /*Gen.sequence[List, CValue](refs map {
-    case ColumnRef(_, cType) => Gen.frequency(5 -> genCValue(cType), 1 -> Gen.value(CUndefined))
-  })*/
-  Gen.sequence[List, List[CValue]](groupConsecutive(refs)(_.selector) map {
-    case refs =>
-      Gen.choose(0, refs.size - 1) flatMap { i =>
-        Gen.sequence[List, CValue](refs.zipWithIndex map {
-          case (ColumnRef(_, cType), `i`) => Gen.frequency(5 -> genCValue(cType), 1 -> Gen.value(CUndefined))
-          case (_, _) => Gen.value(CUndefined)
-        })
-      }
-  }) map (_.flatten)
+  def genCValuesForColumnRefs(refs: List[ColumnRef]): Gen[List[CValue]] = 
+    Gen.sequence[List, List[CValue]](groupConsecutive(refs)(_.selector) map {
+      case refs =>
+        Gen.choose(0, refs.size - 1) flatMap { i =>
+          Gen.sequence[List, CValue](refs.zipWithIndex map {
+            case (ColumnRef(_, cType), `i`) => Gen.frequency(5 -> genCValue(cType), 1 -> Gen.value(CUndefined))
+            case (_, _) => Gen.value(CUndefined)
+          })
+        }
+    }) map (_.flatten)
 
   def arrayColumnsFor(size: Int, refs: List[ColumnRef]): List[ArrayColumn[_]] =
     refs map JDBMSlice.columnFor(JPath.Identity, size) map (_._2)
@@ -136,7 +129,7 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
           sortedA must_== sortedB
         }
       }
-    }
+    }.set(minTestsOk -> 500, maxDiscarded -> 500)
   }
 
   def checkRoundTrips(toRowFormat: List[ColumnRef] => RowFormat) {

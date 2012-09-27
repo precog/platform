@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.common.VectorCase
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser.parse
 import blueeyes.json.JPathField
@@ -37,10 +36,8 @@ import SampleData._
 trait IntersectSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
   implicit def M: Monad[M] with Copointed[M]
 
-  object module extends BlockStoreTestModule {
-    val projections = Map.empty[ProjectionDescriptor, Projection]
-  }
-
+  val module = BlockStoreTestModule.empty[M]
+  
   def testIntersect(sample: SampleData) = {
     import module._
     import module.trans._
@@ -62,7 +59,7 @@ trait IntersectSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   }
 
   def testSimpleIntersect = {
-    val s1 = SampleData(Stream(toRecord(VectorCase(1), parse("""{"a":[]}""")), toRecord(VectorCase(2), parse("""{"b":[]}"""))))
+    val s1 = SampleData(Stream(toRecord(Array(1l), parse("""{"a":[]}""")), toRecord(Array(2l), parse("""{"b":[]}"""))))
 
     testIntersect(s1)
   }

@@ -26,7 +26,10 @@ import org.joda.time.DateTime
 
 import java.nio.ByteBuffer
 
-import scala.collection.immutable.BitSet
+//import scala.collection.immutable.BitSet
+import com.precog.util.BitSet
+import com.precog.util.BitSetUtil
+import com.precog.util.BitSetUtil.Implicits._
 
 import org.specs2._
 import org.specs2.mutable.Specification
@@ -39,17 +42,19 @@ class CodecSpec extends Specification with ScalaCheck {
   implicit lazy val arbBigDecimal: Arbitrary[BigDecimal] = Arbitrary(
     Gen.chooseNum(Double.MinValue / 2, Double.MaxValue / 2) map (BigDecimal(_)))
 
-  implicit def arbBitSet = Arbitrary(Gen.listOf(Gen.choose(0, 500)) map (BitSet(_: _*)))
+  //implicit def arbBitSet = Arbitrary(Gen.listOf(Gen.choose(0, 500)) map (BitSet(_: _*)))
+  implicit def arbBitSet = Arbitrary(Gen.listOf(Gen.choose(0, 500)) map BitSetUtil.create)
 
   implicit def arbSparseBitSet: Arbitrary[(Codec[BitSet], BitSet)] = {
     Arbitrary(Gen.chooseNum(0, 500) flatMap { size =>
       val codec = Codec.SparseBitSetCodec(size)
       if (size > 0) {
         Gen.listOf(Gen.choose(0, size - 1)) map { bits =>
-          (codec, BitSet(bits: _*))
+          //(codec, BitSet(bits: _*))
+          (codec, BitSetUtil.create(bits))
         }
       } else {
-        Gen.value((codec, BitSet()))
+        Gen.value((codec, new BitSet()))
       }
     })
   }

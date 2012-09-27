@@ -49,61 +49,47 @@ case class ArchiveData(descriptor: ProjectionDescriptor)
 trait RoutingTable {
   def routeEvent(msg: EventMessage): Seq[ProjectionData]
   
-  def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): List[ArchiveData]
+  def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ArchiveData]
 
   def batchMessages(events: Iterable[IngestMessage], descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ProjectionUpdate] = {
-    import ProjectionUpdate._
-
-    val actions = mutable.Map.empty[ProjectionDescriptor, Seq[UpdateAction]]
-
-    @inline @tailrec
-    def update(eventId: EventId, updates: Iterator[ProjectionData]): Unit = {
-      if (updates.hasNext) {
-        val ProjectionData(descriptor, values, metadata) = updates.next()
-        val insert = Row(eventId, values, metadata)
-        
-        actions += (descriptor -> (actions.getOrElse(descriptor, Vector.empty) :+ insert))
-        update(eventId, updates)
-      } 
-    }
-
-    @inline @tailrec
-    def archive(archiveId: ArchiveId, archives: Iterator[ArchiveData]): Unit = {
-      if (archives.hasNext) {
-        val descriptor = archives.next().descriptor
-        val arch = Archive(archiveId)
-        
-        actions += (descriptor -> (actions.getOrElse(descriptor, Vector.empty) :+ arch))
-        archive(archiveId, archives)
+    import ProjectionInsert.Row
+    
+    val updates = events.flatMap {
+      case em @ EventMessage(eventId, _) => routeEvent(em).map {
+        case ProjectionData(descriptor, values, metadata) => (descriptor, Row(eventId, values, metadata)) 
+      }
+      
+      case am @ ArchiveMessage(archiveId, _) => routeArchive(am, descriptorMap).map { 
+        case ArchiveData(descriptor) => (descriptor, archiveId)
       }
     }
     
-    @inline @tailrec
-    def build(events: Iterator[IngestMessage]): Unit = {
-      if (events.hasNext) {
-        events.next() match {
-          case em @ EventMessage(eventId, _) => update(eventId, routeEvent(em).iterator)
-          case am @ ArchiveMessage(archiveId, _) => archive(archiveId, routeArchive(am, descriptorMap).iterator)
-        }
-
-        build(events)
+    val grouped = updates.groupBy(_._1).mapValues(_.map(_._2))
+    
+    val revBatched = grouped.flatMap {
+      case (desc, updates) => updates.foldLeft(List.empty[ProjectionUpdate]) {
+        case (rest, id : ArchiveId) => ProjectionArchive(desc, id) :: rest
+        case (ProjectionInsert(_, inserts) :: rest, insert : Row) => ProjectionInsert(desc, insert +: inserts) :: rest
+        case (rest, insert : Row) => ProjectionInsert(desc, Seq(insert)) :: rest
       }
     }
-
-    build(events.iterator);
-    actions.map({ case (descriptor, actions) => ProjectionUpdate(descriptor, actions) })(collection.breakOut)
+    
+    revBatched.map {
+      case ProjectionInsert(desc, inserts) => ProjectionInsert(desc, inserts.reverse)
+      case archive => archive
+    }.toSeq.reverse
   }
 }
 
 
 class SingleColumnProjectionRoutingTable extends RoutingTable {
-  final def routeEvent(msg: EventMessage): List[ProjectionData] = {
+  final def routeEvent(msg: EventMessage): Seq[ProjectionData] = {
     msg.event.data.flattenWithPath map { 
       case (selector, value) => toProjectionData(msg, CPath(selector), value)
     }
   }
 
-  final def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): List[ArchiveData] = {
+  final def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ArchiveData] = {
     (for {
       desc <- descriptorMap.get(msg.archive.path).flatten 
     } yield ArchiveData(desc))(collection.breakOut)

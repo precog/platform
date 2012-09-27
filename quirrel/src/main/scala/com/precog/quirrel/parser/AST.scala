@@ -231,6 +231,12 @@ trait AST extends Phases {
         indent + "type: div\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
+      }      
+
+      case Mod(loc, left, right) => {
+        indent + "type: mod\n" +
+          indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
+          indent + "right:\n" + prettyPrint(right, level + 2)
       }
       
       case Lt(loc, left, right) => {
@@ -496,6 +502,9 @@ trait AST extends Phases {
         (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
       
       case (Div(_, left1, right1), Div(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Mod(_, left1, right1), Mod(_, left2, right2)) =>
         (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
       
       case (Lt(_, left1, right1), Lt(_, left2, right2)) =>
@@ -830,6 +839,10 @@ trait AST extends Phases {
     
     final case class Div(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val sym = 'div
+    }
+    
+    final case class Mod(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+      val sym = 'mod
     }
     
     final case class Lt(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {

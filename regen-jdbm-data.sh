@@ -19,16 +19,54 @@
 ## 
 #!/bin/bash
 
-if [[ $# != 2 ]]; then
-    echo "Usage: `basename $0` <target data directory> <sbt launcher JAR>"
+function usage() {
+    echo "Usage: `basename $0` [-n] [-t <owner token>] [-s <source directory>] <target data directory> <sbt launcher JAR>"
     echo "  For now target is normally pandora/dist/data-jdbm/data/"
-    exit
-fi
+    echo "  -n : don't wipe existing data"
+    exit 1
+}
 
 SRCDIR=muspelheim/src/test/resources/test_data
+OWNERTOKEN=C18ED787-BF07-4097-B819-0415C759C8D5
+
+while getopts "nt:s:" OPTNAME; do
+    case $OPTNAME in
+        t)
+            OWNERTOKEN=$OPTARG
+            ;;
+        s)
+            [ -d $OPTARG ] || {
+                echo "Could not open source directory: $OPTARG"
+                exit 2
+            }
+            SRCDIR=$OPTARG
+            ;;
+        n)
+            echo "Not wiping existing data"
+            DONTWIPE=true
+            ;;
+        \?)
+            usage
+            ;;
+    esac
+done
+
+shift $(( $OPTIND - 1 ))
+
+if [[ $# != 2 ]]; then
+    usage
+fi
+
+[ -d $1 ] || {
+    echo "Could not open target directory: $1"
+    exit 2
+}
+
 DATADIR=$(cd $1; pwd)
 
 cd `dirname $0`
+
+echo "Loading data from $SRCDIR with owner token $OWNERTOKEN"
 
 if [ ! -d $SRCDIR -o ! -d $DATADIR ]; then
     echo "Source or dest dir does not exist!"
@@ -50,6 +88,6 @@ popd > /dev/null
     done
 }
 
-rm -rf $DATADIR/*
+[ -z "$DONTWIPE" ] && rm -rf $DATADIR/*
 
-java -cp yggdrasil/target/yggdrasil-assembly-2.0.0-SNAPSHOT.jar com.precog.yggdrasil.util.YggUtils import -t C18ED787-BF07-4097-B819-0415C759C8D5 -s $DATADIR $SOURCES
+java -cp yggdrasil/target/yggdrasil-assembly-2.0.0-SNAPSHOT.jar com.precog.yggdrasil.util.YggUtils import -t $OWNERTOKEN -s $DATADIR $SOURCES

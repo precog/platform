@@ -57,10 +57,12 @@ trait MetadataStorage {
   import MetadataStorage._
 
   def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]]
+  def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]]
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] 
   def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit]
+  def archiveMetadata(desc: ProjectionDescriptor): IO[Unit]
 
   def findChildren(path: Path): Set[Path] =
     findDescriptors(_ => true) flatMap { descriptor => 
@@ -307,6 +309,14 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
     } getOrElse {
       IO.throwIO(new IllegalStateException("Metadata update on missing projection for " + desc))
     }
+  }
+  
+  def archiveMetadata(desc: ProjectionDescriptor): IO[Unit] = {
+    // Metadata file should already have been moved as a side-effect of archiving
+    // the projection, so here we just remove it from the map.
+    logger.debug("Archiving metadata for " + desc)
+    metadataLocations -= desc
+    IO(())
   }
 
   override def toString = "FileMetadataStorage(root = " + baseDir + " archive = " + archiveDir +")"

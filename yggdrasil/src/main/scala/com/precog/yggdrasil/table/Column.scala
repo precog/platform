@@ -40,6 +40,9 @@ sealed trait Column {
   def jValue(row: Int): JValue
   def cValue(row: Int): CValue
   def strValue(row: Int): String
+  
+  def toString(row: Int): String = if (isDefinedAt(row)) strValue(row) else "(undefined)"
+  def toString(range: Range): String = range.map(toString(_: Int)).mkString("(", ",", ")")
 
   def definedAt(from: Int, to: Int): BitSet = BitSet((for (i <- from until to if isDefinedAt(i)) yield i) : _*)
 }
@@ -138,7 +141,9 @@ trait NullColumn extends Column {
   override def toString = "NullColumn"
 }
 object NullColumn {
-  def apply(definedAt: BitSet) = new BitsetColumn(definedAt) with NullColumn
+  def apply(definedAt: BitSet) = {
+    new BitsetColumn(definedAt) with NullColumn
+  }
 }
 
 object UndefinedColumn {

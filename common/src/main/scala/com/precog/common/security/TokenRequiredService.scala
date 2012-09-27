@@ -42,7 +42,7 @@ import scalaz.syntax.std.option._
 class TokenRequiredService[A, B](tokenManager: TokenManager[Future], val delegate: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
 extends DelegatingService[A, Future[B], A, Token => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
-    request.parameters.get('tokenId).toSuccess[NotServed](DispatchError(BadRequest, "A tokenId query parameter is required to access this URL")) flatMap { tokenId =>
+    request.parameters.get('apiKey).toSuccess[NotServed](DispatchError(BadRequest, "An apiKey query parameter is required to access this URL")) flatMap { tokenId =>
       delegate.service(request) map { (f: Token => Future[B]) =>
         logger.debug("Locating token: " + tokenId)
         tokenManager.findToken(tokenId) flatMap {  
@@ -53,5 +53,5 @@ extends DelegatingService[A, Future[B], A, Token => Future[B]] with Logging {
     }
   }
 
-  val metadata = Some(AboutMetadata(ParameterMetadata('tokenId, None), DescriptionMetadata("A Precog account token is required for the use of this service.")))
+  val metadata = Some(AboutMetadata(ParameterMetadata('apiKey, None), DescriptionMetadata("A Precog account token is required for the use of this service.")))
 }

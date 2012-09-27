@@ -209,6 +209,7 @@ trait Instructions extends Library {
     case object Sub extends NumericBinaryOperation
     case object Mul extends NumericBinaryOperation
     case object Div extends NumericBinaryOperation
+    case object Mod extends NumericBinaryOperation
     
     case object Lt extends NumericComparisonOperation
     case object LtEq extends NumericComparisonOperation
@@ -225,17 +226,31 @@ trait Instructions extends Library {
     case object Comp extends BooleanUnaryOperation
     case object Neg extends NumericUnaryOperation
     
-    case object WrapObject extends UnfixedBinaryOperation
-    case object WrapArray extends UnfixedUnaryOperation
+    case object WrapObject extends BinaryOperation {
+      val tpe = BinaryOperationType(JTextT, JType.JUnfixedT, JObjectUnfixedT)
+    }
+    case object WrapArray extends UnaryOperation {
+      val tpe = UnaryOperationType(JType.JUnfixedT, JArrayUnfixedT)
+    }
     
-    case object JoinObject extends UnfixedBinaryOperation
-    case object JoinArray extends UnfixedBinaryOperation
+    case object JoinObject extends BinaryOperation {
+      val tpe = BinaryOperationType(JObjectUnfixedT, JObjectUnfixedT, JObjectUnfixedT)
+    }
+    case object JoinArray extends BinaryOperation {
+      val tpe = BinaryOperationType(JArrayUnfixedT, JArrayUnfixedT, JArrayUnfixedT)
+    }
     
-    case object ArraySwap extends UnfixedBinaryOperation
-    
-    case object DerefObject extends UnfixedBinaryOperation
+    case object ArraySwap extends BinaryOperation {
+      val tpe = BinaryOperationType(JArrayUnfixedT, JNumberT, JArrayUnfixedT)
+    }
+
+    case object DerefObject extends BinaryOperation {
+      val tpe = BinaryOperationType(JObjectUnfixedT, JTextT, JType.JUnfixedT)
+    }
     case object DerefMetadata extends UnfixedBinaryOperation
-    case object DerefArray extends UnfixedBinaryOperation
+    case object DerefArray extends BinaryOperation {
+      val tpe = BinaryOperationType(JArrayUnfixedT, JNumberT, JType.JUnfixedT)
+    }
     
     case object Range
   }

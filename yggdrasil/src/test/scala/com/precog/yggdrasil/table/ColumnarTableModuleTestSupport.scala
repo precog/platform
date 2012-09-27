@@ -45,12 +45,14 @@ import TableModule._
 trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] with ColumnarTableModule[M] {
   def newGroupId: GroupId
 
+  def defaultSliceSize = 10
+
   def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
-    val sliceSize = maxSliceSize.getOrElse(10)
+    val sliceSize = maxSliceSize.getOrElse(defaultSliceSize)
 
     def makeSlice(sampleData: Stream[JValue]): (Slice, Stream[JValue]) = {
       val (prefix, suffix) = sampleData.splitAt(sliceSize)
-  
+
       @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
         from match {
           case jv #:: xs =>
@@ -107,6 +109,8 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
   
                 acc + (ref -> pair)
             }
+
+            //println("Computed " + withIdsAndValues)
   
             buildColArrays(xs, withIdsAndValues, sliceIndex + 1)
   

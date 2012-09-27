@@ -164,9 +164,12 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           val constrConstr = constrVec reduce { _ ++ _ }
           
           val (errors, constr) = loop(child, relations, constraints)
-          expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+          val errorSet = constrErrors ++ errors
           
-          (constrErrors ++ errors, constrConstr ++ constr)
+          if (errorSet.nonEmpty) expr.provenance = NullProvenance
+          else expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+          
+          (errorSet, constrConstr ++ constr)
         }
         
         case Import(_, _, child) => {
@@ -177,7 +180,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         
         case New(_, child) => {
           val (errors, constr) = loop(child, relations, constraints)
-          expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+
+          if (errors.nonEmpty) expr.provenance = NullProvenance
+          else expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+
           (errors, constr)
         }
         
@@ -350,13 +356,47 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             }
             
             case Morphism2Binding(morph2) => {
-              val pair = handleBinary(expr, actuals(0), actuals(1), relations, constraints)
-              
-              if (!morph2.retainIds) {
-                expr.provenance = ValueProvenance
+              // oddly, handleBinary doesn't seem to work here (premature fixation of expr.provenance)
+              val left = actuals(0)
+              val right = actuals(1)
+
+              val (leftErrors, leftConstr) = loop(left, relations, constraints)
+              val (rightErrors, rightConstr) = loop(right, relations, constraints)
+                
+              val unified = unifyProvenance(relations)(left.provenance, right.provenance)
+
+              val (errors, constr) = if (morph2.retainIds) {
+                if (left.provenance.isParametric || right.provenance.isParametric) {
+                  expr.provenance = UnifiedProvenance(left.provenance, right.provenance)
+
+                  if (unified.isDefined)
+                    (Set(), Set())
+                  else
+                    (Set(), Set(Related(left.provenance, right.provenance)))
+                } else {
+                  expr.provenance = unified getOrElse NullProvenance
+                  if (unified.isDefined)
+                    (Set(), Set())
+                  else
+                    (Set(Error(expr, OperationOnUnrelatedSets)), Set())
+                }
+              } else {
+                if (left.provenance.isParametric || right.provenance.isParametric) {
+                  expr.provenance = ValueProvenance
+                  
+                  (Set(), Set(Related(left.provenance, right.provenance)))
+                } else {
+                  if (unified.isDefined) {
+                    expr.provenance = ValueProvenance
+                    (Set(), Set())
+                  } else {
+                    expr.provenance = NullProvenance
+                    (Set(Error(expr, OperationOnUnrelatedSets)), Set())
+                  }
+                }
               }
               
-              pair
+              (leftErrors ++ rightErrors ++ errors, leftConstr ++ rightConstr ++ constr)
             }
             
             case Op1Binding(_) => {
@@ -418,6 +458,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         case Sub(_, left, right) => handleBinary(expr, left, right, relations, constraints)
         case Mul(_, left, right) => handleBinary(expr, left, right, relations, constraints)
         case Div(_, left, right) => handleBinary(expr, left, right, relations, constraints)
+        case Mod(_, left, right) => handleBinary(expr, left, right, relations, constraints)
         case Lt(_, left, right) => handleBinary(expr, left, right, relations, constraints)
         case LtEq(_, left, right) => handleBinary(expr, left, right, relations, constraints)
         case Gt(_, left, right) => handleBinary(expr, left, right, relations, constraints)

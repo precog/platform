@@ -23,7 +23,7 @@ package daze
 import com.precog.common.Path
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.memoization._
+import com.precog.yggdrasil.table.BaseBlockStoreTestModule
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.test._
 import com.precog.yggdrasil.util._
@@ -36,13 +36,14 @@ import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
 import blueeyes.json._
-import JsonAST.{JObject, JField, JArray, JNum}
+import JsonAST._
 
 import java.io._
 import java.util.concurrent.Executors
 
 import scalaz._
 import scalaz.effect._
+import scalaz.syntax.copointed._
 import scalaz.iteratee._
 import scalaz.std.anyVal._
 import scalaz.std.list._
@@ -54,15 +55,50 @@ import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
 
-trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with table.StubColumnarTableModule[M] with IdSourceScannerModule[M] {
+trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestModule[M] with IdSourceScannerModule[M] {
   val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
 
+  val projections = Map.empty[ProjectionDescriptor, Projection]
+
   object yggConfig extends YggConfig
 
-  object Table extends TableCompanion
+  //object Table extends TableCompanion
+
+  private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
+  private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
+  private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
+  
+  override def load(table: Table, uid: UserId, jtpe: JType) = {
+    table.toJson map { events =>
+      fromJson {
+        events.toStream flatMap {
+          case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
+            val path = Path(pathStr)
+      
+            val index = initialIndices get path getOrElse {
+              initialIndices += (path -> currentIndex)
+              currentIndex
+            }
+            
+            val target = path.path.replaceAll("/$", ".json")
+            val src = io.Source fromInputStream getClass.getResourceAsStream(target)
+            val parsed = src.getLines map JsonParser.parse toStream
+            
+            currentIndex += parsed.length
+            
+            parsed zip (Stream from index) map {
+              case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
+            }
+          }
+
+          case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
+        }
+      }
+    }
+  }
   
   trait YggConfig extends EvaluatorConfig with DatasetConsumersConfig {
     val sortBufferSize = 1000
@@ -97,13 +133,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     (consumeEval(testUID, graph, ctx, path, true) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
-    }) and 
+    })/* and 
     (consumeEval(testUID, graph, ctx, path, false) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
-    })
+    })*/
   }
-
+  
   "evaluator" should {
     "evaluate simple two-value multiplication" in {
       val line = Line(0, "")
@@ -189,7 +225,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         testEval(input) { result =>
           result must haveSize(1)
-          result must contain((VectorCase(), SNull))
+          result.map(_._2) must contain(SNull)
         }
       }
       
@@ -328,6 +364,22 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(42, 12, 77, 1, 13)
       }
     }
+    
+    "evaluate a new literal" in {
+      val line = Line(0, "")
+      
+      val input = dag.New(line, Root(line, PushString("foo")))
+        
+      testEval(input) { result =>
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (ids, SString(s)) if ids.size == 1 => s
+        }
+        
+        result2 must contain("foo")
+      }
+    }
 
     "evaluate a join of two reductions on the same dataset" in {
       val line = Line(0, "")
@@ -355,7 +407,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers7")))
       
       val mega = dag.MegaReduce(line, 
-        NEL(dag.Reduce(line, Count, parent), dag.Reduce(line, Sum, parent)), 
+        NEL(Count, Sum), 
         parent)
 
       val input = Join(line, Add, CrossRightSort, 
@@ -511,7 +563,6 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Root(line, PushNum("5")))
           
         testEval(input) { result =>
-          
           result must haveSize(5)
           
           val result2 = result collect {
@@ -519,6 +570,75 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
           
           result2 must contain(8.4, 2.4, 15.4, 0.2, 2.6)
+        }
+      }      
+
+      "mod both positive" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Mod, CrossLeftSort,
+          Root(line, PushNum("11")),
+          Root(line, PushNum("4")))
+          
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 0 => d.toDouble
+          }
+          
+          result2 must contain(3)
+        }
+      }
+      "mod both negative" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Mod, CrossLeftSort,
+          Root(line, PushNum("-11")),
+          Root(line, PushNum("-4")))
+          
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 0 => d.toDouble
+          }
+          
+          result2 must contain(-3)
+        }
+      }
+      "mod negative left" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Mod, CrossLeftSort,
+          Root(line, PushNum("-11")),
+          Root(line, PushNum("4")))
+          
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 0 => d.toDouble
+          }
+          
+          result2 must contain(1)
+        }
+      }
+      "mod" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Mod, CrossLeftSort,
+          Root(line, PushNum("11")),
+          Root(line, PushNum("-4")))
+          
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 0 => d.toDouble
+          }
+          
+          result2 must contain(-1)
         }
       }
     }
@@ -594,7 +714,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
           result2 must contain(8.4, 2.4, 15.4, 0.2, 2.6)
         }
-      }
+      }      
     }
 
     "count a filtered dataset" in {
@@ -1124,7 +1244,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
 
       val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      val input = dag.MegaReduce(line, NEL(dag.Reduce(line, Count, parent)), parent)
+      val input = dag.MegaReduce(line, NEL(Count), parent)
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -1145,7 +1265,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val red = Count
       
       val input = Join(line, DerefArray, CrossLeftSort,
-        dag.MegaReduce(line, NEL(dag.Reduce(line, red, parent)), parent),
+        dag.MegaReduce(line, NEL(red), parent),
         Root(line, PushNum("0")))
         
       testEval(input) { result =>
@@ -1312,7 +1432,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
     
     "compute the set difference of the set difference" in {
       val line = Line(0, "")
@@ -1322,9 +1442,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         clicks2,
         Diff(line,
           clicks2,
-          Join(line, DerefObject, CrossLeftSort,
-            clicks2,
-            Root(line, PushString("time")))))
+          Filter(line, IdentitySort,
+            clicks2, 
+            Join(line, Gt, CrossLeftSort,
+              Join(line, DerefObject, CrossLeftSort,
+                clicks2,
+                Root(line, PushString("time"))),
+              Root(line, PushNum("0"))))))
+
 
       testEval(input) { result =>
         result must haveSize(101)
@@ -1333,14 +1458,23 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           _ must beLike {
             case (ids, SObject(obj)) if ids.size == 1 => 
               obj must haveKey("time")
-  
-            case (ids, SString(s)) if ids.size == 1 => 
-              s mustEqual "string cheese"
           }
         }
       }
-    }.pendingUntilFixed
+    }
     
+    "compute the iunion of a set with itself" in {
+      val line = Line(0, "")
+      
+      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+
+      val input = IUI(line, true, numbers, numbers)
+        
+      testEval(input) { result =>
+        result must haveSize(5)
+      }
+    }
+
     "compute the iunion of two homogeneous sets" in {
       val line = Line(0, "")
       
@@ -1361,7 +1495,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
         result3 must haveSize(10)
       }
-    }.pendingUntilFixed
+    }
 
     "compute the iunion of two homogeneous sets (with relative path)" in {
       val line = Line(0, "")
@@ -1379,7 +1513,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(42, 12, 77, 1, 13, 14, -1, 0)
       }
-    }.pendingUntilFixed
+    }
     
     "compute the iunion of two datasets, one with objects" in {
       val line = Line(0, "")
@@ -1391,7 +1525,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(105)
       }
-    }.pendingUntilFixed
+    }
     
     "compute the iintersect of two nonintersecting sets of numbers" in {
       val line = Line(0, "")
@@ -1414,6 +1548,37 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
       testEval(input) { result =>
         result must haveSize(0)
+      }
+    }
+
+    "compute the iintersect of mod2 and mod3" in {
+      val line = Line(0, "")
+      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbersmod")))
+
+      val input = IUI(line, false,
+        Filter(line, IdentitySort,
+          numbers,
+          Join(line, Eq, CrossLeftSort,
+            Join(line, Mod, CrossLeftSort,
+              numbers,
+              Root(line, PushNum("2"))),
+            Root(line, PushNum("0")))),
+        Filter(line, IdentitySort,
+          numbers,
+          Join(line, Eq, CrossLeftSort,
+            Join(line, Mod, CrossLeftSort,
+              numbers,
+              Root(line, PushNum("3"))),
+            Root(line, PushNum("0")))))
+
+      testEval(input) { result =>
+        result must haveSize(3)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+
+        result2 must contain(6, 12, 24)
       }
     }
     
@@ -2217,7 +2382,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(0, -377, -780, 6006, -76, 5929, 1, 156, 169, 2, 1764,
           2695, 144, 1806, -360, 1176, -832, 182, 4851, -1470, -13, -41, -24)
       }
-    }.pendingUntilFixed
+    }
     
     "correctly evaluate a match following a cross with equality" in {
       val line = Line(0, "")
@@ -2232,7 +2397,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         Join(line, Eq, IdentitySort, numbers3, numbers3))
       
       testEval(input) { _ must not(beEmpty) }
-    }.pendingUntilFixed
+    }
     
     "correctly order a match following a cross within a new" in {
       val line = Line(0, "")
@@ -2256,7 +2421,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(0, 1260, -1470, 1722, 1218, -360, -780, 132, -12,
           2695, 5005, 5852, 4928, -41, -11, -76, -377, 13, -832, 156)
       }
-    }.pendingUntilFixed
+    }
     
     "split on a homogeneous set" in {
       val line = Line(0, "")
@@ -2291,7 +2456,40 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(55, 13, 119, 25)
       }
-    }.pendingUntilFixed
+    }
+
+    "memoize properly in a load" in {
+      val line = Line(0, "")
+
+      val input0 = dag.Memoize(dag.LoadLocal(line, Root(line, PushString("/clicks"))), 1)
+      val input1 = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+
+      testEval(input0) { result0 => {
+        testEval(input1) { result1 =>
+          result0.map({case (ids, v) => (ids.toSeq, v)}) must_== result1.map({case (ids, v) => (ids.toSeq, v)})
+        }
+      }}
+    }
+
+    "memoize properly in an add" in {
+      val line = Line(0, "")
+
+      val input0 = dag.Memoize(
+        dag.Join(line, Add, CrossLeftSort, 
+          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+          Root(line, PushNum("5"))),
+        1)
+
+      val input1 = dag.Join(line, Add, CrossLeftSort, 
+          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+          Root(line, PushNum("5")))
+
+      testEval(input0) { result0 => {
+        testEval(input1) { result1 =>
+          result0.map({case (ids, v) => (ids.toSeq, v)}) must_== result1.map({case (ids, v) => (ids.toSeq, v)})
+        }
+      }}
+    }
     
     "evaluate a histogram function" in {
       val Expected = Map("daniel" -> 9, "kris" -> 8, "derek" -> 7, "nick" -> 17,
@@ -2353,7 +2551,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate with on the clicks dataset" in {
       val line = Line(0, "")
@@ -2458,7 +2656,64 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
+
+    "evaluate with on the results of a histogram function" in {
+      val line = Line(0, "")
+      
+      // 
+      // clicks := //clicks
+      // histogram('user) :=
+      //   { user: 'user, num: count(clicks where clicks.user = 'user) }
+      // histogram with {rank: std::stats::rank(histogram.num)}
+      // 
+
+      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+       
+      lazy val histogram: dag.Split = dag.Split(line,
+        dag.Group(1,
+          clicks,
+          UnfixedSolution(0,
+            Join(line, DerefObject, CrossLeftSort,
+              clicks,
+              Root(line, PushString("user"))))),
+        Join(line, JoinObject, CrossLeftSort,
+          Join(line, WrapObject, CrossLeftSort,
+            Root(line, PushString("user")),
+            SplitParam(line, 0)(histogram)),
+          Join(line, WrapObject, CrossLeftSort,
+            Root(line, PushString("num")),
+            dag.Reduce(line, Count,
+              SplitGroup(line, 1, clicks.identities)(histogram)))))
+
+      val input = Join(line, JoinObject, IdentitySort,
+        histogram,
+        Join(line, WrapObject, CrossLeftSort,
+          Root(line, PushString("rank")),
+          dag.Morph1(line, Rank, 
+            Join(line, DerefObject, CrossLeftSort,
+              histogram,
+              Root(line, PushString("num"))))))
+
+      testEval(input) { resultsE =>
+        resultsE must haveSize(10)
+        
+        val results = resultsE collect {
+          case (ids, sv) if ids.length == 1 => sv
+        }
+
+        results must contain(SObject(Map("user" -> SString("daniel"), "num" -> SDecimal(BigDecimal("9")), "rank" -> SDecimal(BigDecimal("5")))))
+        results must contain(SObject(Map("user" -> SString("kris"), "num" -> SDecimal(BigDecimal("8")), "rank" -> SDecimal(BigDecimal("4")))))
+        results must contain(SObject(Map("user" -> SString("derek"), "num" -> SDecimal(BigDecimal("7")), "rank" -> SDecimal(BigDecimal("2")))))
+        results must contain(SObject(Map("user" -> SString("nick"), "num" -> SDecimal(BigDecimal("17")), "rank" -> SDecimal(BigDecimal("10")))))
+        results must contain(SObject(Map("user" -> SString("john"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("7")))))
+        results must contain(SObject(Map("user" -> SString("alissa"), "num" -> SDecimal(BigDecimal("7")), "rank" -> SDecimal(BigDecimal("2")))))
+        results must contain(SObject(Map("user" -> SString("franco"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("7")))))
+        results must contain(SObject(Map("user" -> SString("matthew"), "num" -> SDecimal(BigDecimal("10")), "rank" -> SDecimal(BigDecimal("6")))))
+        results must contain(SObject(Map("user" -> SString("jason"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("7")))))
+        results must contain(SObject(Map("user" -> SNull, "num" -> SDecimal(BigDecimal("3")), "rank" -> SDecimal(BigDecimal("1")))))
+      }
+    }
     
     "perform a naive cartesian product on the clicks dataset" in {
       val line = Line(0, "")
@@ -2505,8 +2760,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(42, 12, 77, 1, 13)
       }
-    }.pendingUntilFixed
-    
+    }
+
     "distinct heterogenous sets" in {
       val line = Line(0, "")
       
@@ -2541,25 +2796,66 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         SortBy(clicks2, "time", "time", 0))
         
       testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("time")))) { expected =>
-        val expectedValues = expected collect {
-          case (_, SDecimal(d)) => d * 2
+        val decimalValues = expected.toList map {
+          case (_, SDecimal(d)) => d 
         }
-        
+
+        val cross = 
+          for {
+            x <- decimalValues
+            y <- decimalValues
+          } yield {
+            (x, y) 
+          }
+
+        val expectedResult = cross collect { case (x, y) if x == y => x + y }
+
         testEval(input) { result =>
-          result must haveSize(100)
+          result must haveSize(expectedResult.size)
           
+          val decis = result.toList map { 
+            case (_, SDecimal(d)) => d
+          }
+          decis.sorted mustEqual expectedResult.sorted
+
           forall(result) { result =>
             result must beLike {
               case (ids, SDecimal(d)) => {
-                ids must haveSize(1)
-                expectedValues must contain(d)
+                ids must haveSize(2)
+                expectedResult must contain(d)
               }
             }
           }
         }
       }
-    }.pendingUntilFixed
-    
+    }    
+
+    "join two sets according to a value sort and then an identity sort" in {
+      val line = Line(0, "")
+      
+      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks2 = dag.LoadLocal(line, Root(line, PushString("/clicks2")))
+      
+      val input = dag.Join(line, Eq, IdentitySort,
+        dag.Join(line, Add, ValueSort(0),
+          SortBy(clicks, "time", "time", 0),
+          SortBy(clicks2, "time", "time", 0)),
+        dag.Join(line, Mul, CrossLeftSort,
+          dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("time"))),
+          Root(line, PushNum("2"))))
+        
+      testEval(input) { result =>
+        result must haveSize(106)
+
+        val result2 = result collect {
+          case (ids, SBoolean(b)) if ids.size == 2 => b
+        }
+
+        result2 must contain(true)
+        result2 must not(contain(false))
+      }
+    }
+
     "filter two sets according to a value sort" in {
       val line = Line(0, "")
       
@@ -2576,24 +2872,40 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Root(line, PushNum("500"))))
         
       testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("time")))) { expected =>
-        val expectedValues = expected collect {
-          case (ids, SDecimal(d)) if d > 500 => (ids, d)
+        val decimalValues = expected.toList map {
+          case (_, SDecimal(d)) => d
         }
-        
+
+        val cross = 
+          for {
+            x <- decimalValues
+            y <- decimalValues
+          } yield {
+            (x, y) 
+          }
+
+        val expectedResult = cross collect { case (x, y) if x > 500 && x == y  => x }
+
         testEval(input) { result =>
-          result must haveSize(expectedValues.size)
+          result must haveSize(expectedResult.size)
+
+          val decis = result.toList map { 
+            case (_, SDecimal(d)) => d
+          }
+          decis.sorted mustEqual expectedResult.sorted
+
           
           forall(result) { result =>
             result must beLike {
-              case sev @ (ids, SDecimal(_)) => {
-                ids must haveSize(1)
-                expectedValues must contain(sev)
+              case (ids, SDecimal(d)) => {
+                ids must haveSize(2)
+                expectedResult must contain(d)
               }
             }
           }
         }
       }
-    }.pendingUntilFixed
+    }
   }
 }
 

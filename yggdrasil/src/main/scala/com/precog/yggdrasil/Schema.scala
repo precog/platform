@@ -115,16 +115,13 @@ object Schema {
       case _ => false
     }
 
-    case (JTextT, ctpes) => ctpes.exists {
-      case (CPath.Identity, CString) => true
-      case _ => false
-    }
+    case (JTextT, ctpes) => ctpes.contains(CPath.Identity -> CString)
 
-    case (JBooleanT, ctpes) => ctpes.contains(CPath.Identity, CBoolean)
+    case (JBooleanT, ctpes) => ctpes.contains(CPath.Identity -> CBoolean)
 
-    case (JNullT, ctpes) => ctpes.contains(CPath.Identity, CNull)
+    case (JNullT, ctpes) => ctpes.contains(CPath.Identity -> CNull)
 
-    case (JObjectFixedT(fields), ctpes) if fields.isEmpty => ctpes.contains(CPath.Identity, CEmptyObject)
+    case (JObjectFixedT(fields), ctpes) if fields.isEmpty => ctpes.contains(CPath.Identity -> CEmptyObject)
     case (JObjectUnfixedT, ctpes) => ctpes.exists {
       case (CPath(CPathField(_), _*), _) => true
       case _ => false
@@ -138,7 +135,7 @@ object Schema {
       }
     }
 
-    case (JArrayFixedT(elements), ctpes) if elements.isEmpty => ctpes.contains(CPath.Identity, CEmptyArray)
+    case (JArrayFixedT(elements), ctpes) if elements.isEmpty => ctpes.contains(CPath.Identity -> CEmptyArray)
     case (JArrayUnfixedT, ctpes) => ctpes.exists {
       case (CPath(CPathIndex(_), _*), _) => true
       case _ => false

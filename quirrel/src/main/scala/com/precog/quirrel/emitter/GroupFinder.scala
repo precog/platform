@@ -120,6 +120,9 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
       case Div(_, left, right) =>
         loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
+      case Mod(_, left, right) =>
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
+      
       case Lt(_, left, right) =>
         loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       

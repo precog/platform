@@ -50,7 +50,7 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with
   
   type X = Throwable
   type YggConfig <: DatasetConsumersConfig
-  type SEvent = (VectorCase[Long], SValue)
+  type SEvent = (Identities, SValue)
 
   implicit def M: Monad[M] with Copointed[M]
   
@@ -62,7 +62,7 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with
       }}
 
       val events = json map { jvalue =>
-        (VectorCase(((jvalue \ "key") --> classOf[JArray]).elements collect { case JNum(i) => i.toLong }: _*), jvalueToSValue(jvalue \ "value"))
+        ((((jvalue \ "key") --> classOf[JArray]).elements collect { case JNum(i) => i.toLong }).toArray, jvalueToSValue(jvalue \ "value"))
       }
       
       events.toSet

@@ -72,6 +72,7 @@ trait TableModule[M[+_]] extends FNModule {
   type GroupId
   type Scanner
   type Reducer[α]
+  type TableMetrics
 
   implicit def M: Monad[M]
 
@@ -149,21 +150,35 @@ trait TableModule[M[+_]] extends FNModule {
       def mapSources[A <: SourceType, B <: SourceType](spec: TransSpec[A])(f: A => B): TransSpec[B] = {
         spec match {
           case Leaf(source) => Leaf(f(source))
+          case trans.ConstLiteral(value, target) => trans.ConstLiteral(value, mapSources(target)(f))
+          
           case trans.Filter(source, pred) => trans.Filter(mapSources(source)(f), mapSources(pred)(f))
+          case trans.FilterDefined(source, definedFor, definedness) =>
+            trans.FilterDefined(mapSources(source)(f), mapSources(definedFor)(f), definedness)
+          
           case Scan(source, scanner) => Scan(mapSources(source)(f), scanner)
+          
           case trans.Map1(source, f1) => trans.Map1(mapSources(source)(f), f1)
           case trans.Map2(left, right, f2) => trans.Map2(mapSources(left)(f), mapSources(right)(f), f2)
+          
           case trans.OuterObjectConcat(objects @ _*) => trans.OuterObjectConcat(objects.map(mapSources(_)(f)): _*)
           case trans.InnerObjectConcat(objects @ _*) => trans.InnerObjectConcat(objects.map(mapSources(_)(f)): _*)
+          case trans.ObjectDelete(source, fields) => trans.ObjectDelete(mapSources(source)(f), fields)
           case trans.ArrayConcat(arrays @ _*) => trans.ArrayConcat(arrays.map(mapSources(_)(f)): _*)
+          
           case trans.WrapObject(source, field) => trans.WrapObject(mapSources(source)(f), field)
+          case trans.WrapObjectDynamic(left, right) => trans.WrapObjectDynamic(mapSources(left)(f), mapSources(right)(f))
           case trans.WrapArray(source) => trans.WrapArray(mapSources(source)(f))
+          
           case DerefObjectStatic(source, field) => DerefObjectStatic(mapSources(source)(f), field)
           case DerefObjectDynamic(left, right) => DerefObjectDynamic(mapSources(left)(f), mapSources(right)(f))
           case DerefArrayStatic(source, element) => DerefArrayStatic(mapSources(source)(f), element)
           case DerefArrayDynamic(left, right) => DerefArrayDynamic(mapSources(left)(f), mapSources(right)(f))
+          
           case trans.ArraySwap(source, index) => trans.ArraySwap(mapSources(source)(f), index)
+          
           case Typed(source, tpe) => Typed(mapSources(source)(f), tpe)
+          
           case trans.Equal(left, right) => trans.Equal(mapSources(left)(f), mapSources(right)(f))
           case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(mapSources(source)(f), value, invert)
         }
@@ -171,33 +186,56 @@ trait TableModule[M[+_]] extends FNModule {
 
       def deepMap[A <: SourceType](spec: TransSpec[A])(f: PartialFunction[TransSpec[A], TransSpec[A]]): TransSpec[A] = spec match {
         case x if f isDefinedAt x => f(x)
+        
         case x @ Leaf(source) => x
+        case trans.ConstLiteral(value, target) => trans.ConstLiteral(value, deepMap(target)(f))
+        
         case trans.Filter(source, pred) => trans.Filter(deepMap(source)(f), deepMap(pred)(f))
+        case trans.FilterDefined(source, definedFor, definedness) => 
+          trans.FilterDefined(deepMap(source)(f), deepMap(definedFor)(f), definedness)
+        
         case Scan(source, scanner) => Scan(deepMap(source)(f), scanner)
+        
         case trans.Map1(source, f1) => trans.Map1(deepMap(source)(f), f1)
         case trans.Map2(left, right, f2) => trans.Map2(deepMap(left)(f), deepMap(right)(f), f2)
+        
         case trans.OuterObjectConcat(objects @ _*) => trans.OuterObjectConcat(objects.map(deepMap(_)(f)): _*)
         case trans.InnerObjectConcat(objects @ _*) => trans.InnerObjectConcat(objects.map(deepMap(_)(f)): _*)
+        case trans.ObjectDelete(source, fields) => trans.ObjectDelete(deepMap(source)(f), fields)
         case trans.ArrayConcat(arrays @ _*) => trans.ArrayConcat(arrays.map(deepMap(_)(f)): _*)
+        
         case trans.WrapObject(source, field) => trans.WrapObject(deepMap(source)(f), field)
+        case trans.WrapObjectDynamic(source, right) => trans.WrapObjectDynamic(deepMap(source)(f), deepMap(right)(f))
         case trans.WrapArray(source) => trans.WrapArray(deepMap(source)(f))
+        
         case DerefObjectStatic(source, field) => DerefObjectStatic(deepMap(source)(f), field)
         case DerefObjectDynamic(left, right) => DerefObjectDynamic(deepMap(left)(f), deepMap(right)(f))
         case DerefArrayStatic(source, element) => DerefArrayStatic(deepMap(source)(f), element)
         case DerefArrayDynamic(left, right) => DerefArrayDynamic(deepMap(left)(f), deepMap(right)(f))
+        
         case trans.ArraySwap(source, index) => trans.ArraySwap(deepMap(source)(f), index)
+        
         case Typed(source, tpe) => Typed(deepMap(source)(f), tpe)
+        
         case trans.Equal(left, right) => trans.Equal(deepMap(left)(f), deepMap(right)(f))
         case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(deepMap(source)(f), value, invert)
       }
     }
     
     object TransSpec1 {
+      import constants._
+
       val Id = Leaf(Source)
 
       val DerefArray0 = DerefArrayStatic(Leaf(Source), CPathIndex(0))
       val DerefArray1 = DerefArrayStatic(Leaf(Source), CPathIndex(1))
       val DerefArray2 = DerefArrayStatic(Leaf(Source), CPathIndex(2))
+
+      val PruneToKeyValue = InnerObjectConcat(
+        WrapObject(SourceKey.Single, paths.Key.name), 
+        WrapObject(SourceValue.Single, paths.Value.name))
+
+      val DeleteKeyValue = ObjectDelete(Leaf(Source), Set(paths.Key, paths.Value))
     }
     
     type TransSpec2 = TransSpec[Source2]
@@ -209,6 +247,9 @@ trait TableModule[M[+_]] extends FNModule {
       def DerefArray0(source: Source2) = DerefArrayStatic(Leaf(source), CPathIndex(0))
       def DerefArray1(source: Source2) = DerefArrayStatic(Leaf(source), CPathIndex(1))
       def DerefArray2(source: Source2) = DerefArrayStatic(Leaf(source), CPathIndex(2))
+
+      val DeleteKeyValueLeft = ObjectDelete(Leaf(SourceLeft), Set(paths.Key, paths.Value))
+      val DeleteKeyValueRight = ObjectDelete(Leaf(SourceRight), Set(paths.Key, paths.Value))
     }
   
     sealed trait GroupKeySpec 
@@ -374,45 +415,46 @@ trait TableModule[M[+_]] extends FNModule {
      * a single table.
      */
     def cross(that: Table)(spec: TransSpec2): Table
+
+    /**
+     * Force the table to a backing store, and provice a restartable table
+     * over the results.
+     */
+    def force: M[Table]
     
     /**
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
+     * 
+     * @param sortKey The transspec to use to obtain the values to sort on
+     * @param sortOrder Whether to sort ascending or descending
+     * @param unique If true, the same key values will sort into a single row, otherwise
+     * we assign a unique row ID as part of the key so that multiple equal values are
+     * preserved
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Table]
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Table]
     
     def distinct(spec: TransSpec1): Table
 
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Seq[Table]]
+    /**
+     * Sorts the KV table by ascending or descending order based on a seq of transformations
+     * applied to the rows.
+     * 
+     * @param groupKeys The transspecs to use to obtain the values to sort on
+     * @param valueSpec The transspec to use to obtain the non-sorting values
+     * @param sortOrder Whether to sort ascending or descending
+     * @param unique If true, the same key values will sort into a single row, otherwise
+     * we assign a unique row ID as part of the key so that multiple equal values are
+     * preserved
+     */
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]]
 
     def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table]
     
     def takeRange(startIndex: Long, numberToTake: Long): Table
     
     def toJson: M[Iterable[JValue]]
-  }
 
-  type MemoId
-  type MemoContext <: MemoizationContext
-  
-  def newMemoContext : MemoContext 
-
-  def withMemoizationContext[A](f: MemoContext => A): A = {
-    val ctx = newMemoContext
-    try {
-      f(ctx)
-    } finally {
-      ctx.purge()
-    }
-  }
-
-  trait MemoizationContext {
-    import trans._
-    
-    def memoize(table: Table, memoId: MemoId): M[Table]
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table]
-    
-    def expire(memoId: MemoId): Unit
-    def purge(): Unit
+    def metrics: TableMetrics
   }
 }

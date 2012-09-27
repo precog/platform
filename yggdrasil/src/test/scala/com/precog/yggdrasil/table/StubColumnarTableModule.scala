@@ -48,39 +48,32 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
 
   implicit def M: Monad[M] with Copointed[M]
   
-  class MemoContext extends MemoizationContext {
-    import trans._
-    
-    def memoize(table: Table, memoId: MemoId): M[Table] = M.point(table)
-    def sort(table: Table, sortKey: TransSpec1, sortOrder: DesiredSortOrder, memoId: MemoId, unique: Boolean = true): M[Table] =
-      table.sort(sortKey, sortOrder)
-    
-    def expire(memoId: MemoId): Unit = ()
-    def purge(): Unit = ()
-  }
-
-  def newMemoContext = new MemoContext
-
   private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
   private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
   private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
 
   trait TableCompanion extends ColumnarTableCompanion {
-    def apply(slices: StreamT[M, Slice]): Table = new Table(slices)
+    def apply(slices: StreamT[M, Slice], size: Option[Long] = None): Table = new Table(slices, size)
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = sys.error("todo")
   }
 
-  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) { self: Table => 
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = true): M[Table] = {
+  class Table(slices: StreamT[M, Slice], size: Option[Long]) extends ColumnarTable(slices, size) { self: Table => 
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = {
       // We use the sort transspec1 to compute a new table with a combination of the 
       // original data and the new sort columns, referenced under the sortkey namespace
-      val tableWithSortKey = transform(InnerObjectConcat(Leaf(Source), WrapObject(sortKey, TableModule.paths.SortKey.name)))
+      val tableWithSortKey = transform(InnerObjectConcat(WrapObject(sortKey, "0"),
+                                                         WrapObject(Leaf(Source), "1")))
 
-      implicit val jValueOrdering = blueeyes.json.xschema.DefaultOrderings.JValueOrdering
+      implicit val jValueOrdering = if (sortOrder.isAscending) {
+        blueeyes.json.xschema.DefaultOrderings.JValueOrdering
+      } else {
+        blueeyes.json.xschema.DefaultOrderings.JValueOrdering.reverse
+      }
 
       tableWithSortKey.toJson.map {
-        jvals => fromJson(jvals.toList.sorted.toStream)
-      }
+        jvals =>
+          fromJson(jvals.toList.sortBy(_ \ "0").toStream)
+      }.map(_.transform(DerefObjectStatic(Leaf(Source), JPathField("1"))))
     }
     
     override def load(uid: UserId, jtpe: JType) = {
@@ -112,7 +105,7 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
       }
     }
 
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = true): M[Seq[Table]] = sys.error("todo")
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("todo")
 
     override def toString = toStrings.copoint.mkString("\n")
   }

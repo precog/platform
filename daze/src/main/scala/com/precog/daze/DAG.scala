@@ -392,12 +392,12 @@ trait DAG extends Instructions {
     
     def isSingleton: Boolean  //true implies that the node is a singleton; false doesn't imply anything 
     
-    lazy val memoId = IdGen.nextInt()
-    
-    def findMemos(parent: dag.Split): Set[Int]
-    
     def containsSplitArg: Boolean
 
+    /**
+     * NOTE: Does ''not'' work with `Split` rewrites!  Do not attempt!  Do not
+     * even ''think'' of attempting!  The badness that follows will be...bewildering.
+     */
     def mapDown(body: (DepGraph => DepGraph) => PartialFunction[DepGraph, DepGraph]): DepGraph = {
       val memotable = mutable.Map[DepGraph, DepGraph]()
 
@@ -408,9 +408,9 @@ trait DAG extends Instructions {
         def inner(graph: DepGraph): DepGraph = graph match {
           case x if pf isDefinedAt x => pf(x)
           
-          case dag.SplitParam(_, _) => graph
+          case s @ dag.SplitParam(loc, id) => dag.SplitParam(loc, id)(splits(s.parent))
 
-          case dag.SplitGroup(_, _, _) => graph
+          case s @ dag.SplitGroup(loc, id, identities) => dag.SplitGroup(loc, id, identities)(splits(s.parent))
           
           case dag.Root(_, _) => graph
 
@@ -485,63 +485,79 @@ trait DAG extends Instructions {
     def foldDown[Z](f0: PartialFunction[DepGraph, Z])(implicit monoid: Monoid[Z]): Z = {
       val f: PartialFunction[DepGraph, Z] = f0.orElse { case _ => monoid.zero }
 
-      def foldDown0(node: DepGraph, acc: Z)(f: DepGraph => Z): Z = node match {
+      def foldThroughSpec(spec: dag.BucketSpec, acc: Z): Z = spec match {
+        case dag.UnionBucketSpec(left, right) =>
+          foldThroughSpec(right, foldThroughSpec(left, acc))
+
+        case dag.IntersectBucketSpec(left, right) =>
+          foldThroughSpec(right, foldThroughSpec(left, acc))
+
+        case dag.Group(_, target, forest) =>
+          foldThroughSpec(forest, foldDown0(target, acc |+| f(target)))
+
+        case dag.UnfixedSolution(_, solution) => foldDown0(solution, acc |+| f(solution))
+        case dag.Extra(expr) => foldDown0(expr, acc |+| f(expr))
+      }
+
+      def foldDown0(node: DepGraph, acc: Z): Z = node match {
         case dag.SplitParam(_, _) => acc
 
         case dag.SplitGroup(_, _, identities) => acc
 
         case node @ dag.Root(_, _) => acc
 
-        case dag.New(_, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.New(_, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.Morph1(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.Morph1(_, _, parent) => foldDown0(parent, acc |+| f(parent))
 
         case dag.Morph2(_, _, left, right) => 
-          val acc2 = foldDown0(left, acc |+| f(left))(f)
-          foldDown0(right, acc2 |+| f(right))(f)
+          val acc2 = foldDown0(left, acc |+| f(left))
+          foldDown0(right, acc2 |+| f(right))
 
-        case dag.Distinct(_, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.Distinct(_, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.LoadLocal(_, parent, _) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.LoadLocal(_, parent, _) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.Operate(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.Operate(_, _, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case node @ dag.Reduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case node @ dag.Reduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case node @ dag.MegaReduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+        case node @ dag.MegaReduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.Split(_, specs, child) => foldDown0(child, acc |+| f(child))(f)
+        case dag.Split(_, specs, child) => foldDown0(child, foldThroughSpec(specs, acc) |+| f(child))
 
         case dag.IUI(_, _, left, right) =>
-          val acc2 = foldDown0(left, acc |+| f(left))(f)
-          foldDown0(right, acc2 |+| f(right))(f)
+          val acc2 = foldDown0(left, acc |+| f(left))
+          foldDown0(right, acc2 |+| f(right))
 
         case dag.Diff(_, left, right) =>
-          val acc2 = foldDown0(left, acc |+| f(left))(f)
-          foldDown0(right, acc2 |+| f(right))(f)
+          val acc2 = foldDown0(left, acc |+| f(left))
+          foldDown0(right, acc2 |+| f(right))
 
         case dag.Join(_, _, _, left, right) =>
-          val acc2 = foldDown0(left, acc |+| f(left))(f)
-          foldDown0(right, acc2 |+| f(right))(f)
+          val acc2 = foldDown0(left, acc |+| f(left))
+          foldDown0(right, acc2 |+| f(right))
 
         case dag.Filter(_, _, target, boolean) =>
-          val acc2 = foldDown0(target, acc |+| f(target))(f)
-          foldDown0(boolean, acc2 |+| f(boolean))(f)
+          val acc2 = foldDown0(target, acc |+| f(target))
+          foldDown0(boolean, acc2 |+| f(boolean))
 
-        case dag.Sort(parent, _) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.Sort(parent, _) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.SortBy(parent, _, _, _) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.SortBy(parent, _, _, _) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.ReSortBy(parent, _) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.ReSortBy(parent, _) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.Memoize(parent, _) => foldDown0(parent, acc |+| f(parent))(f)
+        case dag.Memoize(parent, _) => foldDown0(parent, acc |+| f(parent))
       }
 
-      foldDown0(this, f(this))(f)
+      foldDown0(this, f(this))
     }
   }
   
   object dag {
+    sealed trait ForcingPoint extends DepGraph
+    
     object ConstString {
       def unapply(graph : DepGraph) : Option[String] = graph.value match {
         case Some(SString(str)) => Some(str)
@@ -566,8 +582,6 @@ trait DAG extends Instructions {
       
       val isSingleton = true
       
-      def findMemos(parent: Split) = if (this.parent == parent) Set(memoId) else Set()
-      
       val containsSplitArg = true
     }
     
@@ -578,8 +592,6 @@ trait DAG extends Instructions {
       val sorting = IdentitySort
       
       val isSingleton = false
-      
-      def findMemos(parent: Split) = if (this.parent == parent) Set(memoId) else Set()
       
       val containsSplitArg = true
     }
@@ -601,8 +613,6 @@ trait DAG extends Instructions {
       
       val isSingleton = true
       
-      def findMemos(s: Split) = Set()
-      
       val containsSplitArg = false
     }
     
@@ -614,14 +624,6 @@ trait DAG extends Instructions {
       override lazy val value = parent.value
       
       lazy val isSingleton = parent.isSingleton
-      
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
       
       lazy val containsSplitArg = parent.containsSplitArg
     }
@@ -636,14 +638,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = false
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
 
@@ -657,14 +651,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = false
       
-      def findMemos(s: Split) = {
-        val back = left.findMemos(s) ++ right.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
 
@@ -675,18 +661,10 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = parent.isSingleton
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JType.JUnfixedT) extends DepGraph {
+    case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JType.JUnfixedT) extends DepGraph with ForcingPoint {
       lazy val identities = parent match {
         case Root(_, PushString(path)) => Vector(LoadIds(path))
         case _ => Vector(SynthIds(IdGen.nextInt()))
@@ -695,14 +673,6 @@ trait DAG extends Instructions {
       val sorting = IdentitySort
       
       val isSingleton = false
-      
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
       
       lazy val containsSplitArg = parent.containsSplitArg
     }
@@ -715,83 +685,35 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = parent.isSingleton
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph {
+    case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph with ForcingPoint {
       lazy val identities = Vector()
       
       val sorting = IdentitySort
       
       val isSingleton = true
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class MegaReduce(loc: Line, reds: NEL[dag.Reduce], parent: DepGraph) extends DepGraph {
+    case class MegaReduce(loc: Line, reds: NEL[Reduction], parent: DepGraph) extends DepGraph with ForcingPoint {
       lazy val identities = Vector()
       
       val sorting = IdentitySort
       
       val isSingleton = false
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class Split(loc: Line, spec: BucketSpec, child: DepGraph) extends DepGraph {
+    case class Split(loc: Line, spec: BucketSpec, child: DepGraph) extends DepGraph with ForcingPoint {
       lazy val identities = Vector(SynthIds(IdGen.nextInt()))
       
       val sorting = IdentitySort
       
       lazy val isSingleton = false
-      
-      lazy val memoIds = Vector(IdGen.nextInt())
-      
-      def findMemos(s: Split) = {
-        def loop(spec: BucketSpec): Set[Int] = spec match {
-          case UnionBucketSpec(left, right) =>
-            loop(left) ++ loop(right)
-          
-          case IntersectBucketSpec(left, right) =>
-            loop(left) ++ loop(right)
-          
-          case Group(_, target, child) =>
-            target.findMemos(s) ++ loop(child)
-          
-          case UnfixedSolution(_, target) => target.findMemos(s)
-          case Extra(target) => target.findMemos(s)
-        }
-        
-        val back = loop(spec) ++ child.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
       
       lazy val containsSplitArg = {
         def loop(spec: BucketSpec): Boolean = spec match {
@@ -819,14 +741,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
-      def findMemos(s: Split) = {
-        val back = left.findMemos(s) ++ right.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
     
@@ -836,14 +750,6 @@ trait DAG extends Instructions {
       val sorting = IdentitySort
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
-      
-      def findMemos(s: Split) = {
-        val back = left.findMemos(s) ++ right.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
       
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
@@ -864,14 +770,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
-      def findMemos(s: Split) = {
-        val back = left.findMemos(s) ++ right.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
     
@@ -889,18 +787,10 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = target.isSingleton
       
-      def findMemos(s: Split) = {
-        val back = target.findMemos(s) ++ boolean.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = target.containsSplitArg || boolean.containsSplitArg
     }
     
-    case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph {
+    case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph with ForcingPoint {
       val loc = parent.loc
       
       lazy val identities = {
@@ -920,14 +810,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = parent.isSingleton
       
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
@@ -942,7 +824,7 @@ trait DAG extends Instructions {
      * share the same identity.  This is very important to ensure correctness in
      * evaluation of the `Join` node.
      */
-    case class SortBy(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph {
+    case class SortBy(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph with ForcingPoint {
       val loc = parent.loc
 
       lazy val identities = parent.identities
@@ -951,12 +833,10 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = parent.isSingleton
       
-      def findMemos(s: Split) = parent.findMemos(s)
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class ReSortBy(parent: DepGraph, id: Int) extends DepGraph {
+    case class ReSortBy(parent: DepGraph, id: Int) extends DepGraph with ForcingPoint {
       val loc = parent.loc
       
       lazy val identities = parent.identities
@@ -965,25 +845,15 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = parent.isSingleton
       
-      def findMemos(s: Split) = parent.findMemos(s)
-      
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class Memoize(parent: DepGraph, priority: Int) extends DepGraph {
+    case class Memoize(parent: DepGraph, priority: Int) extends DepGraph with ForcingPoint {
       val loc = parent.loc
       
       lazy val identities = parent.identities
       lazy val sorting = parent.sorting
       lazy val isSingleton = parent.isSingleton
-      
-      def findMemos(s: Split) = {
-        val back = parent.findMemos(s)
-        if (back.isEmpty)
-          back
-        else
-          back + memoId
-      }
       
       lazy val containsSplitArg = parent.containsSplitArg
     }
@@ -1010,6 +880,7 @@ trait DAG extends Instructions {
     
     case object IdentitySort extends TableSort
     case class ValueSort(id: Int) extends TableSort
+    case object NullSort extends TableSort
     
     case object CrossLeftSort extends JoinSort
     case object CrossRightSort extends JoinSort

@@ -36,6 +36,17 @@ import scalaz.syntax.foldable._
 import scalaz.syntax.std.option._
 import scalaz.syntax.std.boolean._
 
+object RangeUtil {
+  def loop(r: Range, f: Int => Unit) {
+    var i = r.start
+    val limit = r.end
+    while (i < limit) {
+      f(i)
+      i += 1
+    }
+  }
+}
+
 trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Evaluator[M] {
   val ReductionNamespace = Vector()
 
@@ -53,8 +64,9 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range) = {
         val cx = cols(JType.JUnfixedT)
-        val colSeq = range.view filter { i => cx.exists(_.isDefinedAt(i)) }
-        colSeq.size
+        var count = 0
+        RangeUtil.loop(range, i => if (cx.exists(_.isDefinedAt(i))) count += 1)
+        count
       }
     }
 
@@ -77,29 +89,35 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         val max = cols(JNumberT) flatMap {
           case col: LongColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty)
-              None
-            else
-              Some(mapped.max: BigDecimal)
+            var zmax = Long.MinValue
+            var seen = false
+            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+              seen = true
+              val z = col(i)
+              if (z > zmax) zmax = z
+            })
+            if (seen) Some(BigDecimal(zmax)) else None
+
           case col: DoubleColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty)
-              None
-            else
-              Some(mapped.max: BigDecimal)
+            var zmax = Double.NegativeInfinity
+            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+              val z = col(i)
+              if (z > zmax) zmax = z
+            })
+            if (zmax > Double.NegativeInfinity) Some(BigDecimal(zmax)) else None
+
           case col: NumColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty)
-              None
-            else
-              Some(mapped.max: BigDecimal)
+            var zmax: BigDecimal = null
+            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+              val z = col(i)
+              if (zmax == null || z > zmax) zmax = z
+            })
+            if (zmax != null) Some(zmax) else None
 
           case _ => None
         }
 
-        if (max.isEmpty) None
-        else Some(max.suml)
+        if (max.isEmpty) None else Some(max.suml)
       }
     }
 
@@ -123,26 +141,35 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         val min = cols(JType.JUnfixedT) flatMap {
           case col: LongColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty)
-              None
-            else
-              Some(BigDecimal(mapped.min))
+            var zmin = Long.MaxValue
+            var seen = false
+            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+              seen = true
+              val z = col(i)
+              if (z < zmin) zmin = z
+            })
+            if (seen) Some(BigDecimal(zmin)) else None
+
           case col: DoubleColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) None
-            else Some(BigDecimal(mapped.min))
+            var zmin = Double.PositiveInfinity
+            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+              val z = col(i)
+              if (z > zmin) zmin = z
+            })
+            if (zmin < Double.PositiveInfinity) Some(BigDecimal(zmin)) else None
 
           case col: NumColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty) None
-            else Some(mapped.min: BigDecimal)
+            var zmin: BigDecimal = null
+            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+              val z = col(i)
+              if (zmin == null || z < zmin) zmin = z
+            })
+            if (zmin != null) Some(zmin) else None
 
           case _ => None
         }
 
-        if (min.isEmpty) None
-        else Some(min.suml)
+        if (min.isEmpty) None else Some(min.suml)
       }
     }
 
@@ -163,31 +190,36 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
         val sum = cols(JNumberT) flatMap {
           case col: LongColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty)
-              None
-            else
-              Some(BigDecimal(mapped.sum))
+            var t = 0L
+            var seen = false
+            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+              t += col(i)
+              seen = true
+            })
+            if (seen) Some(BigDecimal(t)) else None
+
           case col: DoubleColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty)
-              None
-            else
-              Some(BigDecimal(mapped.sum))
+            var t = 0.0
+            var seen = false
+            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+              t += col(i)
+              seen = true
+            })
+            if (seen) Some(BigDecimal(t)) else None
+
           case col: NumColumn =>
-            val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty)
-              None
-            else
-              Some(mapped.sum)
+            var t = BigDecimal(0)
+            var seen = false
+            RangeUtil.loop(range, i => if (col.isDefinedAt(i)) {
+              t += col(i)
+              seen = true
+            })
+            if (seen) Some(t) else None
 
           case _ => None
         }
 
-        if (sum.isEmpty) None
-        else Some(sum.suml)
-
-        //(sum.isEmpty).option(sum.suml)
+        if (sum.isEmpty) None else Some(sum.suml)
       }
     }
 
@@ -206,8 +238,10 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
+        //println("Reducing over range from " + range.start + " to " + range.end)
         val result = cols(JNumberT) flatMap {
           case col: LongColumn =>
+            //println("Mean over LongColumn: " + col.toString(range))
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
               None
@@ -219,6 +253,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
               Some(foldedMapped)
             }
           case col: DoubleColumn =>
+            //println("Mean over DoubleColumn: " + col.toString(range))
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
               None
@@ -230,6 +265,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
               Some(foldedMapped)
             }
           case col: NumColumn =>
+            //println("Mean over NumColumn: " + col.toString(range))
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
               None
@@ -251,7 +287,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def extract(res: Result): Table = {
       val filteredResult = res filter { case (_, count) => count != 0 }
-      filteredResult map { case (sum, count) => Table.constDecimal(Set(CNum(sum / count))) } getOrElse Table.empty
+      filteredResult map { case (sum, count) => Table.constDecimal(Set(CNum(sum / count)/*.tap{ mean => println("count: %s, mean: %s".format(count, mean))}*/)) } getOrElse Table.empty
     }
   }
   

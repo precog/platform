@@ -83,15 +83,17 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
       "sort with a bad schema"        in badSchemaSortSample
       "merges over three cells"       in threeCellMerge
       "empty input"                   in emptySort
-      "arbitrary datasets"            in checkSortDense
+      "with uniqueness for keys"      in uniqueSort
+      "arbitrary datasets"            in checkSortDense(SortAscending)
+      "arbitrary datasets descending" in checkSortDense(SortDescending)      
     }
 
-    "align" >> {
-      "a simple example" in alignSimple
-      "across slice boundaries" in alignAcrossBoundaries
-      "survive a trivial scalacheck" in checkAlign
-    }
-
+//    "align" >> {
+//      "a simple example" in alignSimple
+//      "across slice boundaries" in alignAcrossBoundaries
+//      "survive a trivial scalacheck" in checkAlign
+//    }
+//
     "intersect by identity" >> {
       "simple data" in testSimpleIntersect
       "survive a trivial scalacheck" in checkIntersect

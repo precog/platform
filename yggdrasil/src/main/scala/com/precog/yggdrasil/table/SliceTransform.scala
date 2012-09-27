@@ -80,7 +80,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
 
         case Map1(source, f) => 
           composeSliceTransform2(source) map {
-            _ mapColumns f 
+            _ mapRoot f 
           }
 
         case Map2(left, right, f) =>
@@ -90,14 +90,17 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
           l0.zip(r0) { (sl, sr) =>
             new Slice {
               val size = sl.size
-              val columns: Map[ColumnRef, Column] = 
-                (for {
-                  cl <- sl.valueColumns
-                  cr <- sr.valueColumns
-                  col <- f(cl, cr) // TODO: Unify columns of the same result type
-                } yield {
-                  (ColumnRef(CPath.Identity, col.tpe), col)
-                })(collection.breakOut)
+              val columns: Map[ColumnRef, Column] = {
+                val resultColumns = for {
+                  cl <- sl.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
+                  cr <- sr.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
+                  result <- f(cl, cr)
+                } yield result
+                  
+                resultColumns.groupBy(_.tpe) map { 
+                  case (tpe, cols) => (ColumnRef(CPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+                }
+              }
             }
           }
 
@@ -117,7 +120,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                 }
               }
 
-              s filterColumns { cf.util.filter(0, s.size, definedAt) }
+              s mapColumns { cf.util.filter(0, s.size, definedAt) }
             }
           }
 
@@ -154,7 +157,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                         }
                         def apply(row: Int) = {
                           numEq exists { 
-                            case col: BoolColumn => col.isDefinedAt(row) && col(row) 
+                            case (col: BoolColumn) => col.isDefinedAt(row) && col(row)
                             case _ => sys.error("Unreachable code - only boolean columns can be derived from equality.")
                           }
                         }
@@ -183,28 +186,22 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                     if !tpe.isNumeric && !sl.columns.contains(ref) => col
                 })
 
-                val allColumns = sl.columns ++ sr.columns
-                
                 val resultCol = new MemoBoolColumn(
                   new BoolColumn {
                     def isDefinedAt(row: Int): Boolean = {
-                      allColumns exists { case (_, c) => c.isDefinedAt(row) } 
+                      (sl.columns exists { case (_, c) => c.isDefinedAt(row) }) || (sr.columns exists { case (_, c) => c.isDefinedAt(row) }) 
                     }
 
                     def apply(row: Int): Boolean = {
-                      !(
-                        // if any excluded column exists for the row, unequal
-                        excluded.exists(_.isDefinedAt(row)) || 
-                         // if any paired column compares unequal, unequal
-                        paired.exists { 
-                          case (_, equal: BoolColumn) => equal.isDefinedAt(row) && !equal(row) 
-
-                          case _ => false
-                        }
-                      )
+                      // if any excluded column exists for the row, unequal
+                      !excluded.exists(_.isDefinedAt(row)) && 
+                       // if any paired column compares unequal, unequal
+                      paired.exists { 
+                        case (_, equal: BoolColumn) if equal.isDefinedAt(row) => equal(row)
+                        case _ => false
+                      }
                     }
-                  }
-                )
+                  })
                 
                 Map(ColumnRef(CPath.Identity, CBoolean) -> resultCol)
               }
@@ -434,9 +431,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
           val sourceTransform = composeSliceTransform2(source)
           val keyTransform = composeSliceTransform2(definedFor)
 
-          sourceTransform.zip(keyTransform) { (s1, s2) =>
-            s1.compact(s2, definedness)
-          }
+          sourceTransform.zip(keyTransform) { (s1, s2) => s1.filterDefined(s2, definedness) }
       }
       
       result.withSource(spec)

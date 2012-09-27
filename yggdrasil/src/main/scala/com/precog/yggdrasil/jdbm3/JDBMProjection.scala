@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 package jdbm3
 
-import iterable._
 import table._
 import com.precog.common._ 
 import com.precog.common.json._ 
@@ -62,7 +61,7 @@ import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 
 object JDBMProjection {
-  private[jdbm3] type IndexTree = SortedMap[Identities,Array[Byte]]
+  private[jdbm3] type IndexTree = SortedMap[Array[Byte],Array[Byte]]
 
   final val DEFAULT_SLICE_SIZE = 10000
   final val INDEX_SUBDIR = "jdbm"
@@ -70,11 +69,20 @@ object JDBMProjection {
   def isJDBMProjection(baseDir: File) = (new File(baseDir, INDEX_SUBDIR)).isDirectory
 }
 
-abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Identities, Slice] { projection =>
+abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte], Slice] { projection =>
+  import TableModule.paths._
   import JDBMProjection._
 
   val logger = Logger("col:" + descriptor.shows)
   logger.debug("Opening column index files for projection " + descriptor.shows + " at " + baseDir)
+
+  val keyColRefs = Array.tabulate(descriptor.identities) { i => ColumnRef(JPath(Key :: JPathIndex(i) :: Nil), CLong) }
+
+  val keyFormat: IdentitiesRowFormat = RowFormat.IdentitiesRowFormatV1(keyColRefs)
+
+  val rowFormat: RowFormat = RowFormat.ValueRowFormatV1(descriptor.columns map {
+    case ColumnDescriptor(_, cPath, cType, _) => ColumnRef(cPath, cType)
+  })
 
   override def toString = "JDBMProjection(" + descriptor.columns + ")"
 
@@ -97,7 +105,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     val treeMap: IndexTree = idIndexFile.getTreeMap(treeMapName)
     if (treeMap == null) {
       logger.debug("Creating new projection store")
-      val ret: IndexTree = idIndexFile.createTreeMap(treeMapName, AscendingIdentitiesComparator, IdentitiesSerializer(descriptor.identities), null)
+      val ret: IndexTree = idIndexFile.createTreeMap(treeMapName, SortingKeyComparator(keyFormat, true), ByteArraySerializer, ByteArraySerializer)
       logger.debug("Created projection store")
       ret
     } else {
@@ -113,79 +121,53 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     logger.debug("Closed column index files")
   }
 
-  val rowFormat: RowFormat = RowFormat.ValueRowFormatV1(descriptor.columns map {
-    case ColumnDescriptor(_, cPath, cType, _) => ColumnRef(cPath, cType)
-  })
-
   def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
-    logger.trace("Inserting %s => %s".format(ids, v))
+    logger.trace("Inserting %s => %s".format(ids.mkString("[", ", ", "]"), v))
 
-    treeMap.put(ids, rowFormat.encode(v.toList))
+    treeMap.put(keyFormat.encodeIdentities(ids), rowFormat.encode(v.toList))
 
     if (shouldSync) {
       idIndexFile.commit()
     }
   }
 
-  def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = new IterableDataset(descriptor.identities, new Iterable[(Identities,Seq[CValue])] {
-    def iterator = treeMap.entrySet.iterator.asScala.map { case kvEntry =>
-      (kvEntry.getKey, rowFormat.decode(kvEntry.getValue))
-    }
-  })
-
-  // Compute the successor to the provided Identities. Assumes that we would never use a VectorCase() for Identities
-  private def identitiesAfter(id: Identities) = VectorCase((id.init :+ (id.last + 1)): _*)
-
-  def getBlockAfter(id: Option[Identities], desiredColumns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Identities,Slice]] = {
-    import TableModule.paths._
+  def getBlockAfter(id: Option[Array[Byte]], desiredColumns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Array[Byte],Slice]] = {
+    if (idIndexFile.isClosed()) {
+      sys.error("Attempting to retrieve more data from a closed projection")
+    
+}
+    logger.trace("Retrieving key after " + id.map(_.mkString("[", ", ", "]")))
 
     try {
       // tailMap semantics are >=, but we want > the IDs if provided
-      val constrainedMap = id.map { idKey => treeMap.tailMap(identitiesAfter(idKey)) }.getOrElse(treeMap)
-
-      constrainedMap.lastKey() // Will throw an exception if the map is empty
-
-      var firstKey: Identities = null
-      var lastKey: Identities  = null
-
-      val slice = new JDBMSlice[Identities] {
-        val requestedSize = DEFAULT_SLICE_SIZE
-
-        val keyColumns = (0 until descriptor.identities).map {
-          idx: Int => (ColumnRef(CPath(Key :: CPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) 
-        }.toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
-
-        val valColumns: Array[(ColumnRef, ArrayColumn[_])] =
-          rowFormat.columnRefs.map(JDBMSlice.columnFor(CPath(Value), sliceSize))(collection.breakOut)
-
-        val columnDecoder = rowFormat.ColumnDecoder(valColumns map (_._2))
-
-        def loadRowFromKey(row: Int, rowKey: Identities) {
-          if (row == 0) { firstKey = rowKey }
-          lastKey = rowKey
-
-          var i = 0
-          
-          while (i < descriptor.identities) {
-            keyColumns(i)._2.asInstanceOf[ArrayLongColumn].update(row, rowKey(i))
-            i += 1
-          }
-        }
-
-        load(constrainedMap.entrySet.iterator.asScala)
-
-        val desiredRefs: Set[ColumnRef] = desiredColumns.map { case ColumnDescriptor(_, selector, tpe, _) => ColumnRef(CPath(Value) \ selector, tpe) }
-
-        override val columns = super.columns filterKeys {
-          case ref @ ColumnRef(CPath(Value, _*), _) => desiredRefs(ref)
-          case _ => true
-        }
-      }
-
-      if (slice.size == 0) {
-        None
+      val constrainedMap = id.map { idKey => treeMap.tailMap(idKey) } getOrElse treeMap
+      val rawIterator = constrainedMap.entrySet.iterator.asScala
+      if (id.isDefined && rawIterator.hasNext) rawIterator.next();
+      
+      if (rawIterator.isEmpty) {
+        None 
       } else {
-        Some(BlockProjectionData[Identities,Slice](firstKey, lastKey, slice))
+        val keyCols = Array.fill(descriptor.identities) { ArrayLongColumn.empty(sliceSize) }
+        val valColumns = rowFormat.columnRefs.map(JDBMSlice.columnFor(JPath(Value), sliceSize))
+
+        val keyColumnDecoder = keyFormat.ColumnDecoder(keyCols)
+        val valColumnDecoder = rowFormat.ColumnDecoder(valColumns.map(_._2)(collection.breakOut))
+
+        val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, rawIterator, keyColumnDecoder, valColumnDecoder)
+
+        val slice = new Slice {
+          private val desiredRefs: Set[ColumnRef] = desiredColumns map { 
+            case ColumnDescriptor(_, selector, tpe, _) => ColumnRef(CPath(Value) \ selector, tpe) 
+          }
+          
+          val size = rows
+          val columns = keyColRefs.iterator.zip(keyCols.iterator).toMap ++ valColumns.iterator.filter({
+            case (ref @ ColumnRef(JPath(Value, _*), _), _) => desiredRefs.contains(ref)
+            case _ => true
+          })
+        }
+
+        Some(BlockProjectionData[Array[Byte],Slice](firstKey, lastKey, slice))
       }
     } catch {
       case e: java.util.NoSuchElementException => None

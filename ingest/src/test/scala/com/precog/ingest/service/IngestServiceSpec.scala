@@ -76,6 +76,9 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   val asyncContext = defaultFutureDispatch
 
   import BijectionsChunkJson._
+  import BijectionsChunkString._
+  import BijectionsByteArray._
+  import BijectionsChunkByteArray._
 
   val config = """
     security {
@@ -109,23 +112,61 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
 
   override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
 
-  lazy val ingestService = service.contentType[JValue](application/(MimeTypes.json)).path("/vfs/")
+  lazy val ingestService = service.contentType[JValue](application/(MimeTypes.json)).path("/sync/fs/")
+
+  lazy val asyncIngestService =
+    service.contentType[ByteChunk](application/(MimeTypes.json)).path("/async/fs/")
+
+  lazy val syncIngestService =
+    service.contentType[ByteChunk](application/(MimeTypes.json)).path("/sync/fs/")
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 }
 
 class IngestServiceSpec extends TestIngestService with FutureMatchers {
+
+  def asyncTrack(data: ByteChunk, token: Option[String] = Some(TestTokenUID), path: String = "unittest") =
+    token.map(asyncIngestService.query("apiKey", _)).getOrElse(asyncIngestService).post[ByteChunk](path)(data)
+
+  def syncTrack(data: ByteChunk, token: Option[String] = Some(TestTokenUID), path: String = "unittest") =
+    token.map(syncIngestService.query("apiKey", _)).getOrElse(syncIngestService).post[ByteChunk](path)(data)
+
   def track(data: JValue, token: Option[String] = Some(TestTokenUID), path: String = "unittest"): Future[HttpResponse[JValue]] = {
-    token.map{ ingestService.query("tokenId", _) }.getOrElse(ingestService).post(path)(data)
+    token.map{ ingestService.query("apiKey", _) }.getOrElse(ingestService).post(path)(data)
   }
 
   def testValue = JObject(List(JField("testing", JNum(123))))
+
+  def testChunkValue = Chunk(
+    "{ testing: 123 }\n".getBytes("UTF-8"),
+    Some(Future {
+      Chunk("{ testing: 321 }".getBytes("UTF-8"), None)
+    })
+  )
+
+  def badChunkValue = Chunk(
+    "178234#!!@#$\n".getBytes("UTF-8"),
+    Some(Future {
+      Chunk("{ testing: 321 }".getBytes("UTF-8"), None)
+    })
+  )
 
   "Ingest service" should {
     "track event with valid token" in {
       track(testValue) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, None, _) => ok
+      }}
+    }
+    "track asynchronous event with valid token" in {
+      asyncTrack(testChunkValue) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Accepted, _), _, None, _) => ok
+      }}
+    }
+    "track asynchronous event with bad row" in {
+      syncTrack(badChunkValue) must whenDelivered { beLike {
+        // TODO Check that the value in Some(...) is { errors: [ 0 ] }.
+        case HttpResponse(HttpStatus(BadRequest, _), _, Some(_), _) => ok
       }}
     }
     "reject track request when token not found" in {

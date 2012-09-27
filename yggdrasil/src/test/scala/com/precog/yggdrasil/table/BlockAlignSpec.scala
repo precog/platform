@@ -51,9 +51,7 @@ import SampleData._
 
 trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
   def testAlign(sample: SampleData) = {
-    object module extends BlockStoreTestModule {
-      val projections = Map.empty[ProjectionDescriptor, Projection]
-    }
+    val module = BlockStoreTestModule.empty[M]
 
     import module._
     import module.trans._
@@ -305,6 +303,88 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
     val sample = SampleData(elements.toStream, Some((3,List((JPath(".xb5hs2ckjajs0k44x"),CDouble), (JPath(".zzTqxfzwzacakwjqeGFcnhpkzd5akfobsg2nxump"),CEmptyArray), (JPath(".sp7hpv"),CEmptyObject)))))
     testAlign(sample.sortBy(_ \ "key"))
   }
+
+  def testAlignSymmetry = {
+    val module = BlockStoreTestModule.empty[M]
+
+    import module._
+    import module.trans._
+    import module.trans.constants._
+
+    val alignOnL = DerefArrayStatic(Leaf(Source), JPathIndex(1))
+    val alignOnR = DerefArrayStatic(Leaf(Source), JPathIndex(1))
+    val JArray(sourceLeft) = JsonParser.parse("""[
+      [[3],{ "000000":-1 },-1],
+      [[4],{ "000000":0 },0],
+      [[5],{ "000000":0 },0],
+      [[0],{ "000000":1 },1],
+      [[2],{ "000000":2126441435 },2126441435],
+      [[1],{ "000000":2147483647 },2147483647]
+    ]""")
+
+    val JArray(sourceRight) = JsonParser.parse("""[
+      [[1],{ "000000":-2147483648 },-2147483648],
+      [[6],{ "000000":-1904025337 },-1904025337],
+      [[2],{ "000000":-1456034303 },-1456034303],
+      [[4],{ "000000":0 },0],
+      [[0],{ "000000":2006322377 },2006322377],
+      [[3],{ "000000":2147483647 },2147483647],
+      [[5],{ "000000":2147483647 },2147483647]
+    ]""")
+
+    val JArray(lexpected) = JsonParser.parse("""[
+      [[4],{ "000000":0 },0],
+      [[5],{ "000000":0 },0],
+      [[1],{ "000000":2147483647 },2147483647]
+    ]""")
+
+    val JArray(rexpected) = JsonParser.parse("""[
+      [[4],{ "000000":0 },0],
+      [[3],{ "000000":2147483647 },2147483647],
+      [[5],{ "000000":2147483647 },2147483647]
+    ]""")
+
+    
+    val (ljson, rjson) = (for {
+      aligned <- Table.align(fromJson(sourceLeft.toStream), alignOnL, fromJson(sourceRight.toStream), alignOnR)
+      ljson <- aligned._1.toJson
+      rjson <- aligned._2.toJson
+    } yield {
+      (ljson, rjson)
+    }).copoint
+
+    ljson must_== lexpected.toStream
+    rjson must_== rexpected.toStream
+    
+    val (ljsonreversed, rjsonreversed) = (for {
+      aligned <- Table.align(fromJson(sourceRight.toStream), alignOnR, fromJson(sourceLeft.toStream), alignOnL) 
+      ljson <- aligned._1.toJson
+      rjson <- aligned._2.toJson
+    } yield {
+      (ljson, rjson)
+    }).copoint
+
+    ljsonreversed must_== rexpected.toStream
+    rjsonreversed must_== lexpected.toStream
+  }
 }
 
+object BlockAlignSpec extends TableModuleSpec[Free.Trampoline] with BlockAlignSpec[Free.Trampoline] {
+  implicit def M = Trampoline.trampolineMonad
+
+  type YggConfig = IdSourceConfig
+  val yggConfig = new IdSourceConfig {
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
+    }
+  }
+
+  "align" should {
+    "a simple example" in alignSimple
+    "across slice boundaries" in alignAcrossBoundaries
+    "survive a trivial scalacheck" in checkAlign
+    "produce the same results irrespective of input order" in testAlignSymmetry
+  }
+}
 // vim: set ts=4 sw=4 et:

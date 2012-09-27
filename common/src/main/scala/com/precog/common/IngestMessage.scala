@@ -197,6 +197,7 @@ object IngestMessageSerialization {
       
       (stop, msgType) match {
         case (`stopByte`, `jsonEventFlag`) => parseEvent(buffer)
+        case (`stopByte`, `jsonArchiveFlag`) => parseArchive(buffer)
         //case (`stopByte`, `jsonSyncFlag`)  => parseSync(buffer)
       }
     }
@@ -205,6 +206,8 @@ object IngestMessageSerialization {
   //def parseSync = (parseJValue _) andThen (jvalueToSync _)
   
   def parseEvent = (parseJValue _) andThen (jvalueToEvent _)
+
+  def parseArchive = (parseJValue _) andThen (jvalueToArchive _)
   
 //  def jvalueToSync(jvalue: JValue): Validation[String, IngestMessage] = {
 //    jvalue.validated[SyncMessage] match {
@@ -217,6 +220,13 @@ object IngestMessageSerialization {
     jvalue.validated[EventMessage] match {
       case Failure(e)  => Failure(e.message)
       case Success(em) => Success(em)
+    }
+  }
+
+  def jvalueToArchive(jvalue: JValue): Validation[String, IngestMessage] = {
+    jvalue.validated[ArchiveMessage] match {
+      case Failure(e)  => Failure(e.message)
+      case Success(am) => Success(am)
     }
   }
   

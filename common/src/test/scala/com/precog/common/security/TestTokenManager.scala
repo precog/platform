@@ -181,8 +181,8 @@ object TestTokenManager {
     Token("root", "root", grantList(0).map { _.gid }(collection.breakOut)),
     Token("unittest", "unittest", grantList(1).map { _.gid }(collection.breakOut)),
     Token("usage", "usage", grantList(2).map { _.gid }(collection.breakOut)),
-    Token("user1", "user1", (grantList(3) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
-    Token("user2", "user2", (grantList(4) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
+    Token("user1", "root", (grantList(3) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
+    Token("user2", "root", (grantList(4) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
     Token("expired", "expired", (grantList(5) ++ grantList(6)).map{ _.gid}(collection.breakOut))
   ).map { t => (t.tid -> t) }(collection.breakOut)
   
