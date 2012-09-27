@@ -1,5 +1,5 @@
-HEAP_OPTS="-Xms2G -Xmx6G"
+HEAP_OPTS="-Xms128m -Xmx512m"
 STACK_OPTS="-Xss4m"
 GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
-GC_LOG_OPTS="-verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/var/log/precog/beta-auth-v1.gc.log"
+GC_LOG_OPTS="-verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/var/log/precog/accounts-v1-beta.gc.log"
 JAVA_OPTS="$GC_OPTS $GC_LOG_OPTS $HEAP_OPTS $STACK_OPTS"
