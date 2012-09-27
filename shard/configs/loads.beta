@@ -1,6 +1,6 @@
-conf=beta/beta-shard-v1.conf
-default=beta/beta-shard-v1.default
-init=beta/beta-shard-v1.init
-/etc/monit/conf.d/beta-shard-v1.monit=beta/beta-shard-v1.monit
-/etc/precog/beta-shard-v1.logging.xml=beta/beta-shard-v1.logging.xml
+/etc/precog/shard-v1-beta.conf=beta/shard-v1-beta.conf
+default=beta/shard-v1-beta.default
+init=beta/shard-v1-beta.init
+/etc/monit/conf.d/shard-v1-beta.monit=beta/shard-v1-beta.monit
+/etc/precog/shard-v1-beta.logging.xml=beta/shard-v1-beta.logging.xml
 postinstall=beta/postinstall.sh
