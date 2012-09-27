@@ -323,6 +323,30 @@ trait EvalStackSpecs extends Specification {
       result must haveSize(size.head)
       actual mustEqual expected
     }
+
+    "ensure rows of rank 1 exist" >> {
+      val input = """
+        clicks := //clicks
+
+        newFoo := new(clicks.time)
+
+        rank := std::stats::rank(newFoo)
+
+        newFoo where rank = 1
+      """.stripMargin
+
+      val input2 = """count(//clicks where //clicks.time = min(//clicks.time))"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("//clicks.time where //clicks.time = min(//clicks.time)") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
     
     "have the correct number of identities and values in a relate" >> {
       "with the sum plus the LHS" >> {
