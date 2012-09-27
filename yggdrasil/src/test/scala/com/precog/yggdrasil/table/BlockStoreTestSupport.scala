@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.Path
+import com.precog.common.json._
 import com.precog.common.VectorCase
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.util._
@@ -113,8 +114,8 @@ trait BaseBlockStoreTestModule[M[+_]] extends
             val columns = s.columns filter {
               case (ColumnRef(jpath, ctype), _) =>
                 colSelection.isEmpty || 
-                jpath.nodes.head == JPathField("key") ||
-                colSelection.exists { desc => (JPathField("value") \ desc.selector) == jpath && desc.valueType == ctype }
+                jpath.nodes.head == CPathField("key") ||
+                colSelection.exists { desc => (CPathField("value") \ desc.selector) == jpath && desc.valueType == ctype }
             }
           }
 
@@ -140,11 +141,11 @@ trait BaseBlockStoreTestModule[M[+_]] extends
       case _ => false
     }
 
-    def sortTransspec(sortKeys: JPath*): TransSpec1 = InnerObjectConcat(sortKeys.zipWithIndex.map {
+    def sortTransspec(sortKeys: CPath*): TransSpec1 = InnerObjectConcat(sortKeys.zipWithIndex.map {
       case (sortKey, idx) => WrapObject(
-        sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), JPathField("value"))) {
-          case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, field)
-          case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
+        sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), CPathField("value"))) {
+          case (innerSpec, field: CPathField) => DerefObjectStatic(innerSpec, field)
+          case (innerSpec, index: CPathIndex) => DerefArrayStatic(innerSpec, index)
         },
         "%09d".format(idx)
       )

@@ -194,7 +194,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           def genComparator(sl1: Slice, sl2: Slice) = Slice.rowComparatorFor(sl1, sl2) {
             // only need to compare identities (field "0" of the sorted table) between projections
             // TODO: Figure out how we might do this directly with the identitySpec
-            slice => slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(JPathField("0") :: Nil) }).toList.sorted
+            slice => slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(CPathField("0") :: Nil) }).toList.sorted
           }
           
           def boundaryCollapse(prevSlice: Slice, prevStart: Int, curSlice: Slice): (BitSet, Int) = {
@@ -1007,7 +1007,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             // Get mappings from each ticvar to columns that define it.
             val ticVarColumns =
               cols.toList.collect { 
-                case (ref @ ColumnRef(JPath(JPathIndex(1), JPathField(ticVarIndex), _ @ _*), _), col) => (ticVarIndex, col)
+                case (ref @ ColumnRef(CPath(CPathIndex(1), CPathField(ticVarIndex), _ @ _*), _), col) => (ticVarIndex, col)
               }.groupBy(_._1).mapValues(_.unzip._2)
 
             if (ticVarColumns.keySet.map(_.toInt) == keyIndices) {
@@ -1782,14 +1782,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                              WrapObject(DerefObjectStatic(valueSpec(Source), CPathField(groupId.shows)), "1")
                            )
 
-                           val sortByTrans = DerefObjectStatic(Leaf(Source), JPathField("0"))
+                           val sortByTrans = DerefObjectStatic(Leaf(Source), CPathField("0"))
                            // transform to get just the information related to the particular groupId,
                            for {
                              partitionSorted <- partition.transform(recordTrans).sort(sortByTrans, unique = true)
                              //json <- partitionSorted.toJson
                              //_ = println("group " + groupId + " partition: " + json.mkString("\n"))
                            } yield {
-                             groupId -> partitionSorted.transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
+                             groupId -> partitionSorted.transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
                            }
                          }.sequence
             } yield grouped.toMap

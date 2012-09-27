@@ -86,8 +86,8 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
       if (rawIterator.isEmpty) {
         None
       } else {
-        val keyColumns = sortKeyRefs.map(JDBMSlice.columnFor(JPath("[0]"), sliceSize))
-        val valColumns = valRefs.map(JDBMSlice.columnFor(JPath("[1]"), sliceSize))
+        val keyColumns = sortKeyRefs.map(JDBMSlice.columnFor(CPath("[0]"), sliceSize))
+        val valColumns = valRefs.map(JDBMSlice.columnFor(CPath("[1]"), sliceSize))
 
         val keyColumnDecoder = keyFormat.ColumnDecoder(keyColumns.map(_._2)(collection.breakOut))
         val valColumnDecoder = rowFormat.ColumnDecoder(valColumns.map(_._2)(collection.breakOut))

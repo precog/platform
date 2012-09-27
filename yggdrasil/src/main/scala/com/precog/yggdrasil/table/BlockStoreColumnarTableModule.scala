@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.{MetadataStats,Path,VectorCase}
+import com.precog.common.json._
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
@@ -259,7 +260,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           val init = 0l
           def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
             val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
-            (a + range.end + 1, cols + (ColumnRef(JPath(JPathIndex(1)), CLong) -> globalIdColumn))
+            (a + range.end + 1, cols + (ColumnRef(CPath(CPathIndex(1)), CLong) -> globalIdColumn))
           }
         }
       )
@@ -287,7 +288,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       // we need a custom row comparator that ignores the global ID introduced to prevent elimination of
       // duplicate rows in the write to JDBM
       def buildRowComparator(lkey: Slice, rkey: Slice) = {
-        Slice.rowComparatorFor(lkey.deref(JPathIndex(0)), rkey.deref(JPathIndex(0))) {
+        Slice.rowComparatorFor(lkey.deref(CPathIndex(0)), rkey.deref(CPathIndex(0))) {
           _.columns.keys.toList.sorted 
         }
       }
@@ -749,7 +750,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     // In order to get a size, we pre-run the metadata fetch
     for {
       paths          <- pathsM
-      projectionData <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
+      projectionData <- (paths map { path => loadable(metadataView, path, CPath.Identity, tpe) }).sequence map { _.flatten }
       val (coveringProjections, colMetadata) = projectionData.unzip
       val maxSize = colMetadata.toList.flatMap { _.values.flatMap { _.values.collect { case stats: MetadataStats => stats.count } } }.sorted.lastOption
     } yield {

@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common._
+import com.precog.common.json._
 import com.precog.util._
 import com.precog.yggdrasil.util._
 
@@ -111,7 +112,7 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
         }]
     """)
 
-    val sample = SampleData(elements.toStream, Some((2,List((JPath(".q"),CNum), (JPath(".hw"),CEmptyArray), (JPath(".fr8y"),CNum)))))
+    val sample = SampleData(elements.toStream, Some((2,List((CPath(".q"),CNum), (CPath(".hw"),CEmptyArray), (CPath(".fr8y"),CNum)))))
 
     testAlign(sample.sortBy(_ \ "key"))
   }
@@ -300,7 +301,7 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
       }]
     """)
 
-    val sample = SampleData(elements.toStream, Some((3,List((JPath(".xb5hs2ckjajs0k44x"),CDouble), (JPath(".zzTqxfzwzacakwjqeGFcnhpkzd5akfobsg2nxump"),CEmptyArray), (JPath(".sp7hpv"),CEmptyObject)))))
+    val sample = SampleData(elements.toStream, Some((3,List((CPath(".xb5hs2ckjajs0k44x"),CDouble), (CPath(".zzTqxfzwzacakwjqeGFcnhpkzd5akfobsg2nxump"),CEmptyArray), (CPath(".sp7hpv"),CEmptyObject)))))
     testAlign(sample.sortBy(_ \ "key"))
   }
 
@@ -311,8 +312,8 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
     import module.trans._
     import module.trans.constants._
 
-    val alignOnL = DerefArrayStatic(Leaf(Source), JPathIndex(1))
-    val alignOnR = DerefArrayStatic(Leaf(Source), JPathIndex(1))
+    val alignOnL = DerefArrayStatic(Leaf(Source), CPathIndex(1))
+    val alignOnR = DerefArrayStatic(Leaf(Source), CPathIndex(1))
     val JArray(sourceLeft) = JsonParser.parse("""[
       [[3],{ "000000":-1 },-1],
       [[4],{ "000000":0 },0],

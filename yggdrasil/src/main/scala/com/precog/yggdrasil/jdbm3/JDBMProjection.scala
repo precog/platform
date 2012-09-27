@@ -76,7 +76,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   val logger = Logger("col:" + descriptor.shows)
   logger.debug("Opening column index files for projection " + descriptor.shows + " at " + baseDir)
 
-  val keyColRefs = Array.tabulate(descriptor.identities) { i => ColumnRef(JPath(Key :: JPathIndex(i) :: Nil), CLong) }
+  val keyColRefs = Array.tabulate(descriptor.identities) { i => ColumnRef(CPath(Key :: CPathIndex(i) :: Nil), CLong) }
 
   val keyFormat: IdentitiesRowFormat = RowFormat.IdentitiesRowFormatV1(keyColRefs)
 
@@ -148,7 +148,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
         None 
       } else {
         val keyCols = Array.fill(descriptor.identities) { ArrayLongColumn.empty(sliceSize) }
-        val valColumns = rowFormat.columnRefs.map(JDBMSlice.columnFor(JPath(Value), sliceSize))
+        val valColumns = rowFormat.columnRefs.map(JDBMSlice.columnFor(CPath(Value), sliceSize))
 
         val keyColumnDecoder = keyFormat.ColumnDecoder(keyCols)
         val valColumnDecoder = rowFormat.ColumnDecoder(valColumns.map(_._2)(collection.breakOut))
@@ -162,7 +162,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
           
           val size = rows
           val columns = keyColRefs.iterator.zip(keyCols.iterator).toMap ++ valColumns.iterator.filter({
-            case (ref @ ColumnRef(JPath(Value, _*), _), _) => desiredRefs.contains(ref)
+            case (ref @ ColumnRef(CPath(Value, _*), _), _) => desiredRefs.contains(ref)
             case _ => true
           })
         }

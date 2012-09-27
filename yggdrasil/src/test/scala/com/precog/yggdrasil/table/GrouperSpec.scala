@@ -39,8 +39,8 @@ import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 
 trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
-  def tic_a = JPathField("tic_a")
-  def tic_b = JPathField("tic_b")
+  def tic_a = CPathField("tic_a")
+  def tic_b = CPathField("tic_b")
 
   val eq12F1 = new CF1P({
     case c: DoubleColumn => new Map1Column(c) with BoolColumn {
@@ -255,8 +255,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(TransSpec1.Id), groupId,
       GroupKeySpecAnd(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val result = Table.merge(spec) { (key, map) =>
       for {
@@ -317,8 +317,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(TransSpec1.Id), groupId,
       GroupKeySpecOr(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val result = Table.merge(spec) { (key, map) =>
       for {
@@ -394,9 +394,9 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(TransSpec1.Id), groupId,
       GroupKeySpecAnd(
-        GroupKeySpecSource(JPathField("extra"),
-          Filter(Map1(DerefObjectStatic(SourceValue.Single, JPathField("a")), eq12F1), Map1(DerefObjectStatic(SourceValue.Single, JPathField("a")), eq12F1))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(CPathField("extra"),
+          Filter(Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1), Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val result = Table.merge(spec) { (key, map) =>
       for {
@@ -441,7 +441,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(SourceValue.Single), groupId,
       GroupKeySpecOr(
-        GroupKeySpecSource(JPathField("extra"),
+        GroupKeySpecSource(CPathField("extra"),
           Filter(Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1), Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1))),
         GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
@@ -581,13 +581,13 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table1,
       SourceKey.Single, Some(SourceValue.Single), groupId1,
       GroupKeySpecAnd(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
       
     val spec2 = GroupingSource(
       table2,
       SourceKey.Single, Some(SourceValue.Single), groupId2,
-      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))))
+      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))))
       
     val intersection = GroupingAlignment(
       DerefObjectStatic(Leaf(Source), tic_a),
@@ -681,13 +681,13 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table1,
       SourceKey.Single, Some(SourceValue.Single), groupId1,
       GroupKeySpecOr(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
       
     val spec2 = GroupingSource(
       table2,
       SourceKey.Single, Some(SourceValue.Single), groupId2,
-      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))))
+      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))))
       
     val intersection = GroupingAlignment(
       DerefObjectStatic(Leaf(Source), tic_a),
@@ -818,18 +818,18 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       fromJson(foo.toStream),
       SourceKey.Single, Some(SourceValue.Single), fooGroup,
       GroupKeySpecAnd(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val barSpec = GroupingSource(
       fromJson(bar.toStream),
       SourceKey.Single, Some(SourceValue.Single), barGroup,
-      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))))
+      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))))
         
     val bazSpec = GroupingSource(
       fromJson(baz.toStream),
       SourceKey.Single, Some(SourceValue.Single), bazGroup,
-      GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b"))))
+      GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b"))))
         
     val spec = GroupingAlignment(
       DerefObjectStatic(Leaf(Source), tic_b),

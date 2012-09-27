@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 
 import scala.collection.mutable
 
+import blueeyes.json._
 import blueeyes.json.JsonAST._
 
 import com.precog.common.json._
@@ -96,7 +97,12 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     }
   }
 
-  def leafSchema: Gen[JSchema] = ctype map { t => (JPath.Identity -> t) :: Nil }
+  def leafSchema: Gen[JSchema] = ctype map { t => (CPath.Identity -> t) :: Nil }
+
+  //def metadataSchema(jschema: JSchema): Gen[JSchema] = {
+  //  val paths = jschema map { case (jpath, _) => jpath }
+
+  //}
 
   def ctype: Gen[CType] = oneOf(
     CString,
@@ -134,18 +140,20 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     }
   }
 
-  def genEventColumns(jschema: JSchema): Gen[(Int, Stream[(Identities, Seq[(JPath, JValue)])])] = 
+  def genEventColumns(jschema: JSchema): Gen[(Int, Stream[(Identities, Seq[(CPath, JValue)])])] = 
     for {
       idCount  <- choose(1, 3) 
       dataSize <- choose(0, 20)
       ids      <- containerOfN[Set, List[Long]](dataSize, containerOfN[List, Long](idCount, posNum[Long]))
-      values   <- containerOfN[List, Seq[(JPath, JValue)]](dataSize, Gen.sequence[List, (JPath, JValue)](jschema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
+      values   <- containerOfN[List, Seq[(CPath, JValue)]](dataSize, Gen.sequence[List, (CPath, JValue)](jschema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
       
       falseDepth  <- choose(1, 3)
       falseSchema <- schema(falseDepth)
       falseSize   <- choose(0, 5)
       falseIds    <- containerOfN[Set, List[Long]](falseSize, containerOfN[List, Long](idCount, posNum[Long]))
-      falseValues <- containerOfN[List, Seq[(JPath, JValue)]](falseSize, Gen.sequence[List, (JPath, JValue)](falseSchema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
+      falseValues <- containerOfN[List, Seq[(CPath, JValue)]](falseSize, Gen.sequence[List, (CPath, JValue)](falseSchema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
+
+      //metaSchema <- metadataSchema(jschema)
       
       falseIds2 = falseIds -- ids     // distinct ids
     } yield {

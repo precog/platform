@@ -23,7 +23,7 @@ package jdbm3
 import com.precog.yggdrasil.table._
 import com.precog.util.ByteBufferPool
 
-import blueeyes.json.{ JPath, JPathIndex }
+import blueeyes.json.{ CPath, CPathIndex }
 
 import org.joda.time.DateTime
 
@@ -45,7 +45,7 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
   // This should generate some jpath ids, then generate CTypes for these.
   def genColumnRefs: Gen[List[ColumnRef]] = Gen.listOf(Gen.alphaStr filter (_.size > 0)) flatMap { paths =>
     Gen.sequence[List, List[ColumnRef]](paths.distinct.map { name =>
-      Gen.listOf(genCType) map { _.distinct map (ColumnRef(JPath(name), _)) }
+      Gen.listOf(genCType) map { _.distinct map (ColumnRef(CPath(name), _)) }
     }).map(_.flatten)
   }
 
@@ -74,7 +74,7 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
     }) map (_.flatten)
 
   def arrayColumnsFor(size: Int, refs: List[ColumnRef]): List[ArrayColumn[_]] =
-    refs map JDBMSlice.columnFor(JPath.Identity, size) map (_._2)
+    refs map JDBMSlice.columnFor(CPath.Identity, size) map (_._2)
 
   def verify(rows: List[List[CValue]], cols: List[Column]) = {
     rows.zipWithIndex foreach { case (values, row) =>
