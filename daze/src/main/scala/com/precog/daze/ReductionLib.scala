@@ -128,7 +128,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
             // for longs, we'll use a Boolean to track whether zmax was really
             // seen or not.
             var zmax = Long.MinValue
-            val seen = RangeUtil.loopDefined(range, col, i => {
+            val seen = RangeUtil.loopDefined(range, col, { i =>
               val z = col(i)
               if (z > zmax) zmax = z
             })
@@ -138,7 +138,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
             // since -inf is not a legal value, it's a great starting point for
             // finding the max because any legal value will be greater.
             var zmax = Double.NegativeInfinity
-            val seen = RangeUtil.loopDefined(range, col, i => {
+            val seen = RangeUtil.loopDefined(range, col, { i =>
               val z = col(i)
               if (z > zmax) zmax = z
             })
@@ -148,7 +148,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
             // we can just use a null BigDecimal to signal that we haven't
             // found a value yet.
             var zmax: BigDecimal = null
-            RangeUtil.loopDefined(range, col, i => {
+            RangeUtil.loopDefined(range, col, { i =>
               val z = col(i)
               if (zmax == null || z > zmax) zmax = z
             })
@@ -185,7 +185,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
             // for longs, we'll use a Boolean to track whether zmin was really
             // seen or not.
             var zmin = Long.MaxValue
-            val seen = RangeUtil.loopDefined(range, col, i => {
+            val seen = RangeUtil.loopDefined(range, col, { i =>
               val z = col(i)
               if (z < zmin) zmin = z
             })
@@ -195,7 +195,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
             // since +inf is not a legal value, it's a great starting point for
             // finding the min because any legal value will be less.
             var zmin = Double.PositiveInfinity
-            RangeUtil.loopDefined(range, col, i => {
+            RangeUtil.loopDefined(range, col, { i =>
               val z = col(i)
               if (z < zmin) zmin = z
             })
@@ -205,7 +205,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
             // we can just use a null BigDecimal to signal that we haven't
             // found a value yet.
             var zmin: BigDecimal = null
-            RangeUtil.loopDefined(range, col, i => {
+            RangeUtil.loopDefined(range, col, { i =>
               val z = col(i)
               if (zmin == null || z < zmin) zmin = z
             })
@@ -279,7 +279,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case col: LongColumn =>
             val ls = new LongAdder()
             var count = 0L
-            RangeUtil.loopDefined(range, col, i => {
+            RangeUtil.loopDefined(range, col, { i =>
                 ls.add(col(i))
                 count += 1L
             })
@@ -288,7 +288,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case col: DoubleColumn =>
             var count = 0L
             var t = BigDecimal(0)
-            RangeUtil.loopDefined(range, col, i => {
+            RangeUtil.loopDefined(range, col, { i =>
                 t += col(i)
                 count += 1L
             })
@@ -297,7 +297,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case col: NumColumn =>
             var count = 0L
             var t = BigDecimal(0)
-            RangeUtil.loopDefined(range, col, i => {
+            RangeUtil.loopDefined(range, col, { i =>
                 t += col(i)
                 count += 1L
             })
@@ -335,7 +335,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case col: LongColumn =>
             var prod = BigDecimal(1)
             var count = 0L
-            RangeUtil.loopDefined(range, col, i => {
+            RangeUtil.loopDefined(range, col, { i =>
                 prod *= col(i)
                 count += 1L
             })
@@ -344,7 +344,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case col: DoubleColumn =>
             var prod = BigDecimal(1)
             var count = 0L
-            RangeUtil.loopDefined(range, col, i => {
+            RangeUtil.loopDefined(range, col, { i =>
                 prod *= col(i)
                 count += 1L
             })
@@ -353,7 +353,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case col: NumColumn =>
             var prod = BigDecimal(1)
             var count = 0L
-            RangeUtil.loopDefined(range, col, i => {
+            RangeUtil.loopDefined(range, col, { i =>
                 prod *= col(i)
                 count += 1L
             })
@@ -389,21 +389,21 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
           case col: LongColumn =>
             val ls = new LongAdder()
-            val seen = RangeUtil.loopDefined(range, col, i => {
+            val seen = RangeUtil.loopDefined(range, col, { i =>
               ls.addSquare(col(i))
             })
             if (seen) Some(ls.total) else None
 
           case col: DoubleColumn =>
             var t = BigDecimal(0)
-            val seen = RangeUtil.loopDefined(range, col, i => {
+            val seen = RangeUtil.loopDefined(range, col, { i =>
               t += BigDecimal(col(i)) pow 2
             })
             if (seen) Some(t) else None
 
           case col: NumColumn =>
             var t = BigDecimal(0)
-            val seen = RangeUtil.loopDefined(range, col, i => {
+            val seen = RangeUtil.loopDefined(range, col, { i =>
               t += col(i) pow 2
             })
             if (seen) Some(t) else None
@@ -427,7 +427,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           var count = 0L
           var sum = new LongAdder()
           var sumsq = new LongAdder()
-          val seen = RangeUtil.loopDefined(range, col, i => {
+          val seen = RangeUtil.loopDefined(range, col, { i =>
               val z = col(i)
               count += 1
               sum.add(z)
@@ -440,7 +440,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           var count = 0L
           var sum = BigDecimal(0)
           var sumsq = BigDecimal(0)
-          val seen = RangeUtil.loopDefined(range, col, i => {
+          val seen = RangeUtil.loopDefined(range, col, { i =>
               val z = BigDecimal(col(i))
               count += 1
               sum += z
@@ -453,7 +453,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           var count = 0L
           var sum = BigDecimal(0)
           var sumsq = BigDecimal(0)
-          val seen = RangeUtil.loopDefined(range, col, i => {
+          val seen = RangeUtil.loopDefined(range, col, { i =>
               val z = col(i)
               count += 1
               sum += z
