@@ -155,7 +155,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     def intersect(set: Set[NodeSubset], requiredSorts: Map[MergeNode, Set[Seq[TicVar]]]): M[NodeSubset] = {
       if (set.size == 1) {
-        set.head.point[M]
+        for {
+          subset <- set.head.point[M]
+          //json <- subset.table.toJson
+          //_ = println("\n\nintersect of single-sorting node for groupId: " + subset.groupId + "\n" + JArray(json.toList))
+        } yield subset
       } else {
         val preferredKeyOrder: Seq[TicVar] = requiredSorts(set.head.node).groupBy(a => a).mapValues(_.size).maxBy(_._2)._1
 
@@ -163,7 +167,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
            sub => sub.copy(groupKeyTrans = sub.groupKeyTrans.alignTo(preferredKeyOrder))
         }
 
-        intersect(reindexedSubsets.head.idTrans, reindexedSubsets.map(_.table).toSeq: _*) map { joinedTable =>
+        for {
+          joinedTable <- intersect(reindexedSubsets.head.idTrans, reindexedSubsets.map(_.table).toSeq: _*) 
+          //json <- joinedTable.toJson
+          //_ = println("\n\njoined table in multiple-sorting node: " + reindexedSubsets.head.groupId + "\n" + JArray(json.toList))
+        } yield {
           // todo: make sortedByIdentities not a boolean flag, maybe wrap groupKeyPrefix in Option
           reindexedSubsets.head.copy(table = joinedTable, groupKeyPrefix = preferredKeyOrder, sortedByIdentities = true)
         }
@@ -266,7 +274,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           // Break the idents out into field "0", original data in "1"
           val splitIdentsTransSpec = OuterObjectConcat(WrapObject(identitySpec, "0"), WrapObject(Leaf(Source), "1"))
 
-          Table(transformStream(collapse, sortedTable.transform(splitIdentsTransSpec).slices)).transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
+          Table(transformStream(collapse, sortedTable.transform(splitIdentsTransSpec).compact(Leaf(Source)).slices)).transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
         }
       }
     }
@@ -1089,12 +1097,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
                 common map {
                   case (aSorted, bSorted) => 
-                    val alignedM = Table.align(aSorted.table, aSorted.sortedOn, bSorted.table, bSorted.sortedOn)
-                    
-                    alignedM map {
-                      case (aAligned, bAligned) => List(
-                        aSorted.copy(table = aAligned),
-                        bSorted.copy(table = bAligned)
+                    for {
+                      aligned <- Table.align(aSorted.table, aSorted.sortedOn, bSorted.table, bSorted.sortedOn)
+                    } yield {
+                      List(
+                        aSorted.copy(table = aligned._1),
+                        bSorted.copy(table = aligned._2)
                       )
                     }
                 }
@@ -1743,9 +1751,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         for {
           spanningGraphs <- minimizedSpanningGraphsM
           borgedGraphs <- spanningGraphs.map(Function.tupled(borg)).sequence
-        } yield {
-          crossAll(borgedGraphs)
-        }
+          // cross all of the disconnected subgraphs within a single universe
+          crossed = crossAll(borgedGraphs)
+          //json <- crossed.table.toJson
+          //_ = println("crossed universe: " + json.toList)
+        } yield crossed
       }.sequence
 
       for {

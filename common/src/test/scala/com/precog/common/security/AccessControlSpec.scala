@@ -190,8 +190,8 @@ class AccessControlUseCasesSpec extends Specification with UseCasesTokenManagerT
         mayAccess(customer.tid, "/friend", Set(friend.tid), ReadPermission) must beTrue
         mayAccess(customer.tid, "/friend", Set(friend.tid, customer.tid), ReadPermission) must beTrue
 
-        //mayAccess(customer.tid, "/friend", Set(addon.tid), ReadPermission) must beFalse
-        //mayAccess(customer.tid, "/friend", Set(friend.tid, customer.tid, addon.tid), ReadPermission) must beFalse
+        mayAccess(customer.tid, "/friend", Set(addon.tid), ReadPermission) must beFalse
+        mayAccess(customer.tid, "/friend", Set(friend.tid, customer.tid, addon.tid), ReadPermission) must beFalse
         
         mayAccess(customer.tid, "/stranger", Set(stranger.tid), ReadPermission) must beFalse
         mayAccess(customer.tid, "/stranger", Set(addon.tid), ReadPermission) must beFalse
