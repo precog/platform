@@ -1,13 +1,14 @@
-# demo-shard-v1 - ReportGrid demo shard service (v1)
+# shard-v1-demo4 - ReportGrid demo4 shard service (v1)
 #
 #
 
-description "demo-shard-v1 - ReportGrid demo shard service (v1)"
+description "shard-v1 - ReportGrid demo4 shard service (v1)"
 
 start on runlevel [2345]
 stop on runlevel [06]
 
-limit nofile 65535 65535
+limit nofile 100000 100000
+limit nproc 40000 40000
 
 respawn
 
@@ -16,10 +17,13 @@ pre-start script
 end script
 
 script
-  if [ -f /etc/default/demo-shard-v1 ]; then . /etc/default/demo-shard-v1; fi
-  su precog -s "/bin/bash" -c "/usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=/etc/precog/demo-shard-v1.logging.xml -jar /usr/share/java/demo-shard-v1.jar --configFile /etc/precog/demo-shard-v1.conf >> /var/log/precog/demo-shard-v1.stdout.log 2>&1"
+  if [ -f /etc/default/shard-v1-demo4 ]; then . /etc/default/shard-v1-demo4; fi
+  ulimit -n 100000
+  ulimit -u 40000
+  sudo -u precog /usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=/etc/precog/shard-v1-demo4.logging.xml -jar /usr/share/java/shard-v1-demo.jar --configFile /etc/precog/shard-v1-demo4.conf >> /var/log/precog/shard-v1-demo4.stdout.log 2>&1
 end script
 
 post-start script
-  echo `status demo-shard-v1 | egrep -o '[0-9]+$' | head -n1` > /var/run/precog/demo-shard-v1.pid
+  echo `status shard-v1-demo4 | egrep -o '[0-9]+$' | head -n1` > /var/run/precog/shard-v1-demo4.pid
 end script
+
