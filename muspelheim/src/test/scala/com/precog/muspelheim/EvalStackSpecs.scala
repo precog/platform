@@ -223,6 +223,106 @@ trait EvalStackSpecs extends Specification {
           obj must haveKey("count")
       }
     }
+
+    "perform filter based on rank" >> {
+      val input = """
+        clicks := //clicks
+
+        foo := solve 'userId
+          clicks.time where clicks.userId = 'userId
+
+        rank := std::stats::rank(foo)
+
+        foo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(//clicks.time)"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("//clicks.time") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
+
+    "perform filter on distinct set based on rank with a solve" >> {
+      val input = """
+        clicks := //clicks
+
+        foo := solve 'userId
+          clicks.time where clicks.userId = 'userId
+
+        distinctFoo := distinct(foo)
+
+        rank := std::stats::rank(distinctFoo)
+
+        distinctFoo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(distinct(//clicks.time))"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("distinct(//clicks.time)") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
+
+    "perform filter on distinct set based on rank without a solve" >> {
+      val input = """
+        clicks := //clicks
+
+        distinctFoo := distinct(clicks.time)
+
+        rank := std::stats::rank(distinctFoo)
+
+        distinctFoo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(distinct(//clicks.time))"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("distinct(//clicks.time)") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
+
+    "perform filter on new set based on rank without a solve" >> {
+      val input = """
+        clicks := //clicks
+
+        newFoo := new(clicks.time)
+
+        rank := std::stats::rank(newFoo)
+
+        newFoo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(//clicks.time)"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("//clicks.time") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
     
     "have the correct number of identities and values in a relate" >> {
       "with the sum plus the LHS" >> {
