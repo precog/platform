@@ -1,0 +1,6 @@
+/etc/precog/accounts-v1.conf=dev/accounts-v1.conf
+default=dev/accounts-v1.default
+init=dev/accounts-v1.init
+/etc/monit/conf.d/accounts-v1.monit=dev/accounts-v1.monit
+/etc/precog/accounts-v1.logging.xml=dev/accounts-v1.logging.xml
+postinstall=dev/postinstall.sh

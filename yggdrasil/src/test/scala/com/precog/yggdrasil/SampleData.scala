@@ -1,7 +1,5 @@
 package com.precog.yggdrasil
 
-import com.precog.common.VectorCase
-
 import akka.dispatch.Future
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
@@ -41,7 +39,7 @@ case class SampleData(data: Stream[JValue], schema: Option[(Int, JSchema)] = Non
 }
 
 object SampleData extends CValueGenerators {
-  def toRecord(ids: VectorCase[Long], jv: JValue): JValue = {
+  def toRecord(ids: Array[Long], jv: JValue): JValue = {
     JObject(Nil).set(JPath(".key"), JArray(ids.map(JNum(_)).toList)).set(JPath(".value"), jv)
   }
 
@@ -102,7 +100,7 @@ object SampleData extends CValueGenerators {
         SampleData(sampleData.data.sorted, sampleData.schema)
       }
     )
-  }
+  }  
   
   def shuffle(sample: Arbitrary[SampleData]): Arbitrary[SampleData] = {
     val gen =
