@@ -20,7 +20,7 @@ script
   if [ -f /etc/default/auth-v1-beta ]; then . /etc/default/auth-v1-beta; fi
   ulimit -n 100000
   ulimit -u 10000
-  sudo -u precog /usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=/etc/precog/auth-v1-beta.logging.xml -jar /usr/share/java/auth-v1.jar --configFile /etc/precog/auth-v1-beta.conf >> /var/log/precog/auth-v1-beta.stdout.log 2>&1
+  sudo -u precog /usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=/etc/precog/auth-v1-beta.logging.xml -jar /usr/share/java/auth-v1-beta.jar --configFile /etc/precog/auth-v1-beta.conf >> /var/log/precog/auth-v1-beta.stdout.log 2>&1
 end script
 
 post-start script
