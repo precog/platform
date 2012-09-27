@@ -108,7 +108,7 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
             exists(t.grants.map{ gid =>
               tokens.findGrant(gid).flatMap( _.map {
                 case g @ Grant(_, _, ReadPermission(p, o, _)) =>
-                  isValid(g).map { _ && p.equalOrChild(path) && (owner == o || owner == t.tid) }
+                  isValid(g).map { _ && p.equalOrChild(path) /*&& (owner == o || owner == t.tid)*/ }
                 case _ => M.point(false)
               }.getOrElse(M.point(false))
             )})
@@ -121,9 +121,9 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
           exists(t.grants.map{ gid =>
             tokens.findGrant(gid).flatMap( _.map { 
               case g @ Grant(_, _, ReducePermission(p, o, _)) =>
-                isValid(g).map { _ && p.equalOrChild(path) && (owner == o || owner == t.tid) }
+                isValid(g).map { _ && p.equalOrChild(path) /*&& (owner == o || owner == t.tid)*/ }
               case g @ Grant(_, _, ReadPermission(p, o, _)) =>
-                isValid(g).map { _ && p.equalOrChild(path) && (owner == o || owner == t.tid) }
+                isValid(g).map { _ && p.equalOrChild(path) /*&& (owner == o || owner == t.tid)*/ }
               case _ => M.point(false)
             }.getOrElse(M.point(false))
           )})
