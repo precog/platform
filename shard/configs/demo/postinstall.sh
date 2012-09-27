@@ -45,7 +45,7 @@ done
 sleep 30
 
 echo "Running health checks"
-for PORT in 30156; do
+for PORT in 30150 30152 30154 30156; do
     curl -v -f -G "http://localhost:$PORT/blueeyes/services/quirrel/v1/health"
     echo ""
 done
