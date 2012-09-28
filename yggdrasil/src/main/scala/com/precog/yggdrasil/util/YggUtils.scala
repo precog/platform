@@ -509,17 +509,24 @@ object ZookeeperTools extends Command {
     }
     config.checkpointUpdate.foreach {
       case (path, data) =>
-        JsonParser.parse(data).validated[YggCheckpoint] match {
+        val newCheckpoint = if (data == "initial") {
+          """{"offset":0,"messageClock":[[0,0]]}"""
+        } else {
+          data
+        }
+        
+        println("Loading initial checkpoint: " + newCheckpoint)
+        JsonParser.parse(newCheckpoint).validated[YggCheckpoint] match {
           case Success(_) =>
             if (! client.exists(path)) {
               client.createPersistent(path, true)
             }
 
             client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
-              def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
+              def update(cur: Array[Byte]): Array[Byte] = newCheckpoint.getBytes 
             })  
 
-            println("Checkpoint updated: %s with %s".format(path, data))
+            println("Checkpoint updated: %s with %s".format(path, newCheckpoint))
           case Failure(e) => println("Invalid json for checkpoint: %s".format(e))
       }
     }

@@ -261,13 +261,13 @@ trait Evaluator[M[+_]] extends DAG
         case dag.New(_, parent) => {
           for {
             pendingTable <- prepareEval(parent, splits)
-            spec = TableTransSpec.makeTransSpec(
+            idSpec = TableTransSpec.makeTransSpec(
               Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
             
             tableM2 = for {
               table <- pendingTable.table
-              transformed = table.transform(liftToValues(pendingTable.trans))  //TODO `transformed` is not used
-            } yield table.transform(spec)
+              forced <- table.transform(liftToValues(pendingTable.trans)).transform(idSpec).force
+            } yield forced
           } yield PendingTable(tableM2, graph, TransSpec1.Id)
         }
         
@@ -342,9 +342,8 @@ trait Evaluator[M[+_]] extends DAG
               table = pendingTable.transform(liftToValues(pending.trans))
               sorted <- table.sort(valueSpec, SortAscending)
               distinct = sorted.distinct(valueSpec) 
-            } yield {
-              distinct.transform(idSpec)
-            }
+              forced <- distinct.transform(idSpec).force
+            } yield forced
             PendingTable(result, graph, TransSpec1.Id)
           }
         }
