@@ -23,6 +23,9 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
   def tic_a = CPathField("tic_a")
   def tic_b = CPathField("tic_b")
 
+  def tic_aj = JPathField("tic_a")
+  def tic_bj = JPathField("tic_b")
+
   val eq12F1 = new CF1P({
     case c: DoubleColumn => new Map1Column(c) with BoolColumn {
       def apply(row: Int) = c(row) == 12.0d
@@ -65,7 +68,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
           case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
         }
 
-        val histoKey = keyIter.head(tic_a)
+        val histoKey = keyIter.head(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
       
@@ -126,7 +129,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
           case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
         }
         
-        val histoKey = keyIter.head(tic_a)
+        val histoKey = keyIter.head(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
       
@@ -182,7 +185,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
           case JObject(JField("tic_a", JNum(i)) :: Nil) => set.map(_ % 2) must contain(i)
         }
 
-        val histoKey = keyIter.head(tic_a)
+        val histoKey = keyIter.head(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
         
@@ -248,8 +251,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         keyJson must haveSize(1)
         keyJson.head must beLike {
           case obj: JObject => {
-            val a = obj(tic_a)
-            val b = obj(tic_b)
+            val a = obj(tic_aj)
+            val b = obj(tic_bj)
             
             a must beLike {
               case JNum(i) if i == 12 => {
@@ -310,8 +313,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         keyJson must haveSize(1)
         keyJson.head must beLike {
           case obj: JObject => {
-            val a = obj(tic_a)
-            val b = obj(tic_b)
+            val a = obj(tic_aj)
+            val b = obj(tic_bj)
         
             if (a == JNothing) {
               b must beLike {
@@ -387,7 +390,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyJson must haveSize(1)
         
-        (keyJson.head(tic_b)) must beLike {
+        (keyJson.head(tic_bj)) must beLike {
           case JNum(i) => i must_== 7
         }
         
@@ -434,7 +437,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyJson must haveSize(1)
 
-        (keyJson.head(tic_b)) must beLike {
+        (keyJson.head(tic_bj)) must beLike {
           case JNothing =>
             (gs1Json.head \ "a") must beLike {
               case JNum(i) if i == 12 => ok
@@ -509,7 +512,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyJson must haveSize(1)
         
-        val JNum(keyBigInt) = keyJson.head(tic_a)
+        val JNum(keyBigInt) = keyJson.head(tic_aj)
 
         forall(gs1Json) { row =>
           row must beLike {
@@ -522,7 +525,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
         fromJson(Stream(
           JObject(
-            JField("key", keyJson.head(tic_a)) ::
+            JField("key", keyJson.head(tic_aj)) ::
             JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
       }
     }
@@ -586,8 +589,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyJson must haveSize(1)
 
-        val JNum(keyBigInt) = keyJson.head(tic_a)
-        keyJson.head(tic_b) must beLike {
+        val JNum(keyBigInt) = keyJson.head(tic_aj)
+        keyJson.head(tic_bj) must beLike {
           case JNum(_) => ok
         }
         
@@ -608,7 +611,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         
         fromJson(Stream(
           JObject(
-            JField("key", JArray(keyJson.head(tic_a) :: keyJson.head(tic_b) :: Nil)) ::
+            JField("key", JArray(keyJson.head(tic_aj) :: keyJson.head(tic_bj) :: Nil)) ::
             JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
       }
     }
@@ -686,8 +689,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyJson must haveSize(1)
         
-        val ka @ JNum(kaValue) = keyJson.head(tic_a)
-        val kb = keyJson.head(tic_b)
+        val ka @ JNum(kaValue) = keyJson.head(tic_aj)
+        val kb = keyJson.head(tic_bj)
         
         gs1Json must not(beEmpty)
         gs2Json must not(beEmpty)
@@ -704,7 +707,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         
         fromJson(Stream(
           JObject(
-            JField("key", keyJson.head(tic_a)) ::
+            JField("key", keyJson.head(tic_aj)) ::
             JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
       }
     }
@@ -827,8 +830,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
       keyJson must not(beEmpty)
       
-      val a = keyJson.head(tic_a)
-      val b = keyJson.head(tic_b)
+      val a = keyJson.head(tic_aj)
+      val b = keyJson.head(tic_bj)
       
       a mustNotEqual JNothing
       b mustNotEqual JNothing

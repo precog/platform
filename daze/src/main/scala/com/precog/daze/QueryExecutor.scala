@@ -3,8 +3,8 @@ package daze
 
 import com.precog.yggdrasil.TableModule
 import com.precog.common._
+import com.precog.common.json._
 
-import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 
 import akka.actor.ActorSystem
@@ -27,7 +27,7 @@ object EvaluationError {
 
 case class QueryOptions(
   page: Option[(Int, Int)] = None,
-  sortOn: List[JPath] = Nil,
+  sortOn: List[CPath] = Nil,
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending)
 
 trait QueryExecutor[M[+_]] {
