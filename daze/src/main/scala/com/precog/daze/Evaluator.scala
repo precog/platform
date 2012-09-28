@@ -612,19 +612,19 @@ trait Evaluator[M[+_]] extends DAG
   
         // begin: annoyance with Scala's lousy pattern matcher
         case Join(_, op, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
-          val f1 = op2(op).f2.partialRight(value)
-          
-          for {
-            pendingTable <- prepareEval(left, splits)
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, f1))
+          op2ForBinOp(op) map { _.f2.partialRight(value) } map { f1 =>
+            for {
+              pendingTable <- prepareEval(left, splits)
+            } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, f1))
+          } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         
         case Join(_, op, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
-          val f1 = op2(op).f2.partialLeft(value)
-          
-          for {
-            pendingTable <- prepareEval(right, splits)
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, f1))
+          op2ForBinOp(op) map { _.f2.partialLeft(value) } map { f1 =>
+            for {
+              pendingTable <- prepareEval(right, splits)
+            } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, f1))
+          } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         // end: annoyance
         
@@ -1081,30 +1081,6 @@ trait Evaluator[M[+_]] extends DAG
     case Neg => Unary.Neg
   }
   
-  private def op2(op: BinaryOperation): Op2 = op match {
-    case BuiltInFunction2Op(op2) => op2
-    
-    case instructions.Add => Infix.Add
-    case instructions.Sub => Infix.Sub
-    case instructions.Mul => Infix.Mul
-    case instructions.Div => Infix.Div
-    case instructions.Mod => Infix.Mod
-    
-    case instructions.Lt => Infix.Lt
-    case instructions.LtEq => Infix.LtEq
-    case instructions.Gt => Infix.Gt
-    case instructions.GtEq => Infix.GtEq
-    
-    case instructions.Eq | instructions.NotEq => sys.error("assertion error")
-    
-    case instructions.Or => Infix.Or
-    case instructions.And => Infix.And
-    
-    case instructions.WrapObject | instructions.JoinObject |
-         instructions.JoinArray | instructions.ArraySwap |
-         instructions.DerefObject | instructions.DerefArray => sys.error("assertion error")
-  }
-  
   private def transFromBinOp[A <: SourceType](op: BinaryOperation)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = op match {
     case Eq => trans.Equal(left, right)
     case NotEq => trans.Map1(trans.Equal(left, right), op1(Comp).f1)
@@ -1114,7 +1090,7 @@ trait Evaluator[M[+_]] extends DAG
     case instructions.ArraySwap => sys.error("nothing happens")
     case DerefObject => DerefObjectDynamic(left, right)
     case DerefArray => DerefArrayDynamic(left, right)
-    case _ => trans.Map2(left, right, op2(op).f2)
+    case _ => trans.Map2(left, right, op2ForBinOp(op).get.f2)     // if this fails, we're missing a case above
   }
 
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
