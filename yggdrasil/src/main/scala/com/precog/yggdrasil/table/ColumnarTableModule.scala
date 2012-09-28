@@ -1083,7 +1083,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         
         for {
           sorts <- sortPairs
-          //_ = sorts.map(println)
+          //_ = println("sorts: " + System.currentTimeMillis) 
           groupedSubsets <- {
             val edgeAlignments = spanningGraph.edges flatMap {
               case MergeEdge(a, b) =>
@@ -1100,6 +1100,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   case (aSorted, bSorted) => 
                     for {
                       aligned <- Table.align(aSorted.table, aSorted.sortedOn, bSorted.table, bSorted.sortedOn)
+                      //_ = println("aligned: " + System.currentTimeMillis)
                     } yield {
                       List(
                         aSorted.copy(table = aligned._1),
@@ -1747,15 +1748,19 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                               for (intersected <- alignment.values.toStream.map(intersect(_, requiredSorts)).sequence)
                                 yield (spanningGraph, intersected.toSet, requiredSorts)
                           }.sequence
+          //_ = println("intersected: " + System.currentTimeMillis)
         } yield intersected
 
         for {
           spanningGraphs <- minimizedSpanningGraphsM
+          //_ = println("spanned: " + System.currentTimeMillis)
           borgedGraphs <- spanningGraphs.map(Function.tupled(borg)).sequence
+          //_ = println("borged: " + System.currentTimeMillis)
           // cross all of the disconnected subgraphs within a single universe
           crossed = crossAll(borgedGraphs)
           //json <- crossed.table.toJson
           //_ = println("crossed universe: " + json.toList)
+          //_ = println("crossed: " + System.currentTimeMillis)
         } yield crossed
       }.sequence
 
@@ -1765,6 +1770,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         //_ = println("omniverse: \n" + json.mkString("\n"))
         sorted <- omniverse.table.compact(groupKeySpec(Source)).sort(groupKeySpec(Source))
         result <- sorted.partitionMerge(DerefObjectStatic(Leaf(Source), CPathField("groupKeys"))) { partition =>
+          //print(".")
           val groupKeyTrans = OuterObjectConcat(
             omniverse.groupKeys.zipWithIndex map { case (ticvar, i) =>
               WrapObject(
@@ -2307,26 +2313,28 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = {
       // Find the first element that compares LT
       @tailrec def findEnd(compare: Int => Ordering, imin: Int, imax: Int): Int = {
-        (compare(imin), compare(imax)) match {
-          case (LT, LT) => 
-            // Min index is first LT
-            imin
-          case (EQ, EQ) =>
-            // The slice only holds EQ values
+        val minOrd = compare(imin)
+        if (minOrd eq EQ) {
+          val maxOrd = compare(imax) 
+          if (maxOrd eq EQ) {
             imax + 1
-          case (EQ, LT) =>
+          } else if (maxOrd eq LT) {
             val imid = imin + ((imax - imin) / 2)
-            
-            compare(imid) match {
-              case LT =>
-                findEnd(compare, imin, imid - 1)
-              case EQ => 
-                findEnd(compare, imid, imax - 1)
-              case GT => 
-                sys.error("Inputs to partitionMerge not sorted.")
+            val midOrd = compare(imid)
+            if (midOrd eq LT) {
+              findEnd(compare, imin, imid - 1)
+            } else if (midOrd eq EQ) {
+              findEnd(compare, imid, imax - 1)
+            } else {
+              sys.error("Inputs to partitionMerge not sorted.")
             }
-          case _ =>
+          } else {
             sys.error("Inputs to partitionMerge not sorted.")
+          }
+        } else if ((minOrd eq LT) && (compare(imax) eq LT)) {
+          imin
+        } else {
+          sys.error("Inputs to partitionMerge not sorted.")
         }
       }
 
@@ -2336,8 +2344,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             val headComparator = comparatorGen(head)
             val spanEnd = findEnd(headComparator, 0, head.size - 1)
             if (spanEnd < head.size) {
-              val (prefix, _) = head.split(spanEnd) 
-              prefix :: StreamT.empty[M, Slice]
+              head.take(spanEnd) :: StreamT.empty[M, Slice]
             } else {
               head :: subTable(comparatorGen, tail)
             }
@@ -2347,16 +2354,15 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         }
       }
 
-      def dropAndSplit(comparatorGen: Slice => (Int => Ordering), slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT.wrapEffect {
+      def dropAndSplit(comparatorGen: Slice => (Int => Ordering), slices: StreamT[M, Slice], spanStart: Int): StreamT[M, Slice] = StreamT.wrapEffect {
         slices.uncons map {
           case Some((head, tail)) =>
             val headComparator = comparatorGen(head)
-            val spanEnd = findEnd(headComparator, 0, head.size - 1)
+            val spanEnd = findEnd(headComparator, spanStart, head.size - 1)
             if (spanEnd < head.size) {
-              val (_, suffix) = head.split(spanEnd) 
-              stepPartition(suffix, tail)
+              stepPartition(head, spanEnd, tail)
             } else {
-              dropAndSplit(comparatorGen, tail)
+              dropAndSplit(comparatorGen, tail, 0)
             }
             
           case None =>
@@ -2364,20 +2370,20 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         }
       }
 
-      def stepPartition(head: Slice, tail: StreamT[M, Slice]): StreamT[M, Slice] = {
+      def stepPartition(head: Slice, spanStart: Int, tail: StreamT[M, Slice]): StreamT[M, Slice] = {
         val comparatorGen = (s: Slice) => {
           val rowComparator = Slice.rowComparatorFor(head, s) {
             (s0: Slice) => s0.columns.keys.collect({ case ref @ ColumnRef(CPath(CPathField("0"), _ @ _*), _) => ref }).toList.sorted
           }
 
-          (i: Int) => rowComparator.compare(0, i)
+          (i: Int) => rowComparator.compare(spanStart, i)
         }
 
-        val groupTable = Table(subTable(comparatorGen, head :: tail)).transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
+        val groupTable = Table(subTable(comparatorGen, head.drop(spanStart) :: tail)).transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
         val groupedM: M[Table] = f(groupTable)
         val groupedStream: StreamT[M, Slice] = StreamT.wrapEffect(groupedM.map(_.slices))
 
-        groupedStream ++ dropAndSplit(comparatorGen, head :: tail)
+        groupedStream ++ dropAndSplit(comparatorGen, head :: tail, spanStart)
       }
 
       val keyTrans = OuterObjectConcat(
@@ -2387,7 +2393,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       this.transform(keyTrans).compact(TransSpec1.Id).slices.uncons map {
         case Some((head, tail)) =>
-          Table(stepPartition(head, tail))
+          Table(stepPartition(head, 0, tail))
         case None =>
           Table.empty
       }
