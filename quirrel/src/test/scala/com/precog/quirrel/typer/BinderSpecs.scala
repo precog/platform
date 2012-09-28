@@ -529,6 +529,13 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.errors must beEmpty
     }
     
+    "forward binding through metadescent" in {
+      val e @ Let(_, _, _, _, MetaDescent(_, d: Dispatch, _)) = parse("a := 42 a@b")
+      d.binding mustEqual LetBinding(e)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+    
     "forward binding through dereference" in {
       val e @ Let(_, _, _, _, Deref(_, _, d: Dispatch)) = parse("a := 42 1[a]")
       d.binding mustEqual LetBinding(e)

@@ -26,6 +26,7 @@ import bytecode.Library
 import yggdrasil._
 import yggdrasil.table._
 
+import com.precog.common.json._
 import com.precog.util.IdGen
 import com.precog.util._
 
@@ -904,7 +905,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
             }
           }
           
-          ((finalValue, finalCount), Map(ColumnRef(JPath.Identity, CNum) -> ArrayNumColumn(defined, acc)))
+          ((finalValue, finalCount), Map(ColumnRef(CPath.Identity, CNum) -> ArrayNumColumn(defined, acc)))
         }
       }
     }
@@ -987,7 +988,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
             }
           }
 
-          ((finalValue, finalCountEach, finalCountTotal), Map(ColumnRef(JPath.Identity, CNum) -> ArrayNumColumn(defined, acc)))
+          ((finalValue, finalCountEach, finalCountTotal), Map(ColumnRef(CPath.Identity, CNum) -> ArrayNumColumn(defined, acc)))
         }
       }
     }

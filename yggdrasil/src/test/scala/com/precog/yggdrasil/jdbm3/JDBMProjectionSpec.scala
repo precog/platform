@@ -34,6 +34,7 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 
 import com.precog.common.{Path,VectorCase}
+import com.precog.common.json._
 
 import java.io.File
 
@@ -50,7 +51,7 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging with
       size       <- chooseNum(1,1000)//00) TODO bump back up to 100000 when memory isn't an issue.
       width      <- chooseNum(1,20) // TODO bump back up to 40 when bytebuffer overflows handled.
       types      <- listOfN(width, genCType)
-      descriptor <- ProjectionDescriptor(1, types.toList.map { tpe => ColumnDescriptor(Path("/test"), JPath.Identity, tpe, Authorities(Set.empty)) })
+      descriptor <- ProjectionDescriptor(1, types.toList.map { tpe => ColumnDescriptor(Path("/test"), CPath.Identity, tpe, Authorities(Set.empty)) })
       val typeGens: Seq[Gen[CValue]] = types.map(genCValue)
       data       <- genColumn(size, sequence[Array, CValue](typeGens))
     } yield ProjectionData(descriptor, data)

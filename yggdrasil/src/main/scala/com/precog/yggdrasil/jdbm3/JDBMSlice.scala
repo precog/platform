@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package jdbm3
 
+import com.precog.common.json._
 import com.weiglewilczek.slf4s.Logging
 
 import org.joda.time.DateTime
@@ -65,7 +66,7 @@ object JDBMSlice {
     (firstKey, lastKey, rows)
   }
 
-  def columnFor(prefix: JPath, sliceSize: Int)(ref: ColumnRef): (ColumnRef, ArrayColumn[_]) =
+  def columnFor(prefix: CPath, sliceSize: Int)(ref: ColumnRef): (ColumnRef, ArrayColumn[_]) =
     (ref.copy(selector = (prefix \ ref.selector)), (ref.ctype match {
       case CString      => ArrayStrColumn.empty(sliceSize)
       case CBoolean     => ArrayBoolColumn.empty()

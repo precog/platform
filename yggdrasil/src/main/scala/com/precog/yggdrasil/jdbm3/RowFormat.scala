@@ -22,9 +22,9 @@ package jdbm3
 
 import scalaz._
 
+import com.precog.common.json._
 import com.precog.yggdrasil.table._
 import com.precog.util._
-import blueeyes.json.JPath
 
 import org.joda.time.DateTime
 
@@ -343,14 +343,14 @@ trait SortingRowFormat extends RowFormat with StdCodecs with RowFormatSupport {
   abstract override implicit lazy val BigDecimalCodec: Codec[BigDecimal] =
     Codec.CompositeCodec[Double, BigDecimal, BigDecimal](Codec[Double], super.BigDecimalCodec, bd => (bd.toDouble, bd), (_, bd) => bd)
 
-  @transient lazy val selectors: List[(JPath, List[CType])] = {
-    val refs: Map[JPath, Seq[ColumnRef]] = columnRefs.groupBy(_.selector)
+  @transient lazy val selectors: List[(CPath, List[CType])] = {
+    val refs: Map[CPath, Seq[ColumnRef]] = columnRefs.groupBy(_.selector)
     (columnRefs map (_.selector)).distinct.map(selector => (selector, refs(selector).map(_.ctype).toList))(collection.breakOut)
   }
 
-  private def zipWithSelectors[A](xs: Seq[A]): List[(JPath, Seq[(A, CType)])] = {
+  private def zipWithSelectors[A](xs: Seq[A]): List[(CPath, Seq[(A, CType)])] = {
     @tailrec
-    def zip(zipped: List[(JPath, Seq[(A, CType)])], right: Seq[A], sels: List[(JPath, List[CType])]): List[(JPath, Seq[(A, CType)])] = sels match {
+    def zip(zipped: List[(CPath, Seq[(A, CType)])], right: Seq[A], sels: List[(CPath, List[CType])]): List[(CPath, Seq[(A, CType)])] = sels match {
       case Nil => zipped.reverse
       case (path, cTypes) :: sels =>
         val (head, tail) = right splitAt cTypes.size

@@ -1510,7 +1510,7 @@ trait EvalStackSpecs extends Specification {
            //richie1/test 
         """.stripMargin
 
-        eval(input) must not(throwA[Throwable])
+        eval(input) must haveSize(100)
       }
 
       "handle query on empty array" >> {

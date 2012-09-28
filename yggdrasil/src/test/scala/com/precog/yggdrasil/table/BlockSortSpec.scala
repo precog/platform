@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common.json._
 import com.precog.bytecode._
 import com.precog.common._
 import com.precog.util._
@@ -82,8 +83,10 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     }.sortBy({ v => { JArray(sortKeys.map(_.extract(v \ "value")).toList ::: List(v \ "globalId")).asInstanceOf[JValue] }       
     })(desiredJValueOrder).map(_.delete(globalIdPath).get).toList
 
+    val cSortKeys = sortKeys map { CPath(_) }
+
     val resultM = for {
-      sorted <- module.fromSample(sample).sort(module.sortTransspec(sortKeys: _*), sortOrder)
+      sorted <- module.fromSample(sample).sort(module.sortTransspec(cSortKeys: _*), sortOrder)
       json <- sorted.toJson
     } yield (json, sorted)
 

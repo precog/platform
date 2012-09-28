@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.{Path, VectorCase}
+import com.precog.common.json._
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
@@ -99,42 +100,42 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     
     def constBoolean(v: collection.Set[CBoolean]): Table = {
       val column = ArrayBoolColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constLong(v: collection.Set[CLong]): Table = {
       val column = ArrayLongColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constDouble(v: collection.Set[CDouble]): Table = {
       val column = ArrayDoubleColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constDecimal(v: collection.Set[CNum]): Table = {
       val column = ArrayNumColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constString(v: collection.Set[CString]): Table = {
       val column = ArrayStrColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constDate(v: collection.Set[CDate]): Table =  {
       val column = ArrayDateColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(JPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
     }
 
     def constNull: Table = 
-      Table(Slice(Map(ColumnRef(JPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice], Some(1))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice], Some(1))
 
     def constEmptyObject: Table = 
-      Table(Slice(Map(ColumnRef(JPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice], Some(1))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice], Some(1))
 
     def constEmptyArray: Table = 
-      Table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice], Some(1))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice], Some(1))
 
     def transformStream[A](sliceTransform: SliceTransform1[A], slices: StreamT[M, Slice]): StreamT[M, Slice] = {
       def stream(state: A, slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT(
@@ -193,7 +194,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           def genComparator(sl1: Slice, sl2: Slice) = Slice.rowComparatorFor(sl1, sl2) {
             // only need to compare identities (field "0" of the sorted table) between projections
             // TODO: Figure out how we might do this directly with the identitySpec
-            slice => slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(JPathField("0") :: Nil) }).toList.sorted
+            slice => slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(CPathField("0") :: Nil) }).toList.sorted
           }
           
           def boundaryCollapse(prevSlice: Slice, prevStart: Int, curSlice: Slice): (BitSet, Int) = {
@@ -274,7 +275,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           // Break the idents out into field "0", original data in "1"
           val splitIdentsTransSpec = OuterObjectConcat(WrapObject(identitySpec, "0"), WrapObject(Leaf(Source), "1"))
 
-          Table(transformStream(collapse, sortedTable.transform(splitIdentsTransSpec).compact(Leaf(Source)).slices)).transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
+          Table(transformStream(collapse, sortedTable.transform(splitIdentsTransSpec).compact(Leaf(Source)).slices)).transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
         }
       }
     }
@@ -283,7 +284,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     // Grouping Support //
     ///////////////////////
   
-    type TicVar = JPathField
+    type TicVar = CPathField
 
     case class MergeAlignment(left: MergeSpec, right: MergeSpec, keys: Seq[TicVar])
     
@@ -457,7 +458,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId], size: Option[Long] = None)
 
     object BorgResult {
-      val allFields = Set(JPathField("groupKeys"), JPathField("identities"), JPathField("values"))
+      val allFields = Set(CPathField("groupKeys"), CPathField("identities"), CPathField("values"))
 
       def apply(nodeSubset: NodeSubset): BorgResult = {
         assert(!nodeSubset.sortedByIdentities)
@@ -475,9 +476,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                    nodeSubset.size)
       }
 
-      def groupKeySpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("groupKeys"))
-      def identSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("identities"))
-      def valueSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), JPathField("values"))
+      def groupKeySpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), CPathField("groupKeys"))
+      def identSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), CPathField("identities"))
+      def valueSpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), CPathField("values"))
 
       def wrapGroupKeySpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "groupKeys")
       def wrapIdentSpec[A <: SourceType](source: TransSpec[A]) = WrapObject(source, "identities")
@@ -868,7 +869,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     object GroupKeyTrans {
       // 999999 ticvars should be enough for anybody.
       def keyName(i: Int) = "%06d".format(i)
-      def keyVar(i: Int): TicVar = JPathField(keyName(i))
+      def keyVar(i: Int): TicVar = CPathField(keyName(i))
 
       def reindex[A <: SourceType](spec: TransSpec[A], from: Int, to: Int) = WrapObject(DerefObjectStatic(spec, keyVar(from)), keyName(to))
 
@@ -1006,7 +1007,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             // Get mappings from each ticvar to columns that define it.
             val ticVarColumns =
               cols.toList.collect { 
-                case (ref @ ColumnRef(JPath(JPathIndex(1), JPathField(ticVarIndex), _ @ _*), _), col) => (ticVarIndex, col)
+                case (ref @ ColumnRef(CPath(CPathIndex(1), CPathField(ticVarIndex), _ @ _*), _), col) => (ticVarIndex, col)
               }.groupBy(_._1).mapValues(_.unzip._2)
 
             if (ticVarColumns.keySet.map(_.toInt) == keyIndices) {
@@ -1536,7 +1537,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 groupKeySpec(SourceLeft) +: neededRight.zipWithIndex.map { 
                   case (key, i) =>
                     WrapObject(
-                      DerefObjectStatic(groupKeySpec(SourceRight), JPathField(GroupKeyTrans.keyName(rightKeyMap(key)))),
+                      DerefObjectStatic(groupKeySpec(SourceRight), CPathField(GroupKeyTrans.keyName(rightKeyMap(key)))),
                       GroupKeyTrans.keyName(i + leftJoinable.groupKeys.size)
                     )
                 }: _*
@@ -1546,7 +1547,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             val cogroupBySpec = OuterObjectConcat(
               (0 until commonPrefix.size) map { i =>
                 WrapObject(
-                  DerefObjectStatic(groupKeySpec(Source), JPathField(GroupKeyTrans.keyName(i))),
+                  DerefObjectStatic(groupKeySpec(Source), CPathField(GroupKeyTrans.keyName(i))),
                   GroupKeyTrans.keyName(i)
                 )
               }: _*
@@ -1684,7 +1685,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               rightKeys.find(_._1 == leftKeys(leftIndex)).map {
                 case (_, rightIndex) => {
                   GroupKeyTrans.reindex(
-                    DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
+                    DerefObjectStatic(Leaf(Source), CPathField("groupKeys")),
                     rightIndex,
                     leftIndex
                   )
@@ -1696,7 +1697,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               rightKeys.find(_._1 == extraRight(extraIndex)).map {
                 case (_, rightIndex) => {
                   GroupKeyTrans.reindex(
-                    DerefObjectStatic(Leaf(Source), JPathField("groupKeys")),
+                    DerefObjectStatic(Leaf(Source), CPathField("groupKeys")),
                     rightIndex,
                     leftKeys.length + extraIndex
                   )
@@ -1707,8 +1708,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
           val remapFullSpec = OuterObjectConcat(
             WrapObject(remapKeyTrans, "groupKeys"),
-            WrapObject(DerefObjectStatic(Leaf(Source), JPathField("identities")), "identities"),
-            WrapObject(DerefObjectStatic(Leaf(Source), JPathField("values")), "values")
+            WrapObject(DerefObjectStatic(Leaf(Source), CPathField("identities")), "identities"),
+            WrapObject(DerefObjectStatic(Leaf(Source), CPathField("values")), "values")
           )
 
           (right.table.transform(remapFullSpec), left.groupKeys ++ extraRight.toSeq)
@@ -1763,11 +1764,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         //json <- omniverse.table.toJson
         //_ = println("omniverse: \n" + json.mkString("\n"))
         sorted <- omniverse.table.compact(groupKeySpec(Source)).sort(groupKeySpec(Source))
-        result <- sorted.partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("groupKeys"))) { partition =>
+        result <- sorted.partitionMerge(DerefObjectStatic(Leaf(Source), CPathField("groupKeys"))) { partition =>
           val groupKeyTrans = OuterObjectConcat(
             omniverse.groupKeys.zipWithIndex map { case (ticvar, i) =>
               WrapObject(
-                DerefObjectStatic(groupKeySpec(Source), JPathField(GroupKeyTrans.keyName(i))),
+                DerefObjectStatic(groupKeySpec(Source), CPathField(GroupKeyTrans.keyName(i))),
                 ticvar.name
               )
             } : _*
@@ -1777,18 +1778,18 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             for {
               grouped <- omniverse.groups.map { groupId =>
                            val recordTrans = OuterObjectConcat(
-                             WrapObject(DerefObjectStatic(identSpec(Source), JPathField(groupId.shows)), "0"),
-                             WrapObject(DerefObjectStatic(valueSpec(Source), JPathField(groupId.shows)), "1")
+                             WrapObject(DerefObjectStatic(identSpec(Source), CPathField(groupId.shows)), "0"),
+                             WrapObject(DerefObjectStatic(valueSpec(Source), CPathField(groupId.shows)), "1")
                            )
 
-                           val sortByTrans = DerefObjectStatic(Leaf(Source), JPathField("0"))
+                           val sortByTrans = DerefObjectStatic(Leaf(Source), CPathField("0"))
                            // transform to get just the information related to the particular groupId,
                            for {
                              partitionSorted <- partition.transform(recordTrans).sort(sortByTrans, unique = true)
                              //json <- partitionSorted.toJson
                              //_ = println("group " + groupId + " partition: " + json.mkString("\n"))
                            } yield {
-                             groupId -> partitionSorted.transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
+                             groupId -> partitionSorted.transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
                            }
                          }.sequence
             } yield grouped.toMap
@@ -2366,13 +2367,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def stepPartition(head: Slice, tail: StreamT[M, Slice]): StreamT[M, Slice] = {
         val comparatorGen = (s: Slice) => {
           val rowComparator = Slice.rowComparatorFor(head, s) {
-            (s0: Slice) => s0.columns.keys.collect({ case ref @ ColumnRef(JPath(JPathField("0"), _ @ _*), _) => ref }).toList.sorted
+            (s0: Slice) => s0.columns.keys.collect({ case ref @ ColumnRef(CPath(CPathField("0"), _ @ _*), _) => ref }).toList.sorted
           }
 
           (i: Int) => rowComparator.compare(0, i)
         }
 
-        val groupTable = Table(subTable(comparatorGen, head :: tail)).transform(DerefObjectStatic(Leaf(Source), JPathField("1")))
+        val groupTable = Table(subTable(comparatorGen, head :: tail)).transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
         val groupedM: M[Table] = f(groupTable)
         val groupedStream: StreamT[M, Slice] = StreamT.wrapEffect(groupedM.map(_.slices))
 

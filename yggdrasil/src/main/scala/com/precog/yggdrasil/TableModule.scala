@@ -19,9 +19,9 @@
  */
 package com.precog.yggdrasil
 
+import com.precog.common.json._
 import com.precog.common.Path
 import com.precog.bytecode.JType
-import blueeyes.json.{JPath, JPathField, JPathIndex}
 import blueeyes.json.JsonAST._
 
 import collection.Set
@@ -31,11 +31,11 @@ import scalaz.Monad
 
 object TableModule {
   object paths {
-    val Key   = JPathField("key")
-    val Value = JPathField("value")
-    val Group = JPathField("group")
-    val SortKey = JPathField("sortkey")
-    val SortGlobalId = JPathField("globalid")
+    val Key   = CPathField("key")
+    val Value = CPathField("value")
+    val Group = CPathField("group")
+    val SortKey = CPathField("sortkey")
+    val SortGlobalId = CPathField("globalid")
   }  
 
   sealed trait Definedness
@@ -105,7 +105,7 @@ trait TableModule[M[+_]] extends FNModule {
 
     case class OuterObjectConcat[+A <: SourceType](objects: TransSpec[A]*) extends TransSpec[A] //done
 
-    case class ObjectDelete[+A <: SourceType](source: TransSpec[A], fields: Set[JPathField]) extends TransSpec[A]
+    case class ObjectDelete[+A <: SourceType](source: TransSpec[A], fields: Set[CPathField]) extends TransSpec[A]
     
     case class ArrayConcat[+A <: SourceType](arrays: TransSpec[A]*) extends TransSpec[A] //done
     
@@ -117,11 +117,13 @@ trait TableModule[M[+_]] extends FNModule {
     
     case class WrapArray[+A <: SourceType](source: TransSpec[A]) extends TransSpec[A] //done
     
-    case class DerefObjectStatic[+A <: SourceType](source: TransSpec[A], field: JPathField) extends TransSpec[A] //done
+    case class DerefObjectStatic[+A <: SourceType](source: TransSpec[A], field: CPathField) extends TransSpec[A] //done
+    
+    case class DerefMetadataStatic[+A <: SourceType](source: TransSpec[A], field: CPathMeta) extends TransSpec[A]
     
     case class DerefObjectDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
     
-    case class DerefArrayStatic[+A <: SourceType](source: TransSpec[A], element: JPathIndex) extends TransSpec[A] //done
+    case class DerefArrayStatic[+A <: SourceType](source: TransSpec[A], element: CPathIndex) extends TransSpec[A] //done
     
     case class DerefArrayDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
     
@@ -225,9 +227,9 @@ trait TableModule[M[+_]] extends FNModule {
 
       val Id = Leaf(Source)
 
-      val DerefArray0 = DerefArrayStatic(Leaf(Source), JPathIndex(0))
-      val DerefArray1 = DerefArrayStatic(Leaf(Source), JPathIndex(1))
-      val DerefArray2 = DerefArrayStatic(Leaf(Source), JPathIndex(2))
+      val DerefArray0 = DerefArrayStatic(Leaf(Source), CPathIndex(0))
+      val DerefArray1 = DerefArrayStatic(Leaf(Source), CPathIndex(1))
+      val DerefArray2 = DerefArrayStatic(Leaf(Source), CPathIndex(2))
 
       val PruneToKeyValue = InnerObjectConcat(
         WrapObject(SourceKey.Single, paths.Key.name), 
@@ -242,9 +244,9 @@ trait TableModule[M[+_]] extends FNModule {
       val LeftId = Leaf(SourceLeft)
       val RightId = Leaf(SourceRight)
 
-      def DerefArray0(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(0))
-      def DerefArray1(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(1))
-      def DerefArray2(source: Source2) = DerefArrayStatic(Leaf(source), JPathIndex(2))
+      def DerefArray0(source: Source2) = DerefArrayStatic(Leaf(source), CPathIndex(0))
+      def DerefArray1(source: Source2) = DerefArrayStatic(Leaf(source), CPathIndex(1))
+      def DerefArray2(source: Source2) = DerefArrayStatic(Leaf(source), CPathIndex(2))
 
       val DeleteKeyValueLeft = ObjectDelete(Leaf(SourceLeft), Set(paths.Key, paths.Value))
       val DeleteKeyValueRight = ObjectDelete(Leaf(SourceRight), Set(paths.Key, paths.Value))
@@ -258,7 +260,7 @@ trait TableModule[M[+_]] extends FNModule {
      * @param key The key which will be used by `merge` to access this particular tic-variable (which may be refined by more than one `GroupKeySpecSource`)
      * @param spec A transform which defines this key part as a function of the source table in `GroupingSource`.
      */
-    case class GroupKeySpecSource(key: JPathField, spec: TransSpec1) extends GroupKeySpec
+    case class GroupKeySpecSource(key: CPathField, spec: TransSpec1) extends GroupKeySpec
     
     case class GroupKeySpecAnd(left: GroupKeySpec, right: GroupKeySpec) extends GroupKeySpec
     case class GroupKeySpecOr(left: GroupKeySpec, right: GroupKeySpec) extends GroupKeySpec

@@ -19,13 +19,14 @@
  */
 package com.precog.yggdrasil
 
+import com.precog.common.json._
+import com.precog.common.json.CPath.{CPathDecomposer, CPathExtractor}
 import com.precog.common._
 import com.precog.util.IOUtils
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.Printer.{pretty,render}
-import blueeyes.json.JPath.{JPathDecomposer, JPathExtractor}
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
@@ -117,7 +118,7 @@ object Authorities extends AuthoritiesSerialization {
   val None = Authorities(Set())
 }
 
-case class ColumnDescriptor(path: Path, selector: JPath, valueType: CType, authorities: Authorities) {
+case class ColumnDescriptor(path: Path, selector: CPath, valueType: CType, authorities: Authorities) {
   lazy val hash = {
     var hash = 1
     hash = hash * 31 + path.hashCode
@@ -148,13 +149,13 @@ trait ColumnDescriptorSerialization {
   implicit val ColumnDescriptorExtractor : Extractor[ColumnDescriptor] = new Extractor[ColumnDescriptor] with ValidatedExtraction[ColumnDescriptor] {
     override def validated(obj : JValue) : Validation[Error,ColumnDescriptor] = 
       ((obj \ "path").validated[Path] |@|
-       (obj \ "selector").validated[JPath] |@|
+       (obj \ "selector").validated[CPath] |@|
        (obj \ "valueType").validated[CType] |@|
        (obj \ "authorities").validated[Authorities]).apply(ColumnDescriptor(_,_,_,_))
   }
 }
 
-object ColumnDescriptor extends ColumnDescriptorSerialization with ((Path, JPath, CType, Authorities) => ColumnDescriptor) {
+object ColumnDescriptor extends ColumnDescriptorSerialization with ((Path, CPath, CType, Authorities) => ColumnDescriptor) {
   implicit object briefShow extends Show[ColumnDescriptor] {
     override def shows(d: ColumnDescriptor) = {
       "%s::%s (%s)".format(d.path.path, d.selector.toString, d.valueType.toString)
@@ -171,7 +172,7 @@ object ColumnDescriptor extends ColumnDescriptorSerialization with ((Path, JPath
 case class ProjectionDescriptor(identities: Int, columns: List[ColumnDescriptor]) {
   lazy val selectors = columns.map(_.selector).toSet
 
-  def columnAt(path: Path, selector: JPath) = columns.find(col => col.path == path && col.selector == selector)
+  def columnAt(path: Path, selector: CPath) = columns.find(col => col.path == path && col.selector == selector)
 
   def satisfies(col: ColumnDescriptor) = columns.contains(col)
 }

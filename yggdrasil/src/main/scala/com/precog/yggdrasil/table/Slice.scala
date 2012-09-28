@@ -20,9 +20,13 @@
 package com.precog.yggdrasil
 package table
 
+import util.CPathUtils
+
 import com.precog.common.VectorCase
 import com.precog.bytecode._
 import com.precog.util._
+
+import com.precog.common.json._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -96,7 +100,7 @@ trait Slice { source =>
     } toSet
   }
 
-  lazy val valueColumns: Set[Column] = columns collect { case (ColumnRef(JPath.Identity, _), col) => col } toSet
+  lazy val valueColumns: Set[Column] = columns collect { case (ColumnRef(CPath.Identity, _), col) => col } toSet
   
   def isDefinedAt(row: Int) = columns.values.exists(_.isDefinedAt(row))
 
@@ -105,12 +109,12 @@ trait Slice { source =>
 
     val columns: Map[ColumnRef, Column] = {
       val resultColumns = for {
-        col <- source.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
+        col <- source.columns collect { case (ref, col) if ref.selector == CPath.Identity => col }
         result <- f(col)
       } yield result
 
       resultColumns.groupBy(_.tpe) map { 
-        case (tpe, cols) => (ColumnRef(JPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+        case (tpe, cols) => (ColumnRef(CPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
       }
     }
   }
@@ -141,37 +145,37 @@ trait Slice { source =>
     val columns = {
       Map(
         value match {
-          case CString(s) => (ColumnRef(JPath.Identity, CString), new StrColumn {
+          case CString(s) => (ColumnRef(CPath.Identity, CString), new StrColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = s
           })
-          case CBoolean(b) => (ColumnRef(JPath.Identity, CBoolean), new BoolColumn {
+          case CBoolean(b) => (ColumnRef(CPath.Identity, CBoolean), new BoolColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = b
           })
-          case CLong(l) => (ColumnRef(JPath.Identity, CLong), new LongColumn {
+          case CLong(l) => (ColumnRef(CPath.Identity, CLong), new LongColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = l
           })
-          case CDouble(d) => (ColumnRef(JPath.Identity, CDouble), new DoubleColumn {
+          case CDouble(d) => (ColumnRef(CPath.Identity, CDouble), new DoubleColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = d
           })
-          case CNum(n) => (ColumnRef(JPath.Identity, CNum), new NumColumn {
+          case CNum(n) => (ColumnRef(CPath.Identity, CNum), new NumColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = n
           })
-          case CDate(d) => (ColumnRef(JPath.Identity, CDate), new DateColumn {
+          case CDate(d) => (ColumnRef(CPath.Identity, CDate), new DateColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = d
           })
-          case CNull => (ColumnRef(JPath.Identity, CNull), new NullColumn {
+          case CNull => (ColumnRef(CPath.Identity, CNull), new NullColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
-          case CEmptyObject => (ColumnRef(JPath.Identity, CEmptyObject), new EmptyObjectColumn {
+          case CEmptyObject => (ColumnRef(CPath.Identity, CEmptyObject), new EmptyObjectColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
-          case CEmptyArray => (ColumnRef(JPath.Identity, CEmptyArray), new EmptyArrayColumn {
+          case CEmptyArray => (ColumnRef(CPath.Identity, CEmptyArray), new EmptyArrayColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
           case CUndefined => sys.error("Cannot define a constant undefined value")
@@ -180,37 +184,37 @@ trait Slice { source =>
     }
   }
 
-  def deref(node: JPathNode): Slice = {
+  def deref(node: CPathNode): Slice = {
     new Slice {
       val size = source.size
       val columns = source.columns.collect {
-        case (ColumnRef(JPath(`node`, xs @ _*), ctype), col) => (ColumnRef(JPath(xs: _*), ctype), col)
+        case (ColumnRef(CPath(`node`, xs @ _*), ctype), col) => (ColumnRef(CPath(xs: _*), ctype), col)
       }
     }
   }
 
-  def wrap(wrapper: JPathNode): Slice = {
+  def wrap(wrapper: CPathNode): Slice = {
     new Slice {
       val size = source.size
       val columns = source.columns.map {
-        case (ColumnRef(JPath(nodes @ _*), ctype), col) => (ColumnRef(JPath(wrapper +: nodes : _*), ctype), col)
+        case (ColumnRef(CPath(nodes @ _*), ctype), col) => (ColumnRef(CPath(wrapper +: nodes : _*), ctype), col)
       }
     }
   }
 
   def delete(jtype: JType): Slice = new Slice {
     def fixArrays(columns: Map[ColumnRef, Column]): Map[ColumnRef, Column] = {
-      columns.toSeq.sortBy(_._1).foldLeft((Map.empty[Vector[JPathNode], Int], Map.empty[ColumnRef, Column])) {
+      columns.toSeq.sortBy(_._1).foldLeft((Map.empty[Vector[CPathNode], Int], Map.empty[ColumnRef, Column])) {
         case ((arrayPaths, acc), (ColumnRef(jpath, ctype), col)) => 
-          val (arrayPaths0, nodes) = jpath.nodes.foldLeft((arrayPaths, Vector.empty[JPathNode])) {
-            case ((ap, nodes), JPathIndex(_)) => 
+          val (arrayPaths0, nodes) = jpath.nodes.foldLeft((arrayPaths, Vector.empty[CPathNode])) {
+            case ((ap, nodes), CPathIndex(_)) => 
               val idx = ap.getOrElse(nodes, -1) + 1
-              (ap + (nodes -> idx), nodes :+ JPathIndex(idx))
+              (ap + (nodes -> idx), nodes :+ CPathIndex(idx))
 
             case ((ap, nodes), fieldNode) => (ap, nodes :+ fieldNode)
           }
 
-          (arrayPaths0, acc + (ColumnRef(JPath(nodes: _*), ctype) -> col))
+          (arrayPaths0, acc + (ColumnRef(CPath(nodes: _*), ctype) -> col))
       }._2
     }
     
@@ -222,11 +226,11 @@ trait Slice { source =>
     )
   }
 
-  def deleteFields(prefixes: scala.collection.Set[JPathField]) = {
+  def deleteFields(prefixes: scala.collection.Set[CPathField]) = {
     new Slice {
       val size = source.size
       val columns = source.columns filterNot {
-        case (ColumnRef(JPath(head @ JPathField(_), _ @ _*), _), _) => prefixes contains head
+        case (ColumnRef(CPath(head @ CPathField(_), _ @ _*), _), _) => prefixes contains head
         case _ => false
       }
     }
@@ -239,7 +243,7 @@ trait Slice { source =>
     }
   }
 
-  def nest(selectorPrefix: JPath) = new Slice {
+  def nest(selectorPrefix: CPath) = new Slice {
     val size = source.size
     val columns = source.columns map { case (ColumnRef(selector, ctype), v) => ColumnRef(selectorPrefix \ selector, ctype) -> v }
   }
@@ -247,13 +251,13 @@ trait Slice { source =>
   def arraySwap(index: Int) = new Slice {
     val size = source.size
     val columns = source.columns.collect {
-      case (ColumnRef(JPath(JPathIndex(0), xs @ _*), ctype), col) => 
-        (ColumnRef(JPath(JPathIndex(index) +: xs : _*), ctype), col)
+      case (ColumnRef(CPath(CPathIndex(0), xs @ _*), ctype), col) => 
+        (ColumnRef(CPath(CPathIndex(index) +: xs : _*), ctype), col)
 
-      case (ColumnRef(JPath(JPathIndex(`index`), xs @ _*), ctype), col) => 
-        (ColumnRef(JPath(JPathIndex(0) +: xs : _*), ctype), col)
+      case (ColumnRef(CPath(CPathIndex(`index`), xs @ _*), ctype), col) => 
+        (ColumnRef(CPath(CPathIndex(0) +: xs : _*), ctype), col)
 
-      case c @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), ctype), col) => c
+      case c @ (ColumnRef(CPath(CPathIndex(i), xs @ _*), ctype), col) => c
     }
   }
 
@@ -273,7 +277,7 @@ trait Slice { source =>
     }
   }
 
-  def map(from: JPath, to: JPath)(f: CF1): Slice = new Slice {
+  def map(from: CPath, to: CPath)(f: CF1): Slice = new Slice {
     val size = source.size
 
     val columns: Map[ColumnRef, Column] = {
@@ -288,7 +292,7 @@ trait Slice { source =>
     }
   }
 
-  def map2(froml: JPath, fromr: JPath, to: JPath)(f: CF2): Slice = new Slice {
+  def map2(froml: CPath, fromr: CPath, to: CPath)(f: CF2): Slice = new Slice {
     val size = source.size
 
     val columns: Map[ColumnRef, Column] = {
@@ -410,7 +414,7 @@ trait Slice { source =>
     }
   }
 
-  def sortBy(refs: VectorCase[JPath]): Slice = {
+  def sortBy(refs: VectorCase[CPath]): Slice = {
     val sortedIndices: Array[Int] = {
       import java.util.Arrays
       val arr = Array.range(0, source.size)
@@ -481,7 +485,9 @@ trait Slice { source =>
   def toJson(row: Int): Option[JValue] = {
     columns.foldLeft[JValue](JNothing) {
       case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
-        jv.unsafeInsert(selector, col.jValue(row))
+        CPathUtils.cPathToJPaths(selector, col.cValue(row)).foldLeft(jv) {
+          case (jv, (path, value)) => jv.unsafeInsert(path, value.toJValue)
+        }
 
       case (jv, _) => jv
     } match {

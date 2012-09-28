@@ -17,30 +17,24 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil.util
+package com.precog.yggdrasil
+package util
 
-import com.precog.common.json.CPath
-import com.precog.yggdrasil.{ IdSource, TableModule, YggConfigComponent, CLong }
-import com.precog.yggdrasil.table._
+import com.precog.common.json._
+import blueeyes.json._
 
-import scala.collection.immutable.BitSet
+object CPathUtils {
+  def cPathToJPaths(cpath: CPath, value: CValue): List[(JPath, CValue)] = (cpath.nodes, value) match {
+    case (CPathField(name) :: tail, _) => addComponent(JPathField(name), cPathToJPaths(CPath(tail), value))
+    case (CPathIndex(i) :: tail, _) => addComponent(JPathIndex(i), cPathToJPaths(CPath(tail), value))
+    // case (CPathArray :: tail, CArray(elems, CArrayType(elemType))) =>
+    //  elems.zipWithIndex flatMap { case (e, i) => addComponent(JPathIndex(i), cPathToJPaths(CPath(tail), elemType(e)) }
+    // case (CPathMeta(_) :: _, _) => Nil
+    case (Nil, _) => List((JPath.Identity, value))
+    case (path, _) => sys.error("Bad news, bob! " + path)
+  }
 
-trait IdSourceConfig {
-  def idSource: IdSource
-}
-
-trait IdSourceScannerModule[M[+_]] extends TableModule[M] with YggConfigComponent {
-  type YggConfig <: IdSourceConfig
-  
-  def freshIdScanner = new CScanner {
-    type A = Unit
-    def init = ()
-    
-    def scan(a: Unit, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-      val defined = BitSet(range filter { i => cols.exists(_._2.isDefinedAt(i)) }: _*)
-      val values = range map { _ => yggConfig.idSource.nextId() } toArray
-      
-      ((), Map(ColumnRef(CPath.Identity, CLong) -> ArrayLongColumn(defined, values)))
-    }
+  private def addComponent(c: JPathNode, xs: List[(JPath, CValue)]): List[(JPath, CValue)] = xs map {
+    case (path, value) => (JPath(c :: path.nodes), value)
   }
 }

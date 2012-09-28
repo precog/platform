@@ -20,9 +20,11 @@
 package com.precog.yggdrasil
 package actor
 
+import util.CPathUtils
+
+import com.precog.common.json._
 import com.precog.common._
 
-import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 
 import scala.annotation.tailrec
@@ -33,8 +35,11 @@ case class ProjectionData(descriptor: ProjectionDescriptor, values: Seq[CValue],
   def toJValue: JValue = {
     assert(descriptor.columns.size == values.size)
     (descriptor.columns zip values).foldLeft[JValue](JObject(Nil)) {
-      case (acc, (colDesc, cv)) => 
-        acc.set(colDesc.selector, cv.toJValue)
+      case (acc, (colDesc, cv)) => {
+        CPathUtils.cPathToJPaths(colDesc.selector, cv).foldLeft(acc) {
+          case (acc, (path, value)) => acc.set(path, value.toJValue)
+        }
+      }
     }
   }
 }
@@ -80,7 +85,7 @@ trait RoutingTable {
 class SingleColumnProjectionRoutingTable extends RoutingTable {
   final def routeEvent(msg: EventMessage): Seq[ProjectionData] = {
     msg.event.data.flattenWithPath map { 
-      case (selector, value) => toProjectionData(msg, selector, value)
+      case (selector, value) => toProjectionData(msg, CPath(selector), value)
     }
   }
 
@@ -91,14 +96,17 @@ class SingleColumnProjectionRoutingTable extends RoutingTable {
   }
   
   @inline
-  private final def toProjectionData(msg: EventMessage, selector: JPath, value: JValue): ProjectionData = {
+  private final def toProjectionData(msg: EventMessage, selector: CPath, value: JValue): ProjectionData = {
     val authorities = Set.empty + msg.event.tokenId
     val colDesc = ColumnDescriptor(msg.event.path, selector, CType.forJValue(value).get, Authorities(authorities))
 
     val projDesc = ProjectionDescriptor(1, List(colDesc))
 
     val values = Vector1(CType.toCValue(value))
-    val metadata = msg.event.metadata.get(selector).getOrElse(Set.empty).asInstanceOf[Set[Metadata]] :: Nil
+    val metadata: List[Set[Metadata]] = CPathUtils.cPathToJPaths(selector, values.head) map {
+      case (path, _) => 
+        msg.event.metadata.get(path).getOrElse(Set()).asInstanceOf[Set[Metadata]]       // and now I hate my life...
+    }
 
     ProjectionData(projDesc, values, metadata)
   }

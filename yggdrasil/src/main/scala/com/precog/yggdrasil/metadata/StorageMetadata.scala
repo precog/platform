@@ -20,13 +20,13 @@
 package com.precog.yggdrasil
 package metadata 
 
+import com.precog.common.json._
 import actor._
 
 import com.precog.common._
 import com.precog.common.security._
 
 import blueeyes.bkka._
-import blueeyes.json.JPath
  
 import akka.actor._
 import akka.pattern.ask
@@ -49,9 +49,9 @@ trait StorageMetadata[M[+_]] {
   implicit def M: Monad[M]
 
   def findChildren(path: Path): M[Set[Path]]
-  def findSelectors(path: Path): M[Set[JPath]]
-  def findProjections(path: Path, selector: JPath): M[Map[ProjectionDescriptor, ColumnMetadata]]
-  def findPathMetadata(path: Path, selector: JPath): M[PathRoot]
+  def findSelectors(path: Path): M[Set[CPath]]
+  def findProjections(path: Path, selector: CPath): M[Map[ProjectionDescriptor, ColumnMetadata]]
+  def findPathMetadata(path: Path, selector: CPath): M[PathRoot]
 
   def findProjections(path: Path): M[Map[ProjectionDescriptor, ColumnMetadata]] = {
     findSelectors(path) flatMap { selectors => 
@@ -65,10 +65,10 @@ trait StorageMetadata[M[+_]] {
     }
   }
 
-  def findProjections(path: Path, selector: JPath, valueType: CType): M[Map[ProjectionDescriptor, ColumnMetadata]] = 
+  def findProjections(path: Path, selector: CPath, valueType: CType): M[Map[ProjectionDescriptor, ColumnMetadata]] = 
     findProjections(path, selector) map { m => m.filter(typeFilter(path, selector, valueType) _ ) }
 
-  def typeFilter(path: Path, selector: JPath, valueType: CType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
+  def typeFilter(path: Path, selector: CPath, valueType: CType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
     t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType == valueType )
   }
 }
@@ -96,7 +96,7 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
     }
   }
 
-  def findSelectors(path: Path): M[Set[JPath]] = {
+  def findSelectors(path: Path): M[Set[CPath]] = {
     metadata.findSelectors(path) flatMap { selectors =>
       selectors traverse { selector =>
         findProjections(path, selector) map { result =>
@@ -106,7 +106,7 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
     }
   }
 
-  def findProjections(path: Path, selector: JPath): M[Map[ProjectionDescriptor, ColumnMetadata]] = {
+  def findProjections(path: Path, selector: CPath): M[Map[ProjectionDescriptor, ColumnMetadata]] = {
     metadata.findProjections(path, selector) flatMap { pmap =>
       traverseFilter(pmap) {
         case (key, value) =>
@@ -119,7 +119,7 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
     }
   }
   
-  def findPathMetadata(path: Path, selector: JPath): M[PathRoot] = {
+  def findPathMetadata(path: Path, selector: CPath): M[PathRoot] = {
     // TODO: This algorithm can be implemented in a single pass without all this nonsense.
     def restrictAccess(children: Set[PathMetadata]): M[Set[PathMetadata]] = {
       val mapped = children map {
@@ -173,16 +173,16 @@ class ActorStorageMetadata(actor: ActorRef)(implicit val asyncContext: Execution
     case e => logger.error("Error finding children for " + path, e) 
   }
 
-  def findSelectors(path: Path) = (actor ? FindSelectors(path)).mapTo[Set[JPath]] onFailure { 
+  def findSelectors(path: Path) = (actor ? FindSelectors(path)).mapTo[Set[CPath]] onFailure { 
     case e => logger.error("Error finding selectors for " + path, e) 
   }
 
-  def findProjections(path: Path, selector: JPath) = 
+  def findProjections(path: Path, selector: CPath) = 
     (actor ? FindDescriptors(path, selector)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]] onFailure { 
       case e => logger.error("Error finding projections for " + (path, selector), e) 
     }
   
-  def findPathMetadata(path: Path, selector: JPath) = {
+  def findPathMetadata(path: Path, selector: CPath) = {
     logger.debug("Querying actor for path metadata")
     (actor ? FindPathMetadata(path, selector)).mapTo[PathRoot] onFailure { 
       case e => logger.error("Error finding pathmetadata for " + (path, selector), e) 

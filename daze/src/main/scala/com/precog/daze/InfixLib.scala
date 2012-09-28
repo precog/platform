@@ -56,7 +56,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
       case instructions.And => Some(Infix.And)
       
       case instructions.WrapObject | instructions.JoinObject |
-      instructions.JoinArray | instructions.ArraySwap |
+      instructions.JoinArray | instructions.ArraySwap | instructions.DerefMetadata |
       instructions.DerefObject | instructions.DerefArray => None
     }
   }

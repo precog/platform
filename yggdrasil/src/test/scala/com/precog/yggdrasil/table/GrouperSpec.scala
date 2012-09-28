@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common.json._
 import com.precog.yggdrasil.util.IdSourceConfig
 import com.precog.yggdrasil.test._
 
@@ -38,8 +39,11 @@ import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 
 trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
-  def tic_a = JPathField("tic_a")
-  def tic_b = JPathField("tic_b")
+  def tic_a = CPathField("tic_a")
+  def tic_b = CPathField("tic_b")
+
+  def tic_aj = JPathField("tic_a")
+  def tic_bj = JPathField("tic_b")
 
   val eq12F1 = new CF1P({
     case c: DoubleColumn => new Map1Column(c) with BoolColumn {
@@ -83,7 +87,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
           case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
         }
 
-        val histoKey = keyIter.head(tic_a)
+        val histoKey = keyIter.head(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
       
@@ -144,7 +148,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
           case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
         }
         
-        val histoKey = keyIter.head(tic_a)
+        val histoKey = keyIter.head(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
       
@@ -200,7 +204,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
           case JObject(JField("tic_a", JNum(i)) :: Nil) => set.map(_ % 2) must contain(i)
         }
 
-        val histoKey = keyIter.head(tic_a)
+        val histoKey = keyIter.head(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
         
@@ -254,8 +258,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(TransSpec1.Id), groupId,
       GroupKeySpecAnd(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val result = Table.merge(spec) { (key, map) =>
       for {
@@ -266,8 +270,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         keyJson must haveSize(1)
         keyJson.head must beLike {
           case obj: JObject => {
-            val a = obj(tic_a)
-            val b = obj(tic_b)
+            val a = obj(tic_aj)
+            val b = obj(tic_bj)
             
             a must beLike {
               case JNum(i) if i == 12 => {
@@ -316,8 +320,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(TransSpec1.Id), groupId,
       GroupKeySpecOr(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val result = Table.merge(spec) { (key, map) =>
       for {
@@ -328,8 +332,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         keyJson must haveSize(1)
         keyJson.head must beLike {
           case obj: JObject => {
-            val a = obj(tic_a)
-            val b = obj(tic_b)
+            val a = obj(tic_aj)
+            val b = obj(tic_bj)
         
             if (a == JNothing) {
               b must beLike {
@@ -393,9 +397,9 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(TransSpec1.Id), groupId,
       GroupKeySpecAnd(
-        GroupKeySpecSource(JPathField("extra"),
-          Filter(Map1(DerefObjectStatic(SourceValue.Single, JPathField("a")), eq12F1), Map1(DerefObjectStatic(SourceValue.Single, JPathField("a")), eq12F1))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(CPathField("extra"),
+          Filter(Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1), Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val result = Table.merge(spec) { (key, map) =>
       for {
@@ -405,7 +409,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyJson must haveSize(1)
         
-        (keyJson.head(tic_b)) must beLike {
+        (keyJson.head(tic_bj)) must beLike {
           case JNum(i) => i must_== 7
         }
         
@@ -440,9 +444,9 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(SourceValue.Single), groupId,
       GroupKeySpecOr(
-        GroupKeySpecSource(JPathField("extra"),
-          Filter(Map1(DerefObjectStatic(SourceValue.Single, JPathField("a")), eq12F1), Map1(DerefObjectStatic(SourceValue.Single, JPathField("a")), eq12F1))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(CPathField("extra"),
+          Filter(Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1), Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val result = Table.merge(spec) { (key, map) =>
       for {
@@ -452,7 +456,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyJson must haveSize(1)
 
-        (keyJson.head(tic_b)) must beLike {
+        (keyJson.head(tic_bj)) must beLike {
           case JNothing =>
             (gs1Json.head \ "a") must beLike {
               case JNum(i) if i == 12 => ok
@@ -527,7 +531,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyJson must haveSize(1)
         
-        val JNum(keyBigInt) = keyJson.head(tic_a)
+        val JNum(keyBigInt) = keyJson.head(tic_aj)
 
         forall(gs1Json) { row =>
           row must beLike {
@@ -540,7 +544,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
         fromJson(Stream(
           JObject(
-            JField("key", keyJson.head(tic_a)) ::
+            JField("key", keyJson.head(tic_aj)) ::
             JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
       }
     }
@@ -580,13 +584,13 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table1,
       SourceKey.Single, Some(SourceValue.Single), groupId1,
       GroupKeySpecAnd(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
       
     val spec2 = GroupingSource(
       table2,
       SourceKey.Single, Some(SourceValue.Single), groupId2,
-      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))))
+      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))))
       
     val intersection = GroupingAlignment(
       DerefObjectStatic(Leaf(Source), tic_a),
@@ -604,8 +608,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyJson must haveSize(1)
 
-        val JNum(keyBigInt) = keyJson.head(tic_a)
-        keyJson.head(tic_b) must beLike {
+        val JNum(keyBigInt) = keyJson.head(tic_aj)
+        keyJson.head(tic_bj) must beLike {
           case JNum(_) => ok
         }
         
@@ -626,7 +630,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         
         fromJson(Stream(
           JObject(
-            JField("key", JArray(keyJson.head(tic_a) :: keyJson.head(tic_b) :: Nil)) ::
+            JField("key", JArray(keyJson.head(tic_aj) :: keyJson.head(tic_bj) :: Nil)) ::
             JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
       }
     }
@@ -680,13 +684,13 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table1,
       SourceKey.Single, Some(SourceValue.Single), groupId1,
       GroupKeySpecOr(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
       
     val spec2 = GroupingSource(
       table2,
       SourceKey.Single, Some(SourceValue.Single), groupId2,
-      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))))
+      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))))
       
     val intersection = GroupingAlignment(
       DerefObjectStatic(Leaf(Source), tic_a),
@@ -704,8 +708,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyJson must haveSize(1)
         
-        val ka @ JNum(kaValue) = keyJson.head(tic_a)
-        val kb = keyJson.head(tic_b)
+        val ka @ JNum(kaValue) = keyJson.head(tic_aj)
+        val kb = keyJson.head(tic_bj)
         
         gs1Json must not(beEmpty)
         gs2Json must not(beEmpty)
@@ -722,7 +726,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         
         fromJson(Stream(
           JObject(
-            JField("key", keyJson.head(tic_a)) ::
+            JField("key", keyJson.head(tic_aj)) ::
             JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
       }
     }
@@ -817,18 +821,18 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       fromJson(foo.toStream),
       SourceKey.Single, Some(SourceValue.Single), fooGroup,
       GroupKeySpecAnd(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val barSpec = GroupingSource(
       fromJson(bar.toStream),
       SourceKey.Single, Some(SourceValue.Single), barGroup,
-      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))))
+      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))))
         
     val bazSpec = GroupingSource(
       fromJson(baz.toStream),
       SourceKey.Single, Some(SourceValue.Single), bazGroup,
-      GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b"))))
+      GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b"))))
         
     val spec = GroupingAlignment(
       DerefObjectStatic(Leaf(Source), tic_b),
@@ -845,8 +849,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
       keyJson must not(beEmpty)
       
-      val a = keyJson.head(tic_a)
-      val b = keyJson.head(tic_b)
+      val a = keyJson.head(tic_aj)
+      val b = keyJson.head(tic_bj)
       
       a mustNotEqual JNothing
       b mustNotEqual JNothing
@@ -991,6 +995,3 @@ object GrouperSpec extends TableModuleSpec[YId] with GrouperSpec[YId] with YIdIn
     }
   }
 }
-
-
-

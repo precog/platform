@@ -21,14 +21,13 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.{MetadataStats,Path,VectorCase}
+import com.precog.common.json._
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
 import com.precog.util._
 import Schema._
 import metadata._
-
-import blueeyes.json.{JPath,JPathField,JPathIndex}
 
 import java.io.File
 import java.util.SortedMap
@@ -261,7 +260,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           val init = 0l
           def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
             val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
-            (a + range.end + 1, cols + (ColumnRef(JPath(JPathIndex(1)), CLong) -> globalIdColumn))
+            (a + range.end + 1, cols + (ColumnRef(CPath(CPathIndex(1)), CLong) -> globalIdColumn))
           }
         }
       )
@@ -289,7 +288,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       // we need a custom row comparator that ignores the global ID introduced to prevent elimination of
       // duplicate rows in the write to JDBM
       def buildRowComparator(lkey: Slice, rkey: Slice) = {
-        Slice.rowComparatorFor(lkey.deref(JPathIndex(0)), rkey.deref(JPathIndex(0))) {
+        Slice.rowComparatorFor(lkey.deref(CPathIndex(0)), rkey.deref(CPathIndex(0))) {
           _.columns.keys.toList.sorted 
         }
       }
@@ -705,7 +704,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           for (cellOptions <- cellsMs.sequence) yield {
             mergeProjections(sortOrder, cellOptions.flatMap(a => a)) { slice => 
               // only need to compare on the group keys (0th element of resulting table) between projections
-              slice.columns.keys.collect({ case ref @ ColumnRef(JPath(JPathIndex(0), _ @ _*), _) => ref}).toList.sorted
+              slice.columns.keys.collect({ case ref @ ColumnRef(CPath(CPathIndex(0), _ @ _*), _) => ref}).toList.sorted
             }
           }
         )
@@ -751,7 +750,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     // In order to get a size, we pre-run the metadata fetch
     for {
       paths          <- pathsM
-      projectionData <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
+      projectionData <- (paths map { path => loadable(metadataView, path, CPath.Identity, tpe) }).sequence map { _.flatten }
       val (coveringProjections, colMetadata) = projectionData.unzip
       val maxSize = colMetadata.toList.flatMap { _.values.flatMap { _.values.collect { case stats: MetadataStats => stats.count } } }.sorted.lastOption
     } yield {
@@ -762,7 +761,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           } yield {
             mergeProjections(SortAscending, // Projections are always sorted in ascending identity order
                              cellOptions.flatMap(a => a)) { slice => 
-              slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(JPathField("key") :: Nil) }).toList.sorted
+              slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(CPathField("key") :: Nil) }).toList.sorted
             }
           }
         )
@@ -860,7 +859,7 @@ object BlockStoreColumnarTableModule extends Logging {
    * Determine the set of all projections that could potentially provide columns
    * representing the requested dataset.
    */
-  protected def loadable[M[+_]: Monad](metadataView: StorageMetadata[M], path: Path, prefix: JPath, jtpe: JType): M[Set[(ProjectionDescriptor, ColumnMetadata)]] = {
+  protected def loadable[M[+_]: Monad](metadataView: StorageMetadata[M], path: Path, prefix: CPath, jtpe: JType): M[Set[(ProjectionDescriptor, ColumnMetadata)]] = {
     jtpe match {
       case p: JPrimitiveType => ctypes(p).map(metadataView.findProjections(path, prefix, _)).sequence map { _.flatten }
 
@@ -877,7 +876,7 @@ object BlockStoreColumnarTableModule extends Logging {
           sources.toSet filter { 
             _._1.columns exists { 
               case ColumnDescriptor(`path`, selector, _, _) => 
-                (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathIndex])
+                (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[CPathIndex])
             }
           }
         }
@@ -897,7 +896,7 @@ object BlockStoreColumnarTableModule extends Logging {
           sources.toSet filter { 
             _._1.columns exists { 
               case ColumnDescriptor(`path`, selector, _, _) => 
-                (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathField])
+                (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[CPathField])
             }
           }
         }

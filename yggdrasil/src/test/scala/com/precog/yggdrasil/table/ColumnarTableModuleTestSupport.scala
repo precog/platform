@@ -23,6 +23,7 @@ package table
 import com.precog.bytecode.JType
 import com.precog.common.Path
 import com.precog.common.VectorCase
+import com.precog.common.json._
 
 import akka.actor.ActorSystem
 
@@ -60,7 +61,7 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
               case (acc, (jpath, JNothing)) => acc
               case (acc, (jpath, v)) =>
                 val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
-                val ref = ColumnRef(jpath, ctype)
+                val ref = ColumnRef(CPath(jpath), ctype)
   
                 val pair: (BitSet, Array[_]) = v match {
                   case JBool(b) => 
@@ -173,7 +174,7 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
         type A = BigDecimal
         val init = BigDecimal(0)
         def scan(a: BigDecimal, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-          val identityPath = cols collect { case c @ (ColumnRef(JPath.Identity, _), _) => c }
+          val identityPath = cols collect { case c @ (ColumnRef(CPath.Identity, _), _) => c }
           val prioritized = identityPath.values filter {
             case (_: LongColumn | _: DoubleColumn | _: NumColumn) => true
             case _ => false
@@ -202,7 +203,7 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
             }
           }
           
-          (a2, Map(ColumnRef(JPath.Identity, CNum) -> ArrayNumColumn(mask, arr)))
+          (a2, Map(ColumnRef(CPath.Identity, CNum) -> ArrayNumColumn(mask, arr)))
         }
       }
     )

@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 
 import scala.collection.immutable.BitSet
 
-import blueeyes.json.{ JPath, JPathField, JPathIndex }
+import com.precog.common.json._
 
 import com.precog.bytecode._
 
@@ -33,39 +33,39 @@ object Schema {
     case JNullT => Set(CNull)
   }
   /**
-   * Constructs a JType corresponding to the supplied sequence of (JPath, CType) pairs. Returns None if the
+   * Constructs a JType corresponding to the supplied sequence of (CPath, CType) pairs. Returns None if the
    * supplied sequence is empty.
    */
-  def mkType(ctpes: Seq[(JPath, CType)]): Option[JType] = {
+  def mkType(ctpes: Seq[(CPath, CType)]): Option[JType] = {
     val primitives = ctpes.collect {
-      case (JPath.Identity, CLong | CDouble | CNum) => JNumberT
-      case (JPath.Identity, CString) => JTextT
-      case (JPath.Identity, CBoolean) => JBooleanT
-      case (JPath.Identity, CNull) => JNullT
-      case (JPath.Identity, CEmptyArray) => JArrayFixedT(Map())
-      case (JPath.Identity, CEmptyObject) => JObjectFixedT(Map())
+      case (CPath.Identity, CLong | CDouble | CNum) => JNumberT
+      case (CPath.Identity, CString) => JTextT
+      case (CPath.Identity, CBoolean) => JBooleanT
+      case (CPath.Identity, CNull) => JNullT
+      case (CPath.Identity, CEmptyArray) => JArrayFixedT(Map())
+      case (CPath.Identity, CEmptyObject) => JObjectFixedT(Map())
     }
 
     val indices = ctpes.foldLeft(BitSet()) {
-      case (acc, (JPath(JPathIndex(i), _*), _)) => acc+i
+      case (acc, (CPath(CPathIndex(i), _*), _)) => acc+i
       case (acc, _) => acc
     }
 
     val elements = indices.flatMap { i =>
       mkType(ctpes.collect {
-        case (JPath(JPathIndex(`i`), tail @ _*), ctpe) => (JPath(tail : _*), ctpe)
+        case (CPath(CPathIndex(`i`), tail @ _*), ctpe) => (CPath(tail : _*), ctpe)
       }).map(i -> _)
     }
     val array = if (elements.isEmpty) Nil else List(JArrayFixedT(elements.toMap))
 
     val keys = ctpes.foldLeft(Set.empty[String]) {
-      case (acc, (JPath(JPathField(key), _*), _)) => acc+key
+      case (acc, (CPath(CPathField(key), _*), _)) => acc+key
       case (acc, _) => acc
     }
 
     val members = keys.flatMap { key =>
       mkType(ctpes.collect {
-        case (JPath(JPathField(`key`), tail @ _*), ctpe) => (JPath(tail : _*), ctpe)
+        case (CPath(CPathField(`key`), tail @ _*), ctpe) => (CPath(tail : _*), ctpe)
       }).map(key -> _)
     }
     val obj = if (members.isEmpty) Nil else List(JObjectFixedT(members.toMap))
@@ -74,31 +74,31 @@ object Schema {
   }
 
   /**
-   * Tests whether the supplied JType includes the supplied JPath and CType.
+   * Tests whether the supplied JType includes the supplied CPath and CType.
    */
-  def includes(jtpe: JType, path: JPath, ctpe: CType): Boolean = (jtpe, (path, ctpe)) match {
-    case (JNumberT, (JPath.Identity, CLong | CDouble | CNum)) => true
+  def includes(jtpe: JType, path: CPath, ctpe: CType): Boolean = (jtpe, (path, ctpe)) match {
+    case (JNumberT, (CPath.Identity, CLong | CDouble | CNum)) => true
 
-    case (JTextT, (JPath.Identity, CString)) => true
+    case (JTextT, (CPath.Identity, CString)) => true
 
-    case (JBooleanT, (JPath.Identity, CBoolean)) => true
+    case (JBooleanT, (CPath.Identity, CBoolean)) => true
 
-    case (JNullT, (JPath.Identity, CNull))=> true
+    case (JNullT, (CPath.Identity, CNull))=> true
 
-    case (JObjectUnfixedT, (JPath.Identity, CEmptyObject)) => true
-    case (JObjectUnfixedT, (JPath(JPathField(_), _*), _)) => true
-    case (JObjectFixedT(fields), (JPath.Identity, CEmptyObject)) if fields.isEmpty => true
+    case (JObjectUnfixedT, (CPath.Identity, CEmptyObject)) => true
+    case (JObjectUnfixedT, (CPath(CPathField(_), _*), _)) => true
+    case (JObjectFixedT(fields), (CPath.Identity, CEmptyObject)) if fields.isEmpty => true
 
-    case (JObjectFixedT(fields), (JPath(JPathField(head), tail @ _*), ctpe)) => {
+    case (JObjectFixedT(fields), (CPath(CPathField(head), tail @ _*), ctpe)) => {
       val fieldHead = fields.get(head)
-      fields.get(head).map(includes(_, JPath(tail: _*), ctpe)).getOrElse(false)
+      fields.get(head).map(includes(_, CPath(tail: _*), ctpe)).getOrElse(false)
     }
 
-    case (JArrayUnfixedT, (JPath.Identity, CEmptyArray)) => true
-    case (JArrayUnfixedT, (JPath(JPathIndex(_), _*), _)) => true
-    case (JArrayFixedT(elements), (JPath.Identity, CEmptyArray)) if elements.isEmpty => true
-    case (JArrayFixedT(elements), (JPath(JPathIndex(i), tail @ _*), ctpe)) =>
-      elements.get(i).map(includes(_, JPath(tail: _*), ctpe)).getOrElse(false)
+    case (JArrayUnfixedT, (CPath.Identity, CEmptyArray)) => true
+    case (JArrayUnfixedT, (CPath(CPathIndex(_), _*), _)) => true
+    case (JArrayFixedT(elements), (CPath.Identity, CEmptyArray)) if elements.isEmpty => true
+    case (JArrayFixedT(elements), (CPath(CPathIndex(i), tail @ _*), ctpe)) =>
+      elements.get(i).map(includes(_, CPath(tail: _*), ctpe)).getOrElse(false)
 
     case (JUnionT(ljtpe, rjtpe), (path, ctpe)) => includes(ljtpe, path, ctpe) || includes(rjtpe, path, ctpe)
 
@@ -106,45 +106,45 @@ object Schema {
   }
 
   /**
-   * Tests whether the supplied sequence contains all the (JPath, CType) pairs that are
+   * Tests whether the supplied sequence contains all the (CPath, CType) pairs that are
    * included by the supplied JType.
    */
-  def subsumes(ctpes: Seq[(JPath, CType)], jtpe: JType): Boolean = (jtpe, ctpes) match {
+  def subsumes(ctpes: Seq[(CPath, CType)], jtpe: JType): Boolean = (jtpe, ctpes) match {
     case (JNumberT, ctpes) => ctpes.exists {
-      case (JPath.Identity, CLong | CDouble | CNum) => true
+      case (CPath.Identity, CLong | CDouble | CNum) => true
       case _ => false
     }
 
-    case (JTextT, ctpes) => ctpes.contains(JPath.Identity -> CString)
+    case (JTextT, ctpes) => ctpes.contains(CPath.Identity -> CString)
 
-    case (JBooleanT, ctpes) => ctpes.contains(JPath.Identity -> CBoolean)
+    case (JBooleanT, ctpes) => ctpes.contains(CPath.Identity -> CBoolean)
 
-    case (JNullT, ctpes) => ctpes.contains(JPath.Identity -> CNull)
+    case (JNullT, ctpes) => ctpes.contains(CPath.Identity -> CNull)
 
-    case (JObjectFixedT(fields), ctpes) if fields.isEmpty => ctpes.contains(JPath.Identity -> CEmptyObject)
+    case (JObjectFixedT(fields), ctpes) if fields.isEmpty => ctpes.contains(CPath.Identity -> CEmptyObject)
     case (JObjectUnfixedT, ctpes) => ctpes.exists {
-      case (JPath(JPathField(_), _*), _) => true
+      case (CPath(CPathField(_), _*), _) => true
       case _ => false
     }
     case (JObjectFixedT(fields), ctpes) => {
       val keys = fields.keySet
       keys.forall { key =>
         subsumes(
-          ctpes.collect { case (JPath(JPathField(`key`), tail @ _*), ctpe) => (JPath(tail : _*), ctpe) }, 
+          ctpes.collect { case (CPath(CPathField(`key`), tail @ _*), ctpe) => (CPath(tail : _*), ctpe) }, 
           fields(key))
       }
     }
 
-    case (JArrayFixedT(elements), ctpes) if elements.isEmpty => ctpes.contains(JPath.Identity -> CEmptyArray)
+    case (JArrayFixedT(elements), ctpes) if elements.isEmpty => ctpes.contains(CPath.Identity -> CEmptyArray)
     case (JArrayUnfixedT, ctpes) => ctpes.exists {
-      case (JPath(JPathIndex(_), _*), _) => true
+      case (CPath(CPathIndex(_), _*), _) => true
       case _ => false
     }
     case (JArrayFixedT(elements), ctpes) => {
       val indices = elements.keySet
       indices.forall { i =>
         subsumes(
-          ctpes.collect { case (JPath(JPathIndex(`i`), tail @ _*), ctpe) => (JPath(tail : _*), ctpe) }, 
+          ctpes.collect { case (CPath(CPathIndex(`i`), tail @ _*), ctpe) => (CPath(tail : _*), ctpe) }, 
           elements(i))
       }
     }

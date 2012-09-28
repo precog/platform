@@ -21,7 +21,6 @@ package com.precog
 package shard
 package yggdrasil 
 
-import blueeyes.json._
 import blueeyes.json.JsonAST._
 
 import daze._
@@ -29,6 +28,7 @@ import daze._
 import muspelheim.ParseEvalStack
 
 import com.precog.common._
+import com.precog.common.json._
 import com.precog.common.security._
 
 import com.precog.yggdrasil._
@@ -177,11 +177,11 @@ trait YggdrasilQueryExecutor
     import trans._
 
     def sort(table: Future[Table]): Future[Table] = if (!opts.sortOn.isEmpty) {
-      val sortKey = ArrayConcat(opts.sortOn map { jpath =>
-        WrapArray(jpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
-          case (inner, f @ JPathField(_)) =>
+      val sortKey = ArrayConcat(opts.sortOn map { cpath =>
+        WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
+          case (inner, f @ CPathField(_)) =>
             DerefObjectStatic(inner, f)
-          case (inner, i @ JPathIndex(_)) =>
+          case (inner, i @ CPathIndex(_)) =>
             DerefArrayStatic(inner, i)
         })
       }: _*)
@@ -227,7 +227,7 @@ trait YggdrasilQueryExecutor
   }
 
   def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = {
-    val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, JPath(""))
+    val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, CPath(""))
 
     def transform(children: Set[PathMetadata]): JObject = {
       // Rewrite with collect or fold?

@@ -167,6 +167,15 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
         }
       }
       
+      "metadescent" >> {
+        val tree = MetaDescent(LineStream(), NumLit(LineStream(), "1"), "a")
+        bindRoot(tree, tree)
+        
+        shakeTree(tree) must beLike {
+          case MetaDescent(LineStream(), NumLit(LineStream(), "1"), "a") => ok
+        }
+      }
+      
       "deref" >> {
         val tree = Deref(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2"))
         bindRoot(tree, tree)
@@ -680,6 +689,46 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
 
     "detect unused tic-variable from solve in descent" in {
       val tree = Solve(LineStream(), Vector(TicVar(LineStream(), "'a"), TicVar(LineStream(), "'b")), Descent(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), "foo"))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result.errors mustEqual Set(UnusedTicVariable("'b"))
+    }
+    
+    "eliminate let when not found in scope in metadescent" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), MetaDescent(LineStream(), NumLit(LineStream(), "24"), "foo"))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result must beLike {
+        case MetaDescent(LineStream(), NumLit(LineStream(), "24"), "foo") => ok
+      }
+      
+      result.errors mustEqual Set(UnusedLetBinding(Identifier(Vector(), "a")))
+    }
+    
+    "preserve let when found in scope in metadescent" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), MetaDescent(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), "foo"))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result must beLike {
+        case Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), MetaDescent(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), "foo")) => ok
+      }
+      
+      result.errors must beEmpty
+    }
+
+    "detect unused formal parameter in metadescent" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), MetaDescent(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), "foo"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result.errors mustEqual Set(UnusedFormalBinding(Identifier(Vector(), "b")))
+    }
+
+    "detect unused tic-variable from solve in metadescent" in {
+      val tree = Solve(LineStream(), Vector(TicVar(LineStream(), "'a")), Solve(LineStream(), Vector(TicVar(LineStream(), "'b")), MetaDescent(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), "foo")))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)

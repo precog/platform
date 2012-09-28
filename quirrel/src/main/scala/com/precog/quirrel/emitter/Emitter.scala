@@ -429,6 +429,9 @@ trait Emitter extends AST
         case ast.Descent(loc, child, property) => 
           emitMapState(emitExpr(child), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefObject)
         
+        case ast.MetaDescent(loc, child, property) => 
+          emitMapState(emitExpr(child), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefMetadata)
+        
         case ast.Deref(loc, left, right) => 
           emitMap(left, right, DerefArray)
         

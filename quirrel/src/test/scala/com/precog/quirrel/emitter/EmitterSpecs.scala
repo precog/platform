@@ -409,6 +409,15 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefObject)))
     }
 
+    "emit meta descent for object load" in {
+      testEmit("clicks := //clicks clicks@foo")(
+        Vector(
+          PushString("/clicks"),
+          LoadLocal,
+          PushString("foo"),
+          Map2Cross(DerefMetadata)))
+    }
+
     "emit descent for array load" in {
       testEmit("clicks := //clicks clicks[1]")(
         Vector(

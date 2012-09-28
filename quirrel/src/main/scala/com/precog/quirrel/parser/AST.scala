@@ -772,6 +772,11 @@ trait AST extends Phases {
       val isPrefix = false
     }
     
+    final case class MetaDescent(loc: LineStream, child: Expr, property: String) extends ExprUnaryNode {
+      val sym = 'metaDescent
+      val isPrefix = false
+    }
+    
     final case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with Node {
       val sym = 'deref
       

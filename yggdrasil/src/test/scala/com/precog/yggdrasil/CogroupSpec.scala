@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 
 import table._
 import com.precog.util._
-import blueeyes.json.{JPath, JPathField}
+import com.precog.common.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
@@ -52,14 +52,14 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
 
   implicit val cogroupData = Arbitrary(
     for {
-      depth   <- choose(1, 2)
-      jschema  <- Gen.oneOf(arraySchema(depth, 2), objectSchema(depth, 2))
-      (idCount, data) <- genEventColumns(jschema)
+      depth <- choose(1, 2)
+      cschema <- Gen.oneOf(arraySchema(depth, 2), objectSchema(depth, 2))
+      (idCount, data) <- genEventColumns(cschema)
     } yield {
-      val (lschema, rschema) = Bifunctor[Tuple2].umap(jschema.splitAt(jschema.size / 2)) { _.map(_._1).toSet }
+      val (lschema, rschema) = Bifunctor[Tuple2].umap(cschema.splitAt(cschema.size / 2)) { _.map(_._1).toSet }
       val (l, r) =  data map {
                       case (ids, values) => 
-                        val (d1, d2) = values.partition { case (jpath, _) => lschema.contains(jpath) }
+                        val (d1, d2) = values.partition { case (cpath, _) => lschema.contains(cpath) }
                         (toRecord(ids, assemble(d1)), toRecord(ids, assemble(d2)))
                     } unzip
 
@@ -402,11 +402,11 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
       parse("""{ "id": "foo", "left": 4, "right": 4 }""")
     )
 
-    val keySpec = DerefObjectStatic(Leaf(Source), JPathField("id"))
+    val keySpec = DerefObjectStatic(Leaf(Source), CPathField("id"))
     val result = ltable.cogroup(keySpec, keySpec, rtable)(Leaf(Source),Leaf(Source),
-      InnerObjectConcat(WrapObject(DerefObjectStatic(Leaf(SourceLeft), JPathField("id")), "id"),
-                        WrapObject(DerefObjectStatic(Leaf(SourceLeft), JPathField("val")), "left"),
-                        WrapObject(DerefObjectStatic(Leaf(SourceRight), JPathField("val")), "right")))
+      InnerObjectConcat(WrapObject(DerefObjectStatic(Leaf(SourceLeft), CPathField("id")), "id"),
+                        WrapObject(DerefObjectStatic(Leaf(SourceLeft), CPathField("val")), "left"),
+                        WrapObject(DerefObjectStatic(Leaf(SourceRight), CPathField("val")), "right")))
 
     toJson(result).copoint must_== expected
   }
