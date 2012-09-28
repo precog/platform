@@ -1,5 +1,5 @@
 <configuration scan="true">
-  <property name="SERVICE" value="demo-shard-v1" />
+  <property name="SERVICE" value="ingest-v1-beta" />
   <property name="LOG_DIR" value="/var/log/precog" />
 
   <appender name="SERVERLOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
@@ -18,7 +18,8 @@
 
   <logger name="blueeyes.core.http" level="trace" />
 
-  <root level="debug">
+  <root level="trace">
     <appender-ref ref="SERVERLOG" />
   </root>
 </configuration>
+

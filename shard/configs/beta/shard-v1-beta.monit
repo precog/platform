@@ -1,0 +1,15 @@
+check process shard-v1-beta with pidfile /var/run/precog/shard-v1-beta.pid
+  start program = "/usr/sbin/service shard-v1-beta start" with timeout 30 seconds
+  stop program  = "/usr/sbin/service shard-v1-beta stop"
+  if failed port 30070 protocol http and request '/blueeyes/services/quirrel/v1/health' with timeout 15 seconds for 3 cycles 
+     then exec "/opt/precog/threaddump.sh shard-v1-beta"
+  if failed port 30070 protocol http and request '/blueeyes/services/quirrel/v1/health' with timeout 15 seconds for 8 cycles 
+     then restart
+  if 3 restarts within 10 cycles then timeout
+  group shard-v1-beta
+
+# Watch server log for issues
+check file shard-v1-beta.server.log with path /var/log/precog/shard-v1-beta.server.log
+  if match "Exception" for 3 cycles then alert
+  depends on shard-v1-beta
+  group shard-v1-beta

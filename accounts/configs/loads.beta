@@ -1,6 +1,6 @@
-conf=beta/beta-auth-v1.conf
-default=beta/beta-auth-v1.default
-init=beta/beta-auth-v1.init
-/etc/monit/conf.d/beta-auth-v1.monit=beta/beta-auth-v1.monit
-/etc/precog/beta-auth-v1.logging.xml=beta/beta-auth-v1.logging.xml
+/etc/precog/accounts-v1-beta.conf=beta/accounts-v1-beta.conf
+default=beta/accounts-v1-beta.default
+init=beta/accounts-v1-beta.init
+/etc/monit/conf.d/accounts-v1-beta.monit=beta/accounts-v1-beta.monit
+/etc/precog/accounts-v1-beta.logging.xml=beta/accounts-v1-beta.logging.xml
 postinstall=beta/postinstall.sh
