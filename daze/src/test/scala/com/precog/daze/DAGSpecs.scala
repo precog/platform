@@ -141,7 +141,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       result must beLike {
         case Right(
           s1 @ dag.Split(`line`,
-            dag.Group(2, Root(`line`, CBoolean(true)), UnfixedSolution(1, Root(`line`, CBoolean(true)))),
+            dag.Group(2, Root(`line`, CBoolean(false)), UnfixedSolution(1, Root(`line`, CBoolean(true)))),
             s2 @ dag.Split(`line`,
               dag.Group(4, sp1 @ SplitParam(`line`, 1), UnfixedSolution(3, sg1 @ SplitGroup(`line`, 2, Vector()))),
               IUI(`line`, true,

@@ -25,6 +25,7 @@ import com.precog.bytecode.JType
 
 class CF1(f: Column => Option[Column]) { //extends (Column => Option[Column]) {
   def apply(c: Column): Option[Column] = f(c)
+  def apply(cv: CValue): Option[Column] = f(Column.const(cv))
 
   // Do not use PartialFunction.compose or PartialFunction.andThen for composition,
   // because they will fail out with MatchError.

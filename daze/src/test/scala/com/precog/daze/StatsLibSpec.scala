@@ -57,7 +57,7 @@ trait StatsLibSpec[M[+_]] extends Specification
   }
 
   implicit def add_~=(d: Double) = new AlmostEqual(d)
-  implicit val precision = Precision(0.000000000000001)
+  implicit val precision = Precision(0.000000001)
 
   "homogenous sets" should {
     "median with odd number of elements" >> {
