@@ -22,6 +22,8 @@ package daze
 
 import bytecode._
 
+import blueeyes.json.JsonAST.JNum
+
 import com.precog.util.IdGen
 import com.precog.yggdrasil._
 
@@ -32,6 +34,8 @@ import scalaz.Scalaz._
 import scalaz.std.option._
 import scalaz.std.list._
 import scalaz.{NonEmptyList => NEL, _}
+
+import java.math.MathContext
 
 trait DAG extends Instructions {
   import instructions._
@@ -308,7 +312,23 @@ trait DAG extends Instructions {
           } getOrElse Left(UnableToLocateSplitDescribingId(id))
         }
         
-        case instr: RootInstr => loop(loc, Right(Root(loc, instr)) :: roots, splits, stream.tail)
+        case instr: RootInstr => {
+          val cvalue = instr match {
+            case PushString(str) => CString(str)
+            
+            // get the numeric coersion
+            case PushNum(num) =>
+              CType.toCValue(JNum(BigDecimal(num, MathContext.UNLIMITED)))
+            
+            case PushTrue => CBoolean(true)
+            case PushFalse => CBoolean(false)
+            case PushNull => CNull
+            case PushObject => CEmptyObject
+            case PushArray => CEmptyArray
+          }
+          
+          loop(loc, Right(Root(loc, cvalue)) :: roots, splits, stream.tail)
+        }
       }
       
       tail getOrElse {
@@ -326,8 +346,23 @@ trait DAG extends Instructions {
     }
     
     def findFirstRoot(line: Option[Line], stream: Vector[Instruction]): Either[StackError, (Root, Vector[Instruction])] = {
-      def buildRoot(instr: RootInstr): Either[StackError, (Root, Vector[Instruction])] =
-        line map { ln => Right((Root(ln, instr), stream.tail)) } getOrElse Left(UnknownLine)
+      def buildRoot(instr: RootInstr): Either[StackError, (Root, Vector[Instruction])] = {
+        val cvalue = instr match {
+          case PushString(str) => CString(str)
+          
+          // get the numeric coersion
+          case PushNum(num) =>
+            CType.toCValue(JNum(BigDecimal(num, MathContext.UNLIMITED)))
+          
+          case PushTrue => CBoolean(true)
+          case PushFalse => CBoolean(false)
+          case PushNull => CNull
+          case PushObject => CEmptyObject
+          case PushArray => CEmptyArray
+        }
+          
+        line map { ln => Right((Root(ln, cvalue), stream.tail)) } getOrElse Left(UnknownLine)
+      }
       
       val back = stream.headOption collect {
         case ln: Line => findFirstRoot(Some(ln), stream.tail)
@@ -387,8 +422,6 @@ trait DAG extends Instructions {
     def identities: Vector[dag.IdentitySpec]
     
     def sorting: dag.TableSort
-    
-    def value: Option[SValue] = None
     
     def isSingleton: Boolean  //true implies that the node is a singleton; false doesn't imply anything 
     
@@ -559,15 +592,17 @@ trait DAG extends Instructions {
     sealed trait ForcingPoint extends DepGraph
     
     object ConstString {
-      def unapply(graph : DepGraph) : Option[String] = graph.value match {
-        case Some(SString(str)) => Some(str)
+      def unapply(graph: DepGraph): Option[String] = graph match {
+        case Root(_, CString(str)) => Some(str)
         case _ => None
       }
     }
 
     object ConstDecimal {
-      def unapply(graph : DepGraph) : Option[BigDecimal] = graph.value match {
-        case Some(SDecimal(d)) => Some(d)
+      def unapply(graph: DepGraph): Option[BigDecimal] = graph match {
+        case Root(_, CNum(d)) => Some(d)
+        case Root(_, CLong(d)) => Some(d)
+        case Root(_, CDouble(d)) => Some(d)
         case _ => None
       }
     }
@@ -596,20 +631,10 @@ trait DAG extends Instructions {
       val containsSplitArg = true
     }
     
-    case class Root(loc: Line, instr: RootInstr) extends DepGraph {
+    case class Root(loc: Line, value: CValue) extends DepGraph {
       lazy val identities = Vector()
       
       val sorting = IdentitySort
-      
-      override lazy val value = Some(instr match {
-        case PushString(str) => SString(str)
-        case PushNum(num) => SDecimal(BigDecimal(num))
-        case PushTrue => SBoolean(true)
-        case PushFalse => SBoolean(false)
-        case PushNull => SNull
-        case PushObject => SObject(Map())
-        case PushArray => SArray(Vector())
-      })
       
       val isSingleton = true
       
@@ -620,8 +645,6 @@ trait DAG extends Instructions {
       lazy val identities = Vector(SynthIds(IdGen.nextInt()))
       
       val sorting = IdentitySort
-      
-      override lazy val value = parent.value
       
       lazy val isSingleton = parent.isSingleton
       
@@ -666,7 +689,7 @@ trait DAG extends Instructions {
     
     case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JType.JUnfixedT) extends DepGraph with ForcingPoint {
       lazy val identities = parent match {
-        case Root(_, PushString(path)) => Vector(LoadIds(path))
+        case Root(_, CString(path)) => Vector(LoadIds(path))
         case _ => Vector(SynthIds(IdGen.nextInt()))
       }
       

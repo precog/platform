@@ -26,7 +26,7 @@ import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 
 import com.precog.bytecode.JType.JUnfixedT
-import com.precog.yggdrasil.SObject
+import com.precog.yggdrasil._
 import com.precog.yggdrasil.test.YId
 import com.precog.util.IdGen
 
@@ -43,7 +43,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
   import Function._
   
   import dag._
-  import instructions.{ DerefObject, Eq, JoinObject, Line, PushString, WrapObject }
+  import instructions.{ DerefObject, Eq, JoinObject, Line, WrapObject }
 
   val testUID = "testUID"
 
@@ -64,13 +64,13 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         |   { name: a.name, height: b.height } where a.userId = b.userId """.stripMargin
         
       val line = Line(0, "")
-      val users = LoadLocal(line,Root(line,PushString("/hom/users")), JUnfixedT)
-      val heightWeight = LoadLocal(line,Root(line,PushString("/hom/heightWeight")), JUnfixedT)
-      val height = Root(line, PushString("height"))
-      val name = Root(line, PushString("name"))
-      val userId = Root(line, PushString("userId"))
-      val key = Root(line, PushString("key"))
-      val value = Root(line, PushString("value"))
+      val users = LoadLocal(line,Root(line,CString("/hom/users")), JUnfixedT)
+      val heightWeight = LoadLocal(line,Root(line,CString("/hom/heightWeight")), JUnfixedT)
+      val height = Root(line, CString("height"))
+      val name = Root(line, CString("name"))
+      val userId = Root(line, CString("userId"))
+      val key = Root(line, CString("key"))
+      val value = Root(line, CString("value"))
 
       val liftedLHS =
         SortBy(
@@ -132,14 +132,14 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         |   { name: a.name, height: b.height, weight: b.weight } where a.userId = b.userId """.stripMargin
         
       val line = Line(0, "")
-      val users = LoadLocal(line, Root(line, PushString("/users")))
-      val heightWeight = LoadLocal(line, Root(line, PushString("/heightWeight")))
-      val userId = Root(line, PushString("userId"))
-      val name = Root(line, PushString("name"))
-      val height = Root(line, PushString("height"))
-      val weight = Root(line, PushString("weight"))
-      val key = Root(line, PushString("key"))
-      val value = Root(line, PushString("value"))
+      val users = LoadLocal(line, Root(line, CString("/users")))
+      val heightWeight = LoadLocal(line, Root(line, CString("/heightWeight")))
+      val userId = Root(line, CString("userId"))
+      val name = Root(line, CString("name"))
+      val height = Root(line, CString("height"))
+      val weight = Root(line, CString("weight"))
+      val key = Root(line, CString("key"))
+      val value = Root(line, CString("value"))
       
       val liftedLHS =
         SortBy(
@@ -214,12 +214,12 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
 
       val line = Line(0, "")
       
-      lazy val users = LoadLocal(line, Root(line, PushString("/users")))
-      lazy val heightWeight = LoadLocal(line, Root(line, PushString("/heightWeight")))
-      lazy val userId = Root(line, PushString("userId"))
-      lazy val name = Root(line, PushString("name"))
-      lazy val key = Root(line, PushString("key"))
-      lazy val value = Root(line, PushString("value"))
+      lazy val users = LoadLocal(line, Root(line, CString("/users")))
+      lazy val heightWeight = LoadLocal(line, Root(line, CString("/heightWeight")))
+      lazy val userId = Root(line, CString("userId"))
+      lazy val name = Root(line, CString("name"))
+      lazy val key = Root(line, CString("key"))
+      lazy val value = Root(line, CString("value"))
       
       lazy val input =
         Filter(line, IdentitySort,

@@ -237,7 +237,7 @@ trait Memoizer extends DAG {
       updateMap(merged, graph, force)
     }
     
-    case Join(_, _, CrossLeftSort | CrossRightSort, left, right) if !left.value.isDefined && !right.value.isDefined => {
+    case Join(_, _, CrossLeftSort | CrossRightSort, left, right) if !left.isInstanceOf[Root] && !right.isInstanceOf[Root] => {
       val merged = findForcingRefs(left, Some(graph)) |+| findForcingRefs(right, Some(graph))
       updateMap(merged, graph, force)
     }
@@ -251,7 +251,7 @@ trait Memoizer extends DAG {
     case Join(_, _, _, left, right) =>
       findForcingRefs(left, force) |+| findForcingRefs(right, force)
     
-    case Filter(_, CrossLeftSort | CrossRightSort, target, boolean) if !target.value.isDefined && !boolean.value.isDefined => {
+    case Filter(_, CrossLeftSort | CrossRightSort, target, boolean) if !target.isInstanceOf[Root] && !boolean.isInstanceOf[Root] => {
       val merged = findForcingRefs(target, Some(graph)) |+| findForcingRefs(boolean, Some(graph))
       updateMap(merged, graph, force)
     }
