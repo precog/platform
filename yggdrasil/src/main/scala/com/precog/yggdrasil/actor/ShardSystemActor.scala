@@ -2,6 +2,7 @@ package com.precog.yggdrasil
 package actor
 
 import com.precog.common.{ Archive, ArchiveMessage, CheckpointCoordination, IngestMessage, YggCheckpoint }
+import com.precog.common.json._
 import com.precog.util.FilesystemFileOps
 import com.precog.yggdrasil.metadata.{ ColumnMetadata, FileMetadataStorage, MetadataStorage }
 
@@ -96,7 +97,7 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
             val archivePaths = messages.collect { case ArchiveMessage(_, Archive(path, _)) => path } 
             Future.sequence {
               archivePaths map { path =>
-                (metadataActor ? FindDescriptors(path, JPath.Identity)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]]
+                (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]]
               }
             }.onSuccess {
               case descMaps : Seq[Map[ProjectionDescriptor, ColumnMetadata]] => ()

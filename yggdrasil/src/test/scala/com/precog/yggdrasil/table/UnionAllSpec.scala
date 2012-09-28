@@ -3,7 +3,7 @@ package table
 
 import org.specs2.mutable.Specification
 
-import blueeyes.json.JPathField
+import com.precog.common.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 
@@ -58,7 +58,7 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
 
   def simpleUnionAllTest = {
     import unionAllData._
-    val vars = Seq(JPathField("a"), JPathField("b"))
+    val vars = Seq(CPathField("a"), CPathField("b"))
   
     val leftBorg = BorgResult(fromJson(leftData.toStream), vars, Set(1))
     val rightBorg = BorgResult(fromJson(rightData.toStream), vars, Set(1))
@@ -75,8 +75,8 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
 
   def reversedUnionAllTest = {
     import unionAllData._
-    val varsLeft = Seq(JPathField("a"), JPathField("b"))
-    val varsRight = Seq(JPathField("b"), JPathField("a"))
+    val varsLeft = Seq(CPathField("a"), CPathField("b"))
+    val varsRight = Seq(CPathField("b"), CPathField("a"))
   
     val leftBorg = BorgResult(fromJson(leftData.toStream), varsLeft, Set(1))
     val rightBorg = BorgResult(fromJson(rightDataReversed.toStream), varsRight, Set(1))

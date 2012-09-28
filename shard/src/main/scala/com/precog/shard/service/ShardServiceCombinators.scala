@@ -16,6 +16,7 @@ import akka.dispatch.MessageDispatcher
 
 import com.precog.common.Path
 import com.precog.common.security._
+import com.precog.common.json._
 import com.precog.ingest.service._
 import com.precog.daze.QueryOptions
 import com.precog.yggdrasil.TableModule
@@ -40,7 +41,7 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
   private val Limit = """([1-9][0-9]*)""".r
   private val Offset = """(0|[1-9][0-9]*)""".r
 
-  private def getSortOn(request: HttpRequest[_]): Validation[String, List[JPath]] = {
+  private def getSortOn(request: HttpRequest[_]): Validation[String, List[CPath]] = {
     import JsonAST._
     import JsonParser.ParseException
     request.parameters.get('sortOn).filter(_ != null) map { paths =>
@@ -48,9 +49,9 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
         val jpaths = JsonParser.parse(paths)
         jpaths match {
           case JArray(elems) =>
-            Validation.success(elems collect { case JString(path) => JPath(path) })
+            Validation.success(elems collect { case JString(path) => CPath(path) })
           case JString(path) =>
-            Validation.success(JPath(path) :: Nil)
+            Validation.success(CPath(path) :: Nil)
           case badJVal =>
             Validation.failure("The sortOn query parameter was expected to be JSON string or array, but found " + badJVal)
         }
@@ -58,7 +59,7 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
         case ex: ParseException =>
           Validation.failure("Couldn't parse sortOn query parameter: " + ex.getMessage())
       }
-    } getOrElse Validation.success[String, List[JPath]](Nil)
+    } getOrElse Validation.success[String, List[CPath]](Nil)
   }
 
   private def getSortOrder(request: HttpRequest[_]): Validation[String, DesiredSortOrder] = {
