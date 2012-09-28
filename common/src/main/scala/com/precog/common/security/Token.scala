@@ -137,6 +137,8 @@ object Permission extends PermissionSerialization {
     }
     Some((permission.accessType, permission.path, owner, permission.expiration))
   }
+  
+  def normalizeExpiration(od: Option[DateTime]): Option[DateTime] = od.flatMap { d => if (d.getMillis == 0) None else od }
 }
 
 sealed trait OwnerIgnorantPermission extends Permission {
@@ -181,7 +183,7 @@ trait WritePermissionSerialization {
   implicit val WritePermissionExtractor: Extractor[WritePermission] = new Extractor[WritePermission] with ValidatedExtraction[WritePermission] {    
     override def validated(obj: JValue): Validation[Error, WritePermission] = 
       ((obj \ "path").validated[Path] |@|
-       (obj \ "expirationDate").validated[Option[DateTime]]).apply(WritePermission(_,_))
+       (obj \ "expirationDate").validated[Option[DateTime]]).apply((p, d) => WritePermission(p,Permission.normalizeExpiration(d)))
   }
 }
 
@@ -209,7 +211,7 @@ trait OwnerPermissionSerialization {
   implicit val OwnerPermissionExtractor: Extractor[OwnerPermission] = new Extractor[OwnerPermission] with ValidatedExtraction[OwnerPermission] {    
     override def validated(obj: JValue): Validation[Error, OwnerPermission] = 
       ((obj \ "path").validated[Path] |@|
-       (obj \ "expirationDate").validated[Option[DateTime]]).apply(OwnerPermission(_,_))
+       (obj \ "expirationDate").validated[Option[DateTime]]).apply((p, d) => OwnerPermission(p,Permission.normalizeExpiration(d)))
   }
 }
 
@@ -238,7 +240,7 @@ trait ReadPermissionSerialization {
     override def validated(obj: JValue): Validation[Error, ReadPermission] = 
       ((obj \ "path").validated[Path] |@|
        (obj \ "ownerAccountId").validated[TokenID] |@|
-       (obj \ "expirationDate").validated[Option[DateTime]]).apply(ReadPermission(_,_,_))
+       (obj \ "expirationDate").validated[Option[DateTime]]).apply((p, o, d) => ReadPermission(p,o,Permission.normalizeExpiration(d)))
   }
 }
 
@@ -268,7 +270,7 @@ trait ReducePermissionSerialization {
     override def validated(obj: JValue): Validation[Error, ReducePermission] = 
       ((obj \ "path").validated[Path] |@|
        (obj \ "ownerAccountId").validated[TokenID] |@|
-       (obj \ "expirationDate").validated[Option[DateTime]]).apply(ReducePermission(_,_,_))
+       (obj \ "expirationDate").validated[Option[DateTime]]).apply((p, o, d) => ReducePermission(p,o,Permission.normalizeExpiration(d)))
   }
 }
 
