@@ -1,6 +1,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common.json._
 import com.precog.common.{Path, VectorCase}
 import com.precog.bytecode.{ JType, JObjectUnfixedT }
 import com.precog.yggdrasil.jdbm3._
@@ -72,13 +73,13 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
               val size = sl.size
               val columns: Map[ColumnRef, Column] = {
                 val resultColumns = for {
-                  cl <- sl.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
-                  cr <- sr.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
+                  cl <- sl.columns collect { case (ref, col) if ref.selector == CPath.Identity => col }
+                  cr <- sr.columns collect { case (ref, col) if ref.selector == CPath.Identity => col }
                   result <- f(cl, cr)
                 } yield result
                   
                 resultColumns.groupBy(_.tpe) map { 
-                  case (tpe, cols) => (ColumnRef(JPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+                  case (tpe, cols) => (ColumnRef(CPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
                 }
               }
             }
@@ -120,7 +121,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
 
                 // In the following fold, we compute all paired columns, and the columns on the left that
                 // have no counterpart on the right.
-                val (paired, excludedLeft) = sl.columns.foldLeft((Map.empty[JPath, Column], Set.empty[Column])) {
+                val (paired, excludedLeft) = sl.columns.foldLeft((Map.empty[CPath, Column], Set.empty[Column])) {
                   case ((paired, excluded), (ref @ ColumnRef(selector, CLong | CDouble | CNum), col)) => 
                     val numEq = for {
                                   ctype <- List(CLong, CDouble, CNum)
@@ -183,7 +184,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                     }
                   })
                 
-                Map(ColumnRef(JPath.Identity, CBoolean) -> resultCol)
+                Map(ColumnRef(CPath.Identity, CBoolean) -> resultCol)
               }
             }
           }
@@ -204,7 +205,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
               val size = ss.size
               val columns = {
                 val (comparable0, other0) = ss.columns.toList.partition {
-                  case (ref @ ColumnRef(JPath.Identity, tpe), col) if CType.canCompare(CType.of(value),tpe) => true
+                  case (ref @ ColumnRef(CPath.Identity, tpe), col) if CType.canCompare(CType.of(value),tpe) => true
                   case _ => false
                 }
                 
@@ -217,7 +218,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                   def apply(row: Int)       = columns.exists { col => col.isDefinedAt(row) && col(row) }
                 }
                 
-                Map(ColumnRef(JPath.Identity, CBoolean) -> (if(invert) complement(aggregate) else aggregate))
+                Map(ColumnRef(CPath.Identity, CBoolean) -> (if(invert) complement(aggregate) else aggregate))
               }
             }
           }
@@ -228,12 +229,12 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
 
         case WrapObject(source, field) =>
           composeSliceTransform2(source) map {
-            _ wrap JPathField(field) 
+            _ wrap CPathField(field) 
           }
 
         case WrapArray(source) =>
           composeSliceTransform2(source) map {
-            _ wrap JPathIndex(0) 
+            _ wrap CPathIndex(0) 
           }
 
         case OuterObjectConcat(objects @ _*) =>
@@ -259,7 +260,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
 
                     // We should never return a slice with zero columns in an outer object concat
                     if (finalCols.size == 0) {
-                      Map(ColumnRef(JPath.Identity, CEmptyObject) -> new EmptyObjectColumn {
+                      Map(ColumnRef(CPath.Identity, CEmptyObject) -> new EmptyObjectColumn {
                         def isDefinedAt(row: Int) = sl.isDefinedAt(row) || sr.isDefinedAt(row)
                       })
                     } else {
@@ -304,16 +305,16 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
               new Slice {
                 val size = sliceAcc.size
                 val columns: Map[ColumnRef, Column] = {
-                  val accCols = sliceAcc.columns collect { case (ref @ ColumnRef(JPath(JPathIndex(i), _*), ctype), col) => (i, ref, col) }
-                  val s2cols = s2.columns collect { case (ref @ ColumnRef(JPath(JPathIndex(i), xs @ _*), ctype), col) => (i, xs, ref, col) }
+                  val accCols = sliceAcc.columns collect { case (ref @ ColumnRef(CPath(CPathIndex(i), _*), ctype), col) => (i, ref, col) }
+                  val s2cols = s2.columns collect { case (ref @ ColumnRef(CPath(CPathIndex(i), xs @ _*), ctype), col) => (i, xs, ref, col) }
 
                   if (accCols.isEmpty && s2cols.isEmpty) {
                     val intersectedEmptyColumn = for {
-                      accEmpty <- (sliceAcc.columns collect { case (ColumnRef(JPath.Identity, CEmptyArray), col) => col }).headOption
-                      s2Empty  <- (s2.columns       collect { case (ColumnRef(JPath.Identity, CEmptyArray), col) => col }).headOption
+                      accEmpty <- (sliceAcc.columns collect { case (ColumnRef(CPath.Identity, CEmptyArray), col) => col }).headOption
+                      s2Empty  <- (s2.columns       collect { case (ColumnRef(CPath.Identity, CEmptyArray), col) => col }).headOption
                     } yield {
                       val emptyArrayCol = new IntersectColumn(accEmpty, s2Empty) with EmptyArrayColumn
-                      (ColumnRef(JPath.Identity, CEmptyArray) -> emptyArrayCol)
+                      (ColumnRef(CPath.Identity, CEmptyArray) -> emptyArrayCol)
                     } 
 
                     intersectedEmptyColumn.toMap
@@ -323,7 +324,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
                   } else {
                     val maxId = if (accCols.isEmpty) -1 else accCols.map(_._1).max
                     val newCols = (accCols map { case (_, ref, col) => ref -> col }) ++ 
-                                  (s2cols  map { case (i, xs, ref, col) => ColumnRef(JPath(JPathIndex(i + maxId + 1) :: xs.toList), ref.ctype) -> col })
+                                  (s2cols  map { case (i, xs, ref, col) => ColumnRef(CPath(CPathIndex(i + maxId + 1) :: xs.toList), ref.ctype) -> col })
 
                     newCols.toMap
                   }
@@ -358,6 +359,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
             )
           }
 
+        case DerefMetadataStatic(source, field) =>
+          composeSliceTransform2(source) map {
+            _ deref field
+          }
+
         case DerefObjectStatic(source, field) =>
           composeSliceTransform2(source) map {
             _ deref field
@@ -370,8 +376,8 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
           l0.zip(r0) { (slice, derefBy) => 
             assert(derefBy.columns.size <= 1)
             derefBy.columns.headOption collect {
-              case (ColumnRef(JPath.Identity, CString), c: StrColumn) => 
-                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathField(c(row)) })
+              case (ColumnRef(CPath.Identity, CString), c: StrColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => CPathField(c(row)) })
             } getOrElse {
               slice
             }
@@ -389,14 +395,14 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
           l0.zip(r0) { (slice, derefBy) => 
             assert(derefBy.columns.size <= 1)
             derefBy.columns.headOption collect {
-              case (ColumnRef(JPath.Identity, CLong), c: LongColumn) => 
-                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathIndex(c(row).toInt) })
+              case (ColumnRef(CPath.Identity, CLong), c: LongColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => CPathIndex(c(row).toInt) })
 
-              case (ColumnRef(JPath.Identity, CDouble), c: DoubleColumn) => 
-                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathIndex(c(row).toInt) })
+              case (ColumnRef(CPath.Identity, CDouble), c: DoubleColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => CPathIndex(c(row).toInt) })
 
-              case (ColumnRef(JPath.Identity, CNum), c: NumColumn) => 
-                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathIndex(c(row).toInt) })
+              case (ColumnRef(CPath.Identity, CNum), c: NumColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => CPathIndex(c(row).toInt) })
             } getOrElse {
               slice
             }

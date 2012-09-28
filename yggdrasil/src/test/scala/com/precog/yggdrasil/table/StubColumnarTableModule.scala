@@ -1,6 +1,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common.json._
 import com.precog.bytecode.JType
 import com.precog.common.Path
 import com.precog.common.VectorCase
@@ -53,7 +54,7 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
       tableWithSortKey.toJson.map {
         jvals =>
           fromJson(jvals.toList.sortBy(_ \ "0").toStream)
-      }.map(_.transform(DerefObjectStatic(Leaf(Source), JPathField("1"))))
+      }.map(_.transform(DerefObjectStatic(Leaf(Source), CPathField("1"))))
     }
     
     override def load(uid: UserId, jtpe: JType) = {

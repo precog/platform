@@ -1,6 +1,6 @@
 package com.precog.yggdrasil.util
 
-import blueeyes.json.JPath
+import com.precog.common.json.CPath
 import com.precog.yggdrasil.{ IdSource, TableModule, YggConfigComponent, CLong }
 import com.precog.yggdrasil.table._
 
@@ -21,7 +21,7 @@ trait IdSourceScannerModule[M[+_]] extends TableModule[M] with YggConfigComponen
       val defined = BitSet(range filter { i => cols.exists(_._2.isDefinedAt(i)) }: _*)
       val values = range map { _ => yggConfig.idSource.nextId() } toArray
       
-      ((), Map(ColumnRef(JPath.Identity, CLong) -> ArrayLongColumn(defined, values)))
+      ((), Map(ColumnRef(CPath.Identity, CLong) -> ArrayLongColumn(defined, values)))
     }
   }
 }
