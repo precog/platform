@@ -1,5 +1,5 @@
 HEAP_OPTS="-Xms2G -Xmx12G"
-STACK_OPTS="-Xss4m"
+STACK_OPTS="-Xss1m"
 GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
 GC_LOG_OPTS="-verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/var/log/precog/shard-v1-demo3.gc.log"
 JAVA_OPTS="-Djava.io.tmpdir=/srv/tmp $GC_OPTS $GC_LOG_OPTS $HEAP_OPTS $STACK_OPTS"
