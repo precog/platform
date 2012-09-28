@@ -42,6 +42,7 @@ trait Evaluator[M[+_]] extends DAG
     with CrossOrdering
     with Memoizer
     with TypeInferencer
+    with StaticInliner[M]
     with ReductionFinder
     with TableModule[M]        // TODO specific implementation
     with ImplLibrary[M]
@@ -82,6 +83,7 @@ trait Evaluator[M[+_]] extends DAG
   def rewriteDAG(optimize: Boolean): DepGraph => DepGraph = {
     (orderCrosses _) andThen
     (if (optimize) (g => megaReduce(g, findReductions(g))) else identity) andThen
+    (if (optimize) inlineStatics else identity) andThen
     (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
     (if (optimize) (memoize _) else identity)
   }
@@ -223,19 +225,27 @@ trait Evaluator[M[+_]] extends DAG
           state(PendingTable(f(index), graph, TransSpec1.Id))
         }
         
-        case Root(_, instr) => {
-          val table = graph.value collect {
-            case SString(str) => Table.constString(Set(CString(str)))
-            case SDecimal(d) => Table.constDecimal(Set(CNum(d)))
-            case SBoolean(b) => Table.constBoolean(Set(CBoolean(b)))
-            case SNull => Table.constNull
-            case SObject(map) if map.isEmpty => Table.constEmptyObject
-            case SArray(Vector()) => Table.constEmptyArray
+        case Root(_, value) => {
+          val table = value match {
+            case str @ CString(_) => Table.constString(Set(str))
+            
+            case ln @ CLong(_) => Table.constLong(Set(ln))
+            case d @ CDouble(_) => Table.constDouble(Set(d))
+            case n @ CNum(_) => Table.constDecimal(Set(n))
+            
+            case b @ CBoolean(_) => Table.constBoolean(Set(b))
+            
+            case CNull => Table.constNull
+            
+            case CEmptyObject => Table.constEmptyObject
+            case CEmptyArray => Table.constEmptyArray
+            
+            case CUndefined => Table.empty
           }
           
           val spec = buildConstantWrapSpec(Leaf(Source))
           
-          state(PendingTable(M.point(table.get.transform(spec)), graph, TransSpec1.Id))
+          state(PendingTable(M.point(table.transform(spec)), graph, TransSpec1.Id))
         }
         
         // TODO technically, we can do this without forcing by pre-lifting PendingTable#trans
@@ -447,33 +457,33 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
+        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
           for {
             pendingTable <- prepareEval(left, splits)
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), false))
+          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, false))
         }
         
-        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
+        case Join(_, Eq, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
           for {
             pendingTable <- prepareEval(right, splits)
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(left.value.get), false))
+          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, false))
         }
         
-        case Join(_, NotEq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
+        case Join(_, NotEq, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
           for {
             pendingTable <- prepareEval(left, splits)
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), true))
+          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, true))
         }
         
-        case Join(_, NotEq, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
+        case Join(_, NotEq, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
           for {
             pendingTable <- prepareEval(right, splits)
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(left.value.get), true))
+          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, true))
         }
         
-        case Join(_, instructions.WrapObject, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
-          left.value match {
-            case Some(value @ SString(str)) => {
+        case Join(_, instructions.WrapObject, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
+          value match {
+            case value @ CString(str) => {
               //prepareEval(right, splits) map { pendingTable => PendingTable(pendingTable.table, pendingTable.graph, trans.WrapObject(pendingTable.trans, str)) }
 
               for {
@@ -486,9 +496,9 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, DerefObject, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
-          right.value match {
-            case Some(value @ SString(str)) => {
+        case Join(_, DerefObject, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+          value match {
+            case value @ CString(str) => {
               for {
                 pendingTable <- prepareEval(left, splits)
               } yield PendingTable(pendingTable.table, pendingTable.graph, DerefObjectStatic(pendingTable.trans, CPathField(str)))
@@ -499,9 +509,9 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, DerefMetadata, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
-          right.value match {
-            case Some(value @ SString(str)) => {
+        case Join(_, DerefMetadata, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+          value match {
+            case value @ CString(str) => {
               for {
                 pendingTable <- prepareEval(left, splits)
               } yield PendingTable(pendingTable.table, pendingTable.graph, DerefMetadataStatic(pendingTable.trans, CPathMeta(str)))
@@ -512,37 +522,39 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
-          right.value match {
-            case Some(SDecimal(d)) => {
-              for {
-                pendingTable <- prepareEval(left, splits)
-              } yield PendingTable(pendingTable.table, pendingTable.graph, DerefArrayStatic(pendingTable.trans, CPathIndex(d.toInt)))
-            }
-            
-            // TODO other numeric types
-            
-            case _ =>
-              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+        case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+          val optIndex = value match {
+            case CNum(d) => Some(d.toInt)
+            case CLong(ln) => Some(ln.toInt)
+            case CDouble(d) => Some(d.toInt)
+            case _ => None
           }
+          
+          optIndex map { idx => 
+            for {
+              pendingTable <- prepareEval(left, splits)
+            } yield PendingTable(pendingTable.table, pendingTable.graph, DerefArrayStatic(pendingTable.trans, CPathIndex(idx)))
+          } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         
-        case Join(_, instructions.ArraySwap, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
-          right.value match {
-            case Some(value @ SDecimal(d)) => {     // TODO other numeric types
-              for {
-                pendingTable <- prepareEval(left, splits)
-              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArraySwap(pendingTable.trans, d.toInt))
-            }
-            
-            case _ =>
-              state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
+        case Join(_, instructions.ArraySwap, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+          val optIndex = value match {
+            case CNum(d) => Some(d.toInt)
+            case CLong(ln) => Some(ln.toInt)
+            case CDouble(d) => Some(d.toInt)
+            case _ => None
           }
+          
+          optIndex map { idx =>
+            for {
+              pendingTable <- prepareEval(left, splits)
+            } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArraySwap(pendingTable.trans, idx))
+          } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         
-        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
-          right.value match {
-            case Some(SObject(obj)) if obj.isEmpty => {
+        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+          value match {
+            case CEmptyObject => {
               for {
                 pendingTable <- prepareEval(left, splits)
               } yield PendingTable(pendingTable.table, pendingTable.graph, trans.InnerObjectConcat(pendingTable.trans))
@@ -553,9 +565,9 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
-          left.value match {
-            case Some(SObject(obj)) if obj.isEmpty => {
+        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
+          value match {
+            case CEmptyObject => {
               for {
                 pendingTable <- prepareEval(right, splits)
               } yield PendingTable(pendingTable.table, pendingTable.graph, trans.InnerObjectConcat(pendingTable.trans))
@@ -566,9 +578,9 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
-          right.value match {
-            case Some(SObject(obj)) if obj.isEmpty => {
+        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+          value match {
+            case CEmptyArray => {
               for {
                 pendingTable <- prepareEval(left, splits)
               } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArrayConcat(pendingTable.trans))
@@ -579,9 +591,9 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
-          left.value match {
-            case Some(SObject(obj)) if obj.isEmpty => {
+        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
+          value match {
+            case CEmptyArray => {
               for {
                 pendingTable <- prepareEval(right, splits)
               } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArrayConcat(pendingTable.trans))
@@ -592,33 +604,25 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
   
-        // case Join(_, Map2CrossLeft(op), left, right) if right.isSingleton =>
-        
-        // case Join(_, Map2CrossRight(op), left, right) if left.isSingleton =>
-        
         // begin: annoyance with Scala's lousy pattern matcher
-        case Join(_, op, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
-          val cv = svalueToCValue(right.value.get)
-          val f1 = op2(op).f2.partialRight(cv)
-
-          for {
-            pendingTable <- prepareEval(left, splits)
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, f1))
+        case Join(_, op, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+          op2ForBinOp(op) map { _.f2.partialRight(value) } map { f1 =>
+            for {
+              pendingTable <- prepareEval(left, splits)
+            } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, f1))
+          } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         
-        case Join(_, op, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
-          val cv = svalueToCValue(left.value.get)
-          val f1 = op2(op).f2.partialLeft(cv)
-          
-          for {
-            pendingTable <- prepareEval(right, splits)
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, f1))
+        case Join(_, op, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
+          op2ForBinOp(op) map { _.f2.partialLeft(value) } map { f1 =>
+            for {
+              pendingTable <- prepareEval(right, splits)
+            } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, f1))
+          } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         // end: annoyance
         
         case Join(_, op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => {
-          //println("left: " + left)
-          //println("right: " + right)
           // TODO binary typing
 
           for {
@@ -1071,31 +1075,6 @@ trait Evaluator[M[+_]] extends DAG
     case Neg => Unary.Neg
   }
   
-  private def op2(op: BinaryOperation): Op2 = op match {
-    case BuiltInFunction2Op(op2) => op2
-    
-    case instructions.Add => Infix.Add
-    case instructions.Sub => Infix.Sub
-    case instructions.Mul => Infix.Mul
-    case instructions.Div => Infix.Div
-    case instructions.Mod => Infix.Mod
-    
-    case instructions.Lt => Infix.Lt
-    case instructions.LtEq => Infix.LtEq
-    case instructions.Gt => Infix.Gt
-    case instructions.GtEq => Infix.GtEq
-    
-    case instructions.Eq | instructions.NotEq => sys.error("assertion error")
-    
-    case instructions.Or => Infix.Or
-    case instructions.And => Infix.And
-    
-    case instructions.WrapObject | instructions.JoinObject |
-         instructions.JoinArray | instructions.ArraySwap |
-         instructions.DerefObject | instructions.DerefMetadata |
-         instructions.DerefArray => sys.error("assertion error")
-  }
-  
   private def transFromBinOp[A <: SourceType](op: BinaryOperation)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = op match {
     case Eq => trans.Equal(left, right)
     case NotEq => trans.Map1(trans.Equal(left, right), op1(Comp).f1)
@@ -1106,7 +1085,7 @@ trait Evaluator[M[+_]] extends DAG
     case DerefObject => DerefObjectDynamic(left, right)
     case DerefMetadata => sys.error("cannot do a dynamic metadata deref")
     case DerefArray => DerefArrayDynamic(left, right)
-    case _ => trans.Map2(left, right, op2(op).f2)
+    case _ => trans.Map2(left, right, op2ForBinOp(op).get.f2)     // if this fails, we're missing a case above
   }
 
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =

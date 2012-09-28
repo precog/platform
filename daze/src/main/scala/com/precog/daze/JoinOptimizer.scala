@@ -4,6 +4,7 @@ package daze
 import scala.collection.mutable
 
 import com.precog.util.IdGen
+import com.precog.yggdrasil.CString
 
 trait JoinOptimizer extends DAGTransform {
   import dag._
@@ -80,10 +81,10 @@ trait JoinOptimizer extends DAGTransform {
             Join(_, Eq, CrossLeftSort | CrossRightSort,
               Join(_, DerefObject, CrossLeftSort,
                 eqLHS,
-                Root(_, PushString(sortFieldLHS))),
+                Root(_, CString(sortFieldLHS))),
               Join(_, DerefObject, CrossLeftSort,
                 eqRHS,
-                Root(_, PushString(sortFieldRHS))))) => {
+                Root(_, CString(sortFieldRHS))))) => {
                   
             val sortId = idGen.nextInt()
             
@@ -91,9 +92,9 @@ trait JoinOptimizer extends DAGTransform {
               SortBy(
                 Join(loc, JoinObject, IdentitySort,
                   Join(loc, WrapObject, CrossLeftSort,
-                    Root(loc, PushString("key")),
-                    Join(loc, DerefObject, CrossLeftSort, graph, Root(loc, PushString(sortField)))),
-                  Join(loc, WrapObject, CrossLeftSort, Root(loc, PushString("value")), graph)),
+                    Root(loc, CString("key")),
+                    Join(loc, DerefObject, CrossLeftSort, graph, Root(loc, CString(sortField)))),
+                  Join(loc, WrapObject, CrossLeftSort, Root(loc, CString("value")), graph)),
                 "key", "value", sortId) 
             }
             

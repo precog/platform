@@ -37,7 +37,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     "singleton count" >> {
       val line = Line(0, "")
       
-      val input = dag.Reduce(line, Count, Root(line, PushString("alpha")))
+      val input = dag.Reduce(line, Count, Root(line, CString("alpha")))
         
       val result = testEval(input)
       
@@ -54,7 +54,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Count,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -71,7 +71,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, GeometricMean,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -88,7 +88,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Mean,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -105,7 +105,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Max,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -122,7 +122,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Min,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -139,7 +139,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, StdDev,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -155,7 +155,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     "sum a singleton" >> {
       val line = Line(0, "")
       
-      val input = dag.Reduce(line, Sum, Root(line, PushNum("18")))
+      val input = dag.Reduce(line, Sum, Root(line, CLong(18)))
         
       val result = testEval(input)
       
@@ -172,7 +172,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Sum,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -189,7 +189,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, SumSq,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -206,7 +206,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Variance,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -226,7 +226,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Count,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -243,7 +243,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, GeometricMean,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -260,7 +260,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Mean,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -277,7 +277,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Max,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -294,7 +294,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Min,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -311,7 +311,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, StdDev,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -328,7 +328,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Sum,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -345,7 +345,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, SumSq,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -362,7 +362,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Variance,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -381,7 +381,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Count,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbersAcrossSlices"))))
         
       val result = testEval(input)
       
@@ -398,7 +398,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, GeometricMean,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbersAcrossSlices"))))
         
       val result = testEval(input)
       
@@ -415,7 +415,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Mean,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbersAcrossSlices"))))
         
       val result = testEval(input)
       
@@ -432,7 +432,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Max,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbersAcrossSlices"))))
         
       val result = testEval(input)
       
@@ -449,7 +449,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Min,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbersAcrossSlices"))))
         
       val result = testEval(input)
       
@@ -466,7 +466,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, StdDev,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbersAcrossSlices"))))
         
       val result = testEval(input)
       
@@ -483,7 +483,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Sum,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbersAcrossSlices"))))
         
       val result = testEval(input)
       
@@ -500,7 +500,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, SumSq,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbersAcrossSlices"))))
         
       val result = testEval(input)
       
@@ -517,7 +517,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Variance,
-        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/het/numbersAcrossSlices"))))
         
       val result = testEval(input)
       
@@ -536,7 +536,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Reduce(line, Count,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbersAcrossSlices"))))
 
       val result = testEval(input)
 
@@ -553,7 +553,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Reduce(line, GeometricMean,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbersAcrossSlices"))))
 
       val result = testEval(input)
 
@@ -570,7 +570,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Reduce(line, Mean,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbersAcrossSlices"))))
 
       val result = testEval(input)
 
@@ -587,7 +587,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Reduce(line, Max,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbersAcrossSlices"))))
 
       val result = testEval(input)
 
@@ -604,7 +604,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Reduce(line, Min,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbersAcrossSlices"))))
 
       val result = testEval(input)
 
@@ -621,7 +621,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Reduce(line, StdDev,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbersAcrossSlices"))))
 
       val result = testEval(input)
 
@@ -638,7 +638,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Reduce(line, Sum,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbersAcrossSlices"))))
 
       val result = testEval(input)
 
@@ -655,7 +655,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Reduce(line, SumSq,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbersAcrossSlices"))))
 
       val result = testEval(input)
 
@@ -672,7 +672,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Reduce(line, Variance,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbersAcrossSlices"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbersAcrossSlices"))))
 
       val result = testEval(input)
 
