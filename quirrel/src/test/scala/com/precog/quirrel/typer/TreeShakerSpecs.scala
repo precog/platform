@@ -718,13 +718,13 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       
       result.errors must beEmpty
     }
-    
-    "detect unused tic-variable from let in metadescent" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("'a", "'b"), MetaDescent(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), "foo"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+
+    "detect unused formal parameter in metadescent" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), MetaDescent(LineStream(), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), "foo"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
-      result.errors mustEqual Set(UnusedTicVariable("'b"))
+      result.errors mustEqual Set(UnusedFormalBinding(Identifier(Vector(), "b")))
     }
 
     "detect unused tic-variable from solve in metadescent" in {
