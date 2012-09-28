@@ -40,7 +40,7 @@ import scalaz.std.list._
 import scalaz.std.anyVal._
 
 object CValueGenerators {
-  type JSchema = Seq[(CPath, CType)]
+  type JSchema = Seq[(JPath, CType)]
 
   def inferSchema(data: Seq[JValue]): JSchema = {
     if (data.isEmpty) {
@@ -48,7 +48,7 @@ object CValueGenerators {
     } else {
       val current = data.head.flattenWithPath flatMap {
         case (path, jv) =>
-          CType.forJValue(jv) map { ct => (CPath(path), ct) }
+          CType.forJValue(jv) map { ct => (path, ct) }
       }
       
       (current ++ inferSchema(data.tail)).distinct
@@ -78,7 +78,7 @@ trait CValueGenerators extends ArbitraryBigDecimal {
         (name, subschema) <- names.toList zip subschemas
         (jpath, ctype)    <- subschema
       } yield {
-        (CPathField(name) \ jpath, ctype)
+        (JPathField(name) \ jpath, ctype)
       }
     }
   }
@@ -92,17 +92,12 @@ trait CValueGenerators extends ArbitraryBigDecimal {
         (idx, subschema) <- (0 until size) zip subschemas
         (jpath, ctype)   <- subschema
       } yield {
-        (CPathIndex(idx) \ jpath, ctype)
+        (JPathIndex(idx) \ jpath, ctype)
       }
     }
   }
 
-  def leafSchema: Gen[JSchema] = ctype map { t => (CPath.Identity -> t) :: Nil }
-
-  //def metadataSchema(jschema: JSchema): Gen[JSchema] = {
-  //  val paths = jschema map { case (jpath, _) => jpath }
-
-  //}
+  def leafSchema: Gen[JSchema] = ctype map { t => (JPath.Identity -> t) :: Nil }
 
   def ctype: Gen[CType] = oneOf(
     CString,
@@ -140,21 +135,19 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     }
   }
 
-  def genEventColumns(jschema: JSchema): Gen[(Int, Stream[(Identities, Seq[(CPath, JValue)])])] = 
+  def genEventColumns(jschema: JSchema): Gen[(Int, Stream[(Identities, Seq[(JPath, JValue)])])] = 
     for {
       idCount  <- choose(1, 3) 
       dataSize <- choose(0, 20)
       ids      <- containerOfN[Set, List[Long]](dataSize, containerOfN[List, Long](idCount, posNum[Long]))
-      values   <- containerOfN[List, Seq[(CPath, JValue)]](dataSize, Gen.sequence[List, (CPath, JValue)](jschema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
+      values   <- containerOfN[List, Seq[(JPath, JValue)]](dataSize, Gen.sequence[List, (JPath, JValue)](jschema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
       
       falseDepth  <- choose(1, 3)
       falseSchema <- schema(falseDepth)
       falseSize   <- choose(0, 5)
       falseIds    <- containerOfN[Set, List[Long]](falseSize, containerOfN[List, Long](idCount, posNum[Long]))
-      falseValues <- containerOfN[List, Seq[(CPath, JValue)]](falseSize, Gen.sequence[List, (CPath, JValue)](falseSchema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
+      falseValues <- containerOfN[List, Seq[(JPath, JValue)]](falseSize, Gen.sequence[List, (JPath, JValue)](falseSchema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
 
-      //metaSchema <- metadataSchema(jschema)
-      
       falseIds2 = falseIds -- ids     // distinct ids
     } yield {
       (idCount, (ids.map(_.toArray) zip values).toStream ++ (falseIds2.map(_.toArray) zip falseValues).toStream)

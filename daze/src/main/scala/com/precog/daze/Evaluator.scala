@@ -523,7 +523,7 @@ trait Evaluator[M[+_]] extends DAG
           right.value match {
             case Some(value @ SString(str)) => {
               for {
-                pendingTable <- loop(left, splits)
+                pendingTable <- prepareEval(left, splits)
               } yield PendingTable(pendingTable.table, pendingTable.graph, DerefMetadataStatic(pendingTable.trans, CPathMeta(str)))
             }
             
@@ -805,8 +805,8 @@ trait Evaluator[M[+_]] extends DAG
         }
         
         case s @ SortBy(parent, sortField, valueField, id) => {
-          val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(sortField))
-          val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(valueField))
+          val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), CPathField(sortField))
+          val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), CPathField(valueField))
                 
           if (parent.sorting == ValueSort(id)) {
             prepareEval(parent, splits)
@@ -1163,7 +1163,7 @@ trait Evaluator[M[+_]] extends DAG
   
   private def buildJoinKeySpec(sharedLength: Int): TransSpec1 = {
     val components = for (i <- 0 until sharedLength)
-      yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, JPathIndex(i))): TransSpec1
+      yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, CPathIndex(i))): TransSpec1
     
     components reduce { trans.ArrayConcat(_, _) }
   }

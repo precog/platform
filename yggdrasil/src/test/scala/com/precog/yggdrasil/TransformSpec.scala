@@ -136,7 +136,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkFilter = {
-    implicit val gen = sample(_ => Gen.value(Seq(CPath.Identity -> CLong)))
+    implicit val gen = sample(_ => Gen.value(Seq(JPath.Identity -> CLong)))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
@@ -197,6 +197,18 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     results.copoint must_== expected
   }
 
+  def checkMetaDeref = {
+    implicit val gen = sample(objectSchema(_, 3))
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+      val results = toJson(table.transform {
+        DerefMetadataStatic(Leaf(Source), CPathMeta("foo"))
+      })
+
+      results.copoint must_== Stream()
+    }
+  }
+  
   def checkObjectDeref = {
     implicit val gen = sample(objectSchema(_, 3))
     check { (sample: SampleData) =>
@@ -204,10 +216,10 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       val fieldHead = field.head.get
       val table = fromSample(sample)
       val results = toJson(table.transform {
-        DerefObjectStatic(Leaf(Source), CPathField(fieldHead.asInstanceOf[CPathField].name))
+        DerefObjectStatic(Leaf(Source), fieldHead match { case JPathField(s) => CPathField(s) })
       })
 
-      val expected = sample.data.map { jv => jv(CPath(fieldHead)) } flatMap {
+      val expected = sample.data.map { jv => jv(JPath(fieldHead)) } flatMap {
         case JNothing => None
         case jv       => Some(jv)
       }
@@ -223,10 +235,10 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       val fieldHead = field.head.get
       val table = fromSample(sample)
       val results = toJson(table.transform {
-        DerefArrayStatic(Leaf(Source), CPathIndex(fieldHead.asInstanceOf[CPathIndex].index))
+        DerefArrayStatic(Leaf(Source), fieldHead match { case JPathIndex(s) => CPathIndex(s) })
       })
 
-      val expected = sample.data.map { jv => jv(CPath(fieldHead)) } flatMap {
+      val expected = sample.data.map { jv => jv(JPath(fieldHead)) } flatMap {
         case JNothing => None
         case jv       => Some(jv)
       }
@@ -236,7 +248,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkMap2Eq = {
-    implicit val gen = sample(_ => Seq(CPath("value1") -> CDouble, CPath("value2") -> CLong))
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CDouble, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
@@ -260,7 +272,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkMap2Add = {
-    implicit val gen = sample(_ => Seq(CPath("value1") -> CLong, CPath("value2") -> CLong))
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
@@ -479,7 +491,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkEqual = {
-    val genBase: Gen[SampleData] = sample(_ => Seq(CPath("value1") -> CLong, CPath("value2") -> CLong)).arbitrary
+    val genBase: Gen[SampleData] = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong)).arbitrary
     implicit val gen: Arbitrary[SampleData] = Arbitrary {
       genBase map { sd =>
         SampleData(
@@ -487,21 +499,21 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
             case (jv, i) if i%2 == 0 => 
               jv match {
                 case JObject(JField("value", JObject(JField("value2", _) :: JField("value1", _) :: Nil)) :: _ :: Nil) =>
-                  jv.set(CPath(CPathField("value"), CPathField("value1")), jv(CPath(CPathField("value"), CPathField("value2"))))
+                  jv.set(JPath(JPathField("value"), JPathField("value1")), jv(JPath(JPathField("value"), JPathField("value2"))))
                 case _ => jv
               }
 
             case (jv, i) if i%5 == 0 =>
               jv match {
                 case JObject(JField("value", JObject(JField("value2", _) :: JField("value1", _) :: Nil)) :: _ :: Nil) =>
-                  jv.set(CPath(CPathField("value"), CPathField("value1")), JNothing)
+                  jv.set(JPath(JPathField("value"), JPathField("value1")), JNothing)
                 case _ => jv
               }
 
             case (jv, i) if i%5 == 3 =>
               jv match {
                 case JObject(JField("value", JObject(JField("value2", _) :: JField("value1", _) :: Nil)) :: _ :: Nil) =>
-                  jv.set(CPath(CPathField("value"), CPathField("value2")), JNothing)
+                  jv.set(JPath(JPathField("value"), JPathField("value2")), JNothing)
                 case _ => jv
               }
 
@@ -532,7 +544,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkEqualLiteral = {
-    val genBase: Gen[SampleData] = sample(_ => Seq(CPath("value1") -> CLong)).arbitrary
+    val genBase: Gen[SampleData] = sample(_ => Seq(JPath("value1") -> CLong)).arbitrary
     implicit val gen: Arbitrary[SampleData] = Arbitrary {
       genBase map { sd =>
         SampleData(
@@ -540,14 +552,14 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
             case (jv, i) if i%2 == 0 => 
               jv match {
                 case JObject(JField("value", JObject(JField("value1", _) :: Nil)) :: _ :: Nil) =>
-                  jv.set(CPath(CPathField("value"), CPathField("value1")), JNum(0))
+                  jv.set(JPath(JPathField("value"), JPathField("value1")), JNum(0))
                 case _ => jv
               }
 
             case (jv, i) if i%5 == 0 =>
               jv match {
                 case JObject(JField("value", JObject(JField("value1", _) :: Nil)) :: _ :: Nil) =>
-                  jv.set(CPath(CPathField("value"), CPathField("value1")), JNothing)
+                  jv.set(JPath(JPathField("value"), JPathField("value1")), JNothing)
                 case _ => jv
               }
 
@@ -577,7 +589,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     }
   }
   def checkNotEqualLiteral = {
-    val genBase: Gen[SampleData] = sample(_ => Seq(CPath("value1") -> CLong)).arbitrary
+    val genBase: Gen[SampleData] = sample(_ => Seq(JPath("value1") -> CLong)).arbitrary
     implicit val gen: Arbitrary[SampleData] = Arbitrary {
       genBase map { sd =>
         SampleData(
@@ -585,14 +597,14 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
             case (jv, i) if i%2 == 0 => 
               jv match {
                 case JObject(JField("value", JObject(JField("value1", _) :: Nil)) :: _ :: Nil) =>
-                  jv.set(CPath(CPathField("value"), CPathField("value1")), JNum(0))
+                  jv.set(JPath(JPathField("value"), JPathField("value1")), JNum(0))
                 case _ => jv
               }
 
             case (jv, i) if i%5 == 0 =>
               jv match {
                 case JObject(JField("value", JObject(JField("value1", _) :: Nil)) :: _ :: Nil) =>
-                  jv.set(CPath(CPathField("value"), CPathField("value1")), JNothing)
+                  jv.set(JPath(JPathField("value"), JPathField("value1")), JNothing)
                 case _ => jv
               }
 
@@ -673,7 +685,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkObjectConcat = {
-    implicit val gen = sample(_ => Seq(CPath("value1") -> CLong, CPath("value2") -> CLong))
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
@@ -698,7 +710,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkObjectConcatOverwrite = {
-    implicit val gen = sample(_ => Seq(CPath("value1") -> CLong, CPath("value2") -> CLong))
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
@@ -716,7 +728,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkArrayConcat = {
-    implicit val gen = sample(_ => Seq(CPath("[0]") -> CLong, CPath("[1]") -> CLong))
+    implicit val gen = sample(_ => Seq(JPath("[0]") -> CLong, JPath("[1]") -> CLong))
     check { (sample0: SampleData) =>
       /***
       important note:
@@ -762,8 +774,8 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   def checkObjectDelete = {
     implicit val gen = sample(objectSchema(_, 3))
 
-    def randomDeletionMask(schema: CValueGenerators.JSchema): Option[CPathField] = {
-      Random.shuffle(schema).headOption.map({ case (CPath(x @ CPathField(_), _ @ _*), _) => x })
+    def randomDeletionMask(schema: CValueGenerators.JSchema): Option[JPathField] = {
+      Random.shuffle(schema).headOption.map({ case (JPath(x @ JPathField(_), _ @ _*), _) => x })
     }
 
     check { (sample: SampleData) =>
@@ -777,7 +789,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
           ObjectDelete(DerefObjectStatic(Leaf(Source), CPathField("value")), Set(CPathField(field.name)))
         })
 
-        val expected = sample.data.flatMap { jv => (jv \ "value").delete(CPath(field)) }
+        val expected = sample.data.flatMap { jv => (jv \ "value").delete(JPath(field)) }
 
         result.copoint must_== expected
       }
@@ -926,7 +938,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   */
 
   def checkTypedTrivial = {
-    implicit val gen = sample(_ => Seq(CPath("value1") -> CLong, CPath("value2") -> CBoolean, CPath("value3") -> CLong))
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CBoolean, JPath("value3") -> CLong))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
 
@@ -960,11 +972,12 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
   def testTyped(sample: SampleData) = {
     val (_, schema) = sample.schema.getOrElse(0 -> List())
+    val cschema = schema map { case (jpath, ctype) => (CPath(jpath), ctype) }
 
     // using a generator with heterogeneous data, we're just going to produce
     // the jtype that chooses all of the elements of the non-random data.
     val jtpe = JObjectFixedT(Map(
-      "value" -> Schema.mkType(schema).getOrElse(sys.error("Could not generate JType from schema " + schema)),
+      "value" -> Schema.mkType(cschema).getOrElse(sys.error("Could not generate JType from schema " + cschema)),
       "key" -> JArrayUnfixedT
     ))
 
@@ -974,7 +987,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
     val included = schema.groupBy(_._1).mapValues(_.map(_._2).toSet)
 
-    val sampleSchema = inferSchema(sample.data.toSeq)
+    val sampleSchema = inferSchema(sample.data.toSeq) map { case (jpath, ctype) => (CPath(jpath), ctype) }
     val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
     val expected = expectedResult(sample.data, included, subsumes)
 
@@ -1001,7 +1014,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         { "value":{ "lvf":-1, "vbeu":true, "dAc":0 }, "key":[4,3,4] }
       ]""")
 
-      val sample = SampleData(data.toStream, Some((3,List((CPath(".n"),CEmptyObject)))))
+      val sample = SampleData(data.toStream, Some((3,List((JPath(".n"),CEmptyObject)))))
 
       testTyped(sample)
   }
@@ -1138,12 +1151,12 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       Typed(Leaf(Source), jtpe)
     })
       
-    val included: Map[CPath, Set[CType]] = Map(
-      CPath(List(CPathIndex(0))) -> Set(CEmptyArray), 
-      CPath(List(CPathIndex(1))) -> Set(CEmptyArray), 
-      CPath(List(CPathIndex(2))) -> Set(CNull))
+    val included: Map[JPath, Set[CType]] = Map(
+      JPath(List(JPathIndex(0))) -> Set(CEmptyArray), 
+      JPath(List(JPathIndex(1))) -> Set(CEmptyArray), 
+      JPath(List(JPathIndex(2))) -> Set(CNull))
 
-    val sampleSchema = inferSchema(data.toSeq)
+    val sampleSchema = inferSchema(data.toSeq) map { case (jpath, ctype) => (CPath(jpath), ctype) }
     val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
 
     results.copoint must_== expectedResult(data, included, subsumes)
@@ -1162,13 +1175,13 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       Typed(Leaf(Source), jtpe)
     })
     
-    val included: Map[CPath, Set[CType]] = Map(
-      CPath(List(CPathIndex(0))) -> Set(CNum), 
-      CPath(List(CPathIndex(1))) -> Set(CNum), 
-      CPath(List(CPathIndex(2))) -> Set(CBoolean), 
-      CPath(List(CPathIndex(3))) -> Set(CEmptyArray))
+    val included: Map[JPath, Set[CType]] = Map(
+      JPath(List(JPathIndex(0))) -> Set(CNum), 
+      JPath(List(JPathIndex(1))) -> Set(CNum), 
+      JPath(List(JPathIndex(2))) -> Set(CBoolean), 
+      JPath(List(JPathIndex(3))) -> Set(CEmptyArray))
 
-    val sampleSchema = inferSchema(data.toSeq)
+    val sampleSchema = inferSchema(data.toSeq) map { case (jpath, ctype) => (CPath(jpath), ctype) }
     val subsumes: Boolean = Schema.subsumes(sampleSchema, jtpe)
 
     results.copoint must_== expectedResult(data, included, subsumes)
@@ -1281,7 +1294,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkScan = {
-    implicit val gen = sample(_ => Seq(CPath.Identity -> CLong))
+    implicit val gen = sample(_ => Seq(JPath.Identity -> CLong))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform {
@@ -1354,7 +1367,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkConst = {
-    implicit val gen = undefineRowsForColumn(sample(_ => Seq(CPath("field") -> CLong)), CPath("value") \ "field")
+    implicit val gen = undefineRowsForColumn(sample(_ => Seq(JPath("field") -> CLong)), JPath("value") \ "field")
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val results = toJson(table.transform(ConstLiteral(CString("foo"), DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("field")))))
@@ -1368,7 +1381,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     }
   }
 
-  def expectedResult(data: Stream[JValue], included: Map[CPath, Set[CType]], subsumes: Boolean): Stream[JValue] = {
+  def expectedResult(data: Stream[JValue], included: Map[JPath, Set[CType]], subsumes: Boolean): Stream[JValue] = {
     //if (subsumes) { 
       data map { jv =>
         val paths = jv.flattenWithPath.toMap.keys.toList
@@ -1381,8 +1394,8 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         */
 
         val filtered = jv.flattenWithPath filter {
-          case (CPath(CPathField("value"), tail @ _*), leaf) =>
-            included.get(CPath(tail: _*)).exists { ctpes =>
+          case (JPath(JPathField("value"), tail @ _*), leaf) =>
+            included.get(JPath(tail: _*)).exists { ctpes =>
               leaf match {
                 case JBool(_) => ctpes.contains(CBoolean)
                 case JString(_) => ctpes.contains(CString)
@@ -1400,7 +1413,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
               }
             }
             
-          case (CPath(CPathField("key"), _*), _) => true
+          case (JPath(JPathField("key"), _*), _) => true
           case _ => sys.error("Unexpected JValue schema for " + jv)
         }
 

@@ -161,6 +161,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "give a transformation for a big decimal and a long" in testMod2Filter
       "perform an object dereference" in checkObjectDeref
       "perform an array dereference" in checkArrayDeref
+      "perform metadata dereference on data without metadata" in checkMetaDeref
       "perform a trivial map2 add" in checkMap2Add
       "perform a trivial map2 eq" in checkMap2Eq
       "perform a map2 add over but not into arrays and objects" in testMap2ArrayObject

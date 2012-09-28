@@ -92,8 +92,8 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
               val size = sl.size
               val columns: Map[ColumnRef, Column] = {
                 val resultColumns = for {
-                  cl <- sl.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
-                  cr <- sr.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
+                  cl <- sl.columns collect { case (ref, col) if ref.selector == CPath.Identity => col }
+                  cr <- sr.columns collect { case (ref, col) if ref.selector == CPath.Identity => col }
                   result <- f(cl, cr)
                 } yield result
                   
@@ -378,6 +378,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
             )
           }
 
+        case DerefMetadataStatic(source, field) =>
+          composeSliceTransform2(source) map {
+            _ deref field
+          }
+
         case DerefObjectStatic(source, field) =>
           composeSliceTransform2(source) map {
             _ deref field
@@ -409,13 +414,13 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
           l0.zip(r0) { (slice, derefBy) => 
             assert(derefBy.columns.size <= 1)
             derefBy.columns.headOption collect {
-              case (ColumnRef(JPath.Identity, CLong), c: LongColumn) => 
+              case (ColumnRef(CPath.Identity, CLong), c: LongColumn) => 
                 new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => CPathIndex(c(row).toInt) })
 
-              case (ColumnRef(JPath.Identity, CDouble), c: DoubleColumn) => 
+              case (ColumnRef(CPath.Identity, CDouble), c: DoubleColumn) => 
                 new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => CPathIndex(c(row).toInt) })
 
-              case (ColumnRef(JPath.Identity, CNum), c: NumColumn) => 
+              case (ColumnRef(CPath.Identity, CNum), c: NumColumn) => 
                 new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => CPathIndex(c(row).toInt) })
             } getOrElse {
               slice

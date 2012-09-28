@@ -112,7 +112,7 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
         }]
     """)
 
-    val sample = SampleData(elements.toStream, Some((2,List((CPath(".q"),CNum), (CPath(".hw"),CEmptyArray), (CPath(".fr8y"),CNum)))))
+    val sample = SampleData(elements.toStream, Some((2,List((JPath(".q"),CNum), (JPath(".hw"),CEmptyArray), (JPath(".fr8y"),CNum)))))
 
     testAlign(sample.sortBy(_ \ "key"))
   }
@@ -301,7 +301,7 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
       }]
     """)
 
-    val sample = SampleData(elements.toStream, Some((3,List((CPath(".xb5hs2ckjajs0k44x"),CDouble), (CPath(".zzTqxfzwzacakwjqeGFcnhpkzd5akfobsg2nxump"),CEmptyArray), (CPath(".sp7hpv"),CEmptyObject)))))
+    val sample = SampleData(elements.toStream, Some((3,List((JPath(".xb5hs2ckjajs0k44x"),CDouble), (JPath(".zzTqxfzwzacakwjqeGFcnhpkzd5akfobsg2nxump"),CEmptyArray), (JPath(".sp7hpv"),CEmptyObject)))))
     testAlign(sample.sortBy(_ \ "key"))
   }
 

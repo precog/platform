@@ -54,7 +54,7 @@ import TableModule._
 trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
   implicit def M: Monad[M] with Copointed[M]
 
-  def testSortDense(sample: SampleData, sortOrder: DesiredSortOrder, unique: Boolean, sortKeys: CPath*) = {
+  def testSortDense(sample: SampleData, sortOrder: DesiredSortOrder, unique: Boolean, sortKeys: JPath*) = {
     val module = BlockStoreTestModule.empty[M]
     val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
       import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
@@ -67,7 +67,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
     val desiredJValueOrder = if (sortOrder.isAscending) jvalueOrdering else jvalueOrdering.reverse
 
-    val globalIdPath = CPath(".globalId")
+    val globalIdPath = JPath(".globalId")
 
     val original = if (unique) {
       sample.data.map { jv => JArray(sortKeys.map(_.extract(jv \ "value")).toList) -> jv }.toMap.toList.unzip._2.toStream
@@ -83,8 +83,10 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     }.sortBy({ v => { JArray(sortKeys.map(_.extract(v \ "value")).toList ::: List(v \ "globalId")).asInstanceOf[JValue] }       
     })(desiredJValueOrder).map(_.delete(globalIdPath).get).toList
 
+    val cSortKeys = sortKeys map { CPath(_) }
+
     val resultM = for {
-      sorted <- module.fromSample(sample).sort(module.sortTransspec(sortKeys: _*), sortOrder)
+      sorted <- module.fromSample(sample).sort(module.sortTransspec(cSortKeys: _*), sortOrder)
       json <- sorted.toJson
     } yield (json, sorted)
 
@@ -135,11 +137,11 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
         }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (1 , List(CPath(".uid") -> CString, CPath(".u") -> CBoolean, CPath(".md") -> CString, CPath(".l") -> CEmptyArray))
+        (1 , List(JPath(".uid") -> CString, JPath(".u") -> CBoolean, JPath(".md") -> CString, JPath(".l") -> CEmptyArray))
       )
     )
 
-    testSortDense(sampleData, SortDescending, false, CPath(".uid"))
+    testSortDense(sampleData, SortDescending, false, JPath(".uid"))
   }
 
   // Simple test of partially undefined sort key data
@@ -165,11 +167,11 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
         }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (2, List(CPath(".uid") -> CString, CPath(".fa") -> CNull, CPath(".hW") -> CDouble, CPath(".rzp") -> CEmptyObject))
+        (2, List(JPath(".uid") -> CString, JPath(".fa") -> CNull, JPath(".hW") -> CDouble, JPath(".rzp") -> CEmptyObject))
       )
     )
 
-    testSortDense(sampleData, SortAscending, false, CPath(".uid"), CPath(".hW"))
+    testSortDense(sampleData, SortAscending, false, JPath(".uid"), JPath(".hW"))
   }
 
   def heterogeneousBaseValueTypeSample = {
@@ -188,11 +190,11 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
         }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (2, List(CPath("[0]") -> CLong, CPath("[1]") -> CLong, CPath(".uid") -> CString, CPath("abc") -> CLong))
+        (2, List(JPath("[0]") -> CLong, JPath("[1]") -> CLong, JPath(".uid") -> CString, JPath("abc") -> CLong))
       )
     )
 
-    testSortDense(sampleData, SortAscending, false, CPath(".uid"))
+    testSortDense(sampleData, SortAscending, false, JPath(".uid"))
   }
 
   def badSchemaSortSample = {
@@ -223,12 +225,12 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
         }
       ]""") --> classOf[JArray]).elements.toStream,
       Some((2,List(
-        CPath(".m") -> CEmptyArray,
-        CPath(".f") -> CBoolean,
-        CPath(".u") -> CDouble,
-        CPath(".q") -> CNum,
-        CPath(".vxu") -> CEmptyArray))))
-    testSortDense(sampleData, SortAscending, false, CPath("q"))
+        JPath(".m") -> CEmptyArray,
+        JPath(".f") -> CBoolean,
+        JPath(".u") -> CDouble,
+        JPath(".q") -> CNum,
+        JPath(".vxu") -> CEmptyArray))))
+    testSortDense(sampleData, SortAscending, false, JPath("q"))
   }
 
   // Simple test of heterogeneous sort keys
@@ -261,18 +263,18 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
          }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (3, List(CPath(".uid") -> CLong,
-                 CPath(".uid") -> CDouble,
-                 CPath(".f.bn[0]") -> CNull, 
-                 CPath(".f.wei") -> CDouble, 
-                 CPath(".ljz[0]") -> CNull,
-                 CPath(".ljz[1][0]") -> CString,
-                 CPath(".ljz[2]") -> CBoolean,
-                 CPath(".jmy") -> CDouble))
+        (3, List(JPath(".uid") -> CLong,
+                 JPath(".uid") -> CDouble,
+                 JPath(".f.bn[0]") -> CNull, 
+                 JPath(".f.wei") -> CDouble, 
+                 JPath(".ljz[0]") -> CNull,
+                 JPath(".ljz[1][0]") -> CString,
+                 JPath(".ljz[2]") -> CBoolean,
+                 JPath(".jmy") -> CDouble))
       )
     )
 
-    testSortDense(sampleData, SortAscending, false, CPath(".uid"))
+    testSortDense(sampleData, SortAscending, false, JPath(".uid"))
   }
 
   def secondHetSortSample = {
@@ -299,16 +301,16 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
         "key":[2.0]
       }]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (1, List(CPath(".e") -> CNull,
-                 CPath(".chl") -> CNum,
-                 CPath(".zw1") -> CNum,
-                 CPath("[0]") -> CLong,
-                 CPath("[1]") -> CLong,
-                 CPath("[2]") -> CEmptyObject))
+        (1, List(JPath(".e") -> CNull,
+                 JPath(".chl") -> CNum,
+                 JPath(".zw1") -> CNum,
+                 JPath("[0]") -> CLong,
+                 JPath("[1]") -> CLong,
+                 JPath("[2]") -> CEmptyObject))
       )
     )
 
-    testSortDense(sampleData, SortAscending, false, CPath(".zw1"))
+    testSortDense(sampleData, SortAscending, false, JPath(".zw1"))
   }
 
   /* The following data set results in three separate JDBM
@@ -454,13 +456,13 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (3, List(CPath(".zbtQhnpnun") -> CLong,
-                 CPath(".ohvhwN") -> CNum,
-                 CPath(".viip") -> CNum))
+        (3, List(JPath(".zbtQhnpnun") -> CLong,
+                 JPath(".ohvhwN") -> CNum,
+                 JPath(".viip") -> CNum))
       )
     )
 
-    testSortDense(sampleData, SortAscending, false, CPath(".zbtQhnpnun"))
+    testSortDense(sampleData, SortAscending, false, JPath(".zbtQhnpnun"))
   }
 
   def uniqueSort = {
@@ -474,7 +476,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       )
     )
 
-    testSortDense(sampleData, SortAscending, false, CPath(".foo"))
+    testSortDense(sampleData, SortAscending, false, JPath(".foo"))
   }  
 
   def emptySort = {
@@ -485,7 +487,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       )
     )
 
-    testSortDense(sampleData, SortAscending, false, CPath(".foo"))
+    testSortDense(sampleData, SortAscending, false, JPath(".foo"))
   }
 
 }

@@ -23,7 +23,8 @@ package jdbm3
 import com.precog.yggdrasil.table._
 import com.precog.util.ByteBufferPool
 
-import blueeyes.json.{ CPath, CPathIndex }
+import com.precog.common.json._
+import blueeyes.json.{ JPath, JPathIndex }
 
 import org.joda.time.DateTime
 

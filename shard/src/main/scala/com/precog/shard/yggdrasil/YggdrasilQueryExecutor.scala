@@ -177,11 +177,11 @@ trait YggdrasilQueryExecutor
     import trans._
 
     def sort(table: Future[Table]): Future[Table] = if (!opts.sortOn.isEmpty) {
-      val sortKey = ArrayConcat(opts.sortOn map { jpath =>
-        WrapArray(jpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
-          case (inner, f @ JPathField(_)) =>
+      val sortKey = ArrayConcat(opts.sortOn map { cpath =>
+        WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
+          case (inner, f @ CPathField(_)) =>
             DerefObjectStatic(inner, f)
-          case (inner, i @ JPathIndex(_)) =>
+          case (inner, i @ CPathIndex(_)) =>
             DerefArrayStatic(inner, i)
         })
       }: _*)
