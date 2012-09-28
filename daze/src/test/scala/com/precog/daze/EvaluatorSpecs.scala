@@ -126,8 +126,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Mul, CrossLeftSort,
-        Root(line, PushNum("6")),
-        Root(line, PushNum("7")))
+        Root(line, CLong(6)),
+        Root(line, CLong(7)))
         
       testEval(input) { result => 
         result must haveSize(1)
@@ -143,7 +143,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate single value roots" >> {
       "push_string" >> {
         val line = Line(0, "")
-        val input = Root(line, PushString("daniel"))
+        val input = Root(line, CString("daniel"))
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -158,7 +158,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_num" >> {
         val line = Line(0, "")
-        val input = Root(line, PushNum("42"))
+        val input = Root(line, CLong(42))
         testEval(input) { result =>
           result must haveSize(1)
           
@@ -172,7 +172,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_true" >> {
         val line = Line(0, "")
-        val input = Root(line, PushTrue)
+        val input = Root(line, CBoolean(true))
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -187,7 +187,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_false" >> {
         val line = Line(0, "")
-        val input = Root(line, PushFalse)
+        val input = Root(line, CBoolean(false))
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -202,7 +202,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "push_null" >> {
         val line = Line(0, "")
-        val input = Root(line, PushNull)
+        val input = Root(line, CNull)
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -212,7 +212,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_object" >> {
         val line = Line(0, "")
-        val input = Root(line, PushObject)
+        val input = Root(line, CEmptyObject)
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -227,7 +227,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_array" >> {
         val line = Line(0, "")
-        val input = Root(line, PushArray)
+        val input = Root(line, CEmptyArray)
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -243,7 +243,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "evaluate a load_local" in {
       val line = Line(0, "")
-      val input = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+      val input = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
 
       testEval(input) { result =>
         result must haveSize(5)
@@ -259,7 +259,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate a join given a relative path" in {
       val line = Line(0, "")
 
-      val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+      val numbers = dag.LoadLocal(line, Root(line, CString("/numbers")))
 
       val input = Join(line, Add, IdentitySort, numbers, numbers)
 
@@ -277,8 +277,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate a join given a relative path with two different JTypes" in {
       val line = Line(0, "")
 
-      val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
-      val numbers0 = dag.LoadLocal(line, Root(line, PushString("/numbers")), JNumberT)
+      val numbers = dag.LoadLocal(line, Root(line, CString("/numbers")))
+      val numbers0 = dag.LoadLocal(line, Root(line, CString("/numbers")), JNumberT)
 
       val input = Join(line, Add, IdentitySort, numbers, numbers0)
 
@@ -296,8 +296,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate a join given a relative path with two different datasets" in {
       val line = Line(0, "")
 
-      val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
-      val numbers2 = dag.LoadLocal(line, Root(line, PushString("/numbers2")))
+      val numbers = dag.LoadLocal(line, Root(line, CString("/numbers")))
+      val numbers2 = dag.LoadLocal(line, Root(line, CString("/numbers2")))
 
       val input = Join(line, Add, CrossLeftSort, numbers, numbers2)
 
@@ -316,7 +316,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Operate(line, Neg,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
         
       testEval(input) { result =>
         result must haveSize(5)
@@ -333,7 +333,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.New(line,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
         
       testEval(input) { result =>
         result must haveSize(5)
@@ -349,7 +349,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate a new literal" in {
       val line = Line(0, "")
       
-      val input = dag.New(line, Root(line, PushString("foo")))
+      val input = dag.New(line, Root(line, CString("foo")))
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -365,7 +365,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate a join of two reductions on the same dataset" in {
       val line = Line(0, "")
 
-      val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers7")))
+      val parent = dag.LoadLocal(line, Root(line, CString("/hom/numbers7")))
 
       val input = Join(line, Add, CrossRightSort,
         dag.Reduce(line, Count, parent),
@@ -385,7 +385,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate a join of two reductions on the same dataset using a MegaReduce" in {
       val line = Line(0, "")
 
-      val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers7")))
+      val parent = dag.LoadLocal(line, Root(line, CString("/hom/numbers7")))
       
       val mega = dag.MegaReduce(line, 
         NEL(Count, Sum), 
@@ -394,10 +394,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val input = Join(line, Add, CrossRightSort, 
         Join(line, DerefArray, CrossLeftSort,
           mega,
-          Root(line, PushNum("0"))),
+          Root(line, CLong(0))),
         Join(line, DerefArray, CrossLeftSort,
           mega,
-          Root(line, PushNum("1"))))
+          Root(line, CLong(1))))
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -416,11 +416,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         val input = Join(line, Add, CrossLeftSort,
           Join(line, DerefObject, CrossLeftSort, 
-            dag.LoadLocal(line, Root(line, PushString("/clicks"))),
-            Root(line, PushString("time"))),
+            dag.LoadLocal(line, Root(line, CString("/clicks"))),
+            Root(line, CString("time"))),
           Join(line, DerefObject, CrossLeftSort,
-            dag.LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
-            Root(line, PushString("height"))))
+            dag.LoadLocal(line, Root(line, CString("/hom/heightWeight"))),
+            Root(line, CString("height"))))
 
         testEval(input) { result =>
           result must haveSize(500)
@@ -435,15 +435,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "from the same path" >> {
         val line = Line(0, "")
-        val heightWeight = dag.LoadLocal(line, Root(line, PushString("/hom/heightWeight")))
+        val heightWeight = dag.LoadLocal(line, Root(line, CString("/hom/heightWeight")))
 
         val input = Join(line, Add, IdentitySort,
           Join(line, DerefObject, CrossLeftSort, 
             heightWeight,
-            Root(line, PushString("weight"))),
+            Root(line, CString("weight"))),
           Join(line, DerefObject, CrossLeftSort,
             heightWeight,
-            Root(line, PushString("height"))))
+            Root(line, CString("height"))))
 
         testEval(input) { result =>
           result must haveSize(5)
@@ -458,15 +458,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "from the same path (with a relative path)" >> {
         val line = Line(0, "")
-        val heightWeight = dag.LoadLocal(line, Root(line, PushString("/heightWeight")))
+        val heightWeight = dag.LoadLocal(line, Root(line, CString("/heightWeight")))
 
         val input = Join(line, Add, IdentitySort,
           Join(line, DerefObject, CrossLeftSort, 
             heightWeight,
-            Root(line, PushString("weight"))),
+            Root(line, CString("weight"))),
           Join(line, DerefObject, CrossLeftSort,
             heightWeight,
-            Root(line, PushString("height"))))
+            Root(line, CString("height"))))
 
         testEval(input, Path("/hom")) { result =>
           result must haveSize(5)
@@ -485,8 +485,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Add, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
-          Root(line, PushNum("5")))
+          dag.LoadLocal(line, Root(line, CString("/hom/numbers"))),
+          Root(line, CLong(5)))
           
         testEval(input) { result =>
           result must haveSize(5)
@@ -503,8 +503,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Sub, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
-          Root(line, PushNum("5")))
+          dag.LoadLocal(line, Root(line, CString("/hom/numbers"))),
+          Root(line, CLong(5)))
           
         testEval(input) { result =>
           
@@ -522,8 +522,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Mul, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
-          Root(line, PushNum("5")))
+          dag.LoadLocal(line, Root(line, CString("/hom/numbers"))),
+          Root(line, CLong(5)))
           
         testEval(input) { result =>
           result must haveSize(5)
@@ -540,8 +540,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Div, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
-          Root(line, PushNum("5")))
+          dag.LoadLocal(line, Root(line, CString("/hom/numbers"))),
+          Root(line, CLong(5)))
           
         testEval(input) { result =>
           result must haveSize(5)
@@ -558,8 +558,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Mod, CrossLeftSort,
-          Root(line, PushNum("11")),
-          Root(line, PushNum("4")))
+          Root(line, CLong(11)),
+          Root(line, CLong(4)))
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -575,8 +575,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Mod, CrossLeftSort,
-          Root(line, PushNum("-11")),
-          Root(line, PushNum("-4")))
+          Root(line, CLong(-11)),
+          Root(line, CLong(-4)))
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -592,8 +592,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Mod, CrossLeftSort,
-          Root(line, PushNum("-11")),
-          Root(line, PushNum("4")))
+          Root(line, CLong(-11)),
+          Root(line, CLong(4)))
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -609,8 +609,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Mod, CrossLeftSort,
-          Root(line, PushNum("11")),
-          Root(line, PushNum("-4")))
+          Root(line, CLong(11)),
+          Root(line, CLong(-4)))
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -629,8 +629,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Add, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
-          Root(line, PushNum("5")))
+          dag.LoadLocal(line, Root(line, CString("/het/numbers"))),
+          Root(line, CLong(5)))
           
         testEval(input) { result =>
           result must haveSize(5)
@@ -647,8 +647,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Sub, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
-          Root(line, PushNum("5")))
+          dag.LoadLocal(line, Root(line, CString("/het/numbers"))),
+          Root(line, CLong(5)))
           
         testEval(input) { result =>
           result must haveSize(5)
@@ -665,8 +665,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Mul, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
-          Root(line, PushNum("5")))
+          dag.LoadLocal(line, Root(line, CString("/het/numbers"))),
+          Root(line, CLong(5)))
           
         testEval(input) { result =>
           result must haveSize(5)
@@ -683,8 +683,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Div, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
-          Root(line, PushNum("5")))
+          dag.LoadLocal(line, Root(line, CString("/het/numbers"))),
+          Root(line, CLong(5)))
           
         testEval(input) { result =>
           result must haveSize(5)
@@ -700,7 +700,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
     "count a filtered dataset" in {
       val line = Line(0, "")
-      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
 
       val input = dag.Reduce(line, Count,
         Filter(line, IdentitySort,
@@ -708,8 +708,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Join(line, Gt, CrossLeftSort,
             Join(line, DerefObject, CrossLeftSort,
               clicks,
-              Root(line, PushString("time"))),
-            Root(line, PushNum("0")))))
+              Root(line, CString("time"))),
+            Root(line, CLong(0)))))
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -727,9 +727,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val input = Join(line, Gt, CrossLeftSort,
             Join(line, DerefObject, CrossLeftSort,
-              dag.LoadLocal(line, Root(line, PushString("/clicks"))),
-              Root(line, PushString("time"))),
-            Root(line, PushNum("0")))
+              dag.LoadLocal(line, Root(line, CString("/clicks"))),
+              Root(line, CString("time"))),
+            Root(line, CLong(0)))
 
       testEval(input) { result =>
         result must haveSize(100)
@@ -747,8 +747,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val input = dag.Reduce(line, Count,
         Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
-          Root(line, PushString("time"))))
+          dag.LoadLocal(line, Root(line, CString("/clicks"))),
+          Root(line, CString("time"))))
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -766,9 +766,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
 
         val input = Join(line, Add, CrossLeftSort, 
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
+          dag.LoadLocal(line, Root(line, CString("/hom/numbers"))),
           dag.Reduce(line, Count, 
-            Root(line, PushNum("42"))))
+            Root(line, CLong(42))))
 
         testEval(input) { result =>
           result must haveSize(5)
@@ -786,8 +786,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         val input = Join(line, Add, CrossLeftSort, 
           dag.Reduce(line, Count, 
-            Root(line, PushNum("42"))),
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+            Root(line, CLong(42))),
+          dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
 
         testEval(input) { result =>
           result must haveSize(5)
@@ -804,8 +804,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
 
         val input = Join(line, Add, CrossLeftSort,  
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
-          Root(line, PushNum("3")))
+          dag.LoadLocal(line, Root(line, CString("/hom/numbers"))),
+          Root(line, CLong(3)))
          
         testEval(input) { result =>
           result must haveSize(5)
@@ -822,8 +822,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
 
         val input = Join(line, Add, CrossLeftSort, 
-          Root(line, PushNum("3")),
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
+          Root(line, CLong(3)),
+          dag.LoadLocal(line, Root(line, CString("/hom/numbers"))))
 
         testEval(input) { result =>
           result must haveSize(5)
@@ -841,8 +841,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, WrapObject, CrossLeftSort,
-        Root(line, PushString("answer")),
-        Root(line, PushNum("42")))
+        Root(line, CString("answer")),
+        Root(line, CLong(42)))
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -868,10 +868,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, WrapObject, CrossLeftSort,
-        Root(line, PushString("answer")),
+        Root(line, CString("answer")),
         Join(line, WrapObject, CrossLeftSort,
-          Root(line, PushString("question")),
-          Root(line, PushNull)))
+          Root(line, CString("question")),
+          Root(line, CNull)))
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -900,10 +900,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, WrapObject, CrossLeftSort,
-        Root(line, PushString("aa")),
+        Root(line, CString("aa")),
         Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
-          Root(line, PushString("user"))))
+          dag.LoadLocal(line, Root(line, CString("/clicks"))),
+          Root(line, CString("user"))))
         
       testEval(input) { result =>
         result must haveSize(100)
@@ -922,7 +922,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Operate(line, WrapArray,
-        Root(line, PushNum("42")))
+        Root(line, CLong(42)))
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -948,7 +948,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Operate(line, WrapArray,
-        Root(line, PushNull))
+        Root(line, CNull))
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -973,11 +973,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = Join(line, JoinObject, CrossLeftSort,
         Join(line, WrapObject, CrossLeftSort,
-          Root(line, PushString("question")),
-          Root(line, PushString("What is six times seven?"))),
+          Root(line, CString("question")),
+          Root(line, CString("What is six times seven?"))),
         Join(line, WrapObject, CrossLeftSort,
-          Root(line, PushString("answer")),
-          Root(line, PushNum("42"))))
+          Root(line, CString("answer")),
+          Root(line, CLong(42))))
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -1009,9 +1009,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = Join(line, JoinArray, CrossLeftSort,
         Operate(line, WrapArray,
-          Root(line, PushNum("24"))),
+          Root(line, CLong(24))),
         Operate(line, WrapArray,
-          Root(line, PushNum("42"))))
+          Root(line, CLong(42))))
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -1041,12 +1041,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val input = 
         Join(line, JoinArray, CrossLeftSort,
           Operate(line, WrapArray,
-            Root(line, PushNum("12"))),
+            Root(line, CLong(12))),
           Join(line, JoinArray, CrossLeftSort,
             Operate(line, WrapArray,
-              Root(line, PushNum("24"))),
+              Root(line, CLong(24))),
             Operate(line, WrapArray,
-              Root(line, PushNum("42")))))
+              Root(line, CLong(42)))))
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -1078,13 +1078,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val input = Join(line, ArraySwap, CrossLeftSort,
           Join(line, JoinArray, CrossLeftSort,
             Operate(line, WrapArray,
-              Root(line, PushNum("12"))),
+              Root(line, CLong(12))),
             Join(line, JoinArray, CrossLeftSort,
               Operate(line, WrapArray,
-                Root(line, PushNum("24"))),
+                Root(line, CLong(24))),
               Operate(line, WrapArray,
-                Root(line, PushNum("42"))))),
-          Root(line, PushNum("1")))
+                Root(line, CLong(42))))),
+          Root(line, CLong(1)))
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -1115,13 +1115,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val input = Join(line, ArraySwap, CrossLeftSort,
           Join(line, JoinArray, CrossLeftSort,
             Operate(line, WrapArray,
-              Root(line, PushNum("12"))),
+              Root(line, CLong(12))),
             Join(line, JoinArray, CrossLeftSort,
               Operate(line, WrapArray,
-                Root(line, PushNum("24"))),
+                Root(line, CLong(24))),
               Operate(line, WrapArray,
-                Root(line, PushNum("42"))))),
-          Root(line, PushNum("2")))
+                Root(line, CLong(42))))),
+          Root(line, CLong(2)))
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -1151,8 +1151,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, DerefObject, CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/pairs"))),
-        Root(line, PushString("first")))
+        dag.LoadLocal(line, Root(line, CString("/hom/pairs"))),
+        Root(line, CString("first")))
         
       testEval(input) { result =>
         result must haveSize(5)
@@ -1169,8 +1169,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, DerefObject, CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/pairs"))),
-        Root(line, PushString("first")))
+        dag.LoadLocal(line, Root(line, CString("/het/pairs"))),
+        Root(line, CString("first")))
         
       testEval(input) { result =>
         result must haveSize(5)
@@ -1188,8 +1188,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, DerefObject, CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/het-pairs"))),
-        Root(line, PushString("first")))
+        dag.LoadLocal(line, Root(line, CString("/het/het-pairs"))),
+        Root(line, CString("first")))
         
       testEval(input) { result =>
         result must haveSize(5)
@@ -1208,7 +1208,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "an array must return an array" in {
       val line = Line(0, "")
 
-      val input = dag.LoadLocal(line, Root(line, PushString("/hom/arrays")))
+      val input = dag.LoadLocal(line, Root(line, CString("/hom/arrays")))
 
       testEval(input) { result =>
         result must haveSize(5)
@@ -1224,7 +1224,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "MegaReduce must return an array" in {
       val line = Line(0, "")
 
-      val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+      val parent = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
       val input = dag.MegaReduce(line, NEL(Count), parent)
 
       testEval(input) { result =>
@@ -1242,12 +1242,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate array dereference on a MegaReduce" in {
       val line = Line(0, "")
       
-      val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+      val parent = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
       val red = Count
       
       val input = Join(line, DerefArray, CrossLeftSort,
         dag.MegaReduce(line, NEL(red), parent),
-        Root(line, PushNum("0")))
+        Root(line, CLong(0)))
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -1264,8 +1264,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, DerefArray, CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/arrays"))),
-        Root(line, PushNum("2")))
+        dag.LoadLocal(line, Root(line, CString("/hom/arrays"))),
+        Root(line, CLong(2)))
         
       testEval(input) { result =>
         result must haveSize(5)
@@ -1282,8 +1282,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, DerefArray, CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/arrays"))),
-        Root(line, PushNum("2")))
+        dag.LoadLocal(line, Root(line, CString("/het/arrays"))),
+        Root(line, CLong(2)))
         
       testEval(input) { result =>
         result must haveSize(5)
@@ -1300,8 +1300,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, DerefArray, CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/het-arrays"))),
-        Root(line, PushNum("2")))
+        dag.LoadLocal(line, Root(line, CString("/het/het-arrays"))),
+        Root(line, CLong(2)))
         
       testEval(input) { result =>
         result must haveSize(5)
@@ -1319,15 +1319,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "evaluate matched binary numeric operation" in {
       val line = Line(0, "")
-      val pairs = dag.LoadLocal(line, Root(line, PushString("/hom/pairs")))
+      val pairs = dag.LoadLocal(line, Root(line, CString("/hom/pairs")))
       
       val input = Join(line, Sub, IdentitySort,
         Join(line, DerefObject, CrossLeftSort,
           pairs,
-          Root(line, PushString("first"))),
+          Root(line, CString("first"))),
         Join(line, DerefObject, CrossLeftSort,
           pairs,
-          Root(line, PushString("second"))))
+          Root(line, CString("second"))))
         
       testEval(input) { result =>
         result must haveSize(5)
@@ -1342,15 +1342,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "evaluate matched binary numeric operation dropping undefined result" in {
       val line = Line(0, "")
-      val pairs = dag.LoadLocal(line, Root(line, PushString("/hom/pairs")))
+      val pairs = dag.LoadLocal(line, Root(line, CString("/hom/pairs")))
       
       val input = Join(line, Div, IdentitySort,
         Join(line, DerefObject, CrossLeftSort,
           pairs,
-          Root(line, PushString("first"))),
+          Root(line, CString("first"))),
         Join(line, DerefObject, CrossLeftSort,
           pairs,
-          Root(line, PushString("second"))))
+          Root(line, CString("second"))))
         
       testEval(input) { result =>
         result must haveSize(4)
@@ -1365,15 +1365,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
     "evaluate matched binary numeric operation dropping undefined result (with relative path)" in {
       val line = Line(0, "")
-      val pairs = dag.LoadLocal(line, Root(line, PushString("/pairs")))
+      val pairs = dag.LoadLocal(line, Root(line, CString("/pairs")))
       
       val input = Join(line, Div, IdentitySort,
         Join(line, DerefObject, CrossLeftSort,
           pairs,
-          Root(line, PushString("first"))),
+          Root(line, CString("first"))),
         Join(line, DerefObject, CrossLeftSort,
           pairs,
-          Root(line, PushString("second"))))
+          Root(line, CString("second"))))
         
       testEval(input, Path("/hom")) { result =>
         result must haveSize(4)
@@ -1388,7 +1388,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
     "compute the set difference of two sets" in {
       val line = Line(0, "")
-      val clicks2 = dag.LoadLocal(line, Root(line, PushString("/clicks2")))
+      val clicks2 = dag.LoadLocal(line, Root(line, CString("/clicks2")))
       
       val input = Diff(line,
         clicks2,
@@ -1397,8 +1397,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Join(line, Gt, CrossLeftSort,
             Join(line, DerefObject, CrossLeftSort,
               clicks2,
-              Root(line, PushString("time"))),
-            Root(line, PushNum("0")))))
+              Root(line, CString("time"))),
+            Root(line, CLong(0)))))
         
       testEval(input) { result =>
         result must haveSize(6)
@@ -1417,7 +1417,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "compute the set difference of the set difference" in {
       val line = Line(0, "")
-      val clicks2 = dag.LoadLocal(line, Root(line, PushString("/clicks2")))
+      val clicks2 = dag.LoadLocal(line, Root(line, CString("/clicks2")))
       
       val input = Diff(line,
         clicks2,
@@ -1428,8 +1428,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             Join(line, Gt, CrossLeftSort,
               Join(line, DerefObject, CrossLeftSort,
                 clicks2,
-                Root(line, PushString("time"))),
-              Root(line, PushNum("0"))))))
+                Root(line, CString("time"))),
+              Root(line, CLong(0))))))
 
 
       testEval(input) { result =>
@@ -1447,7 +1447,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "compute the iunion of a set with itself" in {
       val line = Line(0, "")
       
-      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+      val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
 
       val input = IUI(line, true, numbers, numbers)
         
@@ -1460,8 +1460,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = IUI(line, true,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))),
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers3"))))
         
       testEval(input) { result =>
         result must haveSize(10)
@@ -1482,8 +1482,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = IUI(line, true,
-        dag.LoadLocal(line, Root(line, PushString("/numbers"))),
-        dag.LoadLocal(line, Root(line, PushString("/numbers3"))))
+        dag.LoadLocal(line, Root(line, CString("/numbers"))),
+        dag.LoadLocal(line, Root(line, CString("/numbers3"))))
         
       testEval(input, Path("/hom")) { result =>
         result must haveSize(10)
@@ -1500,8 +1500,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = IUI(line, true,
-        dag.LoadLocal(line, Root(line, PushString("/clicks"))),
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
+        dag.LoadLocal(line, Root(line, CString("/clicks"))),
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers3"))))
         
       testEval(input) { result =>
         result must haveSize(105)
@@ -1512,8 +1512,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = IUI(line, false,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers"))),
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers3"))))
         
       testEval(input) { result =>
         result must haveSize(0)
@@ -1524,8 +1524,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = IUI(line, false,
-        dag.LoadLocal(line, Root(line, PushString("/clicks"))),
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
+        dag.LoadLocal(line, Root(line, CString("/clicks"))),
+        dag.LoadLocal(line, Root(line, CString("/hom/numbers3"))))
         
       testEval(input) { result =>
         result must haveSize(0)
@@ -1534,7 +1534,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
     "compute the iintersect of mod2 and mod3" in {
       val line = Line(0, "")
-      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbersmod")))
+      val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbersmod")))
 
       val input = IUI(line, false,
         Filter(line, IdentitySort,
@@ -1542,15 +1542,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Join(line, Eq, CrossLeftSort,
             Join(line, Mod, CrossLeftSort,
               numbers,
-              Root(line, PushNum("2"))),
-            Root(line, PushNum("0")))),
+              Root(line, CLong(2))),
+            Root(line, CLong(0)))),
         Filter(line, IdentitySort,
           numbers,
           Join(line, Eq, CrossLeftSort,
             Join(line, Mod, CrossLeftSort,
               numbers,
-              Root(line, PushNum("3"))),
-            Root(line, PushNum("0")))))
+              Root(line, CLong(3))),
+            Root(line, CLong(0)))))
 
       testEval(input) { result =>
         result must haveSize(3)
@@ -1566,13 +1566,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "filter homogeneous numeric set by binary operation" >> {
       "less-than" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, Lt, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(2)
@@ -1587,13 +1587,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "less-than (with relative paths)" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, Lt, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input, Path("/hom")) { result =>
           result must haveSize(2)
@@ -1608,13 +1608,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "less-than-equal" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, LtEq, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -1629,13 +1629,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "greater-than" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, Gt, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(2)
@@ -1650,13 +1650,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "greater-than-equal" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, GtEq, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -1671,13 +1671,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "equal with a number literal" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, Eq, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -1694,8 +1694,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Eq, CrossLeftSort,
-            dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
-            Root(line, PushNum("13")))
+            dag.LoadLocal(line, Root(line, CString("/hom/numbers"))),
+            Root(line, CLong(13)))
           
         testEval(input) { result =>
           result must haveSize(5)
@@ -1710,13 +1710,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "not-equal" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, NotEq, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           val result2 = result collect {
@@ -1729,17 +1729,17 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "and" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, And, IdentitySort,
             Join(line, NotEq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("77"))),
+              Root(line, CLong(77))),
             Join(line, NotEq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("13")))))
+              Root(line, CLong(13)))))
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -1754,17 +1754,17 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "and (with relative paths)" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, And, IdentitySort,
             Join(line, NotEq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("77"))),
+              Root(line, CLong(77))),
             Join(line, NotEq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("13")))))
+              Root(line, CLong(13)))))
           
         testEval(input, Path("/hom")) { result =>
           result must haveSize(3)
@@ -1779,17 +1779,17 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "or" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, Or, IdentitySort,
             Join(line, Eq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("77"))),
+              Root(line, CLong(77))),
             Join(line, Eq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("13")))))
+              Root(line, CLong(13)))))
           
         testEval(input) { result =>
           result must haveSize(2)
@@ -1804,14 +1804,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "complement of equality" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Operate(line, Comp,
             Join(line, Eq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("13")))))
+              Root(line, CLong(13)))))
           
         testEval(input) { result =>
           result must haveSize(4)
@@ -1828,13 +1828,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "filter heterogeneous numeric set by binary operation" >> {
       "less-than" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, Lt, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(2)
@@ -1849,13 +1849,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "less-than-equal" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, LtEq, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -1870,13 +1870,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "less-than-equal (with relative path)" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, LtEq, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input, Path("/het")) { result =>
           result must haveSize(3)
@@ -1891,13 +1891,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "greater-than" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, Gt, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(2)
@@ -1912,13 +1912,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "greater-than-equal" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, GtEq, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -1933,15 +1933,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "equal with boolean set as the source" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers")))
         
         val input = Filter(line, IdentitySort,
           Join(line, Eq, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))),
+            Root(line, CLong(13))),
           Join(line, Eq, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -1956,13 +1956,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "equal" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, Eq, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -1977,13 +1977,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "equal with empty array" >> {
         val line = Line(0, "")
-        val numbers9 = dag.LoadLocal(line, Root(line, PushString("/het/numbers9")))
+        val numbers9 = dag.LoadLocal(line, Root(line, CString("/het/numbers9")))
         
         val input = Filter(line, IdentitySort,
           numbers9,
           Join(line, Eq, CrossLeftSort,
             numbers9,
-            Root(line, PushArray)))
+            Root(line, CEmptyArray)))
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -1998,13 +1998,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "equal with empty object" >> {
         val line = Line(0, "")
-        val numbers9 = dag.LoadLocal(line, Root(line, PushString("/het/numbers9")))
+        val numbers9 = dag.LoadLocal(line, Root(line, CString("/het/numbers9")))
         
         val input = Filter(line, IdentitySort,
           numbers9,
           Join(line, Eq, CrossLeftSort,
             numbers9,
-            Root(line, PushObject)))
+            Root(line, CEmptyObject)))
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -2019,7 +2019,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "equal with an array" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers6")))
         
         val input = Filter(line, IdentitySort,
           numbers,
@@ -2027,9 +2027,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             numbers,
             Join(line, JoinArray, CrossLeftSort,
               Join(line, JoinArray, CrossLeftSort,
-                Operate(line, WrapArray, Root(line, PushNum("9"))),
-                Operate(line, WrapArray, Root(line, PushNum("10")))),
-              Operate(line, WrapArray, Root(line, PushNum("11"))))))
+                Operate(line, WrapArray, Root(line, CLong(9))),
+                Operate(line, WrapArray, Root(line, CLong(10)))),
+              Operate(line, WrapArray, Root(line, CLong(11))))))
 
         testEval(input) { result =>
           result must haveSize(1)
@@ -2044,7 +2044,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "equal with a singleton array" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/array")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/array")))
         
         val input = Filter(line, IdentitySort,
           numbers,
@@ -2052,9 +2052,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             numbers,
             Join(line, JoinArray, CrossLeftSort,
               Join(line, JoinArray, CrossLeftSort,
-                Operate(line, WrapArray, Root(line, PushNum("9"))),
-                Operate(line, WrapArray, Root(line, PushNum("10")))),
-              Operate(line, WrapArray, Root(line, PushNum("11"))))))
+                Operate(line, WrapArray, Root(line, CLong(9))),
+                Operate(line, WrapArray, Root(line, CLong(10)))),
+              Operate(line, WrapArray, Root(line, CLong(11))))))
 
 
         testEval(input) { result =>
@@ -2070,15 +2070,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "equal with an object" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers6")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, Eq, CrossLeftSort,
             numbers,
               Join(line, WrapObject, CrossLeftSort,
-                Root(line, PushString("foo")),
-                Root(line, PushString("bar")))))
+                Root(line, CString("foo")),
+                Root(line, CString("bar")))))
 
         testEval(input) { result =>
           result must haveSize(1)
@@ -2098,8 +2098,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Eq, CrossLeftSort,
-            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
-            Root(line, PushNum("13")))
+            dag.LoadLocal(line, Root(line, CString("/het/numbers"))),
+            Root(line, CLong(13)))
           
         testEval(input) { result =>
           result must haveSize(10)
@@ -2119,8 +2119,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = Join(line, NotEq, CrossLeftSort,
-            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
-            Root(line, PushNum("13")))
+            dag.LoadLocal(line, Root(line, CString("/het/numbers"))),
+            Root(line, CLong(13)))
           
         testEval(input) { result =>
           result must haveSize(10)
@@ -2138,13 +2138,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "not-equal" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, NotEq, CrossLeftSort,
             numbers,
-            Root(line, PushNum("13"))))
+            Root(line, CLong(13))))
           
         testEval(input) { result =>
           result must haveSize(9)
@@ -2164,13 +2164,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "not-equal with empty array" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers10")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers10")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, NotEq, CrossLeftSort,
             numbers,
-            Root(line, PushArray)))
+            Root(line, CEmptyArray)))
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -2186,13 +2186,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "not-equal with empty object" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers10")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers10")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, NotEq, CrossLeftSort,
             numbers,
-            Root(line, PushObject)))
+            Root(line, CEmptyObject)))
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -2208,15 +2208,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "not-equal with an array" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers10")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers10")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, NotEq, CrossLeftSort,
             numbers,
             Join(line, JoinArray, CrossLeftSort,
-              Operate(line, WrapArray, Root(line, PushNum("9"))),
-              Operate(line, WrapArray, Root(line, PushNum("10"))))))
+              Operate(line, WrapArray, Root(line, CLong(9))),
+              Operate(line, WrapArray, Root(line, CLong(10))))))
 
 
         testEval(input) { result =>
@@ -2234,15 +2234,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "not-equal with an object" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers10")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers10")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, NotEq, CrossLeftSort,
             numbers,
             Join(line, WrapObject, CrossLeftSort,
-              Root(line, PushString("foo")),
-              Root(line, PushNull))))
+              Root(line, CString("foo")),
+              Root(line, CNull))))
 
         testEval(input) { result =>
           result must haveSize(3)
@@ -2259,17 +2259,17 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "and" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, And, IdentitySort,
             Join(line, NotEq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("77"))),
+              Root(line, CLong(77))),
             Join(line, NotEq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("13")))))
+              Root(line, CLong(13)))))
           
         testEval(input) { result =>
           result must haveSize(8)
@@ -2289,17 +2289,17 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "or" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Join(line, Or, IdentitySort,
             Join(line, Eq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("77"))),
+              Root(line, CLong(77))),
             Join(line, Eq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("13")))))
+              Root(line, CLong(13)))))
           
         testEval(input) { result =>
           result must haveSize(2)
@@ -2314,14 +2314,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "complement of equality" >> {
         val line = Line(0, "")
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/het/numbers")))
+        val numbers = dag.LoadLocal(line, Root(line, CString("/het/numbers")))
         
         val input = Filter(line, IdentitySort,
           numbers,
           Operate(line, Comp,
             Join(line, Eq, CrossLeftSort,
               numbers,
-              Root(line, PushNum("13")))))
+              Root(line, CLong(13)))))
           
         testEval(input) { result =>
           result must haveSize(9)
@@ -2343,13 +2343,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "correctly order a match following a cross" in {
       val line = Line(0, "")
         
-      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+      val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
       
       val input = Join(line, Mul, IdentitySort,
         numbers,
         Join(line, Sub, CrossLeftSort,
           numbers,
-          dag.LoadLocal(line, Root(line, PushString("/hom/numbers3")))))
+          dag.LoadLocal(line, Root(line, CString("/hom/numbers3")))))
           
       testEval(input) { result =>
         result must haveSize(25)
@@ -2368,8 +2368,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "correctly evaluate a match following a cross with equality" in {
       val line = Line(0, "")
       
-      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      val numbers3 = dag.LoadLocal(line, Root(line, PushString("/hom/numbers3")))
+      val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
+      val numbers3 = dag.LoadLocal(line, Root(line, CString("/hom/numbers3")))
       
       val input = Join(line, And, IdentitySort,
         Join(line, And, CrossLeftSort,
@@ -2382,7 +2382,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "correctly order a match following a cross within a new" in {
       val line = Line(0, "")
-      val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+      val numbers = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
       
       val input = Join(line, Mul, IdentitySort,
         numbers,
@@ -2415,7 +2415,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       // sums
       // 
        
-      val nums = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+      val nums = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
       
       lazy val input: dag.Split = dag.Split(line,
         dag.Group(1, nums, UnfixedSolution(0, nums)),
@@ -2442,8 +2442,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "memoize properly in a load" in {
       val line = Line(0, "")
 
-      val input0 = dag.Memoize(dag.LoadLocal(line, Root(line, PushString("/clicks"))), 1)
-      val input1 = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val input0 = dag.Memoize(dag.LoadLocal(line, Root(line, CString("/clicks"))), 1)
+      val input1 = dag.LoadLocal(line, Root(line, CString("/clicks")))
 
       testEval(input0) { result0 => {
         testEval(input1) { result1 =>
@@ -2457,13 +2457,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val input0 = dag.Memoize(
         dag.Join(line, Add, CrossLeftSort, 
-          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
-          Root(line, PushNum("5"))),
+          dag.LoadLocal(line, Root(line, CString("/clicks"))),
+          Root(line, CLong(5))),
         1)
 
       val input1 = dag.Join(line, Add, CrossLeftSort, 
-          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
-          Root(line, PushNum("5")))
+          dag.LoadLocal(line, Root(line, CString("/clicks"))),
+          Root(line, CLong(5)))
 
       testEval(input0) { result0 => {
         testEval(input1) { result1 =>
@@ -2485,7 +2485,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       // histogram
       // 
       // 
-      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
        
       lazy val input: dag.Split = dag.Split(line,
         dag.Group(1,
@@ -2493,13 +2493,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           UnfixedSolution(0, 
             Join(line, DerefObject, CrossLeftSort,
               clicks,
-              Root(line, PushString("user"))))),
+              Root(line, CString("user"))))),
         Join(line, JoinObject, CrossLeftSort,
           Join(line, WrapObject, CrossLeftSort,
-            Root(line, PushString("user")),
+            Root(line, CString("user")),
             SplitParam(line, 0)(input)),
           Join(line, WrapObject, CrossLeftSort,
-            Root(line, PushString("num")),
+            Root(line, CString("num")),
             dag.Reduce(line, Count,
               SplitGroup(line, 1, clicks.identities)(input)))))
       
@@ -2538,10 +2538,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, JoinObject, CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+        dag.LoadLocal(line, Root(line, CString("/clicks"))),
         Join(line, WrapObject, CrossLeftSort,
-          Root(line, PushString("t")),
-          Root(line, PushNum("42"))))
+          Root(line, CString("t")),
+          Root(line, CLong(42))))
           
       testEval(input) { result =>
         result must haveSize(100)
@@ -2562,7 +2562,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "evaluate filter with null" in {
       val line = Line(0, "")
-      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
 
       //
       // //clicks where //clicks.user = null
@@ -2573,8 +2573,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         Join(line, Eq, CrossLeftSort,
           Join(line, DerefObject, CrossLeftSort,
             clicks,
-            Root(line, PushString("user"))),
-          Root(line, PushNull)))
+            Root(line, CString("user"))),
+          Root(line, CNull)))
 
       testEval(input) { result =>
         result must haveSize(3)
@@ -2599,7 +2599,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       // histogram where histogram.num = 9
       // 
       // 
-      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
        
       lazy val histogram: dag.Split = dag.Split(line,
         dag.Group(1,
@@ -2607,13 +2607,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           UnfixedSolution(0,
             Join(line, DerefObject, CrossLeftSort,
               clicks,
-              Root(line, PushString("user"))))),
+              Root(line, CString("user"))))),
         Join(line, JoinObject, CrossLeftSort,
           Join(line, WrapObject, CrossLeftSort,
-            Root(line, PushString("user")),
+            Root(line, CString("user")),
             SplitParam(line, 0)(histogram)),
           Join(line, WrapObject, CrossLeftSort,
-            Root(line, PushString("num")),
+            Root(line, CString("num")),
             dag.Reduce(line, Count,
               SplitGroup(line, 1, clicks.identities)(histogram)))))
        
@@ -2622,8 +2622,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         Join(line, Eq, CrossLeftSort,
           Join(line, DerefObject, CrossLeftSort,
             histogram,
-            Root(line, PushString("num"))),
-          Root(line, PushNum("9"))))
+            Root(line, CString("num"))),
+          Root(line, CLong(9))))
                   
       testEval(input) { result =>
         result must haveSize(1)
@@ -2649,7 +2649,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       // histogram with {rank: std::stats::rank(histogram.num)}
       // 
 
-      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
        
       lazy val histogram: dag.Split = dag.Split(line,
         dag.Group(1,
@@ -2657,24 +2657,24 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           UnfixedSolution(0,
             Join(line, DerefObject, CrossLeftSort,
               clicks,
-              Root(line, PushString("user"))))),
+              Root(line, CString("user"))))),
         Join(line, JoinObject, CrossLeftSort,
           Join(line, WrapObject, CrossLeftSort,
-            Root(line, PushString("user")),
+            Root(line, CString("user")),
             SplitParam(line, 0)(histogram)),
           Join(line, WrapObject, CrossLeftSort,
-            Root(line, PushString("num")),
+            Root(line, CString("num")),
             dag.Reduce(line, Count,
               SplitGroup(line, 1, clicks.identities)(histogram)))))
 
       val input = Join(line, JoinObject, IdentitySort,
         histogram,
         Join(line, WrapObject, CrossLeftSort,
-          Root(line, PushString("rank")),
+          Root(line, CString("rank")),
           dag.Morph1(line, Rank, 
             Join(line, DerefObject, CrossLeftSort,
               histogram,
-              Root(line, PushString("num"))))))
+              Root(line, CString("num"))))))
 
       testEval(input) { resultsE =>
         resultsE must haveSize(10)
@@ -2698,19 +2698,19 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "perform a naive cartesian product on the clicks dataset" in {
       val line = Line(0, "")
-      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
       
       val input = Join(line, JoinObject, CrossLeftSort,
         Join(line, WrapObject, CrossLeftSort,
-          Root(line, PushString("aa")),
+          Root(line, CString("aa")),
           Join(line, DerefObject, CrossLeftSort,
             clicks,
-            Root(line, PushString("user")))),
+            Root(line, CString("user")))),
         Join(line, WrapObject, CrossLeftSort,
-          Root(line, PushString("bb")),
+          Root(line, CString("bb")),
           Join(line, DerefObject, CrossLeftSort,
             dag.New(line, clicks),
-            Root(line, PushString("user")))))
+            Root(line, CString("user")))))
             
       testEval(input) { result =>
         result must haveSize(10000)
@@ -2730,7 +2730,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Distinct(line,
-      dag.LoadLocal(line, Root(line, PushString("/hom/numbers2"))))
+      dag.LoadLocal(line, Root(line, CString("/hom/numbers2"))))
       
       testEval(input) { result =>
         result must haveSize(5)
@@ -2747,7 +2747,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Distinct(line,
-      dag.LoadLocal(line, Root(line, PushString("/het/numbers2"))))
+      dag.LoadLocal(line, Root(line, CString("/het/numbers2"))))
       
       testEval(input) { result =>
         result must haveSize(10)
@@ -2767,8 +2767,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "join two sets according to a value sort" in {
       val line = Line(0, "")
       
-      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
-      val clicks2 = dag.LoadLocal(line, Root(line, PushString("/clicks2")))
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      val clicks2 = dag.LoadLocal(line, Root(line, CString("/clicks2")))
       
       val input = dag.Join(line,
         Add,
@@ -2776,7 +2776,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         SortBy(clicks, "time", "time", 0),
         SortBy(clicks2, "time", "time", 0))
         
-      testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("time")))) { expected =>
+      testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("time")))) { expected =>
         val decimalValues = expected.toList map {
           case (_, SDecimal(d)) => d 
         }
@@ -2814,16 +2814,16 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "join two sets according to a value sort and then an identity sort" in {
       val line = Line(0, "")
       
-      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
-      val clicks2 = dag.LoadLocal(line, Root(line, PushString("/clicks2")))
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      val clicks2 = dag.LoadLocal(line, Root(line, CString("/clicks2")))
       
       val input = dag.Join(line, Eq, IdentitySort,
         dag.Join(line, Add, ValueSort(0),
           SortBy(clicks, "time", "time", 0),
           SortBy(clicks2, "time", "time", 0)),
         dag.Join(line, Mul, CrossLeftSort,
-          dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("time"))),
-          Root(line, PushNum("2"))))
+          dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("time"))),
+          Root(line, CLong(2))))
         
       testEval(input) { result =>
         result must haveSize(106)
@@ -2840,8 +2840,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "filter two sets according to a value sort" in {
       val line = Line(0, "")
       
-      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
-      val clicks2 = dag.LoadLocal(line, Root(line, PushString("/clicks2")))
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      val clicks2 = dag.LoadLocal(line, Root(line, CString("/clicks2")))
       
       val input = dag.Filter(line,
         ValueSort(0),
@@ -2850,9 +2850,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Gt,
           CrossLeftSort,
           SortBy(clicks2, "time", "time", 0),
-          Root(line, PushNum("500"))))
+          Root(line, CLong(500))))
         
-      testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("time")))) { expected =>
+      testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("time")))) { expected =>
         val decimalValues = expected.toList map {
           case (_, SDecimal(d)) => d
         }
