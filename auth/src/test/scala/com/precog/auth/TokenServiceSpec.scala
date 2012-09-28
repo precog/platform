@@ -110,6 +110,12 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
   def addTokenGrantRaw(authAPIKey: String, updateKey: String, grantId: JValue) = 
     authService.query("apiKey", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(grantId)
 
+  def createTokenGrant(authAPIKey: String, permission: Permission) = 
+    createTokenGrantRaw(authAPIKey, permission.serialize)
+
+  def createTokenGrantRaw(authAPIKey: String, permission: JValue) = 
+    authService.query("apiKey", authAPIKey).post("/grants/")(permission)
+
   def removeTokenGrant(authAPIKey: String, updateKey: String, grantId: String) = 
     authService.query("apiKey", authAPIKey).delete("/apikeys/"+updateKey+"/grants/"+grantId)
 
@@ -241,6 +247,22 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       }}
     }
 
+    "create a new grant derived from the grants of the authorization token" in {
+      createTokenGrant(cust1UID, ReadPermission(Path("/user1/read-me"), cust1UID, None)) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) =>
+          val id = jid.deserialize[WrappedGrantId]
+          id.grantId.length must be_>(0)
+      }}
+    }
+    
+    "don't create a new grant if it can't be derived from the authorization tokens grants" in {
+      createTokenGrant(cust1UID, ReadPermission(Path("/user2/secret"), cust1UID, None)) must whenDelivered { beLike {
+        case
+          HttpResponse(HttpStatus(BadRequest, _), _,
+            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new grant: Requestor lacks permissions to give grants to token" => ok
+      }}
+    }
+    
     "remove a specified grant from a token" in {
       removeTokenGrant(cust1UID, cust1UID, "user1_read") must whenDelivered { beLike {
         case HttpResponse(HttpStatus(NoContent, _), _, None, _) => ok

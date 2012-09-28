@@ -202,9 +202,9 @@ class CreateGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: 
         content <- request.content 
       } yield {
         content.flatMap { _.validated[Permission] match {
-          case Success(permission) => tokenManagement.createGrant(permission) map {
+          case Success(permission) => tokenManagement.createGrant(authToken.tid, permission) map {
             case Success(grant) => 
-              HttpResponse[JValue](OK, content = Some(grant.gid.serialize))
+              HttpResponse[JValue](OK, content = Some(WrappedGrantId(grant.gid).serialize))
             case Failure(e) => 
               HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new grant."), content = Some(JObject(List(
                 JField("error", "Error creating new grant: " + e)
@@ -356,8 +356,11 @@ class TokenManagement(val tokenManager: TokenManager[Future])(implicit val execC
     tokenManager.deleteToken(tid).map(_.isDefined)
   } 
 
-  def createGrant(request: Permission): Future[Validation[String, Grant]] = {
-    tokenManager.newGrant(None, request).map(Success(_))
+  def createGrant(tid: TokenID, request: Permission): Future[Validation[String, Grant]] = {
+    mayGrant(tid, Set(request)).flatMap { mayGrant =>
+      if (mayGrant) tokenManager.newGrant(None, request).map(success(_))
+      else Future(failure("Requestor lacks permissions to give grants to token "+tid))
+    }
   }
   
   def grantDetails(gid: GrantID): Future[Validation[String, Grant]] = {
