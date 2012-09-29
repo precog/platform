@@ -82,7 +82,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
             token(state.tokenManager) {
               path("/(?<sync>a?sync)") {
                 dataPath("fs") {
-                  post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, 8)(defaultFutureDispatch)) ~
+                  post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, maxReadThreads = 8, maxBatchErrors = 100)(defaultFutureDispatch)) ~
                   delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
                 }
               }

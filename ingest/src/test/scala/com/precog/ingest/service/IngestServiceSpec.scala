@@ -23,7 +23,7 @@ package service
 import kafka._
 
 import com.precog.daze._
-import com.precog.common.Path
+import com.precog.common.{ Path, Event }
 import com.precog.common.security._
 
 import org.specs2.mutable.Specification
@@ -54,139 +54,97 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 
+import blueeyes.json.JsonParser
 import blueeyes.json.JsonAST._
 
 import blueeyes.util.Clock
 
 
-case class PastClock(duration: org.joda.time.Duration) extends Clock {
-  def now() = new DateTime().minus(duration)
-  def instant() = now().toInstant
-  def nanoTime = sys.error("nanotime not available in the past")
-}
-
-trait TestTokens {
-  import TestTokenManager._
-  val TestTokenUID = testUID
-  val TrackingTokenUID = usageUID
-  val ExpiredTokenUID = expiredUID
-}
-
-trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestTokens with AkkaDefaults with MongoTokenManagerComponent {
-  val asyncContext = defaultFutureDispatch
+class IngestServiceSpec extends TestIngestService with FutureMatchers {
 
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsByteArray._
   import BijectionsChunkByteArray._
+  import BijectionsChunkFutureJson._
 
-  val config = """
-    security {
-      test = true
-      mongo {
-        mock = true
-        servers = [localhost]
-        database = test
-      }
-    }
-  """
+  val testValue: JValue = JObject(List(JField("testing", JNum(123))))
 
-  override val configuration = "services { ingest { v1 { " + config + " } } }"
-
-  def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(TrackingTokenUID) 
-
-  val messaging = new CollectingMessaging
-
-  def queryExecutorFactory(config: Configuration) = new NullQueryExecutor {
-    lazy val actorSystem = ActorSystem("ingestServiceSpec")
-    implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  }
-
-  def eventStoreFactory(config: Configuration): EventStore = {
-    val defaultAddresses = NonEmptyList(MailboxAddress(0))
-
-    val routeTable = new ConstantRouteTable(defaultAddresses)
-
-    new KafkaEventStore(new EventRouter(routeTable, messaging), 0)
-  }
-
-  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
-
-  lazy val ingestService = service.contentType[JValue](application/(MimeTypes.json)).path("/sync/fs/")
-
-  lazy val asyncIngestService =
-    service.contentType[ByteChunk](application/(MimeTypes.json)).path("/async/fs/")
-
-  lazy val syncIngestService =
-    service.contentType[ByteChunk](application/(MimeTypes.json)).path("/sync/fs/")
-
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
-  val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
-}
-
-class IngestServiceSpec extends TestIngestService with FutureMatchers {
-
-  def asyncTrack(data: ByteChunk, token: Option[String] = Some(TestTokenUID), path: String = "unittest") =
-    token.map(asyncIngestService.query("apiKey", _)).getOrElse(asyncIngestService).post[ByteChunk](path)(data)
-
-  def syncTrack(data: ByteChunk, token: Option[String] = Some(TestTokenUID), path: String = "unittest") =
-    token.map(syncIngestService.query("apiKey", _)).getOrElse(syncIngestService).post[ByteChunk](path)(data)
-
-  def track(data: JValue, token: Option[String] = Some(TestTokenUID), path: String = "unittest"): Future[HttpResponse[JValue]] = {
-    token.map{ ingestService.query("apiKey", _) }.getOrElse(ingestService).post(path)(data)
-  }
-
-  def testValue = JObject(List(JField("testing", JNum(123))))
-
-  def testChunkValue = Chunk(
-    "{ testing: 123 }\n".getBytes("UTF-8"),
-    Some(Future {
-      Chunk("{ testing: 321 }".getBytes("UTF-8"), None)
-    })
-  )
-
-  def badChunkValue = Chunk(
-    "178234#!!@#$\n".getBytes("UTF-8"),
-    Some(Future {
-      Chunk("{ testing: 321 }".getBytes("UTF-8"), None)
-    })
-  )
+  val JSON = MimeTypes.application/MimeTypes.json
+  val CSV = MimeTypes.text/MimeTypes.csv
 
   "Ingest service" should {
     "track event with valid token" in {
-      track(testValue) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, None, _) => ok
-      }}
+      track(JSON)(testValue) must whenDelivered { beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _),
+          Event(_, _, `testValue`, _) :: Nil) => ok
+      } }
     }
     "track asynchronous event with valid token" in {
-      asyncTrack(testChunkValue) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Accepted, _), _, None, _) => ok
-      }}
+      track(JSON, sync = false) {
+        Chunk("""{ "testing": 123 }\n""".getBytes("UTF-8"),
+          Some(Future { Chunk("""{ "testing": 321 }""".getBytes("UTF-8"), None) }))
+      } must whenDelivered { beLike {
+        case (HttpResponse(HttpStatus(Accepted, _), _, None, _), _) => ok
+      } }
     }
-    "track asynchronous event with bad row" in {
-      syncTrack(badChunkValue) must whenDelivered { beLike {
-        // TODO Check that the value in Some(...) is { errors: [ 0 ] }.
-        case HttpResponse(HttpStatus(BadRequest, _), _, Some(_), _) => ok
-      }}
+    "track synchronous event with bad row" in {
+      val msg = JsonParser.parse("""{
+          "total": 2,
+          "ingested": 1,
+          "failed": 1,
+          "skipped": 0,
+          "errors": [ 0 ]
+        }""")
+
+      track(JSON, sync = true) {
+        Chunk("178234#!!@#$\n".getBytes("UTF-8"),
+          Some(Future { Chunk("""{ "testing": 321 }""".getBytes("UTF-8"), None) }))
+      } must whenDelivered { beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, Some(`msg`), _), event) =>
+          event map (_.data) must_== JsonParser.parse("""{ "testing": 321 }""") :: Nil
+      } }
     }
-    "reject track request when token not found" in {
-      track(testValue, Some("not gonna find it")) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified token does not exist")), _) => ok 
-      }}
+    "track CSV batch ingest with valid token" in {
+      track(CSV, sync = true) {
+        Chunk("a,b,c\n1,2,3\n4, ,a".getBytes("UTF-8"),
+          Some(Future { Chunk("\n6,7,8".getBytes("UTF-8"), None) }))
+      } must whenDelivered { beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), event) =>
+          event map (_.data) must_== List(
+            JsonParser.parse("""{ "a": 1, "b": 2, "c": "3" }"""),
+            JsonParser.parse("""{ "a": 4, "b": null, "c": "a" }"""),
+            JsonParser.parse("""{ "a": 6, "b": 7, "c": "8" }"""))
+      } }
+    }
+    "reject track request when apiKey not found" in {
+      track(JSON, apiKey = Some("not gonna find it"))(testValue) must whenDelivered { beLike {
+        case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified token does not exist")), _), _) => ok 
+      } }
     }
     "reject track request when no token provided" in {
-      track(testValue, None) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, _, _) => ok 
+      track(JSON, apiKey = None)(testValue) must whenDelivered { beLike {
+        case (HttpResponse(HttpStatus(BadRequest, _), _, _, _), _) => ok 
       }}
     }
     "reject track request when grant is expired" in {
-      track(testValue, Some(ExpiredTokenUID)) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your token does not have permissions to write at this location.")), _) => ok 
+      track(JSON, apiKey = Some(ExpiredTokenUID))(testValue) must whenDelivered { beLike {
+        case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your token does not have permissions to write at this location.")), _), _) => ok 
       }}
     }
-    "reject track request when path is not accessible by token" in {
-      track(testValue, path = "") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your token does not have permissions to write at this location.")), _) => ok 
+    "reject track request when path is not accessible by apiKey" in {
+      track(JSON, path = "")(testValue) must whenDelivered { beLike {
+        case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your token does not have permissions to write at this location.")), _), _) => ok 
+      }}
+    }
+    "cap errors at 100" in {
+      val data = Chunk((List.fill(500)("!@#$") mkString "\n").getBytes("UTF-8"), None)
+      track(JSON)(data) must whenDelivered { beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), _) =>
+          msg \ "total" must_== JNum(500)
+          msg \ "ingested" must_== JNum(0)
+          msg \ "failed" must_== JNum(100)
+          msg \ "skipped" must_== JNum(400)
       }}
     }
   }

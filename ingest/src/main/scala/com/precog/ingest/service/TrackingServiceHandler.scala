@@ -48,9 +48,11 @@ import com.weiglewilczek.slf4s.Logging
 
 import au.com.bytecode.opencsv.CSVReader
 
+import scala.collection.mutable.ListBuffer
+
 import scalaz._
 
-class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout, maxReadThreads: Int)(implicit dispatcher: MessageDispatcher)
+class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout, maxReadThreads: Int, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
 
   // TODO Make this more configurable?
@@ -74,18 +76,29 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
     eventStore.save(eventInstance, insertTimeout)
   }
 
+  case class SyncResult(total: Int, ingested: Int, errors: List[Int])
+
   class EventQueueInserter(p: Path, t: Token, events: Iterator[Option[JValue]], close: Option[Closeable]) extends Runnable {
-    private[service] val errors: Promise[List[Int]] = Promise()
+    private[service] val result: Promise[SyncResult] = Promise()
 
     def run() {
-      val futures: List[Future[Option[Int]]] = events.zipWithIndex.map {
-        case (Some(event), _) => ingest(p, t, event) map (_ => None)
-        case (_, line) => Future { Some(line) }
-      }.toList
+      val errors: ListBuffer[Int] = new ListBuffer()
+      val futures: ListBuffer[Future[Unit]] = new ListBuffer()
+      var i = 0
+      while (events.hasNext) {
+        val ev = events.next()
+        if (errors.size < maxBatchErrors) {
+          ev match {
+            case Some(event) => futures += ingest(p, t, event)
+            case None => errors += i
+          }
+        }
+        i += 1
+      }
 
       Future.sequence(futures) foreach { results =>
         close foreach (_.close())
-        errors.complete(Right(results collect { case Some(line) => line }))
+        result.complete(Right(SyncResult(i, futures.size, errors.toList)))
       }
     }
   }
@@ -176,9 +189,14 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
     if (async) {
       Future { HttpResponse[JValue](Accepted) }
     } else {
-      inserter.errors map {
-        case Nil => HttpResponse[JValue](OK)
-        case errors => HttpResponse[JValue](BadRequest, content = Some(JObject(JField("errors", JArray(errors map (JNum(_)))) :: Nil)))
+      inserter.result map { case SyncResult(total, ingested, errors) =>
+        val failed = errors.size
+        HttpResponse[JValue](OK, content = Some(JObject(List(
+          JField("total", JNum(total)),
+          JField("ingested", JNum(ingested)),
+          JField("failed", JNum(failed)),
+          JField("skipped", JNum(total - ingested - failed)),
+          JField("errors", JArray(errors map (JNum(_))))))))  // List or Scala? You decide.
       }
     }
   } catch {
