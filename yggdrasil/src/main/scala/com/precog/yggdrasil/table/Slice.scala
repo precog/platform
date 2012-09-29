@@ -437,16 +437,28 @@ trait Slice { source =>
     source mapRoot cf.util.Remap(sortedIndices)
   }
 
-  def split(idx: Int): (Slice, Slice) = (
+  /**
+   * Split the table at the specified index, exclusive. The
+   * new prefix will contain all indices less than that index, and
+   * the new suffix will contain indices >= that index.
+   */
+  def split(idx: Int): (Slice, Slice) = {
+    (take(idx), drop(idx))
+  }
+
+  def take(sz: Int): Slice = if (sz >= source.size) source else {
     new Slice {
-      val size = idx
-      val columns = source.columns mapValues { col => (col |> cf.util.Remap({case i if i < idx => i})).get }
-    },
-    new Slice {
-      val size = source.size - idx
-      val columns = source.columns mapValues { col => (col |> cf.util.Remap({case i if i < size => i + idx})).get }
+      val size = sz
+      val columns = source.columns mapValues { col => (col |> cf.util.Remap({case i if i < sz => i})).get }
     }
-  )
+  }
+
+  def drop(sz: Int): Slice = if (sz <= 0) source else {
+    new Slice {
+      val size = source.size - sz
+      val columns = source.columns mapValues { col => (col |> cf.util.Remap({case i if i < size => i + sz})).get }
+    }
+  }
 
   def takeRange(startIndex: Int, numberToTake: Int): Slice = {
     new Slice {

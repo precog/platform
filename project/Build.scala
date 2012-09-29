@@ -91,9 +91,7 @@ object PlatformBuild extends Build {
     javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) {
       (opts, lib, conf, id, d) =>
       opts ++ Seq("-agentpath:%s=offline,config=%s/%s,id=%s" format (lib, d, conf, id))
-    },
-
-    fullRunInputTask(profileTask, Test, "com.precog.jprofiler.Run")
+    }
   )
 
   val commonNexusSettings = nexusSettings ++ commonSettings
@@ -116,6 +114,9 @@ object PlatformBuild extends Build {
 
   lazy val yggdrasil = Project(id = "yggdrasil", base = file("yggdrasil")).
     settings(commonNexusSettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util)
+
+  lazy val yggdrasilProf = Project(id = "yggdrasilProf", base = file("yggdrasilProf")).
+    settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test")
 
   lazy val daze = Project(id = "daze", base = file("daze")).
     settings(commonNexusSettings: _*).dependsOn (common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util)
@@ -145,5 +146,5 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test")
 
   lazy val jprofiler = Project(id = "jprofiler", base = file("jprofiler")).
-    settings(jprofilerSettings ++ commonNexusSettings: _*).dependsOn(ragnarok)
+    settings(jprofilerSettings ++ commonNexusSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.jprofiler.Run")): _*).dependsOn(ragnarok)
 }

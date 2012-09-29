@@ -199,11 +199,15 @@ trait ValueRowFormat extends RowFormat with RowFormatSupport { self: StdCodecs =
     new ColumnEncoder {
       import scalaz.syntax.apply._
       import scalaz.syntax.monad._
-
+      val colsArray = cols.toArray
       def encodeFromRow(row: Int) = {
-        val undefined = BitSetUtil.create(cols.zipWithIndex collect {
-          case (col, i) if !col.isDefinedAt(row) => i
-        })
+        val undefined = BitSetUtil.create()
+        
+        @inline @tailrec def definedCols(i: Int): Unit = if (i >= 0) {
+          if (!colsArray(i).isDefinedAt(row)) undefined.set(i)
+          definedCols(i - 1)
+        }
+        definedCols(colsArray.length - 1)
 
         val rowWriter = colWriters.foldLeft(Codec[BitSet].write(undefined)) {
           case (acc, (encode, i)) if !undefined(i) => acc *> encode(row)
