@@ -64,9 +64,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
     Future { chan.write(ByteBuffer.wrap(chunk.data)) } flatMap { _ =>
       chunk.next match {
         case Some(future) => future flatMap (writeChunkStream(chan, _))
-        case None => Future {
-          chan.close()
-        }
+        case None => Future(chan.close())
       }
     }
   }
@@ -133,7 +131,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
       } getOrElse success(default)
 
     val delimiter = charOrError(request.parameters get 'delimiter, ',').toValidationNEL
-    val quote = charOrError(request.parameters get 'quote, '\'').toValidationNEL
+    val quote = charOrError(request.parameters get 'quote, '"').toValidationNEL
     val escape = charOrError(request.parameters get 'escape,'\\').toValidationNEL
 
     (delimiter |@| quote |@| escape) { (delimiter, quote, escape) => 

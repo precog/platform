@@ -26,7 +26,9 @@ import blueeyes.core.data.{ Chunk, ByteChunk }
 import java.io.{ InputStream, ByteArrayOutputStream, IOException, EOFException }
 import java.util.zip.Inflater
 
-trait DecompressByteChunk {
+import com.weiglewilczek.slf4s.Logging
+
+trait DecompressByteChunk extends Logging {
 
   def nowrap: Boolean
 
@@ -43,16 +45,27 @@ trait DecompressByteChunk {
 
     { (chunk: ByteChunk) => 
 
-      inflater.setInput(chunk.data)
+      val data = if (chunk.data.length > 0) {
 
-      out.reset()
-      while (!inflater.needsInput() && !inflater.finished() && !inflater.needsDictionary()) {
-        val len = inflater.inflate(bytes)
-        out.write(bytes, 0, len)
+        logger.debug("Proposing %d bytes for inflation." format chunk.data.length)
+
+        inflater.setInput(chunk.data)
+
+        out.reset()
+        var len = inflater.inflate(bytes)
+        while (len > 0) {
+          out.write(bytes, 0, len)
+          len = inflater.inflate(bytes)
+        }
+        out.toByteArray()
+
+      } else {
+        new Array[Byte](0)
       }
-      val data = out.toByteArray()
 
-      if (!inflater.finished() && !inflater.needsDictionary()) {
+      logger.debug("Inflated bytes" format data.length)
+
+      if (inflater.needsInput()) {
         More(data, chunk.next)
 
       } else {
@@ -156,8 +169,8 @@ case object GunzipByteChunk extends DecompressByteChunk {
     if (i == chunk.data.length) {
       Chunk(new Array[Byte](0), chunk.next map (_ map (skipString(_))))
     } else {
-      val leftover = new Array[Byte](chunk.data.length - i)
-      System.arraycopy(chunk.data, i, leftover, 0, leftover.length)
+      val leftover = new Array[Byte](chunk.data.length - i - 1)
+      System.arraycopy(chunk.data, i + 1, leftover, 0, leftover.length)
       Chunk(leftover, chunk.next)
     }
   }

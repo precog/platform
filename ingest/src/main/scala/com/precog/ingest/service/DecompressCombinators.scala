@@ -26,10 +26,12 @@ import blueeyes.core.data._
 
 import akka.dispatch.ExecutionContext
 
+import com.weiglewilczek.slf4s.Logging
+
 import scalaz._
 
 case class DecompressService[B](delegate: HttpService[ByteChunk, B])(implicit ctx: ExecutionContext)
-extends DelegatingService[ByteChunk, B, ByteChunk, B] {
+extends DelegatingService[ByteChunk, B, ByteChunk, B] with Logging {
   import HttpStatusCodes._
   import HttpHeaders._
   import Encodings.{ identity => _, _ }
