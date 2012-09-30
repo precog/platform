@@ -104,7 +104,7 @@ echo "Using artifacts in $ARTIFACTDIR"
 (exists $ARTIFACTDIR/kafka* && echo "  Kafka exists") || {
     echo "Downloading current Kafka artifact"
     pushd $ARTIFACTDIR > /dev/null
-    wget -nd -q https://s3.amazonaws.com/ops.reportgrid.com/kafka/kafka-0.7.5.zip || { 
+    wget -nd -q http://s3.amazonaws.com/ops.reportgrid.com/kafka/kafka-0.7.5.zip || { 
         echo "Failed to download kafka"
         exit 3 
     }
