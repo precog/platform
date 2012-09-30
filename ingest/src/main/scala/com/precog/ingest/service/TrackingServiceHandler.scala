@@ -16,6 +16,7 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 
 import blueeyes.json.JsonParser
+import blueeyes.json.JsonParser.ParseException
 import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
 
@@ -29,10 +30,14 @@ import com.weiglewilczek.slf4s.Logging
 
 import au.com.bytecode.opencsv.CSVReader
 
+import scala.collection.mutable.ListBuffer
+
 import scalaz._
 
-class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout, maxReadThreads: Int)(implicit dispatcher: MessageDispatcher)
+class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout, maxReadThreads: Int, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
+
+  // private type Decompressor = InputStream => InputStream
 
   // TODO Make this more configurable?
   def threadPool: ThreadPoolExecutor = new ThreadPoolExecutor(2, maxReadThreads, 5, TimeUnit.SECONDS, new ArrayBlockingQueue(50))
@@ -41,9 +46,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
     Future { chan.write(ByteBuffer.wrap(chunk.data)) } flatMap { _ =>
       chunk.next match {
         case Some(future) => future flatMap (writeChunkStream(chan, _))
-        case None => Future {
-          chan.close()
-        }
+        case None => Future(chan.close())
       }
     }
   }
@@ -55,18 +58,29 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
     eventStore.save(eventInstance, insertTimeout)
   }
 
-  class EventQueueInserter(p: Path, t: Token, events: Iterator[Option[JValue]], close: Option[Closeable]) extends Runnable {
-    private[service] val errors: Promise[List[Int]] = Promise()
+  case class SyncResult(total: Int, ingested: Int, errors: List[(Int, String)])
+
+  class EventQueueInserter(p: Path, t: Token, events: Iterator[Either[String, JValue]], close: Option[Closeable]) extends Runnable {
+    private[service] val result: Promise[SyncResult] = Promise()
 
     def run() {
-      val futures: List[Future[Option[Int]]] = events.zipWithIndex.map {
-        case (Some(event), _) => ingest(p, t, event) map (_ => None)
-        case (_, line) => Future { Some(line) }
-      }.toList
+      val errors: ListBuffer[(Int, String)] = new ListBuffer()
+      val futures: ListBuffer[Future[Unit]] = new ListBuffer()
+      var i = 0
+      while (events.hasNext) {
+        val ev = events.next()
+        if (errors.size < maxBatchErrors) {
+          ev match {
+            case Right(event) => futures += ingest(p, t, event)
+            case Left(error) => errors += (i -> error)
+          }
+        }
+        i += 1
+      }
 
       Future.sequence(futures) foreach { results =>
         close foreach (_.close())
-        errors.complete(Right(results collect { case Some(line) => line }))
+        result.complete(Right(SyncResult(i, futures.size, errors.toList)))
       }
     }
   }
@@ -99,7 +113,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
       } getOrElse success(default)
 
     val delimiter = charOrError(request.parameters get 'delimiter, ',').toValidationNEL
-    val quote = charOrError(request.parameters get 'quote, '\'').toValidationNEL
+    val quote = charOrError(request.parameters get 'quote, '"').toValidationNEL
     val escape = charOrError(request.parameters get 'escape,'\\').toValidationNEL
 
     (delimiter |@| quote |@| escape) { (delimiter, quote, escape) => 
@@ -121,8 +135,8 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
       val csv = readCsv(file)
       val rows = toRows(csv)
       val paths = rows.next() map (JPath(_))
-      val jVals = rows map { row =>
-        Some((paths zip types zip row).foldLeft(JNothing: JValue) { case (obj, ((path, tpe), s)) =>
+      val jVals: Iterator[Either[String, JValue]] = rows map { row =>
+        Right((paths zip types zip row).foldLeft(JNothing: JValue) { case (obj, ((path, tpe), s)) =>
           JValue.unsafeInsert(obj, path, tpe(s))
         })
       }
@@ -134,7 +148,14 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
   def parseJson(channel: ReadableByteChannel, t: Token, p: Path): EventQueueInserter = {
     val reader = new BufferedReader(Channels.newReader(channel, "UTF-8"))
     val lines = Iterator.continually(reader.readLine()).takeWhile(_ != null)
-    val inserter = new EventQueueInserter(p, t, lines map (JsonParser.parseOpt(_)), Some(reader))
+    val inserter = new EventQueueInserter(p, t, lines map { json =>
+      try {
+        Right(JsonParser.parse(json))
+      } catch {
+        case e: ParseException => Left("Parsing failed: " + e.getMessage())
+        case e => Left("Server error: " + e.getMessage())
+      }
+    }, Some(reader))
     inserter
   }
 
@@ -157,9 +178,16 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
     if (async) {
       Future { HttpResponse[JValue](Accepted) }
     } else {
-      inserter.errors map {
-        case Nil => HttpResponse[JValue](OK)
-        case errors => HttpResponse[JValue](BadRequest, content = Some(JObject(JField("errors", JArray(errors map (JNum(_)))) :: Nil)))
+      inserter.result map { case SyncResult(total, ingested, errors) =>
+        val failed = errors.size
+        HttpResponse[JValue](OK, content = Some(JObject(List(
+          JField("total", JNum(total)),
+          JField("ingested", JNum(ingested)),
+          JField("failed", JNum(failed)),
+          JField("skipped", JNum(total - ingested - failed)),
+          JField("errors", JArray(errors map { case (line, msg) =>
+            JObject(List(JField("line", JNum(line)), JField("reason", JString(msg))))
+          }))))))
       }
     }
   } catch {
