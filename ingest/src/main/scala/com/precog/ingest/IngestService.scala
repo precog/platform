@@ -44,7 +44,8 @@ import scalaz.syntax.monad._
 
 case class IngestState(tokenManager: TokenManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging)
 
-trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators with AkkaDefaults { 
+trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
+with DecompressCombinators with AkkaDefaults { 
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
@@ -78,12 +79,14 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           }
         } ->
         request { (state: IngestState) =>
-          jsonpOrChunk {
-            token(state.tokenManager) {
-              path("/(?<sync>a?sync)") {
-                dataPath("fs") {
-                  post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, maxReadThreads = 8, maxBatchErrors = 100)(defaultFutureDispatch)) ~
-                  delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
+          decompress {
+            jsonpOrChunk {
+              token(state.tokenManager) {
+                path("/(?<sync>a?sync)") {
+                  dataPath("fs") {
+                    post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, maxReadThreads = 8, maxBatchErrors = 100)(defaultFutureDispatch)) ~
+                    delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
+                  }
                 }
               }
             }

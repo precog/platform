@@ -55,6 +55,8 @@ import scalaz._
 class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout, maxReadThreads: Int, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
 
+  // private type Decompressor = InputStream => InputStream
+
   // TODO Make this more configurable?
   def threadPool: ThreadPoolExecutor = new ThreadPoolExecutor(2, maxReadThreads, 5, TimeUnit.SECONDS, new ArrayBlockingQueue(50))
 
