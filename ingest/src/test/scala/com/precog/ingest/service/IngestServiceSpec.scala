@@ -94,7 +94,10 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
           "ingested": 1,
           "failed": 1,
           "skipped": 0,
-          "errors": [ 0 ]
+          "errors": [ {
+            "line": 0,
+            "reason": "Parsing failed: unknown token #\nNear: 178234#!!@#$"
+          } ]
         }""")
 
       track(JSON, sync = true) {

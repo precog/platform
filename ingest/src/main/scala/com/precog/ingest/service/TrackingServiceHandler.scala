@@ -35,6 +35,7 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 
 import blueeyes.json.JsonParser
+import blueeyes.json.JsonParser.ParseException
 import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
 
@@ -76,21 +77,21 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
     eventStore.save(eventInstance, insertTimeout)
   }
 
-  case class SyncResult(total: Int, ingested: Int, errors: List[Int])
+  case class SyncResult(total: Int, ingested: Int, errors: List[(Int, String)])
 
-  class EventQueueInserter(p: Path, t: Token, events: Iterator[Option[JValue]], close: Option[Closeable]) extends Runnable {
+  class EventQueueInserter(p: Path, t: Token, events: Iterator[Either[String, JValue]], close: Option[Closeable]) extends Runnable {
     private[service] val result: Promise[SyncResult] = Promise()
 
     def run() {
-      val errors: ListBuffer[Int] = new ListBuffer()
+      val errors: ListBuffer[(Int, String)] = new ListBuffer()
       val futures: ListBuffer[Future[Unit]] = new ListBuffer()
       var i = 0
       while (events.hasNext) {
         val ev = events.next()
         if (errors.size < maxBatchErrors) {
           ev match {
-            case Some(event) => futures += ingest(p, t, event)
-            case None => errors += i
+            case Right(event) => futures += ingest(p, t, event)
+            case Left(error) => errors += (i -> error)
           }
         }
         i += 1
@@ -153,8 +154,8 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
       val csv = readCsv(file)
       val rows = toRows(csv)
       val paths = rows.next() map (JPath(_))
-      val jVals = rows map { row =>
-        Some((paths zip types zip row).foldLeft(JNothing: JValue) { case (obj, ((path, tpe), s)) =>
+      val jVals: Iterator[Either[String, JValue]] = rows map { row =>
+        Right((paths zip types zip row).foldLeft(JNothing: JValue) { case (obj, ((path, tpe), s)) =>
           JValue.unsafeInsert(obj, path, tpe(s))
         })
       }
@@ -166,7 +167,14 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
   def parseJson(channel: ReadableByteChannel, t: Token, p: Path): EventQueueInserter = {
     val reader = new BufferedReader(Channels.newReader(channel, "UTF-8"))
     val lines = Iterator.continually(reader.readLine()).takeWhile(_ != null)
-    val inserter = new EventQueueInserter(p, t, lines map (JsonParser.parseOpt(_)), Some(reader))
+    val inserter = new EventQueueInserter(p, t, lines map { json =>
+      try {
+        Right(JsonParser.parse(json))
+      } catch {
+        case e: ParseException => Left("Parsing failed: " + e.getMessage())
+        case e => Left("Server error: " + e.getMessage())
+      }
+    }, Some(reader))
     inserter
   }
 
@@ -196,7 +204,9 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
           JField("ingested", JNum(ingested)),
           JField("failed", JNum(failed)),
           JField("skipped", JNum(total - ingested - failed)),
-          JField("errors", JArray(errors map (JNum(_))))))))  // List or Scala? You decide.
+          JField("errors", JArray(errors map { case (line, msg) =>
+            JObject(List(JField("line", JNum(line)), JField("reason", JString(msg))))
+          }))))))
       }
     }
   } catch {
