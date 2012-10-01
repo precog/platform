@@ -299,7 +299,7 @@ trait EvalStackSpecs extends Specification {
       result must haveSize(size.head)
       actual mustEqual expected
     }
-
+   
     "perform filter on new set based on rank without a solve" >> {
       val input = """
         clicks := //clicks
@@ -320,10 +320,11 @@ trait EvalStackSpecs extends Specification {
       val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
       val expected = evalE("//clicks.time") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
 
+      result must not(beEmpty)
       result must haveSize(size.head)
       actual mustEqual expected
     }
-
+    
     "ensure rows of rank 1 exist" >> {
       val input = """
         clicks := //clicks
@@ -1550,7 +1551,6 @@ trait EvalStackSpecs extends Specification {
         eval("//fastspring_nulls") must haveSize(2)
         eval("//fastspring_mixed_type") must haveSize(2)
       }
-
 
       // times out...
 //      "handle chained characteristic functions" in {
