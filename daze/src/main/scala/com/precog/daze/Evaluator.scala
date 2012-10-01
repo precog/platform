@@ -257,8 +257,8 @@ trait Evaluator[M[+_]] extends DAG
             
             tableM2 = for {
               table <- pendingTable.table
-              forced <- table.transform(liftToValues(pendingTable.trans)).transform(idSpec).force
-            } yield forced
+              remapped = table.transform(liftToValues(pendingTable.trans)).transform(idSpec)
+            } yield remapped
           } yield PendingTable(tableM2, graph, TransSpec1.Id)
         }
         
@@ -333,8 +333,7 @@ trait Evaluator[M[+_]] extends DAG
               table = pendingTable.transform(liftToValues(pending.trans))
               sorted <- table.sort(valueSpec, SortAscending)
               distinct = sorted.distinct(valueSpec) 
-              forced <- distinct.transform(idSpec).force
-            } yield forced
+            } yield distinct.transform(idSpec)
             PendingTable(result, graph, TransSpec1.Id)
           }
         }
@@ -397,8 +396,7 @@ trait Evaluator[M[+_]] extends DAG
 
                 back.eval(state)  //: M[Table]
               }
-              forced <- result.transform(idSpec).force
-            } yield forced
+            } yield result.transform(idSpec)
           }
           table map { PendingTable(_, graph, TransSpec1.Id) }
         }
