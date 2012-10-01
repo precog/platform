@@ -1,0 +1,6 @@
+/etc/precog/auth-v1.conf=special/auth-v1.conf
+default=special/auth-v1.default
+init=special/auth-v1.init
+/etc/monit/conf.d/auth-v1.monit=special/auth-v1.monit
+/etc/precog/auth-v1.logging.xml=special/auth-v1.logging.xml
+postinstall=special/postinstall.sh
