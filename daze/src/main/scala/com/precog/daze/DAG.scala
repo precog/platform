@@ -641,7 +641,7 @@ trait DAG extends Instructions {
       val containsSplitArg = false
     }
     
-    case class New(loc: Line, parent: DepGraph) extends DepGraph with StagingPoint {
+    case class New(loc: Line, parent: DepGraph) extends DepGraph {
       lazy val identities = Vector(SynthIds(IdGen.nextInt()))
       
       val sorting = IdentitySort
