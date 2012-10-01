@@ -147,7 +147,7 @@ object ByteBufferPool {
       buf.flip()
       size + buf.remaining()
     }
-    val bytes = Array.ofDim[Byte](size)
+    val bytes = new Array[Byte](size)
     buffers.foldLeft(0) { (offset, buf) =>
       val length = buf.remaining()
       buf.get(bytes, offset, length)
