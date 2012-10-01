@@ -862,7 +862,7 @@ trait Evaluator[M[+_]] extends DAG
       }
       
       def memoizedResult = graph match {
-        case graph: ForcingPoint => {
+        case graph: StagingPoint => {
           for {
             pendingTable <- result
             _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (graph -> pendingTable.table)) }
@@ -893,7 +893,7 @@ trait Evaluator[M[+_]] extends DAG
       
       // find the topologically-sorted forcing points (excluding the endpoint)
       // at the current split level
-      val toEval = listForcingPoints(Queue(graph)) filter referencesOnlySplit(currentSplit)
+      val toEval = listStagingPoints(Queue(graph)) filter referencesOnlySplit(currentSplit)
       
       val preStates = toEval map { graph =>
         for {
@@ -919,7 +919,7 @@ trait Evaluator[M[+_]] extends DAG
   /**
    * Returns all forcing points in the graph, ordered topologically.
    */
-  private def listForcingPoints(queue: Queue[DepGraph], acc: List[dag.ForcingPoint] = Nil): List[dag.ForcingPoint] = {
+  private def listStagingPoints(queue: Queue[DepGraph], acc: List[dag.StagingPoint] = Nil): List[dag.StagingPoint] = {
     def listParents(spec: BucketSpec): Set[DepGraph] = spec match {
       case UnionBucketSpec(left, right) => listParents(left) ++ listParents(right)
       case IntersectBucketSpec(left, right) => listParents(left) ++ listParents(right)
@@ -971,13 +971,13 @@ trait Evaluator[M[+_]] extends DAG
         }
         
         val addend = Some(graph) collect {
-          case fp: ForcingPoint => fp
+          case fp: StagingPoint => fp
         }
         
         (queue3, addend)
       }
       
-      listForcingPoints(queue3, addend map { _ :: acc } getOrElse acc)
+      listStagingPoints(queue3, addend map { _ :: acc } getOrElse acc)
     }
   }
   
