@@ -150,7 +150,7 @@ trait CrossOrdering extends DAG {
             val right2 = memoized(right, splits)
             
             right2 match {
-              case _: ForcingPoint =>
+              case _: Memoize =>
                 Join(loc, op, CrossLeftSort, memoized(left, splits), right2)
               
               case _ =>

@@ -589,7 +589,7 @@ trait DAG extends Instructions {
   }
   
   object dag {
-    sealed trait ForcingPoint extends DepGraph
+    sealed trait StagingPoint extends DepGraph
     
     object ConstString {
       def unapply(graph: DepGraph): Option[String] = graph match {
@@ -641,7 +641,7 @@ trait DAG extends Instructions {
       val containsSplitArg = false
     }
     
-    case class New(loc: Line, parent: DepGraph) extends DepGraph with ForcingPoint {
+    case class New(loc: Line, parent: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = Vector(SynthIds(IdGen.nextInt()))
       
       val sorting = IdentitySort
@@ -651,7 +651,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
 
-    case class Morph1(loc: Line, mor: Morphism1, parent: DepGraph) extends DepGraph with ForcingPoint {
+    case class Morph1(loc: Line, mor: Morphism1, parent: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = {
         if (mor.retainIds) parent.identities
         else Vector(SynthIds(IdGen.nextInt()))
@@ -664,7 +664,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
 
-    case class Morph2(loc: Line, mor: Morphism2, left: DepGraph, right: DepGraph) extends DepGraph with ForcingPoint {
+    case class Morph2(loc: Line, mor: Morphism2, left: DepGraph, right: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = {
         if (mor.retainIds) sys.error("not implemented yet") //TODO need to retain only the identities that are being used in the match
         else Vector(SynthIds(IdGen.nextInt()))
@@ -677,7 +677,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
 
-    case class Distinct(loc: Line, parent: DepGraph) extends DepGraph with ForcingPoint {
+    case class Distinct(loc: Line, parent: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = Vector(SynthIds(IdGen.nextInt()))
       
       val sorting = IdentitySort
@@ -687,7 +687,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JType.JUnfixedT) extends DepGraph with ForcingPoint {
+    case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JType.JUnfixedT) extends DepGraph with StagingPoint {
       lazy val identities = parent match {
         case Root(_, CString(path)) => Vector(LoadIds(path))
         case _ => Vector(SynthIds(IdGen.nextInt()))
@@ -711,7 +711,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph with ForcingPoint {
+    case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = Vector()
       
       val sorting = IdentitySort
@@ -721,7 +721,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class MegaReduce(loc: Line, reds: NEL[Reduction], parent: DepGraph) extends DepGraph with ForcingPoint {
+    case class MegaReduce(loc: Line, reds: NEL[Reduction], parent: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = Vector()
       
       val sorting = IdentitySort
@@ -731,7 +731,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class Split(loc: Line, spec: BucketSpec, child: DepGraph) extends DepGraph with ForcingPoint {
+    case class Split(loc: Line, spec: BucketSpec, child: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = Vector(SynthIds(IdGen.nextInt()))
       
       val sorting = IdentitySort
@@ -757,7 +757,7 @@ trait DAG extends Instructions {
       }
     }
     
-    case class IUI(loc: Line, union: Boolean, left: DepGraph, right: DepGraph) extends DepGraph with ForcingPoint {
+    case class IUI(loc: Line, union: Boolean, left: DepGraph, right: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = Vector(Stream continually SynthIds(IdGen.nextInt()) take left.identities.length: _*)
       
       val sorting = IdentitySort
@@ -767,7 +767,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
     
-    case class Diff(loc: Line, left: DepGraph, right: DepGraph) extends DepGraph with ForcingPoint {
+    case class Diff(loc: Line, left: DepGraph, right: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = left.identities
       
       val sorting = IdentitySort
@@ -813,7 +813,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = target.containsSplitArg || boolean.containsSplitArg
     }
     
-    case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph with ForcingPoint {
+    case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph with StagingPoint {
       val loc = parent.loc
       
       lazy val identities = {
@@ -847,7 +847,7 @@ trait DAG extends Instructions {
      * share the same identity.  This is very important to ensure correctness in
      * evaluation of the `Join` node.
      */
-    case class SortBy(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph with ForcingPoint {
+    case class SortBy(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph with StagingPoint {
       val loc = parent.loc
 
       lazy val identities = parent.identities
@@ -859,7 +859,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class ReSortBy(parent: DepGraph, id: Int) extends DepGraph with ForcingPoint {
+    case class ReSortBy(parent: DepGraph, id: Int) extends DepGraph with StagingPoint {
       val loc = parent.loc
       
       lazy val identities = parent.identities
@@ -871,7 +871,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class Memoize(parent: DepGraph, priority: Int) extends DepGraph with ForcingPoint {
+    case class Memoize(parent: DepGraph, priority: Int) extends DepGraph with StagingPoint {
       val loc = parent.loc
       
       lazy val identities = parent.identities
