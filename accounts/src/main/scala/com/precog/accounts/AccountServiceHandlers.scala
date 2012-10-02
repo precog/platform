@@ -221,10 +221,14 @@ extends CustomHttpService[Future[JValue],Account => Future[HttpResponse[JValue]]
     Success { (auth: Account) => 
       request.parameters.get('accountId).map { accountId =>
          accountManagement.findAccountById(accountId).map { 
-          case Some(account) => 
+          case Some(account) if account.accountId == auth.accountId => 
             HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
             
-          case _ => HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId)))
+          case Some(_) => 
+            HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId)))
+
+          case None => 
+            HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId)))
         }
       } getOrElse {
         Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))
@@ -247,7 +251,7 @@ extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]
         planType <- request.parameters.get('type)
       } yield {
         accountManagement.findAccountById(accountId) flatMap { 
-          case Some(account) => 
+          case Some(account) if account.accountId == auth.accountId => 
             accountManagement.updateAccount(account.copy(plan = new AccountPlan(planType))) map { 
               case true =>
                 HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
@@ -257,7 +261,10 @@ extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]
                                      content = Some(JString("Failed to Update Account")))
             }
             
-          case _ =>
+          case Some(_) => 
+            Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId))))
+
+          case None =>
             Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId))))
         }
       }) getOrElse {
@@ -278,11 +285,14 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
     Success { (auth: Account) =>
       request.parameters.get('accountId).map { accountId =>
         accountManagement.findAccountById(accountId).map { 
-          case Some(account) => 
+          case Some(account) if account.accountId == auth.accountId => 
             accountManagement.updateAccount(account.copy(plan = AccountPlan.Free))
             HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
           
-          case _ => 
+          case Some(_) => 
+            HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId)))
+
+          case None => 
             HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId)))
         }
       } getOrElse {
@@ -302,8 +312,14 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
     Success { (auth: Account) =>
       request.parameters.get('accountId) map { accountId =>
         accountManagement.findAccountById(accountId).map { 
-          case Some(account) => HttpResponse[JValue](OK, content = Some(account.serialize))
-          case (_)  => HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId)))
+          case Some(account) if auth.accountId == account.accountId => 
+            HttpResponse[JValue](OK, content = Some(account.serialize))
+
+          case Some(_) => 
+            HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId)))
+
+          case None  => 
+            HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId)))
         }
       } getOrElse {
         Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))
@@ -320,9 +336,13 @@ extends CustomHttpService[Future[JValue],  Account => Future[HttpResponse[JValue
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
       request.parameters.get('accountId).map { accountId =>
-        accountManagement.deleteAccount(accountId).map { 
-          if(_) HttpResponse[JValue](HttpStatus(NoContent))
-          else  HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+accountId)))
+        if (accountId == auth.accountId) {
+          accountManagement.deleteAccount(accountId).map { 
+            if(_) HttpResponse[JValue](HttpStatus(NoContent))
+            else  HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+accountId)))
+          }
+        } else {
+          Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId))))
         }
       } getOrElse {
         Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))
