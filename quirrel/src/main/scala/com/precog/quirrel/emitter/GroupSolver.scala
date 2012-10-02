@@ -163,7 +163,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     val (spec, condErrors) = {
       val processed = forest collect {
         case GroupCondition(origin @ Where(_, target, pred)) => {
-          if (listTicVars(b, target).isEmpty) {
+          if (listTicVars(Some(b), target).isEmpty) {
             val (result, errors) = solveGroupCondition(b, pred, false)
             (result map { Group(Some(origin), target, _) }, errors)
           } else {
@@ -213,13 +213,14 @@ trait GroupSolver extends AST with GroupFinder with Solver {
       (andSpec orElse leftSpec orElse rightSpec, leftErrors ++ rightErrors)
     }
     
-    case expr: RelationExpr if !listTicVars(b, expr).isEmpty => {
-      val vars = listTicVars(b, expr)
+    case expr: RelationExpr if !listTicVars(Some(b), expr).isEmpty => {
+      val vars = listTicVars(Some(b), expr)
       
       if (vars.size > 1) {
-        (None, Set(Error(expr, InseparablePairedTicVariables(vars))))
+        val ticVars = vars map { case (_, id) => id }
+        (None, Set(Error(expr, InseparablePairedTicVariables(ticVars))))
       } else {
-        val tv = vars.head
+        val tv = vars.head._2
         val result = solveRelation(expr) { case t @ TicVar(_, `tv`) => !free && t.binding == SolveBinding(b) || free && t.binding == FreeBinding(b) }
         
         if (result.isDefined)
@@ -229,13 +230,14 @@ trait GroupSolver extends AST with GroupFinder with Solver {
       }
     }
     
-    case expr: Comp if !listTicVars(b, expr).isEmpty => {
-      val vars = listTicVars(b, expr)
+    case expr: Comp if !listTicVars(Some(b), expr).isEmpty => {
+      val vars = listTicVars(Some(b), expr)
       
       if (vars.size > 1) {
-        (None, Set(Error(expr, InseparablePairedTicVariables(vars))))
+        val ticVars = vars map { case (_, id) => id }
+        (None, Set(Error(expr, InseparablePairedTicVariables(ticVars))))
       } else {
-        val tv = vars.head
+        val tv = vars.head._2
         val result = solveComplement(expr) { case t @ TicVar(_, `tv`) => !free && t.binding == SolveBinding(b) || free && t.binding == FreeBinding(b) }
         
         if (result.isDefined)
@@ -244,15 +246,17 @@ trait GroupSolver extends AST with GroupFinder with Solver {
           (None, Set(Error(expr, UnableToSolveTicVariable(tv))))
       }
     }
+
+    case _ if listTicVars(Some(b), expr).isEmpty && !listTicVars(None, expr).isEmpty => 
+      (None, Set(Error(expr, ConstraintsWithinInnerScope)))
+
+    case _ if listTicVars(Some(b), expr).isEmpty => 
+      (Some(Extra(expr)), Set())
     
-    case _ if listTicVars(b, expr).isEmpty => (Some(Extra(expr)), Set())
-    
-    case _ => (None, listTicVars(b, expr) map UnableToSolveTicVariable map { Error(expr, _) })
+    case _ => (None, listTicVars(Some(b), expr) map { case (_, id) => id } map UnableToSolveTicVariable map { Error(expr, _) })
   }
   
   private def mergeSpecs(specs: TraversableOnce[(Option[BucketSpec], Set[Error])])(f: (BucketSpec, BucketSpec) => BucketSpec): (Option[BucketSpec], Set[Error]) = {
-    val optionalErrors = f == IntersectBucketSpec
-    
     val (back, errors) = specs.fold((None: Option[BucketSpec], Set[Error]())) {
       case ((leftAcc, leftErrors), (rightAcc, rightErrors)) => {
         val merged = for (left <- leftAcc; right <- rightAcc)
@@ -261,19 +265,22 @@ trait GroupSolver extends AST with GroupFinder with Solver {
         (merged orElse leftAcc orElse rightAcc, leftErrors ++ rightErrors)
       }
     }
-    
-    if (f == IntersectBucketSpec && back.isDefined)
+
+    if (f == IntersectBucketSpec && back.isDefined && !(errors collect { case Error(tpe) => tpe } contains ConstraintsWithinInnerScope))
       (back, Set())
     else
       (back, errors)
   }
   
-  private def listTicVars(b: Solve, expr: Expr): Set[TicId] = expr match {
+  //if b is Some: finds all tic vars in the Expr that have the given Solve as their binding
+  //if b is None: finds all tic vars in the Expr
+  private def listTicVars(b: Option[Solve], expr: Expr): Set[(Option[Solve], TicId)] = expr match {
     case Let(_, _, _, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
     case Solve(_, constraints, child) => (constraints map { listTicVars(b, _) } reduce { _ ++ _ }) ++ listTicVars(b, child)
     case New(_, child) => listTicVars(b, child)
     case Relate(_, from, to, in) => listTicVars(b, from) ++ listTicVars(b, to) ++ listTicVars(b, in)
-    case t @ TicVar(_, name) if t.binding == SolveBinding(b) || t.binding == FreeBinding(b) => Set(name)
+    case t @ TicVar(_, name) if b.isDefined && (t.binding == SolveBinding(b.get) || t.binding == FreeBinding(b.get)) => Set((b, name))
+    case TicVar(_, name) if !b.isDefined => Set((b, name))
     case TicVar(_, _) => Set()
     case StrLit(_, _) => Set()
     case NumLit(_, _) => Set()
@@ -288,7 +295,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     case d @ Dispatch(_, _, actuals) => {
       val leftSet = d.binding match {
         case LetBinding(b2) => listTicVars(b, b2.left)
-        case _ => Set[TicId]()
+        case _ => Set[(Option[Solve], TicId)]()
       }
       (actuals map { listTicVars(b, _) }).fold(leftSet) { _ ++ _ }
     }

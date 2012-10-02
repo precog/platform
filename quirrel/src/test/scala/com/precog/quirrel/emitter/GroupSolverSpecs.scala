@@ -72,7 +72,42 @@ object GroupSolverSpecs extends Specification
       
       tree.errors must beEmpty
       tree.buckets must beSome(expected)
+    }
+
+    "identify and fail to solve problematic case of nested solves" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        solve 'gender
+          solve 'weight
+            medals where medals.Weight = 'weight & medals.Gender = 'gender
+      """.stripMargin
+
+      val Let(_, _, _, _,
+        tree @ Solve(_, _, _)) = compile(input)
+
+      tree.errors mustEqual Set(ConstraintsWithinInnerScope)
     }    
+    
+    "identify and fail to solve more complicated problematic case of nested solves" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        solve 'gender
+          histogram := solve 'weight
+            medals' := medals where medals.Weight = 'weight & medals.Gender = 'gender
+            {weight: 'weight, count: count(medals')}
+          
+          maxCount := max(histogram.count where histogram.weight != "")
+          
+          {gender: 'gender, optimalWeight: (histogram.weight where histogram.count = maxCount)}
+      """.stripMargin
+
+      val Let(_, _, _, _,
+        tree @ Solve(_, _, _)) = compile(input)
+
+      tree.errors mustEqual Set(ConstraintsWithinInnerScope)
+    }
 
     "identify composite bucket for solve with contraint for 'a in constraints and body" in {
       val input = """
