@@ -319,7 +319,7 @@ object EmitterSpecs extends Specification
           Map2Cross(WrapObject),
           Map2Match(JoinObject)))
     }
-    
+
     "emit empty array" in {
       testEmit("[]")(Vector(PushArray))
     }
