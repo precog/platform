@@ -81,6 +81,7 @@ object PlatformBuild extends Build {
 
   val jprofilerSettings = Seq(
     fork in profileTask := true,
+    fork in run := true,
 
     jprofilerLib := "/Applications/jprofiler7/bin/macos/libjprofilerti.jnilib",
     jprofilerConf := "src/main/resources/jprofile.xml",
