@@ -83,14 +83,15 @@ object PlatformBuild extends Build {
   val jprofilerSettings = Seq(
     fork in profileTask := true,
 
-
     jprofilerLib := "/Applications/jprofiler7/bin/macos/libjprofilerti.jnilib",
     jprofilerConf := "src/main/resources/jprofile.xml",
     jprofilerId := "116",
     
     javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) {
       (opts, lib, conf, id, d) =>
-      opts ++ Seq("-agentpath:%s=offline,config=%s/%s,id=%s" format (lib, d, conf, id))
+      // download jnilib if necessary. a bit sketchy, but convenient
+      Process("./jprofiler/setup-jnilib.py").!!
+      opts ++ Seq("-agentpath:%s/jprofiler.jnilib=offline,config=%s/%s,id=%s" format (d, d, conf, id))
     }
   )
 
