@@ -84,7 +84,7 @@ extends DelegatingService[A, Future[B], A, Account => Future[B]] with Logging {
 }
 
 
-class ListAccountsHandler(accountManagement: AccountManagement)(implicit ctx: ExecutionContext) 
+class ListAccountsHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed,Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
@@ -104,7 +104,7 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
 //returns accountId of account if exists, else creates account, 
 //we are working on path accountId.. do we use this to get the account the user wants to create?
 //because we also need auth at this stage.. auth will give us the root key for permmissions
-class PostAccountHandler(accountManagement: AccountManagement, clock: Clock, securityService: SecurityService)(implicit ctx: ExecutionContext) 
+class PostAccountHandler(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService)(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
    
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
@@ -170,7 +170,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
 }
 
 
-class CreateAccountGrantHandler(accountManagement: AccountManagement, securityService: SecurityService)(implicit ctx: ExecutionContext) 
+class CreateAccountGrantHandler(accountManagement: AccountManager[Future], securityService: SecurityService)(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
@@ -215,7 +215,7 @@ extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue
 
 
 //returns plan for account
-class GetAccountPlanHandler(accountManagement: AccountManagement)(implicit ctx: ExecutionContext) 
+class GetAccountPlanHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue],Account => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) => 
@@ -240,9 +240,40 @@ extends CustomHttpService[Future[JValue],Account => Future[HttpResponse[JValue]]
 }
 
 
+//update account password
+class PutAccountPasswordHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
+extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]] with Logging {
+  val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
+    Success { (auth: Account) =>
+      request.content map { futureContent =>
+        futureContent flatMap { jvalue =>
+          (jvalue \ "password").validated[String] match {
+            case Success(newPassword) => 
+              accountManagement.updateAccountPassword(auth, newPassword) map { 
+                case true =>
+                  HttpResponse[JValue](OK, content = None)
+
+                case _ =>
+                  HttpResponse[JValue](HttpStatus(InternalServerError, "Failed to update Account"), 
+                                       content = Some(JString("Failed to Update Account")))
+              } 
+
+            case Failure(error) => 
+              Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body."), content = Some(JString("Could not determine replacement password from request body."))))
+          }
+        }
+      } getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Request body missing."), content = Some(JString("You must provide a JSON object containing a password field."))))
+      }
+    }
+  }
+
+  val metadata = None
+}
+
 
 //update account Plan
-class PutAccountPlanHandler(accountManagement: AccountManagement)(implicit ctx: ExecutionContext) 
+class PutAccountPlanHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
@@ -279,7 +310,7 @@ extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]
 
 
 //sets plan to "free"
-class DeleteAccountPlanHandler(accountManagement: AccountManagement)(implicit ctx: ExecutionContext) 
+class DeleteAccountPlanHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
@@ -306,7 +337,7 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
 }
 
 
-class GetAccountDetailsHandler(accountManagement: AccountManagement)(implicit ctx: ExecutionContext) 
+class GetAccountDetailsHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
@@ -331,15 +362,15 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
 }
 
 
-class DeleteAccountHandler(accountManagement: AccountManagement)(implicit ctx: ExecutionContext) 
+class DeleteAccountHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue],  Account => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
       request.parameters.get('accountId).map { accountId =>
         if (accountId == auth.accountId) {
           accountManagement.deleteAccount(accountId).map { 
-            if(_) HttpResponse[JValue](HttpStatus(NoContent))
-            else  HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+accountId)))
+            case Some(_) => HttpResponse[JValue](HttpStatus(NoContent))
+            case None    => HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+accountId)))
           }
         } else {
           Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId))))
@@ -351,46 +382,6 @@ extends CustomHttpService[Future[JValue],  Account => Future[HttpResponse[JValue
   }
 
   val metadata = None
-}
-
-
-class AccountManagement(val accountManager: AccountManager[Future])(implicit execContext: ExecutionContext) {
-  def newTempPassword() : String = {
-    accountManager.newTempPassword() 
-  }
-  
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (String, Path) => Future[String]): Future[Account] = {
-    accountManager.newAccount(email, password, creationDate, plan)(f)
-  }
-  
-  def updateAccount(account: Account) : Future[Boolean] = {
-    accountManager.updateAccount(account) 
-  }
-  
-  def findAccountById(accountId: String): Future[Option[Account]] = {
-    accountManager.findAccountById(accountId) 
-  }
-  
-  def findAccountByEmail(email: String): Future[Option[Account]] = {
-    accountManager.findAccountByEmail(email) 
-  }
-  
-  def accountDetails(accountId: String): Future[Option[Account]] = {
-    accountManager.findAccountById(accountId)
-  }
-
-  def listAccountIds(apiKey: String) = {
-    accountManager.listAccountIds(apiKey)
-  }
- 
-  def deleteAccount(accountId: String): Future[Boolean] = {
-    accountManager.deleteAccount(accountId).map {
-      case Some(_) => true
-      case None => false
-    }
-  } 
-
-  def close() = accountManager.close()
 }
 
 

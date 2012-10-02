@@ -63,7 +63,7 @@ case class SecurityService(protocol: String, host: String, port: Int, path: Stri
   }
 }
 
-case class AccountServiceState(accountManagement: AccountManagement, clock: Clock, securityService: SecurityService)
+case class AccountServiceState(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService)
 
 
 trait AccountServiceCombinators extends HttpRequestHandlerCombinators {
@@ -94,7 +94,7 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Accou
 
           Future {
             logger.debug("Building account service state...")
-            val accountManagement = new AccountManagement(accountManager(config)) 
+            val accountManagement = accountManager(config)
             val securityService = SecurityService(
                config[String]("security.service.protocol", "http"),
                config[String]("security.service.host", "localhost"),
@@ -110,11 +110,14 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Accou
           jsonp[ByteChunk] {
             path("/") {
               post(new PostAccountHandler(state.accountManagement, state.clock, state.securityService)) ~
-              auth(state.accountManagement.accountManager) {
+              auth(state.accountManagement) {
                 get(new ListAccountsHandler(state.accountManagement)) ~ 
                 path("'accountId") {
                   get(new GetAccountDetailsHandler(state.accountManagement)) ~ 
                   delete(new DeleteAccountHandler(state.accountManagement)) ~
+                  path("/password") {
+                    put(new PutAccountPasswordHandler(state.accountManagement))
+                  } ~ 
                   path("/grants/") {
                     post(new CreateAccountGrantHandler(state.accountManagement, state.securityService))
                   } ~
