@@ -273,7 +273,7 @@ trait Slice { source =>
   def remap(indices: ArrayIntList) = new Slice {
     val size = indices.size
     val columns: Map[ColumnRef, Column] = source.columns mapValues { col => 
-      cf.util.Remap.forIndices(indices).apply(col).get //Remap is total
+      cf.util.RemapIndices(indices).apply(col).get
     }
   }
 
@@ -336,12 +336,16 @@ trait Slice { source =>
 
         case AllDefined =>
           (0 until filter.size).foldLeft(new ArrayIntList) {
-            case (acc, i) => if (filter.columns.values.forall(_.isDefinedAt(i))) acc.add(i) ; acc
+            case (acc, i) =>
+              if (filter.columns.values.forall(_.isDefinedAt(i))) acc.add(i)
+              acc
           }
       }
 
       lazy val size = retained.size
-      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }
+      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues {
+        col => (col |> cf.util.RemapIndices(retained)).get
+      }
     }
   }
 
@@ -410,7 +414,9 @@ trait Slice { source =>
       }
 
       lazy val size = retained.size
-      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }
+      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues {
+        col => (col |> cf.util.RemapIndices(retained)).get
+      }
     }
   }
 
@@ -449,14 +455,18 @@ trait Slice { source =>
   def take(sz: Int): Slice = if (sz >= source.size) source else {
     new Slice {
       val size = sz
-      val columns = source.columns mapValues { col => (col |> cf.util.Remap({case i if i < sz => i})).get }
+      val columns = source.columns mapValues {
+        col => (col |> cf.util.RemapFilter(_ < sz, 0)).get
+      }
     }
   }
 
   def drop(sz: Int): Slice = if (sz <= 0) source else {
     new Slice {
       val size = source.size - sz
-      val columns = source.columns mapValues { col => (col |> cf.util.Remap({case i if i < size => i + sz})).get }
+      val columns = source.columns mapValues {
+        col => (col |> cf.util.RemapFilter(_ < size, sz)).get
+      }
     }
   }
 
@@ -464,7 +474,7 @@ trait Slice { source =>
     new Slice {
       val size = numberToTake
       val columns = source.columns mapValues { 
-        col => (col |> cf.util.Remap( { case i if i < numberToTake => i + startIndex} )).get  //remaps new to old
+        col => (col |> cf.util.RemapFilter(_ < numberToTake, startIndex)).get
       }
     }
   }

@@ -17,6 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
+
 package com.precog.yggdrasil
 package table
 
@@ -26,6 +27,8 @@ import com.precog.bytecode.JType
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
 import com.precog.util._
+
+import com.precog.yggdrasil.table.cf.util.{Remap, Empty}
 
 import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
@@ -2183,7 +2186,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 case Some((rhead, rtail0)) =>
                   val lslice = new Slice {
                     val size = rhead.size
-                    val columns = lhead.columns.mapValues { cf.util.Remap({ case _ => state.position })(_).get }
+                    val columns = lhead.columns.mapValues(Remap(i => state.position)(_).get)
                   }
 
                   val (a0, resultSlice) = transform.f(state.a, lslice, rhead)
@@ -2206,12 +2209,18 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               case Some((lhead, ltail0)) =>
                 val lslice = new Slice {
                   val size = rhead.size * lhead.size
-                  val columns = lhead.columns.mapValues { cf.util.Remap({ case i => i / rhead.size })(_).get }
+                  val columns = if (rhead.size == 0)
+                    lhead.columns.mapValues(Empty(_).get)
+                  else
+                    lhead.columns.mapValues(Remap(_ / rhead.size)(_).get)
                 }
 
                 val rslice = new Slice {
                   val size = rhead.size * lhead.size
-                  val columns = rhead.columns.mapValues { cf.util.Remap({ case i => i % rhead.size })(_).get }
+                  val columns = if (rhead.size == 0)
+                    rhead.columns.mapValues(Empty(_).get)
+                  else
+                    rhead.columns.mapValues(Remap(_ % rhead.size)(_).get)
                 }
 
                 val (a0, resultSlice) = transform.f(state.a, lslice, rslice)

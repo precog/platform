@@ -144,22 +144,53 @@ object util {
     case c: NullColumn => new SparsenColumn(c, idx, toSize) with NullColumn
   })
 
-  case class Remap(f: PartialFunction[Int, Int]) extends CF1P ({
+  case object Empty extends CF1P ({
+    case c: BoolColumn   => new EmptyColumn[BoolColumn] with BoolColumn
+    case c: LongColumn   => new EmptyColumn[LongColumn] with LongColumn
+    case c: DoubleColumn => new EmptyColumn[DoubleColumn] with DoubleColumn
+    case c: NumColumn    => new EmptyColumn[NumColumn] with NumColumn
+    case c: StrColumn    => new EmptyColumn[StrColumn] with StrColumn
+    case c: DateColumn   => new EmptyColumn[DateColumn] with DateColumn
+    case c: EmptyArrayColumn  => new EmptyColumn[EmptyArrayColumn] with EmptyArrayColumn
+    case c: EmptyObjectColumn => new EmptyColumn[EmptyObjectColumn] with EmptyObjectColumn
+    case c: NullColumn => new EmptyColumn[NullColumn] with NullColumn
+  })
+
+  case class Remap(f: Int => Int) extends CF1P ({
     case c: BoolColumn   => new RemapColumn(c, f) with BoolColumn { def apply(row: Int) = c(f(row)) }
     case c: LongColumn   => new RemapColumn(c, f) with LongColumn { def apply(row: Int) = c(f(row)) }
     case c: DoubleColumn => new RemapColumn(c, f) with DoubleColumn { def apply(row: Int) = c(f(row)) }
     case c: NumColumn    => new RemapColumn(c, f) with NumColumn { def apply(row: Int) = c(f(row)) }
     case c: StrColumn    => new RemapColumn(c, f) with StrColumn { def apply(row: Int) = c(f(row)) }
     case c: DateColumn   => new RemapColumn(c, f) with DateColumn { def apply(row: Int) = c(f(row)) }
-
     case c: EmptyArrayColumn  => new RemapColumn(c, f) with EmptyArrayColumn
     case c: EmptyObjectColumn => new RemapColumn(c, f) with EmptyObjectColumn
     case c: NullColumn => new RemapColumn(c, f) with NullColumn
   })
 
-  object Remap {
-    def forIndices(indices: ArrayIntList): Remap = Remap({ case i if (i >= 0 && i < indices.size) => indices.get(i) })
-  }
+  case class RemapFilter(filter: Int => Boolean, offset: Int) extends CF1P ({
+    case c: BoolColumn   => new RemapFilterColumn(c, filter, offset) with BoolColumn { def apply(row: Int) = c(row + offset) }
+    case c: LongColumn   => new RemapFilterColumn(c, filter, offset) with LongColumn { def apply(row: Int) = c(row + offset) }
+    case c: DoubleColumn => new RemapFilterColumn(c, filter, offset) with DoubleColumn { def apply(row: Int) = c(row + offset) }
+    case c: NumColumn    => new RemapFilterColumn(c, filter, offset) with NumColumn { def apply(row: Int) = c(row + offset) }
+    case c: StrColumn    => new RemapFilterColumn(c, filter, offset) with StrColumn { def apply(row: Int) = c(row + offset) }
+    case c: DateColumn   => new RemapFilterColumn(c, filter, offset) with DateColumn { def apply(row: Int) = c(row + offset) }
+    case c: EmptyArrayColumn  => new RemapFilterColumn(c, filter, offset) with EmptyArrayColumn
+    case c: EmptyObjectColumn => new RemapFilterColumn(c, filter, offset) with EmptyObjectColumn
+    case c: NullColumn => new RemapFilterColumn(c, filter, offset) with NullColumn
+  })
+
+  case class RemapIndices(indices: ArrayIntList) extends CF1P ({
+    case c: BoolColumn   => new RemapIndicesColumn(c, indices) with BoolColumn { def apply(row: Int) = c(indices.get(row)) }
+    case c: LongColumn   => new RemapIndicesColumn(c, indices) with LongColumn { def apply(row: Int) = c(indices.get(row)) }
+    case c: DoubleColumn => new RemapIndicesColumn(c, indices) with DoubleColumn { def apply(row: Int) = c(indices.get(row)) }
+    case c: NumColumn    => new RemapIndicesColumn(c, indices) with NumColumn { def apply(row: Int) = c(indices.get(row)) }
+    case c: StrColumn    => new RemapIndicesColumn(c, indices) with StrColumn { def apply(row: Int) = c(indices.get(row)) }
+    case c: DateColumn   => new RemapIndicesColumn(c, indices) with DateColumn { def apply(row: Int) = c(indices.get(row)) }
+    case c: EmptyArrayColumn  => new RemapIndicesColumn(c, indices) with EmptyArrayColumn
+    case c: EmptyObjectColumn => new RemapIndicesColumn(c, indices) with EmptyObjectColumn
+    case c: NullColumn => new RemapIndicesColumn(c, indices) with NullColumn
+  })
 
   case class filter(from: Int, to: Int, definedAt: BitSet) extends CF1P ({
     case c: BoolColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with BoolColumn { def apply(row: Int) = c(row) }

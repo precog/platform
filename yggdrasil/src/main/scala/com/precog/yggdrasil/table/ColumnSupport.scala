@@ -23,6 +23,7 @@ package table
 import org.joda.time.DateTime
 import scala.collection.BitSet
 import scala.annotation.tailrec
+import org.apache.commons.collections.primitives.ArrayIntList
 
 class BitsetColumn(definedAt: BitSet) { this: Column =>
   def isDefinedAt(row: Int): Boolean = definedAt(row)
@@ -68,8 +69,19 @@ class ShiftColumn[T <: Column](by: Int, c1: T) { this: T =>
   def isDefinedAt(row: Int) = c1.isDefinedAt(row - by)
 }
 
-class RemapColumn[T <: Column](delegate: T, f: PartialFunction[Int, Int]) { this: T =>
-  def isDefinedAt(row: Int) = f.isDefinedAt(row) && delegate.isDefinedAt(f(row))
+class RemapColumn[T <: Column](delegate: T, f: Int => Int) {
+  this: T =>
+  def isDefinedAt(row: Int) = delegate.isDefinedAt(f(row))
+}
+
+class RemapFilterColumn[T <: Column](delegate: T, filter: Int => Boolean, offset: Int) {
+  this: T =>
+  def isDefinedAt(row: Int) = filter(row) && delegate.isDefinedAt(row + offset)
+}
+
+class RemapIndicesColumn[T <: Column](delegate: T, indices: ArrayIntList) { this: T =>
+  private val _size = indices.size
+  def isDefinedAt(row: Int) = row >= 0 && row < _size && delegate.isDefinedAt(indices.get(row))
 }
 
 class SparsenColumn[T <: Column](delegate: T, idx: Array[Int], toSize: Int) { this: T =>
