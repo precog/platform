@@ -280,16 +280,18 @@ trait YggdrasilQueryExecutor
       else failure(
         UserError(
           JArray(
-            (tree.errors: Set[Error]) map {
-              case Error(loc, tp) =>
-                JObject(
-                  JField("message", JString("Errors occurred compiling your query.")) 
-                  :: JField("line", JString(loc.line))
-                  :: JField("lineNum", JNum(loc.lineNum))
-                  :: JField("colNum", JNum(loc.colNum))
-                  :: JField("detail", JString(tp.toString))
-                  :: Nil
-                )
+            (tree.errors: Set[Error]) map { err =>
+              val loc = err.loc
+              val tp = err.tp
+
+              JObject(
+                JField("message", JString("Errors occurred compiling your query.")) 
+                :: JField("line", JString(loc.line))
+                :: JField("lineNum", JNum(loc.lineNum))
+                :: JField("colNum", JNum(loc.colNum))
+                :: JField("detail", JString(tp.toString))
+                :: Nil
+              )
             } toList
           )
         )
