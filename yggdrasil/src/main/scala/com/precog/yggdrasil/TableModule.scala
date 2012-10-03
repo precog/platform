@@ -26,8 +26,9 @@ import blueeyes.json.JsonAST._
 
 import collection.Set
 
-import scalaz.Monoid
-import scalaz.Monad
+import scalaz.{Monad, Monoid, StreamT}
+
+import java.nio.CharBuffer
 
 object TableModule {
   object paths {
@@ -453,8 +454,11 @@ trait TableModule[M[+_]] extends FNModule {
     
     def takeRange(startIndex: Long, numberToTake: Long): Table
     
+    def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer]
+    
+    // for debugging only!!
     def toJson: M[Iterable[JValue]]
-
+    
     def metrics: TableMetrics
   }
 }
