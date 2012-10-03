@@ -2,7 +2,10 @@ package com.precog.yggdrasil
 package table
 
 import org.joda.time.DateTime
-import scala.collection.BitSet
+
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
+
 import scala.annotation.tailrec
 import org.apache.commons.collections.primitives.ArrayIntList
 
@@ -10,7 +13,7 @@ class BitsetColumn(definedAt: BitSet) { this: Column =>
   def isDefinedAt(row: Int): Boolean = definedAt(row)
 
   override def toString = {
-    val limit = definedAt.reduce(_ max _)
+    val limit = definedAt.max
     val repr = (row: Int) => if (definedAt(row)) 'x' else '_'
     getClass.getName + "(" + (0 until limit).map(repr).mkString("[", ",", "]") + ", " + limit + ")"
   }
@@ -18,7 +21,13 @@ class BitsetColumn(definedAt: BitSet) { this: Column =>
 
 object BitsetColumn {
   def bitset(definedAt: Seq[Boolean]) = {
-    BitSet(definedAt.zipWithIndex collect { case (v, i) if v => i }: _*)
+    val bs = new BitSet
+    var i = 0
+    definedAt.foreach { v =>
+      if (v) bs.set(i)
+      i += 1
+    }
+    bs
   }
 }
 

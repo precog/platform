@@ -3,7 +3,6 @@ package table
 
 import com.precog.bytecode._
 import com.precog.common.json._
-import scala.collection.immutable.BitSet
 import scala.util.Random
 
 import blueeyes.json._

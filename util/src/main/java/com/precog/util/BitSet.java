@@ -90,6 +90,16 @@ public class BitSet extends FastCollection <Index>  implements Set <Index> , Reu
     }
 
     /**
+     * Creates a bitset given the bits array and length.
+     *
+     * Used internally by copy.
+     */
+    private BitSet(long[] _bits, int _len) {
+        bits = _bits;
+        _length = _len;
+    }
+
+    /**
      * Returns a new, preallocated or {@link #recycle recycled} set instance
      * (on the stack when executing in a {@link javolution.context.StackContext
      * StackContext}).
@@ -220,6 +230,12 @@ public class BitSet extends FastCollection <Index>  implements Set <Index> , Reu
         }
     }
 
+    public BitSet copy() {
+        long[] _bits = new long[_length];
+        System.arraycopy(bits, 0, _bits, 0, _length);
+        return new BitSet(_bits, _length);
+    }
+
     /**
      * Sets the bit at the index to the opposite value.
      *
@@ -275,6 +291,10 @@ public class BitSet extends FastCollection <Index>  implements Set <Index> , Reu
         int i = bitIndex >> 6;
         return (i >= _length) ? false : (bits[i] & (1L << bitIndex)) != 0;
     }
+    public boolean contains(int bitIndex) {
+        int i = bitIndex >> 6;
+        return (i >= _length) ? false : (bits[i] & (1L << bitIndex)) != 0;
+    }
 
     /**
      * Returns a new bit set composed of a range of bits from this one.
@@ -313,6 +333,11 @@ public class BitSet extends FastCollection <Index>  implements Set <Index> , Reu
         }
         return false;
     }
+
+    // provided by super class
+    //public boolean isEmpty() {
+    //    return nextSetBit(0) == -1;
+    //}
     
     /**
      * Returns the logical number of bits actually used by this bit
@@ -386,6 +411,10 @@ public class BitSet extends FastCollection <Index>  implements Set <Index> , Reu
             offset++;
         }
         return -1;
+    }
+
+    public boolean nonEmpty() {
+        return nextSetBit(0) != -1;
     }
 
     /**
