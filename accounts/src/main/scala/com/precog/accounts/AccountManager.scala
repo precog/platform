@@ -56,6 +56,7 @@ trait AccountManager[M[+_]] {
   def newTempPassword(): String = new ObjectId().toString
 
   def updateAccount(account: Account): M[Boolean]
+  def updateAccountPassword(account: Account, newPassword: String): M[Boolean]
  
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountId, Path) => M[ApiKey]): M[Account]
 
@@ -212,6 +213,11 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
       case None => 
         Future(false)
     }
+  }
+
+  def updateAccountPassword(account: Account, newPassword: String): Future[Boolean] = {
+    val salt = randomSalt()
+    updateAccount(account.copy(passwordHash = saltAndHash(newPassword, salt), passwordSalt = salt))
   }
 
   def deleteAccount(accountId: String): Future[Option[Account]] = {
