@@ -123,7 +123,7 @@ abstract class KafkaShardIngestActor(shardId: String,
       } else {
         // Blow up in spectacular fashion.
         logger.error("Halting ingest due to excessive consecutive failures at Kafka offsets: " + ingestCache.keys.map(_.offset).mkString("[", ", ", "]"))
-        logger.error("Metadata is consistent up to the lower bound:"  + ingestCache.head)
+        logger.error("Metadata is consistent up to the lower bound:"  + ingestCache.head._1)
         self ! PoisonPill
       }
 
