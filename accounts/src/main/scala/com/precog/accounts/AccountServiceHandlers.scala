@@ -277,30 +277,41 @@ class PutAccountPlanHandler(accountManagement: AccountManager[Future])(implicit 
 extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
-      (for {
-        accountId <- request.parameters.get('accountId)
-        planType <- request.parameters.get('type)
-      } yield {
-        accountManagement.findAccountById(accountId) flatMap { 
-          case Some(account) if account.accountId == auth.accountId => 
-            accountManagement.updateAccount(account.copy(plan = new AccountPlan(planType))) map { 
-              case true =>
-                HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
+      request.parameters.get('accountId) match {
+        case Some(accountId) =>
+          accountManagement.findAccountById(accountId) flatMap {
+            case Some(account) if account.accountId == auth.accountId => 
+              request.content.map { futureContent =>
+                futureContent flatMap { jvalue =>
+                  (jvalue \ "type").validated[String] match {
+                    case Success(planType) => 
+                      accountManagement.updateAccount(account.copy(plan = new AccountPlan(planType))) map { 
+                        case true =>
+                          HttpResponse[JValue](OK, content = None)
 
-              case _ =>
-                HttpResponse[JValue](HttpStatus(InternalServerError, "Failed to update Account"), 
-                                     content = Some(JString("Failed to Update Account")))
-            }
-            
-          case Some(_) => 
-            Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId))))
+                        case _ =>
+                          HttpResponse[JValue](HttpStatus(InternalServerError, "Failed to update Account"), 
+                                               content = Some(JString("Failed to Update Account")))
+                      }
 
-          case None =>
-            Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId))))
-        }
-      }) getOrElse {
-        val errmsg = "Missing accountId and/or type request parameters."
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, errmsg), content = Some(JString(errmsg))))
+                    case Failure(error) => 
+                      Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body."), content = Some(JString("Could not determine new account type from request body."))))
+                  }
+                }
+              } getOrElse {
+                Future(HttpResponse[JValue](HttpStatus(BadRequest, "Request body missing."), content = Some(JString("You must provide a JSON object containing a \"type\" field."))))
+              }
+              
+            case Some(_) => 
+              Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId))))
+
+            case None =>
+              Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find account "+ accountId))))
+          }
+
+        case None =>
+          val errmsg = "Missing accountId from request path."
+          Future(HttpResponse[JValue](HttpStatus(BadRequest, errmsg), content = Some(JString(errmsg))))
       }
     }
   }
