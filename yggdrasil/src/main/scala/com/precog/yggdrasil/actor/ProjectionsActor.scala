@@ -59,7 +59,7 @@ import scalaz.syntax.traverse._
 // To simplify routing, tag all messages for the ProjectionLike actor
 sealed trait ShardProjectionAction
 
-case class AcquireProjection(descriptor: ProjectionDescriptor, exclusive: Boolean = false, evict: Boolean = false) extends ShardProjectionAction
+case class AcquireProjection(descriptor: ProjectionDescriptor, lockForArchive: Boolean) extends ShardProjectionAction
 case class ReleaseProjection(descriptor: ProjectionDescriptor) extends ShardProjectionAction
 
 trait ProjectionUpdate extends ShardProjectionAction {
@@ -82,6 +82,8 @@ sealed trait ProjectionResult
 case class ProjectionAcquired(projection: ProjectionLike) extends ProjectionResult
 case class ProjectionError(descriptor: ProjectionDescriptor, error: Throwable) extends ProjectionResult
 
+case class LockedForArchive(descriptor: ProjectionDescriptor) 
+
 trait ProjectionsActorModule extends ProjectionModule {
   ////////////
   // ACTORS //
@@ -94,7 +96,7 @@ trait ProjectionsActorModule extends ProjectionModule {
     private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionsActor")
 
     case class AcquisitionRequest(requestor: ActorRef, lockForArchive: Boolean) 
-    case class AcquisitionState(exclusive: Boolean, count: Int, queue: List[AcquisitionRequest])
+    case class AcquisitionState(archiveLock: Boolean, count: Int, queue: List[AcquisitionRequest])
     
     private val acquisitionState = mutable.Map.empty[ProjectionDescriptor, AcquisitionState] 
     
@@ -102,28 +104,29 @@ trait ProjectionsActorModule extends ProjectionModule {
       case Status =>
         sender ! status
 
-      case AcquireProjection(descriptor, lockForArchive) => {
-        acquisitionState.get(descriptor) match {
+      case AcquireProjection(descriptor, lockForArchive) => 
+        val io = acquisitionState.get(descriptor) match {
           case None =>
             logger.debug("Fresh acquisition of " + descriptor.shows + (if(lockForArchive) " (archive)" else ""))
             acquisitionState(descriptor) = AcquisitionState(lockForArchive, 1, Nil)
-            acquired(sender, descriptor, lockForArchive)
+            if (lockForArchive) archive(sender, descriptor) else acquired(sender, descriptor)
             
           case Some(s @ AcquisitionState(false, count0, Nil)) if !lockForArchive =>
             logger.debug("Non-exclusive acquisition (%d prior) of %s".format(count0, descriptor.shows))
             acquisitionState(descriptor) = s.copy(count = count0+1)
-            acquired(sender, descriptor, lockForArchive)
+            acquired(sender, descriptor)
             
           case Some(s @ AcquisitionState(_, _, queue0)) =>
-            logger.warn("Queueing exclusive acquisition of " + descriptor.shows)
-            acquisitionState(descriptor) = s.copy(queue = AcquisitionRequest(sender, ) :: queue0)
-        }
-      }
+            logger.warn("Queueing due to exclusive lock on " + descriptor.shows)
+            IO(acquisitionState(descriptor) = s.copy(queue = AcquisitionRequest(sender, lockForArchive) :: queue0))
+        } 
+
+        io.unsafePerformIO
 
       case ReleaseProjection(descriptor) => {
         acquisitionState.get(descriptor) match {
           case None =>
-            logger.warn("Extraneous request to release projection descriptor " + descriptor + 
+            logger.warn("Extraneous request to release projection descriptor " + descriptor.shows + 
                         "; no outstanding acquisitions for this descriptor recorded.")
                         
           case Some(s @ AcquisitionState(_, 1, Nil)) =>
@@ -131,16 +134,16 @@ trait ProjectionsActorModule extends ProjectionModule {
             acquisitionState -= descriptor
           
           case Some(s @ AcquisitionState(_, 1, queue)) =>
-            queue.reverse.span(!_.exclusive) match {
+            queue.reverse.span(!_.lockForArchive) match {
               case (Nil, excl :: rest) =>
-                logger.debug("Dequeued exclusive acquisition of " + descriptor.shows + " after release")
+                logger.debug("Dequeued exclusive archive lock request for " + descriptor.shows + " after release")
                 acquisitionState(descriptor) = AcquisitionState(true, 1, rest)
-                acquired(excl.requestor, descriptor, true, excl.evict)
+                archive(excl.requestor, descriptor)
 
               case (nonExcl, excl) =>
                 logger.debug("Dequeued non-exclusive acquisition of " + descriptor.shows + " after release")
                 acquisitionState(descriptor) = AcquisitionState(false, nonExcl.size, excl)
-                nonExcl map { req => acquired(req.requestor, descriptor, false, req.evict) }
+                nonExcl map { req => acquired(req.requestor, descriptor) }
             }
             
           case Some(s @ AcquisitionState(_, count0, _)) =>
@@ -151,18 +154,18 @@ trait ProjectionsActorModule extends ProjectionModule {
 
       case ProjectionInsert(descriptor, rows) => {
         val coordinator = sender
-        logger.trace(coordinator + " is inserting into projection " + descriptor)
+        logger.trace(coordinator + " is inserting into projection " + descriptor.shows)
         
         val insertActor = context.actorOf(Props(new ProjectionInsertActor(rows, coordinator)))
-        self.tell(AcquireProjection(descriptor), insertActor)
+        self.tell(AcquireProjection(descriptor, false), insertActor)
       }
       
       case ProjectionArchive(descriptor, archive) => {
         val coordinator = sender
-        logger.trace(coordinator + " is archiving projection " + descriptor)
+        logger.info(coordinator + " is archiving projection " + descriptor.shows)
         
         val archiveActor = context.actorOf(Props(new ProjectionArchiveActor(coordinator)))
-        self.tell(AcquireProjection(descriptor, true, true), archiveActor)
+        self.tell(AcquireProjection(descriptor, true), archiveActor)
       }
     }
 
@@ -186,42 +189,59 @@ trait ProjectionsActorModule extends ProjectionModule {
       Projection.close(projection)
     }
 
-    private def acquired(sender: ActorRef, descriptor: ProjectionDescriptor, lockForArchive: Boolean)(implicit self: ActorRef) : Unit = {
+    private def archive(sender: ActorRef, descriptor: ProjectionDescriptor)(implicit self: ActorRef): IO[Unit] = {
+      IO(openProjections.get(descriptor)) flatMap {
+        case Some((projection, _)) =>
+          for {
+            _ <- evictProjection(descriptor, projection)
+          } yield {
+            sender ! LockedForArchive(descriptor)
+          }
+
+        case None => 
+          IO {
+            sender ! LockedForArchive(descriptor)
+          }
+      }
+    }
+
+    private def evictExcessProjections: IO[Unit] = {
+      val overage = openProjections.size - maxOpenProjections
+      if (overage >= 0) {
+        logger.debug("Evicting " + overage + " projections")
+        // attempt to "evict" some unused projections to get us back under the limit
+        val (retained, unused) = openProjections.partition { case (d, _) => acquisitionState.contains(d) }
+        val toEvict = unused.toList.sortBy(_._2._2).take(overage + 1)
+
+        if ((openProjections.size - toEvict.size) > maxOpenProjections) {
+          logger.warn("Unable to evict sufficient projections to get under open projection limit (currently %d)".format(openProjections.size))
+        }
+
+        toEvict.map({ case (d, (p, _)) => evictProjection(d, p) }).sequence.map(_ => ())
+      } else {
+        IO(())
+      }
+    }
+
+    private def acquired(sender: ActorRef, descriptor: ProjectionDescriptor)(implicit self: ActorRef) : IO[Unit] = {
       IO(openProjections.get(descriptor)) flatMap { 
-        case Some((p, _)) => IO { openProjections += (descriptor, (p, System.currentTimeMillis)); p }
-        case None => for {
-                       _ <- {
-                              val overage = openProjections.size - maxOpenProjections
-                              if (overage >= 0) {
-                                logger.debug("Evicting " + overage + " projections")
-                                // attempt to "evict" some unused projections to get us back under the limit
-                                val (retained, unused) = openProjections.partition { case (d, _) => acquisitionState.contains(d) }
-                                val toEvict = unused.toList.sortBy(_._2._2).take(overage + 1)
-
-                                if ((openProjections.size - toEvict.size) > maxOpenProjections) {
-                                  logger.warn("Unable to evict sufficient projections to get under open projection limit (currently %d)".format(openProjections.size))
-                                }
-
-                                toEvict.map { case (d, (p, _)) => evictProjection(d, p) }.sequence
-                              } else {
-                                IO(())
-                              }
-                            }
-                       p <- Projection.open(descriptor)
-                       _ <- IO { openProjections += (descriptor -> (p, System.currentTimeMillis)) }
-                     } yield p
+        case Some((projection, _)) => 
+          IO { 
+            openProjections += (descriptor -> (projection, System.currentTimeMillis)) 
+            projection
+          }
+          
+        case None => 
+          for {
+            _ <- evictExcessProjections
+            p <- Projection.open(descriptor)
+            _ <- IO { openProjections += (descriptor -> (p, System.currentTimeMillis)) }
+          } yield p
       } map { p =>
         sender ! ProjectionAcquired(p)
-        p
-      } flatMap { p =>
-        if (evict) {
-          evictProjection(descriptor, p)
-        } else {
-          IO(())
-        }
       } except {
         error => IO(sender ! ProjectionError(descriptor, error))
-      } unsafePerformIO
+      }
     }
   }
 
@@ -272,18 +292,17 @@ trait ProjectionsActorModule extends ProjectionModule {
     private val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionArchiveActor")
 
     def receive = {
-      case ProjectionAcquired(projection) => { 
-        logger.debug("Archiving " + projection)
+      case LockedForArchive(descriptor) => { 
+        logger.debug("Archiving " + descriptor)
         
         try {
-          Projection.archive(projection.asInstanceOf[Projection].descriptor).unsafePerformIO // The cake is a lie!
-          
-          replyTo ! ArchiveMetadata(projection.descriptor)
+          Projection.archive(descriptor).unsafePerformIO 
+          replyTo ! ArchiveMetadata(descriptor)
         } catch {
-          case t: Throwable => logger.error("Error during archive on %s, aborting batch".format(projection), t)
+          case t: Throwable => logger.error("Error during archive on %s".format(descriptor), t)
         }
 
-        sender ! ReleaseProjection(projection.descriptor)
+        sender ! ReleaseProjection(descriptor)
 
         self ! PoisonPill
       }

@@ -64,7 +64,7 @@ trait ActorStorageModule extends StorageModule[Future] {
       implicit val storageTimeout: Timeout = Timeout(300 seconds)
 
 
-      (for (ProjectionAcquired(projection) <- (shardSystemActor ? AcquireProjection(descriptor))) yield {
+      (for (ProjectionAcquired(projection) <- (shardSystemActor ? AcquireProjection(descriptor, false))) yield {
         logger.debug("  projection obtained")
         (projection.asInstanceOf[Projection], new Release(IO(shardSystemActor ! ReleaseProjection(descriptor))))
       }) onFailure {
