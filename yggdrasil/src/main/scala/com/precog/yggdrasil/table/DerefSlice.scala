@@ -27,8 +27,6 @@ import blueeyes.json._
 import blueeyes.json.JsonAST._
 import org.joda.time.DateTime
 
-import scala.collection.BitSet
-
 class DerefSlice(source: Slice, derefBy: PartialFunction[Int, CPathNode]) extends Slice {
   private val forwardIndex: Map[CPathNode, Map[ColumnRef, Column]] = source.columns.foldLeft(Map.empty[CPathNode, Map[ColumnRef, Column]]) {
     case (acc, (ColumnRef(CPath(root, xs @ _*), ctype), col)) => 

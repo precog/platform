@@ -27,7 +27,8 @@ import org.joda.time.DateTime
 
 import java.io.{DataInput,DataOutput}
 
-import scala.collection.BitSet
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
 
 /* I really hate using this, but the custom serialization code in JDBM3 is choking in
  * very weird ways when using "CType" as the format type. It appears that it "registers"
@@ -118,16 +119,16 @@ class CValueSerializer private[CValueSerializer] (val format: Array[Byte]) exten
     var backingBytes = defaultSerializer.deserialize(in).asInstanceOf[Array[Byte]]
 
     if (backingBytes.length == 0) {
-      BitSet.empty
+      new BitSet
     } else {
-      var result = BitSet.empty
+      var result = new BitSet
 
       var octet = 0
       while (octet < backingBytes.length) {
         var i = 7
         while (i >= 0) {
           if ((0x01 & (backingBytes(octet) >> i)) != 0) {
-            result += (octet * 8 + (7 - i))
+            result.set((octet * 8 + (7 - i)))
           }
           i -= 1
         }
@@ -140,20 +141,10 @@ class CValueSerializer private[CValueSerializer] (val format: Array[Byte]) exten
 
   def serialize(out: DataOutput, seq: Array[CValue]) {
     try {
-      var i = 0
-
-      var undefined = BitSet()
-
-      while (i < format.length) {
-        if (seq(i) == CUndefined) {
-          undefined += i
-        }
-        i += 1
-      }
-
+      val undefined = BitSetUtil.filteredRange(0, format.length)(seq(_) == CUndefined)
       serializeUndefinedIndices(out, undefined)
      
-      i = 0
+      var i = 0
       while (i < format.length) {
         if (undefined(i)) {
           out.write(0) // TODO: required?

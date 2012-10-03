@@ -25,8 +25,6 @@ import org.apache.jdbm.Serializer
 import java.io.{DataInput,DataOutput,Externalizable,ObjectInput,ObjectInputStream,ObjectOutput}
 import java.util.Comparator
 
-import scala.collection.BitSet
-
 object SortingKeyComparator {
   final val serialVersionUID = 20120730l
 

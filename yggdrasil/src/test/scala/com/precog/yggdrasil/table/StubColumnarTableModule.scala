@@ -33,7 +33,6 @@ import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
 
 import scala.annotation.tailrec
-import scala.collection.BitSet
 
 import scalaz._
 import scalaz.syntax.copointed._

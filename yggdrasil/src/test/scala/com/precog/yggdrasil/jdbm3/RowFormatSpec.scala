@@ -30,8 +30,6 @@ import org.joda.time.DateTime
 
 import java.nio.ByteBuffer
 
-import scala.collection.immutable.BitSet
-
 import org.specs2._
 import org.specs2.mutable.Specification
 import org.scalacheck.{Shrink, Arbitrary, Gen}

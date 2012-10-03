@@ -30,8 +30,7 @@ import org.joda.time.DateTime
 import java.nio.{ ByteBuffer, CharBuffer }
 import java.nio.charset.{ Charset, CharsetEncoder, CoderResult }
 
-import com.precog.util.BitSet
-import com.precog.util.BitSetUtil
+import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
 import scala.annotation.tailrec
@@ -680,7 +679,7 @@ object Codec {
       @inline def get(offset: Int): Boolean =
         (src.get(pos + (offset >>> 3)) & (1 << (offset & 7))) != 0
 
-      val bits = new BitSet()
+      val bits = new BitSet
       def read(l: Int, r: Int, offset: Int): Int = {
         if (l == r) {
           offset

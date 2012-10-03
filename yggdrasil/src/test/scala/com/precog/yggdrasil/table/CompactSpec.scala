@@ -21,8 +21,10 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.json._
-import scala.collection.immutable.BitSet
 import scala.util.Random
+
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -85,13 +87,17 @@ trait CompactSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
         if(numSlices > 1 && Random.nextDouble < 0.25) {
           new Slice {
             val size = slice.size
-            val columns = slice.columns.mapValues { col => (col |> cf.util.filter(0, slice.size, BitSet())).get }
+            val columns = slice.columns.mapValues { col => (col |> cf.util.filter(0, slice.size, new BitSet)).get }
           }
         } else {
-          val retained = (0 until slice.size).map { (x : Int) => if(scala.util.Random.nextDouble < 0.75) Some(x) else None }.flatten
+          val retained = (0 until slice.size).flatMap {
+            x => if (scala.util.Random.nextDouble < 0.75) Some(x) else None
+          }
           new Slice {
             val size = slice.size 
-            val columns = slice.columns.mapValues { col => (col |> cf.util.filter(0, slice.size, BitSet(retained: _*))).get }
+            val columns = slice.columns.mapValues {
+              col => (col |> cf.util.filter(0, slice.size, BitSetUtil.create(retained))).get
+            }
           }
         }
       }
@@ -110,10 +116,10 @@ trait CompactSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
           val col = slice.columns(colRef)
           val maskedCol =
             if(numSlices > 1 && Random.nextDouble < 0.25)
-              (col |> cf.util.filter(0, slice.size, BitSet())).get
+              (col |> cf.util.filter(0, slice.size, new BitSet)).get
             else {
               val retained = (0 until slice.size).map { (x : Int) => if(scala.util.Random.nextDouble < 0.75) Some(x) else None }.flatten
-              (col |> cf.util.filter(0, slice.size, BitSet(retained: _*))).get
+              (col |> cf.util.filter(0, slice.size, BitSetUtil.create(retained))).get
             }
           new Slice {
             val size = slice.size 
