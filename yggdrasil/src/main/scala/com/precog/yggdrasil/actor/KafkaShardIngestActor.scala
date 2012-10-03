@@ -18,6 +18,7 @@ import akka.util.duration._
 import akka.util.Timeout
 
 import com.weiglewilczek.slf4s._
+import org.slf4j._
 
 import _root_.kafka.api.FetchRequest
 import _root_.kafka.consumer.SimpleConsumer
@@ -57,7 +58,8 @@ abstract class KafkaShardIngestActor(shardId: String,
                                      fetchBufferSize: Int = 1024 * 1024,
                                      ingestTimeout: Timeout = 120 seconds, 
                                      maxCacheSize: Int = 5,
-                                     maxConsecutiveFailures: Int = 3) extends Actor with Logging {
+                                     maxConsecutiveFailures: Int = 3) extends Actor {
+  protected lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.KafkaShardIngestActor")
 
   private var lastCheckpoint: YggCheckpoint = initialCheckpoint
 
@@ -107,7 +109,7 @@ abstract class KafkaShardIngestActor(shardId: String,
       }
 
     case GetMessages(requestor) => 
-      logger.debug("Responding to GetMessages starting from checkpoint: " + lastCheckpoint)
+      logger.trace("Responding to GetMessages starting from checkpoint: " + lastCheckpoint)
       if (ingestEnabled) {
         if (ingestCache.size < maxCacheSize) {
           readRemote(lastCheckpoint) match {
@@ -124,7 +126,7 @@ abstract class KafkaShardIngestActor(shardId: String,
                 val batchHandler = context.actorOf(Props(new BatchHandler(self, sender, checkpoint, ingestTimeout))) 
                 requestor.tell(IngestData(messages), batchHandler)
               } else {
-                logger.debug("No new data found after checkpoint: " + checkpoint)
+                logger.trace("No new data found after checkpoint: " + checkpoint)
                 requestor ! IngestData(Nil)
               }
   
@@ -133,7 +135,7 @@ abstract class KafkaShardIngestActor(shardId: String,
               requestor ! IngestErrors(List("An error occurred retrieving data from Kafka: " + error.getMessage))
           }
         } else {
-          logger.debug("ingestCache.size too big (%d)".format(ingestCache.size))
+          logger.warn("ingestCache.size too big (%d) to process more messages".format(ingestCache.size))
           requestor ! IngestData(Nil)
         }
       } else {

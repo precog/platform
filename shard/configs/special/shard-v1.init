@@ -18,7 +18,11 @@ end script
 
 script
   if [ -f /etc/default/shard-v1 ]; then . /etc/default/shard-v1; fi
-  sudo -u precog /usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=/etc/precog/shard-v1.logging.xml -jar /usr/share/java/shard-v1.jar --configFile /etc/precog/shard-v1.conf >> /var/log/precog/shard-v1.stdout.log 2>&1
+  LOGCONF=/etc/precog/shard-v1.logging.xml
+  if [ -f /etc/precog/shard-v1.logging.debug.xml ]; then 
+    LOGCONF=/etc/precog/shard-v1.logging.debug.xml
+  fi
+  sudo -u precog /usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=$LOGCONF -jar /usr/share/java/shard-v1.jar --configFile /etc/precog/shard-v1.conf >> /var/log/precog/shard-v1.stdout.log 2>&1
 end script
 
 post-start script

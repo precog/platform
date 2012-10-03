@@ -17,7 +17,8 @@ import java.util.Map.Entry
 import java.util.SortedMap
 import Bijection._
 
-import com.weiglewilczek.slf4s.Logger
+import org.slf4j._
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
@@ -44,7 +45,7 @@ import blueeyes.json.xschema.DefaultSerialization._
 object JDBMProjection {
   private[jdbm3] type IndexTree = SortedMap[Array[Byte],Array[Byte]]
 
-  final val DEFAULT_SLICE_SIZE = 10000
+  final val DEFAULT_SLICE_SIZE = 50000
   final val INDEX_SUBDIR = "jdbm"
     
   def isJDBMProjection(baseDir: File) = (new File(baseDir, INDEX_SUBDIR)).isDirectory
@@ -54,8 +55,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   import TableModule.paths._
   import JDBMProjection._
 
-  val logger = Logger("col:" + descriptor.shows)
-  logger.debug("Opening column index files for projection " + descriptor.shows + " at " + baseDir)
+  val logger = LoggerFactory.getLogger("com.precog.yggdrasil.jdbm3.JDBMProjection")
 
   val keyColRefs = Array.tabulate(descriptor.identities) { i => ColumnRef(CPath(Key :: CPathIndex(i) :: Nil), CLong) }
 
@@ -65,7 +65,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     case ColumnDescriptor(_, cPath, cType, _) => ColumnRef(cPath, cType)
   })
 
-  override def toString = "JDBMProjection(" + descriptor.columns + ")"
+  override def toString = "JDBMProjection(" + descriptor.shows + ")"
 
   private[this] final val treeMapName = "byIdentityMap"
 
@@ -75,8 +75,12 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
   implicit val keyOrder = IdentitiesOrder
 
+  def setMDC() {
+    MDC.put("projection", descriptor.shows)
+  }
+
   protected lazy val idIndexFile: DB = try {
-    logger.debug("Opening index file for " + toString)
+    logger.debug("Opening index file for " + toString + " from " + baseDir)
     DBMaker.openFile((new File(indexDir, "byIdentity")).getCanonicalPath).make()
   } catch {
     case t: Throwable => logger.error("Error on DB open", t); throw t
@@ -96,14 +100,18 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   }
 
   def close() = {
-    logger.info("Closing column index files")
+    setMDC()
+    logger.debug("Closing column index files")
     idIndexFile.commit()
     idIndexFile.close()
     logger.debug("Closed column index files")
+    MDC.clear()
   }
 
   def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
-    logger.trace("Inserting %s => %s".format(ids.mkString("[", ", ", "]"), v))
+    if (logger.isTraceEnabled) {
+      logger.trace("Inserting %s => %s".format(ids.mkString("[", ", ", "]"), v))
+    }
 
     treeMap.put(keyFormat.encodeIdentities(ids), rowFormat.encode(v.toList))
 
@@ -113,11 +121,16 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   }
 
   def getBlockAfter(id: Option[Array[Byte]], desiredColumns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Array[Byte],Slice]] = {
+    setMDC()
     if (idIndexFile.isClosed()) {
       sys.error("Attempting to retrieve more data from a closed projection")
+    }
     
-}
-    logger.trace("Retrieving key after " + id.map(_.mkString("[", ", ", "]")))
+    if (logger.isDebugEnabled) {
+      logger.debug("Retrieving key after " + id.map(_.mkString("[", ", ", "]")))
+    }
+
+    val startTime = System.currentTimeMillis
 
     try {
       // tailMap semantics are >=, but we want > the IDs if provided
@@ -152,6 +165,11 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
       }
     } catch {
       case e: java.util.NoSuchElementException => None
+    } finally {
+      if (logger.isDebugEnabled) {
+        logger.debug("Block retrieved in %d ms".format(System.currentTimeMillis - startTime))
+      }
+      MDC.clear()
     }
   }
 }
