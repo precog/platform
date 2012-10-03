@@ -693,8 +693,9 @@ object Codec {
       // }
       // val bytes = readBytes()
       // @inline def get(offset: Int): Boolean = (bytes(offset >>> 3) & (1 << (offset & 7))) != 0
+      val pos = src.position()
       @inline def get(offset: Int): Boolean =
-        (src.get(offset >>> 3) & (1 << (offset & 7))) != 0
+        (src.get(pos + (offset >>> 3)) & (1 << (offset & 7))) != 0
 
       val bits = new BitSet()
       def read(l: Int, r: Int, offset: Int): Int = {
@@ -716,7 +717,8 @@ object Codec {
         }
       }
 
-      read(0, size, 0)
+      val offset = read(0, size, 0)
+      src.position(pos + (offset >>> 3) + 1)
       bits
     }
   }
