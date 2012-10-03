@@ -676,23 +676,25 @@ object Codec {
     }
 
     def readBitSet(src: ByteBuffer): BitSet = {
-      def readBytes() = {
-        val buf = new Array[Byte](maxBytes)
-        var i = 0
-        var b = src.get()
-        while ((b & 3) != 0 && (b & 12) != 0 && (b & 48) != 0 && (b & 192) != 0) {
-          buf(i) = b
-          i += 1
-          b = src.get()
-        }
-        buf(i) = b
-        i += 1
-        val arr = new Array[Byte](i)
-        System.arraycopy(buf, 0, arr, 0, i)
-        arr
-      }
-      val bytes = readBytes()
-      @inline def get(offset: Int): Boolean = (bytes(offset >>> 3) & (1 << (offset & 7))) != 0
+      // def readBytes() = {
+      //   val buf = new Array[Byte](maxBytes)
+      //   var i = 0
+      //   var b = src.get()
+      //   while ((b & 3) != 0 && (b & 12) != 0 && (b & 48) != 0 && (b & 192) != 0) {
+      //     buf(i) = b
+      //     i += 1
+      //     b = src.get()
+      //   }
+      //   buf(i) = b
+      //   i += 1
+      //   val arr = new Array[Byte](i)
+      //   System.arraycopy(buf, 0, arr, 0, i)
+      //   arr
+      // }
+      // val bytes = readBytes()
+      // @inline def get(offset: Int): Boolean = (bytes(offset >>> 3) & (1 << (offset & 7))) != 0
+      @inline def get(offset: Int): Boolean =
+        (src.get(offset >>> 3) & (1 << (offset & 7))) != 0
 
       val bits = new BitSet()
       def read(l: Int, r: Int, offset: Int): Int = {
