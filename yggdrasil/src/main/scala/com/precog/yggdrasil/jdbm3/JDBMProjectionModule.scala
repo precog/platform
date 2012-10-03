@@ -66,12 +66,10 @@ trait JDBMProjectionModule extends ProjectionModule {
       IO(projection.close())
     }
     
-    def archive(projection: Projection) = {
-      pmLogger.debug("Archiving " + projection)
-      val descriptor = projection.descriptor
+    def archive(descriptor: ProjectionDescriptor) = {
+      pmLogger.debug("Archiving " + descriptor)
       val dirs = 
         for {
-          _       <- close(projection)
           base    <- baseDir(descriptor)
           archive <- archiveDir(descriptor)
         } yield (base, archive) 
@@ -82,9 +80,9 @@ trait JDBMProjectionModule extends ProjectionModule {
           fileOps.rename(base, timeStampedArchive)
           
         case (Some(base), _) =>
-          throw new FileNotFoundException("Could not locate archive dir for projection: " + projection)
+          throw new FileNotFoundException("Could not locate archive dir for projection: " + descriptor)
         case _ =>
-          throw new FileNotFoundException("Could not locate base dir for projection: " + projection)
+          throw new FileNotFoundException("Could not locate base dir for projection: " + descriptor)
       }
     }
   }

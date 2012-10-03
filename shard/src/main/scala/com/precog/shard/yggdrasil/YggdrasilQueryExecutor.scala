@@ -125,20 +125,20 @@ trait YggdrasilQueryExecutorComponent {
       val storage = new Storage
 
       object Projection extends JDBMProjectionCompanion {
-        private lazy val logger = LoggerFactory.getLogger(classOf[JDBMProjectionCompanion])
+        private lazy val logger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.YggdrasilQueryExecutor.Projection")
 
         private implicit val askTimeout = yggConfig.projectionRetrievalTimeout
              
         val fileOps = FilesystemFileOps
 
         def baseDir(descriptor: ProjectionDescriptor) = {
-          logger.debug("Finding base dir for " + descriptor)
+          logger.trace("Finding base dir for " + descriptor)
           val base = (storage.shardSystemActor ? FindDescriptorRoot(descriptor, true)).mapTo[IO[Option[File]]]
           Await.result(base, yggConfig.maxEvalDuration)
         }
 
         def archiveDir(descriptor: ProjectionDescriptor) = {
-          logger.debug("Finding archive dir for " + descriptor)
+          logger.trace("Finding archive dir for " + descriptor)
           val archive = (storage.shardSystemActor ? FindDescriptorArchive(descriptor)).mapTo[IO[Option[File]]]
           Await.result(archive, yggConfig.maxEvalDuration)
         }

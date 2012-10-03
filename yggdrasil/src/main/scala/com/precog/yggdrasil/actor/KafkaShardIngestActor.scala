@@ -154,7 +154,7 @@ abstract class KafkaShardIngestActor(shardId: String,
               requestor ! IngestErrors(List("An error occurred retrieving data from Kafka: " + error.getMessage))
           }
         } else {
-          logger.warn("ingestCache.size too big (%d) to process more messages".format(ingestCache.size))
+          logger.warn("Concurrent ingest window full (%d). Cannot start new ingest batch".format(ingestCache.size))
           requestor ! IngestData(Nil)
         }
       } else {

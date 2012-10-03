@@ -47,8 +47,10 @@ import scala.collection.mutable
 import scalaz._
 import scalaz.Validation._
 import scalaz.effect._
+import scalaz.std.list._
 import scalaz.syntax.show._
 import scalaz.syntax.std.option._
+import scalaz.syntax.traverse._
 
 //////////////
 // MESSAGES //
@@ -91,44 +93,30 @@ trait ProjectionsActorModule extends ProjectionModule {
   class ProjectionsActor extends Actor { self =>
     private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionsActor")
 
-    private val projectionCacheSettings = CacheSettings(
-      expirationPolicy = ExpirationPolicy(Some(2), Some(2), TimeUnit.MINUTES), 
-      evict = { (descriptor: ProjectionDescriptor, projection: Projection) => 
-        Projection.close(projection).except {
-          case t: Throwable => logger.error("Error during projection eviction", t); IO(())
-        }.unsafePerformIO
-      }
-    )
-
-    case class AcquisitionRequest(requestor: ActorRef, exclusive: Boolean, evict: Boolean) 
+    case class AcquisitionRequest(requestor: ActorRef, lockForArchive: Boolean) 
     case class AcquisitionState(exclusive: Boolean, count: Int, queue: List[AcquisitionRequest])
     
     private val acquisitionState = mutable.Map.empty[ProjectionDescriptor, AcquisitionState] 
     
-    // Cache for active projections
-    private val projections = Cache.concurrentWithCheckedEviction[ProjectionDescriptor, Projection](projectionCacheSettings) {
-      (descriptor, _) => !acquisitionState.isDefinedAt(descriptor)
-    }
-
     def receive = {
       case Status =>
         sender ! status
 
-      case AcquireProjection(descriptor, exclusive, evict) => {
+      case AcquireProjection(descriptor, lockForArchive) => {
         acquisitionState.get(descriptor) match {
           case None =>
-            logger.debug("Fresh acquisition of " + descriptor.shows + (if(exclusive) " (exclusive)" else ""))
-            acquisitionState(descriptor) = AcquisitionState(exclusive, 1, Nil)
-            acquired(sender, descriptor, exclusive, evict)
+            logger.debug("Fresh acquisition of " + descriptor.shows + (if(lockForArchive) " (archive)" else ""))
+            acquisitionState(descriptor) = AcquisitionState(lockForArchive, 1, Nil)
+            acquired(sender, descriptor, lockForArchive)
             
-          case Some(s @ AcquisitionState(false, count0, Nil)) if !exclusive =>
+          case Some(s @ AcquisitionState(false, count0, Nil)) if !lockForArchive =>
             logger.debug("Non-exclusive acquisition (%d prior) of %s".format(count0, descriptor.shows))
             acquisitionState(descriptor) = s.copy(count = count0+1)
-            acquired(sender, descriptor, exclusive, evict)
+            acquired(sender, descriptor, lockForArchive)
             
           case Some(s @ AcquisitionState(_, _, queue0)) =>
             logger.warn("Queueing exclusive acquisition of " + descriptor.shows)
-            acquisitionState(descriptor) = s.copy(queue = AcquisitionRequest(sender, exclusive, evict) :: queue0)
+            acquisitionState(descriptor) = s.copy(queue = AcquisitionRequest(sender, ) :: queue0)
         }
       }
 
@@ -179,37 +167,61 @@ trait ProjectionsActorModule extends ProjectionModule {
     }
 
     override def postStop(): Unit = {
-      if (projections.size > 0) {
-        logger.info("Stopping remaining (cached) projections: " + projections.size)
-        projections.foreach { case (_,projection) => Projection.close(projection).except { t: Throwable => logger.error("Error closing " + projection, t); IO(()) }.unsafePerformIO }
+      if (openProjections.size > 0) {
+        logger.info("Stopping remaining (cached) projections: " + openProjections.size)
+        openProjections.foreach { case (_,(projection,_)) => Projection.close(projection).except { t: Throwable => logger.error("Error closing " + projection, t); IO(()) }.unsafePerformIO }
       }
 
       logger.info("Stopped ProjectionsActor")
     }
 
-    protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JNum(projections.size)) :: 
+    protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JNum(openProjections.size)) :: 
                                                                   JField("outstandingReferences", JNum(acquisitionState.size)) :: Nil)) :: Nil)
-                                                                  
-    private def acquired(sender: ActorRef, descriptor: ProjectionDescriptor, exclusive: Boolean, evict: Boolean)(implicit self: ActorRef) : Unit = {
-      cacheLookup(descriptor) map { p =>
-        if (evict) {
-          logger.debug("Evicting projection for " + descriptor + (if(exclusive) "(exclusive)" else ""))
-          assert(exclusive)
-          projections -= descriptor
-        }
+
+    val maxOpenProjections = 1000
+    private val openProjections = mutable.Map.empty[ProjectionDescriptor, (Projection, Long)]
+                             
+    private def evictProjection(descriptor: ProjectionDescriptor, projection: Projection): IO[Unit] = {
+      openProjections -= descriptor
+      Projection.close(projection)
+    }
+
+    private def acquired(sender: ActorRef, descriptor: ProjectionDescriptor, lockForArchive: Boolean)(implicit self: ActorRef) : Unit = {
+      IO(openProjections.get(descriptor)) flatMap { 
+        case Some((p, _)) => IO { openProjections += (descriptor, (p, System.currentTimeMillis)); p }
+        case None => for {
+                       _ <- {
+                              val overage = openProjections.size - maxOpenProjections
+                              if (overage >= 0) {
+                                logger.debug("Evicting " + overage + " projections")
+                                // attempt to "evict" some unused projections to get us back under the limit
+                                val (retained, unused) = openProjections.partition { case (d, _) => acquisitionState.contains(d) }
+                                val toEvict = unused.toList.sortBy(_._2._2).take(overage + 1)
+
+                                if ((openProjections.size - toEvict.size) > maxOpenProjections) {
+                                  logger.warn("Unable to evict sufficient projections to get under open projection limit (currently %d)".format(openProjections.size))
+                                }
+
+                                toEvict.map { case (d, (p, _)) => evictProjection(d, p) }.sequence
+                              } else {
+                                IO(())
+                              }
+                            }
+                       p <- Projection.open(descriptor)
+                       _ <- IO { openProjections += (descriptor -> (p, System.currentTimeMillis)) }
+                     } yield p
+      } map { p =>
         sender ! ProjectionAcquired(p)
+        p
+      } flatMap { p =>
+        if (evict) {
+          evictProjection(descriptor, p)
+        } else {
+          IO(())
+        }
       } except {
         error => IO(sender ! ProjectionError(descriptor, error))
       } unsafePerformIO
-    }
-
-    private def cacheLookup(descriptor: ProjectionDescriptor): IO[Projection] = {
-      projections.get(descriptor) map { IO(_) } getOrElse {
-        for (p <- Projection.open(descriptor)) yield {
-          // funkiness due to putIfAbsent semantics of returning Some(v) only if k already exists in the map
-          projections.putIfAbsent(descriptor, p) getOrElse p 
-        }
-      }
     }
   }
 
@@ -264,7 +276,7 @@ trait ProjectionsActorModule extends ProjectionModule {
         logger.debug("Archiving " + projection)
         
         try {
-          Projection.archive(projection.asInstanceOf[Projection]).unsafePerformIO // The cake is a lie!
+          Projection.archive(projection.asInstanceOf[Projection].descriptor).unsafePerformIO // The cake is a lie!
           
           replyTo ! ArchiveMetadata(projection.descriptor)
         } catch {

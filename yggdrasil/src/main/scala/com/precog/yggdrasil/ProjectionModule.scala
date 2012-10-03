@@ -33,7 +33,7 @@ trait ProjectionModule {
 
     def close(p: Projection): IO[Unit]
 
-    def archive(p: Projection): IO[Boolean]
+    def archive(d: ProjectionDescriptor): IO[Boolean]
   }
 }
 
