@@ -75,7 +75,7 @@ fi
 
 pushd $SRCDIR > /dev/null
 SOURCES=""
-for source in `find . -name '*.json'`; do
+for source in `find -L . -name '*.json'`; do
     DPATH=`echo $source | sed -e 's/^\.\(.*\)\.json/\1\//'`
     DATAFILE=${source/\.\//}
     SOURCES="$SOURCES $DPATH=$SRCDIR/$DATAFILE"
