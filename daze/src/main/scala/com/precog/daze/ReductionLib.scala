@@ -118,9 +118,15 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range) = {
-        val cx = cols(JType.JUnfixedT)
+        val cx = cols(JType.JUnfixedT).toArray
         var count = 0L
-        RangeUtil.loop(range, i => if (cx.exists(_.isDefinedAt(i))) count += 1L)
+        RangeUtil.loop(range, { i =>
+          var j = 0
+          while (j < cx.length && !cx(j).isDefinedAt(i)) {
+            j += 1
+          }
+          if (j == cx.length) count += 1L 
+        })
         count
       }
     }
