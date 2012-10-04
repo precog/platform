@@ -2,8 +2,10 @@ package com.precog.yggdrasil
 package table
 package cf
 
-import scala.collection.BitSet
 import org.apache.commons.collections.primitives.ArrayIntList
+
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
 
 object util {
 
