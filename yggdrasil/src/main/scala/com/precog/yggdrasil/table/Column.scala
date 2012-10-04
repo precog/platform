@@ -209,4 +209,12 @@ object Column {
       }
     }
   }
+
+  def isDefinedAt(cols: Array[Column], row: Int): Boolean = {
+    var i = 0
+    while (i < cols.length && !cols(i).isDefinedAt(row)) {
+      i += 1
+    }
+    i < cols.length
+  }
 }

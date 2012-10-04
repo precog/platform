@@ -121,11 +121,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
         val cx = cols(JType.JUnfixedT).toArray
         var count = 0L
         RangeUtil.loop(range, { i =>
-          var j = 0
-          while (j < cx.length && !cx(j).isDefinedAt(i)) {
-            j += 1
-          }
-          if (j == cx.length) count += 1L 
+          if (Column.isDefinedAt(cx, i)) count += 1L
         })
         count
       }
