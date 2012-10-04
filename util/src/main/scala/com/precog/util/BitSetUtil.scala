@@ -70,20 +70,6 @@ object BitSetUtil {
     }
   }
 
-  object TempImplicits {
-    implicit def toScala(b: BitSet): mutable.BitSet = {
-      val bitset = mutable.BitSet.empty
-      new BitSetOperations(b).foreach(i => bitset += i)
-      bitset
-    }
-
-    implicit def fromScala(bitset: scala.collection.BitSet): BitSet = {
-      val b = new BitSet
-      bitset.foreach(i => b.set(i))
-      b
-    }
-  }
-
   object Implicits {
     implicit def bitSetOps(bs: BitSet) = new BitSetOperations(bs)
   }
