@@ -677,6 +677,7 @@ trait Slice { source =>
         var buffer = CharBuffer.allocate(BufferSize)
         val vector = new mutable.ArrayBuffer[CharBuffer](math.max(1, size / 10))
         
+        @inline
         def checkPush(length: Int) {
           if (buffer.remaining < length) {
             buffer.flip()
@@ -686,9 +687,16 @@ trait Slice { source =>
           }
         }
         
+        @inline
         def push(c: Char) {
           checkPush(1)
           buffer.put(c)
+        }
+        
+        @inline
+        def pushStr(str: String) {
+          checkPush(str.length)
+          buffer.put(str)
         }
         
         val in = new mutable.ListBuffer[String]
@@ -740,38 +748,17 @@ trait Slice { source =>
             val c = str.charAt(idx)
             
             (c: @switch) match {
-              case '"' =>
-                push('\'')
-                push('"')
-                
-              case '\\' =>
-                push('\\')
-                push('\\')
-                
-              case '\b' =>
-                push('\\')
-                push('b')
-              
-              case '\f' =>
-                push('\\')
-                push('\b')
-                
-              case '\n' =>
-                push('\\')
-                push('n')
-                
-              case '\r' =>
-                push('\\')
-                push('r')
-                
-              case '\t' =>
-                push('\\')
-                push('t')
+              case '"' => pushStr("\"")
+              case '\\' => pushStr("\\\\")
+              case '\b' => pushStr("\\b")
+              case '\f' => pushStr("\\f")
+              case '\n' => pushStr("\\n")
+              case '\r' => pushStr("\\r")
+              case '\t' => pushStr("\\t")
               
               case c => {
                 if ((c >= '\u0000' && c < '\u001f') || (c >= '\u0080' && c < '\u00a0') || (c >= '\u2000' && c < '\u2100')) {
-                  push('\\')
-                  push('u')
+                  pushStr("\\u")
                   renderLong(c)
                 } else {
                   push(c)
@@ -812,42 +799,25 @@ trait Slice { source =>
         @inline
         def renderBoolean(b: Boolean) {
           if (b) {
-            checkPush(4)
-            push('t')
-            push('r')
-            push('u')
-            push('e')
+            pushStr("true")
           } else {
-            checkPush(5)
-            push('f')
-            push('a')
-            push('l')
-            push('s')
-            push('e')
+            pushStr("false")
           }
         }
         
         @inline
         def renderNull() {
-          checkPush(4)
-          push('n')
-          push('u')
-          push('l')
-          push('l')
+          pushStr("null")
         }
         
         @inline
         def renderEmptyObject() {
-          checkPush(2)
-          push('{')
-          push('}')
+          pushStr("{}")
         }
         
         @inline
         def renderEmptyArray() {
-          checkPush(2)
-          push('[')
-          push(']')
+          pushStr("[]")
         }
         
         @inline
