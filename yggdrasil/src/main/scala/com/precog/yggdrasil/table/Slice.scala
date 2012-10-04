@@ -729,7 +729,7 @@ trait Slice { source =>
             val c = str.charAt(idx)
             
             (c: @switch) match {
-              case '"' => pushStr("\"")
+              case '"' => pushStr("\\\"")
               case '\\' => pushStr("\\\\")
               case '\b' => pushStr("\\b")
               case '\f' => pushStr("\\f")
@@ -740,7 +740,7 @@ trait Slice { source =>
               case c => {
                 if ((c >= '\u0000' && c < '\u001f') || (c >= '\u0080' && c < '\u00a0') || (c >= '\u2000' && c < '\u2100')) {
                   pushStr("\\u")
-                  renderLong(c)
+                  pushStr("%04x".format(Character.codePointAt(str, idx)))
                 } else {
                   push(c)
                 }
