@@ -574,7 +574,7 @@ object Slice {
         do { i += 1 } while (i <= upper && (ord.order(x(i), t) eq LT))
         do { j -= 1 } while (ord.order(t, x(j)) eq LT)
         if (i > j) cont = false
-        swap(x, i, j)
+        if (i < upper) swap(x, i, j)
       }
     }
   }
@@ -665,21 +665,11 @@ object Slice {
           }
         }
 
-        case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = EQ
-        }
-
-        case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = EQ
-        }
-
-        case (c1: NullColumn, c2: NullColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = EQ
-        }
-        
         case (c1, c2) => {
           val ordering = implicitly[Order[CType]].apply(c1.tpe, c2.tpe)
           
+          // This also correctly catches CNullType cases.
+
           new RowComparator {
             def compare(thisRow: Int, thatRow: Int) = ordering
           }
