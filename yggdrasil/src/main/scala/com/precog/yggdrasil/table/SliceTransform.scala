@@ -19,7 +19,9 @@ import org.apache.jdbm.DBMaker
 import java.io.File
 import java.util.SortedMap
 
-import scala.collection.BitSet
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
+
 import scala.annotation.tailrec
 
 import scalaz._
@@ -56,8 +58,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
     // No transform defined herein may reduce the size of a slice. Be it known!
     def composeSliceTransform2(spec: TransSpec[SourceType]): SliceTransform2[_] = {
       val result = spec match {
-        case Leaf(source) if source == Source || source == SourceLeft => SliceTransform.left(())
-        case Leaf(source) if source == SourceRight => SliceTransform.right(())
+        case Leaf(source) if source == Source || source == SourceLeft =>
+          SliceTransform.left(())
+
+        case Leaf(source) if source == SourceRight =>
+          SliceTransform.right(())
 
         case Map1(source, f) => 
           composeSliceTransform2(source) map {
@@ -92,12 +97,13 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
             if (s.columns.isEmpty) {
               s
             } else {
-              val definedAt: BitSet = filter.columns.values.foldLeft(BitSet.empty) { (acc, col) =>
-                col match {
-                  case c: BoolColumn => {
-                    cf.util.isSatisfied(col).map(_.definedAt(0, s.size) ++ acc).getOrElse(BitSet.empty) 
+
+              val definedAt = new BitSet
+              filter.columns.values.foreach {
+                case col: BoolColumn => {
+                  cf.util.isSatisfied(col).foreach {
+                    c => definedAt.or(c.definedAt(0, s.size))
                   }
-                  case _ => acc
                 }
               }
 
