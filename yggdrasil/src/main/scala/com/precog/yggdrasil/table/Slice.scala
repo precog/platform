@@ -574,7 +574,7 @@ object Slice {
         do { i += 1 } while (i <= upper && (ord.order(x(i), t) eq LT))
         do { j -= 1 } while (ord.order(t, x(j)) eq LT)
         if (i > j) cont = false
-        swap(x, i, j)
+        if (i < upper) swap(x, i, j)
       }
     }
   }
@@ -598,72 +598,55 @@ object Slice {
 
         case (c1: LongColumn, c2: LongColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+            NumericComparisons.order(c1(thisRow), c2(thatRow))
           }
         }
 
         case (c1: LongColumn, c2: DoubleColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+            NumericComparisons.order(c1(thisRow), c2(thatRow))
           }
         }
 
         case (c1: LongColumn, c2: NumColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+            NumericComparisons.order(c1(thisRow), c2(thatRow))
           }
         }
 
         case (c1: DoubleColumn, c2: LongColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+            NumericComparisons.order(c1(thisRow), c2(thatRow))
           }
         }
 
         case (c1: DoubleColumn, c2: DoubleColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+            NumericComparisons.order(c1(thisRow), c2(thatRow))
           }
         }
 
         case (c1: DoubleColumn, c2: NumColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = BigDecimal(c1(thisRow))
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+            NumericComparisons.order(c1(thisRow), c2(thatRow))
           }
         }
 
         case (c1: NumColumn, c2: LongColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = BigDecimal(c2(thatRow))
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+            NumericComparisons.order(c1(thisRow), c2(thatRow))
           }
         }
 
         case (c1: NumColumn, c2: DoubleColumn) => new RowComparator {
           def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = BigDecimal(c2(thatRow))
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+            NumericComparisons.order(c1(thisRow), c2(thatRow))
           }
         }
 
         case (c1: NumColumn, c2: NumColumn) => new RowComparator {
-          val ord = Order[BigDecimal]
           def compare(thisRow: Int, thatRow: Int) = {
-            ord.order(c1(thisRow), c2(thatRow))
+            NumericComparisons.order(c1(thisRow), c2(thatRow))
           }
         }
 
@@ -682,21 +665,11 @@ object Slice {
           }
         }
 
-        case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = EQ
-        }
-
-        case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = EQ
-        }
-
-        case (c1: NullColumn, c2: NullColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = EQ
-        }
-        
         case (c1, c2) => {
           val ordering = implicitly[Order[CType]].apply(c1.tpe, c2.tpe)
           
+          // This also correctly catches CNullType cases.
+
           new RowComparator {
             def compare(thisRow: Int, thatRow: Int) = ordering
           }
@@ -723,7 +696,7 @@ object Slice {
         private val comparators: Array[RowComparator] = (for {
           i1 <- 0 until array1.length
           i2 <- 0 until array2.length
-        } yield compare0(array1(i1), array2(i2))).toArray
+        } yield compare0(array1(i1), array2(i2)))(collection.breakOut)
 
         def compare(i: Int, j: Int) = {
           val first1 = firstDefinedIndexFor(array1, i)

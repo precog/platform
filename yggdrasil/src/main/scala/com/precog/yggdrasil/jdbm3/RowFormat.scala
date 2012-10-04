@@ -825,16 +825,18 @@ trait IdentitiesRowFormat extends RowFormat {
 
   def ColumnDecoder(cols: Seq[ArrayColumn[_]]) = {
 
-    val longCols = cols map {
+    val longCols: Array[ArrayLongColumn] = cols.map({
       case col: ArrayLongColumn => col
       case col => sys.error("Expecing ArrayLongColumn, but found: " + col)
-    }
+    })(collection.breakOut)
 
     new ColumnDecoder {
       def decodeToRow(row: Int, src: Array[Byte], offset: Int = 0) {
         val buf = ByteBuffer.wrap(src)
-        longCols foreach { col =>
-          col.update(row, codec.read(buf))
+        var i = 0
+        while (i < longCols.length) {
+          longCols(i).update(row, codec.read(buf))
+          i += 1
         }
       }
     }
