@@ -459,7 +459,7 @@ object Codec {
       val blen = readPackedInt(b)
       var cmp = 0
       var pos = 0
-      val len = alen min blen
+      val len = if (alen < blen) alen else blen
       while (cmp == 0 && pos < len) {
         cmp = (a.get() & 0xFF) - (b.get() & 0xFF)
         pos += 1
