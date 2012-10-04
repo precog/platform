@@ -132,7 +132,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                         client.contentType(application/MimeTypes.json).path("apikeys/").post[JValue]("")(createBody) map {
                           case HttpResponse(HttpStatus(OK, _), _, Some(wrappedKey), _) =>
                            wrappedKey.validated[WrappedAPIKey] match {
-                             case Success(WrappedAPIKey(apiKey)) => apiKey
+                             case Success(WrappedAPIKey(_, apiKey)) => apiKey
                              case Failure(err) =>
                               logger.error("Unexpected response to token creation request: " + err)
                               throw HttpException(BadGateway, "Unexpected response to token creation request: " + err)

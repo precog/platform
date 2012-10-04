@@ -50,8 +50,8 @@ class InMemoryTokenManager[M[+_]: Monad](tokens: mutable.Map[TokenID, Token] = m
   private val deletedTokens = mutable.Map.empty[TokenID, Token]
   private val deletedGrants = mutable.Map.empty[GrantID, Grant]
 
-  def newToken(name: String, grants: Set[GrantID]) = Monad[M].point {
-    val newToken = Token(newTokenID, name, grants)
+  def newToken(name: String, creator: TokenID, grants: Set[GrantID]) = Monad[M].point {
+    val newToken = Token(name, newTokenID, creator, grants)
     tokens.put(newToken.tid, newToken)
     newToken
   }
@@ -178,12 +178,12 @@ object TestTokenManager {
   val grants: mutable.Map[GrantID, Grant] = grantList.flatten.map { g => (g.gid -> g) }(collection.breakOut)
 
   val tokens: mutable.Map[TokenID, Token] = List[Token](
-    Token("root", "root", grantList(0).map { _.gid }(collection.breakOut)),
-    Token("unittest", "unittest", grantList(1).map { _.gid }(collection.breakOut)),
-    Token("usage", "usage", grantList(2).map { _.gid }(collection.breakOut)),
-    Token("user1", "root", (grantList(3) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
-    Token("user2", "root", (grantList(4) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
-    Token("expired", "expired", (grantList(5) ++ grantList(6)).map{ _.gid}(collection.breakOut))
+    Token("root", "root", "", grantList(0).map { _.gid }(collection.breakOut)),
+    Token("unittest", "unittest", "root", grantList(1).map { _.gid }(collection.breakOut)),
+    Token("usage", "usage", "root", grantList(2).map { _.gid }(collection.breakOut)),
+    Token("user1", "user1", "root", (grantList(3) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
+    Token("user2", "user2", "root", (grantList(4) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
+    Token("expired", "expired", "root", (grantList(5) ++ grantList(6)).map{ _.gid}(collection.breakOut))
   ).map { t => (t.tid -> t) }(collection.breakOut)
   
   val rootReadChildren = grantList.flatten.filter(_.issuer.map(_ == "root_read").getOrElse(false)).toSet

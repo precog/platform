@@ -157,12 +157,12 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       getTokens(rootUID) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jts), _) =>
           val ks = jts.deserialize[APIKeySet]
-          ks.apiKeys must containTheSameElementsAs(tokens.values.filter(_.cid == rootUID).map(_.tid).toSeq)
+          ks.apiKeys must containTheSameElementsAs(tokens.values.filter(_.cid == rootUID).map(t => WrappedAPIKey(t.name, t.tid)).toSeq)
       }}
     }
 
     "create root token with defaults" in {
-      val request = NewTokenRequest(grantList(0).map(_.permission))
+      val request = NewTokenRequest("root", grantList(0).map(_.permission))
       createToken(rootUID, request) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
           val id = jid.deserialize[WrappedAPIKey]
@@ -171,10 +171,10 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
     }
 
     "create non-root token with overrides" in {
-      val request = NewTokenRequest(grantList(1).map(_.permission))
+      val request = NewTokenRequest("non-root", grantList(1).map(_.permission))
       (for {
         HttpResponse(HttpStatus(OK, _), _, Some(jid), _)    <- createToken(testUID, request)
-        WrappedAPIKey(id) = jid.deserialize[WrappedAPIKey]
+        WrappedAPIKey("non-root", id) = jid.deserialize[WrappedAPIKey]
         HttpResponse(HttpStatus(OK, _), _, Some(jtd), _)    <- getTokenDetails(rootUID, id)
         TokenDetails(token, grants) = jtd.deserialize[TokenDetails]
         if (token.tid == id)
@@ -198,7 +198,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
     }
 
     "don't create if token is expired" in {
-      val request = NewTokenRequest(grantList(5).map(_.permission))
+      val request = NewTokenRequest("expired", grantList(5).map(_.permission))
       createToken(expiredUID, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
@@ -207,7 +207,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
     }
 
     "don't create if token cannot grant permissions" in {
-      val request = NewTokenRequest(grantList(0).map(_.permission))
+      val request = NewTokenRequest("unauthorized", grantList(0).map(_.permission))
       createToken(cust1UID, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,

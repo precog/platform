@@ -60,7 +60,7 @@ trait TokenManager[M[+_]] {
   // 384 bit grant ID
   private[security] def newGrantID(): String = (newUUID() + newUUID() + newUUID()).toLowerCase.replace("-","")
  
-  def newToken(name: String, grants: Set[GrantID]): M[Token]
+  def newToken(name: String, creator: TokenID, grants: Set[GrantID]): M[Token]
   def newGrant(issuer: Option[GrantID], permission: Permission): M[Grant]
 
   def listTokens(): M[Seq[Token]]
@@ -136,9 +136,9 @@ class MongoTokenManager(
 
   private implicit val impTimeout = settings.timeout
 
-  def newToken(name: String, grants: Set[GrantID]) = {
-    val newToken = Token(newTokenID(), name, grants)
-    database(insert(newToken.serialize(Token.TokenDecomposer).asInstanceOf[JObject]).into(settings.tokens)) map {
+  def newToken(name: String, creator: TokenID, grants: Set[GrantID]) = {
+    val newToken = Token(name, newTokenID(), creator, grants)
+    database(insert(newToken.serialize(Token.UnsafeTokenDecomposer).asInstanceOf[JObject]).into(settings.tokens)) map {
       _ => newToken
     }
   }
@@ -200,7 +200,7 @@ class MongoTokenManager(
         f(t) match {
           case Some(nt) if nt != t =>
             database {
-              val updateObj = nt.serialize(Token.TokenDecomposer).asInstanceOf[JObject]
+              val updateObj = nt.serialize(Token.UnsafeTokenDecomposer).asInstanceOf[JObject]
               update(settings.tokens).set(updateObj).where("tid" === tid)
             }.map{ _ => Some(nt) }
           case _ => Future(Some(t))
@@ -213,7 +213,7 @@ class MongoTokenManager(
     findToken(tid).flatMap { 
       case ot @ Some(t) =>
         for {
-          _ <- database(insert(t.serialize(Token.TokenDecomposer).asInstanceOf[JObject]).into(settings.deletedTokens))
+          _ <- database(insert(t.serialize(Token.UnsafeTokenDecomposer).asInstanceOf[JObject]).into(settings.deletedTokens))
           _ <- database(remove.from(settings.tokens).where("tid" === tid))
         } yield { ot }
       case None    => Future(None)
@@ -246,8 +246,9 @@ class CachingTokenManager[M[+_]: Monad](manager: TokenManager[M], settings: Cach
   private val tokenCache = Cache.concurrent[TokenID, Token](settings.tokenCacheSettings)
   private val grantCache = Cache.concurrent[GrantID, Grant](settings.grantCacheSettings)
 
-  def newToken(name: String, grants: Set[GrantID]) =
-    manager.newToken(name, grants).map { _ ->- add }
+  def newToken(name: String, creator: TokenID, grants: Set[GrantID]) =
+    manager.newToken(name, creator, grants).map { _ ->- add }
+
   def newGrant(issuer: Option[GrantID], permission: Permission) =
     manager.newGrant(issuer, permission).map { _ ->- add }
 
