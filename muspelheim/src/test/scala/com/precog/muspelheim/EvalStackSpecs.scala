@@ -276,6 +276,48 @@ trait EvalStackSpecs extends Specification {
       actual mustEqual expected
     }
 
+    "perform another filter with rank" in {
+      val input = """
+        data := //summer_games/athletes 
+        
+        perCapitaAthletes := solve 'Countryname 
+          data' := data where data.Countryname = 'Countryname
+          {country: 'Countryname, 
+            athletesPerMillion: count(data')/(data'.Population/1000000)} 
+        
+        distinctData := distinct(perCapitaAthletes) 
+        
+        rank := std::stats::rank(distinctData.athletesPerMillion) 
+        distinctData with {rank: rank}
+        """.stripMargin
+
+      val result = evalE(input)
+      val input2 = """
+        data := //summer_games/athletes 
+        
+        perCapitaAthletes := solve 'Countryname 
+          data' := data where data.Countryname = 'Countryname
+          {country: 'Countryname, 
+            athletesPerMillion: count(data')/(data'.Population/1000000)} 
+        
+        distinct(perCapitaAthletes)""".stripMargin
+
+      val result2 = evalE(input2)
+      val size = result2.size
+
+      result must haveSize(size)
+
+      forall(result) {
+        case (ids, SObject(obj)) => {
+          ids.length must_== 1
+          obj must haveSize(3)
+          obj must haveKey("rank")
+          obj must haveKey("country")
+          obj must haveKey("athletesPerMillion")
+        }
+      }
+    }
+
     "perform filter on distinct set based on rank without a solve" >> {
       val input = """
         clicks := //clicks
