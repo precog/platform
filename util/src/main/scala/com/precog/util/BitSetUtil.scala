@@ -19,12 +19,26 @@
  */
 package com.precog.util
 
+import scala.collection.mutable
+
 import scala.annotation.tailrec
 
 object BitSetUtil {
   class BitSetOperations(bs: BitSet) {
     def toUnboxedArray(): Array[Long] = bitSetToArray(bs)
     def toList(): List[Int] = bitSetToList(bs)
+
+    def +(elem: Int) = { val b = bs.copy; b.set(elem); b }
+    def -(elem: Int) = { val b = bs.copy; b.clear(elem); b }
+    def &(other: BitSet) = { val b = bs.copy; b.and(other); b }
+    def |(other: BitSet) = { val b = bs.copy; b.or(other); b }
+    def ++(other: BitSet) = { val b = bs.copy; b.or(other); b }
+
+    def +=(elem: Int) = bs.set(elem)
+    def -=(elem: Int) = bs.clear(elem)
+    def &=(other: BitSet) = bs.and(other)
+    def |=(other: BitSet) = bs.or(other)
+    def ++=(other: BitSet) = bs.or(other)
 
     def min(): Int = {
       val n = bs.nextSetBit(0)
@@ -82,6 +96,45 @@ object BitSetUtil {
   def create(ns: Seq[Int]): BitSet = {
     val bs = new BitSet()
     ns.foreach(n => bs.set(n))
+    bs
+  }
+
+  def range(start: Int, end: Int): BitSet = {
+    val bs = new BitSet()
+    Loop.range(start, end)(i => bs.set(i))
+    bs
+  }
+
+  def filteredRange(start: Int, end: Int)(pred: Int => Boolean): BitSet = {
+    val bs = new BitSet()
+    Loop.range(start, end)(i => if (pred(i)) bs.set(i))
+    bs
+  }
+
+  @inline final def filteredRange(r: Range)(pred: Int => Boolean): BitSet =
+    filteredRange(r.start, r.end)(pred)
+
+  def filteredList[A](as: List[A])(pred: A => Boolean): BitSet = {
+    val bs = new BitSet
+    @inline @tailrec def loop(lst: List[A], i: Int): Unit = lst match {
+      case h :: t =>
+        if (pred(h)) bs.set(i)
+        loop(t, i + 1)
+      case Nil => 
+    }
+    loop(as, 0)
+    bs
+  }
+
+  def filteredSeq[A](as: List[A])(pred: A => Boolean): BitSet = {
+    val bs = new BitSet
+    @inline @tailrec def loop(lst: List[A], i: Int): Unit = lst match {
+      case h :: t =>
+        if (pred(h)) bs.set(i)
+        loop(t, i + 1)
+      case Nil => 
+    }
+    loop(as, 0)
     bs
   }
 

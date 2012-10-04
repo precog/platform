@@ -19,8 +19,6 @@
  */
 package com.precog.yggdrasil
 
-import scala.collection.immutable.BitSet
-
 import com.precog.common.json._
 
 import com.precog.bytecode._
@@ -46,12 +44,10 @@ object Schema {
       case (CPath.Identity, CEmptyObject) => JObjectFixedT(Map())
     }
 
-    val indices = ctpes.foldLeft(BitSet()) {
-      case (acc, (CPath(CPathIndex(i), _*), _)) => acc+i
-      case (acc, _) => acc
-    }
-
-    val elements = indices.flatMap { i =>
+    val elements = ctpes.collect {
+      case (CPath(CPathIndex(i), _*), _) => i
+    }.toSet.flatMap {
+      (i: Int) =>
       mkType(ctpes.collect {
         case (CPath(CPathIndex(`i`), tail @ _*), ctpe) => (CPath(tail : _*), ctpe)
       }).map(i -> _)

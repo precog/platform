@@ -20,10 +20,7 @@
 package com.precog.yggdrasil
 package jdbm3
 
-//import scala.collection.immutable.BitSet
 import com.precog.util.BitSet
-import com.precog.util.BitSetUtil
-import com.precog.util.BitSetUtil.Implicits._
 
 import org.joda.time.DateTime
 

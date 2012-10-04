@@ -23,7 +23,8 @@ import com.precog.common.json.CPath
 import com.precog.yggdrasil.{ IdSource, TableModule, YggConfigComponent, CLong }
 import com.precog.yggdrasil.table._
 
-import scala.collection.immutable.BitSet
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
 
 trait IdSourceConfig {
   def idSource: IdSource
@@ -38,10 +39,13 @@ trait IdSourceScannerModule[M[+_]] extends TableModule[M] with YggConfigComponen
     
     def scan(a: Unit, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
       val rawCols = cols.values.toArray
-      val defined = BitSet(range filter { row =>
-        Column.isDefinedAt(rawCols, row)
-      }: _*)
-      val values = range map { _ => yggConfig.idSource.nextId() } toArray
+      val defined = BitSetUtil.filteredRange(range.start, range.end) {
+        i => Column.isDefinedAt(rawCols, i)
+      }
+      val values = new Array[Long](range.size)
+      Loop.range(range.start, range.end) {
+        i => values(i) = yggConfig.idSource.nextId()
+      }
       
       ((), Map(ColumnRef(CPath.Identity, CLong) -> ArrayLongColumn(defined, values)))
     }

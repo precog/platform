@@ -29,6 +29,9 @@ import com.precog.util._
 import Schema._
 import metadata._
 
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
+
 import java.io.File
 import java.util.SortedMap
 import java.util.Comparator
@@ -282,8 +285,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
 
       sealed trait NextStep
-      case class MoreLeft(span: Span, leq: mutable.BitSet, ridx: Int, req: mutable.BitSet) extends NextStep
-      case class MoreRight(span: Span, lidx: Int, leq: mutable.BitSet, req: mutable.BitSet) extends NextStep
+      case class MoreLeft(span: Span, leq: BitSet, ridx: Int, req: BitSet) extends NextStep
+      case class MoreRight(span: Span, lidx: Int, leq: BitSet, req: BitSet) extends NextStep
 
       // we need a custom row comparator that ignores the global ID introduced to prevent elimination of
       // duplicate rows in the write to JDBM
@@ -298,25 +301,25 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                              right: StreamT[M, Slice], rightKeyTrans: SliceTransform1[B],
                              leftWriteState: JDBMState, rightWriteState: JDBMState): M[(Table, Table)] = {
 
-        // We will *always* have a lhead and rhead, because if at any point we run out of data,
-        // we'll still be hanging on to the last slice on the other side to use as the authority
-        // for equality comparisons
-        def step(state: AlignState, lhead: Slice, ltail: StreamT[M, Slice], stepleq: mutable.BitSet,
-                                    rhead: Slice, rtail: StreamT[M, Slice], stepreq: mutable.BitSet,
-                                    lstate: A, rstate: B, 
-                                    leftWriteState: JDBMState, rightWriteState: JDBMState): M[(JDBMState, JDBMState)] = {
+        // We will *always* have a lhead and rhead, because if at any point we
+        // run out of data, we'll still be hanging on to the last slice on the
+        // other side to use as the authority for equality comparisons
+        def step(
+          state: AlignState, lhead: Slice, ltail: StreamT[M, Slice], stepleq: BitSet,
+          rhead: Slice, rtail: StreamT[M, Slice], stepreq: BitSet,
+          lstate: A, rstate: B, 
+          leftWriteState: JDBMState, rightWriteState: JDBMState
+        ): M[(JDBMState, JDBMState)] = {
 
           def buildFilters(comparator: RowComparator, 
-                                    lidx: Int, lsize: Int, lacc: mutable.BitSet, 
-                                    ridx: Int, rsize: Int, racc: mutable.BitSet,
-                                    span: Span): NextStep = {
+            lidx: Int, lsize: Int, lacc: BitSet, 
+            ridx: Int, rsize: Int, racc: BitSet,
+            span: Span): NextStep = {
 
             @tailrec def buildFilters0(comparator: RowComparator, 
-                                      lidx: Int, lsize: Int, lacc: mutable.BitSet, 
-                                      ridx: Int, rsize: Int, racc: mutable.BitSet,
-                                      span: Span): NextStep = {
-
-              //println(span)
+              lidx: Int, lsize: Int, lacc: BitSet, 
+              ridx: Int, rsize: Int, racc: BitSet,
+              span: Span): NextStep = {
 
               // todo: This is optimized for sparse alignments; if you get into an alignment
               // where every pair is distinct and equal, you'll do 2*n comparisons.
@@ -387,7 +390,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                     case LeftSpan => RunLeft(ridx, rkey)
                   }
 
-                  step(nextState, lhead0, ltail0, new mutable.BitSet(), rhead, rtail, req, lstate, rstate, lbs, rbs)
+                  step(nextState, lhead0, ltail0, new BitSet, rhead, rtail, req, lstate, rstate, lbs, rbs)
                 case None =>
                   //println("No more data on left; emitting right based on bitset " + req.mkString("[", ",", "]"))
                   // done on left, and we're not in an equal span on the right (since LeftSpan can only
@@ -416,7 +419,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                     case RightSpan => RunRight(lidx, lkey)
                   }
 
-                  step(nextState, lhead, ltail, leq, rhead0, rtail0, new mutable.BitSet(), lstate, rstate, lbs, rbs)
+                  step(nextState, lhead, ltail, leq, rhead0, rtail0, new BitSet, lstate, rstate, lbs, rbs)
 
                 case None =>
                   // no need here to check for LeftSpan by the contract of buildFilters
@@ -430,7 +433,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                     case RightSpan => 
                       // need to switch to left spanning in buildFilters
                       //println("No more data on right, but in a span so continuing on left.")
-                      val nextState = buildFilters(comparator, lidx, lhead.size, leq, rhead.size, rhead.size, new mutable.BitSet(), LeftSpan)
+                      val nextState = buildFilters(comparator, lidx, lhead.size, leq, rhead.size, rhead.size, new BitSet, LeftSpan)
                       continue(nextState, comparator, lstate, lkey, rstate, rkey, lbs, rbs)
                   }
               }
@@ -445,7 +448,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
           // this is an optimization that uses a preemptory comparison and a binary
           // search to skip over big chunks of (or entire) slices if possible.
-          def findEqual(comparator: RowComparator, leftRow: Int, leq: mutable.BitSet, rightRow: Int, req: mutable.BitSet): NextStep = {
+          def findEqual(comparator: RowComparator, leftRow: Int, leq: BitSet, rightRow: Int, req: BitSet): NextStep = {
             comparator.compare(leftRow, rightRow) match {
               case EQ => 
                 //println("findEqual is equal at %d, %d".format(leftRow, rightRow))
@@ -504,7 +507,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               val comparator = buildRowComparator(lkey, rkey)
 
               val nextState = buildFilters(comparator, leftRow, lhead.size, stepleq, 
-                                                       0, rhead.size, new mutable.BitSet(), RightSpan)
+                                                       0, rhead.size, new BitSet, RightSpan)
 
               continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)
             
@@ -512,7 +515,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
               val comparator = buildRowComparator(lkey, rkey)
 
-              val nextState = buildFilters(comparator, 0, lhead.size, new mutable.BitSet(), 
+              val nextState = buildFilters(comparator, 0, lhead.size, new BitSet, 
                                                        rightRow, rhead.size, stepreq, LeftSpan)
 
               continue(nextState, comparator, nextA, lkey, rstate, rkey, leftWriteState, rightWriteState)
@@ -528,8 +531,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                 //println("initial right: \n" + rhead + "\n\n")
                 val (lstate, lkey) = leftKeyTrans(lhead)
                 val stepResult  = step(FindEqualAdvancingRight(0, lkey), 
-                                       lhead, ltail, new mutable.BitSet(),
-                                       rhead, rtail, new mutable.BitSet(),
+                                       lhead, ltail, new BitSet,
+                                       rhead, rtail, new BitSet,
                                        lstate, rightKeyTrans.initial, 
                                        leftWriteState, rightWriteState)
 

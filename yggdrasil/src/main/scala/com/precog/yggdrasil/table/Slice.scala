@@ -32,8 +32,12 @@ import blueeyes.json._
 import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
+
 import scala.annotation.tailrec
-import scala.collection.{breakOut, BitSet, mutable}
+
+import scala.collection.{breakOut, mutable}
 import scalaz._
 import scalaz.Ordering._
 import scalaz.Validation._
@@ -311,18 +315,24 @@ trait Slice { source =>
       private val colValues = filter.columns.values
       private val defined = definedness match {
         case AnyDefined =>
-          (0 until source.size).foldLeft(new mutable.BitSet()) {
-            case (acc, i) => if (colValues.exists(_.isDefinedAt(i))) acc + i else acc
+          val bs = new BitSet
+          Loop.range(0, source.size) {
+            i => if (colValues.exists(_.isDefinedAt(i))) bs += i
           }
+          bs
 
         case AllDefined =>
-          (0 until source.size).foldLeft(new mutable.BitSet()) {
-            case (acc, i) => if (colValues.nonEmpty && colValues.forall(_.isDefinedAt(i))) acc + i else acc
+          val bs = new BitSet
+          Loop.range(0, source.size) {
+            i => if (colValues.nonEmpty && colValues.forall(_.isDefinedAt(i))) bs += i
           }
+          bs
       }
 
       val size = source.size
-      val columns: Map[ColumnRef, Column] = source.columns mapValues { col => cf.util.filter(0, source.size, defined)(col).get }
+      val columns: Map[ColumnRef, Column] = source.columns mapValues {
+        col => cf.util.filter(0, source.size, defined)(col).get
+      }
     }
   }
 
@@ -330,16 +340,18 @@ trait Slice { source =>
     new Slice {
       lazy val retained = definedness match {
         case AnyDefined =>
-          (0 until filter.size).foldLeft(new ArrayIntList) {
-            case (acc, i) => if (filter.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
+          val acc = new ArrayIntList
+          Loop.range(0, filter.size) {
+            i => if (filter.columns.values.exists(_.isDefinedAt(i))) acc.add(i)
           }
+          acc
 
         case AllDefined =>
-          (0 until filter.size).foldLeft(new ArrayIntList) {
-            case (acc, i) =>
-              if (filter.columns.values.forall(_.isDefinedAt(i))) acc.add(i)
-              acc
+          val acc = new ArrayIntList
+          Loop.range(0, filter.size) {
+            i => if (filter.columns.values.forall(_.isDefinedAt(i))) acc.add(i)
           }
+          acc
       }
 
       lazy val size = retained.size

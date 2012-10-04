@@ -32,12 +32,10 @@ import scala.collection.mutable.ListBuffer
 
 import java.nio.ByteBuffer
 
-//import scala.collection.immutable.BitSet
 import scala.collection.mutable
-import com.precog.util.BitSet
-import com.precog.util.BitSetUtil
-import com.precog.util.BitSetUtil.Implicits._
 
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
 
 import scala.annotation.tailrec
 import scala.{ specialized => spec }
@@ -318,13 +316,9 @@ trait ValueRowFormat extends RowFormat with RowFormatSupport { self: StdCodecs =
     new ColumnEncoder {
       val colsArray = cols.toArray
       def encodeFromRow(row: Int) = {
-        val undefined = BitSetUtil.create()
-        
-        @inline @tailrec def definedCols(i: Int): Unit = if (i >= 0) {
-          if (!colsArray(i).isDefinedAt(row)) undefined.set(i)
-          definedCols(i - 1)
+        val undefined = BitSetUtil.filteredRange(0, colsArray.length) {
+          i => !colsArray(i).isDefinedAt(row)
         }
-        definedCols(colsArray.length - 1)
 
         val init = pool.acquire
         Codec[BitSet].writeUnsafe(undefined, init)
@@ -348,9 +342,6 @@ trait ValueRowFormat extends RowFormat with RowFormatSupport { self: StdCodecs =
       def decodeToRow(row: Int, src: Array[Byte], offset: Int = 0) {
         val buf = ByteBuffer.wrap(src, offset, src.length - offset)
         val undefined = Codec[BitSet].read(buf)
-        //for ((decoder, i) <- decoders if !undefined(i)) {
-        //  decoder.decode(row, buf)
-        //}
         @tailrec def helper(i: Int, decs: List[ColumnValueDecoder]) {
           decs match {
             case h :: t =>
@@ -376,12 +367,8 @@ trait ValueRowFormat extends RowFormat with RowFormatSupport { self: StdCodecs =
 
     type S = (Either[bitSetCodec.S, StatefulCodec#State], List[CValue])
 
-    //private def undefineds(xs: List[CValue]): BitSet = BitSet(xs.zipWithIndex collect {
-    //  case (CUndefined, i) => i
-    //}: _*)
-    private def undefineds(xs: List[CValue]): BitSet = BitSetUtil.create(xs.zipWithIndex collect {
-      case (CUndefined, i) => i
-    })
+    private def undefineds(xs: List[CValue]) =
+      BitSetUtil.filteredList(xs)(_ == CUndefined)
 
     def encodedSize(xs: List[CValue]) = xs.foldLeft(bitSetCodec.encodedSize(undefineds(xs))) {
       (acc, x) => acc + (x match {

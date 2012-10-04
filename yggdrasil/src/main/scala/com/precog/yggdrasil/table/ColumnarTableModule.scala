@@ -17,7 +17,6 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-
 package com.precog.yggdrasil
 package table
 
@@ -42,7 +41,9 @@ import org.apache.jdbm.DBMaker
 import java.io.File
 import java.util.SortedMap
 
-import scala.collection.BitSet
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
+
 import scala.collection.mutable
 import scala.annotation.tailrec
 
@@ -213,16 +214,18 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               // First element is unequal...
               // We either marked the span to retain in the previous slice, or 
               // we don't have enough here to mark the new slice to retain
-              (BitSet.empty, curIndex)
+              (new BitSet, curIndex)
             } else {
               val count = (prevSlice.size - prevStart) + curIndex
 
               if (count == inputCount) {
-                (BitSet(curIndex - 1), curIndex)
+                val bs = new BitSet
+                bs.set(curIndex - 1)
+                (bs, curIndex)
               } else if (count > inputCount) {
                 sys.error("Found too many EQ identities in intersect. This indicates a bug in the graph processing algorithm.")
               } else {
-                (BitSet.empty, curIndex)
+                (new BitSet, curIndex)
               }
             }
           } 
@@ -262,7 +265,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
           val collapse = SliceTransform1[CollapseState](InitialCollapse, {
             case (InitialCollapse, slice) => {
-              val (retain, spanStart) = selfCollapse(slice, 0, BitSet.empty)
+              val (retain, spanStart) = selfCollapse(slice, 0, new BitSet)
               // Pass on the remainder, if any, of this slice to the next slice for continued comparison
               (Boundary(slice, spanStart), slice.redefineWith(retain))
             }
@@ -1016,13 +1019,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             if (ticVarColumns.keySet.map(_.toInt) == keyIndices) {
               //println("All group key columns present:\n  " + (new Slice { val size = range.end; val columns = cols }))
               // all group key columns are present, so we can use filterDefined
-              val defined = range.foldLeft(new mutable.BitSet()) {
-                case (acc, i) => if (ticVarColumns.forall { 
-                                       case (ticvar, columns) => 
-                                         val ret = columns.map(_.isDefinedAt(i))
-                                         //println(ticvar + ", mapped to " + columns + " => defined at " + i + " = " + ret)
-                                         ret.exists(_ == true)
-                                     }) acc + i else acc
+              val defined = BitSetUtil.filteredRange(range.start, range.end) {
+                i => ticVarColumns.forall { 
+                  case (ticvar, columns) => 
+                    val ret = columns.map(_.isDefinedAt(i))
+                    ret.exists(_ == true)
+                }
               }
 
               //println("Defined for " + defined)

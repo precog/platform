@@ -26,7 +26,6 @@ import org.joda.time.DateTime
 
 import java.nio.ByteBuffer
 
-//import scala.collection.immutable.BitSet
 import com.precog.util.BitSet
 import com.precog.util.BitSetUtil
 import com.precog.util.BitSetUtil.Implicits._

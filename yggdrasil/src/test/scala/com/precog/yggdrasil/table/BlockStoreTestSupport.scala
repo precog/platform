@@ -34,7 +34,6 @@ import blueeyes.json.JsonDSL._
 import com.weiglewilczek.slf4s.Logging
 
 import scala.annotation.tailrec
-import scala.collection.BitSet
 import scala.collection.mutable.LinkedHashSet
 import scala.util.Random
 

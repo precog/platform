@@ -36,7 +36,26 @@ object Run {
 
     val args2 = args.toList ++ List("--root-dir", db)
     val config = RunConfig.fromCommandLine(args2) | sys.error("invalid arguments!")
+
     val queries = (
+      //// mega-query, takes ~86s
+      //"""
+      //import std::math::floor
+      //
+      //historic := //summer_games/historic_medals
+      //
+      //histogram := solve 'year
+      //  maleCount := count(historic.Gender
+      //    where historic.Gender = "Men" & historic.Edition = 'year)
+      //  femaleCount := count(historic.Gender
+      //    where historic.Gender = "Women" & historic.Edition = 'year)
+      //
+      //  {year: 'year, ratio: floor(100 * maleCount / femaleCount)}
+      //
+      //histogram
+      //""" ::
+
+      // fast, small queries
       "count(//obnoxious)" ::
       //"min(//obnoxious.v)" :: "max(//obnoxious.v)" ::
       //"sum(//obnoxious.v)" :: "mean(//obnoxious.v)" ::
