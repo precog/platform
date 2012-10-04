@@ -20,7 +20,11 @@ script
   if [ -f /etc/default/shard-v1-beta ]; then . /etc/default/shard-v1-beta; fi
   ulimit -n 100000
   ulimit -u 40000
-  sudo -u precog /usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=/etc/precog/shard-v1-beta.logging.xml -jar /usr/share/java/shard-v1-beta.jar --configFile /etc/precog/shard-v1-beta.conf >> /var/log/precog/shard-v1-beta.stdout.log 2>&1
+  LOGCONF=/etc/precog/shard-v1-beta.logging.xml
+  if [ -f /etc/precog/shard-v1-beta.logging.debug.xml ]; then 
+    LOGCONF=/etc/precog/shard-v1-beta.logging.debug.xml
+  fi
+  sudo -u precog /usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=$LOGCONF -jar /usr/share/java/shard-v1-beta.jar --configFile /etc/precog/shard-v1-beta.conf >> /var/log/precog/shard-v1-beta.stdout.log 2>&1
 end script
 
 post-start script
