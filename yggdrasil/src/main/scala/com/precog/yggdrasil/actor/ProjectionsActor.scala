@@ -36,7 +36,7 @@ import blueeyes.persistence.cache.Cache
 import blueeyes.persistence.cache.CacheSettings
 import blueeyes.persistence.cache.ExpirationPolicy
 
-import com.weiglewilczek.slf4s._
+import org.slf4j._
 
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -47,6 +47,7 @@ import scala.collection.mutable
 import scalaz._
 import scalaz.Validation._
 import scalaz.effect._
+import scalaz.syntax.show._
 import scalaz.syntax.std.option._
 
 //////////////
@@ -87,10 +88,16 @@ trait ProjectionsActorModule extends ProjectionModule {
   /**
    * The responsibilities of
    */
-  class ProjectionsActor extends Actor with Logging { self =>
+  class ProjectionsActor extends Actor { self =>
+    private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionsActor")
+
     private val projectionCacheSettings = CacheSettings(
       expirationPolicy = ExpirationPolicy(Some(2), Some(2), TimeUnit.MINUTES), 
-      evict = (descriptor: ProjectionDescriptor, projection: Projection) => Projection.close(projection).unsafePerformIO
+      evict = { (descriptor: ProjectionDescriptor, projection: Projection) => 
+        Projection.close(projection).except {
+          case t: Throwable => logger.error("Error during projection eviction", t); IO(())
+        }.unsafePerformIO
+      }
     )
 
     case class AcquisitionRequest(requestor: ActorRef, exclusive: Boolean, evict: Boolean) 
@@ -110,14 +117,17 @@ trait ProjectionsActorModule extends ProjectionModule {
       case AcquireProjection(descriptor, exclusive, evict) => {
         acquisitionState.get(descriptor) match {
           case None =>
+            logger.debug("Fresh acquisition of " + descriptor.shows + (if(exclusive) " (exclusive)" else ""))
             acquisitionState(descriptor) = AcquisitionState(exclusive, 1, Nil)
             acquired(sender, descriptor, exclusive, evict)
             
           case Some(s @ AcquisitionState(false, count0, Nil)) if !exclusive =>
+            logger.debug("Non-exclusive acquisition (%d prior) of %s".format(count0, descriptor.shows))
             acquisitionState(descriptor) = s.copy(count = count0+1)
             acquired(sender, descriptor, exclusive, evict)
             
           case Some(s @ AcquisitionState(_, _, queue0)) =>
+            logger.warn("Queueing exclusive acquisition of " + descriptor.shows)
             acquisitionState(descriptor) = s.copy(queue = AcquisitionRequest(sender, exclusive, evict) :: queue0)
         }
       }
@@ -129,27 +139,31 @@ trait ProjectionsActorModule extends ProjectionModule {
                         "; no outstanding acquisitions for this descriptor recorded.")
                         
           case Some(s @ AcquisitionState(_, 1, Nil)) =>
+            logger.debug("Release of last acquisition of " + descriptor.shows)
             acquisitionState -= descriptor
           
           case Some(s @ AcquisitionState(_, 1, queue)) =>
             queue.reverse.span(!_.exclusive) match {
               case (Nil, excl :: rest) =>
+                logger.debug("Dequeued exclusive acquisition of " + descriptor.shows + " after release")
                 acquisitionState(descriptor) = AcquisitionState(true, 1, rest)
                 acquired(excl.requestor, descriptor, true, excl.evict)
 
               case (nonExcl, excl) =>
+                logger.debug("Dequeued non-exclusive acquisition of " + descriptor.shows + " after release")
                 acquisitionState(descriptor) = AcquisitionState(false, nonExcl.size, excl)
                 nonExcl map { req => acquired(req.requestor, descriptor, false, req.evict) }
             }
             
           case Some(s @ AcquisitionState(_, count0, _)) =>
+            logger.debug("Non-exclusive release of %s, count now %d".format(descriptor.shows, count0 - 1))
             acquisitionState(descriptor) = s.copy(count = count0-1)
         }
       }
 
       case ProjectionInsert(descriptor, rows) => {
         val coordinator = sender
-        logger.debug(coordinator + " is inserting into projection " + descriptor)
+        logger.trace(coordinator + " is inserting into projection " + descriptor)
         
         val insertActor = context.actorOf(Props(new ProjectionInsertActor(rows, coordinator)))
         self.tell(AcquireProjection(descriptor), insertActor)
@@ -157,7 +171,7 @@ trait ProjectionsActorModule extends ProjectionModule {
       
       case ProjectionArchive(descriptor, archive) => {
         val coordinator = sender
-        logger.debug(coordinator + " is archiving projection " + descriptor)
+        logger.trace(coordinator + " is archiving projection " + descriptor)
         
         val archiveActor = context.actorOf(Props(new ProjectionArchiveActor(coordinator)))
         self.tell(AcquireProjection(descriptor, true, true), archiveActor)
@@ -177,7 +191,6 @@ trait ProjectionsActorModule extends ProjectionModule {
                                                                   JField("outstandingReferences", JNum(acquisitionState.size)) :: Nil)) :: Nil)
                                                                   
     private def acquired(sender: ActorRef, descriptor: ProjectionDescriptor, exclusive: Boolean, evict: Boolean)(implicit self: ActorRef) : Unit = {
-      logger.debug("Acquiring projection for " + descriptor + (if(exclusive) "(exclusive)" else ""))
       cacheLookup(descriptor) map { p =>
         if (evict) {
           logger.debug("Evicting projection for " + descriptor + (if(exclusive) "(exclusive)" else ""))
@@ -206,14 +219,20 @@ trait ProjectionsActorModule extends ProjectionModule {
    * an insert on a projection. Replies to the sender of ingest messages when
    * it is done with an insert.
    */
-  class ProjectionInsertActor(rows: Seq[ProjectionInsert.Row], replyTo: ActorRef) extends Actor with Logging {
+  class ProjectionInsertActor(rows: Seq[ProjectionInsert.Row], replyTo: ActorRef) extends Actor {
+    private val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionInsertActor")
+
     def receive = {
       case ProjectionAcquired(projection) => { 
         logger.debug("Inserting " + rows.size + " rows into " + projection)
         
         try {
+          MDC.put("projection", projection.descriptor.shows)
+          val startTime = System.currentTimeMillis
           for(ProjectionInsert.Row(eventId, values, _) <- rows)
             projection.insert(Array(eventId.uid), values).unsafePerformIO
+          logger.debug("Insertion of %d rows in %d ms".format(rows.size, System.currentTimeMillis - startTime))
+          MDC.clear()
           
           replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
         } catch {
@@ -237,7 +256,9 @@ trait ProjectionsActorModule extends ProjectionModule {
    * an archival on a projection. Replies to the sender of ingest messages when
    * the archival is complete.
    */
-  class ProjectionArchiveActor(replyTo: ActorRef) extends Actor with Logging {
+  class ProjectionArchiveActor(replyTo: ActorRef) extends Actor {
+    private val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionArchiveActor")
+
     def receive = {
       case ProjectionAcquired(projection) => { 
         logger.debug("Archiving " + projection)

@@ -12,11 +12,14 @@
       <maxHistory>30</maxHistory>
     </rollingPolicy>
     <encoder>
-      <pattern>%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n</pattern>
+      <pattern>%d{ISO8601} [%.10thread] %.-1level %logger{20} {%X} - %msg%n</pattern>
     </encoder>
   </appender>
 
-  <logger name="blueeyes.core.http" level="trace" />
+  <logger name="blueeyes.core.http" level="info" />
+  <logger name="com.precog.yggdrasil.actor.KafkaShardIngestActor" level="debug" />
+  <logger name="com.precog.yggdrasil.actor.ProjectionsActor" level="debug" />
+  <logger name="com.precog.yggdrasil.jdbm3.JDBMProjection" level="debug" />
 
   <root level="trace">
     <appender-ref ref="SERVERLOG" />

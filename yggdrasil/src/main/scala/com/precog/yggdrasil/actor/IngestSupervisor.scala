@@ -34,7 +34,7 @@ import akka.util.Duration
 
 import blueeyes.json.JsonAST._
 
-import com.weiglewilczek.slf4s._
+import org.slf4j._
 
 import annotation.tailrec
 import collection.mutable
@@ -69,7 +69,9 @@ case class DirectIngestData(messages: Seq[IngestMessage]) extends ShardIngestAct
 abstract class IngestSupervisor(ingestActorInit: Option[() => Actor], //projectionsActor: ActorRef, routingTable: RoutingTable, 
                                 idleDelay: Duration,
                                 scheduler: Scheduler,
-                                shutdownCheck: Duration) extends Actor with Logging {
+                                shutdownCheck: Duration) extends Actor {
+
+  protected lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.IngestSupervisor")
 
   private[this] var ingestActor: Option[ActorRef] = None
 
@@ -104,7 +106,7 @@ abstract class IngestSupervisor(ingestActorInit: Option[() => Actor], //projecti
       if (messages.isEmpty) {
         scheduleIngestRequest(idleDelay)
       } else {
-        logger.debug("Ingesting " + messages.size + " messages")
+        logger.info("Ingesting " + messages.size + " messages")
         processMessages(messages, sender)
         scheduleIngestRequest(Duration.Zero)
       }

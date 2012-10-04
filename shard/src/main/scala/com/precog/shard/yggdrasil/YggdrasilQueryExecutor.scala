@@ -48,7 +48,7 @@ import akka.util.duration._
 import akka.util.Duration
 import akka.util.Timeout
 
-import com.weiglewilczek.slf4s.Logging
+import org.slf4j.{LoggerFactory, MDC}
 
 import java.io.File
 
@@ -124,7 +124,9 @@ trait YggdrasilQueryExecutorComponent {
 
       val storage = new Storage
 
-      object Projection extends JDBMProjectionCompanion with Logging {
+      object Projection extends JDBMProjectionCompanion {
+        private lazy val logger = LoggerFactory.getLogger(classOf[JDBMProjectionCompanion])
+
         private implicit val askTimeout = yggConfig.projectionRetrievalTimeout
              
         val fileOps = FilesystemFileOps
@@ -156,19 +158,20 @@ trait YggdrasilQueryExecutor
     extends QueryExecutor[Future]
     with ParseEvalStack[Future]
     with IdSourceScannerModule[Future]
-    with SystemActorStorageModule
-    with Logging  { self =>
+    with SystemActorStorageModule { self =>
+
+  private lazy val queryLogger = LoggerFactory.getLogger(this.getClass)
 
   type YggConfig = YggdrasilQueryExecutorConfig
 
   def startup() = storage.start.onComplete {
-    case Left(error) => logger.error("Startup of actor ecosystem failed!", error)
-    case Right(_) => logger.info("Actor ecosystem started.")
+    case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
+    case Right(_) => queryLogger.info("Actor ecosystem started.")
   }
 
   def shutdown() = storage.stop.onComplete {
-    case Left(error) => logger.error("An error was encountered in actor ecosystem shutdown!", error)
-    case Right(_) => logger.info("Actor ecossytem shutdown complete.")
+    case Left(error) => queryLogger.error("An error was encountered in actor ecosystem shutdown!", error)
+    case Right(_) => queryLogger.info("Actor ecossytem shutdown complete.")
   }
 
   case class StackException(error: StackError) extends Exception(error.toString)
@@ -200,8 +203,10 @@ trait YggdrasilQueryExecutor
 
   def jsonChunks(table: Future[Table]): StreamT[Future, List[JValue]]
 
+  private val queryId = new java.util.concurrent.atomic.AtomicLong
+
   def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, List[JValue]]] = {
-    logger.debug("Executing for %s: %s, prefix: %s".format(userUID, query,prefix))
+    queryLogger.info("Executing query for %s: %s, prefix: %s".format(userUID, query,prefix))
 
     import EvaluationError._
 
@@ -264,11 +269,11 @@ trait YggdrasilQueryExecutor
 
   // private def evaluateDag(userUID: String, dag: DepGraph,prefix: Path): Validation[Throwable, JArray] = {
   //   withContext { ctx =>
-  //     logger.debug("Evaluating DAG for " + userUID)
-  //     val result = consumeEval(userUID, dag, ctx, prefix) map { events => logger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+  //     queryLogger.debug("Evaluating DAG for " + userUID)
+  //     val result = consumeEval(userUID, dag, ctx, prefix) map { events => queryLogger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
   //     // FIXME: The next line should really handle resource cleanup. Not quite there with current MemoizationContext
   //     //ctx.memoizationContext.release.unsafePerformIO
-  //     logger.debug("DAG evaluated to " + result)
+  //     queryLogger.debug("DAG evaluated to " + result)
   //     result
   //   }
   // }
