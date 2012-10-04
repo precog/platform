@@ -182,6 +182,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
             JField("baz", JNothing) :: Nil) ::
           JNum(42) :: Nil)
       }
+      
+      "check utf-8 encoding" in check { str: String =>
+        testRenderJson(JString(str) :: Nil)
+      }.set(minTestsOk -> 20000, workers -> Runtime.getRuntime.availableProcessors)
     }
     
     def testRenderJson(seq: Seq[JValue]) = {
