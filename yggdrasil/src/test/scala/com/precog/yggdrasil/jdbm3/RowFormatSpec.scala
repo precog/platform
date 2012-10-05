@@ -102,6 +102,44 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
     checkRoundTrips(RowFormat.forValues(_))
   }
 
+  private def identityCols(len: Int): List[ColumnRef] = (0 until len).map({ i =>
+    ColumnRef(CPath(CPathIndex(i)), CLong)
+  })(scala.collection.breakOut)
+
+  "IdentitiesRowFormat" should {
+    "round-trip CLongs" in {
+      check { id: List[Long] =>
+        val rowFormat = RowFormat.IdentitiesRowFormatV1(identityCols(id.size))
+        val cId: List[CValue] = id map (CLong(_))
+        rowFormat.decode(rowFormat.encode(cId)) must_== cId
+      }
+    }
+
+    "encodeIdentities matches encode format" in {
+      check { id: List[Long] =>
+        val rowFormat = RowFormat.IdentitiesRowFormatV1(identityCols(id.size))
+        val cId: List[CValue] = id map (CLong(_))
+        rowFormat.decode(rowFormat.encodeIdentities(id.toArray)) must_== cId
+      }
+    }
+
+    "round-trip CLongs -> Column -> CLongs" in {
+      check { id: List[Long] =>
+        val columns = arrayColumnsFor(1, identityCols(id.size))
+        val rowFormat = RowFormat.IdentitiesRowFormatV1(identityCols(id.size))
+        val columnDecoder = rowFormat.ColumnDecoder(columns)
+        val columnEncoder = rowFormat.ColumnEncoder(columns)
+
+        val cId: List[CValue] = id map (CLong(_))
+        columnDecoder.decodeToRow(0, rowFormat.encode(cId))
+
+        verify(cId :: Nil, columns)
+
+        rowFormat.decode(columnEncoder.encodeFromRow(0)) must_== cId
+      }
+    }
+  }
+
   "SortingKeyRowFormat" should {
     checkRoundTrips(RowFormat.forSortingKey(_))
 
@@ -164,7 +202,7 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
           verify(rows, columns)
 
           rows.zipWithIndex foreach { case (vals, row) =>
-            rowFormat.decode(columnEncoder.encodeFromRow(row)) == vals
+            rowFormat.decode(columnEncoder.encodeFromRow(row)) must_== vals
           }
         }
       }
