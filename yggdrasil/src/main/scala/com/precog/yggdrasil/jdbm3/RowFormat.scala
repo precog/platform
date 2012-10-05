@@ -111,8 +111,6 @@ object RowFormat {
     @transient lazy val columnRefs: Seq[ColumnRef] = _columnRefs map { ref =>
       ref.copy(ctype = ref.ctype.readResolve())
     }
-
-    def pool = byteBufferPool
   }
 }
 
@@ -758,54 +756,133 @@ object SortingRowFormat {
 
 trait IdentitiesRowFormat extends RowFormat {
 
-  def pool: ByteBufferPool
+  lazy val identities: Int = columnRefs.size
 
-  lazy val identities = columnRefs.size
-
+  // FYI: This is here purely to ensure backwards compatiblity. Not used.
+  // When we upgrade the serialization format, we can remove this.
   private final val codec = Codec.PackedLongCodec
 
-  private def withBuffer(f: ByteBuffer => Unit): Array[Byte] = {
-    val buf = pool.acquire
-    f(buf)
-    buf.flip()
-    val bytes = new Array[Byte](buf.remaining())
-    buf.get(bytes)
-    pool.release(buf)
+  private final def packedSize(n: Long): Int = {
+
+    @inline @tailrec
+    def loop(size: Int, n: Long): Int = {
+      val m = n >>> 7
+      if (m == 0) size + 1 else loop(size + 1, m)
+    }
+
+    loop(0, n)
+  }
+
+  // Packs the Long n into bytes, starting at offset, and returns the next free
+  // position in bytes to store a Long.
+  private final def packLong(n: Long, bytes: Array[Byte], offset: Int): Int = {
+
+    @tailrec @inline
+    def loop(i: Int, n: Long): Int = {
+      val m = n >>> 7
+      val b = n & 0x7FL
+      if (m != 0) {
+        bytes(i) = (b | 0x80L).toByte
+        loop(i + 1, m)
+      } else {
+        bytes(i) = b.toByte
+        i + 1
+      }
+    }
+
+    loop(offset, n)
+  }
+
+  @inline private final def shiftIn(b: Byte, shift: Int, n: Long): Long = n | ((b.toLong & 0x7FL) << shift)
+
+  @inline private final def more(b: Byte): Boolean = (b & 0x80) != 0
+
+  def encodeIdentities(xs: Array[Long]) = {
+
+    @inline @tailrec
+    def sumPackedSize(xs: Array[Long], i: Int, len: Int): Int = if (i < xs.length) {
+      sumPackedSize(xs, i + 1, len + packedSize(xs(i)))
+    } else {
+      len
+    }
+
+    val bytes = new Array[Byte](sumPackedSize(xs, 0, 0))
+
+    @inline @tailrec
+    def packAll(xs: Array[Long], i: Int, offset: Int) {
+      if (i < xs.length) packAll(xs, i + 1, packLong(xs(i), bytes, offset))
+    }
+
+    packAll(xs, 0, 0)
     bytes
   }
 
-  def encodeIdentities(xs: Array[Long]) = withBuffer { buf =>
-    var i = 0
-    while (i < xs.length) {
-      codec.writeUnsafe(xs(i), buf)
-      i += 1
+  def encode(cValues: List[CValue]): Array[Byte] = {
+    @inline @tailrec
+    def sumPackedSize(cvals: List[CValue], len: Int): Int = cvals match {
+      case CLong(n) :: cvals => sumPackedSize(cvals, len + packedSize(n))
+      case cv :: _ => sys.error("Expecting CLong, but found: " + cv)
+      case Nil => len
     }
-  }
 
-  def encode(cValues: List[CValue]) = withBuffer { buf =>
-    cValues foreach {
-      case CLong(n) => codec.writeUnsafe(n, buf)
-      case cv => sys.error("Expecting CLong, but found: " + cv)
+    val bytes = new Array[Byte](sumPackedSize(cValues, 0))
+
+    @inline @tailrec
+    def packAll(xs: List[CValue], offset: Int): Unit = xs match {
+      case CLong(n) :: xs => packAll(xs, packLong(n, bytes, offset))
+      case _ =>
     }
+
+    packAll(cValues, 0)
+    bytes
   }
 
   def decode(bytes: Array[Byte], offset: Int): List[CValue] = {
-    val buf = ByteBuffer.wrap(bytes, offset, bytes.length - offset)
-    columnRefs.map(_ => CLong(codec.read(buf)))(collection.breakOut)
+    val longs = new Array[Long](identities)
+
+
+    @inline @tailrec
+    def loop(offset: Int, shift: Int, n: Long, i: Int) {
+      val lo = bytes(offset)
+      val m = shiftIn(lo, shift, n)
+      val nOffset = offset + 1
+      if (more(lo)) loop(nOffset, shift + 7, m, i) else {
+        longs(i) = m
+        if (nOffset < bytes.length)
+          loop(nOffset, 0, 0L, i + 1)
+      }
+    }
+
+    if (identities > 0)
+      loop(offset, 0, 0L, 0)
+
+    longs.map(CLong(_))(collection.breakOut)
   }
 
   def ColumnEncoder(cols: Seq[Column]) = {
 
-    val longCols = cols map {
+    val longCols: Array[LongColumn] = cols.map({
       case col: LongColumn => col
       case col => sys.error("Expecing LongColumn, but found: " + col)
-    }
+    })(collection.breakOut)
 
     new ColumnEncoder {
-      def encodeFromRow(row: Int) = withBuffer { buf =>        
-        longCols foreach { col =>
-          codec.writeUnsafe(col(row), buf)
+      def encodeFromRow(row: Int): Array[Byte] = {
+
+        @inline @tailrec
+        def sumPackedSize(i: Int, len: Int): Int = if (i < longCols.length) {
+          sumPackedSize(i + 1, len + packedSize(longCols(i)(row)))
+        } else len
+
+        val bytes = new Array[Byte](sumPackedSize(0, 0))
+
+        @inline @tailrec
+        def packAll(i: Int, offset: Int): Unit = if (i < longCols.length) {
+          packAll(i + 1, packLong(longCols(i)(row), bytes, offset))
         }
+
+        packAll(0, 0)
+        bytes
       }
     }
   }
@@ -819,32 +896,54 @@ trait IdentitiesRowFormat extends RowFormat {
 
     new ColumnDecoder {
       def decodeToRow(row: Int, src: Array[Byte], offset: Int = 0) {
-        val buf = ByteBuffer.wrap(src)
-        var i = 0
-        while (i < longCols.length) {
-          longCols(i).update(row, codec.read(buf))
-          i += 1
+
+        @inline @tailrec
+        def loop(offset: Int, shift: Int, n: Long, col: Int) {
+          val b = src(offset)
+          val m = shiftIn(b, shift, n)
+          val nOffset = offset + 1
+          if (more(b)) loop(nOffset, shift + 7, m, col) else {
+            longCols(col).update(row, m)
+            if (nOffset < src.length)
+              loop(nOffset, 0, 0L, col + 1)
+          }
         }
+
+        if (src.length > 0) loop(0, 0, 0L, 0)
       }
     }
   }
 
   override def compare(a: Array[Byte], b: Array[Byte]): Int = {
-    val buf1 = ByteBuffer.wrap(a)
-    val buf2 = ByteBuffer.wrap(b)
 
-    val len = identities
+    @inline @tailrec
+    def loop(offset: Int, shift: Int, n: Long, m: Long): Int = {
+      val b1 = a(offset)
+      val b2 = b(offset)
+      val n2 = shiftIn(b1, shift, n)
+      val m2 = shiftIn(b2, shift, m)
+      val nOffset = offset + 1
+      val moreA = more(b1)
+      val moreB = more(b2)
 
-    var i = 0
-    var cmp = 0
-    while (cmp == 0 && i < len) {
-      val x = codec.read(buf1)
-      val y = codec.read(buf2)
-      cmp = if (x < y) -1 else if (x == y) 0 else 1
-      i += 1
+      if (moreA && moreB) {
+        loop(nOffset, shift + 7, n2, m2)
+      } else if (moreA) {
+        1
+      } else if (moreB) {
+        -1
+      } else if (n2 < m2) {
+        -1
+      } else if (m2 < n2) {
+        1
+      } else if (nOffset < a.length) {
+        loop(nOffset, 0, 0L, 0L)
+      } else {
+        0
+      }
     }
 
-    cmp
+    if (identities == 0) 0 else loop(0, 0, 0L, 0L)
   }
 }
 
