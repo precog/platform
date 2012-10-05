@@ -121,6 +121,13 @@ echo "Using artifacts in $ARTIFACTDIR"
     popd > /dev/null
 }
 
+unset REBEL_OPTS
+if [ -e "$REBEL_HOME" ]; then
+	REBEL_OPTS="-noverify -javaagent:$REBEL_HOME/jrebel.jar"
+else
+	REBEL_OPTS=''
+fi
+
 if [ "$WORKDIR" == "" ]; then  
     WORKDIR=`mktemp -d -t standaloneShard.XXXXXX 2>&1`
     if [ $? -ne 0 ]; then
@@ -268,7 +275,7 @@ MONGOPID=$!
 wait_until_port_open 27017
 
 if [ ! -e $WORKDIR/root_token.json ]; then
-    java -jar $YGGDRASIL_ASSEMBLY tokens -d dev_auth_v1 -n "/" -a "Local test" -r "Unused" || exit 3
+    java $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -d dev_auth_v1 -n "/" -a "Local test" -r "Unused" || exit 3
     echo 'db.tokens.find({}, {"tid":1})' | $MONGOBASE/bin/mongo dev_auth_v1 > $WORKDIR/root_token.json || {
         echo "Error retrieving new root token"
         exit 3
@@ -295,7 +302,7 @@ cd $BASEDIR
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
 if [ ! -e $WORKDIR/initial_checkpoint.json ]; then
-    java -jar $YGGDRASIL_ASSEMBLY zk -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
+    java $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY zk -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
         echo "Couldn't set initial checkpoint!"
         exit 3
     }
@@ -303,19 +310,20 @@ if [ ! -e $WORKDIR/initial_checkpoint.json ]; then
 fi
 
 echo "Starting ingest service"
-java -Dlogback.configurationFile=$WORKDIR/configs/ingest-v1.logging.xml -jar $INGEST_ASSEMBLY --configFile $WORKDIR/configs/ingest-v1.conf &
+java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/ingest-v1.logging.xml -jar $INGEST_ASSEMBLY --configFile $WORKDIR/configs/ingest-v1.conf &
 INGESTPID=$!
 
 echo "Starting shard service"
-java -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf &
+echo java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf
+java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf &
 SHARDPID=$!
 
 echo "Starting accounts service"
-java -Dlogback.configurationFile=$WORKDIR/configs/accounts-v1.logging.xml -jar $ACCOUNTS_ASSEMBLY --configFile $WORKDIR/configs/accounts-v1.conf &
+java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/accounts-v1.logging.xml -jar $ACCOUNTS_ASSEMBLY --configFile $WORKDIR/configs/accounts-v1.conf &
 ACCOUNTSPID=$!
 
 echo "Starting auth service"
-java -Dlogback.configurationFile=$WORKDIR/configs/auth-v1.logging.xml -jar $AUTH_ASSEMBLY --configFile $WORKDIR/configs/auth-v1.conf &
+java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/auth-v1.logging.xml -jar $AUTH_ASSEMBLY --configFile $WORKDIR/configs/auth-v1.conf &
 AUTHPID=$!
 
 # Let the ingest//auth/accounts/shard services startup in parallel
