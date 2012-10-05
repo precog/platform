@@ -108,7 +108,7 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Accou
         } ->
         request { (state: AccountServiceState) =>
           jsonp[ByteChunk] {
-            path("/") {
+            path("/accounts/") {
               post(new PostAccountHandler(state.accountManagement, state.clock, state.securityService)) ~
               auth(state.accountManagement) {
                 get(new ListAccountsHandler(state.accountManagement)) ~ 
