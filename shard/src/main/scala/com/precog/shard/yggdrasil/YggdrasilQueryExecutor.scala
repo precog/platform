@@ -51,6 +51,7 @@ import akka.util.Timeout
 import org.slf4j.{LoggerFactory, MDC}
 
 import java.io.File
+import java.nio.CharBuffer
 
 import scalaz._
 import scalaz.Validation._
@@ -107,15 +108,9 @@ trait YggdrasilQueryExecutorComponent {
         def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
       }
 
-      def jsonChunks(table: Future[Table]): StreamT[Future, List[JValue]] = {
-        val slices = StreamT[Future, Slice](table map { table =>
-          StreamT.Skip(table.slices)
-        })
-
-        slices map { slice =>
-          val jVals: List[JValue] = (0 until slice.size).flatMap(slice.toJson(_) map (_ \ "value"))(collection.breakOut)
-          jVals
-        }
+      def jsonChunks(table: Future[Table]): StreamT[Future, CharBuffer] = {
+        val stream = implicitly[MonadTrans[StreamT]] liftM table
+        stream flatMap { _ renderJson ',' }
       }
 
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
@@ -201,16 +196,16 @@ trait YggdrasilQueryExecutor
     page(sort(table map (_.compact(constants.SourceValue.Single))))
   }
 
-  def jsonChunks(table: Future[Table]): StreamT[Future, List[JValue]]
+  def jsonChunks(table: Future[Table]): StreamT[Future, CharBuffer]
 
   private val queryId = new java.util.concurrent.atomic.AtomicLong
 
-  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, List[JValue]]] = {
+  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
     queryLogger.info("Executing query for %s: %s, prefix: %s".format(userUID, query,prefix))
 
     import EvaluationError._
 
-    val solution: Validation[Throwable, Validation[EvaluationError, StreamT[Future, List[JValue]]]] = Validation.fromTryCatch {
+    val solution: Validation[Throwable, Validation[EvaluationError, StreamT[Future, CharBuffer]]] = Validation.fromTryCatch {
       asBytecode(query) flatMap { bytecode =>
         ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
           /*(systemError _) <-: */
@@ -222,7 +217,7 @@ trait YggdrasilQueryExecutor
       }
     }
 
-    ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[Future, List[JValue]]]])
+    ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[Future, CharBuffer]]])
   }
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
