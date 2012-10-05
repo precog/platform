@@ -39,7 +39,7 @@ import blueeyes.json.JsonParser.ParseException
 import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
 
-import java.util.concurrent.{ ThreadPoolExecutor, TimeUnit, ArrayBlockingQueue, RejectedExecutionException }
+import java.util.concurrent.{ Executor, RejectedExecutionException }
 
 import java.io.{ File, FileReader, BufferedReader, FileInputStream, FileOutputStream, Closeable }
 import java.nio.channels._
@@ -53,13 +53,8 @@ import scala.collection.mutable.ListBuffer
 
 import scalaz._
 
-class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout, maxReadThreads: Int, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
+class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout, threadPool: Executor, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
-
-  // private type Decompressor = InputStream => InputStream
-
-  // TODO Make this more configurable?
-  def threadPool: ThreadPoolExecutor = new ThreadPoolExecutor(2, maxReadThreads, 5, TimeUnit.SECONDS, new ArrayBlockingQueue(50))
 
   def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[Unit] = {
     Future { chan.write(ByteBuffer.wrap(chunk.data)) } flatMap { _ =>
@@ -193,6 +188,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
   }
 
   def execute(inserter: EventQueueInserter, async: Boolean): Future[HttpResponse[JValue]] = try {
+    
     threadPool.execute(inserter)
     if (async) {
       Future { HttpResponse[JValue](Accepted) }

@@ -243,7 +243,7 @@ trait TokenManagerTestValues extends AkkaDefaults { self : Specification =>
 
   def newToken(name: String)(f: Token => Set[GrantID]): (Token, Set[GrantID]) = {
     try {
-      val token = Await.result(tokens.newToken(name, Set.empty), timeout)
+      val token = Await.result(tokens.newToken(name, "", Set.empty), timeout)
       val grants = f(token)
       (Await.result(tokens.addGrants(token.tid, grants), timeout).get, grants)
     } catch {
@@ -298,7 +298,7 @@ trait TokenManagerTestValues extends AkkaDefaults { self : Specification =>
     Await.result(Future.sequence(Permission.permissions("/", t.tid, None, Permission.ALL).map{ tokens.newGrant(Some(invalidGrantID), _) }.map{ _.map { _.gid } }), timeout)
   }
 
-  val noPermsToken = Await.result(tokens.newToken("noPerms", Set.empty), timeout)
+  val noPermsToken = Await.result(tokens.newToken("noPerms", "", Set.empty), timeout)
 
   val (expiredToken, expiredGrants) = newToken("expiredGrants") { t =>
     Await.result(Future.sequence(Permission.permissions("/", t.tid, Some(farPast), Permission.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid }}), timeout)
@@ -336,7 +336,7 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults { self : Specification
   val tokens = new MongoTokenManager(mongo, database)
 
   def newToken(name: String)(f: Token => Set[GrantID]): (Token, Set[GrantID]) = {
-    Await.result(tokens.newToken(name, Set.empty).flatMap { t =>
+    Await.result(tokens.newToken(name, "", Set.empty).flatMap { t =>
       val g = f(t)
       tokens.addGrants(t.tid, g).map { t => (t.get, g) } 
     }, timeout)

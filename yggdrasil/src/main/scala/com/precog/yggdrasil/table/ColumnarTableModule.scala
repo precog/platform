@@ -63,6 +63,8 @@ import scalaz.syntax.show._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 
+import java.nio.CharBuffer
+
 trait ColumnarTableTypes {
   type F1 = CF1
   type F2 = CF2
@@ -2411,6 +2413,41 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
 
     def normalize: Table = Table(slices.filter(!_.isEmpty))
+    
+    def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
+      val delimiterBuffer = CharBuffer.allocate(1)
+      delimiterBuffer.put(delimiter)
+      
+      val delimitStream = StreamT.unfoldM(true) { hasNext =>
+        val back = if (hasNext)
+          Some((delimiterBuffer, false))
+        else
+          None
+        
+        M.point(back)
+      }
+      
+      def foldFlatMap(slices: StreamT[M, Slice], rendered: Boolean): StreamT[M, CharBuffer] = {
+        StreamT[M, CharBuffer](slices.step map {
+          case StreamT.Yield(slice, tail) => {
+            val (stream, rendered) = slice.renderJson[M](delimiter)
+            
+            val stream2 = if (rendered)
+              delimitStream ++ stream
+            else
+              stream
+            
+            StreamT.Skip(stream2 ++ foldFlatMap(tail(), rendered))
+          }
+          
+          case StreamT.Skip(tail) => StreamT.Skip(foldFlatMap(tail(), rendered))
+          
+          case StreamT.Done => StreamT.Done
+        })
+      }
+      
+      foldFlatMap(slices, false)
+    }
 
     def slicePrinter(prelude: String)(f: Slice => String): Table = {
       Table(StreamT(StreamT.Skip({println(prelude); slices map { s => println(f(s)); s }}).point[M]))

@@ -19,7 +19,8 @@
  */
 package com.precog.shard
 
-import java.io.{ ByteArrayOutputStream, OutputStreamWriter }
+import java.nio._
+import java.nio.charset._
 
 import blueeyes.core.http.{ HttpResponse, HttpFailure }
 import blueeyes.core.data.{ Chunk, ByteChunk, Bijection, BijectionsChunkJson }
@@ -42,7 +43,7 @@ object BijectionsChunkQueryResult {
   implicit def JValueResponseToQueryResultResponse(r1: Future[HttpResponse[JValue]]): Future[HttpResponse[QueryResult]] =
     r1 map { response => response.copy(content = response.content map (Left(_))) }
 
-  implicit def QueryResultToChunk(implicit M: Monad[Future]) = new Bijection[Either[JValue, StreamT[Future, List[JValue]]], ByteChunk] {
+  implicit def QueryResultToChunk(implicit M: Monad[Future]) = new Bijection[Either[JValue, StreamT[Future, CharBuffer]], ByteChunk] {
     import scalaz.syntax.monad._
     import BijectionsChunkJson.JValueToChunk
 
@@ -57,25 +58,19 @@ object BijectionsChunkQueryResult {
       }
     }
 
-    def unapply(chunk: ByteChunk): Either[JValue, StreamT[Future, List[JValue]]] = {
-      def next(chunk: ByteChunk): StreamT.Step[List[JValue], StreamT[Future, List[JValue]]] = {
+    def unapply(chunk: ByteChunk): Either[JValue, StreamT[Future, CharBuffer]] = {
+      def next(chunk: ByteChunk): StreamT.Step[CharBuffer, StreamT[Future, CharBuffer]] = {
         val json = new String(chunk.data)
-
-        val jvals = json match {
-          case "[" | "]" => None
-          case PartialJArray(jarray) =>
-            JsonParser.parse(jarray) match {
-              case JArray(jvals) => Some(jvals)
-              case jval => sys.error("Expected a JArray, but found %s" format jval)
-            }
-        }
+        val buffer = CharBuffer.allocate(json.length)
+        buffer.put(json)
+        buffer.flip()
 
         val tail = StreamT(chunk.next match {
           case None => StreamT.Done.point[Future]
           case Some(futureChunk) => futureChunk map (next(_))
         })
 
-        jvals map (StreamT.Yield(_, tail)) getOrElse StreamT.Skip(tail)
+        StreamT.Yield(buffer, tail)
       }
 
       // All chunks generated from Streams have at least 2 parts, otherwise, if
@@ -88,29 +83,23 @@ object BijectionsChunkQueryResult {
       }
     }
 
-    def apply(queryResult: Either[JValue, StreamT[Future, List[JValue]]]): ByteChunk = {
-      def next(chunked: StreamT[Future, List[JValue]], first: Boolean = false): Future[ByteChunk] = {
-        chunked.uncons map {
+    def apply(queryResult: Either[JValue, StreamT[Future, CharBuffer]]): ByteChunk = {
+      val encoder = Charset.forName("UTF-8").newEncoder
+      
+      def next(chunked: StreamT[Future, CharBuffer]): Future[ByteChunk] = {
+        chunked.uncons flatMap {
           case Some((chunk, chunkStream)) =>
-            val stream = new ByteArrayOutputStream()
-            val writer = new OutputStreamWriter(stream, DefaultCharset)
-            chunk match {
-              case jval :: jvals =>
-                if (!first) writer.write(Comma)
+            val buffer = encoder.encode(chunk)
+            
+            val array = new Array[Byte](buffer.remaining())
+            buffer.get(array)
+            
+            if (array.length > 0)
+              M.point(Chunk(array, Some(next(chunkStream))))
+            else
+              next(chunkStream)
 
-                compact(render(jval), writer)
-                jvals foreach { jval =>
-                  writer.write(Comma)
-                  compact(render(jval), writer)
-                }
-
-                Chunk(stream.toByteArray, Some(next(chunkStream, first = false)))
-
-              case Nil =>
-                Chunk(new Array[Byte](0), Some(next(chunkStream, first)))
-            }
-
-          case None => Chunk("]".getBytes(DefaultCharset), None)
+          case None => M.point(Chunk("]".getBytes(DefaultCharset), None))
         }
       }
 
@@ -118,7 +107,7 @@ object BijectionsChunkQueryResult {
         case Left(jval) =>
           JValueToChunk(jval)
         case Right(chunkedQueryResult) =>
-          Chunk("[".getBytes(DefaultCharset), Some(next(chunkedQueryResult, first = true)))
+          Chunk("[".getBytes(DefaultCharset), Some(next(chunkedQueryResult)))
       }
     }
   }

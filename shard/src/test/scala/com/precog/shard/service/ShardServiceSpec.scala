@@ -60,6 +60,8 @@ import blueeyes.util.Clock
 
 import scalaz.StreamT
 
+import java.nio.CharBuffer
+
 case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def now() = new DateTime().minus(duration)
   def instant() = now().toInstant
@@ -193,8 +195,13 @@ trait TestQueryExecutor extends QueryExecutor[Future] {
   import scalaz.syntax.monad._
   import AkkaTypeClasses._
   
-  private def wrap(a: JArray): StreamT[Future, List[JValue]] = {
-    StreamT.fromStream(Stream(a.elements).point[Future])
+  private def wrap(a: JArray): StreamT[Future, CharBuffer] = {
+    val str = a.toString
+    val buffer = CharBuffer.allocate(str.length)
+    buffer.put(str)
+    buffer.flip()
+    
+    StreamT.fromStream(Stream(buffer).point[Future])
   }
 
   def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions) = {

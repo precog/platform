@@ -37,12 +37,16 @@ import blueeyes.health.metrics.{eternity}
 import blueeyes.core.http._
 import blueeyes.json.JsonAST._
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
+
 import org.streum.configrity.Configuration
 
 import scalaz.Monad
 import scalaz.syntax.monad._
 
-case class IngestState(tokenManager: TokenManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging)
+import java.util.concurrent.{ArrayBlockingQueue, Executor, ThreadPoolExecutor, TimeUnit}
+
+case class IngestState(tokenManager: TokenManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: Executor)
 
 trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 with DecompressCombinators with AkkaDefaults { 
@@ -69,12 +73,21 @@ with DecompressCombinators with AkkaDefaults {
           val tokenManager = tokenManagerFactory(config.detach("security"))
           val accessControl = new TokenManagerAccessControl(tokenManager)
 
+          // Set up a thread pool for ingest tasks
+          val readPool = new ThreadPoolExecutor(config[Int]("readpool.min_threads", 2),
+                                                config[Int]("readpool.max_threads", 8),
+                                                config[Int]("readpool.keepalive_seconds", 5),
+                                                TimeUnit.SECONDS,
+                                                new ArrayBlockingQueue[Runnable](config[Int]("readpool.queue_size", 50)),
+                                                new ThreadFactoryBuilder().setNameFormat("ingestpool-%d").build())
+
           eventStore.start map { _ =>
             IngestState(
               tokenManager,
               accessControl,
               eventStore,
-              usageLoggingFactory(config.detach("usageLogging"))
+              usageLoggingFactory(config.detach("usageLogging")),
+              readPool
             )
           }
         } ->
@@ -84,7 +97,7 @@ with DecompressCombinators with AkkaDefaults {
               token(state.tokenManager) {
                 path("/(?<sync>a?sync)") {
                   dataPath("fs") {
-                    post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, maxReadThreads = 8, maxBatchErrors = 100)(defaultFutureDispatch)) ~
+                    post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch)) ~
                     delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
                   }
                 }
