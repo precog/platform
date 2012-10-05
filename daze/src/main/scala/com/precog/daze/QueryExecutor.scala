@@ -10,6 +10,8 @@ import blueeyes.json.JsonAST._
 import akka.actor.ActorSystem
 import akka.dispatch.{Future, ExecutionContext}
 
+import java.nio.CharBuffer
+
 import scalaz.{ Validation, StreamT, Id }
 import Validation._
 
@@ -31,7 +33,7 @@ case class QueryOptions(
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending)
 
 trait QueryExecutor[M[+_]] {
-  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, List[JValue]]]
+  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, CharBuffer]]
   def browse(userUID: String, path: Path): M[Validation[String, JArray]]
   def structure(userUID: String, path: Path): M[Validation[String, JObject]]
   def status(): M[Validation[String, JValue]]
