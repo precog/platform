@@ -89,7 +89,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
         withContext { ctx =>
           for {
             table <- eval(yggConfig.userUID, dag, ctx, Path.Root, yggConfig.optimize)
-            size <- table.renderJson.size
+            size <- table.renderJson(',').length
           } yield size
         }
     }
