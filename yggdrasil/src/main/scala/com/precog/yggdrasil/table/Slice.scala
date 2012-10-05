@@ -312,21 +312,20 @@ trait Slice { source =>
 
   def filterDefined(filter: Slice, definedness: Definedness) = {
     new Slice {
-      private val colValues = filter.columns.values
-      private val defined = definedness match {
+      private val colValues = filter.columns.values.toArray
+      lazy val defined = definedness match {
         case AnyDefined =>
-          val bs = new BitSet
-          Loop.range(0, source.size) {
-            i => if (colValues.exists(_.isDefinedAt(i))) bs += i
+          BitSetUtil.filteredRange(0, source.size) {
+            i => colValues.exists(_.isDefinedAt(i))
           }
-          bs
 
         case AllDefined =>
-          val bs = new BitSet
-          Loop.range(0, source.size) {
-            i => if (colValues.nonEmpty && colValues.forall(_.isDefinedAt(i))) bs += i
-          }
-          bs
+          if (colValues.isEmpty)
+            new BitSet
+          else
+            BitSetUtil.filteredRange(0, source.size) {
+              i => colValues.forall(_.isDefinedAt(i))
+            }
       }
 
       val size = source.size
@@ -338,18 +337,19 @@ trait Slice { source =>
 
   def compact(filter: Slice, definedness: Definedness): Slice = {
     new Slice {
+      private val cols = filter.columns.values.toArray
       lazy val retained = definedness match {
         case AnyDefined =>
           val acc = new ArrayIntList
           Loop.range(0, filter.size) {
-            i => if (filter.columns.values.exists(_.isDefinedAt(i))) acc.add(i)
+            i => if (cols.exists(_.isDefinedAt(i))) acc.add(i)
           }
           acc
 
         case AllDefined =>
           val acc = new ArrayIntList
           Loop.range(0, filter.size) {
-            i => if (filter.columns.values.forall(_.isDefinedAt(i))) acc.add(i)
+            i => if (cols.forall(_.isDefinedAt(i))) acc.add(i)
           }
           acc
       }
