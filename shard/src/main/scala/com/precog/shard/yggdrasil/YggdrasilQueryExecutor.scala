@@ -108,8 +108,14 @@ trait YggdrasilQueryExecutorComponent {
         def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
       }
 
-      def jsonChunks(table: Future[Table]): StreamT[Future, CharBuffer] = {
-        val stream = implicitly[MonadTrans[StreamT]] liftM table
+      def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
+        import trans._
+        
+        val tableM2 = tableM map { table =>
+          table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value))
+        }
+        
+        val stream = implicitly[MonadTrans[StreamT]] liftM tableM2
         stream flatMap { _ renderJson ',' }
       }
 
