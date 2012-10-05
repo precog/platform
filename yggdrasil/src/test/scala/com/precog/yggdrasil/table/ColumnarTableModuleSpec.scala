@@ -122,7 +122,127 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     }
 
     "verify bijection from JSON" in checkMappings(this)
-
+    
+    "verify renderJson round tripping" in {
+      implicit val gen = sample(schema)
+      
+      check { data: SampleData =>
+        testRenderJson(data.data)
+      }.set(minTestsOk -> 20000, workers -> Runtime.getRuntime.availableProcessors)
+    }
+    
+    "handle special cases of renderJson" >> {
+      "undefined at beginning of array" >> {
+        testRenderJson(JArray(
+          JNothing ::
+          JNum(1) ::
+          JNum(2) :: Nil) :: Nil)
+      }
+      
+      "undefined in middle of array" >> {
+        testRenderJson(JArray(
+          JNum(1) ::
+          JNothing ::
+          JNum(2) :: Nil) :: Nil)
+      }
+      
+      "fully undefined array" >> {
+        testRenderJson(JArray(
+          JNothing ::
+          JNothing ::
+          JNothing :: Nil) :: Nil)
+      }
+      
+      "undefined at beginning of object" >> {
+        testRenderJson(JObject(
+          JField("foo", JNothing) ::
+          JField("bar", JNum(1)) ::
+          JField("baz", JNum(2)) :: Nil) :: Nil)
+      }
+      
+      "undefined in middle of object" >> {
+        testRenderJson(JObject(
+          JField("foo", JNum(1)) ::
+          JField("bar", JNothing) ::
+          JField("baz", JNum(2)) :: Nil) :: Nil)
+      }
+      
+      "fully undefined object" >> {
+        testRenderJson(JObject(
+          JField("foo", JNothing) ::
+          JField("bar", JNothing) ::
+          JField("baz", JNothing) :: Nil) :: Nil)
+      }
+      
+      "undefined row" >> {
+        testRenderJson(
+          JObject(
+            JField("foo", JNothing) ::
+            JField("bar", JNothing) ::
+            JField("baz", JNothing) :: Nil) ::
+          JNum(42) :: Nil)
+      }
+      
+      "check utf-8 encoding" in check { str: String =>
+        testRenderJson(JString(str) :: Nil)
+      }.set(minTestsOk -> 20000, workers -> Runtime.getRuntime.availableProcessors)
+    }
+    
+    def testRenderJson(seq: Seq[JValue]) = {
+      def minimize(value: JValue): Option[JValue] = {
+        value match {
+          case JObject(Nil)     => Some(JObject(Nil))
+          
+          case JObject(fields)  => {
+            val object2 = JObject(fields flatMap { case JField(k, v) => minimize(v) map { JField(k, _) } })
+            if (object2 == JObject(Nil))
+              None
+            else
+              Some(object2)
+          }
+          
+          case JArray(Nil)      => Some(JArray(Nil))
+          
+          case JArray(elements) => {
+            val array2 = JArray(elements flatMap minimize)
+            if (array2 == JArray(Nil))
+              None
+            else
+              Some(array2)
+          }
+          
+          case JNothing => None
+          case value => Some(value)
+        }
+      }
+    
+      val table = fromJson(seq.toStream)
+      
+      val expected = JArray(seq.toList)
+      
+      val values = table.renderJson(',') map { _.toString }
+      
+      val strM = values.foldLeft("") { _ + _ }
+      
+      val arrayM = strM map { body =>
+        val input = "[%s]".format(body)
+        try {
+          JsonParser.parse(input)
+        } catch {
+          case t => {
+            println("####%s####".format(input))
+            for (i <- 0 until input.length) {
+              println(input.charAt(i): Int)
+            }
+            println("####")
+            throw t
+          }
+        }
+      }
+      
+      val minimized = minimize(expected) getOrElse JArray(Nil)
+      arrayM.copoint mustEqual minimized
+    }
     "in cogroup" >> {
       "perform a simple cogroup" in testSimpleCogroup
       "perform another simple cogroup" in testAnotherSimpleCogroup
