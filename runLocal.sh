@@ -123,7 +123,7 @@ echo "Using artifacts in $ARTIFACTDIR"
 
 unset REBEL_OPTS
 if [ -e "$REBEL_HOME" ]; then
-	REBEL_OPTS="-noverify -javaagent:$REBEL_HOME/jrebel.jar"
+	REBEL_OPTS="-noverify -javaagent:$REBEL_HOME/jrebel.jar -Dplatform.root=`dirname $0`"
 else
 	REBEL_OPTS=''
 fi
