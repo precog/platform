@@ -903,7 +903,7 @@ object TokenTools extends Command with AkkaDefaults with Logging {
 
   def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager[Future]) = {
     for {
-      token <- tokenManager.newToken(tokenName, Set())
+      token <- tokenManager.newToken(tokenName, root, Set())
       val ownerGrant  = tokenManager.newGrant(None, OwnerPermission(path, None))
       val readGrant   = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
       val writeGrant  = tokenManager.newGrant(None, WritePermission(path, None))
@@ -913,7 +913,7 @@ object TokenTools extends Command with AkkaDefaults with Logging {
     } yield {
       result match {
         case Some(token) =>
-          println("Successfully created token: \n" + pretty(render(token.serialize)))
+          println("Successfully created token: \n" + pretty(render(token.serialize(Token.TokenDecomposer))))
 
         case None =>
           sys.error("Something went silently wrong in token or grant creation or update, please investigate.")

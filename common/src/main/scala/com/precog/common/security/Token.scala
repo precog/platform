@@ -33,7 +33,7 @@ import org.joda.time.format.ISODateTimeFormat
 import scalaz._
 import Scalaz._
 
-case class Token(tid: TokenID, cid: TokenID, grants: Set[GrantID]) {
+case class Token(name: String, tid: TokenID, cid: TokenID, grants: Set[GrantID]) {
   def addGrants(add: Set[GrantID]): Token = 
     copy(grants = grants ++ add)
   def removeGrants(remove: Set[GrantID]): Token =
@@ -43,6 +43,15 @@ case class Token(tid: TokenID, cid: TokenID, grants: Set[GrantID]) {
 trait TokenSerialization {
   implicit val TokenDecomposer: Decomposer[Token] = new Decomposer[Token] {
     override def decompose(t: Token): JValue = JObject(List(
+      JField("name", t.name),
+      JField("tid", t.tid),
+      JField("gids", t.grants.serialize)
+    )) 
+  }
+
+  val UnsafeTokenDecomposer: Decomposer[Token] = new Decomposer[Token] {
+    override def decompose(t: Token): JValue = JObject(List(
+      JField("name", t.name),
       JField("tid", t.tid),
       JField("cid", t.cid),
       JField("gids", t.grants.serialize)
@@ -51,9 +60,10 @@ trait TokenSerialization {
 
   implicit val TokenExtractor: Extractor[Token] = new Extractor[Token] with ValidatedExtraction[Token] {    
     override def validated(obj: JValue): Validation[Error, Token] = 
-      ((obj \ "tid").validated[TokenID] |@|
+      (((obj \ "name").validated[TokenID] <+> Success("(unnamed)")) |@|
+       (obj \ "tid").validated[TokenID] |@|
        (obj \ "cid").validated[String] |@|
-       (obj \ "gids").validated[Set[GrantID]]).apply(Token(_,_,_))
+       (obj \ "gids").validated[Set[GrantID]]).apply(Token.apply _)
   }
 }
 
