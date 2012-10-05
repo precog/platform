@@ -56,7 +56,7 @@ object MongoTokenManagerSpec extends Specification {
       lazy val result = Await.result(tokenManager.findToken(root.tid), timeout)
 
       result must beLike {
-        case Some(Token(tid,_,_)) => tid must_== root.tid
+        case Some(Token(_,tid,_,_)) => tid must_== root.tid
       }
     }
     "not find missing token" in new tokenManager { 
@@ -69,12 +69,12 @@ object MongoTokenManagerSpec extends Specification {
     }
     "issue new token" in new tokenManager { 
       val name = "newToken"
-      val fResult = tokenManager.newToken(name, Set.empty)
+      val fResult = tokenManager.newToken(name, "", Set.empty)
 
       val result = Await.result(fResult, timeout)
 
       result must beLike {
-        case Token(_,n,g) => 
+        case Token(n,_,_,g) => 
           name must_== n 
           Set.empty must_== g
       }
@@ -138,10 +138,10 @@ object MongoTokenManagerSpec extends Specification {
   
     val notFoundTokenID = "NOT-GOING-TO-FIND"
 
-    val root = Await.result(tokenManager.newToken("root", Set.empty), to)
-    val child1 = Await.result(tokenManager.newToken("child1", Set.empty), to)
-    val child2 = Await.result(tokenManager.newToken("child2", Set.empty), to)
-    val grantChild1 = Await.result(tokenManager.newToken("grandChild1", Set.empty), to)
+    val root = Await.result(tokenManager.newToken("root", "", Set.empty), to)
+    val child1 = Await.result(tokenManager.newToken("child1", root.tid, Set.empty), to)
+    val child2 = Await.result(tokenManager.newToken("child2", root.tid, Set.empty), to)
+    val grantChild1 = Await.result(tokenManager.newToken("grandChild1", child1.tid, Set.empty), to)
 
     def after = { 
       defaultActorSystem.shutdown 

@@ -87,7 +87,7 @@ object TokenTrans {
 
         val grants = if (writePermission == JNothing) readGrants else readGrants ++ writeGrants
 
-        val token = Token(uid, path.replaceAll("/", " "), grants.map{ _.gid }.toSet)        
+        val token = Token(path.replaceAll("/", " "), uid, "", grants.map{ _.gid }.toSet)        
 
         acc + (token -> grants)
     }
