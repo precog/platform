@@ -87,16 +87,19 @@ object BijectionsChunkQueryResult {
       val encoder = Charset.forName("UTF-8").newEncoder
       
       def next(chunked: StreamT[Future, CharBuffer]): Future[ByteChunk] = {
-        chunked.uncons map {
+        chunked.uncons flatMap {
           case Some((chunk, chunkStream)) =>
             val buffer = encoder.encode(chunk)
             
             val array = new Array[Byte](buffer.remaining())
             buffer.get(array)
             
-            Chunk(array, Some(next(chunkStream)))
+            if (array.length > 0)
+              M.point(Chunk(array, Some(next(chunkStream))))
+            else
+              next(chunkStream)
 
-          case None => Chunk("]".getBytes(DefaultCharset), None)
+          case None => M.point(Chunk("]".getBytes(DefaultCharset), None))
         }
       }
 
