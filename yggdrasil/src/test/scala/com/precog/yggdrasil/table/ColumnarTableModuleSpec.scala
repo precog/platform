@@ -167,6 +167,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "check utf-8 encoding" in check { str: String =>
         testRenderJson(JString(str) :: Nil)
       }.set(minTestsOk -> 20000, workers -> Runtime.getRuntime.availableProcessors)
+      
+      "check long encoding" in check { ln: Long =>
+        testRenderJson(JNum(ln) :: Nil)
+      }.set(minTestsOk -> 20000, workers -> Runtime.getRuntime.availableProcessors)
     }
     
     def testRenderJson(seq: Seq[JValue]) = {
@@ -224,6 +228,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       val minimized = minimize(expected) getOrElse JArray(Nil)
       arrayM.copoint mustEqual minimized
     }
+    
     "in cogroup" >> {
       "perform a simple cogroup" in testSimpleCogroup
       "perform another simple cogroup" in testAnotherSimpleCogroup
