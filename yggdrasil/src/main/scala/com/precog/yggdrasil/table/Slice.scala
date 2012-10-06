@@ -672,6 +672,24 @@ trait Slice { source =>
       
       if (optSchema.isDefined) {
         val schema = optSchema.get
+        
+        val depth = {
+          def loop(schema: SchemaNode): Int = schema match {
+            case obj: SchemaNode.Obj =>
+              4 + (obj.values map loop max)
+            
+            case arr: SchemaNode.Arr =>
+              2 + (arr.nodes map loop max)
+            
+            case union: SchemaNode.Union =>
+              union.possibilities map loop max
+            
+            case SchemaNode.Leaf(_, _) => 0
+          }
+          
+          loop(schema)
+        }
+        
         // we have the schema, now emit
         
         var buffer = CharBuffer.allocate(BufferSize)
@@ -699,30 +717,28 @@ trait Slice { source =>
           buffer.put(str)
         }
         
-        val in = new mutable.ListBuffer[String]
-        val inFlags = new mutable.ListBuffer[Boolean]
+        val in = new RingDeque[String](depth)
+        val inFlags = new RingDeque[Boolean](depth)
         
         @inline
         def pushIn(str: String, flag: Boolean) {
-          in.append(str)
-          inFlags.append(flag)
+          in.pushBack(str)
+          inFlags.pushBack(flag)
         }
         
         @inline
         def popIn() {
-          in.remove(in.length - 1)
-          inFlags.remove(inFlags.length - 1)
+          in.popBack()
+          inFlags.popBack()
         }
         
         @inline
         @tailrec
         def flushIn() {
           if (!in.isEmpty) {
-            val str = in.head
-            in.remove(0)
+            val str = in.popFront()
             
-            val flag = inFlags.head
-            inFlags.remove(0)
+            val flag = inFlags.popFront()
             
             if (flag) {
               renderString(str)
