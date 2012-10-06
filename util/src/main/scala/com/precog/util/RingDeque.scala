@@ -87,13 +87,8 @@ final class RingDeque[@specialized(Boolean, Int, Long, Double, Float, Short) A: 
   }
   
   @inline
-  private[this] def rotate(target: Int, delta: Int) = {
-    val back = (target + delta) % bound
-    if (back < 0)
-      back + bound
-    else
-      back
-  }
+  private[this] def rotate(target: Int, delta: Int) =
+    (target + delta + bound) % bound
   
   @inline
   private[this] def moveFront(delta: Int) {
