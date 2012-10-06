@@ -772,12 +772,46 @@ trait Slice { source =>
           }
         }
         
-        // TODO is this a problem?
         @inline
         def renderLong(ln: Long) {
-          val str = ln.toString
-          checkPush(str.length)
-          buffer.put(str)
+          
+          @inline
+          @tailrec
+          def power10(ln: Long, seed: Long = 1): Long = {
+            // note: we could be doing binary search here
+            
+            if (seed * 10 < 0)    // overflow
+              seed
+            else if (seed * 10 > ln)
+              seed
+            else
+              power10(ln, seed * 10)
+          }
+          
+          @inline
+          @tailrec
+          def renderPositive(ln: Long, power: Long) {
+            if (power > 0) {
+              val c = Character.forDigit((ln / power % 10).toInt, 10)
+              push(c)
+              renderPositive(ln, power / 10)
+            }
+          }
+          
+          if (ln == Long.MinValue) {
+            val MinString = "-9223372036854775808"
+            checkPush(MinString.length)
+            buffer.put(MinString)
+          } else if (ln == 0) {
+            push('0')
+          } else if (ln < 0) {
+            push('-')
+            
+            val ln2 = ln * -1
+            renderPositive(ln2, power10(ln2))
+          } else {
+            renderPositive(ln, power10(ln))
+          }
         }
         
         // TODO is this a problem?
