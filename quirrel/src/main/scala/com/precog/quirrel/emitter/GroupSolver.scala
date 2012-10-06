@@ -292,6 +292,9 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     case MetaDescent(_, child, _) => listTicVars(b, child)
     case Deref(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
     
+    case d @ Dispatch(_, _, actuals) if !b.isDefined =>
+      (actuals map { listTicVars(b, _) }).fold(Set()) { _ ++ _ }
+
     case d @ Dispatch(_, _, actuals) => {
       val leftSet = d.binding match {
         case LetBinding(b2) => listTicVars(b, b2.left)

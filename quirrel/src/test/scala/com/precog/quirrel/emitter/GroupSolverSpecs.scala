@@ -88,7 +88,47 @@ object GroupSolverSpecs extends Specification
 
       tree.errors mustEqual Set(ConstraintsWithinInnerScope)
     }    
-    
+
+    "accept acceptable case of nested solves" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        solve 'gender
+          medals' := medals where medals.Gender = 'gender
+
+          solve 'weight
+            medals' where medals'.Weight = 'weight
+      """.stripMargin
+
+      val let @ Let(_, _, _, _,
+        tree1 @ Solve(_, _, 
+          Let(_, _, _, _, 
+            tree2 @ Solve(_, _, _)))) = compile(input)
+
+      let.errors must beEmpty
+      tree1.errors must beEmpty
+      tree2.errors must beEmpty
+    }    
+
+    "accept acceptable case when a dispatch in one solve contains tic variable from another solve" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        medals' := solve 'gender
+          medals where medals.Gender = 'gender
+
+        solve 'weight
+          medals' where medals'.Weight = 'weight & medals'.isAwesome
+      """.stripMargin
+
+      val let @ Let(_, _, _, _,
+        Let(_, _, _, _,
+          tree @ Solve(_, _, _))) = compile(input)
+
+      let.errors must beEmpty
+      tree.errors must beEmpty
+    }    
+
     "identify and fail to solve more complicated problematic case of nested solves" in {
       val input = """
         medals := //summer_games/london_medals
