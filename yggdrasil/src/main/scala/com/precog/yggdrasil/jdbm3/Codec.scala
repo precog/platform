@@ -704,5 +704,163 @@ object Codec {
       bits
     }
   }
+
+
+  case class SparseRawBitSetCodec(size: Int) extends Codec[RawBitSet] {
+
+    // The maxBytes is max. bits / 8 = (highestOneBit(size) << 3) / 8
+    private val maxBytes = java.lang.Integer.highestOneBit(size) max 1
+
+    type S = (Array[Byte], Int)
+
+    def encodedSize(bs: RawBitSet) = writeBitSet(bs).size
+    override def maxSize(bs: RawBitSet) = maxBytes
+
+    def writeUnsafe(bs: RawBitSet, sink: ByteBuffer) {
+      sink.put(writeBitSet(bs))
+    }
+
+    def writeInit(bs: RawBitSet, sink: ByteBuffer): Option[S] = {
+      val spaceLeft = sink.remaining()
+      val bytes = writeBitSet(bs)
+
+      if (spaceLeft >= bytes.length) {
+        sink.put(bytes)
+        None
+      } else {
+        sink.put(bytes, 0, spaceLeft)
+        Some((bytes, spaceLeft))
+      }
+    }
+
+    def writeMore(more: S, sink: ByteBuffer): Option[S] = {
+      val (bytes, offset) = more
+      val bytesLeft = bytes.length - offset
+      val spaceLeft = sink.remaining()
+
+      if (spaceLeft >= bytesLeft) {
+        sink.put(bytes, offset, bytesLeft)
+        None
+      } else {
+        sink.put(bytes, offset, spaceLeft)
+        Some((bytes, offset + spaceLeft))
+      }
+    }
+
+    def read(src: ByteBuffer): RawBitSet = readBitSet(src)
+
+    override def skip(buf: ByteBuffer) {
+      var b = buf.get()
+      while ((b & 3) != 0 && (b & 12) != 0 && (b & 48) != 0 && (b & 192) != 0) {
+        b = buf.get()
+      }
+    }
+
+    def writeBitSet(bs: RawBitSet): Array[Byte] = {
+      val bytes = new Array[Byte](maxBytes)
+
+      def set(offset: Int) {
+        val i = offset >>> 3
+        bytes(i) = ((1 << (offset & 0x7)) | bytes(i).toInt).toByte
+      }
+
+      val arr = RawBitSet.toArray(bs)
+      def rec_(start: Int, end: Int, l: Int, r: Int, offset: Int): Int = {
+
+        if (l == r) return offset
+
+        if (r - l == 1) {
+          if (arr(start) == l) set(offset)
+          set(offset + 1)
+          return offset + 2
+        }
+
+        val c = (l + r) / 2
+        var i = start
+        while (arr(i) < c && i < end) i += 1
+
+        if (i == start) {
+          if (i == end) {
+            offset
+          } else {
+            set(offset + 1)
+            rec_(i, end, c, r, offset + 2)
+          }
+        } else {
+          if (i == end) {
+            set(offset)
+            rec_(start, i, l, c, offset + 2)
+          } else {
+            set(offset)
+            set(offset + 1)
+            rec_(i, end, c, r, rec_(start, i, l, c, offset + 2))
+          }
+        }
+      }
+
+      def rec(bs: List[Int], l: Int, r: Int, offset: Int): Int = {
+        val c = (l + r) / 2
+
+        if (l == r) {
+          offset
+        } else if (r - l == 1) {
+          if (bs == (l :: Nil)) {
+            set(offset)
+          }
+          set(offset + 1)
+          offset + 2
+        } else {
+          bs partition (_ < c) match {
+            case (Nil, Nil) =>
+              offset
+            case (Nil, hi) =>
+              set(offset + 1)
+              rec(hi, c, r, offset + 2)
+            case (lo, Nil) =>
+              set(offset)
+              rec(lo, l, c, offset + 2)
+            case (lo, hi) =>
+              set(offset)
+              set(offset + 1)
+              rec(hi, c, r, rec(lo, l, c, offset + 2))
+          }
+        }
+      }
+
+      val len = rec(RawBitSet.toList(bs), 0, size, 0)
+      java.util.Arrays.copyOf(bytes, (len >>> 3) + 1) // The +1 covers the extra 2 '0' bits.
+    }
+
+    def readBitSet(src: ByteBuffer): RawBitSet = {
+      val pos = src.position()
+      @inline def get(offset: Int): Boolean =
+        (src.get(pos + (offset >>> 3)) & (1 << (offset & 7))) != 0
+
+      val bits = RawBitSet.create(size)
+
+      def read(l: Int, r: Int, offset: Int): Int = {
+        if (l == r) {
+          offset
+        } else if (r - l == 1) {
+          if (get(offset)) {
+            RawBitSet.set(bits, l)
+          }
+          offset + 2
+        } else {
+          val c = (l + r) / 2
+          (get(offset), get(offset + 1)) match {
+            case (false, false) => offset + 2
+            case (false, true) => read(c, r, offset + 2)
+            case (true, false) => read(l, c, offset + 2)
+            case (true, true) => read(c, r, read(l, c, offset + 2))
+          }
+        }
+      }
+
+      val offset = read(0, size, 0)
+      src.position(pos + (offset >>> 3) + 1)
+      bits
+    }
+  }
 }
 

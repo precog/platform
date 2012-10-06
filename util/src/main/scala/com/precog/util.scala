@@ -24,6 +24,8 @@ import scalaz.Monoid
 import java.util.Comparator
 
 package object util {
+  type RawBitSet = Array[Int]
+
   class Order2JComparator[A](order: Order[A]) {
     def toJavaComparator: Comparator[A] = new Comparator[A] {
       def compare(a1: A, a2: A) = {
