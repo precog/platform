@@ -90,4 +90,5 @@ popd > /dev/null
 
 [ -z "$DONTWIPE" ] && rm -rf $DATADIR/*
 
-java -Xmx1G -cp yggdrasil/target/yggdrasil-assembly-2.0.0-SNAPSHOT.jar com.precog.yggdrasil.util.YggUtils import -t $OWNERTOKEN -s $DATADIR $SOURCES
+VERSION=`sed -n 's/.*version.*:=.*"\(.*\)".*/\1/p' project/Build.scala`
+java -Xmx1G -cp yggdrasil/target/yggdrasil-assembly-$VERSION.jar com.precog.yggdrasil.util.YggUtils import -t $OWNERTOKEN -s $DATADIR $SOURCES
