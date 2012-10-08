@@ -25,11 +25,9 @@ import java.util.concurrent.Executors
 import scalaz._
 import scalaz.effect._
 import scalaz.syntax.copointed._
-import scalaz.iteratee._
 import scalaz.std.anyVal._
 import scalaz.std.list._
 import scalaz.{NonEmptyList => NEL, _}
-import Iteratee._
 
 import org.specs2.specification.Fragment
 import org.specs2.specification.Fragments
@@ -2777,7 +2775,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         SortBy(clicks2, "time", "time", 0))
         
       testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("time")))) { expected =>
-        val decimalValues = expected.toList map {
+        val decimalValues = expected.toList collect {
           case (_, SDecimal(d)) => d 
         }
 
@@ -2794,7 +2792,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         testEval(input) { result =>
           result must haveSize(expectedResult.size)
           
-          val decis = result.toList map { 
+          val decis = result.toList collect { 
             case (_, SDecimal(d)) => d
           }
           decis.sorted mustEqual expectedResult.sorted
@@ -2853,7 +2851,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Root(line, CLong(500))))
         
       testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("time")))) { expected =>
-        val decimalValues = expected.toList map {
+        val decimalValues = expected.toList collect {
           case (_, SDecimal(d)) => d
         }
 
@@ -2870,7 +2868,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         testEval(input) { result =>
           result must haveSize(expectedResult.size)
 
-          val decis = result.toList map { 
+          val decis = result.toList collect { 
             case (_, SDecimal(d)) => d
           }
           decis.sorted mustEqual expectedResult.sorted
