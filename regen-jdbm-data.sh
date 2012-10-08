@@ -26,6 +26,7 @@ function usage() {
     exit 1
 }
 
+VERSION=`sed -n 's/.*version.*:=.*"\(.*\)".*/\1/p' project/Build.scala`
 SRCDIR=muspelheim/src/test/resources/test_data
 OWNERTOKEN=C18ED787-BF07-4097-B819-0415C759C8D5
 
@@ -82,13 +83,12 @@ for source in `find -L . -name '*.json'`; do
 done
 popd > /dev/null
 
-[ -f yggdrasil/target/yggdrasil-assembly-2.0.0-SNAPSHOT.jar ] || {
+[ -f yggdrasil/target/yggdrasil-assembly-$VERSION.jar ] || {
     for target in "yggdrasil/compile" "yggdrasil/assembly"; do
-        java -jar $2 "$target"
+        java -Xmx4096m -Xms512m -jar $2 "$target"
     done
 }
 
 [ -z "$DONTWIPE" ] && rm -rf $DATADIR/*
 
-VERSION=`sed -n 's/.*version.*:=.*"\(.*\)".*/\1/p' project/Build.scala`
 java -Xmx1G -cp yggdrasil/target/yggdrasil-assembly-$VERSION.jar com.precog.yggdrasil.util.YggUtils import -t $OWNERTOKEN -s $DATADIR $SOURCES
