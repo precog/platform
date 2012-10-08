@@ -26,13 +26,13 @@ import org.specs2.ScalaCheck
 
 import org.scalacheck.{Arbitrary, Gen} 
 
-import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.Extractor._
+import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Extractor._
 
 import scalaz._
 
-class EventSerializationSpec extends Specification with ArbitraryIngestMessage with ScalaCheck {
+class EventSpec extends Specification with ArbitraryIngestMessage with ScalaCheck {
   implicit val arbEvent = Arbitrary(genRandomEvent)
   "serialization of an event" should {
     "read back the data that was written" in check { in: Event =>

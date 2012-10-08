@@ -262,11 +262,11 @@ object Console extends App {
     new REPLConfig(dataDir)
   }
 
-  val repl: IO[scalaz.Validation[blueeyes.json.xschema.Extractor.Error, Lifecycle]] = for {
+  val repl: IO[scalaz.Validation[blueeyes.json.serialization.Extractor.Error, Lifecycle]] = for {
     replConfig <- loadConfig(args.headOption) 
     fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, replConfig.archiveDir, FilesystemFileOps)
   } yield {
-      scalaz.Success[blueeyes.json.xschema.Extractor.Error, Lifecycle](new REPL 
+      scalaz.Success[blueeyes.json.serialization.Extractor.Error, Lifecycle](new REPL 
           with Lifecycle 
           with BlockStoreColumnarTableModule[Future]
           with JDBMProjectionModule

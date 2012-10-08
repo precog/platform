@@ -33,9 +33,9 @@ import blueeyes.persistence.mongo._
 import blueeyes.persistence.cache._
 
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.Extractor._
+import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Extractor._
 
 import java.util.concurrent.TimeUnit._
 

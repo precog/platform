@@ -27,7 +27,7 @@ import com.precog.util._
 
 import blueeyes.json.JPath
 import blueeyes.concurrent.test._
-import blueeyes.json.xschema.Extractor._
+import blueeyes.json.serialization.Extractor._
 
 import java.io.File
 

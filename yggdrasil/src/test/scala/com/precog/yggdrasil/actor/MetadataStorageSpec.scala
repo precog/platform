@@ -26,7 +26,7 @@ import com.precog.util._
 import com.precog.yggdrasil.metadata._
 
 import blueeyes.json._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import org.specs2.mutable.Specification
 import org.specs2.specification.{Fragments, Scope, Step}

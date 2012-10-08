@@ -21,9 +21,11 @@ package com.precog.common
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.DefaultSerialization._
-import scalaz.Scalaz._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.DefaultSerialization._
+
+import scalaz._
+import scalaz.syntax.std.boolean._
 
 class Path private (val elements: String*) {
   val path = elements.mkString("/", "/", "/").replaceAll("/+", "/")

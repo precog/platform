@@ -23,15 +23,16 @@ package security
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 
-import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.xschema.DefaultSerialization.{DateTimeDecomposer => _, DateTimeExtractor => _, _}
-import blueeyes.json.xschema.Extractor._
+import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.DefaultSerialization.{DateTimeDecomposer => _, DateTimeExtractor => _, _}
+import blueeyes.json.serialization.Extractor._
 
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 
 import scalaz._
-import Scalaz._
+import scalaz.syntax.apply._
+import scalaz.syntax.plusEmpty._
 
 case class Token(name: String, tid: TokenID, cid: TokenID, grants: Set[GrantID]) {
   def addGrants(add: Set[GrantID]): Token = 

@@ -57,7 +57,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   def testSortDense(sample: SampleData, sortOrder: DesiredSortOrder, unique: Boolean, sortKeys: JPath*) = {
     val module = BlockStoreTestModule.empty[M]
     val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
-      import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
+      import blueeyes.json.serialization.DefaultOrderings.JValueOrdering
 
       def compare(a: JValue, b: JValue): Int = (a,b) match {
         case (JNum(ai), JNum(bd)) => ai.compare(bd)

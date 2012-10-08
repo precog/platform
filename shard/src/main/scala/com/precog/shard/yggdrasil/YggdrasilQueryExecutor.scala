@@ -72,7 +72,7 @@ trait YggdrasilQueryExecutorConfig extends
 }
 
 trait YggdrasilQueryExecutorComponent {
-  import blueeyes.json.xschema.Extractor
+  import blueeyes.json.serialization.Extractor
 
   private def wrapConfig(wrappedConfig: Configuration) = {
     new YggdrasilQueryExecutorConfig {
