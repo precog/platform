@@ -29,6 +29,8 @@ import com.precog.util._
 
 import com.precog.yggdrasil.table.cf.util.{Remap, Empty}
 
+import TransSpecModule._
+
 import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
 import blueeyes.json.JsonAST._

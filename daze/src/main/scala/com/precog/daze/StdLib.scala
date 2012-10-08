@@ -28,6 +28,8 @@ import bytecode.Op1Like
 import bytecode.Op2Like
 import bytecode.ReductionLike
 
+import common.json._
+
 import yggdrasil._
 import yggdrasil.table._
 
@@ -58,7 +60,9 @@ object GenOpcode {
   val defaultReductionOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
 }
 
-trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
+trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransSpecModule {
+  import trans._
+
   lazy val libMorphism1 = _libMorphism1
   lazy val libMorphism2 = _libMorphism2
   lazy val lib1 = _lib1
@@ -107,9 +111,19 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
     def extract(res: Result): Table
   }
 
-  class WrapArrayReductionImpl(val r: ReductionImpl) extends ReductionImpl {
+  class WrapArrayReductionImpl(val r: ReductionImpl, val idx: Option[Int]) extends ReductionImpl {
     type Result = r.Result
-    def reducer = r.reducer
+    def reducer = new CReducer[Result] {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        idx match {
+          case Some(jdx) =>
+            val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
+            r.reducer.reduce(cols0, range)
+          case None => 
+            r.reducer.reduce(cols, range)
+        }
+      }
+    }
     implicit def monoid = r.monoid
     def extract(res: Result): Table = {
       r.extract(res).transform(trans.WrapArray(trans.Leaf(trans.Source)))
@@ -121,15 +135,23 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
     val namespace = r.namespace
   }
 
-  def coalesce(reductions: NonEmptyList[ReductionImpl]): ReductionImpl = {
-    def rec(reductions: List[ReductionImpl], acc: ReductionImpl): ReductionImpl = {
+  def coalesce(reductions: List[(ReductionImpl, Option[Int])]): ReductionImpl = {
+    def rec(reductions: List[(ReductionImpl, Option[Int])], acc: ReductionImpl): ReductionImpl = {
       reductions match {
-        case x :: xs =>
-          new ReductionImpl {
+        case (x, idx) :: xs =>
+          val impl = new ReductionImpl {
             type Result = (x.Result, acc.Result) 
+
             val reducer = new CReducer[Result] {
               def reduce(cols: JType => Set[Column], range: Range): Result = {
-                (x.reducer.reduce(cols, range), acc.reducer.reduce(cols, range))
+                idx match {
+                  case Some(jdx) =>
+                    val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
+                    val (a, b) = (x.reducer.reduce(cols0, range), acc.reducer.reduce(cols, range))
+                    (a, b)
+                  case None => 
+                    (x.reducer.reduce(cols, range), acc.reducer.reduce(cols, range))
+                }
               }
             }
 
@@ -158,11 +180,14 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
             ) 
           }
 
+          rec(xs, impl)
+
         case Nil => acc
       }
     }
-
-    rec(reductions.tail, new WrapArrayReductionImpl(reductions.head))
+    
+    val (impl1, idx1) = reductions.head
+    rec(reductions.tail, new WrapArrayReductionImpl(impl1, idx1))
   }
 
   type Morphism1 <: Morphism1Impl

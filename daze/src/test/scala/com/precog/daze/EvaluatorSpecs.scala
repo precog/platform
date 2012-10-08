@@ -27,7 +27,7 @@ import com.precog.yggdrasil.table.BaseBlockStoreTestModule
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.test._
 import com.precog.yggdrasil.util._
-import com.precog.common.VectorCase
+import com.precog.common.json._
 import com.precog.util.IOUtils
 import com.precog.util.IdGen
 import com.precog.bytecode._
@@ -46,7 +46,6 @@ import scalaz.effect._
 import scalaz.syntax.copointed._
 import scalaz.std.anyVal._
 import scalaz.std.list._
-import scalaz.{NonEmptyList => NEL, _}
 
 import org.specs2.specification.Fragment
 import org.specs2.specification.Fragments
@@ -406,18 +405,16 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val parent = dag.LoadLocal(line, Root(line, CString("/hom/numbers7")))
       
+      val spec = trans.Leaf(trans.Source)
+      val reds = List(Count, Sum) 
       val mega = dag.MegaReduce(line, 
-        NEL(Count, Sum), 
+        List((spec, reds)),
         parent)
 
       val input = Join(line, Add, CrossRightSort, 
-        Join(line, DerefArray, CrossLeftSort,
-          mega,
-          Root(line, CLong(0))),
-        Join(line, DerefArray, CrossLeftSort,
-          mega,
-          Root(line, CLong(1))))
-
+        joinDeref(mega, 0, 0, line),
+        joinDeref(mega, 0, 1, line))
+        
       testEval(input) { result =>
         result must haveSize(1)
 
@@ -429,6 +426,195 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
 
+    "MegaReduce of two tuples must return an array" in {
+      val line = Line(0, "")
+
+      val parent = dag.LoadLocal(line, Root(line, CString("/hom/heightWeightAcrossSlices")))
+      
+      val height = trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("height"))
+      val weight = trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("weight"))
+      val mean = List(Mean) 
+      val max = List(Max) 
+
+      val input = dag.MegaReduce(line, 
+        List((weight, mean), (height, max)),
+        parent)
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect {
+          case (ids, SArray(arr)) if ids.size == 0 => arr
+        }
+
+        result2 must contain(Vector(SArray(Vector(SDecimal(104))), SArray(Vector(SDecimal(138)))))
+      }
+    }
+
+
+    "evaluate a join of two reductions on two datasets with the same parent using a MegaReduce" in {
+      val line = Line(0, "")
+
+      val parent = dag.LoadLocal(line, Root(line, CString("/hom/heightWeightAcrossSlices")))
+      
+      val height = trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("height"))
+      val weight = trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("weight"))
+      val mean = List(Mean) 
+      val max = List(Max) 
+
+      val mega = dag.MegaReduce(line, 
+        List((weight, mean), (height, max)),
+        parent)
+
+      val input = Join(line, Add, CrossRightSort, 
+        joinDeref(mega, 0, 0, line),
+        joinDeref(mega, 1, 0, line))
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 0 => d
+        }
+
+        result2 must contain(138 + 104)
+      }
+    }
+
+
+    "evaluate a join of three reductions on the same dataset using a MegaReduce" in {
+      val line = Line(0, "")
+
+      val parent = dag.LoadLocal(line, Root(line, CString("/hom/numbers7")))
+      
+      val mega = dag.MegaReduce(line, List((trans.Leaf(trans.Source), List(Count, Sum, Mean))), parent)
+
+      val input = Join(line, Add, CrossLeftSort,
+        joinDeref(mega, 0, 0, line),
+        Join(line, Add, CrossLeftSort, 
+          joinDeref(mega, 0, 1, line),
+          joinDeref(mega, 0, 2, line)))
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 0 => d
+        }
+
+        result2 must contain(237 + 22 + (237.0 / 22))
+      }
+    }
+
+    "evaluate a rewrite/eval of a 3-way mega reduce" in {
+      import trans._
+
+      val line = Line(0, "")
+
+      val load = dag.LoadLocal(line, Root(line, CString("/hom/heightWeightAcrossSlices")))
+
+      val id = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("userId")))
+      val height = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("height")))
+      val weight = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("weight")))
+
+      val r1 = dag.Reduce(line, Min, id)
+      val r2 = dag.Reduce(line, Max, height)
+      val r3 = dag.Reduce(line, Mean, weight)
+
+      val input = Join(line, Sub, CrossLeftSort, r1, Join(line, Add, CrossLeftSort, r2, r3))
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 0 => d
+        }
+
+        result2 must contain(1 - (104 + 138))
+      }
+    }
+
+    "evaluate a rewrite/eval of reductions" in {
+      import trans._
+
+      val line = Line(0, "")
+
+      val load = dag.LoadLocal(line, Root(line, CString("/hom/heightWeightAcrossSlices")))
+
+      val height = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("height")))
+      val weight = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("weight")))
+
+      val r1 = dag.Reduce(line, Min, height)
+      val r2 = dag.Reduce(line, Max, height)
+      val r3 = dag.Reduce(line, Mean, weight)
+
+      val input = Join(line, Sub, CrossLeftSort, r1, Join(line, Add, CrossLeftSort, r2, r3))
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 0 => d
+        }
+
+        result2 must contain(30 - (104 + 138))
+      }
+    }
+    
+    "three reductions on the same dataset" in {
+      import trans._
+
+      val line = Line(0, "")
+
+      val load = dag.LoadLocal(line, Root(line, CString("/hom/heightWeightAcrossSlices")))
+
+      val weight = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("weight")))
+
+      val r1 = dag.Reduce(line, Min, weight)
+      val r2 = dag.Reduce(line, Max, weight)
+      val r3 = dag.Reduce(line, Mean, weight)
+
+      val input = Join(line, Sub, CrossLeftSort, r1, Join(line, Add, CrossLeftSort, r2, r3))
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 0 => d
+        }
+
+        result2 must contain(29 - (231 + 138))
+      }
+    }
+
+    "the same reduction on three datasets" in {
+      import trans._
+
+      val line = Line(0, "")
+
+      val load = dag.LoadLocal(line, Root(line, CString("/hom/heightWeightAcrossSlices")))
+
+      val id = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("userId")))
+      val height = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("height")))
+      val weight = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("weight")))
+
+      val r1 = dag.Reduce(line, Max, id)
+      val r2 = dag.Reduce(line, Max, height)
+      val r3 = dag.Reduce(line, Max, weight)
+
+      val input = Join(line, Sub, CrossLeftSort, r1, Join(line, Add, CrossLeftSort, r2, r3))
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect { 
+          case (ids, SDecimal(num)) if ids.size == 0 => num
+        }
+
+        result2 must contain(22 - (104 + 231))
+      }
+    }
+    
     "join two sets" >> {
       "from different paths" >> {
         val line = Line(0, "")
@@ -1239,12 +1425,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(Vector(SDecimal(-9), SDecimal(-42), SDecimal(42), SDecimal(87), SDecimal(4)))
       }
     }
-
+  
     "MegaReduce must return an array" in {
       val line = Line(0, "")
 
       val parent = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
-      val input = dag.MegaReduce(line, NEL(Count), parent)
+      val input = dag.MegaReduce(line, List((trans.Leaf(trans.Source), List(Count, Sum))), parent)
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -1253,8 +1439,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           case (ids, SArray(arr)) if ids.size == 0 => arr
         }
 
-        result2.size mustEqual 1
-        result2.head must contain(SDecimal(5))
+        result2 must contain(Vector(SArray(Vector(SDecimal(145), SDecimal(5)))))
       }
     }
     
@@ -1262,11 +1447,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val parent = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
-      val red = Count
-      
-      val input = Join(line, DerefArray, CrossLeftSort,
-        dag.MegaReduce(line, NEL(red), parent),
-        Root(line, CLong(0)))
+      val red = Sum
+
+      val mega = dag.MegaReduce(line, List((trans.Leaf(trans.Source), List(red))), parent)
+      val input = Join(line, DerefArray, CrossLeftSort, Join(line, DerefArray, CrossLeftSort, mega, Root(line, CLong(0))), Root(line, CLong(0)))
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -1275,7 +1459,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           case (ids, SDecimal(d)) if ids.size == 0 => d.toInt
         }
         
-        result2 must contain(5)
+        result2 must contain(145)
       }
     }    
 
@@ -2907,6 +3091,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
   }
+
+  def joinDeref(left: DepGraph, first: Int, second: Int, line: Line): DepGraph = 
+    Join(line, DerefArray, CrossLeftSort,
+      Join(line, DerefArray, CrossLeftSort,
+        left,
+        Root(line, CLong(first))),
+      Root(line, CLong(second)))
+
 }
 
 object EvaluatorSpecs extends EvaluatorSpecs[YId] with test.YIdInstances

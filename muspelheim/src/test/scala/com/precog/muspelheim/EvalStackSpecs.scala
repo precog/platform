@@ -29,7 +29,11 @@ trait EvalStackSpecs extends Specification {
   def eval(str: String, debug: Boolean = false): Set[SValue]
   def evalE(str: String, debug: Boolean = false): Set[(Vector[Long], SValue)]
 
+  implicit def add_~=(d: Double) = new AlmostEqual(d)
+  implicit val precision = Precision(0.000000001)
+
   "the full stack" should {
+
     "count a filtered clicks dataset" in {
       val input = """
         | clicks := //clicks
@@ -66,7 +70,7 @@ trait EvalStackSpecs extends Specification {
 
     "reduce the obnoxiously large dataset" >> {
       "<root>" >> {
-        eval("mean(//obnoxious.v)", true) mustEqual Set(SDecimal(50000.5))
+        eval("mean(//obnoxious.v)") mustEqual Set(SDecimal(50000.5))
       }
     }
 
@@ -133,6 +137,60 @@ trait EvalStackSpecs extends Specification {
 
       "empty array (right)" >> {
         eval("true with []") mustEqual Set()
+      }
+    }
+
+    "reduce sets" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        |   sum(medals.HeightIncm) + mean(medals.Weight) - count(medals.Age) + stdDev(medals.S)
+      """.stripMargin
+
+      val result = evalE(input) 
+
+      result must haveSize(1)
+
+      val actual = result collect {
+        case (ids, SDecimal(num)) if ids.length == 0 => num.toDouble ~= 174257.3421888046
+      }
+
+      actual must contain(true).only
+    }
+
+    "perform various reductions on transspecable sets" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | 
+        | { sum: sum(std::math::floor(std::math::cbrt(medals.HeightIncm))),
+        |   max: max(medals.HeightIncm),
+        |   min: min(medals.Weight),
+        |   stdDev: stdDev(std::math::sqrt(medals.Weight)),
+        |   count: count(medals.Weight = 39),
+        |   minmax: min(max(medals.HeightIncm))
+        | }
+      """.stripMargin
+
+      val result = evalE(input)
+
+      result must haveSize(1)
+
+      forall(result) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+          
+          obj must haveKey("sum")
+          obj must haveKey("max")
+          obj must haveKey("min")
+          obj must haveKey("stdDev")
+          obj must haveKey("count")
+          obj must haveKey("minmax")
+
+          (obj("sum") match { case SDecimal(num) => num.toDouble ~= 4965 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 208 }) mustEqual true
+          (obj("min") match { case SDecimal(num) => num.toDouble ~= 39 }) mustEqual true
+          (obj("stdDev") match { case SDecimal(num) => num.toDouble ~= 0.9076874907113496 }) mustEqual true
+          (obj("count") match { case SDecimal(num) => num.toDouble ~= 1019 }) mustEqual true
+          (obj("minmax") match { case SDecimal(num) => num.toDouble ~= 208 }) mustEqual true
       }
     }
 
@@ -986,6 +1044,36 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "evaluate two reductions on filters" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | 
+        |   {
+        |   sum: sum(medals.Age where medals.Age = 30),
+        |   mean: mean(std::math::max(medals.B, medals.Age)),
+        |   max: max(medals.G where medals.Sex = "F"),
+        |   stdDev: stdDev(std::math::pow(medals.Total, medals.S))
+        |   }
+        """.stripMargin
+
+      val results = evalE(input)
+      
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+          
+          obj must haveKey("sum")
+          obj must haveKey("mean")
+          obj must haveKey("max")
+          obj must haveKey("stdDev")
+
+          (obj("sum") match { case SDecimal(num) => num.toDouble ~= 1590 }) mustEqual true
+          (obj("mean") match { case SDecimal(num) => num.toDouble ~= 26.371933267909714 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 4.5 }) mustEqual true
+          (obj("stdDev") match { case SDecimal(num) => num.toDouble ~= 0.36790736209203007 }) mustEqual true
+      }
+    }
+
     "evaluate functions from each library" >> {
       "Stringlib" >> {
         val input = """
@@ -1614,5 +1702,11 @@ trait EvalStackSpecs extends Specification {
     }
   }
 }
+
+case class Precision(p: Double)
+class AlmostEqual(d: Double) {
+  def ~=(d2: Double)(implicit p: Precision) = (d - d2).abs <= p.p
+}
+
 
 // vim: set ts=4 sw=4 et:

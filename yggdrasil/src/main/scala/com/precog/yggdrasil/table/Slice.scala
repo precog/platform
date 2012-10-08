@@ -28,6 +28,8 @@ import com.precog.util._
 
 import com.precog.common.json._
 
+import TransSpecModule._
+
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList

@@ -34,8 +34,6 @@ object Run {
       case _ => "jprofiler/jprofiler.db"
     }
 
-    val args2 = args.toList ++ List("--root-dir", db)
-    val config = RunConfig.fromCommandLine(args2) | sys.error("invalid arguments!")
 
     val queries = (
       /* "count(//obnoxious)" ::
