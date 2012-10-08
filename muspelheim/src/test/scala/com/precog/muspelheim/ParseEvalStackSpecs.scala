@@ -90,6 +90,8 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val projectionRetrievalTimeout = akka.util.Timeout(Duration(10, "seconds"))
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
+    
+    val maxSliceSize = 10
 
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
@@ -105,7 +107,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     new EvalStackSpecs {
       def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
       
-      def evalE(str: String, debug: Boolean = false) = {
+      def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
         logger.debug("Beginning evaluation of query: " + str)
         val tree = compile(str)
         tree.errors must beEmpty

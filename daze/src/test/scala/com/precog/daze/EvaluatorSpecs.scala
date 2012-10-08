@@ -61,7 +61,9 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
 
   val projections = Map.empty[ProjectionDescriptor, Projection]
 
-  object yggConfig extends YggConfig
+  object yggConfig extends YggConfig {
+    val maxSliceSize = 10
+  }
 
   //object Table extends TableCompanion
 

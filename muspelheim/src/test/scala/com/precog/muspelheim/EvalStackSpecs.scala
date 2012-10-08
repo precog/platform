@@ -27,7 +27,7 @@ import org.specs2.mutable._
 
 trait EvalStackSpecs extends Specification {
   def eval(str: String, debug: Boolean = false): Set[SValue]
-  def evalE(str: String, debug: Boolean = false): Set[SEvent]
+  def evalE(str: String, debug: Boolean = false): Set[(Vector[Long], SValue)]
 
   "the full stack" should {
     "count a filtered clicks dataset" in {
