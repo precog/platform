@@ -108,18 +108,18 @@ object GroupSolverSpecs extends Specification
       let.errors must beEmpty
       tree1.errors must beEmpty
       tree2.errors must beEmpty
-    }    
-
+    }
+   
     "accept acceptable case when one solve contains a dispatch which contains tic variable from another solve" in {
       val input = """
-        medals := //summer_games/london_medals
-        
-        medals' := solve 'gender
-          medals where medals.Gender = 'gender
-
-        solve 'weight
-          medals' where medals'.Weight = 'weight & medals'.isAwesome
-      """.stripMargin
+       |  medals := //summer_games/london_medals
+       |  
+       |  medals' := solve 'gender
+       |    medals where medals.Gender = 'gender
+       | 
+       |  solve 'weight
+       |    medals' where medals'.Weight = 'weight & medals'.isAwesome
+       | """.stripMargin
 
       val let @ Let(_, _, _, _,
         Let(_, _, _, _,
@@ -127,8 +127,8 @@ object GroupSolverSpecs extends Specification
 
       let.errors must beEmpty
       tree.errors must beEmpty
-    } 
-
+    }
+   
     "accept acceptable case when a dispatch in one solve contains, as an actual, a tic variable from another solve" in {
       val input = """
         medals := //summer_games/london_medals
@@ -148,7 +148,7 @@ object GroupSolverSpecs extends Specification
 
       let.errors must beEmpty
       tree.errors must beEmpty
-    } 
+    }.pendingUntilFixed
 
     "accept acceptable case when one solve contains a tic variable from another solve" in {
       val input = """
@@ -166,7 +166,7 @@ object GroupSolverSpecs extends Specification
 
       let.errors must beEmpty
       tree.errors must beEmpty
-    } 
+    }.pendingUntilFixed 
 
     "accept a solve when the tic var is constrained in a let" in {
       val input = """
@@ -543,6 +543,23 @@ object GroupSolverSpecs extends Specification
         |   count(foo where foo.a = 'a)
         | """.stripMargin
 
+      compile(input).errors must beEmpty
+    }
+    
+    "accept a reduced sessionize" in {
+      val input = """
+        | rawInteractions := //interactions
+        | 
+        | solve 'userId
+        |   interactions := rawInteractions where rawInteractions.userId = 'userId
+        |   
+        |   bounds := solve 'it
+        |     interactions.time where interactions = 'it
+        |     
+        |   solve 'it1, 'it2
+        |     bounds where bounds = 'it1 & bounds.isLower & bounds = 'it2
+        | """.stripMargin
+        
       compile(input).errors must beEmpty
     }
   }
