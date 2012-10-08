@@ -20,7 +20,7 @@
 package com.precog.yggdrasil
 package jdbm3
 
-import com.precog.util.BitSet
+import com.precog.util._
 
 import org.joda.time.DateTime
 
@@ -36,6 +36,7 @@ trait StdCodecs {
   implicit def BooleanCodec: Codec[Boolean]
   implicit def DateTimeCodec: Codec[DateTime]
   implicit def BitSetCodec: Codec[BitSet]
+  implicit def RawBitSetCodec: Codec[RawBitSet]
   implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]): Codec[IndexedSeq[A]]
 
   def codecForCType(cType: CType): Codec[_] = cType match {
@@ -68,6 +69,7 @@ trait RowFormatCodecs extends StdCodecs { self: RowFormat =>
   // implicit def BitSetCodec: Codec[BitSet] = Codec.BitSetCodec
   //@transient implicit lazy val BitSetCodec: Codec[BitSet] = Codec.SparseBitSetCodec(columnRefs.size)
   @transient implicit lazy val BitSetCodec: Codec[BitSet] = Codec.SparseBitSetCodec(columnRefs.size)
+  @transient implicit lazy val RawBitSetCodec: Codec[RawBitSet] = Codec.SparseRawBitSetCodec(columnRefs.size)
   implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]): Codec[IndexedSeq[A]] = Codec.IndexedSeqCodec(elemCodec)
 }
 

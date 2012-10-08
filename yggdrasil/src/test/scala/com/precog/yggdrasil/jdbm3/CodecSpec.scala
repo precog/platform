@@ -20,7 +20,7 @@
 package com.precog.yggdrasil
 package jdbm3
 
-import com.precog.util.ByteBufferPool
+import com.precog.util.{ ByteBufferPool, RawBitSet }
 
 import org.joda.time.DateTime
 
@@ -54,6 +54,22 @@ class CodecSpec extends Specification with ScalaCheck {
         }
       } else {
         Gen.value((codec, new BitSet()))
+      }
+    })
+  }
+
+  implicit def arbSparseRawBitSet: Arbitrary[(Codec[RawBitSet], RawBitSet)] = {
+    Arbitrary(Gen.chooseNum(0, 500) flatMap { size =>
+      val codec = Codec.SparseRawBitSetCodec(size)
+      if (size > 0) {
+        Gen.listOf(Gen.choose(0, size - 1)) map { bits =>
+          //(codec, BitSet(bits: _*))
+          val bs = RawBitSet.create(size)
+          bits foreach { RawBitSet.set(bs, _) }
+          (codec, bs)
+        }
+      } else {
+        Gen.value((codec, RawBitSet.create(0)))
       }
     })
   }
@@ -111,6 +127,20 @@ class CodecSpec extends Specification with ScalaCheck {
       }
       "with small buffers" in {
         check { (sparse: (Codec[BitSet], BitSet)) =>
+          surviveHardRoundTrip(sparse._2)(sparse._1)
+        }
+      }
+    }
+  }
+  "SparseRawBitSet" should {
+    "survive round-trip" in {
+      "with large buffers" in {
+        check { (sparse: (Codec[RawBitSet], RawBitSet)) =>
+          surviveEasyRoundTrip(sparse._2)(sparse._1)
+        }
+      }
+      "with small buffers" in {
+        check { (sparse: (Codec[RawBitSet], RawBitSet)) =>
           surviveHardRoundTrip(sparse._2)(sparse._1)
         }
       }

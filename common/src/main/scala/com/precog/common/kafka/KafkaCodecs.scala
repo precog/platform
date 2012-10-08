@@ -27,14 +27,14 @@ import java.nio.charset.CharsetDecoder
 import java.nio.charset.CharsetEncoder
 
 import scalaz._
-import Scalaz._
+import scalaz.syntax.apply._
 
 import _root_.kafka.message._
 import _root_.kafka.serializer._
 
 import blueeyes.json.JsonParser
 import blueeyes.json.Printer
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 // This could be made more efficient by writing a custom message class that bootstraps from
 // a ByteBuffer, but this was the quick and dirty way to get moving

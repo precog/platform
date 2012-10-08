@@ -672,6 +672,24 @@ trait Slice { source =>
       
       if (optSchema.isDefined) {
         val schema = optSchema.get
+        
+        val depth = {
+          def loop(schema: SchemaNode): Int = schema match {
+            case obj: SchemaNode.Obj =>
+              4 + (obj.values map loop max)
+            
+            case arr: SchemaNode.Arr =>
+              2 + (arr.nodes map loop max)
+            
+            case union: SchemaNode.Union =>
+              union.possibilities map loop max
+            
+            case SchemaNode.Leaf(_, _) => 0
+          }
+          
+          loop(schema)
+        }
+        
         // we have the schema, now emit
         
         var buffer = CharBuffer.allocate(BufferSize)
@@ -699,30 +717,28 @@ trait Slice { source =>
           buffer.put(str)
         }
         
-        val in = new mutable.ListBuffer[String]
-        val inFlags = new mutable.ListBuffer[Boolean]
+        val in = new RingDeque[String](depth)
+        val inFlags = new RingDeque[Boolean](depth)
         
         @inline
         def pushIn(str: String, flag: Boolean) {
-          in.append(str)
-          inFlags.append(flag)
+          in.pushBack(str)
+          inFlags.pushBack(flag)
         }
         
         @inline
         def popIn() {
-          in.remove(in.length - 1)
-          inFlags.remove(inFlags.length - 1)
+          in.popBack()
+          inFlags.popBack()
         }
         
         @inline
         @tailrec
         def flushIn() {
           if (!in.isEmpty) {
-            val str = in.head
-            in.remove(0)
+            val str = in.popFront()
             
-            val flag = inFlags.head
-            inFlags.remove(0)
+            val flag = inFlags.popFront()
             
             if (flag) {
               renderString(str)
@@ -772,12 +788,46 @@ trait Slice { source =>
           }
         }
         
-        // TODO is this a problem?
         @inline
         def renderLong(ln: Long) {
-          val str = ln.toString
-          checkPush(str.length)
-          buffer.put(str)
+          
+          @inline
+          @tailrec
+          def power10(ln: Long, seed: Long = 1): Long = {
+            // note: we could be doing binary search here
+            
+            if (seed * 10 < 0)    // overflow
+              seed
+            else if (seed * 10 > ln)
+              seed
+            else
+              power10(ln, seed * 10)
+          }
+          
+          @inline
+          @tailrec
+          def renderPositive(ln: Long, power: Long) {
+            if (power > 0) {
+              val c = Character.forDigit((ln / power % 10).toInt, 10)
+              push(c)
+              renderPositive(ln, power / 10)
+            }
+          }
+          
+          if (ln == Long.MinValue) {
+            val MinString = "-9223372036854775808"
+            checkPush(MinString.length)
+            buffer.put(MinString)
+          } else if (ln == 0) {
+            push('0')
+          } else if (ln < 0) {
+            push('-')
+            
+            val ln2 = ln * -1
+            renderPositive(ln2, power10(ln2))
+          } else {
+            renderPositive(ln, power10(ln))
+          }
         }
         
         // TODO is this a problem?

@@ -23,11 +23,9 @@ import org.specs2.mutable._
 
 import com.precog.yggdrasil._
 import com.precog.common.Path
+
 import scalaz._
-import scalaz.effect._
-import scalaz.iteratee._
 import scalaz.std.list._
-import Iteratee._
 
 import com.precog.util.IdGen
 

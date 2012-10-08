@@ -43,23 +43,20 @@ import scala.collection.mutable.ArrayBuffer
 
 import scalaz.{Ordering => _, _}
 import scalaz.effect._
-import scalaz.iteratee._
-import scalaz.iteratee.Input._
 import scalaz.syntax.plus._
 import scalaz.syntax.monad._
 import scalaz.syntax.applicativePlus._
 import scalaz.syntax.bifunctor
 import scalaz.syntax.show._
 import scalaz.Scalaz._
-import IterateeT._
 
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
 import blueeyes.json.Printer
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.Extractor._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.DefaultSerialization._
 
 object JDBMProjection {
   private[jdbm3] type IndexTree = SortedMap[Array[Byte],Array[Byte]]

@@ -23,8 +23,8 @@ import table._
 import com.precog.util._
 
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import org.joda.time.DateTime
 

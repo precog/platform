@@ -57,7 +57,7 @@ object PlatformBuild extends Build {
 
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "2.0.0-SNAPSHOT",
+    version := "2.0.1-SNAPSHOT",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalaVersion := "2.9.2",
@@ -71,7 +71,6 @@ object PlatformBuild extends Build {
       "com.weiglewilczek.slf4s"     % "slf4s_2.9.1"         % "1.0.7",
       "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
-      "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT" changing(),
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
       "org.specs2"                  %% "specs2"             % "1.12.2-SNAPSHOT" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",

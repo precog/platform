@@ -25,9 +25,9 @@ import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 import blueeyes.json.Printer 
 
-import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.Extractor._
+import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Extractor._
 
 import com.weiglewilczek.slf4s._
 

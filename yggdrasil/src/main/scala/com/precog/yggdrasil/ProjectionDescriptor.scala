@@ -27,9 +27,9 @@ import com.precog.util.IOUtils
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.Printer.{pretty,render}
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.Extractor._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import akka.actor._
 import akka.actor.Actor._

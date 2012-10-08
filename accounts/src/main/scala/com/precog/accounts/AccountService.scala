@@ -29,7 +29,7 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.health.metrics.{eternity}
@@ -108,7 +108,7 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Accou
         } ->
         request { (state: AccountServiceState) =>
           jsonp[ByteChunk] {
-            path("/") {
+            path("/accounts/") {
               post(new PostAccountHandler(state.accountManagement, state.clock, state.securityService)) ~
               auth(state.accountManagement) {
                 get(new ListAccountsHandler(state.accountManagement)) ~ 

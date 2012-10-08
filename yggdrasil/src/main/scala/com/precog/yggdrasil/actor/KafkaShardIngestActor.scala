@@ -44,8 +44,8 @@ import _root_.kafka.consumer.SimpleConsumer
 import _root_.kafka.message.MessageSet
 
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema.Decomposer
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.Decomposer
+import blueeyes.json.serialization.DefaultSerialization._
 
 import scala.collection.mutable
 import scala.collection.immutable.TreeMap
