@@ -158,7 +158,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       val checkpoints = sc.loadYggCheckpoint("shard")
 
       checkpoints must beLike {
-        case Some(Failure(blueeyes.json.xschema.Extractor.Invalid(_))) => ok
+        case Some(Failure(blueeyes.json.serialization.Extractor.Invalid(_))) => ok
       }
     }
 

@@ -27,7 +27,7 @@ import blueeyes.core.data.{ Chunk, ByteChunk, Bijection, BijectionsChunkJson }
 import blueeyes.json.{ JsonAST, JsonParser, Printer }
 import blueeyes.json.JsonAST.{ JValue,  JArray  }
 import blueeyes.json.Printer.{ compact, render }
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import akka.dispatch.Future
 import scalaz._

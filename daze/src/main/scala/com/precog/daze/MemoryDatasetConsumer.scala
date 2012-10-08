@@ -71,7 +71,6 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with
   
   private def jvalueToSValue(value: JValue): SValue = value match {
     case JNothing => sys.error("don't use jnothing; doh!")
-    case JField(_, _) => sys.error("seriously?!")
     case JNull => SNull
     case JBool(value) => SBoolean(value)
     case JNum(bi) => SDecimal(bi)

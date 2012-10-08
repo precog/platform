@@ -26,8 +26,8 @@ import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service.RestPathPattern._
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.util.Clock
 
 import akka.dispatch.Future

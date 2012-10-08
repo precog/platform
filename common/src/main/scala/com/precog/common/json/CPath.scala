@@ -20,8 +20,8 @@
 package com.precog.common.json
 
 import blueeyes.json.JsonAST
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import util.matching.Regex
 
@@ -104,19 +104,21 @@ sealed trait CPath { self =>
       case head :: tail => head match {
         case x @ CPathIndex(index) => expand0(current :+ x, tail, jvalue(index))
         case x @ CPathField(name) if (isRegex(name)) => {
-          val regex = name.r
+          val R = name.r
+          jvalue match {
+            case JObject(fields) => 
+              fields flatMap { 
+                case JField(R(name), value) =>
+                  val expandedNode = CPathField(name)
+                  expand0(current :+ expandedNode, tail, value)
 
-          jvalue.children.flatMap { child =>
-            child match {
-              case JField(regex(name), value) =>
-                val expandedNode = CPathField(name)
+                case _ => Nil
+              }
 
-                expand0(current :+ expandedNode, tail, value)
-
-              case _ => Nil
-            }
+            case _ => Nil
           }
         }
+
         case x @ CPathField(name) => expand0(current :+ x, tail, jvalue \ name)
       }
     }

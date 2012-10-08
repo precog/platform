@@ -26,7 +26,7 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.persistence.cache._
 
 import java.util.concurrent.TimeUnit

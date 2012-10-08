@@ -32,8 +32,8 @@ import com.weiglewilczek.slf4s.Logging
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 
-import blueeyes.json.xschema.Decomposer
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.Decomposer
+import blueeyes.json.serialization.DefaultSerialization._
 
 import akka.actor.Actor
 import akka.actor.ActorRef

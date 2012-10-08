@@ -26,8 +26,8 @@ import blueeyes.core.http._
 import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher

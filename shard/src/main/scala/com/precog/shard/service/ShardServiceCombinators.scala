@@ -27,8 +27,8 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.JsonAST.JValue
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher

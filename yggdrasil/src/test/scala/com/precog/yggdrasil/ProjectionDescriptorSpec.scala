@@ -24,8 +24,8 @@ import org.specs2.mutable.Specification
 import blueeyes.json.JPath
 import blueeyes.json.Printer
 import blueeyes.json.JsonParser
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import com.precog.common._
 import com.precog.common.json._
