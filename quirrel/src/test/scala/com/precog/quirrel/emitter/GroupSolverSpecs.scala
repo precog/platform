@@ -88,7 +88,124 @@ object GroupSolverSpecs extends Specification
 
       tree.errors mustEqual Set(ConstraintsWithinInnerScope)
     }    
-    
+
+    "accept acceptable case of nested solves" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        solve 'gender
+          medals' := medals where medals.Gender = 'gender
+
+          solve 'weight
+            medals' where medals'.Weight = 'weight
+      """.stripMargin
+
+      val let @ Let(_, _, _, _,
+        tree1 @ Solve(_, _, 
+          Let(_, _, _, _, 
+            tree2 @ Solve(_, _, _)))) = compile(input)
+
+      let.errors must beEmpty
+      tree1.errors must beEmpty
+      tree2.errors must beEmpty
+    }
+   
+    "accept acceptable case when one solve contains a dispatch which contains tic variable from another solve" in {
+      val input = """
+       |  medals := //summer_games/london_medals
+       |  
+       |  medals' := solve 'gender
+       |    medals where medals.Gender = 'gender
+       | 
+       |  solve 'weight
+       |    medals' where medals'.Weight = 'weight & medals'.isAwesome
+       | """.stripMargin
+
+      val let @ Let(_, _, _, _,
+        Let(_, _, _, _,
+          tree @ Solve(_, _, _))) = compile(input)
+
+      let.errors must beEmpty
+      tree.errors must beEmpty
+    }
+   
+    "accept acceptable case when a dispatch in one solve contains, as an actual, a tic variable from another solve" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        f(x) := x
+
+        solve 'gender
+          medals' := medals where medals.Gender = 'gender
+
+          solve 'weight
+            medals' where medals'.Weight = 'weight & f('gender)
+      """.stripMargin
+
+      val let @ Let(_, _, _, _,
+        Let(_, _, _, _,
+          tree @ Solve(_, _, _))) = compile(input)
+
+      let.errors must beEmpty
+      tree.errors must beEmpty
+    }.pendingUntilFixed
+
+    "accept acceptable case when one solve contains a tic variable from another solve" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        solve 'gender
+          medals' := medals where medals.Gender = 'gender
+
+          solve 'weight
+            medals' where medals'.Weight = 'weight & 'gender
+      """.stripMargin
+
+      val let @ Let(_, _, _, _,
+          tree @ Solve(_, _, _)) = compile(input)
+
+      let.errors must beEmpty
+      tree.errors must beEmpty
+    }.pendingUntilFixed 
+
+    "accept a solve when the tic var is constrained in a let" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        solve 'gender
+          gender := medals where medals.Gender = 'gender
+          gender + 1
+      """.stripMargin
+
+      val tree @ Let(_, _, _, _,
+        solve @ Solve(_, _, _)) = compile(input)
+
+      solve.errors must beEmpty
+      tree.errors must beEmpty
+    }    
+
+    "accept a solve when a tic var is used in the scope of a nested solve that doesn't bind it" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        solve 'gender
+          gender := medals where medals.Gender = 'gender
+          
+          solve 'weight
+            weight := gender where gender.Weight = 'weight
+            weight + 'gender
+      """.stripMargin
+
+      val tree @ Let(_, _, _, _,
+        solve1 @ Solve(_, _,
+          Let(_, _, _, _,
+            solve2 @ Solve(_, _, _)))) = compile(input)
+
+      solve1.errors must beEmpty
+      solve2.errors must beEmpty
+      tree.errors must beEmpty
+    }    
+
     "identify and fail to solve more complicated problematic case of nested solves" in {
       val input = """
         medals := //summer_games/london_medals
@@ -426,6 +543,23 @@ object GroupSolverSpecs extends Specification
         |   count(foo where foo.a = 'a)
         | """.stripMargin
 
+      compile(input).errors must beEmpty
+    }
+    
+    "accept a reduced sessionize" in {
+      val input = """
+        | rawInteractions := //interactions
+        | 
+        | solve 'userId
+        |   interactions := rawInteractions where rawInteractions.userId = 'userId
+        |   
+        |   bounds := solve 'it
+        |     interactions.time where interactions = 'it
+        |     
+        |   solve 'it1, 'it2
+        |     bounds where bounds = 'it1 & bounds.isLower & bounds = 'it2
+        | """.stripMargin
+        
       compile(input).errors must beEmpty
     }
   }
