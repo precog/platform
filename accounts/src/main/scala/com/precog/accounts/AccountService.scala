@@ -131,7 +131,11 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Accou
             }
           }
         } ->
-        shutdown { state => Future[Option[Stoppable]]( None ) }
+        shutdown { state => 
+          for {
+            _ <- state.accountManagement.close()
+          } yield Option.empty[Stoppable]
+        }
       }
     }
   }
