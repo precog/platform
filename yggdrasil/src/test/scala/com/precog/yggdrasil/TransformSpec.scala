@@ -490,6 +490,27 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     results.copoint mustEqual expected
   }
 
+  def testEqual(sample: SampleData) = {
+    val table = fromSample(sample)
+    val results = toJson(table.transform {
+      Equal(
+        DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")),
+        DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2"))
+      )
+    })
+
+    val expected = sample.data flatMap { jv =>
+      ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
+        case (JNothing, JNothing) => 
+          None
+        case (x, y) => 
+          Some(JBool(x == y))
+      }
+    }
+
+    results.copoint must_== expected
+  }
+
   def checkEqual = {
     val genBase: Gen[SampleData] = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong)).arbitrary
     implicit val gen: Arbitrary[SampleData] = Arbitrary {
@@ -523,24 +544,32 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       }
     }
 
-    check { (sample: SampleData) =>
-      val table = fromSample(sample)
-      val results = toJson(table.transform {
-        Equal(
-          DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")),
-          DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2"))
-        )
-      })
+    check (testEqual _)
+  }
 
-      val expected = sample.data flatMap { jv =>
-        ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-          case (JNothing, JNothing) => None
-          case (x, y) => Some(JBool(x == y))
-        }
+  def testEqual1 = {
+    val JArray(elements) = JsonParser.parse("""[
+      {
+        "value":{
+          "value1":-1503074360046022108,
+          "value2":-1503074360046022108
+        },
+        "key":[1.0]
+      },
+      {
+        "value":[[-1],[],["p",-3.875484961198970156E-18930]],
+        "key":[2.0]
+      },
+      {
+        "value":{
+          "value1":4611686018427387903,
+          "value2":4611686018427387903
+        },
+        "key":[3.0]
       }
+    ]""")
 
-      results.copoint must_== expected
-    }
+    testEqual(SampleData(elements.toStream))
   }
 
   def checkEqualLiteral = {

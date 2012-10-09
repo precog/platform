@@ -292,6 +292,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "perform a trivial equality check" in checkEqualSelf
       "perform a trivial equality check on an array" in checkEqualSelfArray
       "perform a slightly less trivial equality check" in checkEqual
+      "test a failing equality example" in testEqual1
       "perform a simple equality check" in testSimpleEqual
       "perform another simple equality check" in testAnotherSimpleEqual
       "perform yet another simple equality check" in testYetAnotherSimpleEqual
