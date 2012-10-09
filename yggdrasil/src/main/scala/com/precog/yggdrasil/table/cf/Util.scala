@@ -73,6 +73,84 @@ object util {
     case (c1: NullColumn, c2: NullColumn) => new UnionColumn(c1, c2) with NullColumn
   })
 
+  case object NConcat {
+    def apply(cols: List[(Int, Column)]) = {
+      val sortedCols = cols.sortBy(_._1)
+      val offsets: Array[Int] = sortedCols.map(_._1)(collection.breakOut)
+      val columns: Array[Column] = sortedCols.map(_._2)(collection.breakOut)
+
+      cols match {
+        case (_, _: BoolColumn) :: _ if columns.forall(_.isInstanceOf[BoolColumn]) => 
+          val boolColumns = columns.asInstanceOf[Array[BoolColumn]]
+          Some(new NConcatColumn(offsets, boolColumns) with BoolColumn {
+            def apply(row: Int) = {
+              val i = indexOf(row)
+              boolColumns(i)(row - offsets(i))
+            }
+          })
+
+        case (_, _: LongColumn) :: _ if columns.forall(_.isInstanceOf[BoolColumn]) =>
+          val longColumns = columns.asInstanceOf[Array[LongColumn]]
+          Some(new NConcatColumn(offsets, longColumns) with LongColumn {
+          def apply(row: Int) = {
+            val i = indexOf(row)
+            longColumns(i)(row - offsets(i))
+          }
+        })
+        
+        case (_, _: DoubleColumn) :: _ if columns.forall(_.isInstanceOf[BoolColumn]) =>
+          val doubleColumns = columns.asInstanceOf[Array[DoubleColumn]]
+          Some(new NConcatColumn(offsets, doubleColumns) with DoubleColumn {
+          def apply(row: Int) = {
+            val i = indexOf(row)
+            doubleColumns(i)(row - offsets(i))
+          }
+        })
+
+        case (_, _: NumColumn) :: _ if columns.forall(_.isInstanceOf[BoolColumn]) =>
+          val numColumns = columns.asInstanceOf[Array[NumColumn]]
+          Some(new NConcatColumn(offsets, numColumns) with NumColumn {
+          def apply(row: Int) = {
+            val i = indexOf(row)
+            numColumns(i)(row - offsets(i))
+          }
+        })
+
+        case (_, _: StrColumn) :: _ if columns.forall(_.isInstanceOf[BoolColumn]) =>
+          val strColumns = columns.asInstanceOf[Array[StrColumn]]
+          Some(new NConcatColumn(offsets, strColumns) with StrColumn {
+          def apply(row: Int) = {
+            val i = indexOf(row)
+            strColumns(i)(row - offsets(i))
+          }
+        })
+
+        case (_, _: DateColumn) :: _ if columns.forall(_.isInstanceOf[BoolColumn]) =>
+          val dateColumns = columns.asInstanceOf[Array[DateColumn]]
+          Some(new NConcatColumn(offsets, dateColumns) with DateColumn {
+          def apply(row: Int) = {
+            val i = indexOf(row)
+            dateColumns(i)(row - offsets(i))
+          }
+        })
+
+        case (_, _: EmptyArrayColumn) :: _ if columns.forall(_.isInstanceOf[BoolColumn]) =>
+          val emptyArrayColumns = columns.asInstanceOf[Array[EmptyArrayColumn]]
+          Some(new NConcatColumn(offsets, emptyArrayColumns) with EmptyArrayColumn)
+
+        case (_, _: EmptyObjectColumn) :: _ if columns.forall(_.isInstanceOf[BoolColumn]) =>
+          val emptyObjectColumns = columns.asInstanceOf[Array[EmptyObjectColumn]]
+          Some(new NConcatColumn(offsets, emptyObjectColumns) with EmptyObjectColumn)
+
+        case (_, _: NullColumn) :: _ if columns.forall(_.isInstanceOf[BoolColumn]) =>
+          val nullColumns = columns.asInstanceOf[Array[NullColumn]]
+          Some(new NConcatColumn(offsets, nullColumns) with NullColumn)
+
+        case _ => None
+      }
+    }
+  }
+
   case class Concat(at: Int) extends CF2P({
     case (c1: BoolColumn, c2: BoolColumn) => new ConcatColumn(at, c1, c2) with BoolColumn { 
       def apply(row: Int) = if (row < at) c1(row) else c2(row - at)

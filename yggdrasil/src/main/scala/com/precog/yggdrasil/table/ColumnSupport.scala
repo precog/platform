@@ -74,6 +74,35 @@ class ConcatColumn[T <: Column](at: Int, c1: T, c2: T) { this: T =>
   def isDefinedAt(row: Int) = row >= 0 && ((row < at && c1.isDefinedAt(row)) || (row >= at && c2.isDefinedAt(row - at)))
 }
 
+class NConcatColumn[T <: Column](offsets: Array[Int], columns: Array[T]) { this: T =>
+
+  // Is this worth it? For some operations, but not sorting... all the more
+  // reason to add materialise I suppose.
+
+  @volatile private var lastIndex = 0
+
+  /** Returns the index info `offsets` and `columns` for row. */
+  protected def indexOf(row: Int): Int = {
+    val lastIdx = lastIndex
+    if (row >= offsets(lastIdx) && (lastIdx == offsets.length || offsets(lastIdx + 1) < row)) {
+      lastIdx
+    } else {
+      var idx = java.util.Arrays.binarySearch(offsets, row)
+      // Possible for idx to < 0 if row < 0
+      idx = if (idx < 0) -idx - 2 else idx
+      lastIndex = idx
+      idx
+    }
+  }
+
+  def isDefinedAt(row: Int) = {
+    val idx = indexOf(row)
+    val column = columns(idx)
+    val offset = offsets(idx)
+    column.isDefinedAt(row - offset)
+  }
+}
+
 class ShiftColumn[T <: Column](by: Int, c1: T) { this: T =>
   def isDefinedAt(row: Int) = c1.isDefinedAt(row - by)
 }

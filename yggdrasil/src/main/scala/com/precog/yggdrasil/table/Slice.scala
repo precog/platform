@@ -1162,6 +1162,26 @@ object Slice {
     }
   }
 
+  /**
+   * Concatenate multiple slices into 1 big slice. The slices will be
+   * concatenated in the order they appear in `slices`.
+   */
+  def concat(slices: List[Slice]): Slice = {
+    val (_columns, _size) = slices.foldLeft((Map.empty[ColumnRef, List[(Int, Column)]], 0)) {
+      case ((cols, offset), slice) =>
+        (slice.columns.foldLeft(cols) { case (acc, (ref, col)) =>
+          acc + (ref -> ((offset, col) :: acc.getOrElse(ref, Nil)))
+        }, offset + slice.size)
+      }
+
+    new Slice {
+      val size = _size
+      val columns = _columns.flatMap { case (ref, parts) =>
+        cf.util.NConcat(parts) map ((ref, _))
+      }
+    }
+  }
+
   // scalaz order isn't @specialized
   trait IntOrder {
     def order(i1: Int, i2: Int): Ordering
