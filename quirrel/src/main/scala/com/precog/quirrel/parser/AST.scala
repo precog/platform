@@ -591,6 +591,9 @@ trait AST extends Phases {
       case Div(_, left, right) =>
         left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
 
+      case Mod(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
       case Lt(_, left, right) =>
         left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
 
