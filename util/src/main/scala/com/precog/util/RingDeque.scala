@@ -75,15 +75,16 @@ final class RingDeque[@specialized(Boolean, Int, Long, Double, Float, Short) A: 
   def length: Int =
     (if (back > front) back - front else (back + bound) - front) - 1 
   
-  /**
-   * SLOW!!  Don't use in production code.
-   */
   def toList: List[A] = {
-    val end = front + length
-    val results = for (i <- front until end)
-      yield ring(i % bound)
-    
-    results.toList
+    @inline
+    @tailrec
+    def buildList(i: Int, accum: List[A]): List[A] =
+      if (i < front)
+        accum
+      else
+        buildList(i - 1, ring(i % bound) :: accum)
+
+    buildList(front + length - 1, Nil)
   }
   
   @inline
