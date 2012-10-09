@@ -437,26 +437,7 @@ trait Slice { source =>
   }
 
   def sortBy(refs: VectorCase[CPath]): Slice = {
-    val sortedIndices: Array[Int] = {
-      import java.util.Arrays
-      val arr = Array.range(0, source.size)
-
-      val comparator = new IntOrder {
-        def order(i1: Int, i2: Int) = {
-          var i = 0
-          var result: Ordering = EQ
-          //while (i < accessors.length && (result eq EQ)) {
-            sys.error("todo")
-          //}
-          result
-        }
-      }
-
-      Slice.qsort(arr, comparator)
-      arr
-    }
-
-    source mapRoot cf.util.Remap(sortedIndices)
+    sys.error("todo")
   }
 
   /**
@@ -1180,54 +1161,6 @@ object Slice {
         cf.util.NConcat(parts) map ((ref, _))
       }
     }
-  }
-
-  // scalaz order isn't @specialized
-  trait IntOrder {
-    def order(i1: Int, i2: Int): Ordering
-  }
-
-  private val MIN_QSORT_SIZE = 7; 
-
-  def qsort(x: Array[Int], ord: IntOrder): Unit = {
-    val random = new java.util.Random();
-    qsortPartial(x, 0, x.length-1, ord, random);
-    isort(x, ord);
-  }
-
-  private def isort(x: Array[Int], ord: IntOrder): Unit = {
-    @tailrec def sort(i: Int): Unit = if (i < x.length) {
-      val t = x(i);
-      var j = i;
-      while(j > 0 && (ord.order(t, x(j-1)) eq LT)) { x(j) = x(j-1); j -= 1 } 
-      x(j) = t;
-      sort(i + 1)
-    }
-
-    sort(0)
-  }
-
-  private def qsortPartial(x: Array[Int], lower: Int, upper: Int, ord: IntOrder, random: java.util.Random): Unit = {
-    if (upper - lower >= MIN_QSORT_SIZE) {
-      swap(x, lower, lower + random.nextInt(upper-lower+1));
-      val t = x(lower);
-      var i = lower;
-      var j = upper + 1;
-      var cont = true
-      while (cont) {
-        do { i += 1 } while (i <= upper && (ord.order(x(i), t) eq LT))
-        do { j -= 1 } while (ord.order(t, x(j)) eq LT)
-        if (i > j) cont = false
-        if (i < upper) swap(x, i, j)
-      }
-    }
-  }
-
-  @inline 
-  private def swap(xs: Array[Int], i: Int, j: Int) {
-    val temp = xs(i);
-    xs(i) = xs(j);
-    xs(j) = temp;
   }
 
   def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): RowComparator = {
