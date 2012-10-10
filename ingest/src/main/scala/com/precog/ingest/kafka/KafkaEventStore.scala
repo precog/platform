@@ -55,7 +55,7 @@ class KafkaEventStore(router: EventRouter, producerId: Int, firstEventId: Int = 
 
   def start(): Future[Unit] = Future { () }
 
-  def stop(): Future[Unit] = router.close.mapTo[Unit]
+  def stop(): Future[Unit] = router.close.map(_ => ())
 }
 
 class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDispatcher) extends EventStore with Logging {

@@ -55,6 +55,7 @@ import com.weiglewilczek.slf4s.Logging
 
 trait EvaluatorConfig extends IdSourceConfig {
   def maxEvalDuration: akka.util.Duration
+  def maxSliceSize: Int
 }
 
 trait Evaluator[M[+_]] extends DAG
@@ -691,10 +692,12 @@ trait Evaluator[M[+_]] extends DAG
               parentRightTable <- pendingTableRight.table 
               val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
             } yield {
+              val valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
+              
               if (isLeft)
-                leftResult.cross(rightResult)(buildWrappedCrossSpec(transFromBinOp(op)))
+                leftResult.paged(maxSliceSize).compact(valueSpec).cross(rightResult)(buildWrappedCrossSpec(transFromBinOp(op)))
               else
-                rightResult.cross(leftResult)(buildWrappedCrossSpec(flip(transFromBinOp(op))))
+                rightResult.paged(maxSliceSize).compact(valueSpec).cross(leftResult)(buildWrappedCrossSpec(flip(transFromBinOp(op))))
             }
             
             PendingTable(result, graph, TransSpec1.Id)
@@ -758,16 +761,18 @@ trait Evaluator[M[+_]] extends DAG
               parentBooleanTable <- pendingTableBoolean.table
               val booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
             } yield {
+              val valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
+              
               if (isLeft) {
                 val spec = buildWrappedCrossSpec { (srcLeft, srcRight) =>
                   trans.Filter(srcLeft, srcRight)
                 }
-                targetResult.cross(booleanResult)(spec)
+                targetResult.paged(maxSliceSize).compact(valueSpec).cross(booleanResult)(spec)
               } else {
                 val spec = buildWrappedCrossSpec { (srcLeft, srcRight) =>
                   trans.Filter(srcRight, srcLeft)
                 }
-                booleanResult.cross(targetResult)(spec)
+                booleanResult.paged(maxSliceSize).compact(valueSpec).cross(targetResult)(spec)
               }
             }
             
@@ -930,7 +935,7 @@ trait Evaluator[M[+_]] extends DAG
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 
       fullEval(rewriteDAG(optimize)(graph), Map(), None)
 
-    resultState.eval(EvaluatorState(Map()))
+    (resultState.eval(EvaluatorState(Map())): M[Table]) map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
   }
   
   /**

@@ -25,3 +25,4 @@ yggdrasil/data
 *.jps
 jprofiler.db
 jprofiler.jnilib
+.cache

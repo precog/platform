@@ -423,6 +423,8 @@ trait TableModule[M[+_]] extends FNModule {
      */
     def force: M[Table]
     
+    def paged(limit: Int): Table
+    
     /**
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.

@@ -108,7 +108,15 @@ trait ShardService extends
             }
           }
         } ->
-        shutdown { state => Future[Option[Stoppable]]( None ) }
+        shutdown { state =>
+          for {
+            shardShutdown <- state.queryExecutor.shutdown()
+            _             <- state.tokenManager.close()
+          } yield {
+            logger.info("Shard system clean shutdown: " + shardShutdown)            
+            Option.empty[Stoppable]
+          }
+        }
       }
     }
   }

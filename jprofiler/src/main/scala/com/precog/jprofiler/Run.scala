@@ -38,30 +38,21 @@ object Run {
     val config = RunConfig.fromCommandLine(args2) | sys.error("invalid arguments!")
 
     val queries = (
-      // mega-query, takes ~86s
+      /* "count(//obnoxious)" ::
+      "min(//obnoxious.v)" :: "max(//obnoxious.v)" ::
+      "sum(//obnoxious.v)" :: "mean(//obnoxious.v)" ::
+      "geometricMean(//obnoxious.v)" :: "sumSq(//obnoxious.v)" ::
+      "variance(//obnoxious.v)" :: "stdDev(//obnoxious.v)" */
       """
-      import std::math::floor
-      
-      historic := //summer_games/historic_medals
-      
-      histogram := solve 'year
-        maleCount := count(historic.Gender
-          where historic.Gender = "Men" & historic.Edition = 'year)
-        femaleCount := count(historic.Gender
-          where historic.Gender = "Women" & historic.Edition = 'year)
-      
-        {year: 'year, ratio: floor(100 * maleCount / femaleCount)}
-      
-      histogram
-      """ ::
-
-      //// fast, small queries
-      //"count(//obnoxious)" ::
-      //"min(//obnoxious.v)" :: "max(//obnoxious.v)" ::
-      //"sum(//obnoxious.v)" :: "mean(//obnoxious.v)" ::
-      //"geometricMean(//obnoxious.v)" :: "sumSq(//obnoxious.v)" ::
-      //"variance(//obnoxious.v)" :: "stdDev(//obnoxious.v)" ::
-      Nil
+      | medals := //summer_games/london_medals
+      | athletes := //summer_games/athletes
+      | 
+      | medals' := medals where medals.Age > 33
+      | athletes' := athletes where athletes.Countryname = "Tanzania"
+      | 
+      | medals' ~ athletes'
+      |   [medals', athletes']
+      | """.stripMargin :: Nil
     )
 
     config.rootDir match {
