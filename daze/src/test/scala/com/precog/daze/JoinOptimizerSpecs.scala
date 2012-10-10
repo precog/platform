@@ -110,15 +110,13 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val opt = optimizeJoins(input, new IdGen)
       
       val expectedOpt =
-        Sort(
-          Join(line, JoinObject, ValueSort(0),
-            Join(line, WrapObject, CrossLeftSort,
-              height,
-              Join(line, DerefObject, CrossLeftSort, liftedLHS, height)),
-            Join(line, WrapObject, CrossLeftSort,
-              name,
-              Join(line, DerefObject, CrossLeftSort, liftedRHS, name))),
-          Vector(0, 1))
+        Join(line, JoinObject, ValueSort(0),
+          Join(line, WrapObject, CrossLeftSort,
+            height,
+            Join(line, DerefObject, CrossLeftSort, liftedLHS, height)),
+          Join(line, WrapObject, CrossLeftSort,
+            name,
+            Join(line, DerefObject, CrossLeftSort, liftedRHS, name)))
 
       opt must_== expectedOpt
     }
@@ -186,20 +184,17 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val opt = optimizeJoins(input, new IdGen)
       
       val expectedOpt =
-        Sort(
+        Join(line, JoinObject, ValueSort(0),
           Join(line, JoinObject, ValueSort(0),
-            Join(line, JoinObject, ValueSort(0),
-              Join(line, WrapObject, CrossLeftSort,
-                height,
-                Join(line, DerefObject, CrossLeftSort, liftedLHS, height)),
-              Join(line, WrapObject, CrossLeftSort,
-                weight,
-                Join(line, DerefObject, CrossLeftSort, liftedLHS, weight))),
             Join(line, WrapObject, CrossLeftSort,
-              name,
-              Join(line, DerefObject, CrossLeftSort, liftedRHS, name))),
-          Vector(0, 1)
-        )  
+              height,
+              Join(line, DerefObject, CrossLeftSort, liftedLHS, height)),
+            Join(line, WrapObject, CrossLeftSort,
+              weight,
+              Join(line, DerefObject, CrossLeftSort, liftedLHS, weight))),
+          Join(line, WrapObject, CrossLeftSort,
+            name,
+            Join(line, DerefObject, CrossLeftSort, liftedRHS, name)))
 
        opt must_== expectedOpt
     }
@@ -239,27 +234,25 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val opt = optimizeJoins(input, new IdGen)
 
       val expectedOpt =
-        Sort(
-          Join(line, JoinObject, ValueSort(0),
-            Join(line, WrapObject, CrossLeftSort,
-              name,
-              Join(line, DerefObject, CrossLeftSort,
-                SortBy(
-                  Join(line, JoinObject, IdentitySort,
-                    Join(line, WrapObject, CrossLeftSort,
-                      key,
-                      Join(line, DerefObject, CrossLeftSort, users, userId)),
-                    Join(line, WrapObject, CrossLeftSort, value, users)),
-                  "key", "value", 0),
-                name)),
-            SortBy(
-              Join(line, JoinObject, IdentitySort,
-                Join(line, WrapObject, CrossLeftSort,
-                  key,
-                  Join(line, DerefObject, CrossLeftSort, heightWeight, userId)),
-                Join(line, WrapObject, CrossLeftSort, value, heightWeight)),
-              "key", "value", 0)),
-          Vector(0, 1))
+        Join(line, JoinObject, ValueSort(0),
+          Join(line, WrapObject, CrossLeftSort,
+            name,
+            Join(line, DerefObject, CrossLeftSort,
+              SortBy(
+                Join(line, JoinObject, IdentitySort,
+                  Join(line, WrapObject, CrossLeftSort,
+                    key,
+                    Join(line, DerefObject, CrossLeftSort, users, userId)),
+                  Join(line, WrapObject, CrossLeftSort, value, users)),
+                "key", "value", 0),
+              name)),
+          SortBy(
+            Join(line, JoinObject, IdentitySort,
+              Join(line, WrapObject, CrossLeftSort,
+                key,
+                Join(line, DerefObject, CrossLeftSort, heightWeight, userId)),
+              Join(line, WrapObject, CrossLeftSort, value, heightWeight)),
+            "key", "value", 0))
 
       opt must_== expectedOpt
     }
