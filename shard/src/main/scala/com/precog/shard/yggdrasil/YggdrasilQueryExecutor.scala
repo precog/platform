@@ -209,6 +209,7 @@ trait YggdrasilQueryExecutor
   private val queryId = new java.util.concurrent.atomic.AtomicLong
 
   def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
+    val qid = queryId.getAndIncrement
     queryLogger.info("Executing query for %s: %s, prefix: %s".format(userUID, query,prefix))
 
     import EvaluationError._
@@ -219,7 +220,17 @@ trait YggdrasilQueryExecutor
           /*(systemError _) <-: */
           // TODO: How can jsonChunks return a Validation... or report evaluation error to user....
           Validation.success(jsonChunks(withContext { ctx =>
-            applyQueryOptions(opts)(eval(userUID, dag, ctx, prefix, true))
+            applyQueryOptions(opts) {
+              if (queryLogger.isDebugEnabled) {
+                eval(userUID, dag, ctx, prefix, true) map {
+                  _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
+                    slice => "size: " + slice.size
+                  }
+                }
+              } else {
+                eval(userUID, dag, ctx, prefix, true)
+              }
+            }
           }))
         }
       }
