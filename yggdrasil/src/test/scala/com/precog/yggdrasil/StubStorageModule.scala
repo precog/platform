@@ -90,7 +90,8 @@ trait DistributedSampleStubStorageModule[M[+_]] extends StubStorageModule[M] {
   case class Projection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends ProjectionLike {
     val chunkSize = 2000
 
-    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("Dummy ProjectionLike doesn't support insert")      
+    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("Dummy ProjectionLike doesn't support insert")      
+    def commit(): IO[Unit] = sys.error("Dummy ProjectionLike doesn't support commit")
   }
 
   implicit lazy val ordering = IdentitiesOrder.toScalaOrdering
