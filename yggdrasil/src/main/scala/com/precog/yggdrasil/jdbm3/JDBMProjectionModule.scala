@@ -63,7 +63,7 @@ trait JDBMProjectionModule extends ProjectionModule {
 
     def close(projection: Projection) = {
       pmLogger.debug("Requesting close on " + projection)
-      IO(projection.close())
+      projection.close()
     }
     
     def archive(descriptor: ProjectionDescriptor) = {
