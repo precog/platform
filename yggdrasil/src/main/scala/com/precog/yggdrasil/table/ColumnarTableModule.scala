@@ -1856,6 +1856,21 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
     
     def force: M[Table] = this.sort(Scan(Leaf(Source), freshIdScanner), SortAscending)
+    
+    def paged(limit: Int): Table = {
+      val slices2 = slices flatMap { slice =>
+        StreamT.unfoldM(0) { idx =>
+          val back = if (idx >= slice.size)
+            None
+          else
+            Some((slice.takeRange(idx, limit), idx + limit))
+          
+          M.point(back)
+        }
+      }
+      
+      Table(slices2, size)
+    }
 
     /**
      * Cogroups this table with another table, using equality on the specified

@@ -64,9 +64,9 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
                                                          WrapObject(Leaf(Source), "1")))
 
       implicit val jValueOrdering = if (sortOrder.isAscending) {
-        blueeyes.json.serialization.DefaultOrderings.JValueOrdering
+        JValue.order.toScalaOrdering
       } else {
-        blueeyes.json.serialization.DefaultOrderings.JValueOrdering.reverse
+        JValue.order.toScalaOrdering.reverse
       }
 
       tableWithSortKey.toJson.map {

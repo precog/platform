@@ -87,7 +87,11 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
             }
           }
         } ->
-        shutdown { state => Future[Option[Stoppable]]( None ) }
+        shutdown { state => 
+          for {
+            _ <- state.tokenManagement.close()
+          } yield Option.empty[Stoppable]
+        }
       }
     }
   }

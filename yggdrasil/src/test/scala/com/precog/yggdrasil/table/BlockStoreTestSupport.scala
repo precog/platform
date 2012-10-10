@@ -87,7 +87,8 @@ trait BaseBlockStoreTestModule[M[+_]] extends
     case class Projection(descriptor: ProjectionDescriptor, data: Stream[JValue]) extends BlockProjectionLike[JArray, Slice] {
       val slices = fromJson(data).slices.toStream.copoint
 
-      def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO(sys.error("Insert not supported."))
+      def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("Insert not supported.")
+      def commit(): IO[Unit] = sys.error("Commit not supported.")
 
       implicit val keyOrder: Order[JArray] = Order[List[JValue]].contramap((_: JArray).elements)
 

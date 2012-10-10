@@ -247,9 +247,9 @@ trait GroupSolver extends AST with GroupFinder with Solver {
       }
     }
 
-    case _ if listTicVars(Some(b), expr).isEmpty && !listTicVars(None, expr).isEmpty => 
+    case expr if listTicVars(Some(b), expr).isEmpty && !listTicVars(None, expr).isEmpty =>
       (None, Set(Error(expr, ConstraintsWithinInnerScope)))
-
+    
     case _ if listTicVars(Some(b), expr).isEmpty => 
       (Some(Extra(expr)), Set())
     
@@ -275,12 +275,32 @@ trait GroupSolver extends AST with GroupFinder with Solver {
   //if b is Some: finds all tic vars in the Expr that have the given Solve as their binding
   //if b is None: finds all tic vars in the Expr
   private def listTicVars(b: Option[Solve], expr: Expr): Set[(Option[Solve], TicId)] = expr match {
-    case Let(_, _, _, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
-    case Solve(_, constraints, child) => (constraints map { listTicVars(b, _) } reduce { _ ++ _ }) ++ listTicVars(b, child)
+    case Let(_, _, _, left, right) => listTicVars(b, right)
+    
+    case b2 @ Solve(_, constraints, child) => {
+      val allVars = (constraints map { listTicVars(b, _) } reduce { _ ++ _ })
+      allVars -- listTicVars(Some(b2), child)
+    }
+    
     case New(_, child) => listTicVars(b, child)
     case Relate(_, from, to, in) => listTicVars(b, from) ++ listTicVars(b, to) ++ listTicVars(b, in)
-    case t @ TicVar(_, name) if b.isDefined && (t.binding == SolveBinding(b.get) || t.binding == FreeBinding(b.get)) => Set((b, name))
-    case TicVar(_, name) if !b.isDefined => Set((b, name))
+    
+    case t @ TicVar(_, name) if b.isDefined && (t.binding == SolveBinding(b.get) || t.binding == FreeBinding(b.get)) => {
+      t.binding match {
+        case SolveBinding(b2) => Set((Some(b2), name)) 
+        case FreeBinding(b2) => Set((Some(b2), name)) 
+        case NullBinding => Set()
+      }
+    }
+    
+    case t @ TicVar(_, name) if !b.isDefined => {
+      t.binding match {
+        case SolveBinding(b2) => Set((Some(b2), name)) 
+        case FreeBinding(b2) => Set((Some(b2), name)) 
+        case NullBinding => Set()
+      }
+    }
+    
     case TicVar(_, _) => Set()
     case StrLit(_, _) => Set()
     case NumLit(_, _) => Set()

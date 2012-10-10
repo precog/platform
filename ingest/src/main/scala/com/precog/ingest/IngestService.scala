@@ -44,9 +44,9 @@ import org.streum.configrity.Configuration
 import scalaz.Monad
 import scalaz.syntax.monad._
 
-import java.util.concurrent.{ArrayBlockingQueue, Executor, ThreadPoolExecutor, TimeUnit}
+import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
 
-case class IngestState(tokenManager: TokenManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: Executor)
+case class IngestState(tokenManager: TokenManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: ExecutorService)
 
 trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 with DecompressCombinators with AkkaDefaults { 
@@ -105,7 +105,22 @@ with DecompressCombinators with AkkaDefaults {
             }
           }
         } ->
-        shutdown { state => Future[Option[Stoppable]]( None ) }
+        shutdown { state => 
+          for {
+            _ <- state.eventStore.stop
+            _ <- state.tokenManager.close()
+          } yield {
+            logger.info("Stopping read threads")
+            state.ingestPool.shutdown()
+            if (!state.ingestPool.awaitTermination(timeout.duration.toMillis, TimeUnit.MILLISECONDS)) {
+              logger.warn("Forcibly terminating remaining read threads")
+              state.ingestPool.shutdownNow()
+            } else {
+              logger.info("Read threads stopped")
+            }
+            Option.empty[Stoppable]
+          }
+        }
       }
     }
   }

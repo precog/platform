@@ -67,6 +67,8 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
 
 
     val maxEvalDuration: Duration = Duration(30, "seconds")
+    
+    val maxSliceSize = 10000
 
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong()
@@ -89,7 +91,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
         withContext { ctx =>
           for {
             table <- eval(yggConfig.userUID, dag, ctx, Path.Root, yggConfig.optimize)
-            size <- table.renderJson(',').length
+            size <- countStream(table.renderJson(','))
           } yield size
         }
     }
@@ -97,8 +99,14 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
     case e: com.precog.quirrel.parser.Parser$ParseException =>
       sys.error("Error parsing query:\n\n%s\n\n%s" format (query, e.getMessage()))
   }
+  
+  private def countStream[A](str: StreamT[M, A]): M[Int] = {
+    for {
+      optTail <- str.uncons
+      res = optTail map { _._2 } map { tail => countStream(tail) map (1 +) }
+      
+      back <- res getOrElse M.point(0)
+    } yield back
+  }
 }
-
-
-
 

@@ -24,7 +24,6 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
-import blueeyes.json.serialization.DefaultOrderings.JValueOrdering
 import blueeyes.concurrent.test.FutureMatchers
 
 import scalaz.{Ordering => _, NonEmptyList => NEL, _}
