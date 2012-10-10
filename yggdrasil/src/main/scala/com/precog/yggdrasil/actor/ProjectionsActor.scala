@@ -123,15 +123,19 @@ trait ProjectionsActorModule extends ProjectionModule {
 
         io.unsafePerformIO
 
-      case ReleaseProjection(descriptor) => {
-        acquisitionState.get(descriptor) match {
+      case ReleaseProjection(descriptor) => 
+        val io: IO[Any] = acquisitionState.get(descriptor) match {
           case None =>
-            logger.warn("Extraneous request to release projection descriptor " + descriptor.shows + 
-                        "; no outstanding acquisitions for this descriptor recorded.")
+            IO {
+              logger.warn("Extraneous request to release projection descriptor " + descriptor.shows + 
+                          "; no outstanding acquisitions for this descriptor recorded.")
+            }
                         
           case Some(s @ AcquisitionState(_, 1, Nil)) =>
-            logger.debug("Release of last acquisition of " + descriptor.shows)
-            acquisitionState -= descriptor
+            IO {
+              logger.debug("Release of last acquisition of " + descriptor.shows)
+              acquisitionState -= descriptor
+            }
           
           case Some(s @ AcquisitionState(_, 1, queue)) =>
             queue.reverse.span(!_.lockForArchive) match {
@@ -143,30 +147,31 @@ trait ProjectionsActorModule extends ProjectionModule {
               case (nonExcl, excl) =>
                 logger.debug("Dequeued non-exclusive acquisition of " + descriptor.shows + " after release")
                 acquisitionState(descriptor) = AcquisitionState(false, nonExcl.size, excl)
-                nonExcl map { req => acquired(req.requestor, descriptor) }
+                (nonExcl map { req => acquired(req.requestor, descriptor) }).sequence[IO, Unit]
             }
             
           case Some(s @ AcquisitionState(_, count0, _)) =>
-            logger.debug("Non-exclusive release of %s, count now %d".format(descriptor.shows, count0 - 1))
-            acquisitionState(descriptor) = s.copy(count = count0-1)
+            IO {
+              logger.debug("Non-exclusive release of %s, count now %d".format(descriptor.shows, count0 - 1))
+              acquisitionState(descriptor) = s.copy(count = count0-1)
+            }
         }
-      }
 
-      case ProjectionInsert(descriptor, rows) => {
+        io.unsafePerformIO
+
+      case ProjectionInsert(descriptor, rows) => 
         val coordinator = sender
         logger.trace(coordinator + " is inserting into projection " + descriptor.shows)
         
         val insertActor = context.actorOf(Props(new ProjectionInsertActor(rows, coordinator)))
         self.tell(AcquireProjection(descriptor, false), insertActor)
-      }
       
-      case ProjectionArchive(descriptor, archive) => {
+      case ProjectionArchive(descriptor, archive) => 
         val coordinator = sender
         logger.info(coordinator + " is archiving projection " + descriptor.shows)
         
         val archiveActor = context.actorOf(Props(new ProjectionArchiveActor(coordinator)))
         self.tell(AcquireProjection(descriptor, true), archiveActor)
-      }
     }
 
     override def postStop(): Unit = {

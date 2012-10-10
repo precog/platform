@@ -137,7 +137,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     IO { MDC.clear() }
   }
 
-  def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false) {
+  def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = {
     if (logger.isTraceEnabled) {
       logger.trace("Inserting %s => %s".format(ids.mkString("[", ", ", "]"), v))
     }
