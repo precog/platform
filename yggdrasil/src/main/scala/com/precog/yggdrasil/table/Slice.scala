@@ -487,10 +487,11 @@ trait Slice { source =>
   }
 
   def takeRange(startIndex: Int, numberToTake: Int): Slice = {
+    val take2 = math.min(this.size, startIndex + numberToTake) - startIndex
     new Slice {
-      val size = numberToTake
+      val size = take2
       val columns = source.columns mapValues { 
-        col => (col |> cf.util.RemapFilter(_ < numberToTake, startIndex)).get
+        col => (col |> cf.util.RemapFilter(_ < take2, startIndex)).get
       }
     }
   }

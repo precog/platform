@@ -55,6 +55,7 @@ import com.weiglewilczek.slf4s.Logging
 
 trait EvaluatorConfig extends IdSourceConfig {
   def maxEvalDuration: akka.util.Duration
+  def maxSliceSize: Int
 }
 
 trait Evaluator[M[+_]] extends DAG
@@ -930,7 +931,7 @@ trait Evaluator[M[+_]] extends DAG
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 
       fullEval(rewriteDAG(optimize)(graph), Map(), None)
 
-    resultState.eval(EvaluatorState(Map()))
+    (resultState.eval(EvaluatorState(Map())): M[Table]) map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
   }
   
   /**

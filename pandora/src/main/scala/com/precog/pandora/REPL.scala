@@ -250,6 +250,8 @@ object Console extends App {
     val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
+    
+    val maxSliceSize = 10000
 
     //TODO: Get a producer ID
     val idSource = new IdSource {
