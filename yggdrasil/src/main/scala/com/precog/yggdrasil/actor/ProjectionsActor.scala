@@ -258,18 +258,32 @@ trait ProjectionsActorModule extends ProjectionModule {
       case ProjectionAcquired(projection) => { 
         logger.debug("Inserting " + rows.size + " rows into " + projection)
         
-        try {
-          MDC.put("projection", projection.descriptor.shows)
-          val startTime = System.currentTimeMillis
-          for(ProjectionInsert.Row(eventId, values, _) <- rows)
-            projection.insert(Array(eventId.uid), values).unsafePerformIO
-          logger.debug("Insertion of %d rows in %d ms".format(rows.size, System.currentTimeMillis - startTime))
-          MDC.clear()
-          
-          replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
-        } catch {
-          case t: Throwable => logger.error("Error during insert, aborting batch", t)
+        @inline
+        @tailrec
+        def runInsert(rows: Seq[ProjectionInsert.Row]): Unit =  {
+          if (rows.nonEmpty) {
+            val row = rows.head
+            projection.insert(Array(row.id.uid), row.values)
+            runInsert(rows.tail)
+          }
         }
+
+        MDC.put("projection", projection.descriptor.shows)
+        val startTime = System.currentTimeMillis
+
+        val insertRun: IO[Unit] = for {
+          _ <- IO { runInsert(rows) }
+          _ <- projection.commit()
+        } yield {
+          logger.debug("Insertion of %d rows in %d ms".format(rows.size, System.currentTimeMillis - startTime))          
+          replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
+        }
+
+        insertRun.except {
+          t: Throwable => IO { logger.error("Error during insert, aborting batch", t) }
+        }.ensuring {
+          IO { MDC.clear() }
+        }.unsafePerformIO
 
         sender ! ReleaseProjection(projection.descriptor)
 

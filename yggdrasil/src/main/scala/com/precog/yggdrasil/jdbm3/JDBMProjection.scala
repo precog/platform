@@ -94,6 +94,9 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   def setMDC() {
     MDC.put("projection", descriptor.shows)
   }
+  
+  // TODO: Make this safe
+  //  def size(): Long = idIndexFile.collectionSize(treeMap)
 
   protected lazy val idIndexFile: DB = try {
     logger.debug("Opening index file for " + toString + " from " + baseDir)
@@ -115,16 +118,26 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     }
   }
 
-  def close() = {
+  def close(): IO[Unit] = IO {
     setMDC()
     logger.debug("Closing column index files")
     idIndexFile.commit()
     idIndexFile.close()
     logger.debug("Closed column index files")
-    MDC.clear()
+  }.ensuring {
+    IO { MDC.clear() }
   }
 
-  def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
+  def commit(): IO[Unit] = IO {
+    setMDC()
+    logger.debug("Committing column index files")
+    idIndexFile.commit()
+    logger.debug("Committed column index files")
+  } ensuring {
+    IO { MDC.clear() }
+  }
+
+  def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false) {
     if (logger.isTraceEnabled) {
       logger.trace("Inserting %s => %s".format(ids.mkString("[", ", ", "]"), v))
     }
