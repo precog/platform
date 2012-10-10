@@ -29,7 +29,7 @@ trait JoinOptimizer extends DAGTransform {
   import dag._
   import instructions.{ DerefObject, Eq, JoinObject, Line, PushString, WrapObject }
 
-  def optimize(graph: DepGraph, idGen: IdGen = IdGen): DepGraph = {
+  def optimizeJoins(graph: DepGraph, idGen: IdGen = IdGen): DepGraph = {
     
     def determinedBy(determinee: DepGraph, determiner: DepGraph): Boolean = {
       

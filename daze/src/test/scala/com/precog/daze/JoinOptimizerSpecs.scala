@@ -54,7 +54,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
     }) 
   }
 
-  "optimizer" should {
+  "join optimization" should {
     "eliminate naive cartesian products in trivial cases" in {
       
       val rawInput = """
@@ -107,7 +107,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
               heightWeight,
               userId)))    
       
-      val opt = optimize(input, new IdGen)
+      val opt = optimizeJoins(input, new IdGen)
       
       val expectedOpt =
         Sort(
@@ -183,7 +183,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           )
         )
 
-      val opt = optimize(input, new IdGen)
+      val opt = optimizeJoins(input, new IdGen)
       
       val expectedOpt =
         Sort(
@@ -236,7 +236,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           )
         )
 
-      val opt = optimize(input, new IdGen)
+      val opt = optimizeJoins(input, new IdGen)
 
       val expectedOpt =
         Sort(
