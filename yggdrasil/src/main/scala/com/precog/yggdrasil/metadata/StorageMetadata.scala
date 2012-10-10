@@ -165,9 +165,9 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
     as.map(f).toStream.sequence.map(_ forall identity)
 }
 
-class ActorStorageMetadata(actor: ActorRef)(implicit val asyncContext: ExecutionContext) extends StorageMetadata[Future] with Logging {
+class ActorStorageMetadata(actor: ActorRef, serviceTimeout0: Timeout)(implicit val asyncContext: ExecutionContext) extends StorageMetadata[Future] with Logging {
   implicit val M = AkkaTypeClasses.futureApplicative(asyncContext) 
-  implicit val serviceTimeout: Timeout = 10 seconds //TODO: CONFIGURATION!!!
+  implicit val serviceTimeout = serviceTimeout0
  
   def findChildren(path: Path) = (actor ? FindChildren(path)).mapTo[Set[Path]] onFailure { 
     case e => logger.error("Error finding children for " + path, e) 

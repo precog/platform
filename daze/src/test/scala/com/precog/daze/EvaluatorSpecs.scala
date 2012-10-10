@@ -100,7 +100,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
     }
   }
   
-  trait YggConfig extends EvaluatorConfig with DatasetConsumersConfig {
+  trait YggConfig extends EvaluatorConfig {
     val sortBufferSize = 1000
     val sortWorkDir: File = IOUtils.createTmpDir("idsoSpec").unsafePerformIO
     val clock = blueeyes.util.Clock.System

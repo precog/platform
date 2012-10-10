@@ -64,7 +64,7 @@ object SBTConsole {
 
     trait YggConfig
         extends BaseConfig 
-        with DatasetConsumersConfig 
+        with EvaluatorConfig
         with StandaloneShardSystemConfig
 
     trait TableCompanion extends BlockStoreColumnarTableCompanion {

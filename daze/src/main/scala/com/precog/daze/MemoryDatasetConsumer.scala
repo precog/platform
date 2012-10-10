@@ -40,16 +40,11 @@ import Validation._
 
 import blueeyes.json._
 
-trait DatasetConsumersConfig extends EvaluatorConfig {
-  def maxEvalDuration: Duration
-}
-
 // TODO decouple this from the evaluator specifics
-trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with YggConfigComponent {
+trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] {
   import JsonAST._
   
   type X = Throwable
-  type YggConfig <: DatasetConsumersConfig
   type SEvent = (Vector[Long], SValue)
 
   implicit def M: Monad[M] with Copointed[M]
