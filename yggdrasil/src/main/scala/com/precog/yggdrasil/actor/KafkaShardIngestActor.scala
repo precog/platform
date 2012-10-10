@@ -116,6 +116,7 @@ abstract class KafkaShardIngestActor(shardId: String,
       logger.warn("Incomplete ingest at " + checkpoint)
       totalConsecutiveFailures += 1
       if (totalConsecutiveFailures < maxConsecutiveFailures) {
+        logger.info("Retrying failed ingest")
         for (messages <- ingestCache.get(checkpoint)) {
           val batchHandler = context.actorOf(Props(new BatchHandler(self, requestor, checkpoint, ingestTimeout))) 
           requestor.tell(IngestData(messages), batchHandler)
