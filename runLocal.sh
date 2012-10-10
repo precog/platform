@@ -21,8 +21,8 @@ ACCOUNTS_ASSEMBLY=$BASEDIR/accounts/target/accounts-assembly-$VERSION.jar
 SHARD_ASSEMBLY=$BASEDIR/shard/target/shard-assembly-$VERSION.jar
 YGGDRASIL_ASSEMBLY=$BASEDIR/yggdrasil/target/yggdrasil-assembly-$VERSION.jar
 
-if [ ! -f $INGEST_ASSEMBLY -o ! -f $SHARD_ASSEMBLY -o ! -f $YGGDRASIL_ASSEMBLY ]; then
-    echo "Ingest, shard, and yggdrasil assemblies are required before running. Please build and re-run."
+if [ ! -f $INGEST_ASSEMBLY -o ! -f $SHARD_ASSEMBLY -o ! -f $YGGDRASIL_ASSEMBLY -o ! -f $AUTH_ASSEMBLY -o ! -f $ACCOUNTS_ASSEMBLY ]; then
+    echo "Ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run."
     exit 1
 fi
 
@@ -36,7 +36,7 @@ else
 fi
 
 # Parse opts to determine settings
-while getopts ":dl" opt; do
+while getopts "d:l" opt; do
     case $opt in
         d) 
             WORKDIR=$OPTARG
