@@ -65,7 +65,7 @@ libraryDependencies ++= Seq(
   "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.2-SNAPSHOT" changing(),
   "com.google.guava"            %  "guava"              % "12.0",
   "org.apfloat"                 %  "apfloat"            % "1.6.3",
-  "org.spire-math"              %% "spire"              % "0.2.0-M1"
+  "org.spire-math"              %% "spire"              % "0.2.0-M2"
 )
 
 ivyXML :=

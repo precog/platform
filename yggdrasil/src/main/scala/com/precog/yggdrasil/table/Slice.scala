@@ -401,22 +401,31 @@ trait Slice { source =>
       cols
     })(collection.breakOut)
     val comparators: Array[RowComparator] = colGroups map { cols => RowComparator(cols, cols) }
-    val order: Array[Int] = Array.range(0, source.size)
-
-    spire.math.MergeSort.sort(order)(new spire.math.Order[Int] {
-      def eqv(i: Int, j: Int) = compare(i, j) == 0
-      def compare(i: Int, j: Int): Int = {
+    val rowComparator = new RowComparator {
+      def compare(i: Int, j: Int): Ordering = {
         var k = 0
-        var cmp = 0
-        while (cmp == 0 && k < comparators.length) {
-          cmp = comparators(k).compare(i, j).toInt
+        var cmp: Ordering = EQ
+        while (cmp == EQ && k < comparators.length) {
+          cmp = comparators(k).compare(i, j)
           k += 1
         }
         cmp
       }
+    }
+
+    val order: Array[Int] = Array.range(0, source.size)
+    spire.math.MergeSort.sort(order)(new spire.math.Order[Int] {
+      def compare(i: Int, j: Int) = rowComparator.compare(i, j).toInt
+      def eqv(i: Int, j: Int) = compare(i, j) == 0
     }, implicitly)
 
-    source mapRoot cf.util.Remap(order)
+    val remapOrder = new ArrayIntList(order.size)
+    var i = 0
+    while (i < order.length) {
+      remapOrder.add(i, order(i))
+      i += 1
+    }
+    source.remap(remapOrder)
   }
 
   /**

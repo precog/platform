@@ -81,14 +81,19 @@ class NConcatColumn[T <: Column](offsets: Array[Int], columns: Array[T]) { this:
 
   @volatile private var lastIndex = 0
 
+  @inline private final def inBound(row: Int, idx: Int): Boolean = {
+    val lb = if (idx < 0) 0 else offsets(idx)
+    val ub = if ((idx + 1) < offsets.length) offsets(idx + 1) else (row + 1)
+    row >= lb && row < ub
+  }
+
   /** Returns the index info `offsets` and `columns` for row. */
   protected def indexOf(row: Int): Int = {
     val lastIdx = lastIndex
-    if (row >= offsets(lastIdx) && (lastIdx == offsets.length || offsets(lastIdx + 1) < row)) {
+    if (inBound(row, lastIdx)) {
       lastIdx
     } else {
       var idx = java.util.Arrays.binarySearch(offsets, row)
-      // Possible for idx to < 0 if row < 0
       idx = if (idx < 0) -idx - 2 else idx
       lastIndex = idx
       idx
@@ -97,9 +102,11 @@ class NConcatColumn[T <: Column](offsets: Array[Int], columns: Array[T]) { this:
 
   def isDefinedAt(row: Int) = {
     val idx = indexOf(row)
-    val column = columns(idx)
-    val offset = offsets(idx)
-    column.isDefinedAt(row - offset)
+    if (idx < 0) false else {
+      val column = columns(idx)
+      val offset = offsets(idx)
+      column.isDefinedAt(row - offset)
+    }
   }
 }
 
