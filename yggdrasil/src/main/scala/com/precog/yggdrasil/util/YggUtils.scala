@@ -779,7 +779,7 @@ object ImportTools extends Command with Logging {
 
   class Config(
     var input: Vector[(String, String)] = Vector.empty, 
-    val batchSize: Int = 100000,
+    val batchSize: Int = 10000,
     var token: TokenID = "root",
     var verbose: Boolean = false ,
     var storageRoot: File = new File("./data"),
