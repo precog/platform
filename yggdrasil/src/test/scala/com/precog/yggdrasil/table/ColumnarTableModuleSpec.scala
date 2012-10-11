@@ -31,7 +31,7 @@ import akka.dispatch._
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
-import com.weiglewilczek.slf4s.Logging
+import org.slf4j.{LoggerFactory, MDC}
 
 import scala.annotation.tailrec
 import scala.collection.mutable.LinkedHashSet
@@ -93,6 +93,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   }
 
   object Table extends TableCompanion
+
+  private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.table.ColumnarTableModuleSpec")
 
   "a table dataset" should {
     "verify bijection from static JSON" in {
@@ -249,7 +251,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     }
     
     "in cogroup" >> {
-      "perform a simple cogroup" in testSimpleCogroup
+      "perform a simple cogroup" in testSimpleCogroup(identity[Table])
       "perform another simple cogroup" in testAnotherSimpleCogroup
       "cogroup for unions" in testUnionCogroup
       "perform yet another simple cogroup" in testAnotherSimpleCogroupSwitched
@@ -370,6 +372,14 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 
   "crossAll" should {
     "cross a simple borg result set" in simpleCrossAllTest
+  }
+
+  "logging" should {
+    "run" in {
+      testSimpleCogroup(t => t.logged(logger, "test-logging", "start stream", "end stream") {
+        slice => "size: " + slice.size
+      })
+    }
   }
 
   "grouping support" >> {

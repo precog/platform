@@ -35,7 +35,8 @@ import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 import org.joda.time.DateTime
 import com.google.common.io.Files
-import com.weiglewilczek.slf4s.Logging
+
+import org.slf4j.Logger
 
 import org.apache.jdbm.DBMaker
 import java.io.File
@@ -2466,6 +2467,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
     def slicePrinter(prelude: String)(f: Slice => String): Table = {
       Table(StreamT(StreamT.Skip({println(prelude); slices map { s => println(f(s)); s }}).point[M]))
+    }
+
+    def logged(logger: Logger, logPrefix: String = "", prelude: String = "", appendix: String = "")(f: Slice => String): Table = {
+      val preludeEffect = StreamT(StreamT.Skip({logger.debug(logPrefix + " " + prelude); StreamT.empty[M, Slice]}).point[M])
+      val appendixEffect = StreamT(StreamT.Skip({logger.debug(logPrefix + " " + appendix); StreamT.empty[M, Slice]}).point[M])
+      val sliceEffect = if (logger.isTraceEnabled) slices map { s => logger.trace(logPrefix + " " + f(s)); s } else slices
+      Table(preludeEffect ++ sliceEffect ++ appendixEffect)
     }
 
     def printer(prelude: String = "", flag: String = ""): Table = slicePrinter(prelude)(s => flag + s.toJsonString)

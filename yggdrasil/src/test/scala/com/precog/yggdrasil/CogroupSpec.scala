@@ -124,7 +124,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     jsonResult.copoint must containAllOf(expected).only
   }
 
-  def testSimpleCogroup = {
+  def testSimpleCogroup(f: Table => Table = identity[Table]) = {
     def recl(i: Int) = toRecord(Array(i), JObject(List(JField("left", JString(i.toString)))))
     def recr(i: Int) = toRecord(Array(i), JObject(List(JField("right", JString(i.toString)))))
     def recBoth(i: Int) = toRecord(Array(i), JObject(List(JField("left", JString(i.toString)), JField("right", JString(i.toString)))))
@@ -155,7 +155,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
       InnerObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(InnerObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
     )
 
-    val jsonResult = toJson(result)
+    val jsonResult = toJson(f(result))
     jsonResult.copoint must containAllOf(expected).only
   }
 
