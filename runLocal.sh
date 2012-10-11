@@ -334,7 +334,6 @@ wait_until_port_open 30070
 
 echo "Startup complete, running in $WORKDIR"
 
-TOKENID=`grep tid $WORKDIR/root_token.json | sed -e 's/.*"tid" : "\(.*\)".*/\1/'`
 echo "============================================================"
 echo "Root token: $TOKENID"
 echo "Base path: $WORKDIR"
