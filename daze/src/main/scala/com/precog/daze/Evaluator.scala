@@ -43,6 +43,7 @@ trait Evaluator[M[+_]] extends DAG
     with CrossOrdering
     with Memoizer
     with TypeInferencer
+    with JoinOptimizer
     with StaticInliner[M]
     with ReductionFinder
     with TableModule[M]        // TODO specific implementation
@@ -82,9 +83,10 @@ trait Evaluator[M[+_]] extends DAG
   def freshIdScanner: Scanner
 
   def rewriteDAG(optimize: Boolean): DepGraph => DepGraph = {
+    (if (optimize) inlineStatics(_) else identity[DepGraph] _) andThen
+    (if (optimize) optimizeJoins(_) else identity) andThen
     (orderCrosses _) andThen
     (if (optimize) (g => megaReduce(g, findReductions(g))) else identity) andThen
-    (if (optimize) inlineStatics else identity) andThen
     (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
     (if (optimize) (memoize _) else identity)
   }
