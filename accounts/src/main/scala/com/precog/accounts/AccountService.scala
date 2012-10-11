@@ -38,7 +38,7 @@ import blueeyes.util.Clock
 import HttpHeaders.Authorization
 
 import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
+import akka.dispatch.ExecutionContext
 
 import org.joda.time.DateTime
 import org.I0Itec.zkclient.ZkClient 
@@ -67,10 +67,11 @@ case class AccountServiceState(accountManagement: AccountManager[Future], clock:
 
 
 trait AccountServiceCombinators extends HttpRequestHandlerCombinators {
-  implicit val jsonErrorTransform = (failure: HttpFailure, s: String) => HttpResponse(failure, content = Some(s.serialize))
-  
-  def auth[A, B](accountManager: AccountManager[Future])(service: HttpService[A, Account => Future[B]])(implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) = {
-    new AuthenticationService[A, B](accountManager, service)
+  def auth[A](accountManager: AccountManager[Future])(service: HttpService[A, Account => Future[HttpResponse[JValue]]])(implicit ctx: ExecutionContext) = {
+    new AuthenticationService[A, HttpResponse[JValue]](accountManager, service)({
+      case NotProvided => HttpResponse(Unauthorized, headers = HttpHeaders(List(("WWW-Authenticate","Basic"))))
+      case AuthMismatch(message) => HttpResponse(Unauthorized, content = Some(message.serialize))
+    })
   }
 }
 

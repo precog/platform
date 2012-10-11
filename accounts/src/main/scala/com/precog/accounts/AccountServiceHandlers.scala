@@ -62,7 +62,11 @@ import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 
 
-class AuthenticationService[A, B](accountManager: AccountManager[Future], val delegate: HttpService[A, Account => Future[B]])(implicit err: (HttpFailure, String) => B, ctx: ExecutionContext) 
+sealed trait AuthenticationFailure
+case object NotProvided extends AuthenticationFailure
+case class AuthMismatch(message: String) extends AuthenticationFailure
+
+class AuthenticationService[A, B](accountManager: AccountManager[Future], val delegate: HttpService[A, Account => Future[B]])(err: AuthenticationFailure => B)(implicit ctx: ExecutionContext) 
 extends DelegatingService[A, Future[B], A, Account => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
     delegate.service(request) map { (f: Account => Future[B]) =>
@@ -71,11 +75,11 @@ extends DelegatingService[A, Future[B], A, Account => Future[B]] with Logging {
           case BasicAuthCredentials(email,  password) =>
             accountManager.authAccount(email, password) flatMap { 
               case Some(account)   => f(account)
-              case None            => Future(err(Unauthorized, "Credentials provided were formatted correctly, but did not match a known account."))
+              case None            => Future(err(AuthMismatch("Credentials provided were formatted correctly, but did not match a known account.")))
             }
         }
       } getOrElse {
-        Future(err(Unauthorized, "No credentials provided, or Authorization header format was invalid."))
+        Future(err(NotProvided))
       }
     }
   }
