@@ -66,6 +66,7 @@ trait RoutingTable {
     
     val grouped = updates.groupBy(_._1).mapValues(_.map(_._2))
     
+    // Group consecutive inserts into atomic ProjectionInsert messages for batching, but split at any archive requests
     val revBatched = grouped.flatMap {
       case (desc, updates) => updates.foldLeft(List.empty[ProjectionUpdate]) {
         case (rest, id : ArchiveId) => ProjectionArchive(desc, id) :: rest

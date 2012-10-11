@@ -86,20 +86,26 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
     flush(None).unsafePerformIO
   }
 
+  private val ingestBatchId = new java.util.concurrent.atomic.AtomicInteger()
+
   def receive = {
     case Status => logger.trace(Status.toString); sender ! status
 
     case msg @ IngestBatchMetadata(updates, batchClock, batchOffset) => {
-      logger.trace(msg.toString)
+      //logger.trace(msg.toString)
+      MDC.put("metadata_batch", ingestBatchId.getAndIncrement().toString)
       for(update <- updates) update match {
         case (descriptor, Some(metadata)) =>
+          logger.trace("Dirty metadata on %s".format(descriptor))
           projections += (descriptor -> metadata)
           dirty += descriptor
         case (descriptor, None) =>
+          logger.trace("Archive metadata on %s".format(descriptor))
           flush(None).flatMap(_ => storage.archiveMetadata(descriptor)).unsafePerformIO
           projections -= descriptor
           dirty -= descriptor
       }
+      MDC.remove("metadata_batch")
       
       messageClock = messageClock |+| batchClock
       kafkaOffset = batchOffset orElse kafkaOffset
@@ -141,7 +147,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
   private def flush(replyTo: Option[ActorRef]): IO[Unit] = {
     flushRequests += 1
-    logger.debug("Flushing metadata (request %d)...".format(flushRequests))
+    logger.debug("Flushing metadata (%s, request %d)...".format(if (replyTo.nonEmpty) "scheduled" else "forced", flushRequests))
 
     val io: IO[List[Unit]] = fullDataFor(dirty) flatMap { 
       _.toList.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, messageClock)) }).sequence[IO, Unit]

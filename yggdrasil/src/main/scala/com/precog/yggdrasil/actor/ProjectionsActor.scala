@@ -190,6 +190,7 @@ trait ProjectionsActorModule extends ProjectionModule {
     private val openProjections = mutable.Map.empty[ProjectionDescriptor, (Projection, Long)]
                              
     private def evictProjection(descriptor: ProjectionDescriptor, projection: Projection): IO[Unit] = {
+      logger.debug("Evicting " + descriptor.shows)
       openProjections -= descriptor
       Projection.close(projection)
     }
@@ -273,10 +274,10 @@ trait ProjectionsActorModule extends ProjectionModule {
           }
         }
 
-        MDC.put("projection", projection.descriptor.shows)
         val startTime = System.currentTimeMillis
 
         val insertRun: IO[Unit] = for {
+          _ <- IO { MDC.put("projection", projection.descriptor.shows) }
           _ <- IO { runInsert(rows) }
           _ <- projection.commit()
         } yield {

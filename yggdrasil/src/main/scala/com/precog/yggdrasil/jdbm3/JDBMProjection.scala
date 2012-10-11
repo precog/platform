@@ -120,19 +120,19 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
   def close(): IO[Unit] = IO {
     setMDC()
-    logger.debug("Closing column index files")
+    logger.trace("Closing column index files")
     idIndexFile.commit()
     idIndexFile.close()
-    logger.debug("Closed column index files")
+    logger.trace("Closed column index files")
   }.ensuring {
     IO { MDC.clear() }
   }
 
   def commit(): IO[Unit] = IO {
     setMDC()
-    logger.debug("Committing column index files")
+    logger.trace("Committing column index files")
     idIndexFile.commit()
-    logger.debug("Committed column index files")
+    logger.trace("Committed column index files")
   } ensuring {
     IO { MDC.clear() }
   }
