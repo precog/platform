@@ -74,9 +74,9 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
 
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  type YggConfig <: DatasetConsumersConfig with IdSourceConfig
+  type YggConfig <: EvaluatorConfig with IdSourceConfig
   
-  class ParseEvalStackSpecConfig extends BaseConfig with DatasetConsumersConfig with IdSourceConfig {
+  class ParseEvalStackSpecConfig extends BaseConfig with IdSourceConfig {
     logger.trace("Init yggConfig")
     val config = Configuration parse {
       Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }

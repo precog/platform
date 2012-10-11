@@ -90,9 +90,10 @@ trait ProductionShardSystemActorModule extends ShardSystemActorModule {
   def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
 }
 
-trait StandaloneShardSystemConfig extends ShardConfig {
-  val shardId = "standalone"
-  val logPrefix = "[Standalone Yggdrasil Shard]"
+trait StandaloneShardSystemConfig extends SystemActorStorageConfig {
+  def shardId = "standalone"
+  def logPrefix = "[Standalone Yggdrasil Shard]"
+  def metadataServiceTimeout = metadataTimeout
 }
 
 trait StandaloneShardSystemActorModule extends ShardSystemActorModule {

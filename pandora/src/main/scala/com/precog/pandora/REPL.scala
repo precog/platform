@@ -237,7 +237,7 @@ object Console extends App {
   val controlTimeout = Duration(120, "seconds")
   class REPLConfig(dataDir: Option[String]) extends 
       BaseConfig with 
-      DatasetConsumersConfig with 
+      EvaluatorConfig with
       StandaloneShardSystemConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
     val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }

@@ -64,8 +64,9 @@ import org.streum.configrity.Configuration
 
 trait YggdrasilQueryExecutorConfig extends 
     BaseConfig with 
-    DatasetConsumersConfig with 
-    ProductionShardSystemConfig {
+    ProductionShardSystemConfig with
+    SystemActorStorageConfig with
+    EvaluatorConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
