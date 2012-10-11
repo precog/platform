@@ -28,6 +28,7 @@ import com.precog.util._
 import com.precog.common._
 
 import com.weiglewilczek.slf4s.Logging
+import org.slf4j.MDC
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._

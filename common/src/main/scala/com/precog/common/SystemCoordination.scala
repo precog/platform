@@ -145,7 +145,9 @@ trait ProducerStateSerialization {
 object ProducerState extends ProducerStateSerialization
 
 
-case class YggCheckpoint(offset: Long, messageClock: VectorClock)
+case class YggCheckpoint(offset: Long, messageClock: VectorClock) {
+  def update(newOffset: Long, newPid: Int, newSid: Int) = this.copy(offset max newOffset, messageClock.update(newPid, newSid))
+}
 
 trait YggCheckpointSerialization {
   implicit val YggCheckpointDecomposer: Decomposer[YggCheckpoint] = new Decomposer[YggCheckpoint] {

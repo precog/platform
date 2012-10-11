@@ -47,6 +47,7 @@ import blueeyes.json.JsonAST._
 import blueeyes.json.serialization.Decomposer
 import blueeyes.json.serialization.DefaultSerialization._
 
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.immutable.TreeMap
 import scalaz._
@@ -174,16 +175,19 @@ abstract class KafkaShardIngestActor(shardId: String,
 
       // The shard ingest actor needs to compute the maximum offset, so it has to traverse the full 
       // message set in process; to avoid traversing it twice, we simply read the payload into 
-      // event messages at this point.
-      messageSet.foldLeft((Vector.empty[IngestMessage], fromCheckpoint)) {
-        case ((acc, YggCheckpoint(offset, clock)), msgAndOffset) => 
-          IngestMessageSerialization.read(msgAndOffset.message.payload) match {
-            case em @ EventMessage(EventId(pid, sid), _) =>
-              (acc :+ em, YggCheckpoint(offset max msgAndOffset.offset, clock.update(pid, sid)))
-            case am @ ArchiveMessage(ArchiveId(pid, sid), _) =>
-              (acc :+ am, YggCheckpoint(offset max msgAndOffset.offset, clock.update(pid, sid)))
-          }
+      // event messages at this point. We stop at the first archive message, either including it
+      // if it's the initial message, or using all inserts up to that point
+      @tailrec
+      def buildBatch(input: Stream[(IngestMessage,Long)], batch: Vector[IngestMessage], checkpoint: YggCheckpoint): (Vector[IngestMessage], YggCheckpoint) = input match {
+        case Stream.Empty => (batch, checkpoint)
+        case (em @ EventMessage(EventId(pid, sid), _), offset) #:: tail     => buildBatch(tail, batch :+ em, checkpoint.update(offset, pid, sid))
+        case (ar: ArchiveMessage, _) #:: tail if batch.nonEmpty             => (batch, checkpoint)
+        case (ar @ ArchiveMessage(ArchiveId(pid, sid), _), offset) #:: tail => (Vector(ar), checkpoint.update(offset, pid, sid))
       }
+
+      buildBatch(messageSet.toStream.map { msgAndOffset => (IngestMessageSerialization.read(msgAndOffset.message.payload), msgAndOffset.offset) },
+                 Vector.empty,
+                 fromCheckpoint)
     }
   }
 
