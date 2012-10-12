@@ -164,10 +164,29 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     try {
       // tailMap semantics are >=, but we want > the IDs if provided
       val constrainedMap = id.map { idKey => treeMap.tailMap(idKey) } getOrElse treeMap
-      val rawIterator = constrainedMap.entrySet.iterator.asScala
-      if (id.isDefined && rawIterator.hasNext) rawIterator.next();
       
-      if (rawIterator.isEmpty) {
+      val iteratorSetup = () => {
+        val rawIterator = constrainedMap.entrySet.iterator.asScala
+        // Since our key to retrieve after was the last key we retrieved, we know it exists,
+        // so we can safely discard it
+        if (id.isDefined && rawIterator.hasNext) rawIterator.next();
+        rawIterator
+      }
+
+      // FIXME: this is brokenness in JDBM somewhere      
+      val iterator = {
+        var initial: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]] = null
+        while (initial == null) {
+          try {
+            initial = iteratorSetup()
+          } catch {
+            case t: Throwable => logger.warn("Failure on load iterator initialization")
+          }
+        }
+        initial
+      }
+
+      if (iterator.isEmpty) {
         None 
       } else {
         val keyCols = Array.fill(descriptor.identities) { ArrayLongColumn.empty(sliceSize) }
@@ -176,7 +195,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
         val keyColumnDecoder = keyFormat.ColumnDecoder(keyCols)
         val valColumnDecoder = rowFormat.ColumnDecoder(valColumns.map(_._2)(collection.breakOut))
 
-        val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, rawIterator, keyColumnDecoder, valColumnDecoder)
+        val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, iteratorSetup, keyColumnDecoder, valColumnDecoder)
 
         val slice = new Slice {
           private val desiredRefs: Set[ColumnRef] = desiredColumns map { 

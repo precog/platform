@@ -54,7 +54,7 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-import com.weiglewilczek.slf4s.Logging
+import org.slf4j.LoggerFactory
 
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
@@ -63,8 +63,9 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
     with StorageModule[M]
     with MemoryDatasetConsumer[M] 
-    with IdSourceScannerModule[M]
-    with Logging {
+    with IdSourceScannerModule[M] {
+
+  protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 
   val sliceSize = 10
   
@@ -77,7 +78,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
   type YggConfig <: EvaluatorConfig with IdSourceConfig
   
   class ParseEvalStackSpecConfig extends BaseConfig with IdSourceConfig {
-    logger.trace("Init yggConfig")
+    parseEvalLogger.trace("Init yggConfig")
     val config = Configuration parse {
       Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
     }
@@ -108,14 +109,14 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
       
       def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
-        logger.debug("Beginning evaluation of query: " + str)
+        parseEvalLogger.debug("Beginning evaluation of query: " + str)
         val tree = compile(str)
         tree.errors must beEmpty
         val Right(dag) = decorate(emit(tree))
         withContext { ctx => 
           consumeEval("dummyUID", dag, ctx, Path.Root) match {
             case Success(result) => 
-              logger.debug("Evaluation complete for query: " + str)
+              parseEvalLogger.debug("Evaluation complete for query: " + str)
               result
             case Failure(error) => throw error
           }
