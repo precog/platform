@@ -164,7 +164,7 @@ trait YggdrasilQueryExecutor
     with IdSourceScannerModule[Future]
     with SystemActorStorageModule { self =>
 
-  private lazy val queryLogger = LoggerFactory.getLogger(this.getClass)
+  private lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.YggdrasilQueryExecutor")
 
   type YggConfig = YggdrasilQueryExecutorConfig
 

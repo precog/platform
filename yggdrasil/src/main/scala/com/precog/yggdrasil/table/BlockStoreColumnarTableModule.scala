@@ -39,7 +39,7 @@ import java.util.Comparator
 import org.apache.jdbm.DBMaker
 import org.apache.jdbm.DB
 
-import com.weiglewilczek.slf4s.Logging
+import org.slf4j.LoggerFactory
 
 import scalaz._
 import scalaz.Ordering._
@@ -59,6 +59,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   ColumnarTableModule[M] with
   StorageModule[M] with
   IdSourceScannerModule[M] { self =>
+
+  protected lazy val blockModuleLogger = LoggerFactory.getLogger("com.precog.yggdrasil.table.BlockStoreColumnarTableModule")
 
   import trans._
   import TransSpec.deepMap
@@ -219,6 +221,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               }
             } 
           }
+
+          blockModuleLogger.trace("Emitting a new slice of size " + emission.size)
 
           val successorStatesM = expired.map(_.succ).sequence.map(_.toStream.collect({case Some(cs) => cs}))
 
@@ -738,10 +742,13 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     def cellsM(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Stream[M[Option[CellState]]] = {
       for (((desc, cols), i) <- projections.toStream.zipWithIndex) yield {
         val succ: Option[Key] => M[Option[BD]] = (key: Option[Key]) => storage.projection(desc) map {
-          case (projection, release) => 
-            val result = projection.getBlockAfter(key, cols)  
+          case (projection, release) => try {
+            val result = projection.getBlockAfter(key, cols)
             release.release.unsafePerformIO
             result
+          } catch {
+            case t: Throwable => blockModuleLogger.error("Error in cell fetch", t); throw t
+          }
         }
 
         succ(None) map { 
@@ -836,7 +843,9 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   }
 } 
 
-object BlockStoreColumnarTableModule extends Logging {
+object BlockStoreColumnarTableModule {
+  protected lazy val blockModuleLogger = LoggerFactory.getLogger("com.precog.yggdrasil.table.BlockStoreColumnarTableModule")
+  
   /**
    * Find the minimal set of projections (and the relevant columns from each projection) that
    * will be loaded to provide a dataset of the specified type.

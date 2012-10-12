@@ -63,9 +63,13 @@ object JDBMProjection {
 
   final val DEFAULT_SLICE_SIZE = 50000
   final val INDEX_SUBDIR = "jdbm"
+  final val MAX_SPINS = 20 // FIXME: This is related to the JDBM ConcurrentMod exception, and should be removed when that's cleaned up
     
   def isJDBMProjection(baseDir: File) = (new File(baseDir, INDEX_SUBDIR)).isDirectory
 }
+
+// FIXME: Again, related to JDBM concurent mod exception
+class VicciniException(message: String) extends java.io.IOException("Inconceivable! " + message)
 
 abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte], Slice] { projection =>
   import TableModule.paths._
@@ -164,10 +168,35 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     try {
       // tailMap semantics are >=, but we want > the IDs if provided
       val constrainedMap = id.map { idKey => treeMap.tailMap(idKey) } getOrElse treeMap
-      val rawIterator = constrainedMap.entrySet.iterator.asScala
-      if (id.isDefined && rawIterator.hasNext) rawIterator.next();
       
-      if (rawIterator.isEmpty) {
+      val iteratorSetup = () => {
+        val rawIterator = constrainedMap.entrySet.iterator.asScala
+        // Since our key to retrieve after was the last key we retrieved, we know it exists,
+        // so we can safely discard it
+        if (id.isDefined && rawIterator.hasNext) rawIterator.next();
+        rawIterator
+      }
+
+      // FIXME: this is brokenness in JDBM somewhere      
+      val iterator = {
+        var initial: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]] = null
+        var tries = 0
+        while (tries < JDBMProjection.MAX_SPINS && initial == null) {
+          try {
+            initial = iteratorSetup()
+          } catch {
+            case t: Throwable => logger.warn("Failure on load iterator initialization")
+          }
+          tries += 1
+        }
+        if (initial == null) {
+          throw new VicciniException("Initial drop failed with too many concurrent mods.")
+        } else {
+          initial
+        }
+      }
+
+      if (iterator.isEmpty) {
         None 
       } else {
         val keyCols = Array.fill(descriptor.identities) { ArrayLongColumn.empty(sliceSize) }
@@ -176,7 +205,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
         val keyColumnDecoder = keyFormat.ColumnDecoder(keyCols)
         val valColumnDecoder = rowFormat.ColumnDecoder(valColumns.map(_._2)(collection.breakOut))
 
-        val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, rawIterator, keyColumnDecoder, valColumnDecoder)
+        val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, iteratorSetup, keyColumnDecoder, valColumnDecoder)
 
         val slice = new Slice {
           private val desiredRefs: Set[ColumnRef] = desiredColumns map { 

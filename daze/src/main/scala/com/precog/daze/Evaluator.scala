@@ -36,6 +36,8 @@ import org.joda.time.DateTimeZone
 import java.lang.Math._
 import collection.immutable.ListSet
 
+import org.slf4j.LoggerFactory
+
 import akka.dispatch.Future
 
 import scalaz.{NonEmptyList => NEL, _}
@@ -50,8 +52,6 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
 import scala.collection.immutable.Queue
-
-import com.weiglewilczek.slf4s.Logging
 
 trait EvaluatorConfig extends IdSourceConfig {
   def maxEvalDuration: akka.util.Duration
@@ -70,8 +70,9 @@ trait Evaluator[M[+_]] extends DAG
     with InfixLib[M]
     with UnaryLib[M]
     with BigDecimalOperations
-    with YggConfigComponent 
-    with Logging { self =>
+    with YggConfigComponent { self =>
+
+  protected lazy val evalLogger = LoggerFactory.getLogger("com.precog.daze.Evaluator")
 
   type UserId = String
   
@@ -116,7 +117,7 @@ trait Evaluator[M[+_]] extends DAG
    * and `prepareEval` (which has the primary eval loop).
    */
   def eval(userUID: UserId, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean): M[Table] = {
-    logger.debug("Eval for %s = %s".format(userUID.toString, graph))
+    evalLogger.debug("Eval for %s = %s".format(userUID.toString, graph))
   
     def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, M[GroupingSpec]] = spec match {
       case UnionBucketSpec(left, right) => {
@@ -226,7 +227,7 @@ trait Evaluator[M[+_]] extends DAG
     }
 
     def prepareEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, PendingTable] = {
-      logger.trace("Loop on %s".format(graph))
+      evalLogger.trace("Loop on %s".format(graph))
       
       val assumptionCheck: StateT[Id, EvaluatorState, Option[M[Table]]] = for {
         state <- get[EvaluatorState]
