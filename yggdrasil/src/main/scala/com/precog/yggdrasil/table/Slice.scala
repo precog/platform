@@ -621,9 +621,7 @@ trait Slice { source =>
         normalize(schema)
       }
       
-      if (optSchema.isDefined) {
-        val schema = optSchema.get
-        
+      optSchema map { schema =>
         val depth = {
           def loop(schema: SchemaNode): Int = schema match {
             case obj: SchemaNode.Obj =>
@@ -1037,27 +1035,26 @@ trait Slice { source =>
           }
         }
         
-        @inline
         @tailrec
-        def render(row: Int, delimit: Boolean = false): Boolean = {
+        def render(row: Int, delimit: Boolean): Boolean = {
           if (row < size) {
             if (delimit) {
               pushIn(delimiterStr, false)
             }
             
-            val done = traverseSchema(row, schema)
+            val rowRendered = traverseSchema(row, schema)
             
-            if (delimit && !done) {
+            if (delimit && !rowRendered) {
               popIn()
             }
             
-            render(row + 1, delimit || done)
+            render(row + 1, delimit || rowRendered)
           } else {
             delimit
           }
         }
         
-        val rendered = render(0)
+        val rendered = render(0, false)
         
         buffer.flip()
         vector += buffer
@@ -1072,9 +1069,7 @@ trait Slice { source =>
         }
         
         (stream, rendered)
-      } else {
-        (StreamT.empty, false)
-      }
+      } getOrElse (StreamT.empty, false)
     }
   }
 
