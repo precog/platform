@@ -989,8 +989,8 @@ trait Evaluator[M[+_]] extends DAG
   
   private def referencesOnlySplit(split: Option[dag.Split])(graph: DepGraph): Boolean = {
     implicit val m: Monoid[Boolean] = new Monoid[Boolean] {
-      def zero = true
-      def append(b1: Boolean, b2: => Boolean): Boolean = b1 && b2
+      def zero = false
+      def append(b1: Boolean, b2: => Boolean): Boolean = b1 || b2
     }
     
     graph.foldDown(false) {
