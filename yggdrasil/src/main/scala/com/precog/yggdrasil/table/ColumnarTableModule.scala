@@ -2433,15 +2433,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
       val delimiterBuffer = CharBuffer.allocate(1)
       delimiterBuffer.put(delimiter)
+      delimiterBuffer.flip()
       
-      val delimitStream = StreamT.unfoldM(true) { hasNext =>
-        val back = if (hasNext)
-          Some((delimiterBuffer, false))
-        else
-          None
-        
-        M.point(back)
-      }
+      val delimitStream = delimiterBuffer :: StreamT.empty[M, CharBuffer]
       
       def foldFlatMap(slices: StreamT[M, Slice], rendered: Boolean): StreamT[M, CharBuffer] = {
         StreamT[M, CharBuffer](slices.step map {
