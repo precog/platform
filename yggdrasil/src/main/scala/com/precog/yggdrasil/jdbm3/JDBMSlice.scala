@@ -67,16 +67,21 @@ object JDBMSlice {
       // FIXME: Looping here is a blatantly poor way to work around ConcurrentModificationExceptions
       // From the Javadoc for CME, the exception is an indication of a bug
       var finalCount = -1
-      while (finalCount == -1) {
+      var tries = 0
+      while (tries < JDBMProjection.MAX_SPINS && finalCount == -1) {
         try {
           finalCount = consumeRows(source().take(size), 0)
         } catch {
           case t: Throwable =>
             logger.warn("Error during block read, retrying")
-            logger.trace("consumeRows failure", t)
         }
+        tries += 1
       }
-      finalCount
+      if (finalCount == -1) {
+        throw new VicciniException("Block read failed with too many concurrent mods.")
+      } else {
+        finalCount
+      }
     }
 
     (firstKey, lastKey, rows)

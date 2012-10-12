@@ -63,9 +63,13 @@ object JDBMProjection {
 
   final val DEFAULT_SLICE_SIZE = 50000
   final val INDEX_SUBDIR = "jdbm"
+  final val MAX_SPINS = 20 // FIXME: This is related to the JDBM ConcurrentMod exception, and should be removed when that's cleaned up
     
   def isJDBMProjection(baseDir: File) = (new File(baseDir, INDEX_SUBDIR)).isDirectory
 }
+
+// FIXME: Again, related to JDBM concurent mod exception
+class VicciniException(message: String) extends java.io.IOException("Inconceivable! " + message)
 
 abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte], Slice] { projection =>
   import TableModule.paths._
@@ -176,14 +180,20 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
       // FIXME: this is brokenness in JDBM somewhere      
       val iterator = {
         var initial: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]] = null
-        while (initial == null) {
+        var tries = 0
+        while (tries < JDBMProjection.MAX_SPINS && initial == null) {
           try {
             initial = iteratorSetup()
           } catch {
             case t: Throwable => logger.warn("Failure on load iterator initialization")
           }
+          tries += 1
         }
-        initial
+        if (initial == null) {
+          throw new VicciniException("Initial drop failed with too many concurrent mods.")
+        } else {
+          initial
+        }
       }
 
       if (iterator.isEmpty) {

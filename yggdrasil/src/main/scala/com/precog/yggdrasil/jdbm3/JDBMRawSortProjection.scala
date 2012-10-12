@@ -92,14 +92,20 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
       // FIXME: this is brokenness in JDBM somewhere      
       val iterator = {
         var initial: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]] = null
-        while (initial == null) {
+        var tries = 0
+        while (tries < JDBMProjection.MAX_SPINS && initial == null) {
           try {
             initial = iteratorSetup()
           } catch {
             case t: Throwable => logger.warn("Failure on load iterator initialization")
           }
+          tries += 1
         }
-        initial
+        if (initial == null) {
+          throw new VicciniException("Initial drop failed with too many concurrent mods.")
+        } else {
+          initial
+        }
       }
 
       if (iterator.isEmpty) {
