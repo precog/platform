@@ -2446,14 +2446,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def foldFlatMap(slices: StreamT[M, Slice], rendered: Boolean): StreamT[M, CharBuffer] = {
         StreamT[M, CharBuffer](slices.step map {
           case StreamT.Yield(slice, tail) => {
-            val (stream, rendered) = slice.renderJson[M](delimiter)
+            val (stream, rendered2) = slice.renderJson[M](delimiter)
             
-            val stream2 = if (rendered)
+            val stream2 = if (rendered && rendered2)
               delimitStream ++ stream
             else
               stream
             
-            StreamT.Skip(stream2 ++ foldFlatMap(tail(), rendered))
+            StreamT.Skip(stream2 ++ foldFlatMap(tail(), rendered || rendered2))
           }
           
           case StreamT.Skip(tail) => StreamT.Skip(foldFlatMap(tail(), rendered))
