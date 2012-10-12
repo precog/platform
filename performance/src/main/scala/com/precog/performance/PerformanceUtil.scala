@@ -29,7 +29,7 @@ import org.joda.time.format._
 import scalaz._
 import Scalaz._
 
-class PerformanceUtil(apiEndpoint: String, token: String, path: String) {
+class PerformanceUtil(apiEndpoint: String, apiKey: String, path: String) {
 
   val format = ISODateTimeFormat.dateTime 
 
@@ -64,7 +64,7 @@ class PerformanceUtil(apiEndpoint: String, token: String, path: String) {
  
     val client = new HttpClientXLightWeb 
     val result = client.path(baseUrl)
-      .query("apiKey", token) 
+      .query("apiKey", apiKey) 
       .contentType(application/MimeTypes.json)
       .post[JValue](testId)(content)
 

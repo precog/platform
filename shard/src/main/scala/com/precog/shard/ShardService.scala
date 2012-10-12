@@ -19,7 +19,7 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
 
-case class ShardState(queryExecutor: QueryExecutor[Future], tokenManager: TokenManager[Future], accessControl: AccessControl[Future])
+case class ShardState(queryExecutor: QueryExecutor[Future], apiKeyManager: APIKeyManager[Future], accessControl: AccessControl[Future])
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
@@ -37,7 +37,7 @@ trait ShardService extends
 
   def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]): QueryExecutor[Future]
 
-  def tokenManagerFactory(config: Configuration): TokenManager[Future]
+  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
 
   val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {
@@ -49,11 +49,11 @@ trait ShardService extends
           logger.info("Using config: " + config)
           logger.info("Security config = " + config.detach("security"))
 
-          val tokenManager = tokenManagerFactory(config.detach("security"))
+          val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
 
-          logger.trace("tokenManager loaded")
+          logger.trace("apiKeyManager loaded")
 
-          val accessControl = new TokenManagerAccessControl(tokenManager)
+          val accessControl = new APIKeyManagerAccessControl(apiKeyManager)
 
           logger.trace("accessControl loaded")
           
@@ -64,7 +64,7 @@ trait ShardService extends
           queryExecutor.startup.map { _ =>
             ShardState(
               queryExecutor,
-              tokenManager,
+              apiKeyManager,
               accessControl
             )
           }
@@ -75,7 +75,7 @@ trait ShardService extends
                 get(new ActorStatusHandler(state.queryExecutor))
             }
           } ~ jsonpcb[QueryResult] {
-            token(state.tokenManager) {
+            apiKey(state.apiKeyManager) {
               dataPath("analytics/fs") {
                 query {
                   get(new QueryServiceHandler(state.queryExecutor))
@@ -92,7 +92,7 @@ trait ShardService extends
         shutdown { state =>
           for {
             shardShutdown <- state.queryExecutor.shutdown()
-            _             <- state.tokenManager.close()
+            _             <- state.apiKeyManager.close()
           } yield {
             logger.info("Shard system clean shutdown: " + shardShutdown)            
             Option.empty[Stoppable]
