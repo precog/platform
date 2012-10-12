@@ -1037,7 +1037,7 @@ trait Evaluator[M[+_]] extends DAG
       def append(b1: Boolean, b2: => Boolean): Boolean = b1 && b2
     }
     
-    graph foldDown {
+    graph.foldDown(false) {
       case s: dag.SplitParam => split map (s.parent ==) getOrElse false
       case s: dag.SplitGroup => split map (s.parent ==) getOrElse false
     }
