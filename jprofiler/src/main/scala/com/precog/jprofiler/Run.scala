@@ -43,16 +43,32 @@ object Run {
       "sum(//obnoxious.v)" :: "mean(//obnoxious.v)" ::
       "geometricMean(//obnoxious.v)" :: "sumSq(//obnoxious.v)" ::
       "variance(//obnoxious.v)" :: "stdDev(//obnoxious.v)" */
+      // """
+      // | medals := //summer_games/london_medals
+      // | athletes := //summer_games/athletes
+      // | 
+      // | medals' := medals where medals.Age > 33
+      // | athletes' := athletes where athletes.Countryname = "Tanzania"
+      // | 
+      // | medals' ~ athletes'
+      // |   [medals', athletes']
+      // | """.stripMargin :: Nil
+      // """                                                                                    
       """
-      | medals := //summer_games/london_medals
-      | athletes := //summer_games/athletes
-      | 
-      | medals' := medals where medals.Age > 33
-      | athletes' := athletes where athletes.Countryname = "Tanzania"
-      | 
-      | medals' ~ athletes'
-      |   [medals', athletes']
-      | """.stripMargin :: Nil
+      import std::math::floor                                                                
+                                                                                             
+      historic := //summer_games/historic_medals                                             
+                                                                                             
+      histogram := solve 'year                                                               
+        maleCount := count(historic.Gender                                                   
+          where historic.Gender = "Men" & historic.Edition = 'year)                          
+        femaleCount := count(historic.Gender                                                 
+          where historic.Gender = "Women" & historic.Edition = 'year)                        
+                                                                                             
+        {year: 'year, ratio: floor(100 * maleCount / femaleCount)}                           
+                                                                                             
+      histogram                                                                              
+      """ 
     )
 
     config.rootDir match {

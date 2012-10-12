@@ -394,14 +394,13 @@ trait Slice { source =>
     }
   }
 
-  def sortBy(cPaths: VectorCase[CPath]): Slice = {
-    val byRef = columns.groupBy(_._1.selector)
-    val colGroups: Array[Array[Column]] = cPaths.collect({ case path if byRef contains path =>
-      val cols: Array[Column] = byRef(path).map(_._2)(collection.breakOut)
-      cols
-    })(collection.breakOut)
+  def sortWith(keySlice: Slice, sortOrder: DesiredSortOrder = SortAscending): (Slice, Slice) = {
+
+    val colGroups = keySlice.columns.groupBy(_._1.selector).toArray sortBy (_._1) collect {
+      case (path, cols) => cols.map(_._2).toArray
+    }
     val comparators: Array[RowComparator] = colGroups map { cols => RowComparator(cols, cols) }
-    val rowComparator = new RowComparator {
+    val ascRowComparator = new RowComparator {
       def compare(i: Int, j: Int): Ordering = {
         var k = 0
         var cmp: Ordering = EQ
@@ -413,7 +412,19 @@ trait Slice { source =>
       }
     }
 
-    val order: Array[Int] = Array.range(0, source.size)
+    // Use the branch outside of the comparison.
+    val rowComparator = if (sortOrder == SortAscending) {
+      ascRowComparator
+    } else {
+      new RowComparator {
+        def compare(i: Int, j: Int) = ascRowComparator.compare(i, j).complement
+      }
+    }
+
+    // We filter out rows that are completely undefined.
+    val order: Array[Int] = Array.range(0, source.size)/* filter { row =>
+      keySlice.isDefinedAt(row) && source.isDefinedAt(row)
+    }*/
     spire.math.MergeSort.sort(order)(new spire.math.Order[Int] {
       def compare(i: Int, j: Int) = rowComparator.compare(i, j).toInt
       def eqv(i: Int, j: Int) = compare(i, j) == 0
@@ -425,7 +436,29 @@ trait Slice { source =>
       remapOrder.add(i, order(i))
       i += 1
     }
-    source.remap(remapOrder)
+
+    val sortedSlice = source.remap(remapOrder)
+    val sortedKeySlice = keySlice.remap(remapOrder)
+
+    // TODO Remove the duplicate distinct call. Should be able to handle this in 1 pass.
+    (sortedSlice.distinct(None, sortedKeySlice), sortedKeySlice.distinct(None, sortedKeySlice))
+  }
+
+  def sortBy(prefixes: VectorCase[CPath], sortOrder: DesiredSortOrder = SortAscending): Slice = {
+    // TODO This is slow... Faster would require a prefix map or something... argh.
+    val keySlice = new Slice {
+      val size = source.size
+      val columns: Map[ColumnRef, Column] = {
+        prefixes.zipWithIndex.flatMap({ case (prefix, i) =>
+          source.columns collect {
+            case (ColumnRef(path, tpe), col) if path hasPrefix prefix =>
+              (ColumnRef(CPathIndex(i) \ path, tpe), col)
+          }
+        })(collection.breakOut)
+      }
+    }
+
+    source.sortWith(keySlice)._1
   }
 
   /**

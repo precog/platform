@@ -1089,7 +1089,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         
         for {
           sorts <- sortPairs
-          //_ = println("sorts: " + System.currentTimeMillis) 
+          // _ = println("sorts: " + System.currentTimeMillis) 
           groupedSubsets <- {
             val edgeAlignments = spanningGraph.edges flatMap {
               case MergeEdge(a, b) =>
@@ -1106,7 +1106,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   case (aSorted, bSorted) => 
                     for {
                       aligned <- Table.align(aSorted.table, aSorted.sortedOn, bSorted.table, bSorted.sortedOn)
-                      //_ = println("aligned: " + System.currentTimeMillis)
+                      // _ = println("aligned: " + System.currentTimeMillis)
                     } yield {
                       List(
                         aSorted.copy(table = aligned._1),
@@ -1773,7 +1773,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       for {
         omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
-        //json <- omniverse.table.toJson
+        json <- omniverse.table.toJson
         //_ = println("omniverse: \n" + json.mkString("\n"))
         sorted <- omniverse.table.compact(groupKeySpec(Source)).sort(groupKeySpec(Source))
         result <- sorted.partitionMerge(DerefObjectStatic(Leaf(Source), CPathField("groupKeys"))) { partition =>
@@ -1798,7 +1798,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                            // transform to get just the information related to the particular groupId,
                            for {
                              partitionSorted <- partition.transform(recordTrans).sort(sortByTrans, unique = true)
-                             //json <- partitionSorted.toJson
+                             json <- partitionSorted.toJson
                              //_ = println("group " + groupId + " partition: " + json.mkString("\n"))
                            } yield {
                              groupId -> partitionSorted.transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
