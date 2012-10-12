@@ -11,6 +11,7 @@ trait EvalStackSpecs extends Specification {
   def evalE(str: String, debug: Boolean = false): Set[(Vector[Long], SValue)]
 
   "the full stack" should {
+    /*
     "count a filtered clicks dataset" in {
       val input = """
         | clicks := //clicks
@@ -1133,6 +1134,7 @@ trait EvalStackSpecs extends Specification {
         case r => failure("Result has wrong shape: "+r)
       }
     }
+    */
 
     "evaluate a solve of two parameters" in {
       val input = """
@@ -1146,6 +1148,7 @@ trait EvalStackSpecs extends Specification {
 
       eval(input) mustEqual Set()
     }
+    /*
 
     "determine a histogram of a composite key of revenue and campaign" in {
       val input = """
@@ -1593,6 +1596,7 @@ trait EvalStackSpecs extends Specification {
 //        result must haveSize(4)
 //      } 
     }
+    */
   }
 }
 
