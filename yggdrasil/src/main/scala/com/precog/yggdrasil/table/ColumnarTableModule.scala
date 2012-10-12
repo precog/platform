@@ -1112,19 +1112,19 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 common map {
                   case (aSorted, bSorted) => 
                     for {
-                      //ljson <- aSorted.table.slices.toStream
-                      //_ = println("=============================================================")
-                      //_ = println("using merge edge (" + a.describe + " with " + aSorted.groupKeyPrefix + ")-(" + b.describe + " with " + bSorted.groupKeyPrefix + ")")
-                      //_ = println(aSorted.sortedOn)
-                      //_ = println("lsorted\n" + ljson.map(_.toJsonString()).mkString("\n---\n"))
-                      //rjson <- bSorted.table.slices.toStream
-                      //_ = println(bSorted.sortedOn)
-                      //_ = println("rsorted\n" + rjson.map(_.toJsonString()).mkString("\n---\n"))
+                      ljson <- aSorted.table.slices.toStream
+                      _ = println("=============================================================")
+                      _ = println("using merge edge (" + a.describe + " with " + aSorted.groupKeyPrefix + ")-(" + b.describe + " with " + bSorted.groupKeyPrefix + ")")
+                      _ = println(aSorted.sortedOn)
+                      _ = println("lsorted\n" + ljson.map(_.toJsonString()).mkString("\n---\n"))
+                      rjson <- bSorted.table.slices.toStream
+                      _ = println(bSorted.sortedOn)
+                      _ = println("rsorted\n" + rjson.map(_.toJsonString()).mkString("\n---\n"))
                       aligned <- Table.align(aSorted.table, aSorted.sortedOn, bSorted.table, bSorted.sortedOn)
-                      //aljson <- aligned._1.slices.toStream
-                      //_ = println("laligned\n" + aljson.map(_.toJsonString()).mkString("\n---\n"))
-                      //arjson <- aligned._2.slices.toStream
-                      //_ = println("raligned\n" + arjson.map(_.toJsonString()).mkString("\n---\n"))
+                      aljson <- aligned._1.slices.toStream
+                      _ = println("laligned\n" + aljson.map(_.toJsonString()).mkString("\n---\n"))
+                      arjson <- aligned._2.slices.toStream
+                      _ = println("raligned\n" + arjson.map(_.toJsonString()).mkString("\n---\n"))
                     } yield {
                       List(
                         aSorted.copy(table = aligned._1),
@@ -1907,6 +1907,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
      * transformation on rows of the table.
      */
     def cogroup(leftKey: TransSpec1, rightKey: TransSpec1, that: Table)(leftResultTrans: TransSpec1, rightResultTrans: TransSpec1, bothResultTrans: TransSpec2): Table = {
+      println("Cogrouping with respect to\nleftKey: " + leftKey + "\nrightKey: " + rightKey)
       class IndexBuffers(lInitialSize: Int, rInitialSize: Int) {
         val lbuf = new ArrayIntList(lInitialSize)
         val rbuf = new ArrayIntList(rInitialSize)
@@ -2017,7 +2018,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                       buildRemappings(lpos + 1, xrstart, xrstart, rpos, endRight)
                     case GT => 
                       // catch input-out-of-order errors early
-                      if (xrend == -1) sys.error("Inputs are not sorted; value on the left exceeded value on the right at the end of equal span. lpos = %d, rpos = %d".format(lpos, rpos))
+                      if (xrend == -1) {
+                        println("lhead\n" + lhead.toJsonString())
+                        println("rhead\n" + rhead.toJsonString())
+                        sys.error("Inputs are not sorted; value on the left exceeded value on the right at the end of equal span. lpos = %d, rpos = %d".format(lpos, rpos))
+                      }
+
                       buildRemappings(lpos, xrend, Reset, Reset, endRight)
                     case EQ => 
                       ibufs.advanceBoth(lpos, rpos)

@@ -317,6 +317,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         }
       }
 
+      // this method exists only to skolemize A and B
       def writeStreams[A, B](dbFile: File, db: DB, 
                              left: StreamT[M, Slice], leftKeyTrans: SliceTransform1[A],
                              right: StreamT[M, Slice], rightKeyTrans: SliceTransform1[B],
@@ -326,152 +327,71 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         // run out of data, we'll still be hanging on to the last slice on the
         // other side to use as the authority for equality comparisons
         def step(
-          state: AlignState, lhead: Slice, ltail: StreamT[M, Slice], stepleq: BitSet,
+          state: AlignState, 
+          lhead: Slice, ltail: StreamT[M, Slice], stepleq: BitSet,
           rhead: Slice, rtail: StreamT[M, Slice], stepreq: BitSet,
           lstate: A, rstate: B, 
           leftWriteState: JDBMState, rightWriteState: JDBMState
         ): M[(JDBMState, JDBMState)] = {
 
-          def buildFilters(comparator: RowComparator, 
-            lidx: Int, lsize: Int, lacc: BitSet, 
-            ridx: Int, rsize: Int, racc: BitSet,
-            span: Span): NextStep = {
+          @tailrec def buildFilters(comparator: RowComparator, 
+                                    lidx: Int, lsize: Int, lacc: BitSet, 
+                                    ridx: Int, rsize: Int, racc: BitSet,
+                                    span: Span): NextStep = {
+            //println((lidx, ridx, span))
 
-            @tailrec def buildFilters0(comparator: RowComparator, 
-              lidx: Int, lsize: Int, lacc: BitSet, 
-              ridx: Int, rsize: Int, racc: BitSet,
-              span: Span): NextStep = {
-
-              //println((lidx, ridx, span))
-
-              // todo: This is optimized for sparse alignments; if you get into an alignment
-              // where every pair is distinct and equal, you'll do 2*n comparisons.
-              // This should instead be optimized for dense alignments, using an algorithm that
-              // advances both sides after an equal, then backtracks on inequality
-              if (span eq LeftSpan) {
-                // We don't need to compare the index on the right, since it will be left unchanged
-                // throughout the time that we're advancing left, and even if it's beyond the end of
-                // input we can use the next-to-last element for comparison
-                
-                if (lidx < lsize) {
-                  comparator.compare(lidx, ridx - 1) match {
-                    case EQ => 
-                      //println("Found equal on left.")
-                      buildFilters0(comparator, lidx + 1, lsize, lacc + lidx, ridx, rsize, racc, LeftSpan)
-                    case LT => 
-                      sys.error("Inputs to align are not correctly sorted.")
-                    case GT =>
-                      buildFilters0(comparator, lidx, lsize, lacc, ridx, rsize, racc, NoSpan)
-                  }
-                } else {
-                  // left is exhausted in the midst of a span
-                  //println("Left exhausted in the middle of a span.")
-                  MoreLeft(LeftSpan, lacc, ridx, racc)
+            // todo: This is optimized for sparse alignments; if you get into an alignment
+            // where every pair is distinct and equal, you'll do 2*n comparisons.
+            // This should instead be optimized for dense alignments, using an algorithm that
+            // advances both sides after an equal, then backtracks on inequality
+            if (span eq LeftSpan) {
+              // We don't need to compare the index on the right, since it will be left unchanged
+              // throughout the time that we're advancing left, and even if it's beyond the end of
+              // input we can use the next-to-last element for comparison
+              
+              if (lidx < lsize) {
+                comparator.compare(lidx, ridx - 1) match {
+                  case EQ => 
+                    //println("Found equal on left.")
+                    buildFilters(comparator, lidx + 1, lsize, lacc + lidx, ridx, rsize, racc, LeftSpan)
+                  case LT => 
+                    sys.error("Inputs to align are not correctly sorted.")
+                  case GT =>
+                    buildFilters(comparator, lidx, lsize, lacc, ridx, rsize, racc, NoSpan)
                 }
               } else {
-                if (lidx < lsize && ridx < rsize) {
-                  comparator.compare(lidx, ridx) match {
-                    case EQ => 
-                      //println("Found equal on right.")
-                      buildFilters0(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc + ridx, RightSpan)
-                    case LT => 
-                      if (span eq RightSpan) {
-                        // drop into left spanning of equal
-                        buildFilters0(comparator, lidx, lsize, lacc, ridx, rsize, racc, LeftSpan)
-                      } else {
-                        // advance the left in the not-left-spanning state
-                        buildFilters0(comparator, lidx + 1, lsize, lacc, ridx, rsize, racc, NoSpan)
-                      }
-                    case GT =>
-                      if (span eq RightSpan) sys.error("Inputs to align are not correctly sorted")
-                      else buildFilters0(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc, NoSpan)
-                  }
-                } else if (lidx < lsize) {
-                  // right is exhausted; span will be RightSpan or NoSpan
-                  //println("Right exhausted, left is not; asking for more right with " + lacc.mkString("[", ",", "]") + ";" + racc.mkString("[", ",", "]") )
-                  MoreRight(span, lidx, lacc, racc)
-                } else {
-                  //println("Both sides exhausted, so emitting with " + lacc.mkString("[", ",", "]") + ";" + racc.mkString("[", ",", "]") )
-                  MoreLeft(NoSpan, lacc, ridx, racc)
+                // left is exhausted in the midst of a span
+                //println("Left exhausted in the middle of a span.")
+                MoreLeft(LeftSpan, lacc, ridx, racc)
+              }
+            } else {
+              if (lidx < lsize && ridx < rsize) {
+                comparator.compare(lidx, ridx) match {
+                  case EQ => 
+                    //println("Found equal on right.")
+                    buildFilters(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc + ridx, RightSpan)
+                  case LT => 
+                    if (span eq RightSpan) {
+                      // drop into left spanning of equal
+                      buildFilters(comparator, lidx, lsize, lacc, ridx, rsize, racc, LeftSpan)
+                    } else {
+                      // advance the left in the not-left-spanning state
+                      buildFilters(comparator, lidx + 1, lsize, lacc, ridx, rsize, racc, NoSpan)
+                    }
+                  case GT =>
+                    if (span eq RightSpan) sys.error("Inputs to align are not correctly sorted")
+                    else buildFilters(comparator, lidx, lsize, lacc, ridx + 1, rsize, racc, NoSpan)
                 }
+              } else if (lidx < lsize) {
+                // right is exhausted; span will be RightSpan or NoSpan
+                //println("Right exhausted, left is not; asking for more right with " + lacc.mkString("[", ",", "]") + ";" + racc.mkString("[", ",", "]") )
+                MoreRight(span, lidx, lacc, racc)
+              } else {
+                //println("Both sides exhausted, so emitting with " + lacc.mkString("[", ",", "]") + ";" + racc.mkString("[", ",", "]") )
+                MoreLeft(NoSpan, lacc, ridx, racc)
               }
             }
-
-            buildFilters0(comparator, lidx, lsize, lacc, ridx, rsize, racc, span)
           }
-
-          def continue(nextStep: NextStep, comparator: RowComparator, lstate: A, lkey: Slice, rstate: B, rkey: Slice, leftWriteState: JDBMState, rightWriteState: JDBMState): M[(JDBMState, JDBMState)] = nextStep match {
-            case MoreLeft(span, leq, ridx, req) =>
-              //println("Requested more left; emitting left based on bitset " + leq.toList.mkString("[", ",", "]"))
-              val lemission = leq.nonEmpty.option(lhead.mapColumns(cf.util.filter(0, lhead.size, leq)))
-
-              @inline def next(lbs: JDBMState, rbs: JDBMState): M[(JDBMState, JDBMState)] = ltail.uncons flatMap {
-                case Some((lhead0, ltail0)) =>
-                  //println("Continuing on left; not emitting right.")
-                  val nextState = (span: @unchecked) match {
-                    case NoSpan => FindEqualAdvancingLeft(ridx, rkey)
-                    case LeftSpan => state match {
-                      case RunRight(_, _, rauth) => RunLeft(ridx, rkey, rauth)
-                      case RunLeft(_, _, rauth)  => RunLeft(ridx, rkey, rauth)
-                      case _ => RunLeft(ridx, rkey, None)
-                    }
-                  }
-
-                  step(nextState, lhead0, ltail0, new BitSet, rhead, rtail, req, lstate, rstate, lbs, rbs)
-                case None =>
-                  //println("No more data on left; emitting right based on bitset " + req.toList.mkString("[", ",", "]"))
-                  // done on left, and we're not in an equal span on the right (since LeftSpan can only
-                  // be emitted if we're not in a right span) so we're entirely done.
-                  val remission = req.nonEmpty.option(rhead.mapColumns(cf.util.filter(0, rhead.size, req))) 
-                  (remission map { e => writeAlignedSlices(db, rkey, e, rbs, "alignRight", SortAscending) } getOrElse rbs.point[M]) map { (lbs, _) }
-              }
-
-              lemission map { e => 
-                writeAlignedSlices(db, lkey, e, leftWriteState, "alignLeft", SortAscending) flatMap { next(_: JDBMState, rightWriteState) }
-              } getOrElse {
-                next(leftWriteState, rightWriteState)
-              }
-
-            case MoreRight(span, lidx, leq, req) =>
-              //println("Requested more right; emitting right based on bitset " + req.toList.mkString("[", ",", "]"))
-              // if span == RightSpan and no more data exists on the right, we need to 
-              // continue in buildFilters spanning on the left.
-              val remission = req.nonEmpty.option(rhead.mapColumns(cf.util.filter(0, rhead.size, req)))
-
-              @inline def next(lbs: JDBMState, rbs: JDBMState): M[(JDBMState, JDBMState)] = rtail.uncons flatMap {
-                case Some((rhead0, rtail0)) => 
-                  //println("Continuing on right.")
-                  val nextState = (span: @unchecked) match {
-                    case NoSpan => FindEqualAdvancingRight(lidx, lkey)
-                    case RightSpan => RunRight(lidx, lkey, Some(rkey))
-                  }
-
-                  step(nextState, lhead, ltail, leq, rhead0, rtail0, new BitSet, lstate, rstate, lbs, rbs)
-
-                case None =>
-                  // no need here to check for LeftSpan by the contract of buildFilters
-                  (span: @unchecked) match {
-                    case NoSpan => 
-                      //println("No more data on right and not in a span; emitting left based on bitset " + leq.toList.mkString("[", ",", "]"))
-                      // entirely done; just emit both 
-                      val lemission = leq.nonEmpty.option(lhead.mapColumns(cf.util.filter(0, lhead.size, leq)))
-                      (lemission map { e => writeAlignedSlices(db, lkey, e, lbs, "alignLeft", SortAscending) } getOrElse lbs.point[M]) map { (_, rbs) }
-
-                    case RightSpan => 
-                      // need to switch to left spanning in buildFilters
-                      //println("No more data on right, but in a span so continuing on left.")
-                      val nextState = buildFilters(comparator, lidx, lhead.size, leq, rhead.size, rhead.size, new BitSet, LeftSpan)
-                      continue(nextState, comparator, lstate, lkey, rstate, rkey, lbs, rbs)
-                  }
-              }
-
-              remission map { e => 
-                writeAlignedSlices(db, rkey, e, rightWriteState, "alignRight", SortAscending) flatMap { next(leftWriteState, _: JDBMState) }
-              } getOrElse {
-                next(leftWriteState, rightWriteState)
-              }
-          }
-
 
           // this is an optimization that uses a preemptory comparison and a binary
           // search to skip over big chunks of (or entire) slices if possible.
@@ -500,6 +420,83 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   buildFilters(comparator, leftRow, lhead.size, leq, rightIdx, rhead.size, req, NoSpan)
                 }
             }
+          }
+
+          // This function exists so that we can correctly nandle the situation where the right side is out of data 
+          // and we need to continue in a span on the left.
+          def continue(nextStep: NextStep, comparator: RowComparator, lstate: A, lkey: Slice, rstate: B, rkey: Slice, leftWriteState: JDBMState, rightWriteState: JDBMState): M[(JDBMState, JDBMState)] = nextStep match {
+            case MoreLeft(span, leq, ridx, req) =>
+              def next(lbs: JDBMState, rbs: JDBMState): M[(JDBMState, JDBMState)] = ltail.uncons flatMap {
+                case Some((lhead0, ltail0)) =>
+                  //println("Continuing on left; not emitting right.")
+                  val nextState = (span: @unchecked) match {
+                    case NoSpan => FindEqualAdvancingLeft(ridx, rkey)
+                    case LeftSpan => state match {
+                      case RunRight(_, _, rauth) => RunLeft(ridx, rkey, rauth)
+                      case RunLeft(_, _, rauth)  => RunLeft(ridx, rkey, rauth)
+                      case _ => RunLeft(ridx, rkey, None)
+                    }
+                  }
+
+                  step(nextState, lhead0, ltail0, new BitSet, rhead, rtail, req, lstate, rstate, lbs, rbs)
+
+                case None =>
+                  //println("No more data on left; emitting right based on bitset " + req.toList.mkString("[", ",", "]"))
+                  // done on left, and we're not in an equal span on the right (since LeftSpan can only
+                  // be emitted if we're not in a right span) so we're entirely done.
+                  val remission = req.nonEmpty.option(rhead.mapColumns(cf.util.filter(0, rhead.size, req))) 
+                  (remission map { e => writeAlignedSlices(db, rkey, e, rbs, "alignRight", SortAscending) } getOrElse rbs.point[M]) map { (lbs, _) }
+              }
+
+              //println("Requested more left; emitting left based on bitset " + leq.toList.mkString("[", ",", "]"))
+              val lemission = leq.nonEmpty.option(lhead.mapColumns(cf.util.filter(0, lhead.size, leq)))
+              lemission map { e => 
+                for {
+                  nextLeftWriteState <- writeAlignedSlices(db, lkey, e, leftWriteState, "alignLeft", SortAscending) 
+                  resultWriteStates  <- next(nextLeftWriteState, rightWriteState) 
+                } yield resultWriteStates
+              } getOrElse {
+                next(leftWriteState, rightWriteState)
+              }
+
+            case MoreRight(span, lidx, leq, req) =>
+              def next(lbs: JDBMState, rbs: JDBMState): M[(JDBMState, JDBMState)] = rtail.uncons flatMap {
+                case Some((rhead0, rtail0)) => 
+                  //println("Continuing on right.")
+                  val nextState = (span: @unchecked) match {
+                    case NoSpan => FindEqualAdvancingRight(lidx, lkey)
+                    case RightSpan => RunRight(lidx, lkey, Some(rkey))
+                  }
+
+                  step(nextState, lhead, ltail, leq, rhead0, rtail0, new BitSet, lstate, rstate, lbs, rbs)
+
+                case None =>
+                  // no need here to check for LeftSpan by the contract of buildFilters
+                  (span: @unchecked) match {
+                    case NoSpan => 
+                      //println("No more data on right and not in a span; emitting left based on bitset " + leq.toList.mkString("[", ",", "]"))
+                      // entirely done; just emit both 
+                      val lemission = leq.nonEmpty.option(lhead.mapColumns(cf.util.filter(0, lhead.size, leq)))
+                      (lemission map { e => writeAlignedSlices(db, lkey, e, lbs, "alignLeft", SortAscending) } getOrElse lbs.point[M]) map { (_, rbs) }
+
+                    case RightSpan => 
+                      //println("No more data on right, but in a span so continuing on left.")
+                      // if span == RightSpan and no more data exists on the right, we need to continue in buildFilters spanning on the left.
+                      val nextState = buildFilters(comparator, lidx, lhead.size, leq, rhead.size, rhead.size, new BitSet, LeftSpan)
+                      continue(nextState, comparator, lstate, lkey, rstate, rkey, lbs, rbs)
+                  }
+              }
+
+              //println("Requested more right; emitting right based on bitset " + req.toList.mkString("[", ",", "]"))
+              val remission = req.nonEmpty.option(rhead.mapColumns(cf.util.filter(0, rhead.size, req)))
+              remission map { e => 
+                for {
+                  nextRightWriteState <- writeAlignedSlices(db, rkey, e, rightWriteState, "alignRight", SortAscending) 
+                  resultWriteStates   <- next(leftWriteState, nextRightWriteState) 
+                } yield resultWriteStates
+              } getOrElse {
+                next(leftWriteState, rightWriteState)
+              }
           }
 
           //println("state: " + state)
@@ -533,18 +530,14 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
               val comparator = buildRowComparator(lkey, rkey, rauth.orNull)
 
-              val nextState = buildFilters(comparator, leftRow, lhead.size, stepleq, 
-                                                       0, rhead.size, new BitSet, RightSpan)
-
+              val nextState = buildFilters(comparator, leftRow, lhead.size, stepleq, 0, rhead.size, new BitSet, RightSpan)
               continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)
             
             case RunLeft(rightRow, rkey, rauth) =>
               val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
               val comparator = buildRowComparator(lkey, rkey, rauth.orNull)
 
-              val nextState = buildFilters(comparator, 0, lhead.size, new BitSet, 
-                                                       rightRow, rhead.size, stepreq, LeftSpan)
-
+              val nextState = buildFilters(comparator, 0, lhead.size, new BitSet, rightRow, rhead.size, stepreq, LeftSpan)
               continue(nextState, comparator, nextA, lkey, rstate, rkey, leftWriteState, rightWriteState)
           }
         }
