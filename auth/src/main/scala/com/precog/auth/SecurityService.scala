@@ -34,9 +34,9 @@ import blueeyes.health.metrics.{eternity}
 
 import org.streum.configrity.Configuration
 
-case class TokenServiceState(tokenManagement: TokenManagement)
+case class SecurityServiceState(apiKeyManagement: APIKeyManagement)
 
-trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenServiceCombinators {
+trait SecurityService extends BlueEyesServiceBuilder with AkkaDefaults with APIKeyServiceCombinators {
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
@@ -44,43 +44,43 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
   val insertTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now
 
-  def tokenManagerFactory(config: Configuration): TokenManager[Future]
+  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
 
-  val tokenService = service("security", "1.0") {
+  val securityService = service("security", "1.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
           val securityConfig = config.detach("security")
-          val tokenManager = tokenManagerFactory(securityConfig)
-          Future(TokenServiceState(new TokenManagement(tokenManager)))
+          val apiKeyManager = apiKeyManagerFactory(securityConfig)
+          Future(SecurityServiceState(new APIKeyManagement(apiKeyManager)))
         } ->
-        request { (state: TokenServiceState) =>
+        request { (state: SecurityServiceState) =>
           jsonp[ByteChunk] {
-            token(state.tokenManagement.tokenManager) {
+            apiKey(state.apiKeyManagement.apiKeyManager) {
               path("/apikeys/") {
-                get(new GetTokensHandler(state.tokenManagement)) ~
-                post(new CreateTokenHandler(state.tokenManagement)) ~
+                get(new GetAPIKeysHandler(state.apiKeyManagement)) ~
+                post(new CreateAPIKeyHandler(state.apiKeyManagement)) ~
                 path("'apikey") {
-                  get(new GetTokenDetailsHandler(state.tokenManagement)) ~
-                  delete(new DeleteTokenHandler(state.tokenManagement)) ~
+                  get(new GetAPIKeyDetailsHandler(state.apiKeyManagement)) ~
+                  delete(new DeleteAPIKeyHandler(state.apiKeyManagement)) ~
                   path("/grants/") {
-                    get(new GetTokenGrantsHandler(state.tokenManagement)) ~
-                    post(new AddTokenGrantHandler(state.tokenManagement)) ~
+                    get(new GetAPIKeyGrantsHandler(state.apiKeyManagement)) ~
+                    post(new AddAPIKeyGrantHandler(state.apiKeyManagement)) ~
                     path("'grantId") {
-                      delete(new RemoveTokenGrantHandler(state.tokenManagement))
+                      delete(new RemoveAPIKeyGrantHandler(state.apiKeyManagement))
                     }
                   }
                 }
               } ~
               path("/grants/") {
-                post(new CreateGrantHandler(state.tokenManagement)) ~
+                post(new CreateGrantHandler(state.apiKeyManagement)) ~
                 path("'grantId") {
-                  get(new GetGrantDetailsHandler(state.tokenManagement)) ~
-                  delete(new DeleteGrantHandler(state.tokenManagement)) ~
+                  get(new GetGrantDetailsHandler(state.apiKeyManagement)) ~
+                  delete(new DeleteGrantHandler(state.apiKeyManagement)) ~
                   path("/children/") {
-                    get(new GetGrantChildrenHandler(state.tokenManagement)) ~
-                    post(new AddGrantChildHandler(state.tokenManagement))
+                    get(new GetGrantChildrenHandler(state.apiKeyManagement)) ~
+                    post(new AddGrantChildHandler(state.apiKeyManagement))
                   }
                 }
               }
@@ -89,7 +89,7 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
         } ->
         shutdown { state => 
           for {
-            _ <- state.tokenManagement.close()
+            _ <- state.apiKeyManagement.close()
           } yield Option.empty[Stoppable]
         }
       }

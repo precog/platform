@@ -57,7 +57,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
   def buildMetadata(sample: List[Event]): Map[ProjectionDescriptor, ColumnMetadata] = {
     def projectionDescriptors(e: Event) = {
       e.data.flattenWithPath.map {
-        case (sel, value) => ProjectionDescriptor(1, ColumnDescriptor(e.path, CPath(sel), typeOf(value), Authorities(Set(e.tokenId))) :: Nil)
+        case (sel, value) => ProjectionDescriptor(1, ColumnDescriptor(e.path, CPath(sel), typeOf(value), Authorities(Set(e.apiKey))) :: Nil)
       }
     }
 
@@ -83,7 +83,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
  
   def extractSelectorsFor(path: Path)(events: List[Event]): Set[JPath] = {
     events.flatMap {
-      case Event(epath, token, data, metadata) if epath == path => data.flattenWithPath.map(_._1) 
+      case Event(epath, apiKey, data, metadata) if epath == path => data.flattenWithPath.map(_._1) 
       case _                                                    => List.empty
     }.toSet
   }
@@ -99,7 +99,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
   def extractMetadataFor(path: Path, selector: JPath)(events: List[Event]): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
     def convertColDesc(cd: ColumnDescriptor) = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (cd -> Map[MetadataType, Metadata]())
     Map(events.flatMap {
-      case e @ Event(epath, token, data, metadata) if epath == path => 
+      case e @ Event(epath, apiKey, data, metadata) if epath == path => 
         data.flattenWithPath.collect {
           case (k, v) if isEqualOrChild(selector, k) => k
         }.map( toProjectionDescriptor(e, _) )
@@ -108,23 +108,23 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
   }
   
   trait ChildType
-  case class LeafChild(cType: CType, token: String) extends ChildType
+  case class LeafChild(cType: CType, apiKey: String) extends ChildType
   case class IndexChild(i: Int) extends ChildType
   case class FieldChild(n: String) extends ChildType
   case object NotChild extends ChildType
   
-  def projectionDescriptorMap(path: Path, selector: CPath, cType: CType, token: String) = {
-    val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(token)))
+  def projectionDescriptorMap(path: Path, selector: CPath, cType: CType, apiKey: String) = {
+    val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(apiKey)))
     val desc = ProjectionDescriptor(1, colDesc :: Nil)
     val metadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (colDesc -> Map[MetadataType, Metadata]())
     Map((desc -> metadata))
   }
 
   def extractPathMetadata(path: Path, selector: JPath, in: Set[(JPath, CType, String)]): Set[PathMetadata] = {
-    def classifyChild(ref: JPath, test: JPath, cType: CType, token: String): ChildType = {
+    def classifyChild(ref: JPath, test: JPath, cType: CType, apiKey: String): ChildType = {
       if((test.nodes startsWith ref.nodes) && (test.nodes.length > ref.nodes.length)) {
         if(test.nodes.length - 1 == ref.nodes.length) {
-          LeafChild(cType, token)
+          LeafChild(cType, apiKey)
         } else {
           test.nodes(ref.nodes.length) match {
             case JPathField(i) => FieldChild(i)
@@ -138,7 +138,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
     }
 
     val c1 = in map {
-      case (sel, cType, token) => classifyChild(selector, sel, cType, token)
+      case (sel, cType, apiKey) => classifyChild(selector, sel, cType, apiKey)
     } 
 
     val c2 = c1.filter { 
@@ -148,8 +148,8 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
     val classifiedChildren = c2
 
     classifiedChildren map {
-      case LeafChild(cType, token)  => 
-        PathValue(cType, Authorities(Set(token)), projectionDescriptorMap(path, CPath(selector), cType, token))
+      case LeafChild(cType, apiKey)  => 
+        PathValue(cType, Authorities(Set(apiKey)), projectionDescriptorMap(path, CPath(selector), cType, apiKey))
       case IndexChild(i) =>
         PathIndex(i, extractPathMetadata(path, selector \ i, in))
       case FieldChild(n) =>
@@ -159,11 +159,11 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
 
   def extractPathMetadataFor(path: Path, selector: JPath)(events: List[Event]): PathRoot = {
     val col: Set[(JPath, CType, String)] = events.collect {
-      case Event(`path`, token, data, _) =>
+      case Event(`path`, apiKey, data, _) =>
         data.flattenWithPath.collect {
           case (s, v) if isEqualOrChild(selector, s) => 
              val ns = s.nodes.slice(selector.length, s.length-1)
-            (JPath(ns), CType.forJValue(v).get, token)
+            (JPath(ns), CType.forJValue(v).get, apiKey)
         }
     }.flatten.toSet
 
@@ -175,7 +175,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       data.flattenWithPath.find( _._1 == selector).flatMap[CType]( t => CType.forJValue(t._2) ).getOrElse(sys.error("bang"))
     }
     
-    val colDesc = ColumnDescriptor(e.path, CPath(selector), extractType(selector, e.data), Authorities(Set(e.tokenId)))
+    val colDesc = ColumnDescriptor(e.path, CPath(selector), extractType(selector, e.data), Authorities(Set(e.apiKey)))
     ProjectionDescriptor(1, colDesc :: Nil)
   }
     

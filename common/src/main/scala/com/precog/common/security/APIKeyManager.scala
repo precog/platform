@@ -48,106 +48,106 @@ import scalaz._
 import scalaz.Validation._
 import scalaz.syntax.monad._
 
-trait TokenManager[M[+_]] {
+trait APIKeyManager[M[+_]] {
   private[security] def newUUID() = java.util.UUID.randomUUID.toString
 
-  // 256 bit token ID
-  //private[security] def newTokenID(): String = (newUUID() + "-" + newUUID()).toUpperCase
+  // 256 bit API key
+  //private[security] def newAPIKeyID(): String = (newUUID() + "-" + newUUID()).toUpperCase
 
-  // 128 bit token ID
-  private[security] def newTokenID(): String = newUUID().toUpperCase
+  // 128 bit API key
+  private[security] def newAPIKey(): String = newUUID().toUpperCase
 
   // 384 bit grant ID
   private[security] def newGrantID(): String = (newUUID() + newUUID() + newUUID()).toLowerCase.replace("-","")
  
-  def newToken(name: String, creator: TokenID, grants: Set[GrantID]): M[Token]
+  def newAPIKey(name: String, creator: APIKey, grants: Set[GrantID]): M[APIKeyRecord]
   def newGrant(issuer: Option[GrantID], permission: Permission): M[Grant]
 
-  def listTokens(): M[Seq[Token]]
+  def listAPIKeys(): M[Seq[APIKeyRecord]]
   def listGrants(): M[Seq[Grant]]
   
-  def findToken(tid: TokenID): M[Option[Token]]
+  def findAPIKey(tid: APIKey): M[Option[APIKeyRecord]]
   def findGrant(gid: GrantID): M[Option[Grant]]
   def findGrantChildren(gid: GrantID): M[Set[Grant]]
 
-  def listDeletedTokens(): M[Seq[Token]]
+  def listDeletedAPIKeys(): M[Seq[APIKeyRecord]]
   def listDeletedGrants(): M[Seq[Grant]]
 
-  def findDeletedToken(tid: TokenID): M[Option[Token]]
+  def findDeletedAPIKey(tid: APIKey): M[Option[APIKeyRecord]]
   def findDeletedGrant(gid: GrantID): M[Option[Grant]]
   def findDeletedGrantChildren(gid: GrantID): M[Set[Grant]]
 
-  def addGrants(tid: TokenID, grants: Set[GrantID]): M[Option[Token]]
-  def removeGrants(tid: TokenID, grants: Set[GrantID]): M[Option[Token]]
+  def addGrants(tid: APIKey, grants: Set[GrantID]): M[Option[APIKeyRecord]]
+  def removeGrants(tid: APIKey, grants: Set[GrantID]): M[Option[APIKeyRecord]]
 
-  def deleteToken(tid: TokenID): M[Option[Token]]
+  def deleteAPIKey(tid: APIKey): M[Option[APIKeyRecord]]
   def deleteGrant(gid: GrantID): M[Set[Grant]]
 
   def close(): M[Unit]
 } 
 
 
-case class MongoTokenManagerSettings(
-  tokens: String = "tokens",
+case class MongoAPIKeyManagerSettings(
+  apiKeys: String = "tokens",
   grants: String = "grants",
-  deletedTokens: String = "tokens_deleted",
+  deletedAPIKeys: String = "tokens_deleted",
   deletedGrants: String = "grants_deleted",
   timeout: Timeout = new Timeout(30000))
 
-object MongoTokenManagerSettings {
-  val defaults = MongoTokenManagerSettings()
+object MongoAPIKeyManagerSettings {
+  val defaults = MongoAPIKeyManagerSettings()
 }
 
-trait MongoTokenManagerComponent extends Logging {
+trait MongoAPIKeyManagerComponent extends Logging {
   implicit def asyncContext: ExecutionContext
   implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
-  def tokenManagerFactory(config: Configuration): TokenManager[Future] = {
+  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future] = {
     val mongo = RealMongo(config.detach("mongo"))
     
     val database = config[String]("mongo.database", "auth_v1")
-    val tokens = config[String]("mongo.tokens", "tokens")
+    val apiKeys = config[String]("mongo.tokens", "tokens")
     val grants = config[String]("mongo.grants", "grants")
-    val deletedTokens = config[String]("mongo.deleted_tokens", tokens + "_deleted")
+    val deletedAPIKeys = config[String]("mongo.deleted_tokens", apiKeys + "_deleted")
     val deletedGrants = config[String]("mongo.deleted_grants", grants + "_deleted")
     val timeoutMillis = config[Int]("mongo.query.timeout", 10000)
 
-    val settings = MongoTokenManagerSettings(
-      tokens, grants, deletedTokens, deletedGrants, timeoutMillis
+    val settings = MongoAPIKeyManagerSettings(
+      apiKeys, grants, deletedAPIKeys, deletedGrants, timeoutMillis
     )
 
-    val mongoTokenManager = 
-      new MongoTokenManager(mongo, mongo.database(database), settings)
+    val mongoAPIKeyManager = 
+      new MongoAPIKeyManager(mongo, mongo.database(database), settings)
 
     val cached = config[Boolean]("cached", false)
 
     if(cached) {
-      new CachingTokenManager(mongoTokenManager)
+      new CachingAPIKeyManager(mongoAPIKeyManager)
     } else {
-      mongoTokenManager
+      mongoAPIKeyManager
     }
   }
 }
 
-class MongoTokenManager(
-    mongo: Mongo,
-    database: Database,
-    settings: MongoTokenManagerSettings = MongoTokenManagerSettings.defaults)(implicit val execContext: ExecutionContext) extends TokenManager[Future] with Logging {
+class MongoAPIKeyManager(
+    mongo: Mongo, 
+    database: Database, 
+    settings: MongoAPIKeyManagerSettings = MongoAPIKeyManagerSettings.defaults)(implicit val execContext: ExecutionContext) extends APIKeyManager[Future] with Logging {
 
   private implicit val impTimeout = settings.timeout
 
-  def newToken(name: String, creator: TokenID, grants: Set[GrantID]) = {
-    val newToken = Token(name, newTokenID(), creator, grants)
-    database(insert(newToken.serialize(Token.UnsafeTokenDecomposer).asInstanceOf[JObject]).into(settings.tokens)) map {
-      _ => newToken
+  def newAPIKey(name: String, creator: APIKey, grants: Set[GrantID]) = {
+    val apiKey = APIKeyRecord(name, newAPIKey(), creator, grants)
+    database(insert(apiKey.serialize(APIKeyRecord.apiKeyRecordDecomposer).asInstanceOf[JObject]).into(settings.apiKeys)) map {
+      _ => apiKey
     }
   }
 
   def newGrant(issuer: Option[GrantID], perm: Permission) = {
     val ng = Grant(newGrantID, issuer, perm)
     logger.debug("Adding grant: " + ng)
-    database(insert(ng.serialize(Grant.GrantDecomposer).asInstanceOf[JObject]).into(settings.grants)) map { 
-      _ => logger.debug("Add complete for " + ng); ng 
+    database(insert(ng.serialize(Grant.GrantDecomposer).asInstanceOf[JObject]).into(settings.grants)) map {
+      _ => logger.debug("Add complete for " + ng); ng
     }
   }
 
@@ -170,38 +170,38 @@ class MongoTokenManager(
   private def findAll[A](collection: String)(implicit extract: Extractor[A]): Future[Seq[A]] =
     database { selectAll.from(collection) }.map { _.map(_.deserialize(extract)).toSeq }
 
-  def listTokens() = findAll[Token](settings.tokens)
+  def listAPIKeys() = findAll[APIKeyRecord](settings.apiKeys)
   def listGrants() = findAll[Grant](settings.grants)
 
-  def findToken(tid: TokenID) = findOneMatching[Token]("tid", tid, settings.tokens)
+  def findAPIKey(tid: APIKey) = findOneMatching[APIKeyRecord]("tid", tid, settings.apiKeys)
   def findGrant(gid: GrantID) = findOneMatching[Grant]("gid", gid, settings.grants)
 
   def findGrantChildren(gid: GrantID) = findAllMatching("issuer", gid, settings.grants)
 
-  def listDeletedTokens() = findAll[Token](settings.tokens)
+  def listDeletedAPIKeys() = findAll[APIKeyRecord](settings.apiKeys)
   def listDeletedGrants() = findAll[Grant](settings.grants)
 
-  def findDeletedToken(tid: TokenID) = findOneMatching[Token]("tid", tid, settings.deletedTokens)
+  def findDeletedAPIKey(tid: APIKey) = findOneMatching[APIKeyRecord]("tid", tid, settings.deletedAPIKeys)
   def findDeletedGrant(gid: GrantID) = findOneMatching[Grant]("gid", gid, settings.deletedGrants)
 
   def findDeletedGrantChildren(gid: GrantID) = findAllMatching("issuer", gid, settings.deletedGrants)
 
-  def addGrants(tid: TokenID, add: Set[GrantID]) = updateToken(tid) { t =>
+  def addGrants(tid: APIKey, add: Set[GrantID]) = updateAPIKey(tid) { t =>
     Some(t.addGrants(add))
   }
 
-  def removeGrants(tid: TokenID, remove: Set[GrantID]) = updateToken(tid) { t =>
+  def removeGrants(tid: APIKey, remove: Set[GrantID]) = updateAPIKey(tid) { t =>
     if(remove.subsetOf(t.grants)) Some(t.removeGrants(remove)) else None
   }
 
-  private def updateToken(tid: TokenID)(f: Token => Option[Token]): Future[Option[Token]] = {
-    findToken(tid).flatMap {
+  private def updateAPIKey(tid: APIKey)(f: APIKeyRecord => Option[APIKeyRecord]): Future[Option[APIKeyRecord]] = {
+    findAPIKey(tid).flatMap {
       case Some(t) =>
         f(t) match {
           case Some(nt) if nt != t =>
             database {
-              val updateObj = nt.serialize(Token.UnsafeTokenDecomposer).asInstanceOf[JObject]
-              update(settings.tokens).set(updateObj).where("tid" === tid)
+              val updateObj = nt.serialize(APIKeyRecord.apiKeyRecordDecomposer).asInstanceOf[JObject]
+              update(settings.apiKeys).set(updateObj).where("tid" === tid)
             }.map{ _ => Some(nt) }
           case _ => Future(Some(t))
         }
@@ -209,12 +209,12 @@ class MongoTokenManager(
     }
   }
 
-  def deleteToken(tid: TokenID): Future[Option[Token]] =
-    findToken(tid).flatMap { 
+  def deleteAPIKey(tid: APIKey): Future[Option[APIKeyRecord]] =
+    findAPIKey(tid).flatMap { 
       case ot @ Some(t) =>
         for {
-          _ <- database(insert(t.serialize(Token.UnsafeTokenDecomposer).asInstanceOf[JObject]).into(settings.deletedTokens))
-          _ <- database(remove.from(settings.tokens).where("tid" === tid))
+          _ <- database(insert(t.serialize(APIKeyRecord.apiKeyRecordDecomposer).asInstanceOf[JObject]).into(settings.deletedAPIKeys))
+          _ <- database(remove.from(settings.apiKeys).where("tid" === tid))
         } yield { ot }
       case None    => Future(None)
     } 
@@ -237,29 +237,29 @@ class MongoTokenManager(
   def close() = database.disconnect.fallbackTo(Future(())).flatMap{_ => mongo.close}
 }
 
-case class CachingTokenManagerSettings(
-  tokenCacheSettings: CacheSettings[TokenID, Token],
+case class CachingAPIKeyManagerSettings(
+  apiKeyCacheSettings: CacheSettings[APIKey, APIKeyRecord],
   grantCacheSettings: CacheSettings[GrantID, Grant])
 
-class CachingTokenManager[M[+_]: Monad](manager: TokenManager[M], settings: CachingTokenManagerSettings = CachingTokenManager.defaultSettings) extends TokenManager[M] {
+class CachingAPIKeyManager[M[+_]: Monad](manager: APIKeyManager[M], settings: CachingAPIKeyManagerSettings = CachingAPIKeyManager.defaultSettings) extends APIKeyManager[M] {
 
-  private val tokenCache = Cache.concurrent[TokenID, Token](settings.tokenCacheSettings)
+  private val apiKeyCache = Cache.concurrent[APIKey, APIKeyRecord](settings.apiKeyCacheSettings)
   private val grantCache = Cache.concurrent[GrantID, Grant](settings.grantCacheSettings)
 
-  def newToken(name: String, creator: TokenID, grants: Set[GrantID]) =
-    manager.newToken(name, creator, grants).map { _ ->- add }
+  def newAPIKey(name: String, creator: APIKey, grants: Set[GrantID]) =
+    manager.newAPIKey(name, creator, grants).map { _ ->- add }
 
   def newGrant(issuer: Option[GrantID], permission: Permission) =
     manager.newGrant(issuer, permission).map { _ ->- add }
 
-  def listTokens() = manager.listTokens
+  def listAPIKeys() = manager.listAPIKeys
   def listGrants() = manager.listGrants
 
-  def listDeletedTokens() = manager.listDeletedTokens
+  def listDeletedAPIKeys() = manager.listDeletedAPIKeys
   def listDeletedGrants() = manager.listDeletedGrants
 
-  def findToken(tid: TokenID) = tokenCache.get(tid) match {
-    case None => manager.findToken(tid).map { _.map { _ ->- add } }
+  def findAPIKey(tid: APIKey) = apiKeyCache.get(tid) match {
+    case None => manager.findAPIKey(tid).map { _.map { _ ->- add } }
     case t    => Monad[M].point(t)
   }
   def findGrant(gid: GrantID) = grantCache.get(gid) match {
@@ -268,33 +268,33 @@ class CachingTokenManager[M[+_]: Monad](manager: TokenManager[M], settings: Cach
   }
   def findGrantChildren(gid: GrantID) = manager.findGrantChildren(gid)
 
-  def findDeletedToken(tid: TokenID) = manager.findDeletedToken(tid)
+  def findDeletedAPIKey(tid: APIKey) = manager.findDeletedAPIKey(tid)
   def findDeletedGrant(gid: GrantID) = manager.findDeletedGrant(gid)
   def findDeletedGrantChildren(gid: GrantID) = manager.findDeletedGrantChildren(gid)
 
-  def addGrants(tid: TokenID, grants: Set[GrantID]) =
+  def addGrants(tid: APIKey, grants: Set[GrantID]) =
     manager.addGrants(tid, grants).map { _.map { _ ->- add } }
-  def removeGrants(tid: TokenID, grants: Set[GrantID]) =
+  def removeGrants(tid: APIKey, grants: Set[GrantID]) =
     manager.removeGrants(tid, grants).map { _.map { _ ->- add } }
 
-  def deleteToken(tid: TokenID) =
-    manager.deleteToken(tid) map { _.map { _ ->- remove } }
+  def deleteAPIKey(tid: APIKey) =
+    manager.deleteAPIKey(tid) map { _.map { _ ->- remove } }
   def deleteGrant(gid: GrantID) =
     manager.deleteGrant(gid) map { _.map { _ ->- remove } }
 
-  private def add(t: Token) = tokenCache.put(t.tid, t)
+  private def add(t: APIKeyRecord) = apiKeyCache.put(t.tid, t)
   private def add(g: Grant) = grantCache.put(g.gid, g)
 
-  private def remove(t: Token) = tokenCache.remove(t.tid)
+  private def remove(t: APIKeyRecord) = apiKeyCache.remove(t.tid)
   private def remove(g: Grant) = grantCache.remove(g.gid)
 
   def close() = manager.close
 
 }
 
-object CachingTokenManager {
-  val defaultSettings = CachingTokenManagerSettings(
-    CacheSettings[TokenID, Token](ExpirationPolicy(Some(5), Some(5), MINUTES)),
+object CachingAPIKeyManager {
+  val defaultSettings = CachingAPIKeyManagerSettings(
+    CacheSettings[APIKey, APIKeyRecord](ExpirationPolicy(Some(5), Some(5), MINUTES)),
     CacheSettings[GrantID, Grant](ExpirationPolicy(Some(5), Some(5), MINUTES))
   )
 }

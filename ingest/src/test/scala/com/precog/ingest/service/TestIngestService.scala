@@ -56,14 +56,14 @@ import blueeyes.core.http.MimeTypes._
 
 import blueeyes.json.JsonAST._
 
-trait TestTokens {
-  import TestTokenManager._
-  val TestTokenUID = testUID
-  val TrackingTokenUID = usageUID
-  val ExpiredTokenUID = expiredUID
+trait TestAPIKeys {
+  import TestAPIKeyManager._
+  val TestAPIKey = testUID
+  val TrackingAPIKey = usageUID
+  val ExpiredAPIKey = expiredUID
 }
 
-trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestTokens with AkkaDefaults with MongoTokenManagerComponent {
+trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestAPIKeys with AkkaDefaults with MongoAPIKeyManagerComponent {
   val asyncContext = defaultFutureDispatch
 
   val config = """
@@ -79,7 +79,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
 
   override val configuration = "services { ingest { v1 { " + config + " } } }"
 
-  def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(TrackingTokenUID) 
+  def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(TrackingAPIKey) 
 
   val messaging = new CollectingMessaging
 
@@ -96,7 +96,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
     new KafkaEventStore(new EventRouter(routeTable, messaging), 0)
   }
 
-  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
+  override def apiKeyManagerFactory(config: Configuration) = TestAPIKeyManager.testAPIKeyManager[Future]
 
   implicit def jValueToFutureJValue = new Bijection[JValue, Future[JValue]] {
     def apply(x: JValue) = Future(x)
@@ -106,7 +106,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   def track[A](
       contentType: MimeType,
       sync: Boolean = true,
-      apiKey: Option[String] = Some(TestTokenUID),
+      apiKey: Option[String] = Some(TestAPIKey),
       path: String = "unittest"
     )(data: A)(implicit
       bi: Bijection[A, Future[JValue]],

@@ -61,7 +61,7 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
       val seq = new AtomicInteger(0)
 
       val batch: Seq[IngestMessage] = samples map 
-           { jval => Event(Path("/"), "token", jval, Map()) } map 
+           { jval => Event(Path("/"), "apiKey", jval, Map()) } map 
            { event => EventMessage(0, seq.getAndIncrement, event) }
 
  

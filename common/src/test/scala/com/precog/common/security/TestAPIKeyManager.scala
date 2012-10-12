@@ -44,16 +44,16 @@ import scalaz.Id._
 import scalaz.Validation._
 
 
-class InMemoryTokenManager[M[+_]: Monad](tokens: mutable.Map[TokenID, Token] = mutable.Map.empty, 
-                           grants: mutable.Map[GrantID, Grant] = mutable.Map.empty) extends TokenManager[M] {
+class InMemoryAPIKeyManager[M[+_]: Monad](apiKeys: mutable.Map[APIKey, APIKeyRecord] = mutable.Map.empty, 
+                           grants: mutable.Map[GrantID, Grant] = mutable.Map.empty) extends APIKeyManager[M] {
 
-  private val deletedTokens = mutable.Map.empty[TokenID, Token]
+  private val deletedAPIKeys = mutable.Map.empty[APIKey, APIKeyRecord]
   private val deletedGrants = mutable.Map.empty[GrantID, Grant]
 
-  def newToken(name: String, creator: TokenID, grants: Set[GrantID]) = Monad[M].point {
-    val newToken = Token(name, newTokenID, creator, grants)
-    tokens.put(newToken.tid, newToken)
-    newToken
+  def newAPIKey(name: String, creator: APIKey, grants: Set[GrantID]) = Monad[M].point {
+    val apiKey = APIKeyRecord(name, newAPIKey, creator, grants)
+    apiKeys.put(apiKey.tid, apiKey)
+    apiKey
   }
 
   def newGrant(issuer: Option[GrantID], perm: Permission) = Monad[M].point {
@@ -62,34 +62,34 @@ class InMemoryTokenManager[M[+_]: Monad](tokens: mutable.Map[TokenID, Token] = m
     newGrant
   }
 
-  def listTokens() = Monad[M].point(tokens.values.toList) 
+  def listAPIKeys() = Monad[M].point(apiKeys.values.toList) 
   def listGrants() = Monad[M].point( grants.values.toList)
 
-  def findToken(tid: TokenID) = Monad[M].point(tokens.get(tid))
+  def findAPIKey(tid: APIKey) = Monad[M].point(apiKeys.get(tid))
 
   def findGrant(gid: GrantID) = Monad[M].point(grants.get(gid))
   def findGrantChildren(gid: GrantID) = Monad[M].point {
     grants.values.toSet.filter{ _.issuer.map { _ == gid }.getOrElse(false) }
   }
 
-  def addGrants(tid: TokenID, add: Set[GrantID]) = Monad[M].point {
-    tokens.get(tid).map { t =>
+  def addGrants(tid: APIKey, add: Set[GrantID]) = Monad[M].point {
+    apiKeys.get(tid).map { t =>
       val updated = t.addGrants(add)
-      tokens.put(tid, updated)
+      apiKeys.put(tid, updated)
       updated
     }
   }
 
-  def listDeletedTokens() = Monad[M].point {
-    deletedTokens.values.toList 
+  def listDeletedAPIKeys() = Monad[M].point {
+    deletedAPIKeys.values.toList 
   }
 
   def listDeletedGrants() = Monad[M].point {
     deletedGrants.values.toList 
   }
 
-  def findDeletedToken(tid: TokenID) = Monad[M].point {
-    deletedTokens.get(tid) 
+  def findDeletedAPIKey(tid: APIKey) = Monad[M].point {
+    deletedAPIKeys.get(tid) 
   }
 
   def findDeletedGrant(gid: GrantID) = Monad[M].point {
@@ -100,20 +100,20 @@ class InMemoryTokenManager[M[+_]: Monad](tokens: mutable.Map[TokenID, Token] = m
     deletedGrants.values.toSet.filter{ _.issuer.map { _ == gid }.getOrElse(false) }
   }
 
-  def removeGrants(tid: TokenID, remove: Set[GrantID]) = Monad[M].point {
-    tokens.get(tid).flatMap { t =>
+  def removeGrants(tid: APIKey, remove: Set[GrantID]) = Monad[M].point {
+    apiKeys.get(tid).flatMap { t =>
       if(remove.subsetOf(t.grants)) {
         val updated = t.removeGrants(remove)
-        tokens.put(tid, updated)
+        apiKeys.put(tid, updated)
         Some(updated)
       } else None
     }
   }
 
-  def deleteToken(tid: TokenID) = Monad[M].point {
-    tokens.get(tid).flatMap { t =>
-      deletedTokens.put(tid, t)
-      tokens.remove(tid)
+  def deleteAPIKey(tid: APIKey) = Monad[M].point {
+    apiKeys.get(tid).flatMap { t =>
+      deletedAPIKeys.put(tid, t)
+      apiKeys.remove(tid)
     }
   }
   def deleteGrant(gid: GrantID) =  Monad[M].point {
@@ -129,7 +129,7 @@ class InMemoryTokenManager[M[+_]: Monad](tokens: mutable.Map[TokenID, Token] = m
   def close() = Monad[M].point(())
 }
 
-object TestTokenManager {
+object TestAPIKeyManager {
   val rootUID = "root"
 
   val testUID = "unittest"
@@ -140,7 +140,7 @@ object TestTokenManager {
 
   val expiredUID = "expired"
 
-  def standardAccountPerms(prefix: String, issuerPrefix: Option[String], path: String, owner: TokenID, expiration: Option[DateTime]): List[Grant] = {
+  def standardAccountPerms(prefix: String, issuerPrefix: Option[String], path: String, owner: APIKey, expiration: Option[DateTime]): List[Grant] = {
     val config = List[(String, (Path, Option[DateTime]) => Permission)](
       ("write", WritePermission(_, _)),
       ("owner", OwnerPermission(_, _)),
@@ -153,7 +153,7 @@ object TestTokenManager {
     }
   }
 
-  def publishPathPerms(prefix: String, issuerPrefix: Option[String], path: String, owner: TokenID, expiration: Option[DateTime]) = {
+  def publishPathPerms(prefix: String, issuerPrefix: Option[String], path: String, owner: APIKey, expiration: Option[DateTime]) = {
     val config = List[(String, (Path, Option[DateTime]) => Permission)](
       ("read", ReadPermission(_, owner, _)),
       ("reduce", ReducePermission(_, owner, _))
@@ -177,18 +177,18 @@ object TestTokenManager {
 
   val grants: mutable.Map[GrantID, Grant] = grantList.flatten.map { g => (g.gid -> g) }(collection.breakOut)
 
-  val tokens: mutable.Map[TokenID, Token] = List[Token](
-    Token("root", "root", "", grantList(0).map { _.gid }(collection.breakOut)),
-    Token("unittest", "unittest", "root", grantList(1).map { _.gid }(collection.breakOut)),
-    Token("usage", "usage", "root", grantList(2).map { _.gid }(collection.breakOut)),
-    Token("user1", "user1", "root", (grantList(3) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
-    Token("user2", "user2", "root", (grantList(4) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
-    Token("expired", "expired", "root", (grantList(5) ++ grantList(6)).map{ _.gid}(collection.breakOut))
+  val apiKeys: mutable.Map[APIKey, APIKeyRecord] = List[APIKeyRecord](
+    APIKeyRecord("root", "root", "", grantList(0).map { _.gid }(collection.breakOut)),
+    APIKeyRecord("unittest", "unittest", "root", grantList(1).map { _.gid }(collection.breakOut)),
+    APIKeyRecord("usage", "usage", "root", grantList(2).map { _.gid }(collection.breakOut)),
+    APIKeyRecord("user1", "user1", "root", (grantList(3) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
+    APIKeyRecord("user2", "user2", "root", (grantList(4) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
+    APIKeyRecord("expired", "expired", "root", (grantList(5) ++ grantList(6)).map{ _.gid}(collection.breakOut))
   ).map { t => (t.tid -> t) }(collection.breakOut)
   
   val rootReadChildren = grantList.flatten.filter(_.issuer.map(_ == "root_read").getOrElse(false)).toSet
 
-  def testTokenManager[M[+_]: Monad]: TokenManager[M] = new InMemoryTokenManager[M](tokens, grants)
+  def testAPIKeyManager[M[+_]: Monad]: APIKeyManager[M] = new InMemoryAPIKeyManager[M](apiKeys, grants)
 }
 
 // vim: set ts=4 sw=4 et:

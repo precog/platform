@@ -138,8 +138,8 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                            wrappedKey.validated[WrappedAPIKey] match {
                              case Success(WrappedAPIKey(_, apiKey)) => apiKey
                              case Failure(err) =>
-                              logger.error("Unexpected response to token creation request: " + err)
-                              throw HttpException(BadGateway, "Unexpected response to token creation request: " + err)
+                              logger.error("Unexpected response to API key creation request: " + err)
+                              throw HttpException(BadGateway, "Unexpected response to API key creation request: " + err)
                            }
 
                           case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) => 

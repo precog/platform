@@ -106,8 +106,8 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
     }
   }
 
-  def query[A, B](next: HttpService[A, (Token, Path, Query, QueryOptions) => Future[B]]) = {
-    new DelegatingService[A, (Token, Path) => Future[B], A, (Token, Path, Query, QueryOptions) => Future[B]] {
+  def query[A, B](next: HttpService[A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]]) = {
+    new DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]] {
       val delegate = next
       val metadata = None
       val service = (request: HttpRequest[A]) => {
@@ -124,7 +124,7 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
           )
 
           query map { q =>
-            next.service(request) map { f => (token: Token, path: Path) => f(token, path, q, opts) }
+            next.service(request) map { f => (apiKey: APIKeyRecord, path: Path) => f(apiKey, path, q, opts) }
           } getOrElse {
             failure(inapplicable)
           }

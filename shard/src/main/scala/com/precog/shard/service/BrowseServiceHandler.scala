@@ -40,9 +40,9 @@ import com.precog.common._
 import com.precog.common.security._
 
 class BrowseServiceHandler(queryExecutor: QueryExecutor[Future], accessControl: AccessControl[Future])(implicit dispatcher: MessageDispatcher)
-extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[QueryResult]]] with Logging {
+extends CustomHttpService[Future[JValue], (APIKeyRecord, Path) => Future[HttpResponse[QueryResult]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => { 
-    success((t: Token, p: Path) => {
+    success((t: APIKeyRecord, p: Path) => {
       accessControl.mayAccess(t.tid, p, Set(t.tid), ReadPermission).flatMap { 
         case true =>
           import scalaz.std.string._
@@ -66,7 +66,7 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[Q
             }
           }
         case false =>
-          Future(HttpResponse[QueryResult](HttpStatus(Unauthorized, "The specified token may not browse this location")))
+          Future(HttpResponse[QueryResult](HttpStatus(Unauthorized, "The specified API key may not browse this location")))
       }
     })
   }
