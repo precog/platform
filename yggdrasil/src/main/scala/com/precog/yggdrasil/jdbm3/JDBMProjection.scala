@@ -61,7 +61,6 @@ import blueeyes.json.serialization.DefaultSerialization._
 object JDBMProjection {
   private[jdbm3] type IndexTree = SortedMap[Array[Byte],Array[Byte]]
 
-  final val DEFAULT_SLICE_SIZE = 50000
   final val INDEX_SUBDIR = "jdbm"
   final val MAX_SPINS = 20 // FIXME: This is related to the JDBM ConcurrentMod exception, and should be removed when that's cleaned up
     
@@ -71,7 +70,7 @@ object JDBMProjection {
 // FIXME: Again, related to JDBM concurent mod exception
 class VicciniException(message: String) extends java.io.IOException("Inconceivable! " + message)
 
-abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte], Slice] { projection =>
+abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int) extends BlockProjectionLike[Array[Byte], Slice] { projection =>
   import TableModule.paths._
   import JDBMProjection._
 

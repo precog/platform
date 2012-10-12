@@ -66,6 +66,8 @@ trait YggdrasilQueryExecutorConfig extends
     BaseConfig with 
     ProductionShardSystemConfig with
     SystemActorStorageConfig with
+    JDBMProjectionModuleConfig with
+    BlockStoreColumnarTableModuleConfig with
     EvaluatorConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
@@ -83,13 +85,7 @@ trait YggdrasilQueryExecutorComponent {
       val memoizationWorkDir = scratchDir
 
       val clock = blueeyes.util.Clock.System
-      
       val maxSliceSize = 10000
-
-      object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
 
       //TODO: Get a producer ID
       val idSource = new IdSource {

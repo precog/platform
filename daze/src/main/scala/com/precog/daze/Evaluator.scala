@@ -54,7 +54,6 @@ import scalaz.syntax.traverse._
 import scala.collection.immutable.Queue
 
 trait EvaluatorConfig extends IdSourceConfig {
-  def maxEvalDuration: akka.util.Duration
   def maxSliceSize: Int
 }
 

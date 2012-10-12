@@ -55,10 +55,16 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 
 import TableModule._
+
+trait BlockStoreColumnarTableModuleConfig {
+  def maxSliceSize: Int
+}
+
 trait BlockStoreColumnarTableModule[M[+_]] extends
   ColumnarTableModule[M] with
   StorageModule[M] with
-  IdSourceScannerModule[M] { self =>
+  IdSourceScannerModule[M] with
+  YggConfigComponent { self =>
 
   protected lazy val blockModuleLogger = LoggerFactory.getLogger("com.precog.yggdrasil.table.BlockStoreColumnarTableModule")
 
@@ -67,6 +73,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   import SliceTransform._
   import BlockStoreColumnarTableModule._
     
+  type YggConfig <: IdSourceConfig with BlockStoreColumnarTableModuleConfig
   override type UserId = String
   type Key
   type Projection <: BlockProjectionLike[Key, Slice]
@@ -696,7 +703,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       // Map the distinct indices into SortProjections/Cells, then merge them
       def cellsMs: Stream[M[Option[CellState]]] = indices.values.toStream.zipWithIndex map {
         case (SliceIndex(name, _, _, keyColumns, valColumns, _), index) => 
-          val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns, sortOrder)
+          val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns, sortOrder, yggConfig.maxSliceSize)
           val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
           
           succ(None) map { 
