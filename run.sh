@@ -19,17 +19,26 @@
 ## 
 #!/bin/bash
 
-if [ $# -eq 0 ]; then
+function usage {
     echo "Usage: ./run.sh [-q directory] [ingest.json ...]" 1>&2
     exit 1
+}
+
+if [ $# -eq 0 ]; then
+    echo "Ingest files are required!"
+    usage
 fi
 
-while getopts "q:" opt; do
+while getopts ":q:" opt; do
     case $opt in
         q)
             QUERYDIR=$OPTARG
             shift
             shift
+            ;;
+        \?)
+            echo "Unknown option $OPTARG!"
+            usage
             ;;
     esac
 done
