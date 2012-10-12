@@ -284,8 +284,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = {
       sealed trait AlignState
-      case class RunLeft(rightRow: Int, rightKey: Slice) extends AlignState
-      case class RunRight(leftRow: Int, leftKey: Slice) extends AlignState
+      case class RunLeft(rightRow: Int, rightKey: Slice, rightAuthority: Option[Slice]) extends AlignState
+      case class RunRight(leftRow: Int, leftKey: Slice, rightAuthority: Option[Slice]) extends AlignState
       case class FindEqualAdvancingRight(leftRow: Int, leftKey: Slice) extends AlignState
       case class FindEqualAdvancingLeft(rightRow: Int, rightKey: Slice) extends AlignState
 
@@ -301,9 +301,19 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
       // we need a custom row comparator that ignores the global ID introduced to prevent elimination of
       // duplicate rows in the write to JDBM
-      def buildRowComparator(lkey: Slice, rkey: Slice) = {
-        Slice.rowComparatorFor(lkey.deref(CPathIndex(0)), rkey.deref(CPathIndex(0))) {
+      def buildRowComparator(lkey: Slice, rkey: Slice, rauth: Slice): RowComparator = new RowComparator {
+        private val mainComparator = Slice.rowComparatorFor(lkey.deref(CPathIndex(0)), rkey.deref(CPathIndex(0))) {
           _.columns.keys.toList.sorted 
+        }
+
+        private val auxComparator = if (rauth == null) null else {
+          Slice.rowComparatorFor(lkey.deref(CPathIndex(0)), rauth.deref(CPathIndex(0))) {
+            _.columns.keys.toList.sorted 
+          }
+        } 
+
+        def compare(i1: Int, i2: Int) = {
+          if (i2 < 0 && rauth != null) auxComparator.compare(i1, rauth.size + i2) else mainComparator.compare(i1, i2)
         }
       }
 
@@ -331,6 +341,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               lidx: Int, lsize: Int, lacc: BitSet, 
               ridx: Int, rsize: Int, racc: BitSet,
               span: Span): NextStep = {
+
+              //println((lidx, ridx, span))
 
               // todo: This is optimized for sparse alignments; if you get into an alignment
               // where every pair is distinct and equal, you'll do 2*n comparisons.
@@ -390,7 +402,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
           def continue(nextStep: NextStep, comparator: RowComparator, lstate: A, lkey: Slice, rstate: B, rkey: Slice, leftWriteState: JDBMState, rightWriteState: JDBMState): M[(JDBMState, JDBMState)] = nextStep match {
             case MoreLeft(span, leq, ridx, req) =>
-              //println("Requested more left; emitting left based on bitset " + leq.mkString("[", ",", "]"))
+              //println("Requested more left; emitting left based on bitset " + leq.toList.mkString("[", ",", "]"))
               val lemission = leq.nonEmpty.option(lhead.mapColumns(cf.util.filter(0, lhead.size, leq)))
 
               @inline def next(lbs: JDBMState, rbs: JDBMState): M[(JDBMState, JDBMState)] = ltail.uncons flatMap {
@@ -398,12 +410,16 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   //println("Continuing on left; not emitting right.")
                   val nextState = (span: @unchecked) match {
                     case NoSpan => FindEqualAdvancingLeft(ridx, rkey)
-                    case LeftSpan => RunLeft(ridx, rkey)
+                    case LeftSpan => state match {
+                      case RunRight(_, _, rauth) => RunLeft(ridx, rkey, rauth)
+                      case RunLeft(_, _, rauth)  => RunLeft(ridx, rkey, rauth)
+                      case _ => RunLeft(ridx, rkey, None)
+                    }
                   }
 
                   step(nextState, lhead0, ltail0, new BitSet, rhead, rtail, req, lstate, rstate, lbs, rbs)
                 case None =>
-                  //println("No more data on left; emitting right based on bitset " + req.mkString("[", ",", "]"))
+                  //println("No more data on left; emitting right based on bitset " + req.toList.mkString("[", ",", "]"))
                   // done on left, and we're not in an equal span on the right (since LeftSpan can only
                   // be emitted if we're not in a right span) so we're entirely done.
                   val remission = req.nonEmpty.option(rhead.mapColumns(cf.util.filter(0, rhead.size, req))) 
@@ -417,7 +433,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               }
 
             case MoreRight(span, lidx, leq, req) =>
-              //println("Requested more right; emitting right based on bitset " + req.mkString("[", ",", "]"))
+              //println("Requested more right; emitting right based on bitset " + req.toList.mkString("[", ",", "]"))
               // if span == RightSpan and no more data exists on the right, we need to 
               // continue in buildFilters spanning on the left.
               val remission = req.nonEmpty.option(rhead.mapColumns(cf.util.filter(0, rhead.size, req)))
@@ -427,7 +443,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   //println("Continuing on right.")
                   val nextState = (span: @unchecked) match {
                     case NoSpan => FindEqualAdvancingRight(lidx, lkey)
-                    case RightSpan => RunRight(lidx, lkey)
+                    case RightSpan => RunRight(lidx, lkey, Some(rkey))
                   }
 
                   step(nextState, lhead, ltail, leq, rhead0, rtail0, new BitSet, lstate, rstate, lbs, rbs)
@@ -436,7 +452,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   // no need here to check for LeftSpan by the contract of buildFilters
                   (span: @unchecked) match {
                     case NoSpan => 
-                      //println("No more data on right and not in a span; emitting left based on bitset " + leq.mkString("[", ",", "]"))
+                      //println("No more data on right and not in a span; emitting left based on bitset " + leq.toList.mkString("[", ",", "]"))
                       // entirely done; just emit both 
                       val lemission = leq.nonEmpty.option(lhead.mapColumns(cf.util.filter(0, lhead.size, leq)))
                       (lemission map { e => writeAlignedSlices(db, lkey, e, lbs, "alignLeft", SortAscending) } getOrElse lbs.point[M]) map { (_, rbs) }
@@ -494,7 +510,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               // last iteration.
 
               val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
-              val comparator = buildRowComparator(lkey, rkey)
+              val comparator = buildRowComparator(lkey, rkey, null)
               
               // do some preliminary comparisons to figure out if we even need to look at the current slice
               val nextState = findEqual(comparator, leftRow, stepleq, 0, stepreq)
@@ -507,24 +523,24 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               // last iteration.
 
               val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
-              val comparator = buildRowComparator(lkey, rkey)
+              val comparator = buildRowComparator(lkey, rkey, null)
               
               // do some preliminary comparisons to figure out if we even need to look at the current slice
               val nextState = findEqual(comparator, 0, stepleq, rightRow, stepreq)
               continue(nextState, comparator, nextA, lkey, rstate, rkey, leftWriteState, rightWriteState)    
             
-            case RunRight(leftRow, lkey) =>
+            case RunRight(leftRow, lkey, rauth) =>
               val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
-              val comparator = buildRowComparator(lkey, rkey)
+              val comparator = buildRowComparator(lkey, rkey, rauth.orNull)
 
               val nextState = buildFilters(comparator, leftRow, lhead.size, stepleq, 
                                                        0, rhead.size, new BitSet, RightSpan)
 
               continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)
             
-            case RunLeft(rightRow, rkey) =>
+            case RunLeft(rightRow, rkey, rauth) =>
               val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
-              val comparator = buildRowComparator(lkey, rkey)
+              val comparator = buildRowComparator(lkey, rkey, rauth.orNull)
 
               val nextState = buildFilters(comparator, 0, lhead.size, new BitSet, 
                                                        rightRow, rhead.size, stepreq, LeftSpan)
