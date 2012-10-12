@@ -92,6 +92,8 @@ function repl {
 EXIT_CODE=0
 
 if [ "$QUERYDIR" = "" ]; then
+    echo "TOKEN=$TOKEN"
+    echo "WORKDIR=$WORKDIR"
     repl
 else
     for f in $(find $QUERYDIR -type f); do
