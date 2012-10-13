@@ -25,8 +25,12 @@ local dst="${1}"
 cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")"
 }
 
+function port_is_open() {
+   netstat -an | egrep "[\.:]$1[[:space:]]+.*LISTEN" > /dev/null
+}
+
 function wait_until_port_open () {
-    while ! netstat -an | grep $1 > /dev/null; do
+    while ! port_is_open $1; do
         sleep 1
     done
 }
@@ -40,10 +44,31 @@ ACCOUNTS_ASSEMBLY=$BASEDIR/accounts/target/accounts-assembly-$VERSION.jar
 SHARD_ASSEMBLY=$BASEDIR/shard/target/shard-assembly-$VERSION.jar
 YGGDRASIL_ASSEMBLY=$BASEDIR/yggdrasil/target/yggdrasil-assembly-$VERSION.jar
 
+GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
+
+JAVA="java $GC_OPTS"
+
+# pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
 if [ ! -f $INGEST_ASSEMBLY -o ! -f $SHARD_ASSEMBLY -o ! -f $YGGDRASIL_ASSEMBLY -o ! -f $AUTH_ASSEMBLY -o ! -f $ACCOUNTS_ASSEMBLY ]; then
     echo "Ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run."
     exit 1
 fi
+
+declare -a service_ports
+service_ports[9082]="Kafka Local"
+service_ports[9092]="Kafka Global"
+service_ports[27017]="MongoDB"
+service_ports[30060]="Ingest"
+service_ports[30062]="Auth"
+service_ports[30064]="Accounts"
+service_ports[30070]="Shard"
+
+for PORT in 9082 9092 27017 30060 30062 30064 30070; do
+    if port_is_open $PORT; then
+        echo "You appear to already have a conflicting ${service_ports[$PORT]} service running on port $PORT"
+        exit 1
+    fi
+done
 
 # Make sure we have the tools we need on OSX
 if [ `uname` == "Darwin" ]; then
@@ -55,7 +80,7 @@ else
 fi
 
 # Parse opts to determine settings
-while getopts "d:l" opt; do
+while getopts ":d:l" opt; do
     case $opt in
         d) 
             WORKDIR=$OPTARG
@@ -66,11 +91,10 @@ while getopts "d:l" opt; do
             ;;
 
         \?)
-            echo <<EOF
-Usage: `basename $0` [-l] [-d <work directory>]"
-  -l: If a temp workdir is used, don't clean up afterward
-  -d: Use the provided workdir
-EOF
+            echo "Usage: `basename $0` [-l] [-d <work directory>]"
+            echo "  -l: If a temp workdir is used, don't clean up afterward"
+            echo "  -d: Use the provided workdir"
+            echo "Done"
             exit 1
             ;;
     esac
@@ -275,7 +299,8 @@ MONGOPID=$!
 wait_until_port_open 27017
 
 if [ ! -e $WORKDIR/root_token.json ]; then
-    java $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -d dev_auth_v1 -n "/" -a "Local test" -r "Unused" || exit 3
+    echo "Creating new root token"
+    $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -d dev_auth_v1 -n "/" -a "Local test" -r "Unused" || exit 3
     echo 'db.tokens.find({}, {"tid":1})' | $MONGOBASE/bin/mongo dev_auth_v1 > $WORKDIR/root_token.json || {
         echo "Error retrieving new root token"
         exit 3
@@ -302,7 +327,7 @@ cd $BASEDIR
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
 if [ ! -e $WORKDIR/initial_checkpoint.json ]; then
-    java $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY zk -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
+    $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY zk -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
         echo "Couldn't set initial checkpoint!"
         exit 3
     }
@@ -310,20 +335,20 @@ if [ ! -e $WORKDIR/initial_checkpoint.json ]; then
 fi
 
 echo "Starting ingest service"
-java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/ingest-v1.logging.xml -jar $INGEST_ASSEMBLY --configFile $WORKDIR/configs/ingest-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/ingest-v1.logging.xml -jar $INGEST_ASSEMBLY --configFile $WORKDIR/configs/ingest-v1.conf &
 INGESTPID=$!
 
 echo "Starting shard service"
-echo java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf
-java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf &
+echo $JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf
+$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf &
 SHARDPID=$!
 
 echo "Starting accounts service"
-java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/accounts-v1.logging.xml -jar $ACCOUNTS_ASSEMBLY --configFile $WORKDIR/configs/accounts-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/accounts-v1.logging.xml -jar $ACCOUNTS_ASSEMBLY --configFile $WORKDIR/configs/accounts-v1.conf &
 ACCOUNTSPID=$!
 
 echo "Starting auth service"
-java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/auth-v1.logging.xml -jar $AUTH_ASSEMBLY --configFile $WORKDIR/configs/auth-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/auth-v1.logging.xml -jar $AUTH_ASSEMBLY --configFile $WORKDIR/configs/auth-v1.conf &
 AUTHPID=$!
 
 # Let the ingest//auth/accounts/shard services startup in parallel
