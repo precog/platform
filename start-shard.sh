@@ -19,6 +19,33 @@
 ## 
 #!/bin/bash
 
+MONGOPORT=27017
+
+# Parse opts to determine settings
+while getopts ":d:lm:" opt; do
+    case $opt in
+        d) 
+            WORKDIR=$OPTARG
+            ;;
+        l)
+            DONTCLEAN=1
+            ;;
+        m)
+            echo "Overriding default mongo port with $OPTARG"
+            MONGOPORT=$OPTARG
+            ;;
+
+        \?)
+            echo "Usage: `basename $0` [-l] [-d <work directory>] [-m <mongo port>]"
+            echo "  -l: If a temp workdir is used, don't clean up afterward"
+            echo "  -d: Use the provided workdir"
+            echo "  -m: Use the specified port for mongo"
+            echo "Done"
+            exit 1
+            ;;
+    esac
+done
+
 # Taken from http://blog.publicobject.com/2006/06/canonical-path-of-file-in-bash.html
 function path-canonical-simple() {
 local dst="${1}"
@@ -57,13 +84,13 @@ fi
 declare -a service_ports
 service_ports[9082]="Kafka Local"
 service_ports[9092]="Kafka Global"
-service_ports[27017]="MongoDB"
+service_ports[$MONGOPORT]="MongoDB"
 service_ports[30060]="Ingest"
 service_ports[30062]="Auth"
 service_ports[30064]="Accounts"
 service_ports[30070]="Shard"
 
-for PORT in 9082 9092 27017 30060 30062 30064 30070; do
+for PORT in 9082 9092 $MONGOPORT 30060 30062 30064 30070; do
     if port_is_open $PORT; then
         echo "You appear to already have a conflicting ${service_ports[$PORT]} service running on port $PORT"
         exit 1
@@ -78,27 +105,6 @@ if [ `uname` == "Darwin" ]; then
 else
     MONGOURL="http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-2.2.0.tgz"
 fi
-
-# Parse opts to determine settings
-while getopts ":d:l" opt; do
-    case $opt in
-        d) 
-            WORKDIR=$OPTARG
-            ;;
-
-        l)
-            DONTCLEAN=1
-            ;;
-
-        \?)
-            echo "Usage: `basename $0` [-l] [-d <work directory>]"
-            echo "  -l: If a temp workdir is used, don't clean up afterward"
-            echo "  -d: Use the provided workdir"
-            echo "Done"
-            exit 1
-            ;;
-    esac
-done
 
 
 function exists {
@@ -293,15 +299,15 @@ echo "Kafka Local = $KFLOCALPID"
 # Start up mongo and set test token
 cd $MONGOBASE
 tar --strip-components=1 -xvzf $ARTIFACTDIR/mongo* &> /dev/null
-$MONGOBASE/bin/mongod --dbpath $MONGODATA &
+$MONGOBASE/bin/mongod --port $MONGOPORT --dbpath $MONGODATA &
 MONGOPID=$!
 
-wait_until_port_open 27017
+wait_until_port_open $MONGOPORT
 
 if [ ! -e $WORKDIR/root_token.json ]; then
     echo "Creating new root token"
-    $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -d dev_auth_v1 -n "/" -a "Local test" -r "Unused" || exit 3
-    echo 'db.tokens.find({}, {"tid":1})' | $MONGOBASE/bin/mongo dev_auth_v1 > $WORKDIR/root_token.json || {
+    $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -n "/" -a "Local test" -r "Unused" || exit 3
+    echo 'db.tokens.find({}, {"tid":1})' | $MONGOBASE/bin/mongo localhost:$MONGOPORT/dev_auth_v2 > $WORKDIR/root_token.json || {
         echo "Error retrieving new root token"
         exit 3
     }
@@ -311,16 +317,16 @@ TOKENID=`grep tid $WORKDIR/root_token.json | sed -e 's/.*"tid" : "\(.*\)".*/\1/'
 echo $TOKENID > $WORKDIR/root_token.txt
 
 # Set up ingest and shard services
-sed -e "s#/var/log#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.conf > $WORKDIR/configs/ingest-v1.conf
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.conf > $WORKDIR/configs/ingest-v1.conf || echo "Failed to update ingest config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.logging.xml > $WORKDIR/configs/ingest-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#/opt/precog/shard#$WORKDIR/shard-data#" < $BASEDIR/shard/configs/dev/shard-v1.conf > $WORKDIR/configs/shard-v1.conf
+sed -e "s#/var/log#$WORKDIR/logs#; s#/opt/precog/shard#$WORKDIR/shard-data#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < $BASEDIR/shard/configs/dev/shard-v1.conf > $WORKDIR/configs/shard-v1.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/shard/configs/dev/shard-v1.logging.xml > $WORKDIR/configs/shard-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#" < $BASEDIR/auth/configs/dev/dev-auth-v1.conf > $WORKDIR/configs/auth-v1.conf
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < $BASEDIR/auth/configs/dev/dev-auth-v1.conf > $WORKDIR/configs/auth-v1.conf || echo "Failed to update auth config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/auth/configs/dev/dev-auth-v1.logging.xml > $WORKDIR/configs/auth-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s/port = 80/port = 30062/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < $BASEDIR/accounts/configs/dev/accounts-v1.conf > $WORKDIR/configs/accounts-v1.conf
+sed -e "s!/var/log!$WORKDIR/logs!; s/port = 80/port = 30062/; s!/security/v1/!/!; s/rootKey = .*/rootKey = \"$TOKENID\"/" < $BASEDIR/accounts/configs/dev/accounts-v1.conf > $WORKDIR/configs/accounts-v1.conf || echo "Failed to update accounts config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/accounts/configs/dev/accounts-v1.logging.xml > $WORKDIR/configs/accounts-v1.logging.xml
 
 cd $BASEDIR
