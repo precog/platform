@@ -640,7 +640,10 @@ trait Slice { source =>
         normalize(schema)
       }
       
-      optSchema map { schema =>
+      // don't remove!  @tailrec bugs if you use optSchema.map
+      if (optSchema.isDefined) {
+        val schema = optSchema.get
+        
         val depth = {
           def loop(schema: SchemaNode): Int = schema match {
             case obj: SchemaNode.Obj =>
@@ -1088,7 +1091,9 @@ trait Slice { source =>
         }
         
         (stream, rendered)
-      } getOrElse (StreamT.empty, false)
+      } else {
+        (StreamT.empty, false)
+      }
     }
   }
 
