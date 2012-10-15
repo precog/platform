@@ -96,17 +96,20 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
           "skipped": 0,
           "errors": [ {
             "line": 0,
-            "reason": "Parsing failed: unknown API key #\nNear: 178234#!!@#$"
+            "reason": "Parsing failed: unknown token #\nNear: 178234#!!@#$"
           } ]
         }""")
 
       track(JSON, sync = true) {
         Chunk("178234#!!@#$\n".getBytes("UTF-8"),
           Some(Future { Chunk("""{ "testing": 321 }""".getBytes("UTF-8"), None) }))
-      } must whenDelivered { beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(`msg`), _), event) =>
-          event map (_.data) must_== JsonParser.parse("""{ "testing": 321 }""") :: Nil
-      } }
+      } must whenDelivered {
+        beLike {
+          case (HttpResponse(HttpStatus(OK, _), _, Some(msg2), _), event) =>
+            msg mustEqual msg2
+            event map (_.data) mustEqual JsonParser.parse("""{ "testing": 321 }""") :: Nil
+        }
+      }
     }
     "track CSV batch ingest with valid API key" in {
       track(CSV, sync = true) {
