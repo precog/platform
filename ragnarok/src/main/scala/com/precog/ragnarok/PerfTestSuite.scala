@@ -128,7 +128,8 @@ trait PerfTestSuite extends Logging {
       }
 
       select(config.select getOrElse ((_, _) => true)) foreach { test =>
-        run(test, runner, runs = config.dryRuns, outliers = config.outliers)
+        if(config.dryRuns > 0)
+          run(test, runner, runs = config.dryRuns, outliers = config.outliers)
         val result = run(test, runner, runs = config.runs, outliers = config.outliers) map {
           case (t, stats) =>
             (t, stats map (_ * (1 / 1000000.0))) // Convert to ms.
