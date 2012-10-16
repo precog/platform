@@ -34,7 +34,7 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
   try {
     s.log.info("Extracting data into %s" format path)
     val args = Seq(path, System.getProperty("java.class.path"))
-    Process("./regen-jdbm-data.sh", args).!!
+    Process("./regen-jdbm-data.sh", args).!
   } catch {
     case t: Throwable => s.log.error("Failed to extract to %s" format path)
   }
