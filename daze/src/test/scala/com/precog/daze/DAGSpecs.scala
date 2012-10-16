@@ -797,7 +797,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         SplitParam(loc, 0)(input))
         
       import scalaz.std.anyVal._
-      val result = input.foldDown[Int] {
+      val result = input.foldDown[Int](true) {
         case _: LoadLocal => 1
       }
       

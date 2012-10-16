@@ -1,6 +1,8 @@
 package com.precog
 package daze
 
+import annotation.tailrec
+
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.util.IdSourceConfig
@@ -100,6 +102,9 @@ trait Evaluator[M[+_]] extends DAG
   def eval(userUID: UserId, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean): M[Table] = {
     evalLogger.debug("Eval for %s = %s".format(userUID.toString, graph))
   
+    val rewrittenDAG = rewriteDAG(optimize)(graph)
+    val stagingPoints = listStagingPoints(Queue(rewrittenDAG))
+
     def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, M[GroupingSpec]] = spec match {
       case UnionBucketSpec(left, right) => {
         for {
@@ -899,7 +904,7 @@ trait Evaluator[M[+_]] extends DAG
       
       // find the topologically-sorted forcing points (excluding the endpoint)
       // at the current split level
-      val toEval = listStagingPoints(Queue(graph)) filter referencesOnlySplit(currentSplit)
+      val toEval = stagingPoints filter referencesOnlySplit(currentSplit)
       
       val preStates = toEval map { graph =>
         for {
@@ -917,7 +922,7 @@ trait Evaluator[M[+_]] extends DAG
     }
     
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 
-      fullEval(rewriteDAG(optimize)(graph), Map(), None)
+      fullEval(rewrittenDAG, Map(), None)
 
     (resultState.eval(EvaluatorState(Map())): M[Table]) map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
   }
@@ -925,7 +930,8 @@ trait Evaluator[M[+_]] extends DAG
   /**
    * Returns all forcing points in the graph, ordered topologically.
    */
-  private def listStagingPoints(queue: Queue[DepGraph], acc: List[dag.StagingPoint] = Nil): List[dag.StagingPoint] = {
+  @tailrec
+  private[this] def listStagingPoints(queue: Queue[DepGraph], acc: List[dag.StagingPoint] = Nil): List[dag.StagingPoint] = {
     def listParents(spec: BucketSpec): Set[DepGraph] = spec match {
       case UnionBucketSpec(left, right) => listParents(left) ++ listParents(right)
       case IntersectBucketSpec(left, right) => listParents(left) ++ listParents(right)
@@ -989,11 +995,11 @@ trait Evaluator[M[+_]] extends DAG
   
   private def referencesOnlySplit(split: Option[dag.Split])(graph: DepGraph): Boolean = {
     implicit val m: Monoid[Boolean] = new Monoid[Boolean] {
-      def zero = true
-      def append(b1: Boolean, b2: => Boolean): Boolean = b1 && b2
+      def zero = false
+      def append(b1: Boolean, b2: => Boolean): Boolean = b1 || b2
     }
     
-    graph foldDown {
+    graph.foldDown(false) {
       case s: dag.SplitParam => split map (s.parent ==) getOrElse false
       case s: dag.SplitGroup => split map (s.parent ==) getOrElse false
     }

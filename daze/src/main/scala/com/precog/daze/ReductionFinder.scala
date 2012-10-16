@@ -15,7 +15,7 @@ trait ReductionFinder extends DAG {
   import instructions._
   import dag._
 
-  def findReductions(node: DepGraph): Map[DepGraph, NonEmptyList[Reduction]] = node.foldDown[Map[DepGraph, NonEmptyList[Reduction]]] {
+  def findReductions(node: DepGraph): Map[DepGraph, NonEmptyList[Reduction]] = node.foldDown[Map[DepGraph, NonEmptyList[Reduction]]](true) {
     case dag.Reduce(_, red, parent) => Map(parent -> NonEmptyList(red))
   }
 
