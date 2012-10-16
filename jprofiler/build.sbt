@@ -29,14 +29,14 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
     s.log.info("Deleting old data from %s" format path)
     sbt.IO.delete(d)
   }
-  if (!data.mkdirs())
-    throw new Exception("Failed to create %s" format path)
-  try {
+  if (!data.mkdirs()) {
+    error("Failed to create %s" format path)
+  } else {
     s.log.info("Extracting data into %s" format path)
-    val args = Seq(path, System.getProperty("java.class.path"))
-    Process("./regen-jdbm-data.sh", args).!
-  } catch {
-    case t: Throwable => s.log.error("Failed to extract to %s" format path)
+    if (Process("./regen-jdbm-data.sh", Seq(path)).! != 0) {
+      error("Failed to extract to %s" format path)
+    } else {
+      d.getCanonicalPath
+    }
   }
-  d.getCanonicalPath
 }

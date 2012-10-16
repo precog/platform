@@ -36,13 +36,6 @@ mainClass := Some("com.precog.pandora.Console")
 
 mainTest := "com.precog.pandora.FuturePlatformSpecs"
 
-dataDir := {
-  val file = File.createTempFile("pandora", ".db")
-  file.delete()
-  file.mkdir()
-  file.getCanonicalPath
-}
-  
 outputStrategy := Some(StdoutOutput)
 
 connectInput in run := true
@@ -59,30 +52,34 @@ run <<= inputTask { argTask =>
   }
 }
 
-extractData <<= (dataDir, streams) map { (dir, s) =>
+dataDir <<= streams map { s =>
+  val file = File.createTempFile("pandora", ".db")
+  file.delete()
+  file.mkdir()
+  val dir = file.getCanonicalPath()
   val target = new File(dir)
   val dataTarget = new File(target, "data")
   if (!dataTarget.mkdirs()) {
     if (!dataTarget.isDirectory) {
-      throw new Exception("Failed to make temp projection directory")
+      error("Failed to make temp projection directory")
     } else {
       s.log.info("Using data in " + target.getCanonicalPath())
+      target.getCanonicalPath
     }
   } else {
     s.log.info("Extracting sample projection data into " + target.getCanonicalPath())
-    try {
-      val result = Process("./regen-jdbm-data.sh", Seq(dataTarget.getCanonicalPath, System.getProperty("java.class.path"))).!
+    if (Process("./regen-jdbm-data.sh", Seq(dataTarget.getCanonicalPath)).! != 0) {
+      error("Failed to extract data")
+    } else {
       s.log.info("Extraction complete.")
-    } catch {
-      case t: Throwable => s.log.error("Extraction failed")
-    }
+      target.getCanonicalPath
+    }  
   }
-  target.getCanonicalPath
 }
 
 definedTests in Test := Seq()
 
-test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData, mainTest) map { (s, cp, os, dataDir, testName) =>
+test <<= (streams, fullClasspath in Test, outputStrategy in Test, dataDir, mainTest) map { (s, cp, os, dataDir, testName) =>
   val delim = java.io.File.pathSeparator
   val cpStr = cp map { _.data } mkString delim
   val opts2 =
