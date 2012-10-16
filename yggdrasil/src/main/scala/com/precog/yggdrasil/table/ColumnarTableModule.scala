@@ -1073,24 +1073,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                      size = sortedTable.size)
         }).toMap
       }
-
-      //val nodeSubsetsM: M[Set[(Seq[TicVar], NodeSubset)]] = requiredSorts.map { ticvars => 
-      //  val sortTransSpec = groupKeyTrans.alignTo(ticvars).prefixTrans(ticvars.length)
-
-      //  val sorted: M[Table] = filteredSource.sort(sortTransSpec)
-      //  sorted.map { sortedTable => 
-      //    ticvars ->
-      //    NodeSubset(node0,
-      //               sortedTable,
-      //               idTrans,
-      //               targetTrans,
-      //               groupKeyTrans,
-      //               ticvars,
-      //               size = sortedTable.size)
-      //  }
-      //}.sequence
-
-      //nodeSubsetsM map { _.toMap }
     }
 
     def alignOnEdges(spanningGraph: MergeGraph, requiredSorts: Map[MergeNode, Set[Seq[TicVar]]]): M[Map[GroupId, Set[NodeSubset]]] = {
