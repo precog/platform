@@ -96,6 +96,7 @@ if [ "$QUERYDIR" = "" ]; then
     echo "WORKDIR=$WORKDIR"
     repl
 else
+    sleep 1
     for f in $(find $QUERYDIR -type f); do
         RESULT=$(query "$(cat $f)")
 
