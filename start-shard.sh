@@ -307,7 +307,7 @@ wait_until_port_open $MONGOPORT
 if [ ! -e $WORKDIR/root_token.json ]; then
     echo "Creating new root token"
     $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -n "/" -a "Local test" -r "Unused" || exit 3
-    echo 'db.tokens.find({}, {"tid":1})' | $MONGOBASE/bin/mongo localhost:$MONGOPORT/dev_auth_v2 > $WORKDIR/root_token.json || {
+    echo 'db.tokens.find({}, {"tid":1})' | $MONGOBASE/bin/mongo localhost:$MONGOPORT/dev_auth_v1 > $WORKDIR/root_token.json || {
         echo "Error retrieving new root token"
         exit 3
     }
