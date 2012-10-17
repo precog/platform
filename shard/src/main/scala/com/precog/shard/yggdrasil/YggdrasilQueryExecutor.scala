@@ -89,11 +89,6 @@ trait YggdrasilQueryExecutorComponent {
       
       val maxSliceSize = 10000
 
-      object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-
       //TODO: Get a producer ID
       val idSource = new IdSource {
         private val source = new java.util.concurrent.atomic.AtomicLong
@@ -120,9 +115,11 @@ trait YggdrasilQueryExecutorComponent {
             M.point(None)
         }
         
-        (CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
+        rendered
+        //(CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
       } else {
-        CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
+        StreamT.empty[Future, CharBuffer]
+        //CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
       }
     }
   }
