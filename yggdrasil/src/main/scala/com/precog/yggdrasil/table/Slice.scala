@@ -688,8 +688,8 @@ trait Slice { source =>
           buffer.put(str)
         }
         
-        val in = new RingDeque[String](depth)
-        val inFlags = new RingDeque[Boolean](depth)
+        val in = new RingDeque[String](depth + 1)
+        val inFlags = new RingDeque[Boolean](depth + 1)
         
         @inline
         def pushIn(str: String, flag: Boolean) {
