@@ -20,7 +20,7 @@
 #!/bin/bash
 
 function usage {
-    echo "Usage: ./run.sh [-q directory] [ingest.json ...]" 1>&2
+    echo "Usage: ./run.sh [-m <mongo port>] [-q directory] [ingest.json ...]" 1>&2
     exit 1
 }
 
@@ -29,12 +29,14 @@ if [ $# -eq 0 ]; then
     usage
 fi
 
-while getopts ":q:" opt; do
+while getopts ":q:m:" opt; do
     case $opt in
         q)
             QUERYDIR=$OPTARG
-            shift
-            shift
+            ;;
+        m)
+            echo "Overriding mongo port to $OPTARG"
+            MONGOPORT="-m $OPTARG"
             ;;
         \?)
             echo "Unknown option $OPTARG!"
@@ -43,13 +45,24 @@ while getopts ":q:" opt; do
     esac
 done
 
+shift $(( $OPTIND - 1 ))
+
 INGEST_PORT=30060
 QUERY_PORT=30070
 
 WORKDIR=$(mktemp -d -t standaloneShard.XXXXXX 2>&1)
 echo "Starting..."
-./start-shard.sh -d $WORKDIR 2>/dev/null 1>/dev/null &
+./start-shard.sh -d $WORKDIR $MONGOPORT 1>/dev/null &
 RUN_LOCAL_PID=$!
+
+# Wait to make sure things haven't died
+sleep 2
+if ! kill -0 $RUN_LOCAL_PID &> /dev/null ; then
+    echo "Shard failed to start!"
+    exit 2
+else
+    echo "Shard started fine"
+fi
 
 function finished {
     echo "Hang on, killing start-shard.sh: $RUN_LOCAL_PID"
