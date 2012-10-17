@@ -2431,7 +2431,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def normalize: Table = Table(slices.filter(!_.isEmpty))
     
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
-      def delimiterBuffer = {
+      val delimiterBuffer = {
         val back = CharBuffer.allocate(1)
         back.put(delimiter)
         back.flip()

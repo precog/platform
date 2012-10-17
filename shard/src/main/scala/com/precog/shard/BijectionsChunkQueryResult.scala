@@ -90,6 +90,7 @@ object BijectionsChunkQueryResult {
         chunked.uncons flatMap {
           case Some((chunk, chunkStream)) =>
             val buffer = encoder.encode(chunk)
+            chunk.flip()
             
             val array = new Array[Byte](buffer.remaining())
             buffer.get(array)
