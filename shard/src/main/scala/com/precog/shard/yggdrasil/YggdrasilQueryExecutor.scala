@@ -3,6 +3,7 @@ package shard
 package yggdrasil 
 
 import blueeyes.json.JsonAST._
+import blueeyes.json.JsonDSL
 
 import daze._
 
@@ -56,6 +57,8 @@ trait YggdrasilQueryExecutorConfig extends
 trait YggdrasilQueryExecutorComponent {
   import blueeyes.json.serialization.Extractor
 
+  implicit def M: Monad[Future]
+
   private def wrapConfig(wrappedConfig: Configuration) = {
     new YggdrasilQueryExecutorConfig {
       val config = wrappedConfig 
@@ -79,6 +82,31 @@ trait YggdrasilQueryExecutorComponent {
       }
     }
   }
+
+  def renderStream(stream: StreamT[Future, Slice]): Future[StreamT[Future, CharBuffer]] = {
+    import JsonDSL._
+    stream.uncons map { unconsed =>
+      if (unconsed.isDefined) {
+        val rendered = StreamT.unfoldM[Future, CharBuffer, Option[(Slice, StreamT[Future, Slice])]](unconsed) { 
+          case Some((head, tail)) =>
+            tail.uncons map { next =>
+              if (next.isDefined) {
+                Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",") + ","), next))
+              } else {            
+                Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",")), None))
+              }
+            }
+
+          case None => 
+            M.point(None)
+        }
+        
+        (CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
+      } else {
+        CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
+      }
+    }
+  }
     
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor[Future] = {
     val yConfig = wrapConfig(config)
@@ -95,12 +123,11 @@ trait YggdrasilQueryExecutorComponent {
       def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
         import trans._
         
-        val tableM2 = tableM map { table =>
-          table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value))
-        }
-        
-        val stream = implicitly[MonadTrans[StreamT]] liftM tableM2
-        stream flatMap { _ renderJson ',' }
+        StreamT.wrapEffect(
+          tableM flatMap { table =>
+            renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)).slices)
+          }
+        )
       }
 
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
