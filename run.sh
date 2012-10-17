@@ -67,12 +67,6 @@ done
 
 TOKEN=$(cat $WORKDIR/root_token.txt)
 
-for f in $@; do
-    echo "Ingesting: $f"
-    ./muspelheim/src/test/python/newlinejson.py $f | curl -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$(basename "$f" ".json")?apiKey=$TOKEN"
-    echo ""
-done
-
 function query {
     curl -s -m 60 -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$QUERY_PORT/analytics/fs/"
 }
@@ -84,10 +78,26 @@ function repl {
             finished
             exit 0
         fi
-        query $QUERY
+        query "$QUERY"
         echo ""
     done
 }
+
+for f in $@; do
+    echo "Ingesting: $f"
+    TABLE=$(basename "$f" ".json")
+    DATA=$(./muspelheim/src/test/python/newlinejson.py $f)
+    COUNT=$(echo "$DATA" | wc -l)
+    echo "$DATA" | curl -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$TABLE?apiKey=$TOKEN"
+
+    COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
+    while [ $COUNT_RESULT -lt $COUNT ]; do
+        sleep 2
+        COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
+    done
+
+    echo ""
+done
 
 EXIT_CODE=0
 
@@ -96,14 +106,13 @@ if [ "$QUERYDIR" = "" ]; then
     echo "WORKDIR=$WORKDIR"
     repl
 else
-    sleep 1
     for f in $(find $QUERYDIR -type f); do
         RESULT=$(query "$(cat $f)")
 
         echo $RESULT | python -m json.tool 1>/dev/null 2>/dev/null
         VALID_JSON=$?
 
-        if [ ! $VALID_JSON ] || [ ${RESULT:0:1} != "[" ] || [ $RESULT = "[]" ]; then
+        if [ ! $VALID_JSON ] || [ ${RESULT:0:1} != "[" ] || [ "$RESULT" = "[]" ]; then
             echo "Query $f returned a bad result" 1>&2
             EXIT_CODE=1
         fi
