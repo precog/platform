@@ -78,7 +78,7 @@ function repl {
             finished
             exit 0
         fi
-        query $QUERY
+        query "$QUERY"
         echo ""
     done
 }
