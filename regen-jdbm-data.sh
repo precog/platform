@@ -18,7 +18,7 @@ while getopts "nt:s:" OPTNAME; do
             ;;
         s)
             [ -d $OPTARG ] || {
-                echo "Could not open source directory: $OPTARG"
+                echo "Could not open source directory: $OPTARG" >&2
                 exit 2
             }
             SRCDIR=$OPTARG
@@ -40,7 +40,7 @@ if [[ $# != 2 ]]; then
 fi
 
 [ -d $1 ] || {
-    echo "Could not open target directory: $1"
+    echo "Could not open target directory: $1" >&2
     exit 2
 }
 
@@ -51,7 +51,7 @@ cd `dirname $0`
 echo "Loading data from $SRCDIR with owner token $OWNERTOKEN"
 
 if [ ! -d $SRCDIR -o ! -d $DATADIR ]; then
-    echo "Source or dest dir does not exist!"
+    echo "Source or dest dir does not exist!" >&2
     exit 2
 fi
 
