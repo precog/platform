@@ -62,27 +62,34 @@ run <<= inputTask { argTask =>
 extractData <<= (dataDir, streams) map { (dir, s) =>
   val target = new File(dir)
   val dataTarget = new File(target, "data")
-  if (!dataTarget.mkdirs()) {
-    if (!dataTarget.isDirectory) {
-      throw new Exception("Failed to make temp projection directory")
+  def performExtract = {
+    s.log.info("Extracting sample projection data into " + target.getCanonicalPath())
+    if (Process("./regen-jdbm-data.sh", Seq(dataTarget.getCanonicalPath)).! != 0) {
+      error("Failed to extract data")
     } else {
-      s.log.info("Using data in " + target.getCanonicalPath())
+      s.log.info("Extraction complete.")
+      target.getCanonicalPath
+    }
+  }  
+  if (!dataTarget.isDirectory()) {
+    if (!dataTarget.mkdirs()) {
+      error("Failed to make temp projection directory")
+    } else {
+      performExtract
     }
   } else {
-    s.log.info("Extracting sample projection data into " + target.getCanonicalPath())
-    try {
-      val result = Process("./regen-jdbm-data.sh", Seq(dataTarget.getCanonicalPath, System.getProperty("java.class.path"))).!
-      s.log.info("Extraction complete.")
-    } catch {
-      case t: Throwable => s.log.error("Extraction failed")
+    if (dataTarget.listFiles.length > 0) {
+      s.log.info("Using data in " + target.getCanonicalPath())
+      target.getCanonicalPath  
+    } else {
+      performExtract
     }
   }
-  target.getCanonicalPath
 }
 
 definedTests in Test := Seq()
 
-test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData, mainTest) map { (s, cp, os, dataDir, testName) =>
+test <<= (streams, extractData, fullClasspath in Test, outputStrategy in Test, mainTest) map { (s, dataDir, cp, os, testName) =>
   val delim = java.io.File.pathSeparator
   val cpStr = cp map { _.data } mkString delim
   val opts2 =
@@ -98,7 +105,7 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData, m
   if (result != 0) error("Tests unsuccessful")    // currently has no effect (https://github.com/etorreborre/specs2/issues/55)
 }
 
-(console in Compile) <<= (streams, initialCommands in console, fullClasspath in Compile, scalaInstance, extractData) map { (s, init, cp, si, dataDir) =>
+(console in Compile) <<= (streams, extractData, initialCommands in console, fullClasspath in Compile, scalaInstance) map { (s, dataDir, init, cp, si) =>
   IO.withTemporaryFile("pandora", ".scala") { file =>
     IO.write(file, init)
     val delim = java.io.File.pathSeparator
