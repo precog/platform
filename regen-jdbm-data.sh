@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function usage() {
-    echo "Usage: `basename $0` [-n] [-t <owner token>] [-s <source directory>] <target data directory> <sbt launcher JAR>"
+    echo "Usage: `basename $0` [-n] [-t <owner token>] [-s <source directory>] <target data directory>"
     echo "  For now target is normally pandora/dist/data-jdbm/data/"
     echo "  -n : don't wipe existing data"
     exit 1
@@ -35,7 +35,7 @@ done
 
 shift $(( $OPTIND - 1 ))
 
-if [[ $# != 2 ]]; then
+if [[ $# != 1 ]]; then
     usage
 fi
 
@@ -65,9 +65,8 @@ done
 popd > /dev/null
 
 [ -f yggdrasil/target/yggdrasil-assembly-$VERSION.jar ] || {
-    for target in "yggdrasil/compile" "yggdrasil/assembly"; do
-        java -Xmx4096m -Xms512m -jar $2 "$target"
-    done
+    echo "Error: you must build yggdrasil/assembly before running tasks that extract data"
+    exit 2
 }
 
 [ -z "$DONTWIPE" ] && rm -rf $DATADIR/*
