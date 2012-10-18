@@ -1073,10 +1073,13 @@ trait Evaluator[M[+_]] extends DAG
     case dag.Reduce(_, _, parent) => Set(parent)
     case dag.MegaReduce(_, _, parent) => Set(parent)
     case dag.Split(_, spec, _) => enumerateGraphs(spec)
+    case dag.IUI(_, _, left, right) => Set(left, right)
+    case dag.Diff(_, left, right) => Set(left, right)
     case Join(_, _, _, left, right) => Set(left, right)
     case dag.Filter(_, _, target, boolean) => Set(target, boolean)
     case dag.Sort(parent, _) => Set(parent)
     case dag.SortBy(parent, _, _, _) => Set(parent)
+    case dag.ReSortBy(parent, _) => Set(parent)
     case Memoize(parent, _) => Set(parent)
   }
   

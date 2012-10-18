@@ -827,6 +827,82 @@ trait EvalStackSpecs extends Specification {
         SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
         SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
     }
+    
+    "determine a histogram of STATE on (tweets union tweets)" in {
+      val input = """
+        | tweets := //election/tweets 
+        | 
+        | data := tweets union tweets
+        | 
+        | solve 'state 
+        |   data' := data where data.STATE = 'state 
+        |   {
+        |     state: 'state, 
+        |     count: count(data')
+        |   }
+        | """.stripMargin
+        
+      val resultsE = evalE(input)
+      
+      resultsE must haveSize(52)
+      
+      val results = resultsE collect {
+        case (ids, sv) if ids.length == 1 => sv
+      }
+      
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("319")), "state" -> SString("01"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("267")), "state" -> SString("02"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("248")), "state" -> SString("04"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("229")), "state" -> SString("05"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("242")), "state" -> SString("06"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("265")), "state" -> SString("08"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("207")), "state" -> SString("09"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("265")), "state" -> SString("10"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("183")), "state" -> SString("11"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("275")), "state" -> SString("12"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("267")), "state" -> SString("13"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("240")), "state" -> SString("15"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("269")), "state" -> SString("16"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("268")), "state" -> SString("17"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("221")), "state" -> SString("18"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("238")), "state" -> SString("19"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("251")), "state" -> SString("20"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("220")), "state" -> SString("21"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("215")), "state" -> SString("22"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("245")), "state" -> SString("23"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("232")), "state" -> SString("24"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("234")), "state" -> SString("25"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("239")), "state" -> SString("26"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("242")), "state" -> SString("27"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("219")), "state" -> SString("28"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("213")), "state" -> SString("29"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("216")), "state" -> SString("30"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("195")), "state" -> SString("31"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("196")), "state" -> SString("32"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("223")), "state" -> SString("33"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("207")), "state" -> SString("34"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("221")), "state" -> SString("35"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("204")), "state" -> SString("36"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("221")), "state" -> SString("37"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("231")), "state" -> SString("38"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("167")), "state" -> SString("39"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("219")), "state" -> SString("40"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("200")), "state" -> SString("41"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("206")), "state" -> SString("42"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("230")), "state" -> SString("44"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("224")), "state" -> SString("45"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("184")), "state" -> SString("46"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("215")), "state" -> SString("47"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("189")), "state" -> SString("48"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("227")), "state" -> SString("49"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("233")), "state" -> SString("50"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("206")), "state" -> SString("51"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("232")), "state" -> SString("53"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("223")), "state" -> SString("54"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("193")), "state" -> SString("55"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("186")), "state" -> SString("56"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("153")), "state" -> SString("72"))))
+    }
 
     "load a nonexistent dataset with a dot in the name" in {
       val input = """
