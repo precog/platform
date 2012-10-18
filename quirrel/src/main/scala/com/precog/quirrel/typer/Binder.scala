@@ -332,7 +332,7 @@ trait Binder extends parser.AST with Library {
       
       case Import(_, _, child) => buildChains(env)(child) map { expr :: _ }
       case New(_, child) => buildChains(env)(child) map { expr :: _ }
-      case Relate(_, _, _, in) => buildChains(env)(in) map { expr :: _ }
+      case expr @ Relate(_, _, _, _) => Set(expr :: Nil)
       
       case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => Set()
       
