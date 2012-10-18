@@ -53,7 +53,9 @@ object ShardTestInit extends App with JDBMProjectionModule with SystemActorStora
   val dir = new File("./data") 
   dir.mkdirs
 
-  class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig
+  class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig with JDBMProjectionModuleConfig {
+    val maxSliceSize = config[Int]("precog.jdbm.maxSliceSize", 50000)
+  }
 
   val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
 

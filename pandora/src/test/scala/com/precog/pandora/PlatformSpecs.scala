@@ -72,7 +72,7 @@ trait PlatformSpecs[M[+_]]
 
   implicit def M: Monad[M] with Copointed[M]
 
-  class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig
+  class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig with JDBMProjectionModuleConfig
   object yggConfig  extends YggConfig
 }
 

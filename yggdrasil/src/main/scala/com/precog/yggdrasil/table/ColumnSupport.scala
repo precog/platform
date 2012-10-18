@@ -121,7 +121,7 @@ class RemapColumn[T <: Column](delegate: T, f: Int => Int) {
 
 class RemapFilterColumn[T <: Column](delegate: T, filter: Int => Boolean, offset: Int) {
   this: T =>
-  def isDefinedAt(row: Int) = filter(row) && delegate.isDefinedAt(row + offset)
+  def isDefinedAt(row: Int) = row >= 0 && filter(row) && delegate.isDefinedAt(row + offset)
 }
 
 class RemapIndicesColumn[T <: Column](delegate: T, indices: ArrayIntList) { this: T =>
