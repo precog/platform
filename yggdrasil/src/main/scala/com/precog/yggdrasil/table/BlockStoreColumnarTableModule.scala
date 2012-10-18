@@ -167,38 +167,55 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     }
 
     def mergeProjections(inputSortOrder: DesiredSortOrder, cellStates: Stream[CellState])(keyf: Slice => List[ColumnRef]): StreamT[M, Slice] = {
+
+      // dequeues all equal elements from the head of the queue
+      @inline @tailrec def dequeueEqual(
+        queue: mutable.PriorityQueue[Cell], cellMatrix: CellMatrix, cells: List[Cell]
+      ): List[Cell] = if (queue.isEmpty) {
+        cells
+      } else if (cells.isEmpty || cellMatrix.compare(queue.head, cells.head) == EQ) {
+        dequeueEqual(queue, cellMatrix, queue.dequeue() :: cells)
+      } else {
+        cells
+      }
+
+      // consume as many records as possible
+      @inline @tailrec def consumeToBoundary(
+        queue: mutable.PriorityQueue[Cell], cellMatrix: CellMatrix, idx: Int
+      ): (Int, List[Cell]) = {
+        val cellBlock = dequeueEqual(queue, cellMatrix, Nil)
+
+        if (cellBlock.isEmpty) {
+          // At the end of data, since this will only occur if nothing
+          // remains in the priority queue
+          (idx, Nil)
+        } else {
+          val (continuing, expired) = cellBlock partition { _.advance(idx) }
+          queue.enqueue(continuing: _*)
+
+          if (expired.isEmpty)
+            consumeToBoundary(queue, cellMatrix, idx + 1)
+          else
+            (idx + 1, expired)
+        }
+      }
+
       StreamT.unfoldM[M, Slice, Stream[CellState]](cellStates) { cellStates => 
         val cells: Vector[Cell] = cellStates.map(_.toCell)(collection.breakOut)
 
-        // TODO: We should not recompute all of the row comparators every time, since all but one will
-        // still be valid and usable. However, getting to this requires more significant rework than can be
-        // undertaken right now.
+        // TODO: We should not recompute all of the row comparators every time,
+        // since all but one will still be valid and usable. However, getting
+        // to this requires more significant rework than can be undertaken
+        // right now.
         val cellMatrix = CellMatrix(cells)(keyf)
-        val queue = mutable.PriorityQueue(cells.toSeq: _*)(if (inputSortOrder.isAscending) cellMatrix.ordering.reverse else cellMatrix.ordering)
+        val ordering = if (inputSortOrder.isAscending)
+          cellMatrix.ordering.reverse
+        else
+          cellMatrix.ordering
 
-        // dequeues all equal elements from the head of the queue
-        @inline @tailrec def dequeueEqual(cells: List[Cell]): List[Cell] = {
-          if (queue.isEmpty) cells
-          else if (cells.isEmpty || cellMatrix.compare(queue.head, cells.head) == EQ) dequeueEqual(queue.dequeue() :: cells)
-          else cells
-        }
+        val queue = mutable.PriorityQueue(cells.toSeq: _*)(ordering)
 
-        // consume as many records as possible
-        @inline @tailrec def consumeToBoundary(idx: Int): (Int, List[Cell]) = {
-          val cellBlock = dequeueEqual(Nil)
-
-          if (cellBlock.isEmpty) {
-            // At the end of data, since this will only occur if nothing remains in the priority queue
-            (idx, Nil)
-          } else {
-            val (continuing, expired) = cellBlock partition { _.advance(idx) }
-            queue.enqueue(continuing: _*)
-
-            if (expired.isEmpty) consumeToBoundary(idx + 1) else (idx + 1, expired)
-          }
-        }
-
-        val (finishedSize, expired) = consumeToBoundary(0)
+        val (finishedSize, expired) = consumeToBoundary(queue, cellMatrix, 0)
         if (expired.isEmpty) {
           M.point(None)
         } else {
@@ -644,12 +661,13 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                          indexNamePrefix, jdbmState)  
     }
 
-    protected def writeRawSlices(db: DB,
-                                 kslice: Slice, krefs: List[ColumnRef], kEncoder: ColumnEncoder, keyComparator: SortingKeyComparator,
-                                 vslice: Slice, vrefs: List[ColumnRef], vEncoder: ColumnEncoder,
-                                 indexNamePrefix: String, jdbmState: JDBMState): M[JDBMState] = M.point {
+    protected def writeRawSlices(
+      db: DB, kslice: Slice, krefs: List[ColumnRef], kEncoder: ColumnEncoder,
+      keyComparator: SortingKeyComparator, vslice: Slice,
+      vrefs: List[ColumnRef], vEncoder: ColumnEncoder, indexNamePrefix: String,
+      jdbmState: JDBMState
+    ): M[JDBMState] = {
       // Iterate over the slice, storing each row
-      // FIXME: This may not actually be tail recursive!
       // FIXME: Determine whether undefined sort keys are valid
       @tailrec def storeRow(storage: IndexStore, row: Int, insertCount: Long): Long = {
         if (row < vslice.size) {
@@ -666,27 +684,34 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         }
       }
 
-      val indexMapKey = IndexKey(indexNamePrefix, krefs, vrefs)
+      M.point {
+        val indexMapKey = IndexKey(indexNamePrefix, krefs, vrefs)
+  
+        val (index, newIndices) = jdbmState.indices.get(indexMapKey) map {
+          sliceIndex => (sliceIndex, jdbmState.indices)
+        } getOrElse {
+          val indexName = indexMapKey.name
 
-      val (index, newIndices) = jdbmState.indices.get(indexMapKey) map { sliceIndex => (sliceIndex, jdbmState.indices) } getOrElse {
-        val indexName = indexMapKey.name
-        val newSliceIndex = SliceIndex(indexName,
-                                  db.createTreeMap(indexName, keyComparator, ByteArraySerializer, ByteArraySerializer), 
-                                  keyComparator,
-                                  krefs.toArray,
-                                  vrefs.toArray)
+          val treeMap = db.createTreeMap(indexName, keyComparator,
+            ByteArraySerializer, ByteArraySerializer)
 
-        (newSliceIndex, jdbmState.indices + (indexMapKey -> newSliceIndex))
+          val newSliceIndex = SliceIndex(indexName, treeMap, keyComparator,
+            krefs.toArray, vrefs.toArray)
+  
+          (newSliceIndex, jdbmState.indices + (indexMapKey -> newSliceIndex))
+        }
+  
+        val newInsertCount = storeRow(index.storage, 0, jdbmState.insertCount)
+  
+        // Although we have a global count of inserts, we also want to
+        // specifically track counts on the index since some operations
+        // may not use all indices (e.g. groupByN)
+        val newIndex = index.copy(
+          count = index.count + (newInsertCount - jdbmState.insertCount)
+        )
+
+        JDBMState(newIndices + (indexMapKey -> newIndex), newInsertCount)
       }
-
-      val newInsertCount = storeRow(index.storage, 0, jdbmState.insertCount)
-
-      // Although we have a global count of inserts, we also want to
-      // specifically track counts on the index since some operations
-      // may not use all indices (e.g. groupByN)
-      val newIndex = index.copy(count = index.count + (newInsertCount - jdbmState.insertCount))
-
-      JDBMState(newIndices + (indexMapKey -> newIndex), newInsertCount)
     }
 
     def loadTable(dbFile: File, mergeEngine: MergeEngine[SortingKey, SortBlockData], indices: IndexMap, sortOrder: DesiredSortOrder, notes: String = ""): Table = {

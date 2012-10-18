@@ -846,214 +846,217 @@ trait Slice { source =>
           renderString(date.toString)
         }
         
-        def traverseSchema(row: Int, schema: SchemaNode): Boolean = schema match {
-          case obj: SchemaNode.Obj => {
-            val keys = obj.keys
-            val values = obj.values
-            
-            @inline
-            @tailrec
-            def loop(idx: Int, done: Boolean): Boolean = {
-              if (idx < keys.length) {
-                val key = keys(idx)
-                val value = values(idx)
+        def traverseSchema(row: Int, schema: SchemaNode): Boolean = {
+          @inline @tailrec
+          def objloop(keys: Array[String], values: Array[SchemaNode],
+            idx: Int, done: Boolean): Boolean = {
+
+            if (idx < keys.length) {
+              val key = keys(idx)
+              val value = values(idx)
+              
+              if (done) {
+                pushIn(",", false)
+              }
                 
-                if (done) {
-                  pushIn(",", false)
-                }
+              pushIn(key, true)
+              pushIn(":", false)
                 
-                pushIn(key, true)
-                pushIn(":", false)
+              val emitted = traverseSchema(row, value)
                 
-                val emitted = traverseSchema(row, value)
-                
-                if (!emitted) {     // less efficient
-                  popIn()
-                  popIn()
+              if (!emitted) {     // less efficient
+                popIn()
+                popIn()
                   
-                  if (done) {
-                    popIn()
-                  }
-                }
-                
-                loop(idx + 1, done || emitted)
-              } else {
-                done
-              }
-            }
-            
-            pushIn("{", false)
-            val done = loop(0, false)
-            
-            if (done) {
-              push('}')
-            } else {
-              popIn()
-            }
-            
-            done
-          }
-          
-          case arr: SchemaNode.Arr => {
-            val values = arr.nodes
-            
-            @inline
-            @tailrec
-            def loop(idx: Int, done: Boolean): Boolean = {
-              if (idx < values.length) {
-                val value = values(idx)
-                
                 if (done) {
-                  pushIn(",", false)
-                }
-                
-                val emitted = traverseSchema(row, value)
-                
-                if (!emitted && done) {     // less efficient
                   popIn()
                 }
+              }
                 
-                loop(idx + 1, done || emitted)
-              } else {
-                done
-              }
-            }
-            
-            pushIn("[", false)
-            val done = loop(0, false)
-            
-            if (done) {
-              push(']')
+              objloop(keys, values, idx + 1, done || emitted)
             } else {
-              popIn()
+              done
             }
-            
-            done
           }
-          
-          case union: SchemaNode.Union => {
-            val pos = union.possibilities
-            
-            @inline
-            @tailrec
-            def loop(idx: Int): Boolean = {
-              if (idx < pos.length) {
-                traverseSchema(row, pos(idx)) || loop(idx + 1)
-              } else {
-                false
+
+          @inline
+          @tailrec
+          def arrloop(values: Array[SchemaNode], idx: Int, done: Boolean): Boolean = {
+            if (idx < values.length) {
+              val value = values(idx)
+              
+              if (done) {
+                pushIn(",", false)
               }
+              
+              val emitted = traverseSchema(row, value)
+              
+              if (!emitted && done) {     // less efficient
+                popIn()
+              }
+              
+              arrloop(values, idx + 1, done || emitted)
+            } else {
+              done
             }
-            
-            loop(0)
           }
-          
-          case SchemaNode.Leaf(tpe, col) => tpe match {
-            case CString => {
-              val specCol = col.asInstanceOf[StrColumn]
+
+          @inline
+          @tailrec
+          def uniloop(pos: Array[SchemaNode], idx: Int): Boolean = {
+            if (idx < pos.length) {
+              traverseSchema(row, pos(idx)) || uniloop(pos, idx + 1)
+            } else {
+              false
+            }
+          }
+
+          schema match {
+            case obj: SchemaNode.Obj => {
+              val keys = obj.keys
+              val values = obj.values
               
-              if (specCol.isDefinedAt(row)) {
-                flushIn()
-                renderString(specCol(row))
-                true
-              } else {
-                false
-              }
-            }
-            
-            case CBoolean => {
-              val specCol = col.asInstanceOf[BoolColumn]
+              pushIn("{", false)
+              val done = objloop(keys, values, 0, false)
               
-              if (specCol.isDefinedAt(row)) {
-                flushIn()
-                renderBoolean(specCol(row))
-                true
+              if (done) {
+                push('}')
               } else {
-                false
+                popIn()
               }
-            }
-            
-            case CLong => {
-              val specCol = col.asInstanceOf[LongColumn]
               
-              if (specCol.isDefinedAt(row)) {
-                flushIn()
-                renderLong(specCol(row))
-                true
-              } else {
-                false
-              }
+              done
             }
             
-            case CDouble => {
-              val specCol = col.asInstanceOf[DoubleColumn]
+            case arr: SchemaNode.Arr => {
+              val values = arr.nodes
               
-              if (specCol.isDefinedAt(row)) {
-                flushIn()
-                renderDouble(specCol(row))
-                true
-              } else {
-                false
-              }
-            }
-            
-            case CNum => {
-              val specCol = col.asInstanceOf[NumColumn]
+              pushIn("[", false)
+              val done = arrloop(values, 0, false)
               
-              if (specCol.isDefinedAt(row)) {
-                flushIn()
-                renderNum(specCol(row))
-                true
+              if (done) {
+                push(']')
               } else {
-                false
+                popIn()
               }
-            }
-            
-            case CNull => {
-              val specCol = col.asInstanceOf[NullColumn]
-              if (specCol.isDefinedAt(row)) {
-                flushIn()
-                renderNull()
-                true
-              } else {
-                false
-              }
-            }
-            
-            case CEmptyObject => {
-              val specCol = col.asInstanceOf[EmptyObjectColumn]
-              if (specCol.isDefinedAt(row)) {
-                flushIn()
-                renderEmptyObject()
-                true
-              } else {
-                false
-              }
-            }
-            
-            case CEmptyArray => {
-              val specCol = col.asInstanceOf[EmptyArrayColumn]
-              if (specCol.isDefinedAt(row)) {
-                flushIn()
-                renderEmptyArray()
-                true
-              } else {
-                false
-              }
-            }
-            
-            case CDate => {
-              val specCol = col.asInstanceOf[DateColumn]
               
-              if (specCol.isDefinedAt(row)) {
-                flushIn()
-                renderDate(specCol(row))
-                true
-              } else {
-                false
-              }
+              done
             }
             
-            case CUndefined => false
+            case union: SchemaNode.Union => {
+              val pos = union.possibilities
+              
+              uniloop(pos, 0)
+            }
+            
+            case SchemaNode.Leaf(tpe, col) => tpe match {
+              case CString => {
+                val specCol = col.asInstanceOf[StrColumn]
+                
+                if (specCol.isDefinedAt(row)) {
+                  flushIn()
+                  renderString(specCol(row))
+                  true
+                } else {
+                  false
+                }
+              }
+              
+              case CBoolean => {
+                val specCol = col.asInstanceOf[BoolColumn]
+                
+                if (specCol.isDefinedAt(row)) {
+                  flushIn()
+                  renderBoolean(specCol(row))
+                  true
+                } else {
+                  false
+                }
+              }
+              
+              case CLong => {
+                val specCol = col.asInstanceOf[LongColumn]
+                
+                if (specCol.isDefinedAt(row)) {
+                  flushIn()
+                  renderLong(specCol(row))
+                  true
+                } else {
+                  false
+                }
+              }
+              
+              case CDouble => {
+                val specCol = col.asInstanceOf[DoubleColumn]
+                
+                if (specCol.isDefinedAt(row)) {
+                  flushIn()
+                  renderDouble(specCol(row))
+                  true
+                } else {
+                  false
+                }
+              }
+              
+              case CNum => {
+                val specCol = col.asInstanceOf[NumColumn]
+                
+                if (specCol.isDefinedAt(row)) {
+                  flushIn()
+                  renderNum(specCol(row))
+                  true
+                } else {
+                  false
+                }
+              }
+              
+              case CNull => {
+                val specCol = col.asInstanceOf[NullColumn]
+                if (specCol.isDefinedAt(row)) {
+                  flushIn()
+                  renderNull()
+                  true
+                } else {
+                  false
+                }
+              }
+              
+              case CEmptyObject => {
+                val specCol = col.asInstanceOf[EmptyObjectColumn]
+                if (specCol.isDefinedAt(row)) {
+                  flushIn()
+                  renderEmptyObject()
+                  true
+                } else {
+                  false
+                }
+              }
+              
+              case CEmptyArray => {
+                val specCol = col.asInstanceOf[EmptyArrayColumn]
+                if (specCol.isDefinedAt(row)) {
+                  flushIn()
+                  renderEmptyArray()
+                  true
+                } else {
+                  false
+                }
+              }
+              
+              case CDate => {
+                val specCol = col.asInstanceOf[DateColumn]
+                
+                if (specCol.isDefinedAt(row)) {
+                  flushIn()
+                  renderDate(specCol(row))
+                  true
+                } else {
+                  false
+                }
+              }
+              
+              case CUndefined => false
+            }
           }
         }
         

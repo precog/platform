@@ -260,25 +260,24 @@ trait ProjectionsActorModule extends ProjectionModule {
   class ProjectionInsertActor(rows: Seq[ProjectionInsert.Row], replyTo: ActorRef) extends Actor {
     private val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionInsertActor")
 
+    @tailrec
+    private def runInsert(projection: ProjectionLike, rows: Seq[ProjectionInsert.Row]) {
+      if (rows.nonEmpty) {
+        val row = rows.head
+        projection.insert(Array(row.id.uid), row.values)
+        runInsert(projection, rows.tail)
+      }
+    }
+
     def receive = {
       case ProjectionAcquired(projection) => { 
         logger.debug("Inserting " + rows.size + " rows into " + projection)
         
-        @inline
-        @tailrec
-        def runInsert(rows: Seq[ProjectionInsert.Row]): Unit =  {
-          if (rows.nonEmpty) {
-            val row = rows.head
-            projection.insert(Array(row.id.uid), row.values)
-            runInsert(rows.tail)
-          }
-        }
-
         val startTime = System.currentTimeMillis
 
         val insertRun: IO[Unit] = for {
           _ <- IO { MDC.put("projection", projection.descriptor.shows) }
-          _ <- IO { runInsert(rows) }
+          _ <- IO { runInsert(projection, rows) }
           _ <- projection.commit()
         } yield {
           logger.debug("Insertion of %d rows in %d ms".format(rows.size, System.currentTimeMillis - startTime))          
