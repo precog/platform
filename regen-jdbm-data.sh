@@ -19,16 +19,18 @@
 ## 
 #!/bin/bash
 
+SRCDIR=muspelheim/src/test/resources/test_data
+OWNERTOKEN=C18ED787-BF07-4097-B819-0415C759C8D5
+
 function usage() {
-    echo "Usage: `basename $0` [-n] [-t <owner token>] [-s <source directory>] <target data directory>"
-    echo "  For now target is normally pandora/dist/data-jdbm/data/"
-    echo "  -n : don't wipe existing data"
+    echo "Usage: `basename $0` [-n] [-t <owner token>] [-s <source directory>] <target data directory>" >&2
+    echo "  -n : don't wipe existing data" >&2
+    echo "  -t : Specify the owner token (defaults to $OWNERTOKEN)" >&2
+    echo "  -s : Specify the source directory (defaults to `dirname $0`/$SRCDIR)" >&2
     exit 1
 }
 
-VERSION=`sed -n 's/.*version.*:=.*"\(.*\)".*/\1/p' project/Build.scala`
-SRCDIR=muspelheim/src/test/resources/test_data
-OWNERTOKEN=C18ED787-BF07-4097-B819-0415C759C8D5
+VERSION=`git describe`
 
 while getopts "nt:s:" OPTNAME; do
     case $OPTNAME in

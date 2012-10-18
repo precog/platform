@@ -22,13 +22,16 @@
 MONGOPORT=27017
 
 # Parse opts to determine settings
-while getopts ":d:lm:" opt; do
+while getopts ":d:lbm:" opt; do
     case $opt in
         d) 
             WORKDIR=$OPTARG
             ;;
         l)
             DONTCLEAN=1
+            ;;
+        b)
+            BUILDMISSING=1
             ;;
         m)
             echo "Overriding default mongo port with $OPTARG"
@@ -40,7 +43,7 @@ while getopts ":d:lm:" opt; do
             echo "  -l: If a temp workdir is used, don't clean up afterward"
             echo "  -d: Use the provided workdir"
             echo "  -m: Use the specified port for mongo"
-            echo "Done"
+            echo "  -b: Build missing artifacts prior to run (depends on sbt in path)"
             exit 1
             ;;
     esac
@@ -49,7 +52,7 @@ done
 # Taken from http://blog.publicobject.com/2006/06/canonical-path-of-file-in-bash.html
 function path-canonical-simple() {
 local dst="${1}"
-cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")"
+cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")" | sed 's#/\.##'
 }
 
 function port_is_open() {
@@ -64,7 +67,7 @@ function wait_until_port_open () {
 
 BASEDIR=$(path-canonical-simple `dirname $0`)
 
-VERSION=`grep "version :=" project/Build.scala | sed 's/.*"\(.*\)".*/\1/'`
+VERSION=`git describe`
 INGEST_ASSEMBLY=$BASEDIR/ingest/target/ingest-assembly-$VERSION.jar
 AUTH_ASSEMBLY=$BASEDIR/auth/target/auth-assembly-$VERSION.jar
 ACCOUNTS_ASSEMBLY=$BASEDIR/accounts/target/accounts-assembly-$VERSION.jar
@@ -76,8 +79,30 @@ GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPaci
 JAVA="java $GC_OPTS"
 
 # pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
-if [ ! -f $INGEST_ASSEMBLY -o ! -f $SHARD_ASSEMBLY -o ! -f $YGGDRASIL_ASSEMBLY -o ! -f $AUTH_ASSEMBLY -o ! -f $ACCOUNTS_ASSEMBLY ]; then
-    echo "Ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run." >&2
+MISSING_ARTIFACTS=""
+for ASM in $INGEST_ASSEMBLY $SHARD_ASSEMBLY $YGGDRASIL_ASSEMBLY $AUTH_ASSEMBLY $ACCOUNTS_ASSEMBLY; do
+    if [ ! -f $ASM ]; then
+        if [ -n "$BUILDMISSING" ]; then
+            # Darn you, bash! zsh can do this in one go, a la ${$(basename $ASM)%%-*}
+            BUILDTARGETBASE=$(basename $ASM)
+            BUILDTARGET=${BUILDTARGETBASE%%-*}/assembly
+            echo "Building $BUILDTARGET"
+            sbt $BUILDTARGET || {
+                echo "Failed to build $BUILDTARGET!" >&2
+                exit 1
+            }
+        else
+            MISSING_ARTIFACTS="$MISSING_ARTIFACTS $ASM"
+        fi
+    fi
+done
+
+
+if [ -n "$MISSING_ARTIFACTS" ]; then
+    echo "Up-to-date ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run." >&2
+    for ASM in $MISSING_ARTIFACTS; do
+        echo "  missing `basename $ASM`" >&2
+    done
     exit 1
 fi
 
@@ -243,7 +268,7 @@ function on_exit() {
     cd $ZKBASE/bin
     ./zkServer.sh stop
 
-    if [ "$DONTCLEAN" != "1" ]; then
+    if [ -n "$DONTCLEAN" ]; then
         echo "Cleaning up temp work dir"
         rm -rf $WORKDIR
     fi
