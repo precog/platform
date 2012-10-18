@@ -24,7 +24,7 @@ import org.streum.configrity.Configuration
 object KafkaIngestServer extends 
     BlueEyesServer with 
     IngestService with 
-    MongoTokenManagerComponent with
+    MongoAPIKeyManagerComponent with
     KafkaEventStoreComponent {
 
   val clock = Clock.System

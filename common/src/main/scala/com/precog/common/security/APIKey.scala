@@ -15,24 +15,24 @@ import scalaz._
 import scalaz.syntax.apply._
 import scalaz.syntax.plusEmpty._
 
-case class Token(name: String, tid: TokenID, cid: TokenID, grants: Set[GrantID]) {
-  def addGrants(add: Set[GrantID]): Token = 
+case class APIKeyRecord(name: String, tid: APIKey, cid: APIKey, grants: Set[GrantID]) {
+  def addGrants(add: Set[GrantID]): APIKeyRecord = 
     copy(grants = grants ++ add)
-  def removeGrants(remove: Set[GrantID]): Token =
+  def removeGrants(remove: Set[GrantID]): APIKeyRecord =
     copy(grants = grants -- remove)
 }
 
-trait TokenSerialization {
-  implicit val TokenDecomposer: Decomposer[Token] = new Decomposer[Token] {
-    override def decompose(t: Token): JValue = JObject(List(
+trait APIKeyRecordSerialization {
+  implicit val safeAPIKeyRecordDecomposer: Decomposer[APIKeyRecord] = new Decomposer[APIKeyRecord] {
+    override def decompose(t: APIKeyRecord): JValue = JObject(List(
       JField("name", t.name),
       JField("tid", t.tid),
       JField("gids", t.grants.serialize)
     )) 
   }
 
-  val UnsafeTokenDecomposer: Decomposer[Token] = new Decomposer[Token] {
-    override def decompose(t: Token): JValue = JObject(List(
+  val apiKeyRecordDecomposer: Decomposer[APIKeyRecord] = new Decomposer[APIKeyRecord] {
+    override def decompose(t: APIKeyRecord): JValue = JObject(List(
       JField("name", t.name),
       JField("tid", t.tid),
       JField("cid", t.cid),
@@ -40,16 +40,16 @@ trait TokenSerialization {
     )) 
   }
 
-  implicit val TokenExtractor: Extractor[Token] = new Extractor[Token] with ValidatedExtraction[Token] {    
-    override def validated(obj: JValue): Validation[Error, Token] = 
-      (((obj \ "name").validated[TokenID] <+> Success("(unnamed)")) |@|
-       (obj \ "tid").validated[TokenID] |@|
+  implicit val apiKeyRecordExtractor: Extractor[APIKeyRecord] = new Extractor[APIKeyRecord] with ValidatedExtraction[APIKeyRecord] {    
+    override def validated(obj: JValue): Validation[Error, APIKeyRecord] = 
+      (((obj \ "name").validated[APIKey] <+> Success("(unnamed)")) |@|
+       (obj \ "tid").validated[APIKey] |@|
        (obj \ "cid").validated[String] |@|
-       (obj \ "gids").validated[Set[GrantID]]).apply(Token.apply _)
+       (obj \ "gids").validated[Set[GrantID]]).apply(APIKeyRecord.apply _)
   }
 }
 
-object Token extends TokenSerialization
+object APIKeyRecord extends APIKeyRecordSerialization
 
 case class Grant(gid: GrantID, issuer: Option[GrantID], permission: Permission)
 
@@ -79,7 +79,6 @@ trait Permission {
   def expiration: Option[DateTime]
 
   def isExpired(ref: DateTime) = expiration.map { ref.isAfter(_) }.getOrElse(false)
-
 }
 
 trait PermissionSerialization {
@@ -113,7 +112,7 @@ object Permission extends PermissionSerialization {
   
   def permissions(
       path: Path, 
-      owner: TokenID, 
+      owner: APIKey, 
       expiration: Option[DateTime], 
       grantTypes: Set[AccessType]): Set[Permission] = grantTypes.map {
     case WritePermission => WritePermission(path, expiration)
@@ -138,9 +137,9 @@ sealed trait OwnerIgnorantPermission extends Permission {
 }
 
 sealed trait OwnerAwarePermission extends Permission {
-  def owner: TokenID 
+  def owner: APIKey 
   
-  def derive(path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration): Permission
+  def derive(path: Path = path, owner: APIKey = owner, expiration: Option[DateTime] = expiration): Permission
 }
 
 sealed trait AccessType {
@@ -212,9 +211,9 @@ object OwnerPermission extends AccessType with OwnerPermissionSerialization {
 }
 
 
-case class ReadPermission(path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwarePermission {
+case class ReadPermission(path: Path, owner: APIKey, expiration: Option[DateTime]) extends OwnerAwarePermission {
   val accessType = ReadPermission
-  def derive(path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
+  def derive(path: Path = path, owner: APIKey = owner, expiration: Option[DateTime] = expiration) =
     copy(path = path, owner = owner, expiration = expiration)
 }
 
@@ -231,7 +230,7 @@ trait ReadPermissionSerialization {
   implicit val ReadPermissionExtractor: Extractor[ReadPermission] = new Extractor[ReadPermission] with ValidatedExtraction[ReadPermission] {    
     override def validated(obj: JValue): Validation[Error, ReadPermission] = 
       ((obj \ "path").validated[Path] |@|
-       (obj \ "ownerAccountId").validated[TokenID] |@|
+       (obj \ "ownerAccountId").validated[APIKey] |@|
        (obj \ "expirationDate").validated[Option[DateTime]]).apply((p, o, d) => ReadPermission(p,o,Permission.normalizeExpiration(d)))
   }
 }
@@ -242,9 +241,9 @@ object ReadPermission extends AccessType with ReadPermissionSerialization {
 }
 
 
-case class ReducePermission(path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwarePermission {
+case class ReducePermission(path: Path, owner: APIKey, expiration: Option[DateTime]) extends OwnerAwarePermission {
   val accessType = ReducePermission
-  def derive(path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
+  def derive(path: Path = path, owner: APIKey = owner, expiration: Option[DateTime] = expiration) =
     copy(path = path, owner = owner, expiration = expiration)
 }
 
@@ -261,7 +260,7 @@ trait ReducePermissionSerialization {
   implicit val ReducePermissionExtractor: Extractor[ReducePermission] = new Extractor[ReducePermission] with ValidatedExtraction[ReducePermission] {    
     override def validated(obj: JValue): Validation[Error, ReducePermission] = 
       ((obj \ "path").validated[Path] |@|
-       (obj \ "ownerAccountId").validated[TokenID] |@|
+       (obj \ "ownerAccountId").validated[APIKey] |@|
        (obj \ "expirationDate").validated[Option[DateTime]]).apply((p, o, d) => ReducePermission(p,o,Permission.normalizeExpiration(d)))
   }
 }

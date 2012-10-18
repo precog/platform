@@ -10,7 +10,7 @@ import blueeyes.util.Clock
 
 import org.streum.configrity.Configuration
 
-object KafkaShardServer extends BlueEyesServer with ShardService with YggdrasilQueryExecutorComponent with MongoTokenManagerComponent {
+object KafkaShardServer extends BlueEyesServer with ShardService with YggdrasilQueryExecutorComponent with MongoAPIKeyManagerComponent {
   
   val clock = Clock.System
 
