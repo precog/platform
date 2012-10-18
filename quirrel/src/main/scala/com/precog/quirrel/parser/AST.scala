@@ -163,6 +163,12 @@ trait AST extends Phases {
           indent + "property: " + property
       }
       
+      case MetaDescent(loc, child, property) => {
+        indent + "type: meta-descent\n" +
+          indent + "child:\n" + prettyPrint(child, level + 2) + "\n" +
+          indent + "property: " + property
+      }
+      
       case Deref(loc, left, right) => {
         indent + "type: deref\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n"
@@ -464,6 +470,9 @@ trait AST extends Phases {
       case (Descent(_, child1, property1), Descent(_, child2, property2)) =>
         (child1 equalsIgnoreLoc child2) && (property1 == property2)
 
+      case (MetaDescent(_, child1, property1), MetaDescent(_, child2, property2)) =>
+        (child1 equalsIgnoreLoc child2) && (property1 == property2)
+
       case (Deref(_, left1, right1), Deref(_, left2, right2)) =>
         (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
 
@@ -575,6 +584,9 @@ trait AST extends Phases {
         values map { _.hashCodeIgnoreLoc } sum
 
       case Descent(_, child, property) =>
+        child.hashCodeIgnoreLoc + property.hashCode
+
+      case MetaDescent(_, child, property) =>
         child.hashCodeIgnoreLoc + property.hashCode
 
       case Deref(_, left, right) =>

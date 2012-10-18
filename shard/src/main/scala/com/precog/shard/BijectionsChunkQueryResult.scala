@@ -35,7 +35,7 @@ import scalaz._
 
 object BijectionsChunkQueryResult {
 
-  // Required by TokenServiceCombinator's `token` combinator.
+  // Required by APIKeyServiceCombinator's `apiKey` combinator.
   implicit val queryResultErrorTransform = (failure: HttpFailure, s: String) =>
     HttpResponse[QueryResult](failure, content = Some(Left(s.serialize)))
 
@@ -90,6 +90,7 @@ object BijectionsChunkQueryResult {
         chunked.uncons flatMap {
           case Some((chunk, chunkStream)) =>
             val buffer = encoder.encode(chunk)
+            chunk.flip()
             
             val array = new Array[Byte](buffer.remaining())
             buffer.get(array)

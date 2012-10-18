@@ -1064,23 +1064,21 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       val ns = filteredNodeSubset(node)
       val NodeSubset(node0, filteredSource, idTrans, targetTrans, groupKeyTrans, _, _, _) = ns
 
-      val nodeSubsetsM: M[Set[(Seq[TicVar], NodeSubset)]] = requiredSorts.map { ticvars => 
-        val sortTransSpec = groupKeyTrans.alignTo(ticvars).prefixTrans(ticvars.length)
+      val orderedTicVars = requiredSorts.toList
+      val sortTransSpecs = orderedTicVars map { ticvars => groupKeyTrans.alignTo(ticvars).prefixTrans(ticvars.length) }
 
-        val sortedM: M[Table] = filteredSource.sort(sortTransSpec)
-        for { 
-          //json <- filteredSource.toJson
-          //_ = println(ticvars + " sorted by " + sortTransSpec + " for " + ns.groupId)
-          //_ = println("pre-materialize\n" + json.mkString("\n"))
-          sorted <- sortedM
-          //sjson <- sorted.toJson
-          //_ = println("post-materialize " + ns.groupId + ticvars +"\n" + sjson.mkString("\n"))
-        } yield {
-          ticvars -> NodeSubset(node0, sorted, idTrans, targetTrans, groupKeyTrans, ticvars, size = sorted.size)
-        }
-      }.sequence
-
-      nodeSubsetsM map { _.toMap }
+      filteredSource.groupByN(sortTransSpecs, Leaf(Source)) map { tables =>
+        (orderedTicVars zip tables).map({ case (ticvars, sortedTable) =>
+          ticvars ->
+          NodeSubset(node0,
+                     sortedTable,
+                     idTrans,
+                     targetTrans,
+                     groupKeyTrans,
+                     ticvars,
+                     size = sortedTable.size)
+        }).toMap
+      }
     }
 
     def alignOnEdges(spanningGraph: MergeGraph, requiredSorts: Map[MergeNode, Set[Seq[TicVar]]]): M[Map[GroupId, Set[NodeSubset]]] = {
@@ -1407,9 +1405,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       import BorgResult._
       import OrderingConstraints._
 
-      //println("\n\njoin left: \n" + leftNode)
-      //println("\n\njoin right: \n" + rightNode)
-
       def resortBorgResult(borgResult: BorgResult, newPrefix: Seq[TicVar]): M[BorgResult] = {
         val newAssimilatorOrder = newPrefix ++ (borgResult.groupKeys diff newPrefix)
 
@@ -1471,7 +1466,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               resortVictimToBorgResult(victim, commonPrefix) map { prepared => 
                 (assimilator, prepared, commonPrefix)
               }
-            } 
+            }
           } orElse {
             // the assimilator ordering was not compatible with any of the required sort orders
             // for the node, so we need to resort the accumulator to be compatible with
@@ -1564,6 +1559,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
         joinablesM map {
           case (leftJoinable, rightJoinable, commonPrefix) =>
+
             // todo: Reorder keys into the order specified by the common prefix. The common prefix determination
             // will be factored out in the plan-based version, and will simply be a specified keyOrder that both
             // sides will be brought into alignment with, instead of passing in the required sort orders.
@@ -1597,9 +1593,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             val borgTrans = OuterObjectConcat(groupKeyTrans2, idTrans2, recordTrans2)
             val unmatchedTrans = ObjectDelete(Leaf(Source), BorgResult.allFields)
 
+            val cogrouped = leftJoinable.table.cogroup(cogroupBySpec, cogroupBySpec, rightJoinable.table)(unmatchedTrans, unmatchedTrans, borgTrans)
+
             BorgResultNode(
               BorgResult(
-                leftJoinable.table.cogroup(cogroupBySpec, cogroupBySpec, rightJoinable.table)(unmatchedTrans, unmatchedTrans, borgTrans),
+                cogrouped,
                 leftJoinable.groupKeys ++ neededRight,
                 leftJoinable.groups union rightJoinable.groups
               )
@@ -1706,6 +1704,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     // Create the omniverse
     def unionAll(borgResults: Set[BorgResult]): BorgResult = {
       import TransSpec._
+
       def union2(left: BorgResult, right: BorgResult): BorgResult = {
         // At the point that we union, both sides should have the same ticvars, although they
         // may not be in the same order. If a reorder is needed, we'll have to remap since
@@ -1807,7 +1806,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         //_ = println("omniverse: \n" + json.mkString("\n"))
         sorted <- omniverse.table.compact(groupKeySpec(Source)).sort(groupKeySpec(Source))
         result <- sorted.partitionMerge(DerefObjectStatic(Leaf(Source), CPathField("groupKeys"))) { partition =>
-          //print(".")
           val groupKeyTrans = OuterObjectConcat(
             omniverse.groupKeys.zipWithIndex map { case (ticvar, i) =>
               WrapObject(
@@ -1993,9 +1991,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         
         // step is the continuation function fed to uncons. It is called once for each emitted slice
         def step(state: CogroupState): M[Option[(Slice, CogroupState)]] = {
+
           // step0 is the inner monadic recursion needed to cross slice boundaries within the emission of a slice
           def step0(lr: LR, rr: RR, br: BR, leftPosition: SlicePosition[LK], rightPosition: SlicePosition[RK], rightReset: Option[(Int, Option[Int])])
                    (ibufs: IndexBuffers = new IndexBuffers(leftPosition.key.size, rightPosition.key.size)): M[Option[(Slice, CogroupState)]] = {
+
             val SlicePosition(lpos0, lkstate, lkey, lhead, ltail) = leftPosition
             val SlicePosition(rpos0, rkstate, rkey, rhead, rtail) = rightPosition
 
@@ -2010,6 +2010,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             // must exit this inner loop and recur through the outer monadic loop
             // xrstart is an int with sentinel value for effieiency, but is Option at the slice level.
             @inline @tailrec def buildRemappings(lpos: Int, rpos: Int, xrstart: Int, xrend: Int, endRight: Boolean): NextStep = {
+              //println("lpos = %d, rpos = %d, xrstart = %d, xrend = %d, endRight = %s" format (lpos, rpos, xrstart, xrend, endRight))
+              //println("Left key: " + lkey.toJson(lpos))
+              //println("Right key: " + rkey.toJson(rpos))
+              //println("Left data: " + lhead.toJson(lpos))
+              //println("Right data: " + rhead.toJson(rpos))
+
               if (xrstart != -1) {
                 // We're currently in a cartesian. 
                 if (lpos < lhead.size && rpos < rhead.size) {
@@ -2202,7 +2208,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                     SlicePosition(0, lkstate, lkey, leftHead,  leftTail), 
                     SlicePosition(0, rkstate, rkey, rightHead, rightTail), None)
           } 
-          
+
           cogroup orElse {
             leftUnconsed map {
               case (head, tail) => EndLeft(stlr.initial, head, tail)
@@ -2465,29 +2471,26 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def normalize: Table = Table(slices.filter(!_.isEmpty))
     
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
-      val delimiterBuffer = CharBuffer.allocate(1)
-      delimiterBuffer.put(delimiter)
-      
-      val delimitStream = StreamT.unfoldM(true) { hasNext =>
-        val back = if (hasNext)
-          Some((delimiterBuffer, false))
-        else
-          None
-        
-        M.point(back)
+      val delimiterBuffer = {
+        val back = CharBuffer.allocate(1)
+        back.put(delimiter)
+        back.flip()
+        back
       }
+      
+      val delimitStream = delimiterBuffer :: StreamT.empty[M, CharBuffer]
       
       def foldFlatMap(slices: StreamT[M, Slice], rendered: Boolean): StreamT[M, CharBuffer] = {
         StreamT[M, CharBuffer](slices.step map {
           case StreamT.Yield(slice, tail) => {
-            val (stream, rendered) = slice.renderJson[M](delimiter)
+            val (stream, rendered2) = slice.renderJson[M](delimiter)
             
-            val stream2 = if (rendered)
+            val stream2 = if (rendered && rendered2)
               delimitStream ++ stream
             else
               stream
             
-            StreamT.Skip(stream2 ++ foldFlatMap(tail(), rendered))
+            StreamT.Skip(stream2 ++ foldFlatMap(tail(), rendered || rendered2))
           }
           
           case StreamT.Skip(tail) => StreamT.Skip(foldFlatMap(tail(), rendered))

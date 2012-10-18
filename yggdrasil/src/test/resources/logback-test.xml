@@ -1,6 +1,6 @@
 <configuration>
   <appender name="FILE" class="ch.qos.logback.core.FileAppender" append="false">
-    <file>yggdrasil/target/testlog.log</file>
+    <file>target/testlog.log</file>
 
     <!-- encoders are assigned the type
          ch.qos.logback.classic.encoder.PatternLayoutEncoder by default -->

@@ -54,7 +54,7 @@ import scala.collection.mutable.ListBuffer
 import scalaz._
 
 class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout, threadPool: Executor, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
-extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
+extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path) => Future[HttpResponse[JValue]]] with Logging {
 
   def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[Unit] = {
     Future { chan.write(ByteBuffer.wrap(chunk.data)) } flatMap { _ =>
@@ -65,7 +65,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
     }
   }
 
-  def ingest(p: Path, t: Token, event: JValue): Future[Unit] = {
+  def ingest(p: Path, t: APIKeyRecord, event: JValue): Future[Unit] = {
     
     val eventInstance = Event.fromJValue(p, event, t.tid)
     logger.trace("Saving event: " + eventInstance)
@@ -74,7 +74,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
 
   case class SyncResult(total: Int, ingested: Int, errors: List[(Int, String)])
 
-  class EventQueueInserter(p: Path, t: Token, events: Iterator[Either[String, JValue]], close: Option[Closeable]) extends Runnable {
+  class EventQueueInserter(p: Path, t: APIKeyRecord, events: Iterator[Either[String, JValue]], close: Option[Closeable]) extends Runnable {
     private[service] val result: Promise[SyncResult] = Promise()
 
     def run() {
@@ -138,7 +138,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
     }
   }
 
-  def parseCsv(byteStream: ByteChunk, t: Token, p: Path, readCsv: File => CSVReader): Future[EventQueueInserter] = {
+  def parseCsv(byteStream: ByteChunk, t: APIKeyRecord, p: Path, readCsv: File => CSVReader): Future[EventQueueInserter] = {
     for {
       file <- writeToFile(byteStream)
     } yield {
@@ -159,7 +159,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
     }
   }
 
-  def parseJson(channel: ReadableByteChannel, t: Token, p: Path): EventQueueInserter = {
+  def parseJson(channel: ReadableByteChannel, t: APIKeyRecord, p: Path): EventQueueInserter = {
     val reader = new BufferedReader(Channels.newReader(channel, "UTF-8"))
     val lines = Iterator.continually(reader.readLine()).takeWhile(_ != null)
     val inserter = new EventQueueInserter(p, t, lines map { json =>
@@ -173,13 +173,13 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
     inserter
   }
 
-  def parseSyncJson(byteStream: ByteChunk, t: Token, p: Path): Future[EventQueueInserter] = {
+  def parseSyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path): Future[EventQueueInserter] = {
     val pipe = Pipe.open()
     writeChunkStream(pipe.sink(), byteStream)
     Future { parseJson(pipe.source(), t, p) }
   }
 
-  def parseAsyncJson(byteStream: ByteChunk, t: Token, p: Path): Future[EventQueueInserter] = {
+  def parseAsyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path): Future[EventQueueInserter] = {
     for {
       file <- writeToFile(byteStream)
     } yield {
@@ -210,7 +210,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
   }
 
   val service = (request: HttpRequest[Either[Future[JValue], ByteChunk]]) => {
-    Success { (t: Token, p: Path) =>
+    Success { (t: APIKeyRecord, p: Path) =>
       accessControl.mayAccess(t.tid, p, Set(), WritePermission) flatMap {
         case true => try {
           request.content map {
@@ -249,7 +249,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (Token, Path) => Fu
         }
 
         case false =>
-          Future(HttpResponse[JValue](Unauthorized, content=Some(JString("Your token does not have permissions to write at this location."))))
+          Future(HttpResponse[JValue](Unauthorized, content=Some(JString("Your API key does not have permissions to write at this location."))))
       }
     }
   }

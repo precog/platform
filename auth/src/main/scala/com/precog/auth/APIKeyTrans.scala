@@ -31,30 +31,30 @@ import scala.io.Source
 import com.precog.common._
 import com.precog.common.security._
 
-object TokenTrans {
+object APIKeyTrans {
   def main(args: Array[String]) {
     val input = args(0)
 
     val source = Source.fromFile(input)
-    val tokenOutput = new FileWriter(input + ".newtokens")
+    val apiKeyOutput = new FileWriter(input + ".newapikeys")
     val grantOutput = new FileWriter(input + ".newgrants")
     try {
-      val oldTokens = source.getLines.map(JsonParser.parse(_)).toList
+      val oldAPIKeys = source.getLines.map(JsonParser.parse(_)).toList
 
-      val output = process(oldTokens)
+      val output = process(oldAPIKeys)
 
-      val tokens = output.keySet
+      val apiKeys = output.keySet
       val grants = output.values.flatten
 
-      for (token <- tokens) {
-        tokenOutput.write(compact(render(token.serialize(Token.TokenDecomposer))) + "\n")
+      for (apiKey <- apiKeys) {
+        apiKeyOutput.write(compact(render(apiKey.serialize(APIKeyRecord.apiKeyRecordDecomposer))) + "\n")
       }
       for (grant <- grants) {
         grantOutput.write(compact(render(grant.serialize(Grant.GrantDecomposer))) + "\n")
       }
     } finally {
       source.close()
-      tokenOutput.close()
+      apiKeyOutput.close()
       grantOutput.close()
     }
   }
@@ -62,8 +62,8 @@ object TokenTrans {
   private def newUUID() = java.util.UUID.randomUUID.toString
   private def newGrantID(): String = (newUUID() + newUUID() + newUUID()).toLowerCase.replace("-","")
 
-  def process(tokens: List[JValue]): Map[Token, Set[Grant]] = {
-    tokens.foldLeft(Map.empty[Token, Set[Grant]]) { 
+  def process(apiKeys: List[JValue]): Map[APIKeyRecord, Set[Grant]] = {
+    apiKeys.foldLeft(Map.empty[APIKeyRecord, Set[Grant]]) { 
       case (acc, proto) => 
         val JString(uid) = (proto \ "uid") 
         val JString(path) = proto(JPath("permissions.path[0].pathSpec.subtree"))
@@ -87,9 +87,9 @@ object TokenTrans {
 
         val grants = if (writePermission == JNothing) readGrants else readGrants ++ writeGrants
 
-        val token = Token(path.replaceAll("/", " "), uid, "", grants.map{ _.gid }.toSet)        
+        val apiKey = APIKeyRecord(uid, path.replaceAll("/", " "), "", grants.map{ _.gid }.toSet)        
 
-        acc + (token -> grants)
+        acc + (apiKey -> grants)
     }
   }
 }

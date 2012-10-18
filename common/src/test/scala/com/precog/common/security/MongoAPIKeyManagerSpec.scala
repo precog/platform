@@ -37,57 +37,54 @@ import blueeyes.persistence.mongo._
 import blueeyes.json.JsonAST
 import blueeyes.json.JsonParser
 import blueeyes.json.Printer
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.serialization.DefaultSerialization._
-import blueeyes.json.serialization.Extractor._
 
 import org.streum.configrity._
 
 import scalaz._
 
-object MongoTokenManagerSpec extends Specification {
+object MongoAPIKeyManagerSpec extends Specification {
  
 
   val timeout = Duration(30, "seconds")
 
-  "mongo token manager" should {
-    "find token present" in new tokenManager { 
+  "mongo API key manager" should {
+    "find API key present" in new apiKeyManager { 
 
-      lazy val result = Await.result(tokenManager.findToken(root.tid), timeout)
+      lazy val result = Await.result(apiKeyManager.findAPIKey(root.tid), timeout)
 
       result must beLike {
-        case Some(Token(_,tid,_,_)) => tid must_== root.tid
+        case Some(APIKeyRecord(_,tid,_,_)) => tid must_== root.tid
       }
     }
-    "not find missing token" in new tokenManager { 
+    "not find missing API key" in new apiKeyManager { 
 
-      val result = Await.result(tokenManager.findToken(notFoundTokenID), timeout)
+      val result = Await.result(apiKeyManager.findAPIKey(notFoundAPIKeyID), timeout)
 
       result must beLike {
         case None => ok 
       }
     }
-    "issue new token" in new tokenManager { 
-      val name = "newToken"
-      val fResult = tokenManager.newToken(name, "", Set.empty)
+    "issue new API key" in new apiKeyManager { 
+      val name = "newAPIKey"
+      val fResult = apiKeyManager.newAPIKey(name, "", Set.empty)
 
       val result = Await.result(fResult, timeout)
 
       result must beLike {
-        case Token(n,_,_,g) => 
+        case APIKeyRecord(n,_,_,g) => 
           name must_== n 
           Set.empty must_== g
       }
     }
-    "move token to deleted pool on deletion" in new tokenManager { 
+    "move API key to deleted pool on deletion" in new apiKeyManager { 
 
-      type Results = (Option[Token], Option[Token], Option[Token], Option[Token])
+      type Results = (Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord])
 
       val fut: Future[Results] = for { 
-        before <- tokenManager.findToken(root.tid)
-        deleted <- tokenManager.deleteToken(before.get.tid)
-        after <- tokenManager.findToken(root.tid)
-        deleteCol <- tokenManager.findDeletedToken(root.tid)
+        before <- apiKeyManager.findAPIKey(root.tid)
+        deleted <- apiKeyManager.deleteAPIKey(before.get.tid)
+        after <- apiKeyManager.findAPIKey(root.tid)
+        deleteCol <- apiKeyManager.findDeletedAPIKey(root.tid)
       } yield {
         (before, deleted, after, deleteCol)
       }
@@ -100,15 +97,15 @@ object MongoTokenManagerSpec extends Specification {
           t1 must_== t3
       }
     }
-    "no failure on deleting token that is already deleted" in new tokenManager { 
-      type Results = (Option[Token], Option[Token], Option[Token], Option[Token], Option[Token])
+    "no failure on deleting API key that is already deleted" in new apiKeyManager { 
+      type Results = (Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord])
 
       val fut: Future[Results] = for { 
-        before <- tokenManager.findToken(root.tid)
-        deleted1 <- tokenManager.deleteToken(before.get.tid)
-        deleted2 <- tokenManager.deleteToken(before.get.tid)
-        after <- tokenManager.findToken(root.tid)
-        deleteCol <- tokenManager.findDeletedToken(root.tid)
+        before <- apiKeyManager.findAPIKey(root.tid)
+        deleted1 <- apiKeyManager.deleteAPIKey(before.get.tid)
+        deleted2 <- apiKeyManager.deleteAPIKey(before.get.tid)
+        after <- apiKeyManager.findAPIKey(root.tid)
+        deleteCol <- apiKeyManager.findDeletedAPIKey(root.tid)
       } yield {
         (before, deleted1, deleted2, after, deleteCol)
       }
@@ -127,21 +124,21 @@ object MongoTokenManagerSpec extends Specification {
     val cnt = new java.util.concurrent.atomic.AtomicLong
   }
 
-  class tokenManager extends After {
-    val defaultActorSystem = ActorSystem("tokenManagerTest")
+  class apiKeyManager extends After {
+    val defaultActorSystem = ActorSystem("apiKeyManagerTest")
     implicit val execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
 
     val mongo = new MockMongo
-    val tokenManager = new MongoTokenManager(mongo, mongo.database("test_v1"), MongoTokenManagerSettings.defaults)
+    val apiKeyManager = new MongoAPIKeyManager(mongo, mongo.database("test_v1"), MongoAPIKeyManagerSettings.defaults)
 
     val to = Duration(30, "seconds")
   
-    val notFoundTokenID = "NOT-GOING-TO-FIND"
+    val notFoundAPIKeyID = "NOT-GOING-TO-FIND"
 
-    val root = Await.result(tokenManager.newToken("root", "", Set.empty), to)
-    val child1 = Await.result(tokenManager.newToken("child1", root.tid, Set.empty), to)
-    val child2 = Await.result(tokenManager.newToken("child2", root.tid, Set.empty), to)
-    val grantChild1 = Await.result(tokenManager.newToken("grandChild1", child1.tid, Set.empty), to)
+    val root = Await.result(apiKeyManager.newAPIKey("root", "", Set.empty), to)
+    val child1 = Await.result(apiKeyManager.newAPIKey("child1", root.tid, Set.empty), to)
+    val child2 = Await.result(apiKeyManager.newAPIKey("child2", root.tid, Set.empty), to)
+    val grantChild1 = Await.result(apiKeyManager.newAPIKey("grandChild1", child1.tid, Set.empty), to)
 
     def after = { 
       defaultActorSystem.shutdown 

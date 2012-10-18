@@ -640,6 +640,7 @@ trait Slice { source =>
         normalize(schema)
       }
       
+      // don't remove!  @tailrec bugs if you use optSchema.map
       if (optSchema.isDefined) {
         val schema = optSchema.get
         
@@ -1056,27 +1057,26 @@ trait Slice { source =>
           }
         }
         
-        @inline
         @tailrec
-        def render(row: Int, delimit: Boolean = false): Boolean = {
+        def render(row: Int, delimit: Boolean): Boolean = {
           if (row < size) {
             if (delimit) {
               pushIn(delimiterStr, false)
             }
             
-            val done = traverseSchema(row, schema)
+            val rowRendered = traverseSchema(row, schema)
             
-            if (delimit && !done) {
+            if (delimit && !rowRendered) {
               popIn()
             }
             
-            render(row + 1, delimit || done)
+            render(row + 1, delimit || rowRendered)
           } else {
             delimit
           }
         }
         
-        val rendered = render(0)
+        val rendered = render(0, false)
         
         buffer.flip()
         vector += buffer
@@ -1097,7 +1097,7 @@ trait Slice { source =>
     }
   }
 
-  def toJson(row: Int): Option[JValue] = {
+  def toJValue(row: Int) = {
     columns.foldLeft[JValue](JNothing) {
       case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
         CPathUtils.cPathToJPaths(selector, col.cValue(row)).foldLeft(jv) {
@@ -1105,10 +1105,27 @@ trait Slice { source =>
         }
 
       case (jv, _) => jv
-    } match {
+    } 
+  }
+
+  def toJson(row: Int): Option[JValue] = {
+    toJValue(row) match {
       case JNothing => None
       case jv       => Some(jv)
     }
+  }
+
+  def toJsonElements: Vector[JValue] = {
+    @tailrec def rec(i: Int, acc: Vector[JValue]): Vector[JValue] = {
+      if (i < source.size) {
+        toJValue(i) match {
+          case JNothing => rec(i + 1, acc)
+          case jv => rec(i + 1, acc :+ jv)
+        }
+      } else acc
+    }
+
+    rec(0, Vector())
   }
 
   def toString(row: Int): Option[String] = {

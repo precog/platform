@@ -19,14 +19,45 @@
 ## 
 #!/bin/bash
 
+MONGOPORT=27017
+
+# Parse opts to determine settings
+while getopts ":d:lm:" opt; do
+    case $opt in
+        d) 
+            WORKDIR=$OPTARG
+            ;;
+        l)
+            DONTCLEAN=1
+            ;;
+        m)
+            echo "Overriding default mongo port with $OPTARG"
+            MONGOPORT=$OPTARG
+            ;;
+
+        \?)
+            echo "Usage: `basename $0` [-l] [-d <work directory>] [-m <mongo port>]"
+            echo "  -l: If a temp workdir is used, don't clean up afterward"
+            echo "  -d: Use the provided workdir"
+            echo "  -m: Use the specified port for mongo"
+            echo "Done"
+            exit 1
+            ;;
+    esac
+done
+
 # Taken from http://blog.publicobject.com/2006/06/canonical-path-of-file-in-bash.html
 function path-canonical-simple() {
 local dst="${1}"
 cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")"
 }
 
+function port_is_open() {
+   netstat -an | egrep "[\.:]$1[[:space:]]+.*LISTEN" > /dev/null
+}
+
 function wait_until_port_open () {
-    while ! netstat -an | grep $1 > /dev/null; do
+    while ! port_is_open $1; do
         sleep 1
     done
 }
@@ -40,10 +71,34 @@ ACCOUNTS_ASSEMBLY=$BASEDIR/accounts/target/accounts-assembly-$VERSION.jar
 SHARD_ASSEMBLY=$BASEDIR/shard/target/shard-assembly-$VERSION.jar
 YGGDRASIL_ASSEMBLY=$BASEDIR/yggdrasil/target/yggdrasil-assembly-$VERSION.jar
 
+GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
+
+JAVA="java $GC_OPTS"
+
+# pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
 if [ ! -f $INGEST_ASSEMBLY -o ! -f $SHARD_ASSEMBLY -o ! -f $YGGDRASIL_ASSEMBLY -o ! -f $AUTH_ASSEMBLY -o ! -f $ACCOUNTS_ASSEMBLY ]; then
-    echo "Ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run."
+    echo "Ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run." >&2
     exit 1
 fi
+
+declare -a service_ports
+service_ports[9082]="Kafka Local"
+service_ports[9092]="Kafka Global"
+service_ports[$MONGOPORT]="MongoDB"
+service_ports[30060]="Ingest"
+service_ports[30062]="Auth"
+service_ports[30064]="Accounts"
+service_ports[30070]="Shard"
+
+for PORT in 9082 9092 $MONGOPORT 30060 30062 30064 30070; do
+    if port_is_open $PORT; then
+        echo "You appear to already have a conflicting ${service_ports[$PORT]} service running on port $PORT" >&2
+        if [[ $PORT == $MONGPORT ]]; then
+            echo "You can use the -m flag to override the mongo port" >&2
+        fi
+        exit 1
+    fi
+done
 
 # Make sure we have the tools we need on OSX
 if [ `uname` == "Darwin" ]; then
@@ -53,28 +108,6 @@ if [ `uname` == "Darwin" ]; then
 else
     MONGOURL="http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-2.2.0.tgz"
 fi
-
-# Parse opts to determine settings
-while getopts "d:l" opt; do
-    case $opt in
-        d) 
-            WORKDIR=$OPTARG
-            ;;
-
-        l)
-            DONTCLEAN=1
-            ;;
-
-        \?)
-            echo <<EOF
-Usage: `basename $0` [-l] [-d <work directory>]"
-  -l: If a temp workdir is used, don't clean up afterward
-  -d: Use the provided workdir
-EOF
-            exit 1
-            ;;
-    esac
-done
 
 
 function exists {
@@ -95,8 +128,8 @@ echo "Using artifacts in $ARTIFACTDIR"
     echo "Downloading current ZooKeeper artifact"
     pushd $ARTIFACTDIR > /dev/null
     wget -nd -q -r -l 1 -A tar.gz http://mirrors.gigenet.com/apache/zookeeper/current/ || { 
-        echo "Failed to download zookeeper"
-        exit 3 
+        echo "Failed to download zookeeper" >&2
+        exit 3
     }
     popd > /dev/null
 }
@@ -105,8 +138,8 @@ echo "Using artifacts in $ARTIFACTDIR"
     echo "Downloading current Kafka artifact"
     pushd $ARTIFACTDIR > /dev/null
     wget -nd -q http://s3.amazonaws.com/ops.reportgrid.com/kafka/kafka-0.7.5.zip || { 
-        echo "Failed to download kafka"
-        exit 3 
+        echo "Failed to download kafka" >&2
+        exit 3
     }
     popd > /dev/null
 }
@@ -115,7 +148,7 @@ echo "Using artifacts in $ARTIFACTDIR"
     echo "Downloading current Mongo artifact"
     pushd $ARTIFACTDIR > /dev/null
     wget -nd -q $MONGOURL || { 
-        echo "Failed to download kafka"
+        echo "Failed to download kafka" >&2
         exit 3 
     }
     popd > /dev/null
@@ -131,7 +164,7 @@ fi
 if [ "$WORKDIR" == "" ]; then  
     WORKDIR=`mktemp -d -t standaloneShard.XXXXXX 2>&1`
     if [ $? -ne 0 ]; then
-        echo "Couldn't create temp workdir! ($WORKDIR)"
+        echo "Couldn't create temp workdir! ($WORKDIR)" >&2
         exit 1
     fi
 else
@@ -224,7 +257,7 @@ trap on_exit EXIT
 # Get zookeeper up and running first
 pushd $ZKBASE > /dev/null
 tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-maven*' --exclude='contrib*' --exclude='recipes*' -xvzf $ARTIFACTDIR/zookeeper* > /dev/null 2>&1 || {
-    echo "Failed to unpack zookeeper"
+    echo "Failed to unpack zookeeper" >&2
     exit 3
 }
 popd > /dev/null
@@ -242,7 +275,7 @@ cd $ZKBASE/bin
 # Now, start global and local kafkas
 cd $WORKDIR
 unzip $ARTIFACTDIR/kafka* > /dev/null || {
-    echo "Failed to unpack kafka"
+    echo "Failed to unpack kafka" >&2
     exit 3
 }
 
@@ -269,15 +302,16 @@ echo "Kafka Local = $KFLOCALPID"
 # Start up mongo and set test token
 cd $MONGOBASE
 tar --strip-components=1 -xvzf $ARTIFACTDIR/mongo* &> /dev/null
-$MONGOBASE/bin/mongod --dbpath $MONGODATA &
+$MONGOBASE/bin/mongod --port $MONGOPORT --dbpath $MONGODATA &
 MONGOPID=$!
 
-wait_until_port_open 27017
+wait_until_port_open $MONGOPORT
 
 if [ ! -e $WORKDIR/root_token.json ]; then
-    java $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -d dev_auth_v1 -n "/" -a "Local test" -r "Unused" || exit 3
-    echo 'db.tokens.find({}, {"tid":1})' | $MONGOBASE/bin/mongo dev_auth_v1 > $WORKDIR/root_token.json || {
-        echo "Error retrieving new root token"
+    echo "Creating new root token"
+    $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -n "/" -a "Local test" -r "Unused" || exit 3
+    echo 'db.tokens.find({}, {"tid":1})' | $MONGOBASE/bin/mongo localhost:$MONGOPORT/dev_auth_v1 > $WORKDIR/root_token.json || {
+        echo "Error retrieving new root token" >&2
         exit 3
     }
 fi
@@ -286,44 +320,44 @@ TOKENID=`grep tid $WORKDIR/root_token.json | sed -e 's/.*"tid" : "\(.*\)".*/\1/'
 echo $TOKENID > $WORKDIR/root_token.txt
 
 # Set up ingest and shard services
-sed -e "s#/var/log#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.conf > $WORKDIR/configs/ingest-v1.conf
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.conf > $WORKDIR/configs/ingest-v1.conf || echo "Failed to update ingest config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.logging.xml > $WORKDIR/configs/ingest-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#/opt/precog/shard#$WORKDIR/shard-data#" < $BASEDIR/shard/configs/dev/shard-v1.conf > $WORKDIR/configs/shard-v1.conf
+sed -e "s#/var/log#$WORKDIR/logs#; s#/opt/precog/shard#$WORKDIR/shard-data#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < $BASEDIR/shard/configs/dev/shard-v1.conf > $WORKDIR/configs/shard-v1.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/shard/configs/dev/shard-v1.logging.xml > $WORKDIR/configs/shard-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#" < $BASEDIR/auth/configs/dev/dev-auth-v1.conf > $WORKDIR/configs/auth-v1.conf
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < $BASEDIR/auth/configs/dev/dev-auth-v1.conf > $WORKDIR/configs/auth-v1.conf || echo "Failed to update auth config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/auth/configs/dev/dev-auth-v1.logging.xml > $WORKDIR/configs/auth-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s/port = 80/port = 30062/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < $BASEDIR/accounts/configs/dev/accounts-v1.conf > $WORKDIR/configs/accounts-v1.conf
+sed -e "s!/var/log!$WORKDIR/logs!; s/port = 80/port = 30062/; s!/security/v1/!/!; s/rootKey = .*/rootKey = \"$TOKENID\"/" < $BASEDIR/accounts/configs/dev/accounts-v1.conf > $WORKDIR/configs/accounts-v1.conf || echo "Failed to update accounts config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/accounts/configs/dev/accounts-v1.logging.xml > $WORKDIR/configs/accounts-v1.logging.xml
 
 cd $BASEDIR
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
 if [ ! -e $WORKDIR/initial_checkpoint.json ]; then
-    java $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY zk -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
-        echo "Couldn't set initial checkpoint!"
+    $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY zk -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
+        echo "Couldn't set initial checkpoint!" >&2
         exit 3
     }
     touch $WORKDIR/initial_checkpoint.json
 fi
 
 echo "Starting ingest service"
-java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/ingest-v1.logging.xml -jar $INGEST_ASSEMBLY --configFile $WORKDIR/configs/ingest-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/ingest-v1.logging.xml -jar $INGEST_ASSEMBLY --configFile $WORKDIR/configs/ingest-v1.conf &
 INGESTPID=$!
 
 echo "Starting shard service"
-echo java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf
-java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf &
+echo $JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf
+$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf &
 SHARDPID=$!
 
 echo "Starting accounts service"
-java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/accounts-v1.logging.xml -jar $ACCOUNTS_ASSEMBLY --configFile $WORKDIR/configs/accounts-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/accounts-v1.logging.xml -jar $ACCOUNTS_ASSEMBLY --configFile $WORKDIR/configs/accounts-v1.conf &
 ACCOUNTSPID=$!
 
 echo "Starting auth service"
-java $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/auth-v1.logging.xml -jar $AUTH_ASSEMBLY --configFile $WORKDIR/configs/auth-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/auth-v1.logging.xml -jar $AUTH_ASSEMBLY --configFile $WORKDIR/configs/auth-v1.conf &
 AUTHPID=$!
 
 # Let the ingest//auth/accounts/shard services startup in parallel

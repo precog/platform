@@ -261,7 +261,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       val empty = JDBMState(Map(), 0l)
     }
 
-    case class WriteState(jdbmState: JDBMState, valueTrans: SliceTransform1[_], keyTransforms: Seq[SliceTransform1[_]])
+    case class WriteState(jdbmState: JDBMState, valueTrans: SliceTransform1[_], keyTransformsWithIds: List[(SliceTransform1[_], String)])
 
     private[BlockStoreColumnarTableModule] object loadMergeEngine extends MergeEngine[Key, BD]
     private[BlockStoreColumnarTableModule] object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
@@ -590,8 +590,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                    leftWriteState, rightWriteState)
     }
 
-    def writeTables(db: DB, slices: StreamT[M, Slice], valueTrans: SliceTransform1[_], keyTrans: Seq[SliceTransform1[_]], sortOrder: DesiredSortOrder): M[IndexMap] = {
-      def write0(slices: StreamT[M, Slice], state: WriteState): M[IndexMap] = {
+    def writeTables(db: DB, slices: StreamT[M, Slice], valueTrans: SliceTransform1[_], keyTrans: Seq[SliceTransform1[_]], sortOrder: DesiredSortOrder): M[(List[String], IndexMap)] = {
+      def write0(slices: StreamT[M, Slice], state: WriteState): M[(List[String], IndexMap)] = {
         slices.uncons flatMap {
           case Some((slice, tail)) => 
             writeSlice(db, slice, state, sortOrder) flatMap { write0(tail, _) }
@@ -599,12 +599,13 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           case None => 
             M.point {
               db.close() // No more slices, close out the JDBM database
-              state.jdbmState.indices
+              (state.keyTransformsWithIds map (_._2), state.jdbmState.indices)
             }
         }
       }
 
-      write0(slices, WriteState(JDBMState.empty, valueTrans, keyTrans))
+      val identifiedKeyTrans = keyTrans.zipWithIndex map { case (kt, i) => kt -> i.toString }
+      write0(slices, WriteState(JDBMState.empty, valueTrans, identifiedKeyTrans.toList))
     }
 
     protected def writeSlice(db: DB, slice: Slice, state: WriteState, sortOrder: DesiredSortOrder, source: String = ""): M[WriteState] = {
@@ -615,8 +616,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       val dataRowFormat = RowFormat.forValues(vColumnRefs)
       val dataColumnEncoder = dataRowFormat.ColumnEncoder(vColumns)
 
-      def storeTransformed(jdbmState: JDBMState, transforms: Seq[(SliceTransform1[_], Int)], updatedTransforms: List[SliceTransform1[_]]): M[(JDBMState, List[SliceTransform1[_]])] = transforms match {
-        case (keyTransform, i) :: tail => 
+      def storeTransformed(jdbmState: JDBMState, transforms: List[(SliceTransform1[_], String)], updatedTransforms: List[(SliceTransform1[_], String)]): M[(JDBMState, List[(SliceTransform1[_], String)])] = transforms match {
+        case (keyTransform, streamId) :: tail => 
           val (nextKeyTransform, kslice) = keyTransform.advance(slice)
           val (keyColumnRefs, keyColumns) = kslice.columns.toList.sortBy(_._1).unzip
           if (keyColumnRefs.nonEmpty) {
@@ -626,18 +627,18 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
             writeRawSlices(db, kslice, keyColumnRefs, keyColumnEncoder, keyComparator,
                            vslice, vColumnRefs,   dataColumnEncoder, 
-                           i.toString, jdbmState) flatMap { newJdbmState =>
-              storeTransformed(newJdbmState, tail, nextKeyTransform +: updatedTransforms)
+                           streamId, jdbmState) flatMap { newJdbmState =>
+              storeTransformed(newJdbmState, tail, (nextKeyTransform, streamId) :: updatedTransforms)
             }
           } else {
-            M.point((jdbmState, nextKeyTransform +: updatedTransforms))
+            M.point((jdbmState, (nextKeyTransform, streamId) :: updatedTransforms))
           }
 
         case Nil => 
-          M.point((jdbmState, updatedTransforms))
+          M.point((jdbmState, updatedTransforms.reverse))
       }
 
-      storeTransformed(jdbmState, keyTrans.zipWithIndex, Nil) map {
+      storeTransformed(jdbmState, keyTrans, Nil) map {
         case (jdbmState0, keyTrans0) => 
           WriteState(jdbmState0, valueTrans0, keyTrans0)
       }
@@ -822,12 +823,16 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
      */
     def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = {
       writeSorted(groupKeys, valueSpec, sortOrder, unique) map {
-        case (dbFile, indices) => 
-          indices.groupBy(_._1.streamId).values.toStream.map(loadTable(dbFile, sortMergeEngine, _, sortOrder))
+        case (dbFile, streamIds, indices) => 
+          val streams = indices.groupBy(_._1.streamId)
+          streamIds.toStream map { streamId =>
+            streams get streamId map (loadTable(dbFile, sortMergeEngine, _, sortOrder)) getOrElse Table(this.slices, Some(0))
+          }
+          // indices.groupBy(_._1.streamId).values.toStream.map(loadTable(dbFile, sortMergeEngine, _, sortOrder))
       }
     }
 
-    protected def writeSorted(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[(File, IndexMap)] = {
+    protected def writeSorted(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[(File, List[String], IndexMap)] = {
       import sortMergeEngine._
 
       // Open a JDBM3 DB for use in sorting under a temp directory
@@ -848,13 +853,13 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       }
 
       for {
-        indices <-  writeTables(
+        result <-  writeTables(
                       DBMaker.openFile(dbFile.getCanonicalPath).make(), 
                       this.transform(sourceTrans0).slices,
                       composeSliceTransform(valueTrans0),
                       keyTrans0 map composeSliceTransform,
                       sortOrder)
-      } yield (dbFile, indices)
+      } yield (dbFile, result._1, result._2)
     }
   }
 } 

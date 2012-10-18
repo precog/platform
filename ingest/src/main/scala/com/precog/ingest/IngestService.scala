@@ -46,7 +46,7 @@ import scalaz.syntax.monad._
 
 import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
 
-case class IngestState(tokenManager: TokenManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: ExecutorService)
+case class IngestState(apiKeyManager: APIKeyManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: ExecutorService)
 
 trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 with DecompressCombinators with AkkaDefaults { 
@@ -59,7 +59,7 @@ with DecompressCombinators with AkkaDefaults {
   implicit val timeout = akka.util.Timeout(120000) //for now
   implicit def M: Monad[Future]
 
-  def tokenManagerFactory(config: Configuration): TokenManager[Future]
+  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
   def eventStoreFactory(config: Configuration): EventStore
   def usageLoggingFactory(config: Configuration): UsageLogging 
 
@@ -70,8 +70,8 @@ with DecompressCombinators with AkkaDefaults {
           import context._
 
           val eventStore = eventStoreFactory(config.detach("eventStore"))
-          val tokenManager = tokenManagerFactory(config.detach("security"))
-          val accessControl = new TokenManagerAccessControl(tokenManager)
+          val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
+          val accessControl = new APIKeyManagerAccessControl(apiKeyManager)
 
           // Set up a thread pool for ingest tasks
           val readPool = new ThreadPoolExecutor(config[Int]("readpool.min_threads", 2),
@@ -83,7 +83,7 @@ with DecompressCombinators with AkkaDefaults {
 
           eventStore.start map { _ =>
             IngestState(
-              tokenManager,
+              apiKeyManager,
               accessControl,
               eventStore,
               usageLoggingFactory(config.detach("usageLogging")),
@@ -94,7 +94,7 @@ with DecompressCombinators with AkkaDefaults {
         request { (state: IngestState) =>
           decompress {
             jsonpOrChunk {
-              token(state.tokenManager) {
+              apiKey(state.apiKeyManager) {
                 path("/(?<sync>a?sync)") {
                   dataPath("fs") {
                     post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch)) ~
@@ -108,7 +108,7 @@ with DecompressCombinators with AkkaDefaults {
         shutdown { state => 
           for {
             _ <- state.eventStore.stop
-            _ <- state.tokenManager.close()
+            _ <- state.apiKeyManager.close()
           } yield {
             logger.info("Stopping read threads")
             state.ingestPool.shutdown()
