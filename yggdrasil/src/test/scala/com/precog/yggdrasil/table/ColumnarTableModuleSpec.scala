@@ -88,6 +88,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   trait TableCompanion extends ColumnarTableCompanion {
     def apply(slices: StreamT[M, Slice], size: Option[Long] = None) = new Table(slices, size)
 
+    def singleton(slice: Slice) = new Table(slice :: StreamT.empty[M, Slice], Some(1))
+
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = 
       sys.error("not implemented here")
   }

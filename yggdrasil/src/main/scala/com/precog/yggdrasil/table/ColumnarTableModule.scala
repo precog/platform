@@ -100,6 +100,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
   trait ColumnarTableCompanion extends TableCompanionLike {
     def apply(slices: StreamT[M, Slice], size: Option[Long] = None): Table
+    
+    def singleton(slice: Slice): Table
 
     implicit def groupIdShow: Show[GroupId] = Show.showFromToString[GroupId]
 
@@ -1842,7 +1844,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def compact(spec: TransSpec1): Table = {
       val specTransform = SliceTransform.composeSliceTransform(spec)
       val compactTransform = SliceTransform.composeSliceTransform(Leaf(Source)).zip(specTransform) { (s1, s2) => s1.compact(s2, AnyDefined) }
-      Table(Table.transformStream(compactTransform, slices)).normalize
+      Table(Table.transformStream(compactTransform, slices), size).normalize
     }
 
     /**
@@ -2291,7 +2293,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         }
       }
       
-      Table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }))
+      // TODO: We should be able to fully compute the size of the result above.
+      val newSize = for(l <- size; r <- that.size) yield l*r
+      
+      Table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }), newSize)
     }
     
     /**
@@ -2337,8 +2342,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         }
         case _ => Stream.empty[Slice]
       }
+      
+      val newSize = size.map(sz => ((sz-startIndex) max 0) min numberToTake)
 
-      Table(StreamT.fromStream(slices.toStream.map(loop(_, 0))))
+      Table(StreamT.fromStream(slices.toStream.map(loop(_, 0))), newSize)
     }
 
     /**
@@ -2373,20 +2380,24 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         }
       }
 
-      def subTable(comparatorGen: Slice => (Int => Ordering), slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT.wrapEffect {
-        slices.uncons map {
-          case Some((head, tail)) =>
-            val headComparator = comparatorGen(head)
-            val spanEnd = findEnd(headComparator, 0, head.size - 1)
-            if (spanEnd < head.size) {
-              head.take(spanEnd) :: StreamT.empty[M, Slice]
-            } else {
-              head :: subTable(comparatorGen, tail)
-            }
-            
-          case None =>
-            StreamT.empty[M, Slice]
+      def subTable(comparatorGen: Slice => (Int => Ordering), slices: StreamT[M, Slice]): M[Table] = {
+        def subTable0(slices: StreamT[M, Slice], subSlices: StreamT[M, Slice], size: Int): M[Table] = {
+          slices.uncons flatMap {
+            case Some((head, tail)) =>
+              val headComparator = comparatorGen(head)
+              val spanEnd = findEnd(headComparator, 0, head.size - 1)
+              if (spanEnd < head.size) {
+                M.point(Table(subSlices ++ (head.take(spanEnd) :: StreamT.empty[M, Slice]), Some(size+spanEnd)))
+              } else {
+                subTable0(tail, subSlices ++ (head :: StreamT.empty[M, Slice]), size+head.size)
+              }
+              
+            case None =>
+              M.point(Table(subSlices, Some(size)))
+          }
         }
+        
+        subTable0(slices, StreamT.empty[M, Slice], 0)
       }
 
       def dropAndSplit(comparatorGen: Slice => (Int => Ordering), slices: StreamT[M, Slice], spanStart: Int): StreamT[M, Slice] = StreamT.wrapEffect {
@@ -2413,9 +2424,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
           (i: Int) => rowComparator.compare(spanStart, i)
         }
-
-        val groupTable = Table(subTable(comparatorGen, head.drop(spanStart) :: tail)).transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
-        val groupedM: M[Table] = f(groupTable)
+        
+        val groupTable = subTable(comparatorGen, head.drop(spanStart) :: tail)
+        val groupedM = groupTable.map(_.transform(DerefObjectStatic(Leaf(Source), CPathField("1")))).flatMap(f)
         val groupedStream: StreamT[M, Slice] = StreamT.wrapEffect(groupedM.map(_.slices))
 
         groupedStream ++ dropAndSplit(comparatorGen, head :: tail, spanStart)
@@ -2434,7 +2445,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
-    def normalize: Table = Table(slices.filter(!_.isEmpty))
+    def normalize: Table = Table(slices.filter(!_.isEmpty), size)
     
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
       val delimiterBuffer = {
