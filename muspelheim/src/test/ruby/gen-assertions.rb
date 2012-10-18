@@ -20,6 +20,27 @@ module Tests
       arr.inject(0) { |a, b| a + b } / arr.size
     end
     
+    def test_evaluate_a_histogram_of_state_on_tweets_union_tweets
+      # tweets = //election/tweets
+      tweets = load_file 'election/tweets.json'
+      
+      # tweets.STATE
+      tweets_STATE = tweets.map { |p| p['STATE'] }
+      
+      # solve 'state
+      #   tweets' := tweets where tweets.STATE = 'state
+      #   { state: 'state, count: count(tweets') }
+      results = tweets_STATE.uniq.map do |state|
+        { "state" => state, "count" => tweets_STATE.select { |state2| state == state2 }.size }
+      end
+      
+      results_must " haveSize(#{results.size})"
+      
+      results.uniq.each do |res|
+        results_must " contain(#{render_value res})"
+      end
+    end
+    
     def test_evaluate_a_solve_constrained_by_inclusion
       # clicks = //clicks
       clicks = load_file 'clicks.json'
