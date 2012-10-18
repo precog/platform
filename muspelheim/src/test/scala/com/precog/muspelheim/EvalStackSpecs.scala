@@ -180,6 +180,7 @@ trait EvalStackSpecs extends Specification {
       results must contain(SString("page-2page-4"))
       results must contain(SString("page-2page-0")) 
     }
+    */
 
     "union sets coming out of a solve" >> {
       val input = """
@@ -201,7 +202,30 @@ trait EvalStackSpecs extends Specification {
           obj must haveKey("size")
         }
       }
+
+      val containsUserId = results collect {
+        case (_, SObject(obj)) if obj contains "userId" => obj
+      }
+
+      containsUserId must haveSize(21)
+      containsUserId collect {
+        case obj => obj("userId")
+      } mustEqual Set(
+        SString("user-1000"), SString("user-1001"), SString("user-1002"), SString("user-1003"), SString("user-1004"), SString("user-1005"),
+        SString("user-1006"), SString("user-1007"), SString("user-1008"), SString("user-1009"), SString("user-1010"), SString("user-1011"),
+        SString("user-1012"), SString("user-1013"), SString("user-1014"), SString("user-1015"), SString("user-1016"), SString("user-1017"),
+        SString("user-1018"), SString("user-1019"), SString("user-1020"))
+
+      val containsPageId = results collect {
+        case (_, SObject(obj)) if obj contains "pageId" => obj
+      }
+
+      containsPageId must haveSize(5)
+      containsPageId collect {
+        case obj => obj("pageId")
+      } mustEqual Set(SString("page-0"), SString("page-1"), SString("page-2"), SString("page-3"), SString("page-4"))
     }
+    /*
 
     "accept covariance inside an object with'd with another object" >> {
       val input = """
@@ -1153,7 +1177,6 @@ trait EvalStackSpecs extends Specification {
         case r => failure("Result has wrong shape: "+r)
       }
     }
-    */
 
     "evaluate a solve of two parameters" in {
       val input = """
@@ -1167,7 +1190,6 @@ trait EvalStackSpecs extends Specification {
 
       eval(input) mustEqual Set()
     }
-    /*
 
     "determine a histogram of a composite key of revenue and campaign" in {
       val input = """

@@ -1905,7 +1905,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
      * transformation on rows of the table.
      */
     def cogroup(leftKey: TransSpec1, rightKey: TransSpec1, that: Table)(leftResultTrans: TransSpec1, rightResultTrans: TransSpec1, bothResultTrans: TransSpec2): Table = {
-      println("Cogrouping with respect to\nleftKey: " + leftKey + "\nrightKey: " + rightKey)
+      //println("Cogrouping with respect to\nleftKey: " + leftKey + "\nrightKey: " + rightKey)
       class IndexBuffers(lInitialSize: Int, rInitialSize: Int) {
         val lbuf = new ArrayIntList(lInitialSize)
         val rbuf = new ArrayIntList(rInitialSize)
@@ -2079,6 +2079,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
             def continue(nextStep: NextStep): M[Option[(Slice, CogroupState)]] = nextStep match {
               case SplitLeft(lpos) =>
+
                 val (lpref, lsuf) = lhead.split(lpos)
                 val (_, lksuf) = lkey.split(lpos)
                 val (completeSlice, lr0, rr0, br0) = ibufs.cogrouped(lpref, rhead, 
@@ -2101,12 +2102,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 }
 
               case SplitRight(rpos) => 
+
                 val (rpref, rsuf) = rhead.split(rpos)
                 val (_, rksuf) = rkey.split(rpos)
                 val (completeSlice, lr0, rr0, br0) = ibufs.cogrouped(lhead, rpref, 
                                                                      SliceTransform1[LR](lr, stlr.f),
                                                                      SliceTransform1[RR](rr, strr.f),
                                                                      SliceTransform2[BR](br, stbr.f))
+
 
                 ltail.uncons map {
                   case Some((nextLeftHead, nextLeftTail)) =>
@@ -2123,6 +2126,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 }
 
               case AppendLeft(lpos, rpos, rightReset) => 
+
                 ltail.uncons flatMap {
                   case Some((nextLeftHead, nextLeftTail)) =>
                     val (lkstate0, lkey0) = stlk.f(lkstate, nextLeftHead)
