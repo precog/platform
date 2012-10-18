@@ -152,7 +152,7 @@ echo "Using artifacts in $ARTIFACTDIR"
 (exists $ARTIFACTDIR/zookeeper* && echo "  ZooKeeper exists") || {
     echo "Downloading current ZooKeeper artifact"
     pushd $ARTIFACTDIR > /dev/null
-    wget -nd -q -r -l 1 -A tar.gz http://mirrors.gigenet.com/apache/zookeeper/current/ || { 
+    wget -nd -q http://ops.reportgrid.com.s3.amazonaws.com/zookeeper/zookeeper-3.4.3.tar.gz || { 
         echo "Failed to download zookeeper" >&2
         exit 3
     }
