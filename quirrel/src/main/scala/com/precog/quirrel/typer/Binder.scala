@@ -372,14 +372,8 @@ trait Binder extends parser.AST with Library {
       case With(_, left, right) => 
         (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
       
-      case Union(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Intersect(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Difference(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
+      case expr @ (Union(_, _, _) | Intersect(_, _, _) | Difference(_, _, _)) =>
+        Set(expr :: Nil)
       
       case Add(_, left, right) =>
         (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }

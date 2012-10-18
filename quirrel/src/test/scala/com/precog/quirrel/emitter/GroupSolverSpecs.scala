@@ -562,5 +562,19 @@ object GroupSolverSpecs extends Specification
         
       compile(input).errors must beEmpty
     }
+    
+    "accept a solve on the results of a union operation" in {
+      val input = """
+        | clicks := //clicks
+        | impressions := //impressions
+        | 
+        | data := clicks union impressions
+        |
+        | solve 'a
+        |   count(data where data.a = 'a)
+        | """.stripMargin
+        
+      compile(input).errors must beEmpty
+    }
   }
 }
