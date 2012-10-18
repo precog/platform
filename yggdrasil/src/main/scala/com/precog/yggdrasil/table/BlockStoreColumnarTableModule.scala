@@ -267,7 +267,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       )
     }
 
-    def apply(slices: StreamT[M, Slice], size: Option[Long] = None) = new Table(slices, size)
+    def apply(slices: StreamT[M, Slice], size: TableSize) = new Table(slices, size)
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = {
       sealed trait AlignState
@@ -711,7 +711,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         )
       )
       
-      Table(StreamT(M.point(head)), Some(totalCount)).transform(TransSpec1.DerefArray1)
+      Table(StreamT(M.point(head)), ExactSize(totalCount)).transform(TransSpec1.DerefArray1)
     }
   }
   
@@ -753,7 +753,14 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       paths          <- pathsM
       projectionData <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
       val (coveringProjections, colMetadata) = projectionData.unzip
-      val maxSize = colMetadata.toList.flatMap { _.values.flatMap { _.values.collect { case stats: MetadataStats => stats.count } } }.sorted.lastOption
+      val projectionSizes = colMetadata.toList.flatMap { _.values.flatMap { _.values.collect { case stats: MetadataStats => stats.count } } }.sorted
+      val tableSize: TableSize = projectionSizes.headOption.flatMap { minSize => projectionSizes.lastOption.map { maxSize => {
+        if (coveringProjections.size == 1) {
+          ExactSize(minSize)
+        } else {
+          EstimateSize(minSize, maxSize)
+        }
+      }}}.getOrElse(UnknownSize)
     } yield {
       val head = StreamT.Skip(
         StreamT.wrapEffect(
@@ -768,11 +775,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         )
       )
   
-      Table(StreamT(M.point(head)), maxSize)
+      Table(StreamT(M.point(head)), tableSize)
     }
   }
 
-  class Table(slices: StreamT[M, Slice], size: Option[Long]) extends ColumnarTable(slices, size) {
+  class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size) {
     import Table._
     import SliceTransform._
     import trans._
@@ -786,7 +793,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
      * @see com.precog.yggdrasil.TableModule#sort(TransSpec1, DesiredSortOrder, Boolean)
      */
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder, unique).map {
-      _.headOption getOrElse Table(this.slices, Some(0)) // If we start with an empty table, we always end with an empty table (but then we know that we have zero size)
+      _.headOption getOrElse Table(StreamT.empty[M, Slice], ExactSize(0)) // If we start with an empty table, we always end with an empty table (but then we know that we have zero size)
     }
 
     /**

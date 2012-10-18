@@ -29,6 +29,21 @@ import collection.Set
 import scalaz.Monoid
 import scalaz.Monad
 
+sealed trait TableSize {
+  def maxSize: Long
+  def lessThan (other: TableSize): Boolean = maxSize < other.maxSize
+}
+
+case class ExactSize(minSize: Long) extends TableSize {
+  val maxSize = minSize
+}
+
+case class EstimateSize(minSize: Long, maxSize: Long) extends TableSize
+
+case object UnknownSize extends TableSize {
+  val maxSize = Long.MaxValue
+}
+
 object TableModule {
   object paths {
     val Key   = JPathField("key")
@@ -376,6 +391,11 @@ trait TableModule[M[+_]] extends FNModule {
   
   trait TableLike { this: Table =>
     import trans._
+
+    /**
+     * Return an indication of table size, if known
+     */
+    def size: TableSize
 
     /**
      * For each distinct path in the table, load all columns identified by the specified

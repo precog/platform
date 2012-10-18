@@ -96,7 +96,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     //}
 
     result.toList must_== sorted
-    resultTable.size must beSome(sorted.size)
+    resultTable.size mustEqual ExactSize(sorted.size)
   }
 
   def checkSortDense(sortOrder: DesiredSortOrder) = {

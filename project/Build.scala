@@ -73,7 +73,7 @@ object PlatformBuild extends Build {
       "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT" changing(),
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
-      "org.specs2"                  %% "specs2"             % "1.12.2-SNAPSHOT" % "test",
+      "org.specs2"                  %% "specs2"             % "1.12.2" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
       "javolution"                  %  "javolution"         % "5.5.1"//,
       //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
