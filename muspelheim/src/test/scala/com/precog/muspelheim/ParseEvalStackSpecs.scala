@@ -147,7 +147,6 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       val str = strings.foldLeft("") { _ + _ } copoint
       
       str must contain(",")
-      println(str)
     }
   }
   
