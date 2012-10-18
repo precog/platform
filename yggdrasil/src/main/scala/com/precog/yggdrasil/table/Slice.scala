@@ -422,9 +422,9 @@ trait Slice { source =>
     }
 
     // We filter out rows that are completely undefined.
-    val order: Array[Int] = Array.range(0, source.size)/* filter { row =>
-      keySlice.isDefinedAt(row) && source.isDefinedAt(row)
-    }*/
+    val order: Array[Int] = Array.range(0, source.size) filter { row =>
+      keySlice.isDefinedAt(row) || source.isDefinedAt(row)
+    }
     spire.math.MergeSort.sort(order)(new spire.math.Order[Int] {
       def compare(i: Int, j: Int) = rowComparator.compare(i, j).toInt
       def eqv(i: Int, j: Int) = compare(i, j) == 0
@@ -519,6 +519,82 @@ trait Slice { source =>
       val size = source.size max other.size
       val columns: Map[ColumnRef, Column] = other.columns.foldLeft(source.columns) {
         case (acc, (ref, col)) => acc + (ref -> (acc get ref flatMap { c => cf.util.UnionRight(c, col) } getOrElse col))
+      }
+    }
+  }
+
+  /**
+   * This creates a new slice with the same size and columns as this slice, but
+   * whose values have been materialized and stored in arrays.
+   */
+  def materialized: Slice = {
+    new Slice {
+      val size = source.size
+      val columns = source.columns mapValues {
+        case col: BoolColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = BitSetUtil.filteredRange(0, source.size) { row =>
+            defined(row) && col(row)
+          }
+          ArrayBoolColumn(defined, values)
+
+        case col: LongColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = new Array[Long](source.size)
+          Loop.range(0, source.size) { row =>
+            if (defined(row)) values(row) = col(row)
+          }
+          ArrayLongColumn(defined, values)
+
+        case col: DoubleColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = new Array[Double](source.size)
+          Loop.range(0, source.size) { row =>
+            if (defined(row)) values(row) = col(row)
+          }
+          ArrayDoubleColumn(defined, values)
+
+        case col: NumColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = new Array[BigDecimal](source.size)
+          Loop.range(0, source.size) { row =>
+            if (defined(row)) values(row) = col(row)
+          }
+          ArrayNumColumn(defined, values)
+
+        case col: StrColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = new Array[String](source.size)
+          Loop.range(0, source.size) { row =>
+            if (defined(row)) values(row) = col(row)
+          }
+          ArrayStrColumn(defined, values)
+
+        case col: DateColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = new Array[DateTime](source.size)
+          Loop.range(0, source.size) { row =>
+            if (defined(row)) values(row) = col(row)
+          }
+          ArrayDateColumn(defined, values)
+
+        case col: EmptyArrayColumn =>
+          val ncol = MutableEmptyArrayColumn.empty()
+          Loop.range(0, source.size) { row => ncol.update(row, col.isDefinedAt(row)) }
+          ncol
+
+        case col: EmptyObjectColumn =>
+          val ncol = MutableEmptyObjectColumn.empty()
+          Loop.range(0, source.size) { row => ncol.update(row, col.isDefinedAt(row)) }
+          ncol
+
+        case col: NullColumn =>
+          val ncol = MutableNullColumn.empty()
+          Loop.range(0, source.size) { row => ncol.update(row, col.isDefinedAt(row)) }
+          ncol
+
+        case col =>
+          sys.error("Cannot materialise non-standard (extensible) column")
       }
     }
   }
@@ -1170,11 +1246,14 @@ object Slice {
    */
   def concat(slices: List[Slice]): Slice = {
     val (_columns, _size) = slices.foldLeft((Map.empty[ColumnRef, List[(Int, Column)]], 0)) {
-      case ((cols, offset), slice) =>
+      case ((cols, offset), slice) if slice.size > 0 =>
         (slice.columns.foldLeft(cols) { case (acc, (ref, col)) =>
           acc + (ref -> ((offset, col) :: acc.getOrElse(ref, Nil)))
         }, offset + slice.size)
-      }
+
+      case  ((cols, offset), _) => (cols, offset)
+
+    }
 
     new Slice {
       val size = _size

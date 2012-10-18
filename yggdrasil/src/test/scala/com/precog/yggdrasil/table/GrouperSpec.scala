@@ -922,26 +922,26 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     }
   }
   
-//  "simple single-key grouping" should {
-//    "scalacheck a histogram by value" in check1NoShrink (testHistogramByValue _)
-//    "histogram for two of the same value" in testHistogramByValue(Stream(2147483647, 2147483647))
-//    "histogram when observing spans of equal values" in testHistogramByValue(Stream(24, -10, 0, -1, -1, 0, 24, 0, 0, 24, -1, 0, 0, 24))
-//    "compute a histogram by value (mapping target)" in check (testHistogramByValueMapped _)
-//    "compute a histogram by value (mapping target) trivial example" in testHistogramByValueMapped(Stream(0))
-//    "compute a histogram by even/odd" in check (testHistogramEvenOdd _)
-//    "compute a histogram by even/odd trivial example" in testHistogramEvenOdd(Stream(0))
-//  }
-//
-//  "simple multi-key grouping" should {
-//    "compute a histogram on two keys" >> {
-//      "and" >> testHistogramTwoKeysAnd
-//      "or" >> testHistogramTwoKeysOr
-//    }
-//    "compute a histogram on one key with an extra" >> {
-//      "and" >> testHistogramExtraAnd
-//      "or" >> testHistogramExtraOr
-//    }
-//  }
+  "simple single-key grouping" should {
+    "scalacheck a histogram by value" in check1NoShrink (testHistogramByValue _)
+    "histogram for two of the same value" in testHistogramByValue(Stream(2147483647, 2147483647))
+    "histogram when observing spans of equal values" in testHistogramByValue(Stream(24, -10, 0, -1, -1, 0, 24, 0, 0, 24, -1, 0, 0, 24))
+    "compute a histogram by value (mapping target)" in check (testHistogramByValueMapped _)
+    "compute a histogram by value (mapping target) trivial example" in testHistogramByValueMapped(Stream(0))
+    "compute a histogram by even/odd" in check (testHistogramEvenOdd _)
+    "compute a histogram by even/odd trivial example" in testHistogramEvenOdd(Stream(0))
+  }
+
+  "simple multi-key grouping" should {
+    "compute a histogram on two keys" >> {
+      "and" >> testHistogramTwoKeysAnd
+      "or" >> testHistogramTwoKeysOr
+    }
+    "compute a histogram on one key with an extra" >> {
+      "and" >> testHistogramExtraAnd
+      "or" >> testHistogramExtraOr
+    }
+  }
 
   "multi-set grouping" should {
     "compute ctr on value" in propNoShrink (testCtr _)
@@ -969,6 +969,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       // TODO: the performance of the following is too awful to run under scalacheck, even with a minimal
       // number of examples.
       "or" >> propNoShrink (testCtrPartialJoinOr _).set(minTestsOk -> 10)
+      "or with empty 1st dataset" >> testCtrPartialJoinOr(Stream(), Stream(1))
+      "or with empty 2nd dataset" >> testCtrPartialJoinOr(Stream((1, Some(2))), Stream())
       "or with un-joinable datasets" >> testCtrPartialJoinOr(
         Stream((-2,Some(1))), 
         Stream(-1)

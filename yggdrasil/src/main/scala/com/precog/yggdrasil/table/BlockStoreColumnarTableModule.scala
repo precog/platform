@@ -588,38 +588,34 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
      * of all the slices. At some point this should lazily chunk the slices into
      * fixed sizes so that we can individually sort/merge.
      */
-    protected def reduceSlices(slices: StreamT[M, Slice]): M[Slice] = {
-      def consList(ss: List[Slice], slices: StreamT[M, Slice]): M[List[Slice]] = {
-        slices.uncons flatMap {
-          case Some((head, tail)) => consList(head :: ss, tail)
-          case None => M.point(ss.reverse)
-        }
+    protected def reduceSlices(slices: StreamT[M, Slice]): StreamT[M, Slice] = {
+      def rec(ss: List[Slice], slices: StreamT[M, Slice]): StreamT[M, Slice] = {
+        StreamT[M, Slice](slices.uncons map {
+          case Some((head, tail)) => StreamT.Skip(rec(head :: ss, tail))
+          case None if ss.isEmpty => StreamT.Done
+          case None => StreamT.Yield(Slice.concat(ss.reverse), StreamT.empty)
+        })
       }
 
-      consList(Nil, slices) map (Slice.concat)
+      rec(Nil, slices)
     }
 
     def writeTables(db: DB, slices: StreamT[M, Slice], valueTrans: SliceTransform1[_], keyTrans: Seq[SliceTransform1[_]], sortOrder: DesiredSortOrder): M[(List[String], IndexMap)] = {
       def write0(slices: StreamT[M, Slice], state: WriteState): M[(List[String], IndexMap)] = {
-        reduceSlices(slices) flatMap { slice =>
-          writeSlice(db, slice, state, sortOrder) map { state =>
-            (state.keyTransformsWithIds map (_._2), state.jdbmState.indices)
-          }
-        }
-        // slices.uncons flatMap {
-        //   case Some((slice, tail)) => 
-        //     writeSlice(db, slice, state, sortOrder) flatMap { write0(tail, _) }
+        slices.uncons flatMap {
+          case Some((slice, tail)) => 
+            writeSlice(db, slice, state, sortOrder) flatMap { write0(tail, _) }
 
-        //   case None =>
-        //     M.point {
-        //       db.close() // No more slices, close out the JDBM database
-        //       (state.keyTransformsWithIds map (_._2), state.jdbmState.indices)
-        //     }
-        // }
+          case None =>
+            M.point {
+              db.close() // No more slices, close out the JDBM database
+              (state.keyTransformsWithIds map (_._2), state.jdbmState.indices)
+            }
+        }
       }
 
       val identifiedKeyTrans = keyTrans.zipWithIndex map { case (kt, i) => kt -> i.toString }
-      write0(slices, WriteState(JDBMState.empty, valueTrans, identifiedKeyTrans.toList))
+      write0(reduceSlices(slices), WriteState(JDBMState.empty, valueTrans, identifiedKeyTrans.toList))
     }
 
     protected def writeSlice(db: DB, slice: Slice, state: WriteState, sortOrder: DesiredSortOrder, source: String = ""): M[WriteState] = {
@@ -668,9 +664,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
 
       //M.point(println("writing slice from writeAligned; key: \n" + kslice + "\nvalue\n" + vslice)) >>
-      // writeRawSlices(db, kslice, keyColumnRefs, keyColumnEncoder, keyComparator,
-      //                    vslice, vColumnRefs, dataColumnEncoder, 
-      //                    indexNamePrefix, jdbmState)  
       writeRawSlices(db, kslice, sortOrder,
                          vslice, vColumnRefs, dataColumnEncoder,
                          indexNamePrefix, jdbmState)
@@ -681,10 +674,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                                  vslice: Slice, vrefs: List[ColumnRef], vEncoder: ColumnEncoder,
                                  indexNamePrefix: String,
                                  jdbmState: JDBMState): M[JDBMState] = M.point {
-    //protected def writeRawSlices(db: DB,
-    //                             kslice: Slice, krefs: List[ColumnRef], kEncoder: ColumnEncoder, keyComparator: SortingKeyComparator,
-    //                             vslice: Slice, vrefs: List[ColumnRef], vEncoder: ColumnEncoder,
-    //                             indexNamePrefix: String, jdbmState: JDBMState): M[JDBMState] = M.point {
       // Iterate over the slice, storing each row
       // FIXME: This may not actually be tail recursive!
       // FIXME: Determine whether undefined sort keys are valid
@@ -733,7 +722,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           val storage = db.createTreeMap(indexName, keyComparator, ByteArraySerializer, ByteArraySerializer)
           val count = storeRows(kslice0, vslice0, keyRowFormat, vEncoder0, storage, 0)
           val sliceIndex = SliceIndex(indexName, storage, keyRowFormat, keyComparator, keyRefs, valRefs, count)
-          println("Storing to disk.")
 
           (sliceIndex, jdbmState.indices + (indexMapKey -> sliceIndex))
 
@@ -751,7 +739,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       } getOrElse {
         // sort k/vslice and shove into SortedSlice.
         val indexName = indexMapKey.name
-        val (vslice0, kslice0) = vslice.sortWith(kslice, sortOrder)
+        val mvslice = vslice.materialized
+        val mkslice = kslice.materialized
+        
+        // TODO Materializing after a sort may help w/ cache hits when traversing a column.
+        val (vslice0, kslice0) = mvslice.sortWith(mkslice, sortOrder)
         val sortedSlice = SortedSlice(indexName,
                                       kslice0, vslice0,
                                       vEncoder,
@@ -785,7 +777,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           
           succ(None) map { 
             _ map { nextBlock => 
-              val slice = nextBlock.data
               CellState(index, nextBlock.maxKey, nextBlock.data, (k: SortingKey) => succ(Some(k))) 
             }
           }
@@ -896,7 +887,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           streamIds.toStream map { streamId =>
             streams get streamId map (loadTable(dbFile, sortMergeEngine, _, sortOrder)) getOrElse Table(this.slices, Some(0))
           }
-          // indices.groupBy(_._1.streamId).values.toStream.map(loadTable(dbFile, sortMergeEngine, _, sortOrder))
       }
     }
 

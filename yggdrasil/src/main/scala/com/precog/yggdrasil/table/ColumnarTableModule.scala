@@ -1393,7 +1393,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           wrapValueSpec(valueSpec(Source))
         )
 
-        borgResult.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending) map { sorted =>
+        for {
+          sorted <- borgResult.table.transform(remapSpec).sort(groupKeySpec(Source), SortAscending)//  map { sorted =>
+          //json <- sorted.toJson
+          //_ = println("sorted borg result: " + json.mkString("\n"))
+        } yield {
           borgResult.copy(table = sorted, groupKeys = newAssimilatorOrder)
         }
       }
@@ -1596,7 +1600,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
     def borg(spanningGraph: MergeGraph, connectedSubgraph: Set[NodeSubset], requiredOrders: Map[MergeNode, Set[Seq[TicVar]]]): M[BorgResult] = {
       def assimilate(edges: Set[BorgEdge]): M[BorgResult] = {
-        //println("assimilate: edges = " + edges)
         val largestEdge = edges.maxBy(_.sharedKeys.size)
 
         //val prunedRequirements = orderingIndex.foldLeft(Map.empty[MergeNode, Set[Seq[TicVar]]]) {
@@ -1773,7 +1776,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       for {
         omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
-        json <- omniverse.table.toJson
+        //json <- omniverse.table.toJson
         //_ = println("omniverse: \n" + json.mkString("\n"))
         sorted <- omniverse.table.compact(groupKeySpec(Source)).sort(groupKeySpec(Source))
         result <- sorted.partitionMerge(DerefObjectStatic(Leaf(Source), CPathField("groupKeys"))) { partition =>
@@ -1798,7 +1801,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                            // transform to get just the information related to the particular groupId,
                            for {
                              partitionSorted <- partition.transform(recordTrans).sort(sortByTrans, unique = true)
-                             json <- partitionSorted.toJson
+                             //json <- partitionSorted.toJson
                              //_ = println("group " + groupId + " partition: " + json.mkString("\n"))
                            } yield {
                              groupId -> partitionSorted.transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
@@ -1854,7 +1857,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       Table(Table.transformStream(composeSliceTransform(spec), slices), this.size)
     }
     
-    def force: M[Table] = this.sort(Scan(Leaf(Source), freshIdScanner), SortAscending)
+    def force: M[Table] = this.sort(Scan(Leaf(Source), freshIdScanner), SortAscending) //, unique = true)
     
     def paged(limit: Int): Table = {
       val slices2 = slices flatMap { slice =>
