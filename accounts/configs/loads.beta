@@ -1,0 +1,6 @@
+/etc/precog/accounts-v1-beta.conf=beta/accounts-v1-beta.conf
+default=beta/accounts-v1-beta.default
+init=beta/accounts-v1-beta.init
+/etc/monit/conf.d/accounts-v1-beta.monit=beta/accounts-v1-beta.monit
+/etc/precog/accounts-v1-beta.logging.xml=beta/accounts-v1-beta.logging.xml
+postinstall=beta/postinstall.sh

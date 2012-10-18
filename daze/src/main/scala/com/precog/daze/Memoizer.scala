@@ -13,7 +13,7 @@ trait Memoizer extends DAG {
   val MemoThreshold = 1
   
   def memoize(graph: DepGraph): DepGraph = {
-    val refs = findForcingRefs(graph, None)
+    val refs = findForcingRefs(graph, Some(graph))
     
     def numRefs(node: DepGraph) = refs get node map { _.size } getOrElse 0
     
@@ -37,7 +37,12 @@ trait Memoizer extends DAG {
         
         case dag.Root(_, _) => target
         
-        case dag.New(loc, parent) => dag.New(loc, memoized(splits)(parent))
+        case dag.New(loc, parent) => {
+          if (numRefs(node) > MemoThreshold)
+            Memoize(dag.New(loc, memoized(splits)(parent)), scaleMemoPriority(numRefs(node)))
+          else
+            dag.New(loc, memoized(splits)(parent))
+        }
         
         case node @ dag.Morph1(loc, m, parent) => {
           if (numRefs(node) > MemoThreshold)
@@ -176,7 +181,8 @@ trait Memoizer extends DAG {
   private def findForcingRefs(graph: DepGraph, force: Option[DepGraph]): Map[DepGraph, Set[DepGraph]] = graph match {
     case SplitParam(_, _) | SplitGroup(_, _, _) | Root(_, _) => Map()
     
-    case New(_, parent) => findForcingRefs(parent, force)
+    case New(_, parent) =>
+      updateMap(findForcingRefs(parent, force), graph, force)
     
     case Morph1(_, _, parent) =>
       updateMap(findForcingRefs(parent, Some(graph)), graph, force)
@@ -196,13 +202,13 @@ trait Memoizer extends DAG {
       findForcingRefs(parent, force)
     
     case Reduce(_, _, parent) =>
-      updateMap(findForcingRefs(parent, Some(graph)), graph, force)
+      findForcingRefs(parent, Some(graph))      // reduce is a forcing point, but not a memo candidate
     
     case MegaReduce(_, _, parent) =>
       updateMap(findForcingRefs(parent, Some(graph)), graph, force)
     
     case graph @ Split(_, spec, child) => {
-      val childRefs = findForcingRefs(child, None)
+      val childRefs = findForcingRefs(child, Some(graph))
       val specRefs = findForcingRefsInSpec(spec, graph)
       
       updateMap(childRefs |+| specRefs, graph, force)
@@ -218,7 +224,7 @@ trait Memoizer extends DAG {
       updateMap(merged, graph, force)
     }
     
-    case Join(_, _, CrossLeftSort | CrossRightSort, left, right) if !left.value.isDefined && !right.value.isDefined => {
+    case Join(_, _, CrossLeftSort | CrossRightSort, left, right) if !left.isInstanceOf[Root] && !right.isInstanceOf[Root] => {
       val merged = findForcingRefs(left, Some(graph)) |+| findForcingRefs(right, Some(graph))
       updateMap(merged, graph, force)
     }
@@ -232,7 +238,7 @@ trait Memoizer extends DAG {
     case Join(_, _, _, left, right) =>
       findForcingRefs(left, force) |+| findForcingRefs(right, force)
     
-    case Filter(_, CrossLeftSort | CrossRightSort, target, boolean) if !target.value.isDefined && !boolean.value.isDefined => {
+    case Filter(_, CrossLeftSort | CrossRightSort, target, boolean) if !target.isInstanceOf[Root] && !boolean.isInstanceOf[Root] => {
       val merged = findForcingRefs(target, Some(graph)) |+| findForcingRefs(boolean, Some(graph))
       updateMap(merged, graph, force)
     }

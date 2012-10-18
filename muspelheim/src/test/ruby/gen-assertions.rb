@@ -178,6 +178,34 @@ module Tests
       end
     end
     
+    def test_determine_page0_page1_ratios
+      # clicks := //clicks
+      clicks = load_file 'clicks.json'
+      
+      # spacings := solve 'time
+      #   click := clicks where clicks.time = 'time
+      click_zones = clicks.map { |c| c['timeZone'] }.uniq
+      
+      ratios = click_zones.map do |tz|
+        clicks0 = clicks.select { |c| c['timeZone'] == tz && c['pageId'] == 'page-0' }
+        clicks1 = clicks.select { |c| c['timeZone'] == tz && c['pageId'] == 'page-1' }
+        
+        if (clicks0.size != 0 && clicks1.size != 0) 
+          [{
+            'timeZone' => tz,
+            'ratio' => 100.0 * (clicks0.size.to_f / clicks1.size.to_f)
+          }]
+        else
+          []
+        end
+      end.flatten
+      
+      results_must " haveSize(#{ratios.size})"
+      ratios.each do |res|
+        results_must " contain(#{render_value res})"
+      end
+    end
+    
     def test_perform_a_simple_join_by_value_sorting
       # clicks := //clicks
       clicks = load_file 'clicks.json'
@@ -226,7 +254,11 @@ def render_value(value)
     "SString(\"#{value}\")"
   elsif Fixnum === value
     "SDecimal(BigDecimal(\"#{value}\"))"
-  elsif Boolean === value
+  elsif Float === value
+    "SDecimal(BigDecimal(\"#{value}\"))"
+  elsif TrueClass === value
+    "SBoolean(#{value})"
+  elsif FalseClass === value
     "SBoolean(#{value})"
   else
     ''

@@ -218,7 +218,7 @@ object Console extends App {
   val controlTimeout = Duration(120, "seconds")
   class REPLConfig(dataDir: Option[String]) extends 
       BaseConfig with 
-      DatasetConsumersConfig with 
+      EvaluatorConfig with
       StandaloneShardSystemConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
     val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
@@ -231,6 +231,8 @@ object Console extends App {
     val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
+    
+    val maxSliceSize = 10000
 
     //TODO: Get a producer ID
     val idSource = new IdSource {
@@ -243,11 +245,11 @@ object Console extends App {
     new REPLConfig(dataDir)
   }
 
-  val repl: IO[scalaz.Validation[blueeyes.json.xschema.Extractor.Error, Lifecycle]] = for {
+  val repl: IO[scalaz.Validation[blueeyes.json.serialization.Extractor.Error, Lifecycle]] = for {
     replConfig <- loadConfig(args.headOption) 
     fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, replConfig.archiveDir, FilesystemFileOps)
   } yield {
-      scalaz.Success[blueeyes.json.xschema.Extractor.Error, Lifecycle](new REPL 
+      scalaz.Success[blueeyes.json.serialization.Extractor.Error, Lifecycle](new REPL 
           with Lifecycle 
           with BlockStoreColumnarTableModule[Future]
           with JDBMProjectionModule

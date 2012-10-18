@@ -27,8 +27,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     Add, Neg,
     DerefArray, DerefObject,
     ArraySwap, WrapObject, JoinObject,
-    Map2Cross, Map2CrossLeft, Map2CrossRight, Map2Match,
-    PushString, PushNum
+    Map2Cross, Map2CrossLeft, Map2CrossRight, Map2Match
   }
   import bytecode._
 
@@ -81,7 +80,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
 
       case New(_, parent) => extractLoads(parent)
 
-      case LoadLocal(_, Root(_, PushString(path)), jtpe) => Map(path -> flattenType(jtpe))
+      case LoadLocal(_, Root(_, CString(path)), jtpe) => Map(path -> flattenType(jtpe))
 
       case Operate(_, _, parent) => extractLoads(parent)
 
@@ -115,8 +114,8 @@ trait TypeInferencerSpec[M[+_]] extends Specification
 
       val input =
         Join(line, DerefObject, CrossLeftSort,
-          LoadLocal(line, Root(line, PushString("/file"))),
-          Root(line, PushString("column")))
+          LoadLocal(line, Root(line, CString("/file"))),
+          Root(line, CString("column")))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
       
@@ -134,8 +133,8 @@ trait TypeInferencerSpec[M[+_]] extends Specification
         Operate(line, Neg,
           New(line,
             Join(line, DerefObject, CrossLeftSort, 
-              LoadLocal(line, Root(line, PushString("/file"))),
-              Root(line, PushString("column")))))
+              LoadLocal(line, Root(line, CString("/file"))),
+              Root(line, CString("column")))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -152,8 +151,8 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Operate(line, Neg,
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file"))),
-            Root(line, PushString("column"))))
+            LoadLocal(line, Root(line, CString("/file"))),
+            Root(line, CString("column"))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -170,8 +169,8 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Reduce(line, Mean,
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file"))),
-            Root(line, PushString("column"))))
+            LoadLocal(line, Root(line, CString("/file"))),
+            Root(line, CString("column"))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -188,8 +187,8 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Morph1(line, Median,
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file"))),
-            Root(line, PushString("column"))))
+            LoadLocal(line, Root(line, CString("/file"))),
+            Root(line, CString("column"))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -206,11 +205,11 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Morph2(line, Covariance,
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file0"))),
-            Root(line, PushString("column0"))),
+            LoadLocal(line, Root(line, CString("/file0"))),
+            Root(line, CString("column0"))),
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file1"))),
-            Root(line, PushString("column1"))))
+            LoadLocal(line, Root(line, CString("/file1"))),
+            Root(line, CString("column1"))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -229,8 +228,8 @@ trait TypeInferencerSpec[M[+_]] extends Specification
         Operate(line, Neg,
           New(line,
             Join(line, DerefArray, CrossLeftSort, 
-              LoadLocal(line, Root(line, PushString("/file"))),
-              Root(line, PushNum("0")))))
+              LoadLocal(line, Root(line, CString("/file"))),
+              Root(line, CLong(0)))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -247,11 +246,11 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Join(line, ArraySwap, CrossLeftSort,
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file0"))),
-            Root(line, PushString("column0"))),
+            LoadLocal(line, Root(line, CString("/file0"))),
+            Root(line, CString("column0"))),
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file1"))),
-            Root(line, PushString("column1"))))
+            LoadLocal(line, Root(line, CString("/file1"))),
+            Root(line, CString("column1"))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -269,11 +268,11 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Join(line, WrapObject, CrossLeftSort,
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file0"))),
-            Root(line, PushString("column0"))),
+            LoadLocal(line, Root(line, CString("/file0"))),
+            Root(line, CString("column0"))),
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file1"))),
-            Root(line, PushString("column1"))))
+            LoadLocal(line, Root(line, CString("/file1"))),
+            Root(line, CString("column1"))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -291,11 +290,11 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Join(line, BuiltInFunction2Op(min), IdentitySort,
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file0"))),
-            Root(line, PushString("column0"))),
+            LoadLocal(line, Root(line, CString("/file0"))),
+            Root(line, CString("column0"))),
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file0"))),
-            Root(line, PushString("column1"))))
+            LoadLocal(line, Root(line, CString("/file0"))),
+            Root(line, CString("column1"))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -315,11 +314,11 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Filter(line, IdentitySort,
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file0"))),
-            Root(line, PushString("column0"))),
+            LoadLocal(line, Root(line, CString("/file0"))),
+            Root(line, CString("column0"))),
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/file1"))),
-            Root(line, PushString("column1"))))
+            LoadLocal(line, Root(line, CString("/file1"))),
+            Root(line, CString("column1"))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -338,8 +337,8 @@ trait TypeInferencerSpec[M[+_]] extends Specification
         Operate(line, Neg,
           Sort(
             Join(line, DerefObject, CrossLeftSort, 
-              LoadLocal(line, Root(line, PushString("/file"))),
-              Root(line, PushString("column"))),
+              LoadLocal(line, Root(line, CString("/file"))),
+              Root(line, CString("column"))),
             Vector()
           )
         )
@@ -360,8 +359,8 @@ trait TypeInferencerSpec[M[+_]] extends Specification
         Operate(line, Neg,
           SortBy(
             Join(line, DerefObject, CrossLeftSort, 
-              LoadLocal(line, Root(line, PushString("/file"))),
-              Root(line, PushString("column"))),
+              LoadLocal(line, Root(line, CString("/file"))),
+              Root(line, CString("column"))),
             "foo", "bar", 23
           )
         )
@@ -382,8 +381,8 @@ trait TypeInferencerSpec[M[+_]] extends Specification
         Operate(line, Neg,
           Memoize(
             Join(line, DerefObject, CrossLeftSort, 
-              LoadLocal(line, Root(line, PushString("/file"))),
-              Root(line, PushString("column"))),
+              LoadLocal(line, Root(line, CString("/file"))),
+              Root(line, CString("column"))),
             23
           )
         )
@@ -404,8 +403,8 @@ trait TypeInferencerSpec[M[+_]] extends Specification
         Operate(line, Neg,
           Distinct(line,
             Join(line, DerefObject, CrossLeftSort, 
-              LoadLocal(line, Root(line, PushString("/file"))),
-              Root(line, PushString("column")))))
+              LoadLocal(line, Root(line, CString("/file"))),
+              Root(line, CString("column")))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -419,7 +418,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     "propagate structure/type information through Split nodes (1)" in {
       val line = Line(0, "")
 
-      def clicks = LoadLocal(line, Root(line, PushString("/file")))
+      def clicks = LoadLocal(line, Root(line, CString("/file")))
 
       lazy val input: Split =
         Split(line,
@@ -429,14 +428,14 @@ trait TypeInferencerSpec[M[+_]] extends Specification
             UnfixedSolution(0, 
               Join(line, DerefObject, CrossLeftSort,
                 clicks,
-                Root(line, PushString("column0"))))),
+                Root(line, CString("column0"))))),
           Join(line, Add, CrossLeftSort,
             Join(line, DerefObject, CrossLeftSort,
               SplitParam(line, 0)(input),
-              Root(line, PushString("column1"))),
+              Root(line, CString("column1"))),
             Join(line, DerefObject, CrossLeftSort,
               SplitGroup(line, 1, clicks.identities)(input),
-              Root(line, PushString("column2")))))
+              Root(line, CString("column2")))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -454,23 +453,23 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     
     "propagate structure/type information through Split nodes (2)" in {
       val line = Line(0, "")
-      def clicks = LoadLocal(line, Root(line, PushString("/clicks")))
+      def clicks = LoadLocal(line, Root(line, CString("/clicks")))
       
       // clicks := //clicks forall 'user { user: 'user, num: count(clicks.user where clicks.user = 'user) }
       lazy val input: Split =
         Split(line,
           Group(0,
-            Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("user"))),
+            Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("user"))),
             UnfixedSolution(1,
               Join(line, DerefObject, CrossLeftSort,
                 clicks,
-                Root(line, PushString("user"))))),
+                Root(line, CString("user"))))),
           Join(line, JoinObject, CrossLeftSort,
             Join(line, WrapObject, CrossLeftSort,
-              Root(line, PushString("user")),
+              Root(line, CString("user")),
               SplitParam(line, 1)(input)),
             Join(line, WrapObject, CrossLeftSort,
-              Root(line, PushString("num")),
+              Root(line, CString("num")),
               Reduce(line, Count,
                 SplitGroup(line, 0, clicks.identities)(input)))))
 
@@ -487,31 +486,31 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     
     "propagate structure/type information through Split nodes (3)" in {
       val line = Line(0, "")
-      def clicks = LoadLocal(line, Root(line, PushString("/clicks")))
+      def clicks = LoadLocal(line, Root(line, CString("/clicks")))
       
       // clicks := //clicks forall 'user { user: 'user, age: clicks.age, num: count(clicks.user where clicks.user = 'user) }
       lazy val input: Split =
         Split(line,
           Group(0,
-            Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("user"))),
+            Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("user"))),
             UnfixedSolution(1,
               Join(line, DerefObject, CrossLeftSort,
                 clicks,
-                Root(line, PushString("user"))))),
+                Root(line, CString("user"))))),
           Join(line, JoinObject, CrossLeftSort,
             Join(line, JoinObject, CrossLeftSort,
               Join(line, WrapObject, CrossLeftSort,
-                Root(line, PushString("user")),
+                Root(line, CString("user")),
                 SplitParam(line, 1)(input)),
               Join(line, WrapObject, CrossLeftSort,
-                Root(line, PushString("num")),
+                Root(line, CString("num")),
                 Reduce(line, Count,
                   SplitGroup(line, 0, clicks.identities)(input)))),
             Join(line, WrapObject, CrossLeftSort,
-              Root(line, PushString("age")),
+              Root(line, CString("age")),
               Join(line, DerefObject, CrossLeftSort,
                 clicks,
-                Root(line, PushString("age"))))))
+                Root(line, CString("age"))))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -531,11 +530,11 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Join(line, Add, IdentitySort,
           Join(line, DerefObject, CrossLeftSort, 
-            LoadLocal(line, Root(line, PushString("/clicks"))),
-            Root(line, PushString("time"))),
+            LoadLocal(line, Root(line, CString("/clicks"))),
+            Root(line, CString("time"))),
           Join(line, DerefObject, CrossLeftSort,
-            LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
-            Root(line, PushString("height"))))
+            LoadLocal(line, Root(line, CString("/hom/heightWeight"))),
+            Root(line, CString("height"))))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -550,14 +549,14 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     "negate type inference from deref by wrap" in {
       val line = Line(0, "")
       
-      val clicks = LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks = LoadLocal(line, Root(line, CString("/clicks")))
       
       val input =
         Join(line, DerefObject, CrossLeftSort,
           Join(line, WrapObject, CrossLeftSort,
-            Root(line, PushString("foo")),
+            Root(line, CString("foo")),
             clicks),
-          Root(line, PushString("foo")))
+          Root(line, CString("foo")))
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -570,24 +569,24 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     "propagate type information through split->wrap->deref" in {
       val line = Line(0, "")
       
-      val clicks = LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks = LoadLocal(line, Root(line, CString("/clicks")))
       
       val clicksTime =
         Join(line, DerefObject, CrossLeftSort,
           clicks,
-          Root(line, PushString("time")))
+          Root(line, CString("time")))
       
       lazy val split: dag.Split =
         Split(line,
           Group(0, clicks, UnfixedSolution(1, clicksTime)),
           Join(line, WrapObject, CrossLeftSort,
-            Root(line, PushString("foo")),
+            Root(line, CString("foo")),
             SplitGroup(line, 0, Vector(LoadIds("/clicks")))(split)))
             
       val input =
         Join(line, DerefObject, CrossLeftSort,
           split,
-          Root(line, PushString("foo")))
+          Root(line, CString("foo")))
       
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
       
