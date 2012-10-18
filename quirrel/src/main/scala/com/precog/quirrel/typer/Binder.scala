@@ -327,8 +327,7 @@ trait Binder extends parser.AST with Library {
     def buildChains(env: Map[(Identifier, Let), Set[List[Expr]]])(expr: Expr): Set[List[Expr]] = expr match {
       case Let(_, _, _, _, right) => buildChains(env)(right) map { expr :: _ }
       
-      case Solve(_, constraints, right) =>
-        ((constraints map buildChains(env) reduce { _ ++ _ }) ++ buildChains(env)(right)) map { expr :: _ }
+      case expr @ Solve(_, _, _) => Set(expr :: Nil)
       
       case Import(_, _, child) => buildChains(env)(child) map { expr :: _ }
       case New(_, child) => buildChains(env)(child) map { expr :: _ }
