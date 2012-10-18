@@ -66,6 +66,8 @@ object SBTConsole {
         extends BaseConfig 
         with EvaluatorConfig
         with StandaloneShardSystemConfig
+        with JDBMProjectionModuleConfig
+        with BlockStoreColumnarTableModuleConfig
 
     trait TableCompanion extends BlockStoreColumnarTableCompanion {
       import scalaz.std.anyVal._

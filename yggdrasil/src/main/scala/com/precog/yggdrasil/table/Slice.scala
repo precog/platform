@@ -1135,7 +1135,9 @@ trait Slice { source =>
     }
   }
 
-  def toJsonString: String = (0 until size).map(toJson).mkString("\n")
+  def toJsonString(prefix: String = ""): String = {
+    (0 until size).map(i => prefix +" "+ toJson(i)).mkString("\n")
+  }
 
   override def toString = (0 until size).map(toString(_).getOrElse("")).mkString("\n")
 }

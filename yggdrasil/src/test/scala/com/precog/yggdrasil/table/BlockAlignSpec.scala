@@ -24,6 +24,7 @@ import com.precog.common._
 import com.precog.common.json._
 import com.precog.util._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.test._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -305,74 +306,156 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
     testAlign(sample.sortBy(_ \ "key"))
   }
 
-  def testAlignSymmetry = {
+
+  def testAlignSymmetry(i: Int) = {
     val module = BlockStoreTestModule.empty[M]
 
     import module._
     import module.trans._
     import module.trans.constants._
 
-    val alignOnL = DerefArrayStatic(Leaf(Source), CPathIndex(1))
-    val alignOnR = DerefArrayStatic(Leaf(Source), CPathIndex(1))
-    val JArray(sourceLeft) = JsonParser.parse("""[
-      [[3],{ "000000":-1 },-1],
-      [[4],{ "000000":0 },0],
-      [[5],{ "000000":0 },0],
-      [[0],{ "000000":1 },1],
-      [[2],{ "000000":2126441435 },2126441435],
-      [[1],{ "000000":2147483647 },2147483647]
-    ]""")
+    def test(ltable: Table, alignOnL: TransSpec1, rtable: Table, alignOnR: TransSpec1) = {
+      val (ljsondirect, rjsondirect) = (for {
+        aligned <- Table.align(ltable, alignOnL, rtable, alignOnR)
+        ljson <- aligned._1.toJson
+        rjson <- aligned._2.toJson
+      } yield {
+        (ljson, rjson)
+      }).copoint
 
-    val JArray(sourceRight) = JsonParser.parse("""[
-      [[1],{ "000000":-2147483648 },-2147483648],
-      [[6],{ "000000":-1904025337 },-1904025337],
-      [[2],{ "000000":-1456034303 },-1456034303],
-      [[4],{ "000000":0 },0],
-      [[0],{ "000000":2006322377 },2006322377],
-      [[3],{ "000000":2147483647 },2147483647],
-      [[5],{ "000000":2147483647 },2147483647]
-    ]""")
+      val (ljsonreversed, rjsonreversed) = (for {
+        aligned <- Table.align(rtable, alignOnR, ltable, alignOnL) 
+        ljson <- aligned._1.toJson
+        rjson <- aligned._2.toJson
+      } yield {
+        (ljson, rjson)
+      }).copoint
 
-    val JArray(lexpected) = JsonParser.parse("""[
-      [[4],{ "000000":0 },0],
-      [[5],{ "000000":0 },0],
-      [[1],{ "000000":2147483647 },2147483647]
-    ]""")
+      (ljsonreversed.toList must_== rjsondirect.toList) and
+      (rjsonreversed.toList must_== ljsondirect.toList)
+    }
 
-    val JArray(rexpected) = JsonParser.parse("""[
-      [[4],{ "000000":0 },0],
-      [[3],{ "000000":2147483647 },2147483647],
-      [[5],{ "000000":2147483647 },2147483647]
-    ]""")
+    def test0 = {
+      val lsortedOn = DerefArrayStatic(Leaf(Source), CPathIndex(1))
+      val rsortedOn = DerefArrayStatic(Leaf(Source), CPathIndex(1))
+      val JArray(ljson) = JsonParser.parse("""[
+        [[3],{ "000000":-1 },-1],
+        [[4],{ "000000":0 },0],
+        [[5],{ "000000":0 },0],
+        [[0],{ "000000":1 },1],
+        [[2],{ "000000":2126441435 },2126441435],
+        [[1],{ "000000":2147483647 },2147483647]
+      ]""")
 
-    
-    val (ljson, rjson) = (for {
-      aligned <- Table.align(fromJson(sourceLeft.toStream), alignOnL, fromJson(sourceRight.toStream), alignOnR)
-      ljson <- aligned._1.toJson
-      rjson <- aligned._2.toJson
-    } yield {
-      (ljson, rjson)
-    }).copoint
+      val JArray(rjson) = JsonParser.parse("""[
+        [[1],{ "000000":-2147483648 },-2147483648],
+        [[6],{ "000000":-1904025337 },-1904025337],
+        [[2],{ "000000":-1456034303 },-1456034303],
+        [[4],{ "000000":0 },0],
+        [[0],{ "000000":2006322377 },2006322377],
+        [[3],{ "000000":2147483647 },2147483647],
+        [[5],{ "000000":2147483647 },2147483647]
+      ]""")
 
-    ljson must_== lexpected.toStream
-    rjson must_== rexpected.toStream
-    
-    val (ljsonreversed, rjsonreversed) = (for {
-      aligned <- Table.align(fromJson(sourceRight.toStream), alignOnR, fromJson(sourceLeft.toStream), alignOnL) 
-      ljson <- aligned._1.toJson
-      rjson <- aligned._2.toJson
-    } yield {
-      (ljson, rjson)
-    }).copoint
+      test(fromJson(ljson.toStream), lsortedOn, fromJson(rjson.toStream), rsortedOn)
+    }
 
-    ljsonreversed must_== rexpected.toStream
-    rjsonreversed must_== lexpected.toStream
+    def test1 = {
+      val JArray(ljson) = JsonParser.parse("""[
+        [[10],{ "000001":-2, "000000":42 },{ "a":42, "b":-2 }],
+        [[7],{ "000001":6, "000000":17 },{ "a":17, "b":6 }],
+        [[0],{ "000001":12, "000000":42 },{ "a":42, "b":12 }],
+        [[5],{ "000001":12, "000000":42 },{ "a":42, "b":12 }],
+        [[9],{ "000001":12, "000000":21 },{ "a":21, "b":12 }],
+        [[13],{ "000001":12, "000000":42 },{ "a":42, "b":12 }],
+        [[6],{ "000001":42, "000000":7 },{ "a":7, "b":42 }],
+        [[12],{ "000001":42, "000000":7 },{ "a":7, "b":42 }]
+      ]""")
+
+      val lsortedOn = OuterObjectConcat(WrapObject(
+        DerefObjectStatic(
+          OuterObjectConcat(
+            WrapObject(DerefObjectStatic(DerefArrayStatic(Leaf(Source),CPathIndex(1)),
+                                         CPathField("000001")),"000000"), 
+            WrapObject(DerefObjectStatic(DerefArrayStatic(Leaf(Source),CPathIndex(1)),
+                                         CPathField("000000")),"000001")
+          ),
+          CPathField("000000")
+        ),
+        "000000"
+      ))
+
+      val JArray(rjson) = JsonParser.parse("""[
+        [[3],{ "000000":1 },{ "b":1 }],
+        [[1],{ "000000":6 },{ "b":6 }],
+        [[0],{ "000000":12 },{ "b":12 }],
+        [[4],{ "000000":12 },{ "b":12 }],
+        [[6],{ "000000":42 },{ "b":42 }]
+      ]""")
+
+      val rsortedOn = DerefArrayStatic(Leaf(Source),CPathIndex(1))
+
+      test(fromJson(ljson.toStream), lsortedOn, fromJson(rjson.toStream), rsortedOn)
+    }
+
+    def test2 = {
+      val JArray(ljson) = JsonParser.parse("""[
+        [[6],{ "000001":42, "000000":7 },{ "a":7, "b":42 }],
+        [[12],{ "000001":42, "000000":7 },{ "a":7, "b":42 }],
+        [[7],{ "000001":6, "000000":17 },{ "a":17, "b":6 }],
+        [[9],{ "000001":12, "000000":21 },{ "a":21, "b":12 }]
+      ]""")
+      val JArray(ljson2) = JsonParser.parse("""[
+        [[0],{ "000001":12, "000000":42 },{ "a":42, "b":12 }],
+        [[5],{ "000001":12, "000000":42 },{ "a":42, "b":12 }],
+        [[10],{ "000001":-2, "000000":42 },{ "a":42, "b":-2 }],
+        [[13],{ "000001":12, "000000":42 },{ "a":42, "b":12 }]
+      ]""")
+
+      val lsortedOn = OuterObjectConcat(WrapObject(
+        DerefObjectStatic(
+          OuterObjectConcat(
+            WrapObject(DerefObjectStatic(DerefArrayStatic(Leaf(Source),CPathIndex(1)),
+                                         CPathField("000000")),"000000"), 
+            WrapObject(DerefObjectStatic(DerefArrayStatic(Leaf(Source),CPathIndex(1)),
+                                         CPathField("000001")),"000001")
+          ),
+          CPathField("000000")
+        ),
+        "000000"
+      ))
+
+      val JArray(rjson) = JsonParser.parse("""[
+        [[6],{ "000000":7 },{ "a":7, "b":42 }],
+        [[12],{ "000000":7 },{ "a":7 }],
+        [[7],{ "000000":17 },{ "a":17, "c":77 }]
+      ]""")
+      val JArray(rjson2) = JsonParser.parse("""[
+        [[0],{ "000000":42 },{ "a":42 }],
+        [[1],{ "000000":42 },{ "a":42 }],
+        [[13],{ "000000":42 },{ "a":42 }],
+        [[2],{ "000000":77 },{ "a":77 }]
+      ]""")
+
+      val rsortedOn = DerefArrayStatic(Leaf(Source),CPathIndex(1))
+
+      val ltable = Table(fromJson(ljson.toStream).slices ++ fromJson(ljson2.toStream).slices)
+      val rtable = Table(fromJson(rjson.toStream).slices ++ fromJson(rjson2.toStream).slices)
+
+      test(ltable, lsortedOn, rtable, rsortedOn)
+    }
+
+    i match {
+      case 0 => test0 
+      case 1 => test1
+      case 2 => test2
+    }
   }
 }
 
-object BlockAlignSpec extends TableModuleSpec[Free.Trampoline] with BlockAlignSpec[Free.Trampoline] {
-  implicit def M = Trampoline.trampolineMonad
-
+//object BlockAlignSpec extends TableModuleSpec[Free.Trampoline] with BlockAlignSpec[Free.Trampoline] {
+//  implicit def M = Trampoline.trampolineMonad
+object BlockAlignSpec extends TableModuleSpec[YId] with BlockAlignSpec[YId] with YIdInstances {
   type YggConfig = IdSourceConfig
   val yggConfig = new IdSourceConfig {
     val idSource = new IdSource {
@@ -385,7 +468,9 @@ object BlockAlignSpec extends TableModuleSpec[Free.Trampoline] with BlockAlignSp
     "a simple example" in alignSimple
     "across slice boundaries" in alignAcrossBoundaries
     "survive a trivial scalacheck" in checkAlign
-    "produce the same results irrespective of input order" in testAlignSymmetry
+    "produce the same results irrespective of input order" in testAlignSymmetry(0)
+    "produce the same results irrespective of input order" in testAlignSymmetry(1)
+    "produce the same results irrespective of input order" in testAlignSymmetry(2)
   }
 }
 // vim: set ts=4 sw=4 et:
