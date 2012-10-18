@@ -60,6 +60,7 @@ import scalaz.std.set._
 import scalaz.std.stream._
 import scalaz.syntax.arrow._
 import scalaz.syntax.monad._
+import scalaz.syntax.monoid._
 import scalaz.syntax.show._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
@@ -1111,18 +1112,18 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   case (aSorted, bSorted) => 
                     for {
                       ljson <- aSorted.table.slices.toStream
-                      _ = println("=============================================================")
-                      _ = println("using merge edge (" + a.describe + " with " + aSorted.groupKeyPrefix + ")-(" + b.describe + " with " + bSorted.groupKeyPrefix + ")")
-                      _ = println(aSorted.sortedOn)
-                      _ = println("lsorted\n" + ljson.map(_.toJsonString()).mkString("\n---\n"))
+                      //_ = println("=============================================================")
+                      //_ = println("using merge edge (" + a.describe + " with " + aSorted.groupKeyPrefix + ")-(" + b.describe + " with " + bSorted.groupKeyPrefix + ")")
+                      //_ = println(aSorted.sortedOn)
+                      //_ = println("lsorted\n" + ljson.map(_.toJsonString()).mkString("\n---\n"))
                       rjson <- bSorted.table.slices.toStream
-                      _ = println(bSorted.sortedOn)
-                      _ = println("rsorted\n" + rjson.map(_.toJsonString()).mkString("\n---\n"))
+                      //_ = println(bSorted.sortedOn)
+                      //_ = println("rsorted\n" + rjson.map(_.toJsonString()).mkString("\n---\n"))
                       aligned <- Table.align(aSorted.table, aSorted.sortedOn, bSorted.table, bSorted.sortedOn)
                       aljson <- aligned._1.slices.toStream
-                      _ = println("laligned\n" + aljson.map(_.toJsonString()).mkString("\n---\n"))
+                      //_ = println("laligned\n" + aljson.map(_.toJsonString()).mkString("\n---\n"))
                       arjson <- aligned._2.slices.toStream
-                      _ = println("raligned\n" + arjson.map(_.toJsonString()).mkString("\n---\n"))
+                      //_ = println("raligned\n" + arjson.map(_.toJsonString()).mkString("\n---\n"))
                     } yield {
                       List(
                         aSorted.copy(table = aligned._1),
@@ -1864,9 +1865,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
+
     def reduce[A](reducer: Reducer[A])(implicit monoid: Monoid[A]): M[A] = {  
-      (slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }).foldLeft(monoid.zero)((a, b) => monoid.append(a, b))
-    }
+      def rec(stream: StreamT[M, A], acc: A): M[A] = {
+        stream.uncons flatMap {
+          case Some((head, tail)) => rec(tail, head |+| acc) 
+          case None => M.point(acc)
+        }    
+      }    
+
+      rec(slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }, monoid.zero)
+    }    
 
     def compact(spec: TransSpec1): Table = {
       val specTransform = SliceTransform.composeSliceTransform(spec)
