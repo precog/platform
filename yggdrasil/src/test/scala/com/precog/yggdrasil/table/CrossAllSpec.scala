@@ -22,7 +22,7 @@ package table
 
 import org.specs2.mutable.Specification
 
-import blueeyes.json.JPathField
+import com.precog.common.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 
@@ -64,8 +64,8 @@ trait CrossAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
 
   def simpleCrossAllTest = {
     import crossAllData._
-    val varsLeft = Seq(JPathField("a"))
-    val varsRight = Seq(JPathField("b"))
+    val varsLeft = Seq(CPathField("a"))
+    val varsRight = Seq(CPathField("b"))
   
     val leftBorg = BorgResult(fromJson(leftData.toStream), varsLeft, Set(1))
     val rightBorg = BorgResult(fromJson(rightData.toStream), varsRight, Set(1))

@@ -28,16 +28,15 @@ import org.scalacheck.Arbitrary._
 
 import org.joda.time.DateTime
 
-import scala.collection.BitSet
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
 
 trait ArbitrarySlice extends ArbitraryProjectionDescriptor {
   def arbitraryBitSet(size: Int): Gen[BitSet] = {
     containerOfN[List, Boolean](size, arbitrary[Boolean]) map { BitsetColumn.bitset _ }
   }
 
-  private def fullBitSet(size: Int): BitSet = {
-    BitSet((0 until size).toSeq : _*)
-  }
+  private def fullBitSet(size: Int): BitSet = BitSetUtil.range(0, size)
 
   def genColumn(col: ColumnDescriptor, size: Int): Gen[Column] = {
     val bs = fullBitSet(size)

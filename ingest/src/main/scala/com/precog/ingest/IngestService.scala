@@ -34,14 +34,22 @@ import blueeyes.BlueEyesServiceBuilder
 import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
 import blueeyes.health.metrics.{eternity}
 
+import blueeyes.core.http._
+import blueeyes.json.JsonAST._
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder
+
 import org.streum.configrity.Configuration
 
 import scalaz.Monad
 import scalaz.syntax.monad._
 
-case class IngestState(tokenManager: TokenManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging)
+import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
 
-trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators with AkkaDefaults { 
+case class IngestState(apiKeyManager: APIKeyManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: ExecutorService)
+
+trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
+with DecompressCombinators with AkkaDefaults { 
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
@@ -51,7 +59,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
   implicit val timeout = akka.util.Timeout(120000) //for now
   implicit def M: Monad[Future]
 
-  def tokenManagerFactory(config: Configuration): TokenManager[Future]
+  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
   def eventStoreFactory(config: Configuration): EventStore
   def usageLoggingFactory(config: Configuration): UsageLogging 
 
@@ -62,29 +70,57 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           import context._
 
           val eventStore = eventStoreFactory(config.detach("eventStore"))
-          val tokenManager = tokenManagerFactory(config.detach("security"))
-          val accessControl = new TokenManagerAccessControl(tokenManager)
+          val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
+          val accessControl = new APIKeyManagerAccessControl(apiKeyManager)
+
+          // Set up a thread pool for ingest tasks
+          val readPool = new ThreadPoolExecutor(config[Int]("readpool.min_threads", 2),
+                                                config[Int]("readpool.max_threads", 8),
+                                                config[Int]("readpool.keepalive_seconds", 5),
+                                                TimeUnit.SECONDS,
+                                                new ArrayBlockingQueue[Runnable](config[Int]("readpool.queue_size", 50)),
+                                                new ThreadFactoryBuilder().setNameFormat("ingestpool-%d").build())
 
           eventStore.start map { _ =>
             IngestState(
-              tokenManager,
+              apiKeyManager,
               accessControl,
               eventStore,
-              usageLoggingFactory(config.detach("usageLogging"))
+              usageLoggingFactory(config.detach("usageLogging")),
+              readPool
             )
           }
         } ->
         request { (state: IngestState) =>
-          jsonp[ByteChunk] {
-            token(state.tokenManager) {
-              dataPath("vfs") {
-                post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout)(defaultFutureDispatch)) ~
-                delete(new ArchiveServiceHandler(state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
+          decompress {
+            jsonpOrChunk {
+              apiKey(state.apiKeyManager) {
+                path("/(?<sync>a?sync)") {
+                  dataPath("fs") {
+                    post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch)) ~
+                    delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
+                  }
+                }
               }
             }
           }
         } ->
-        shutdown { state => Future[Option[Stoppable]]( None ) }
+        shutdown { state => 
+          for {
+            _ <- state.eventStore.stop
+            _ <- state.apiKeyManager.close()
+          } yield {
+            logger.info("Stopping read threads")
+            state.ingestPool.shutdown()
+            if (!state.ingestPool.awaitTermination(timeout.duration.toMillis, TimeUnit.MILLISECONDS)) {
+              logger.warn("Forcibly terminating remaining read threads")
+              state.ingestPool.shutdownNow()
+            } else {
+              logger.info("Read threads stopped")
+            }
+            Option.empty[Stoppable]
+          }
+        }
       }
     }
   }

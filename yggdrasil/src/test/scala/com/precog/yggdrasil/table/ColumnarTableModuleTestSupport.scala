@@ -23,6 +23,7 @@ package table
 import com.precog.bytecode.JType
 import com.precog.common.Path
 import com.precog.common.VectorCase
+import com.precog.common.json._
 
 import akka.actor.ActorSystem
 
@@ -32,13 +33,15 @@ import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
 
 import scala.annotation.tailrec
-import scala.collection.BitSet
 
 import scalaz._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 import scalaz.syntax.std.boolean._
 import scalaz.std.anyVal._
+
+import com.precog.util.{BitSetUtil, BitSet, Loop}
+import com.precog.util.BitSetUtil.Implicits._
 
 import TableModule._
 
@@ -60,11 +63,11 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
               case (acc, (jpath, JNothing)) => acc
               case (acc, (jpath, v)) =>
                 val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
-                val ref = ColumnRef(jpath, ctype)
+                val ref = ColumnRef(CPath(jpath), ctype)
   
                 val pair: (BitSet, Array[_]) = v match {
                   case JBool(b) => 
-                    val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Boolean](sliceSize))).asInstanceOf[(BitSet, Array[Boolean])]
+                    val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Boolean](sliceSize))).asInstanceOf[(BitSet, Array[Boolean])]
                     col(sliceIndex) = b
                     (defined + sliceIndex, col)
                     
@@ -73,15 +76,15 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
                     val isDouble = ctype == CDouble
                     
                     val (defined, col) = if (isLong) {
-                      val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Long](sliceSize))).asInstanceOf[(BitSet, Array[Long])]
+                      val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Long](sliceSize))).asInstanceOf[(BitSet, Array[Long])]
                       col(sliceIndex) = d.toLong
                       (defined, col)
                     } else if (isDouble) {
-                      val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Double](sliceSize))).asInstanceOf[(BitSet, Array[Double])]
+                      val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Double](sliceSize))).asInstanceOf[(BitSet, Array[Double])]
                       col(sliceIndex) = d.toDouble
                       (defined, col)
                     } else {
-                      val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
+                      val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
                       col(sliceIndex) = d
                       (defined, col)
                     }
@@ -90,20 +93,20 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
                   }
   
                   case JString(s) => 
-                    val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[String](sliceSize))).asInstanceOf[(BitSet, Array[String])]
+                    val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[String](sliceSize))).asInstanceOf[(BitSet, Array[String])]
                     col(sliceIndex) = s
                     (defined + sliceIndex, col)
                   
                   case JArray(Nil)  => 
-                    val (defined, col) = acc.getOrElse(ref, (BitSet(), null)).asInstanceOf[(BitSet, Array[Boolean])]
+                    val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
                     (defined + sliceIndex, col)
   
                   case JObject(Nil) => 
-                    val (defined, col) = acc.getOrElse(ref, (BitSet(), null)).asInstanceOf[(BitSet, Array[Boolean])]
+                    val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
                     (defined + sliceIndex, col)
   
                   case JNull        => 
-                    val (defined, col) = acc.getOrElse(ref, (BitSet(), null)).asInstanceOf[(BitSet, Array[Boolean])]
+                    val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
                     (defined + sliceIndex, col)
                 }
   
@@ -173,15 +176,17 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
         type A = BigDecimal
         val init = BigDecimal(0)
         def scan(a: BigDecimal, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-          val identityPath = cols collect { case c @ (ColumnRef(JPath.Identity, _), _) => c }
+          val identityPath = cols collect { case c @ (ColumnRef(CPath.Identity, _), _) => c }
           val prioritized = identityPath.values filter {
             case (_: LongColumn | _: DoubleColumn | _: NumColumn) => true
             case _ => false
           }
+
+          val mask = BitSetUtil.filteredRange(range.start, range.end) {
+            i => prioritized exists { _ isDefinedAt i }
+          }
           
-          val mask = BitSet(range filter { i => prioritized exists { _ isDefinedAt i } }: _*)
-          
-          val (a2, arr) = mask.foldLeft((a, new Array[BigDecimal](range.end))) {
+          val (a2, arr) = mask.toList.foldLeft((a, new Array[BigDecimal](range.end))) {
             case ((acc, arr), i) => {
               val col = prioritized find { _ isDefinedAt i }
               
@@ -202,7 +207,7 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
             }
           }
           
-          (a2, Map(ColumnRef(JPath.Identity, CNum) -> ArrayNumColumn(mask, arr)))
+          (a2, Map(ColumnRef(CPath.Identity, CNum) -> ArrayNumColumn(mask, arr)))
         }
       }
     )

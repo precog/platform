@@ -21,10 +21,10 @@ package com.precog.yggdrasil
 
 import scala.collection.mutable
 
-import blueeyes.json.JPath
-import blueeyes.json.JPathField
-import blueeyes.json.JPathIndex
+import blueeyes.json._
 import blueeyes.json.JsonAST._
+
+import com.precog.common.json._
 import com.precog.common.VectorCase
 
 import org.specs2.mutable.Specification
@@ -147,7 +147,7 @@ trait CValueGenerators extends ArbitraryBigDecimal {
       falseSize   <- choose(0, 5)
       falseIds    <- containerOfN[Set, List[Long]](falseSize, containerOfN[List, Long](idCount, posNum[Long]))
       falseValues <- containerOfN[List, Seq[(JPath, JValue)]](falseSize, Gen.sequence[List, (JPath, JValue)](falseSchema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
-      
+
       falseIds2 = falseIds -- ids     // distinct ids
     } yield {
       (idCount, (ids.map(_.toArray) zip values).toStream ++ (falseIds2.map(_.toArray) zip falseValues).toStream)

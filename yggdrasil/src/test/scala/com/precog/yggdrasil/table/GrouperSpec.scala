@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common.json._
 import com.precog.yggdrasil.util.IdSourceConfig
 import com.precog.yggdrasil.test._
 
@@ -38,8 +39,28 @@ import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 
 trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
-  def tic_a = JPathField("tic_a")
-  def tic_b = JPathField("tic_b")
+  def tic_a = CPathField("tic_a")
+  def tic_b = CPathField("tic_b")
+
+  def tic_aj = JPathField("tic_a")
+  def tic_bj = JPathField("tic_b")
+
+  val eq12F1 = new CF1P({
+    case c: DoubleColumn => new Map1Column(c) with BoolColumn {
+      def apply(row: Int) = c(row) == 12.0d
+    }
+    case c: LongColumn => new Map1Column(c) with BoolColumn {
+      def apply(row: Int) = c(row) == 12l
+    }
+    case c: NumColumn => new Map1Column(c) with BoolColumn {
+      def apply(row: Int) = c(row.toInt) == 12
+    }
+  })
+
+  def augmentWithIdentities(json: Stream[JValue]) = json.zipWithIndex map {
+    case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", v) :: Nil)
+  }
+
 
   def testHistogramByValue(set: Stream[Int]) = {
     val module = emptyTestModule
@@ -47,8 +68,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     import trans._
     import constants._
     
-    val data = set.zipWithIndex map { case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", JNum(v)) :: Nil) }
-
+    val data = augmentWithIdentities(set.map(JNum(_)))
     val groupId = module.newGroupId
       
     val spec = GroupingSource(
@@ -59,26 +79,26 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
       for {
         keyIter <- key.toJson
-        group2  <- map(groupId)
-        setIter <- group2.toJson
+        gs1  <- map(groupId)
+        gs1Json <- gs1.toJson
       } yield {
         keyIter must haveSize(1)
         keyIter.head must beLike {
           case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
         }
 
-        val histoKey = keyIter.head(tic_a)
+        val histoKey = keyIter.head(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
       
-        setIter must not(beEmpty)
-        forall(setIter) { record =>
+        gs1Json must not(beEmpty)
+        forall(gs1Json) { record =>
           (record \ "value") mustEqual histoKey
         }
 
-        setIter.size must_== set.count(_ == histoKeyInt)
+        gs1Json.size must_== set.count(_ == histoKeyInt)
         
-        fromJson(JNum(setIter.size) #:: Stream.empty)
+        fromJson(JNum(gs1Json.size) #:: Stream.empty)
       }
     }
     
@@ -91,13 +111,14 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     forall(resultIter) { i => expectedSet must contain(i) }
   }
   
+
   def testHistogramByValueMapped(set: Stream[Int]) = {
     val module = emptyTestModule
     import module._
     import trans._
     import constants._
 
-    val data = set.zipWithIndex map { case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", JNum(v)) :: Nil) }
+    val data = augmentWithIdentities(set.map(JNum(_)))
     
     val doubleF1 = new CF1P({
       case c: LongColumn => new Map1Column(c) with LongColumn {
@@ -119,25 +140,25 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
       for {
         keyIter <- key.toJson
-        group2  <- map(groupId)
-        setIter <- group2.toJson
+        gs1  <- map(groupId)
+        gs1Json <- gs1.toJson
       } yield {
         keyIter must haveSize(1)
         keyIter.head must beLike {
           case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
         }
         
-        val histoKey = keyIter.head(tic_a)
+        val histoKey = keyIter.head(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
       
-        setIter must not(beEmpty)
-        forall(setIter) { record =>
+        gs1Json must not(beEmpty)
+        forall(gs1Json) { record =>
           val JNum(v2) = (record \ "value") 
           v2 must_== (histoKey0 * 2)
         }
         
-        fromJson(JNum(setIter.size) #:: Stream.empty)
+        fromJson(JNum(gs1Json.size) #:: Stream.empty)
       }
     }
     
@@ -150,13 +171,14 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     forall(resultIter) { i => expectedSet must contain(i) }
   }
 
+
   def testHistogramEvenOdd(set: Stream[Int]) = {
     val module = emptyTestModule
     import module._
     import trans._
     import constants._
 
-    val data = set.zipWithIndex map { case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", JNum(v)) :: Nil) }
+    val data = augmentWithIdentities(set.map(JNum(_)))
     
     val mod2 = new CF1P({
       case c: LongColumn => new Map1Column(c) with LongColumn {
@@ -174,25 +196,25 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     val result = Table.merge(spec) { (key: Table, map: GroupId => M[Table]) =>
       for {
         keyIter <- key.toJson
-        group2  <- map(groupId)
-        setIter <- group2.toJson
+        gs1  <- map(groupId)
+        gs1Json <- gs1.toJson
       } yield {
         keyIter must haveSize(1)
         keyIter.head must beLike {
           case JObject(JField("tic_a", JNum(i)) :: Nil) => set.map(_ % 2) must contain(i)
         }
 
-        val histoKey = keyIter.head(tic_a)
+        val histoKey = keyIter.head(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
         
-        setIter must not(beEmpty)
-        forall(setIter) { record =>
+        gs1Json must not(beEmpty)
+        forall(gs1Json) { record =>
           val JNum(v0) = (record \ "value") 
           histoKeyInt must_== (v0.toInt % 2)
         }
         
-        fromJson(JNum(setIter.size) #:: Stream.empty)
+        fromJson(JNum(gs1Json.size) #:: Stream.empty)
       }
     }
     
@@ -204,6 +226,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     
     forall(resultIter) { i => expectedSet must contain(i) }
   }
+
 
   def simpleMultiKeyData = {
     val JArray(elements) = JsonParser.parse("""[
@@ -220,6 +243,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     elements.toStream
   }
 
+
   def testHistogramTwoKeysAnd = {
     val module = emptyTestModule
     import module._
@@ -234,20 +258,20 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(TransSpec1.Id), groupId,
       GroupKeySpecAnd(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val result = Table.merge(spec) { (key, map) =>
       for {
         keyJson <- key.toJson
-        group3  <- map(groupId)
-        gs1Json <- group3.toJson
+        gs1  <- map(groupId)
+        gs1Json <- gs1.toJson
       } yield {
         keyJson must haveSize(1)
         keyJson.head must beLike {
           case obj: JObject => {
-            val a = obj(tic_a)
-            val b = obj(tic_b)
+            val a = obj(tic_aj)
+            val b = obj(tic_bj)
             
             a must beLike {
               case JNum(i) if i == 12 => {
@@ -281,6 +305,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     }
   }
 
+
   def testHistogramTwoKeysOr = {
     val module = emptyTestModule
     import module._
@@ -295,20 +320,20 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(TransSpec1.Id), groupId,
       GroupKeySpecOr(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val result = Table.merge(spec) { (key, map) =>
       for {
         keyJson <- key.toJson
-        group3  <- map(groupId)
-        gs1Json <- group3.toJson
+        gs1  <- map(groupId)
+        gs1Json <- gs1.toJson
       } yield {
         keyJson must haveSize(1)
         keyJson.head must beLike {
           case obj: JObject => {
-            val a = obj(tic_a)
-            val b = obj(tic_b)
+            val a = obj(tic_aj)
+            val b = obj(tic_bj)
         
             if (a == JNothing) {
               b must beLike {
@@ -358,18 +383,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     }
   }
 
-  val eq12F1 = new CF1P({
-    case c: DoubleColumn => new Map1Column(c) with BoolColumn {
-      def apply(row: Int) = c(row) == 12.0d
-    }
-    case c: LongColumn => new Map1Column(c) with BoolColumn {
-      def apply(row: Int) = c(row) == 12l
-    }
-    case c: NumColumn => new Map1Column(c) with BoolColumn {
-      def apply(row: Int) = c(row.toInt) == 12
-    }
-  })
-  
+
   def testHistogramExtraAnd = {
     val module = emptyTestModule
     import module._
@@ -383,19 +397,19 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(TransSpec1.Id), groupId,
       GroupKeySpecAnd(
-        GroupKeySpecSource(JPathField("extra"),
-          Filter(Map1(DerefObjectStatic(SourceValue.Single, JPathField("a")), eq12F1), Map1(DerefObjectStatic(SourceValue.Single, JPathField("a")), eq12F1))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(CPathField("extra"),
+          Filter(Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1), Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val result = Table.merge(spec) { (key, map) =>
       for {
         keyJson <- key.toJson
-        group3  <- map(groupId)
-        gs1Json <- group3.toJson
+        gs1  <- map(groupId)
+        gs1Json <- gs1.toJson
       } yield {
         keyJson must haveSize(1)
         
-        (keyJson.head(tic_b)) must beLike {
+        (keyJson.head(tic_bj)) must beLike {
           case JNum(i) => i must_== 7
         }
         
@@ -415,6 +429,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     }
   }
 
+
   def testHistogramExtraOr = {
     val module = emptyTestModule
     import module._
@@ -429,19 +444,19 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table,
       SourceKey.Single, Some(SourceValue.Single), groupId,
       GroupKeySpecOr(
-        GroupKeySpecSource(JPathField("extra"),
-          Filter(Map1(DerefObjectStatic(SourceValue.Single, JPathField("a")), eq12F1), Map1(DerefObjectStatic(SourceValue.Single, JPathField("a")), eq12F1))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(CPathField("extra"),
+          Filter(Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1), Map1(DerefObjectStatic(SourceValue.Single, CPathField("a")), eq12F1))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
         
     val result = Table.merge(spec) { (key, map) =>
       for {
-        group3  <- map(groupId)
-        gs1Json <- group3.toJson
+        gs1  <- map(groupId)
+        gs1Json <- gs1.toJson
         keyJson <- key.toJson
       } yield {
         keyJson must haveSize(1)
 
-        (keyJson.head(tic_b)) must beLike {
+        (keyJson.head(tic_bj)) must beLike {
           case JNothing =>
             (gs1Json.head \ "a") must beLike {
               case JNum(i) if i == 12 => ok
@@ -452,7 +467,6 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
           case JNum(i) if i == -1 => gs1Json must haveSize(1)
           case JNum(i) if i == 3 => gs1Json must haveSize(1)
         }
-        
 
         fromJson(Stream(JArray(keyJson.head :: JNum(gs1Json.size) :: Nil)))
       }
@@ -462,9 +476,17 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     
     resultJson must haveSize(5)
     
-    val JArray(expected) = JsonParser.parse("""[[{"tic_b": 7}, 2], [{"tic_b": 15}, 1], [{"tic_b": -1}, 1], [{"tic_b": 3}, 1], [{"extra": true}, 2]]""")
+    val JArray(expected) = JsonParser.parse("""[
+      [{"tic_b": 7}, 2], 
+      [{"tic_b": 15}, 1], 
+      [{"tic_b": -1}, 1], 
+      [{"tic_b": 3}, 1], 
+      [{"extra": true}, 2]
+    ]""")
+
     resultJson.toSet must_== expected.toSet
   }
+
 
   def testCtr(rawData1: Stream[Int], rawData2: Stream[Int]) = {
     val module = emptyTestModule
@@ -472,8 +494,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     import trans._
     import constants._
 
-    val data1 = rawData1.zipWithIndex map { case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", JNum(v)) :: Nil) }
-    val data2 = rawData2.zipWithIndex map { case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", JNum(v)) :: Nil) }
+    val data1 = augmentWithIdentities(rawData1.map(JNum(_)))
+    val data2 = augmentWithIdentities(rawData2.map(JNum(_)))
     
     val table1 = fromJson(data1)
     val table2 = fromJson(data2)
@@ -502,14 +524,14 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     val result = Table.merge(intersect) { (key, map) =>
       for {
         keyJson <- key.toJson
-        group2  <- map(groupId1)
-        group3  <- map(groupId2)
-        gs1Json <- group2.toJson
-        gs2Json <- group3.toJson
+        gs1  <- map(groupId1)
+        gs2  <- map(groupId2)
+        gs1Json <- gs1.toJson
+        gs2Json <- gs2.toJson
       } yield {
         keyJson must haveSize(1)
         
-        val JNum(keyBigInt) = keyJson.head(tic_a)
+        val JNum(keyBigInt) = keyJson.head(tic_aj)
 
         forall(gs1Json) { row =>
           row must beLike {
@@ -522,7 +544,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
         fromJson(Stream(
           JObject(
-            JField("key", keyJson.head(tic_a)) ::
+            JField("key", keyJson.head(tic_aj)) ::
             JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
       }
     }
@@ -539,25 +561,18 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     }
   }
 
-  def testCtrPartialJoin(rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) = { 
+
+  def testCtrPartialJoinAnd(rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) = { 
     val module = emptyTestModule
     import module._
     import trans._
     import constants._
 
-    val data1 = rawData1.zipWithIndex map {
-      case ((a, b0), i) =>
-        JObject(
-          JField("key", JArray(JNum(i) :: Nil)) :: 
-          JField("value", JObject(JField("a", JNum(a)) :: b0.map(b => JField("b", JNum(b))).toList)) :: Nil)
-    }
+    val data1 = augmentWithIdentities(rawData1 map { 
+      case (a, b0) => JObject(JField("a", JNum(a)) :: b0.map(b => JField("b", JNum(b))).toList) 
+    })
     
-    val data2 = rawData2.zipWithIndex map { 
-      case (v, i) => 
-        JObject(
-          JField("key", JArray(JNum(i) :: Nil)) :: 
-          JField("value", JObject(JField("a", JNum(v)) :: Nil)) :: Nil) 
-    }
+    val data2 = augmentWithIdentities(rawData2 map { v => JObject(JField("a", JNum(v)) :: Nil) })
     
     val table1 = fromJson(data1)
     val table2 = fromJson(data2)
@@ -569,13 +584,13 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       table1,
       SourceKey.Single, Some(SourceValue.Single), groupId1,
       GroupKeySpecAnd(
-        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, JPathField("b")))))
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
       
     val spec2 = GroupingSource(
       table2,
       SourceKey.Single, Some(SourceValue.Single), groupId2,
-      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, JPathField("a"))))
+      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))))
       
     val intersection = GroupingAlignment(
       DerefObjectStatic(Leaf(Source), tic_a),
@@ -586,24 +601,20 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     val result = Table.merge(intersection) { (key, map) =>
       for {
         keyJson <- key.toJson
-        group2  <- map(groupId1)
-        group3  <- map(groupId2)
-        gs1Json <- group2.toJson
-        gs2Json <- group3.toJson
+        gs1  <- map(groupId1)
+        gs2  <- map(groupId2)
+        gs1Json <- gs1.toJson
+        gs2Json <- gs2.toJson
       } yield {
         keyJson must haveSize(1)
 
-        val JNum(keyBigInt) = keyJson.head(tic_a)
-        keyJson.head(tic_b) must beLike {
+        val JNum(keyBigInt) = keyJson.head(tic_aj)
+        keyJson.head(tic_bj) must beLike {
           case JNum(_) => ok
         }
         
         gs1Json must not(beEmpty)
         gs2Json must not(beEmpty)
-        
-        //println("Got intersection with key " + keyJson.toList)
-        //println("left: \n" + gs1Json.toList)
-        //println("right: \n"+ gs2Json.toList)
         
         forall(gs1Json) { row =>
           (row \ "a") must beLike {
@@ -619,7 +630,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         
         fromJson(Stream(
           JObject(
-            JField("key", JArray(keyJson.head(tic_a) :: keyJson.head(tic_b) :: Nil)) ::
+            JField("key", JArray(keyJson.head(tic_aj) :: keyJson.head(tic_bj) :: Nil)) ::
             JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
       }
     }
@@ -648,6 +659,269 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     }
   }
 
+
+  def testCtrPartialJoinOr(rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) = {
+    val module = emptyTestModule
+    import module._
+    import trans._
+    import constants._
+
+    val data1 = augmentWithIdentities(rawData1 map { 
+      case (a, b0) => JObject(JField("a", JNum(a)) :: b0.map(b => JField("b", JNum(b))).toList) 
+    })
+    
+    val data2 = augmentWithIdentities(rawData2 map { v => JObject(JField("a", JNum(v)) :: Nil) })
+    
+    val table1 = fromJson(data1)
+    val table2 = fromJson(data2)
+    
+    val groupId1 = newGroupId
+    val groupId2 = newGroupId
+    
+    // spec1' := spec1 where spec1.a = 'a | spec1.b = 'b
+    // spec2' := spec2 where spec2.a = 'a
+    val spec1 = GroupingSource(
+      table1,
+      SourceKey.Single, Some(SourceValue.Single), groupId1,
+      GroupKeySpecOr(
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
+      
+    val spec2 = GroupingSource(
+      table2,
+      SourceKey.Single, Some(SourceValue.Single), groupId2,
+      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))))
+      
+    val intersection = GroupingAlignment(
+      DerefObjectStatic(Leaf(Source), tic_a),
+      DerefObjectStatic(Leaf(Source), tic_a),
+      spec1,
+      spec2, GroupingSpec.Intersection)
+
+    var elapsed = 0L
+    var firstMerge = 0L
+
+    val result = Table.merge(intersection) { (key, map) =>
+      if (firstMerge == 0) firstMerge = System.currentTimeMillis
+      val start = System.currentTimeMillis
+      for {
+        keyJson <- key.toJson
+        gs1  <- map(groupId1)
+        gs2  <- map(groupId2)
+        gs1Json <- gs1.toJson
+        gs2Json <- gs2.toJson
+      } yield {
+        keyJson must haveSize(1)
+        
+        val ka @ JNum(kaValue) = keyJson.head(tic_aj)
+        val kb = keyJson.head(tic_bj)
+        
+        gs1Json must not(beEmpty)
+        gs2Json must not(beEmpty)
+        
+        forall(gs1Json) { row =>
+         ((row \ "a") must_== ka) or ((row \ "b") must_== kb)
+        }
+        
+        forall(gs2Json) { row =>
+          (row \ "a") must beLike {
+            case JNum(i) => i mustEqual kaValue
+          }
+        }
+        
+        val result = fromJson(Stream(
+          JObject(
+            JField("key", keyJson.head(tic_aj)) ::
+            JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
+
+        elapsed += (System.currentTimeMillis - start)
+        result
+      }
+    }
+
+    val resultJson = result.flatMap(_.toJson).copoint
+    val elapsedOverMerge = System.currentTimeMillis - firstMerge
+    //println("total elapsed in merge: " + elapsedOverMerge)
+    //println("total elapsed outside of body: " + (elapsedOverMerge - elapsed))
+
+    val joinKeys = (rawData1.map(_._1).toSet intersect rawData2.toSet)
+    val joinRows = rawData1.filter({ case (a, b) => joinKeys(a) })
+
+    val crossRows = for {
+      (row1a, Some(row1b)) <- rawData1
+      row2 <- rawData2
+    } yield {
+      JObject(
+        JField("a", JNum(row2)) ::
+        JField("b", JNum(row1b)) :: Nil)
+    }
+
+    resultJson must haveSize(joinRows.map(_._1).distinct.size + crossRows.distinct.size)
+  }
+
+
+  def testNonTrivial = {
+    //
+    // forall 'a forall 'b
+    //   foo where foo.a = 'a & foo.b = 'b
+    //   bar where bar.a = 'a
+    //   baz where baz.b = 'b
+    //   
+    //   { a: 'a, b: 'b, foo: count(foo'), bar: count(bar'), baz: count(baz') }
+    //
+     
+    val module = emptyTestModule
+    import module._
+    import trans._
+    import constants._
+
+    val JArray(foo0) = JsonParser.parse("""[
+      { "a":42.0, "b":12.0 }, 
+      { "a":42.0 },
+      { "a":77.0 },
+      { "c":-3.0 },
+      { "b":7.0 },
+      { "a":42.0, "b":12.0 },
+      { "a":7.0, "b":42.0 },
+      { "a":17.0, "b":6.0 },
+      { "b":1.0 },
+      { "a":21.0, "b":12.0 },
+      { "a":42.0, "b":-2.0 },
+      { "c":-3.0 },
+      { "a":7.0, "b":42.0 },
+      { "a":42.0, "b":12.0 }
+    ]""")
+
+    val JArray(bar0) = JsonParser.parse("""[
+      { "a":42.0 },
+      { "a":42.0 },
+      { "a":77.0 },
+      { "c":-3.0 },
+      { "b":7.0 },
+      { "b":12.0 },
+      { "a":7.0, "b":42.0 },
+      { "a":17.0, "c":77.0 },
+      { "b":1.0 },
+      { "b":12.0 },
+      { "b":-2.0 },
+      { "c":-3.0 },
+      { "a":7.0 },
+      { "a":42.0 }
+    ]""")
+
+    val JArray(baz0) = JsonParser.parse("""[
+      { "b":12.0 },
+      { "b":6.0 },
+      { "a":42.0 },
+      { "b":1.0 },
+      { "b":12.0 },
+      { "c":-3.0 },
+      { "b":42.0 },
+      { "d":0.0 }
+    ]""")
+
+    val foo = augmentWithIdentities(foo0.toStream)
+    val bar = augmentWithIdentities(bar0.toStream)
+    val baz = augmentWithIdentities(baz0.toStream)
+   
+    val fooGroup = newGroupId
+    val barGroup = newGroupId
+    val bazGroup = newGroupId
+        
+    val fooSpec = GroupingSource(
+      fromJson(foo.toStream),
+      SourceKey.Single, Some(SourceValue.Single), fooGroup,
+      GroupKeySpecAnd(
+        GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+        GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b")))))
+        
+    val barSpec = GroupingSource(
+      fromJson(bar.toStream),
+      SourceKey.Single, Some(SourceValue.Single), barGroup,
+      GroupKeySpecSource(tic_a, DerefObjectStatic(SourceValue.Single, CPathField("a"))))
+        
+    val bazSpec = GroupingSource(
+      fromJson(baz.toStream),
+      SourceKey.Single, Some(SourceValue.Single), bazGroup,
+      GroupKeySpecSource(tic_b, DerefObjectStatic(SourceValue.Single, CPathField("b"))))
+        
+    val spec = GroupingAlignment(
+      DerefObjectStatic(Leaf(Source), tic_b),
+      DerefObjectStatic(Leaf(Source), tic_b),
+      GroupingAlignment(
+        DerefObjectStatic(Leaf(Source), tic_a),
+        DerefObjectStatic(Leaf(Source), tic_a),
+        fooSpec,
+        barSpec, GroupingSpec.Intersection),
+      bazSpec, GroupingSpec.Intersection)
+      
+    val forallResult = Table.merge(spec) { (key, map) =>
+      val keyJson = key.toJson.copoint
+
+      keyJson must not(beEmpty)
+      
+      val a = keyJson.head(tic_aj)
+      val b = keyJson.head(tic_bj)
+      
+      a mustNotEqual JNothing
+      b mustNotEqual JNothing
+      
+      for {
+        fooP <- map(fooGroup)
+        barP <- map(barGroup)
+        bazP <- map(bazGroup)
+        fooPJson <- fooP.toJson
+        barPJson <- barP.toJson
+        bazPJson <- bazP.toJson
+      } yield {
+        fooPJson must not(beEmpty)
+        barPJson must not(beEmpty)
+        bazPJson must not(beEmpty)
+
+        val result = Stream(
+          JObject(
+            JField("a", a) ::
+            JField("b", b) ::
+            JField("foo", JNum(fooPJson.size)) ::
+            JField("bar", JNum(barPJson.size)) ::
+            JField("baz", JNum(bazPJson.size)) :: Nil))
+            
+        fromJson(result)
+      }
+    }
+    
+    val forallJson = forallResult flatMap { _.toJson } copoint
+    
+    forallJson must not(beEmpty)
+    forallJson must haveSize(3)
+    
+    forall(forallJson) { row =>
+      val JNum(ai) = row \ "a"
+      val JNum(bi) = row \ "b"
+          
+      val JNum(fooi) = row \ "foo"
+      val JNum(bari) = row \ "bar"
+      val JNum(bazi) = row \ "baz"
+      
+      (ai.toInt, bi.toInt) must beLike {
+        case (42, 12) => 
+          fooi mustEqual 3
+          bari mustEqual 3
+          bazi mustEqual 2
+
+        case (7, 42) =>
+          fooi mustEqual 2
+          bari mustEqual 2
+          bazi mustEqual 1
+        
+        case (17, 6) =>
+          fooi mustEqual 1
+          bari mustEqual 1
+          bazi mustEqual 1
+      }
+    }
+  }
+  
   "simple single-key grouping" should {
     "scalacheck a histogram by value" in check (testHistogramByValue _)
     "histogram for two of the same value" in testHistogramByValue(Stream(2147483647, 2147483647))
@@ -669,7 +943,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     }
   }
 
-"multi-set grouping" should {
+  "multi-set grouping" should {
     "compute ctr on value" in propNoShrink (testCtr _)
     "compute ctr with an empty dataset" in testCtr(Stream(), Stream(1))
     "compute ctr with singleton datasets" in testCtr(Stream(1), Stream(1))
@@ -678,395 +952,62 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     "compute ctr with simple datasets" in testCtr(Stream(1, 2147483647, 2126441435, -1, 0, 0), Stream(2006322377, -2147483648, -1456034303, 2147483647, 0, 2147483647, -1904025337))
 
     "compute ctr on one field of a composite value" >> {
-      "and" >> propNoShrink (testCtrPartialJoin _)
-      "and with un-joinable datasets" >> testCtrPartialJoin(
+      "and" >> propNoShrink (testCtrPartialJoinAnd _)
+      "and with un-joinable datasets" >> testCtrPartialJoinAnd(
         Stream((0,Some(1)), (1123021019,Some(-2147483648))), 
         Stream(-1675865668, 889796884, 2147483647, -1099860336, -2147483648, -2147483648, 1, 1496400141)
       )
-      "and with joinable datasets" >> testCtrPartialJoin(
+      "and with joinable datasets" >> testCtrPartialJoinAnd(
         Stream((-1,Some(-1771882715)), (-2091150211,Some(1)), (1,Some(-1161386492)), (0,Some(-1)), (-1,Some(-1)), (-2147483648,Some(-2147483648)), (-1,Some(1)), (0,Some(391541906)), (-2147483648,Some(725820706)), (0,Some(-2147483648)), (1286585203,Some(560695941))), 
         Stream(0, -297579588, -1, 2147483647, -1, -1536865491, 1049246142, -2147483648, -2147483648, 766980226, -1047565460)
       )
-      "and with repeated group keys in joinable datasets" >> testCtrPartialJoin(
+      "and with repeated group keys in joinable datasets" >> testCtrPartialJoinAnd(
         Stream((1,Some(-421523375)), (1381663801,Some(2145939312)), (975603510,Some(-456843566)), (-260964705,Some(-811947401)), (-1643830562,Some(0)), (382901678,Some(-2147483648)), (-1770905652,Some(-1)), (1172197808,Some(1)), (-206421051,Some(307500840)), (2147483647,Some(-1)), (2147483647,Some(-1)), (-1775980054,Some(2147483647))), 
         Stream(1, -1, -2005746103, 720318134, 852618110, 1813748094, -1, -1676020815, -627348537, 2147483647, -2147483648)
       )
+
+      // TODO: the performance of the following is too awful to run under scalacheck, even with a minimal
+      // number of examples.
+      "or" >> propNoShrink (testCtrPartialJoinOr _).set(minTestsOk -> 10)
+      "or with un-joinable datasets" >> testCtrPartialJoinOr(
+        Stream((-2,Some(1))), 
+        Stream(-1)
+      )
+      "or with a join in datasets" >> testCtrPartialJoinOr(
+        Stream((2,Some(-1)), (1,Some(-1)), (3,Some(4)), (1,Some(-1))), 
+        Stream(-2, 1, 1, 5, 0, 6)
+      )
+      /* // runs a bit long
+      "or with a pathological example" >> {
+        val s1 = Stream((-954410459,Some(0)), (-1,Some(2007696701)), (2105675940,Some(-1245674830)), (-1582587372,Some(1940093023)), (63198658,Some(2068956190)), (0,Some(-189150978)), (2000592976,Some(-222301652)), (523154377,Some(0)), (-2147483648,Some(1632775270)), (1092038023,Some(1819439617)), (-2147483648,Some(2147483647)), (0,Some(0)), (2147483647,Some(0)), (-1143657189,Some(-2147483648)), (-1958852329,Some(2147483647)), (-2147483648,Some(608866931)), (-273338630,Some(-2147483648)), (-2147483648,Some(-1841559997)), (-2147483648,Some(1601378038)), (0,Some(-1)), (1,Some(1)), (-670756012,Some(-106440741)), (-2147483648,Some(-431649434)), (0,Some(585196920)), (0,Some(143242157)), (2147483647,Some(0)), (-1002181171,Some(2147483647)), (260767290,Some(2147483647)), (2147483647,Some(0)), (1502519219,Some(-80993454)), (-2147483648,Some(1)), (26401216,Some(1737006538)), (459053133,Some(1)), (1,Some(222440292)), (2147483647,Some(-1)), (-785490772,Some(2147483647)), (-1519510933,Some(1)), (1064945303,Some(2015037890)), (2147483647,Some(-1888515244)), (-2147483648,Some(0)), (-1782288738,Some(-2147483648)), (-1243866137,Some(-2036899743)), (2147483647,Some(-2147483648)), (152217775,Some(1)), (-1,Some(1822038570)), (-557295510,Some(-2147483648)), (0,Some(0)), (-1389729666,Some(407111520)), (0,Some(1110392883)), (-2042103283,Some(-1366550515)), (-1309507483,Some(-2147483648)), (2147483647,Some(0)), (1322668865,Some(1)), (1,Some(1)), (1296673327,Some(341152609)), (1040120825,Some(-1731488506)), (-951605740,Some(1)), (690140640,Some(-1783450717)), (1395849695,Some(768982688)), (-1,Some(-894395447)), (2147483647,Some(2147483647)), (-1,Some(-2016297234)), (-1416825502,Some(-2147483648)), (1727813995,Some(1)), (-1178284872,Some(-2147483648)), (2147483647,Some(-1468556846)), (-361436734,Some(0)), (960146451,Some(-2147483648)), (-2147483648,Some(-2147483648)), (973715803,Some(603648248)), (2147483647,Some(0)), (-2147483648,Some(-36955603)), (2005706222,Some(-242403982)), (-1274227445,Some(1156421302)), (-2147483648,Some(385347685)), (-2147483648,Some(926114223)), (1690927871,Some(1)), (-330611474,Some(-2147483648)), (-1801526113,Some(922619077)), (-2147483648,Some(-1903319530)), (2147483647,Some(0)))
+
+        val s2 = Stream(0, 0, 0, 1, 1, 434608913, 193294286, 0, -1921860406, 2147483647, -2147483648, 1, -1, 0, -2147483648, 0, -113276442, -1564947365, 2147483647, -54676151, -1, 49986682, -391210112, 1, -1, 2147483647, 0, -1, 0, 0, 2147483647, -225140804, 1245119802, 1, -548778232, -1138847365, 1, 73483948, 0, -1, -996046474, -695581403, 2147483647, -2147483648, -1, 1563916971, -2147483648, 0, 1, 607908889, -2009071663, -1382431435, 778550183, 2147483647, -2147483648, 0, -1)
+
+        println("s1.size = %d, s2.size = %d".format(s1.size, s2.size))
+        println("distinct s1.size = %d, s2.size = %d".format(s1.map(_._1).toSet.size, s2.toSet.size))
+        testCtrPartialJoinOr(s1, s2)
+      }
+      */
+ 
+      "or with a simple join in datasets" >> testCtrPartialJoinOr(
+        Stream((436413513,Some(-477784155)), 
+               (1693516917,Some(1537597532)), 
+               (-33300192,Some(1)), 
+               (-1,Some(417911606)), 
+               (941828761,Some(-1)), 
+               (-116426729,Some(0)), 
+               (0,Some(1)), 
+               (-1,Some(175860194)), 
+               (-2147483648,Some(-2014951990)), 
+               (2147483647,Some(293027634)), 
+               (-1964286008,Some(132426726))), 
+        Stream(-1)
+      )
     }
   }
+  
+  "handle non-trivial group alignment with composite key" in testNonTrivial
 }
-
-/*
-      "or" >> check { (rawData1: Stream[(Int, Option[Int])], rawData2: Stream[Int]) =>
-        val module = emptyTestModule
-        import module._
-        import trans._
-        import constants._
-
-        val data1 = rawData1 map {
-          case (a, Some(b)) =>
-            JObject(
-              JField("a", JNum(a)) ::
-              JField("b", JNum(b)) :: Nil)
-              
-          case (a, None) =>
-            JObject(JField("a", JNum(a)) :: Nil)
-        }
-        
-        val data2 = rawData2 map { a => JObject(JField("a", JNum(a)) :: Nil) }
-        
-        val table1 = fromJson(data1)
-        val table2 = fromJson(data2)
-        
-        val spec1 = GroupingSource(
-          table1,
-          SourceKey.Single, Some(TransSpec1.Id), 2,
-          GroupKeySpecOr(
-            GroupKeySpecSource(JPathField("1"),
-              DerefObjectStatic(Leaf(Source), JPathField("a"))),
-            GroupKeySpecSource(JPathField("2"),
-              DerefObjectStatic(Leaf(Source), JPathField("b")))))
-          
-        val spec2 = GroupingSource(
-          table2,
-          SourceKey.Single, Some(TransSpec1.Id), 3,
-          GroupKeySpecSource(JPathField("1"),
-            DerefObjectStatic(Leaf(Source), JPathField("a"))))
-          
-        val union = GroupingAlignment(
-          DerefObjectStatic(Leaf(Source), JPathField("1")),
-          DerefObjectStatic(Leaf(Source), JPathField("1")),
-          spec1,
-          spec2, GroupingSpec.Union)
-            
-        val result = Table.merge(union) { (key, map) =>
-          for {
-            keyJson <- key.toJson
-            group2  <- map(2)
-            group3  <- map(3)
-            gs1Json <- group2.toJson
-            gs2Json <- group3.toJson
-          } yield {
-            keyJson must haveSize(1)
-            
-            keyJson.head must beLike {
-              case obj: JObject => {
-                val a = obj \ "1"
-                val b = obj \ "2"
-                
-                a must beLike {
-                  case JNum(_) => ok
-                }
-                
-                b must beLike {
-                  case JNum(_) => ok
-                  case JNothing => ok
-                }
-              }
-            }
-            
-            val JNum(keyBigInt) = keyJson.head \ "1"
-            
-            gs1Json must not(beEmpty)
-            gs2Json must not(beEmpty)
-            
-            forall(gs1Json) { row =>
-              row must beLike {
-                case obj: JObject => {
-                  (obj \ "a") must beLike {
-                    case JNum(i) => i mustEqual keyBigInt
-                  }
-                }
-              }
-            }
-            
-            forall(gs2Json) { row =>
-              row must beLike {
-                case obj: JObject => {
-                  (obj \ "a") must beLike {
-                    case JNum(i) => i mustEqual keyBigInt
-                  }
-                }
-              }
-            }
-            
-            fromJson(Stream(
-              JObject(
-                JField("key", keyJson.head \ "1") ::
-                JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
-          }
-        }
-        
-        val resultJson = result.flatMap(_.toJson).copoint
-        
-        resultJson must haveSize(((rawData1 map { _._1 }) ++ rawData2).distinct.length)
-        
-        forall(resultJson) { v =>
-          v must beLike {
-            case obj: JObject => {
-              val JNum(k) = obj \ "key"
-              val JNum(v) = obj \ "value"
-              
-              v mustEqual (((rawData1 map { _._1 }) ++ rawData2) filter { k == _ } length)
-            }
-          }
-        }
-      }.pendingUntilFixed
-    }
-    
-    //
-    // forall 'a forall 'b
-    //   foo where foo.a = 'a & foo.b = 'b
-    //   bar where bar.a = 'a
-    //   baz where baz.b = 'b
-    //   
-    //   -- note: intersect, not union!  (inexpressible in Quirrel)
-    //   { a: 'a, b: 'b, foo: count(foo'), bar: count(bar'), baz: count(baz') }
-    //
-     
-    "handle non-trivial group alignment with composite key" in {
-      val module = emptyTestModule
-      import module._
-      import trans._
-      import constants._
-
-      val foo = Stream(
-        JObject(
-          JField("a", JNum(42)) ::    // 1
-          JField("b", JNum(12)) :: Nil),
-        JObject(
-          JField("a", JNum(42)) :: Nil),
-        JObject(
-          JField("a", JNum(77)) :: Nil),
-        JObject(
-          JField("c", JNum(-3)) :: Nil),
-        JObject(
-          JField("b", JNum(7)) :: Nil),
-        JObject(
-          JField("a", JNum(42)) ::    // 1
-          JField("b", JNum(12)) :: Nil),
-        JObject(
-          JField("a", JNum(7)) ::     // 2
-          JField("b", JNum(42)) :: Nil),
-        JObject(
-          JField("a", JNum(17)) ::    // 3
-          JField("b", JNum(6)) :: Nil),
-        JObject(
-          JField("b", JNum(1)) :: Nil),
-        JObject(
-          JField("a", JNum(21)) ::    // 4
-          JField("b", JNum(12)) :: Nil),
-        JObject(
-          JField("a", JNum(42)) ::    // 5
-          JField("b", JNum(-2)) :: Nil),
-        JObject(
-          JField("c", JNum(-3)) :: Nil),
-        JObject(
-          JField("a", JNum(7)) ::     // 2
-          JField("b", JNum(42)) :: Nil),
-        JObject(
-          JField("a", JNum(42)) ::    // 1
-          JField("b", JNum(12)) :: Nil))
-          
-      val bar = Stream(
-        JObject(
-          JField("a", JNum(42)) :: Nil),    // 1
-        JObject(
-          JField("a", JNum(42)) :: Nil),    // 1
-        JObject(
-          JField("a", JNum(77)) :: Nil),    // 6
-        JObject(
-          JField("c", JNum(-3)) :: Nil),
-        JObject(
-          JField("b", JNum(7)) :: Nil),
-        JObject(
-          JField("b", JNum(12)) :: Nil),
-        JObject(
-          JField("a", JNum(7)) ::           // 2
-          JField("b", JNum(42)) :: Nil),
-        JObject(
-          JField("a", JNum(17)) ::          // 3
-          JField("c", JNum(77)) :: Nil),
-        JObject(
-          JField("b", JNum(1)) :: Nil),
-        JObject(
-          JField("b", JNum(12)) :: Nil),
-        JObject(
-          JField("b", JNum(-2)) :: Nil),
-        JObject(
-          JField("c", JNum(-3)) :: Nil),
-        JObject(
-          JField("a", JNum(7)) :: Nil),     // 2
-        JObject(
-          JField("a", JNum(42)) :: Nil))    // 1
-          
-      val baz = Stream(
-        JObject(
-          JField("b", JNum(12)) :: Nil),    // 1
-        JObject(
-          JField("b", JNum(6)) :: Nil),     // 3
-        JObject(
-          JField("a", JNum(42)) :: Nil),
-        JObject(
-          JField("b", JNum(1)) :: Nil),     // 7
-        JObject(
-          JField("b", JNum(12)) :: Nil),    // 1
-        JObject(
-          JField("c", JNum(-3)) :: Nil),
-        JObject(
-          JField("b", JNum(42)) :: Nil),    // 2
-        JObject(
-          JField("d", JNum(0)) :: Nil))
-          
-      val fooSpec = GroupingSource(
-        fromJson(foo),
-        SourceKey.Single, Some(TransSpec1.Id), 3,
-        GroupKeySpecAnd(
-          GroupKeySpecSource(
-            JPathField("1"),
-            DerefObjectStatic(Leaf(Source), JPathField("a"))),
-          GroupKeySpecSource(
-            JPathField("2"),
-            DerefObjectStatic(Leaf(Source), JPathField("b")))))
-          
-      val barSpec = GroupingSource(
-        fromJson(bar),
-        SourceKey.Single, Some(TransSpec1.Id), 4,
-        GroupKeySpecSource(
-          JPathField("1"),
-          DerefObjectStatic(Leaf(Source), JPathField("a"))))
-          
-      val bazSpec = GroupingSource(
-        fromJson(baz),
-        SourceKey.Single, Some(TransSpec1.Id), 5,
-        GroupKeySpecSource(
-          JPathField("2"),
-          DerefObjectStatic(Leaf(Source), JPathField("b"))))
-          
-      "intersect" >> {
-        val spec = GroupingAlignment(
-          DerefObjectStatic(Leaf(Source), JPathField("2")),
-          DerefObjectStatic(Leaf(Source), JPathField("2")),
-          GroupingAlignment(
-            DerefObjectStatic(Leaf(Source), JPathField("1")),
-            DerefObjectStatic(Leaf(Source), JPathField("1")),
-            fooSpec,
-            barSpec, GroupingSpec.Intersection),
-          bazSpec, GroupingSpec.Intersection)
-          
-        val forallResult = Table.merge(spec) { (key, map) =>
-          val keyJson = key.toJson.copoint
-          
-          keyJson must not(beEmpty)
-          
-          val a = keyJson.head \ "1"
-          val b = keyJson.head \ "2"
-          
-          a mustNotEqual JNothing
-          b mustNotEqual JNothing
-          
-          for {
-            group3 <- map(3)
-            group4 <- map(4)
-            group5 <- map(5)
-            fooPJson <- group3.toJson
-            barPJson <- group4.toJson
-            bazPJson <- group5.toJson
-          } yield {
-            fooPJson must not(beEmpty)
-            barPJson must not(beEmpty)
-            bazPJson must not(beEmpty)
-
-            val result = Stream(
-              JObject(
-                JField("a", a) ::
-                JField("b", b) ::
-                JField("foo", JNum(fooPJson.size)) ::
-                JField("bar", JNum(barPJson.size)) ::
-                JField("baz", JNum(bazPJson.size)) :: Nil))
-                
-            fromJson(result)
-          }
-        }
-        
-        val forallJson = forallResult flatMap { _.toJson } copoint
-        
-        forallJson must not(beEmpty)
-        forallJson must haveSize(2)
-        
-        forall(forallJson) { row =>
-          row must beLike {
-            case obj: JObject if (obj \ "a") == JNum(42) => {
-              val JNum(ai) = obj \ "a"
-              val JNum(bi) = obj \ "b"
-              
-              ai mustEqual 42
-              bi mustEqual 12
-              
-              val JNum(fooi) = obj \ "foo"
-              val JNum(bari) = obj \ "bar"
-              val JNum(bazi) = obj \ "baz"
-              
-              fooi mustEqual 3
-              bari mustEqual 3
-              bazi mustEqual 2
-            }
-            
-            case obj: JObject if (obj \ "a") == JNum(7) => {
-              val JNum(ai) = obj \ "a"
-              val JNum(bi) = obj \ "b"
-              
-              ai mustEqual 7
-              bi mustEqual 42
-              
-              val JNum(fooi) = obj \ "foo"
-              val JNum(bari) = obj \ "bar"
-              val JNum(bazi) = obj \ "baz"
-              
-              fooi mustEqual 2
-              bari mustEqual 2
-              bazi mustEqual 1
-            }
-          }
-        }
-      }.pendingUntilFixed
-    }
-  }
-}
-*/
-
-//object GrouperSpec extends TableModuleSpec[Free.Trampoline] with GrouperSpec[Free.Trampoline] {
-//  implicit def M = Trampoline.trampolineMonad
-//
-//  type YggConfig = IdSourceConfig
-//  val yggConfig = new IdSourceConfig {
-//    val idSource = new IdSource {
-//      private val source = new java.util.concurrent.atomic.AtomicLong
-//      def nextId() = source.getAndIncrement
-//    }
-//  }
-//}
-//
-//object GrouperSpec extends TableModuleSpec[akka.dispatch.Future] with GrouperSpec[akka.dispatch.Future] {
-//  import akka.actor.ActorSystem
-//  import akka.dispatch._
-//  import akka.util.Duration
-//  import akka.util.duration._
-//
-//  val actorSystem = ActorSystem("grouperSpecActorSystem")
-//  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-//  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
-//    def copoint[A](f: Future[A]) = Await.result(f, Duration(30, "seconds"))
-//  }
-//
-//  type YggConfig = IdSourceConfig
-//  val yggConfig = new IdSourceConfig {
-//    val idSource = new IdSource {
-//      private val source = new java.util.concurrent.atomic.AtomicLong
-//      def nextId() = source.getAndIncrement
-//    }
-//  }
-//}
-//
 
 object GrouperSpec extends TableModuleSpec[YId] with GrouperSpec[YId] with YIdInstances {
   type YggConfig = IdSourceConfig
@@ -1077,6 +1018,3 @@ object GrouperSpec extends TableModuleSpec[YId] with GrouperSpec[YId] with YIdIn
     }
   }
 }
-
-
-

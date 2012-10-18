@@ -33,14 +33,16 @@ trait ProjectionModule {
 
     def close(p: Projection): IO[Unit]
 
-    def archive(p: Projection): IO[Boolean]
+    def archive(d: ProjectionDescriptor): IO[Boolean]
   }
 }
 
 trait ProjectionLike {
   def descriptor: ProjectionDescriptor
 
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit]
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit
+
+  def commit(): IO[Unit]
 }
 
 case class BlockProjectionData[Key, Block](minKey: Key, maxKey: Key, data: Block)

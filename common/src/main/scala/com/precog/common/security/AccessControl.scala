@@ -33,9 +33,9 @@ import blueeyes.persistence.mongo._
 import blueeyes.persistence.cache._
 
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.Extractor._
+import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Extractor._
 
 import java.util.concurrent.TimeUnit._
 
@@ -57,23 +57,23 @@ class UnlimitedAccessControl[M[+_]: Pointed] extends AccessControl[M] {
   def mayGrant(uid: UID, permissions: Set[Permission]): M[Boolean] = Pointed[M].point(true)
 }
 
-class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Monad[M]) extends AccessControl[M] with Logging {
-  def mayAccess(uid: TokenID, path: Path, owners: Set[UID], accessType: AccessType): M[Boolean] = {
-    tokens.findToken(uid).flatMap{ _.map { t => 
-      logger.debug("Checking %s access to %s from token %s with owners: %s".format(accessType, path, uid, owners))
+class APIKeyManagerAccessControl[M[+_]](apiKeys: APIKeyManager[M])(implicit M: Monad[M]) extends AccessControl[M] with Logging {
+  def mayAccess(uid: APIKey, path: Path, owners: Set[UID], accessType: AccessType): M[Boolean] = {
+    apiKeys.findAPIKey(uid).flatMap{ _.map { t => 
+      logger.debug("Checking %s access to %s from API key %s with owners: %s".format(accessType, path, uid, owners))
        hasValidPermissions(t, path, owners, accessType)
     }.getOrElse(M.point(false)) }
   }
   
   def mayGrant(uid: UID, permissions: Set[Permission]): M[Boolean] = {
-    tokens.findToken(uid).flatMap{ _.map { t =>
+    apiKeys.findAPIKey(uid).flatMap{ _.map { t =>
       permissions.map { 
         case p @ Permission(accessType, path, owner, _) => hasValidPermissions(t, path, owner.toSet, accessType)
       }.sequence.map(_.forall(identity))
     }.getOrElse(M.point(false)) }
   }
 
-  def hasValidPermissions(t: Token, path: Path, owners: Set[UID], accessType: AccessType): M[Boolean] = {
+  def hasValidPermissions(t: APIKeyRecord, path: Path, owners: Set[UID], accessType: AccessType): M[Boolean] = {
     def exists(fs: Set[M[Boolean]]): M[Boolean] = {
       fs.sequence map { _ reduceOption { _ || _ } getOrElse false }
     }
@@ -85,47 +85,45 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
     accessType match {
       case WritePermission =>
         exists(t.grants.map{ gid =>
-          tokens.findGrant(gid).flatMap( _.map { 
+          apiKeys.findGrant(gid).flatMap( _.map { 
             case g @ Grant(_, _, WritePermission(p, _)) =>
               isValid(g).map { _ && p.equalOrChild(path) }
             case _ => M.point(false)
           }.getOrElse(M.point(false))
         )})
+
       case OwnerPermission =>
         exists(t.grants.map{ gid =>
-          tokens.findGrant(gid).flatMap( _.map { 
+          apiKeys.findGrant(gid).flatMap( _.map { 
             case g @ Grant(_, _, OwnerPermission(p, _)) =>
               isValid(g).map { _ && p.equalOrChild(path) }
             case _ => M.point(false)
           }.getOrElse(M.point(false))
         )})
+
       case ReadPermission =>
-        if(owners.isEmpty) { logger.debug("Empty owners == no read permission"); M.point(false) }
+        if(owners.isEmpty) M.point(false)
         else {
           forall(owners.map { owner =>
             exists(t.grants.map{ gid =>
-              tokens.findGrant(gid).flatMap( _.map {
+              apiKeys.findGrant(gid).flatMap( _.map {
                 case g @ Grant(_, _, ReadPermission(p, o, _)) =>
-                  isValid(g).map { valid =>
-                    val equalOrChild = p.equalOrChild(path)
-                    val goodOwnership = owner == o
-                    logger.debug("Got grant %s > valid: %s, equalOrChild: %s, goodOwnership: %s".format(gid.take(10) + "...", valid, equalOrChild, goodOwnership))
-                    valid && equalOrChild && goodOwnership
-                  }
-                case other => M.point(false)
-              }.getOrElse { logger.debug("Could not locate grant " + gid); M.point(false) }
+                  isValid(g).map { _ && p.equalOrChild(path) /*&& (owner == o || owner == t.tid)*/ }
+                case _ => M.point(false)
+              }.getOrElse(M.point(false))
             )})
           })
         }
+
       case ReducePermission =>
         if(owners.isEmpty) M.point(false)
         else forall( owners.map { owner =>
           exists(t.grants.map{ gid =>
-            tokens.findGrant(gid).flatMap( _.map { 
+            apiKeys.findGrant(gid).flatMap( _.map { 
               case g @ Grant(_, _, ReducePermission(p, o, _)) =>
-                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
+                isValid(g).map { _ && p.equalOrChild(path) /*&& (owner == o || owner == t.tid)*/ }
               case g @ Grant(_, _, ReadPermission(p, o, _)) =>
-                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
+                isValid(g).map { _ && p.equalOrChild(path) /*&& (owner == o || owner == t.tid)*/ }
               case _ => M.point(false)
             }.getOrElse(M.point(false))
           )})
@@ -135,7 +133,7 @@ class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Mona
 
   def isValid(grant: Grant): M[Boolean] = {
     (grant.issuer.map {
-      tokens.findGrant(_).flatMap { _.map { parentGrant => 
+      apiKeys.findGrant(_).flatMap { _.map { parentGrant => 
         isValid(parentGrant).map { _ && grant.permission.accessType == parentGrant.permission.accessType }
       }.getOrElse { logger.warn("Could not locate issuer for grant: " + grant); M.point(false) } } 
     }.getOrElse { logger.debug("No issuer, parent grant == true"); M.point(true) }).map { _ && !grant.permission.isExpired(new DateTime()) }

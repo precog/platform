@@ -40,17 +40,12 @@ import Validation._
 
 import blueeyes.json._
 
-trait DatasetConsumersConfig extends EvaluatorConfig {
-  def maxEvalDuration: Duration
-}
-
 // TODO decouple this from the evaluator specifics
-trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with YggConfigComponent {
+trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] {
   import JsonAST._
   
   type X = Throwable
-  type YggConfig <: DatasetConsumersConfig
-  type SEvent = (Identities, SValue)
+  type SEvent = (Vector[Long], SValue)
 
   implicit def M: Monad[M] with Copointed[M]
   
@@ -62,7 +57,7 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with
       }}
 
       val events = json map { jvalue =>
-        ((((jvalue \ "key") --> classOf[JArray]).elements collect { case JNum(i) => i.toLong }).toArray, jvalueToSValue(jvalue \ "value"))
+        (Vector(((jvalue \ "key") --> classOf[JArray]).elements collect { case JNum(i) => i.toLong }: _*), jvalueToSValue(jvalue \ "value"))
       }
       
       events.toSet
@@ -71,7 +66,6 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with
   
   private def jvalueToSValue(value: JValue): SValue = value match {
     case JNothing => sys.error("don't use jnothing; doh!")
-    case JField(_, _) => sys.error("seriously?!")
     case JNull => SNull
     case JBool(value) => SBoolean(value)
     case JNum(bi) => SDecimal(bi)

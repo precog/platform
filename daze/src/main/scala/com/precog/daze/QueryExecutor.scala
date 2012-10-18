@@ -22,12 +22,14 @@ package daze
 
 import com.precog.yggdrasil.TableModule
 import com.precog.common._
+import com.precog.common.json._
 
-import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 
 import akka.actor.ActorSystem
 import akka.dispatch.{Future, ExecutionContext}
+
+import java.nio.CharBuffer
 
 import scalaz.{ Validation, StreamT, Id }
 import Validation._
@@ -46,11 +48,11 @@ object EvaluationError {
 
 case class QueryOptions(
   page: Option[(Int, Int)] = None,
-  sortOn: List[JPath] = Nil,
+  sortOn: List[CPath] = Nil,
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending)
 
 trait QueryExecutor[M[+_]] {
-  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, List[JValue]]]
+  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, CharBuffer]]
   def browse(userUID: String, path: Path): M[Validation[String, JArray]]
   def structure(userUID: String, path: Path): M[Validation[String, JObject]]
   def status(): M[Validation[String, JValue]]

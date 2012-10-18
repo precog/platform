@@ -54,4 +54,34 @@ object NumericComparisons {
     val bError = eps(b)
     if (a + aError < b - bError) -1 else if (a - aError > b + bError) 1 else 0
   }
+
+
+  import scalaz.Ordering.{ LT, GT, EQ }
+
+  @inline def order(a: Long, b: Long): scalaz.Ordering =
+    if (a < b) LT else if (a == b) EQ else GT
+
+  @inline def order(a: Double, b: Double): scalaz.Ordering =
+    if (a < b) LT else if (a == b) EQ else GT
+
+  @inline def order(a: Long, b: Double): scalaz.Ordering =
+    scalaz.Ordering.fromInt(compare(a, b))
+
+  @inline def order(a: Double, b: Long): scalaz.Ordering =
+    scalaz.Ordering.fromInt(compare(a, b))
+
+  @inline def order(a: Long, b: BigDecimal): scalaz.Ordering =
+    scalaz.Ordering.fromInt(compare(a, b))
+
+  @inline def order(a: Double, b: BigDecimal): scalaz.Ordering =
+    scalaz.Ordering.fromInt(compare(a, b))
+
+  @inline def order(a: BigDecimal, b:Long): scalaz.Ordering =
+    scalaz.Ordering.fromInt(compare(a, b))
+
+  @inline def order(a: BigDecimal, b:Double): scalaz.Ordering =
+    scalaz.Ordering.fromInt(compare(a, b))
+
+  @inline def order(a: BigDecimal, b:BigDecimal): scalaz.Ordering =
+    scalaz.Ordering.fromInt(compare(a, b))
 }

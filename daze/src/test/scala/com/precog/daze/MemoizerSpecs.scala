@@ -21,7 +21,7 @@ package com.precog
 package daze
 
 import bytecode.StaticLibrary
-
+import com.precog.yggdrasil._
 import org.specs2.mutable._
 
 object MemoizerSpecs extends Specification with Memoizer with StaticLibrary {
@@ -32,7 +32,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary {
     "not memoize a sub-graph of non-forcing operations" in {
       val line = Line(0, "")
       
-      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
       
       val input =
         Join(line, Add, IdentitySort,
@@ -40,7 +40,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary {
           Operate(line, Neg,
             Join(line, Mul, CrossLeftSort,
               clicks,
-              Root(line, PushNum("42")))))
+              Root(line, CLong(42)))))
           
       memoize(input) mustEqual input
     }
@@ -49,7 +49,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary {
       val line = Line(0, "")
       
       val clicks = 
-        dag.Morph1(line, libMorphism1.head, dag.LoadLocal(line, Root(line, PushString("/clicks"))))
+        dag.Morph1(line, libMorphism1.head, dag.LoadLocal(line, Root(line, CString("/clicks"))))
       
       val input =
         Join(line, Add, IdentitySort,
@@ -74,7 +74,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary {
       val line = Line(0, "")
       
       val clicks = 
-        dag.Morph1(line, libMorphism1.head, dag.LoadLocal(line, Root(line, PushString("/clicks"))))
+        dag.Morph1(line, libMorphism1.head, dag.LoadLocal(line, Root(line, CString("/clicks"))))
       
       lazy val split: dag.Split = dag.Split(line,
         dag.Group(0, clicks, UnfixedSolution(1, clicks)),
@@ -103,7 +103,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary {
       val line = Line(0, "")
       
       val clicks = 
-        dag.Morph1(line, libMorphism1.head, dag.LoadLocal(line, Root(line, PushString("/clicks"))))
+        dag.Morph1(line, libMorphism1.head, dag.LoadLocal(line, Root(line, CString("/clicks"))))
       
       val join =
         Join(line, Add, IdentitySort,

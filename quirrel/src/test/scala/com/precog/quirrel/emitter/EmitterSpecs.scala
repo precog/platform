@@ -338,7 +338,7 @@ object EmitterSpecs extends Specification
           Map2Cross(WrapObject),
           Map2Match(JoinObject)))
     }
-    
+
     "emit empty array" in {
       testEmit("[]")(Vector(PushArray))
     }
@@ -407,6 +407,15 @@ object EmitterSpecs extends Specification
           LoadLocal,
           PushString("foo"),
           Map2Cross(DerefObject)))
+    }
+
+    "emit meta descent for object load" in {
+      testEmit("clicks := //clicks clicks@foo")(
+        Vector(
+          PushString("/clicks"),
+          LoadLocal,
+          PushString("foo"),
+          Map2Cross(DerefMetadata)))
     }
 
     "emit descent for array load" in {

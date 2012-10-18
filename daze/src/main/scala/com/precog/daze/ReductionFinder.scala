@@ -25,6 +25,7 @@ import scalaz.Monoid
 import scala.collection.mutable
 
 import com.precog.util._
+import com.precog.yggdrasil.CLong
 
 import scalaz.NonEmptyList
 import scalaz.std.map._
@@ -48,7 +49,7 @@ trait ReductionFinder extends DAG {
           result
         }
         val index: Int = reds(parent).list.indexOf(red)
-        dag.Join(loc, DerefArray, CrossLeftSort, left, Root(loc, PushNum(index.toString)))
+        dag.Join(loc, DerefArray, CrossLeftSort, left, Root(loc, CLong(index)))
       }
     }}
   }

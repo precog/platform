@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 package table
 
-import scala.collection.immutable.BitSet
 import scala.util.Random
 
 import blueeyes.json._

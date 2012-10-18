@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 
 import com.precog.common._
 import com.precog.common.util._
+import com.precog.common.json._
 import blueeyes.json.JPath
 
 import scala.collection.immutable.ListMap
@@ -39,10 +40,10 @@ trait ArbitraryProjectionDescriptor {
 
     val genColumnDescriptor = for {
       path      <- genPath
-      selector  <- genJPath
+      selector  <- genJPath // TODO genCPath
       valueType <- genCType
       ownership <- genAuthorities
-    } yield ColumnDescriptor(path, selector, valueType, ownership)
+    } yield ColumnDescriptor(path, CPath(selector), valueType, ownership)
 
     genColumnDescriptor
   }

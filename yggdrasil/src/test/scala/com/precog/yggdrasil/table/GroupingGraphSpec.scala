@@ -22,6 +22,7 @@ package table
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
+import com.precog.common.json._
 
 import org.specs2.mutable._
 
@@ -41,8 +42,8 @@ trait GroupingGraphSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Sp
 
   override type GroupId = Int
 
-  def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
-  def ticvars(str: String): Seq[TicVar] = str.toSeq.map((c: Char) => JPathField(c.toString))
+  def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => CPathField(c.toString))))
+  def ticvars(str: String): Seq[TicVar] = str.toSeq.map((c: Char) => CPathField(c.toString))
   def order(str: String) = OrderingConstraint.fromFixed(ticvars(str))
   def mergeNode(str: String) = MergeNode(ticvars(str).toSet, null)
 
@@ -50,7 +51,7 @@ trait GroupingGraphSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Sp
     val spec = GroupingSource(
       Table.empty, 
       SourceKey.Single, Some(TransSpec1.Id), 2, 
-      GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
+      GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
 
     Table.findBindingUniverses(spec) must haveSize(1)
   }
@@ -60,8 +61,8 @@ trait GroupingGraphSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Sp
       Table.empty,
       SourceKey.Single, Some(SourceValue.Single), 3,
       GroupKeySpecAnd(
-        GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-        GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+        GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
+        GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
 
     Table.findBindingUniverses(spec) must haveSize(1)
   }
@@ -70,16 +71,16 @@ trait GroupingGraphSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Sp
     val spec1 = GroupingSource(
       Table.empty,
       SourceKey.Single, Some(TransSpec1.Id), 2,
-      GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
+      GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
       
     val spec2 = GroupingSource(
       Table.empty,
       SourceKey.Single, Some(TransSpec1.Id), 3,
-      GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
+      GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
       
     val union = GroupingAlignment(
-      DerefObjectStatic(Leaf(Source), JPathField("1")),
-      DerefObjectStatic(Leaf(Source), JPathField("1")),
+      DerefObjectStatic(Leaf(Source), CPathField("1")),
+      DerefObjectStatic(Leaf(Source), CPathField("1")),
       spec1,
       spec2, GroupingSpec.Union)
 
@@ -91,8 +92,8 @@ trait GroupingGraphSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Sp
       Table.empty,
       SourceKey.Single, Some(SourceValue.Single), 3,
       GroupKeySpecOr(
-        GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-        GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+        GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
+        GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
 
     Table.findBindingUniverses(spec) must haveSize(2)
   }
@@ -102,19 +103,19 @@ trait GroupingGraphSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Sp
       Table.empty,
       SourceKey.Single, Some(TransSpec1.Id), 2,
       GroupKeySpecOr(
-        GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-        GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+        GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
+        GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
       
     val spec2 = GroupingSource(
       Table.empty,
       SourceKey.Single, Some(TransSpec1.Id), 3,
       GroupKeySpecOr(
-        GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-        GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+        GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
+        GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
       
     val union = GroupingAlignment(
-      DerefObjectStatic(Leaf(Source), JPathField("1")),
-      DerefObjectStatic(Leaf(Source), JPathField("1")),
+      DerefObjectStatic(Leaf(Source), CPathField("1")),
+      DerefObjectStatic(Leaf(Source), CPathField("1")),
       spec1,
       spec2, GroupingSpec.Union)
 
@@ -308,9 +309,9 @@ trait GroupingGraphSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Sp
       "derive a correct TransSpec for a conjunctive GroupKeySpec" in {
         val keySpec = GroupKeySpecAnd(
           GroupKeySpecAnd(
-            GroupKeySpecSource(JPathField("tica"), DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-            GroupKeySpecSource(JPathField("ticb"), DerefObjectStatic(SourceValue.Single, JPathField("b")))),
-          GroupKeySpecSource(JPathField("ticc"), DerefObjectStatic(SourceValue.Single, JPathField("c"))))
+            GroupKeySpecSource(CPathField("tica"), DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+            GroupKeySpecSource(CPathField("ticb"), DerefObjectStatic(SourceValue.Single, CPathField("b")))),
+          GroupKeySpecSource(CPathField("ticc"), DerefObjectStatic(SourceValue.Single, CPathField("c"))))
 
         val transspec = GroupKeyTrans(Table.Universe.sources(keySpec))
         val JArray(data) = JsonParser.parse("""[
@@ -332,9 +333,9 @@ trait GroupingGraphSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Sp
       "transform a group key transspec to use a desired sort key order" in {
         val trans = GroupKeyTrans(
           OuterObjectConcat(
-            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a")), keyName(0)),
-            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b")), keyName(1)),
-            WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("c")), keyName(2))
+            WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("a")), keyName(0)),
+            WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("b")), keyName(1)),
+            WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("c")), keyName(2))
           ),
           ticvars("abc")
         )

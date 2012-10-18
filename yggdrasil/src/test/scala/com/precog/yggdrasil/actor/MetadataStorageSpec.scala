@@ -21,11 +21,12 @@ package com.precog.yggdrasil
 package actor
 
 import com.precog.common._
+import com.precog.common.json._
 import com.precog.util._
 import com.precog.yggdrasil.metadata._
 
 import blueeyes.json._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import org.specs2.mutable.Specification
 import org.specs2.specification.{Fragments, Scope, Step}
@@ -60,7 +61,7 @@ class MetadataStorageSpec extends Specification {
 
   override def map(fs: => Fragments) = super.map(fs) ^ cleanupBaseDir
 
-  val colDesc = ColumnDescriptor(Path("/"), JPath(".foo"), CBoolean, Authorities(Set("TOKEN")))
+  val colDesc = ColumnDescriptor(Path("/"), CPath(".foo"), CBoolean, Authorities(Set("TOKEN")))
 
   val desc = ProjectionDescriptor(1, List(colDesc))
 

@@ -62,6 +62,8 @@ trait DAGTransform extends DAG {
         case Operate(loc, op, parent) => f(Operate(loc, op, transformAux(splits, parent)))
   
         case Reduce(loc, red, parent) => f(Reduce(loc, red, transformAux(splits, parent)))
+        
+        case MegaReduce(loc, reds, parent) => f(MegaReduce(loc, reds, transformAux(splits, parent)))
   
         case Morph1(loc, m, parent) => f(Morph1(loc, m, transformAux(splits, parent)))
   

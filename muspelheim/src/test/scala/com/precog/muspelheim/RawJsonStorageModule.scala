@@ -20,6 +20,7 @@
 package com.precog.muspelheim
 
 import com.precog.bytecode._
+import com.precog.common.json.CPath
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.table._
 
@@ -29,7 +30,6 @@ import akka.testkit.TestActorRef
 import akka.util.Timeout
 import akka.util.duration._
 
-import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 
@@ -110,14 +110,14 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
       val source = new TestMetadataStorage(projectionMetadata)
       def findChildren(path: Path) = M.point(source.findChildren(path))
       def findSelectors(path: Path) = M.point(source.findSelectors(path))
-      def findProjections(path: Path, selector: JPath) = M.point {
+      def findProjections(path: Path, selector: CPath) = M.point {
         projections.collect {
           case (descriptor, _) if descriptor.columns.exists { case ColumnDescriptor(p, s, _, _) => p == path && s == selector } => 
             (descriptor, ColumnMetadata.Empty)
         }
       }
 
-      def findPathMetadata(path: Path, selector: JPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
+      def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
     }
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl[M](), metadata)
@@ -172,7 +172,8 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
   }
 
   class Projection(val descriptor: ProjectionDescriptor, val data: Vector[JValue]) extends ProjectionLike {
-    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("DummyProjection doesn't support insert")
+    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("DummyProjection doesn't support insert")
+    def commit(): IO[Unit] = sys.error("DummyProjection doesn't support commit")
   }
 
   object Projection extends ProjectionCompanion {

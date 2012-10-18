@@ -20,13 +20,14 @@
 package com.precog.yggdrasil
 package table
 
-import blueeyes.json.JPath
-import blueeyes.json.JPath._
+import com.precog.common.json.CPath
+import com.precog.common.json.CPath._
+
 import com.precog.common.Path
 import scalaz.syntax.semigroup._
 import scalaz.syntax.order._
 
-case class ColumnRef(selector: JPath, ctype: CType)
+case class ColumnRef(selector: CPath, ctype: CType)
 
 object ColumnRef {
   implicit object order extends scalaz.Order[ColumnRef] {

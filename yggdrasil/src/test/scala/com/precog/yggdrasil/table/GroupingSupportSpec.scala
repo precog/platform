@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.Path
+import com.precog.common.json._
 import com.precog.common.VectorCase
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.util._
@@ -33,7 +34,6 @@ import blueeyes.json.JsonDSL._
 import com.weiglewilczek.slf4s.Logging
 
 import scala.annotation.tailrec
-import scala.collection.BitSet
 import scala.collection.mutable.LinkedHashSet
 import scala.util.Random
 
@@ -59,7 +59,7 @@ import org.specs2.mutable._
 trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
   import TableModule._
 
-  //def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
+  //def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => CPathField(c.toString))))
   abstract class RunVictimPairTest[M[+_]](val module: ColumnarTableModuleTestSupport[M]) {
     import module._
     import trans._
@@ -72,7 +72,7 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
 
     type GroupId = module.GroupId
 
-    def ticvars(str: String): Seq[TicVar] = str.toSeq.map((c: Char) => JPathField(c.toString))
+    def ticvars(str: String): Seq[TicVar] = str.toSeq.map((c: Char) => CPathField(c.toString))
     def order(str: String) = OrderingConstraint.fromFixed(ticvars(str))
     def mergeNode(str: String) = MergeNode(ticvars(str).toSet, null)
 
@@ -90,8 +90,8 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
                 Some(TransSpec1.Id),
                 v1GroupId,
                 GroupKeySpecAnd(
-                  GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))),
-                  GroupKeySpecSource(JPathField("b"), DerefObjectStatic(Leaf(Source), JPathField("b0")))))
+                  GroupKeySpecSource(CPathField("a"), DerefObjectStatic(Leaf(Source), CPathField("a0"))),
+                  GroupKeySpecSource(CPathField("b"), DerefObjectStatic(Leaf(Source), CPathField("b0")))))
       )
 
       val victim1 = BorgVictimNode(
@@ -102,8 +102,8 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
           Some(TransSpec1.Id),
           GroupKeyTrans(
             OuterObjectConcat(
-              WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000"),
-              WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b0")), "000001")
+              WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("a0")), "000000"),
+              WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("b0")), "000001")
             ),
             ticvars("ab")),
           ticvars("ab"),
@@ -116,7 +116,7 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
                 SourceKey.Single,
                 Some(TransSpec1.Id),
                 v2GroupId,
-                GroupKeySpecSource(JPathField("a"), DerefObjectStatic(Leaf(Source), JPathField("a0"))))
+                GroupKeySpecSource(CPathField("a"), DerefObjectStatic(Leaf(Source), CPathField("a0"))))
       )
 
       val victim2 = BorgVictimNode(
@@ -127,7 +127,7 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
           Some(TransSpec1.Id),
           GroupKeyTrans(
             OuterObjectConcat(
-              WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a0")), "000000")
+              WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("a0")), "000000")
             ),
             ticvars("a")),
           ticvars("a"),
@@ -307,7 +307,7 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
   def c(str: String) = OrderingConstraint2.parse(str)
 
   object ConstraintParser extends scala.util.parsing.combinator.JavaTokenParsers {
-    lazy val ticVar: Parser[OrderingConstraint2] = "'" ~> ident ^^ (s => Variable(JPathField(s)))
+    lazy val ticVar: Parser[OrderingConstraint2] = "'" ~> ident ^^ (s => Variable(CPathField(s)))
 
     lazy val ordered: Parser[OrderingConstraint2] = ("[" ~> repsep(constraint, ",") <~ "]") ^^ (v => Ordered(v.toSeq))
 
@@ -387,7 +387,7 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
 
     "variables" should {
       "identify all variables" in {
-        c("[{'a, 'b}, 'c, ['d, {'e, 'f}]]").variables mustEqual Set("a", "b", "c", "d", "e", "f").map(JPathField.apply)
+        c("[{'a, 'b}, 'c, ['d, {'e, 'f}]]").variables mustEqual Set("a", "b", "c", "d", "e", "f").map(CPathField.apply)
       }
     }
 

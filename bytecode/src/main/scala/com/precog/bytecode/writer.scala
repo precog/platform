@@ -129,7 +129,8 @@ trait BytecodeWriter extends Writer with Version {
       case ArraySwap => 0x8A
       
       case DerefObject => 0xA0
-      case DerefArray => 0xA1
+      case DerefMetadata => 0xA1
+      case DerefArray => 0xA2
 
       case BuiltInFunction2Op(op) => 0xB1 | (op.opcode << 8)
     }

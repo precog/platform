@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package metadata
 
+import com.precog.common.json._
 import com.precog.util._
 import com.precog.common._
 
@@ -27,9 +28,9 @@ import com.weiglewilczek.slf4s.Logging
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.Extractor._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Extractor._
 
 import java.io.{File, FileReader, FileWriter}
 import scalaz.{Validation, Success, Failure}
@@ -47,7 +48,7 @@ import scalaz.std.map._
 import scala.collection.GenTraversableOnce
 
 object MetadataStorage {
-  case class ResolvedSelector(selector: JPath, authorities: Authorities, descriptor: ProjectionDescriptor, metadata: ColumnMetadata) {
+  case class ResolvedSelector(selector: CPath, authorities: Authorities, descriptor: ProjectionDescriptor, metadata: ColumnMetadata) {
     def columnType: CType = descriptor.columns.find(_.selector == selector).map(_.valueType).get
   }
 }
@@ -61,6 +62,7 @@ trait MetadataStorage {
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] 
   def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit]
+  def archiveMetadata(desc: ProjectionDescriptor): IO[Unit]
 
   def findChildren(path: Path): Set[Path] =
     findDescriptors(_ => true) flatMap { descriptor => 
@@ -71,50 +73,50 @@ trait MetadataStorage {
       }
     }
 
-  def findSelectors(path: Path): Set[JPath] = 
+  def findSelectors(path: Path): Set[CPath] = 
     findDescriptors(_ => true) flatMap { descriptor =>
       descriptor.columns.collect { 
         case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector 
       }
     }
 
-  def findPathMetadata(path: Path, selector: JPath, columnMetadata: ProjectionDescriptor => IO[ColumnMetadata] = getMetadata(_: ProjectionDescriptor).map(_.metadata)): IO[PathRoot] = {
-    @inline def isLeaf(ref: JPath, test: JPath) = {
+  def findPathMetadata(path: Path, selector: CPath, columnMetadata: ProjectionDescriptor => IO[ColumnMetadata] = getMetadata(_: ProjectionDescriptor).map(_.metadata)): IO[PathRoot] = {
+    @inline def isLeaf(ref: CPath, test: CPath) = {
       (test.nodes startsWith ref.nodes) && 
       test.nodes.length - 1 == ref.nodes.length
     }
     
-    @inline def isObjectBranch(ref: JPath, test: JPath) = {
+    @inline def isObjectBranch(ref: CPath, test: CPath) = {
       (test.nodes startsWith ref.nodes) && 
       test.nodes.length > ref.nodes.length &&
       (test.nodes(ref.nodes.length) match {
-        case JPathField(_) => true
+        case CPathField(_) => true
         case _             => false
       })
     }
     
-    @inline def isArrayBranch(ref: JPath, test: JPath) = {
+    @inline def isArrayBranch(ref: CPath, test: CPath) = {
       (test.nodes startsWith ref.nodes) && 
       test.nodes.length > ref.nodes.length &&
       (test.nodes(ref.nodes.length) match {
-        case JPathIndex(_) => true
+        case CPathIndex(_) => true
         case _             => false
       })
     }
 
-    def extractIndex(base: JPath, child: JPath): Int = child.nodes(base.length) match {
-      case JPathIndex(i) => i
+    def extractIndex(base: CPath, child: CPath): Int = child.nodes(base.length) match {
+      case CPathIndex(i) => i
       case _             => sys.error("assertion failed") 
     }
 
-    def extractName(base: JPath, child: JPath): String = child.nodes(base.length) match {
-      case JPathField(n) => n 
+    def extractName(base: CPath, child: CPath): String = child.nodes(base.length) match {
+      case CPathField(n) => n 
       case _             => sys.error("unpossible")
     }
 
-    def newIsLeaf(ref: JPath, test: JPath): Boolean = ref == test 
+    def newIsLeaf(ref: CPath, test: CPath): Boolean = ref == test 
 
-    def selectorPartition(sel: JPath, rss: Set[ResolvedSelector]): (Set[ResolvedSelector], Set[ResolvedSelector], Set[Int], Set[String]) = {
+    def selectorPartition(sel: CPath, rss: Set[ResolvedSelector]): (Set[ResolvedSelector], Set[ResolvedSelector], Set[Int], Set[String]) = {
       val (values, nonValues) = rss.partition(rs => newIsLeaf(sel, rs.selector))
       val (indexes, fields) = rss.foldLeft( (Set.empty[Int], Set.empty[String]) ) {
         case (acc @ (is, fs), rs) => if(isArrayBranch(sel, rs.selector)) {
@@ -130,7 +132,7 @@ trait MetadataStorage {
     }
 
     def convertValues(values: Set[ResolvedSelector]): Set[PathMetadata] = {
-      values.foldLeft(Map[(JPath, CType), (Authorities, Map[ProjectionDescriptor, ColumnMetadata])]()) {
+      values.foldLeft(Map[(CPath, CType), (Authorities, Map[ProjectionDescriptor, ColumnMetadata])]()) {
         case (acc, rs @ ResolvedSelector(sel, auth, desc, meta)) => 
           val key = (sel, rs.columnType)
           val update = acc.get(key).map(_._2).getOrElse( Map.empty[ProjectionDescriptor, ColumnMetadata] ) + (desc -> meta)
@@ -140,7 +142,7 @@ trait MetadataStorage {
       }(collection.breakOut)
     }
 
-    def buildTree(branch: JPath, rs: Set[ResolvedSelector]): Set[PathMetadata] = {
+    def buildTree(branch: CPath, rs: Set[ResolvedSelector]): Set[PathMetadata] = {
       val (values, nonValues, indexes, fields) = selectorPartition(branch, rs)
 
       val oval = convertValues(values)
@@ -307,6 +309,14 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
     } getOrElse {
       IO.throwIO(new IllegalStateException("Metadata update on missing projection for " + desc))
     }
+  }
+  
+  def archiveMetadata(desc: ProjectionDescriptor): IO[Unit] = {
+    // Metadata file should already have been moved as a side-effect of archiving
+    // the projection, so here we just remove it from the map.
+    logger.debug("Archiving metadata for " + desc)
+    metadataLocations -= desc
+    IO(())
   }
 
   override def toString = "FileMetadataStorage(root = " + baseDir + " archive = " + archiveDir +")"

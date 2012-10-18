@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common.json._
 import com.precog.bytecode.JType
 import com.precog.common.Path
 import com.precog.common.VectorCase
@@ -32,7 +33,6 @@ import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
 
 import scala.annotation.tailrec
-import scala.collection.BitSet
 
 import scalaz._
 import scalaz.syntax.copointed._
@@ -64,15 +64,15 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
                                                          WrapObject(Leaf(Source), "1")))
 
       implicit val jValueOrdering = if (sortOrder.isAscending) {
-        blueeyes.json.xschema.DefaultOrderings.JValueOrdering
+        JValue.order.toScalaOrdering
       } else {
-        blueeyes.json.xschema.DefaultOrderings.JValueOrdering.reverse
+        JValue.order.toScalaOrdering.reverse
       }
 
       tableWithSortKey.toJson.map {
         jvals =>
           fromJson(jvals.toList.sortBy(_ \ "0").toStream)
-      }.map(_.transform(DerefObjectStatic(Leaf(Source), JPathField("1"))))
+      }.map(_.transform(DerefObjectStatic(Leaf(Source), CPathField("1"))))
     }
     
     override def load(uid: UserId, jtpe: JType) = {

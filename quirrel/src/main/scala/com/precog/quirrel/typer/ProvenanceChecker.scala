@@ -233,6 +233,12 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           expr.provenance = child.provenance
           (errors, constr)
         }
+      
+        case MetaDescent(_, child, _) => {
+          val (errors, constr) = loop(child, relations, constraints)
+          expr.provenance = child.provenance
+          (errors, constr)
+        }
         
         case Deref(_, left, right) => handleBinary(expr, left, right, relations, constraints)
         

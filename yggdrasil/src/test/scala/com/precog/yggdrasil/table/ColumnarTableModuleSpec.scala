@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.Path
+import com.precog.common.json._
 import com.precog.common.VectorCase
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.util._
@@ -30,10 +31,9 @@ import akka.dispatch._
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
-import com.weiglewilczek.slf4s.Logging
+import org.slf4j.{LoggerFactory, MDC}
 
 import scala.annotation.tailrec
-import scala.collection.BitSet
 import scala.collection.mutable.LinkedHashSet
 import scala.util.Random
 
@@ -88,11 +88,15 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   trait TableCompanion extends ColumnarTableCompanion {
     def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize) = new Table(slices, size)
 
+    def singleton(slice: Slice) = new Table(slice :: StreamT.empty[M, Slice], ExactSize(1))
+
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = 
       sys.error("not implemented here")
   }
 
   object Table extends TableCompanion
+
+  private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.table.ColumnarTableModuleSpec")
 
   "a table dataset" should {
     "verify bijection from static JSON" in {
@@ -122,9 +126,134 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     }
 
     "verify bijection from JSON" in checkMappings(this)
-
+    
+    "verify renderJson round tripping" in {
+      implicit val gen = sample(schema)
+      
+      check { data: SampleData =>
+        testRenderJson(data.data)
+      }.set(minTestsOk -> 20000, workers -> Runtime.getRuntime.availableProcessors)
+    }
+    
+    "handle special cases of renderJson" >> {
+      "undefined at beginning of array" >> {
+        testRenderJson(JArray(
+          JNothing ::
+          JNum(1) ::
+          JNum(2) :: Nil) :: Nil)
+      }
+      
+      "undefined in middle of array" >> {
+        testRenderJson(JArray(
+          JNum(1) ::
+          JNothing ::
+          JNum(2) :: Nil) :: Nil)
+      }
+      
+      "fully undefined array" >> {
+        testRenderJson(JArray(
+          JNothing ::
+          JNothing ::
+          JNothing :: Nil) :: Nil)
+      }
+      
+      "undefined at beginning of object" >> {
+        testRenderJson(JObject(
+          JField("foo", JNothing) ::
+          JField("bar", JNum(1)) ::
+          JField("baz", JNum(2)) :: Nil) :: Nil)
+      }
+      
+      "undefined in middle of object" >> {
+        testRenderJson(JObject(
+          JField("foo", JNum(1)) ::
+          JField("bar", JNothing) ::
+          JField("baz", JNum(2)) :: Nil) :: Nil)
+      }
+      
+      "fully undefined object" >> {
+        testRenderJson(JObject(
+          JField("foo", JNothing) ::
+          JField("bar", JNothing) ::
+          JField("baz", JNothing) :: Nil) :: Nil)
+      }
+      
+      "undefined row" >> {
+        testRenderJson(
+          JObject(
+            JField("foo", JNothing) ::
+            JField("bar", JNothing) ::
+            JField("baz", JNothing) :: Nil) ::
+          JNum(42) :: Nil)
+      }
+      
+      "check utf-8 encoding" in check { str: String =>
+        testRenderJson(JString(str) :: Nil)
+      }.set(minTestsOk -> 20000, workers -> Runtime.getRuntime.availableProcessors)
+      
+      "check long encoding" in check { ln: Long =>
+        testRenderJson(JNum(ln) :: Nil)
+      }.set(minTestsOk -> 20000, workers -> Runtime.getRuntime.availableProcessors)
+    }
+    
+    def testRenderJson(seq: Seq[JValue]) = {
+      def minimize(value: JValue): Option[JValue] = {
+        value match {
+          case JObject(Nil)     => Some(JObject(Nil))
+          
+          case JObject(fields)  => {
+            val object2 = JObject(fields flatMap { case JField(k, v) => minimize(v) map { JField(k, _) } })
+            if (object2 == JObject(Nil))
+              None
+            else
+              Some(object2)
+          }
+          
+          case JArray(Nil)      => Some(JArray(Nil))
+          
+          case JArray(elements) => {
+            val array2 = JArray(elements flatMap minimize)
+            if (array2 == JArray(Nil))
+              None
+            else
+              Some(array2)
+          }
+          
+          case JNothing => None
+          case value => Some(value)
+        }
+      }
+    
+      val table = fromJson(seq.toStream)
+      
+      val expected = JArray(seq.toList)
+      
+      val values = table.renderJson(',') map { _.toString }
+      
+      val strM = values.foldLeft("") { _ + _ }
+      
+      val arrayM = strM map { body =>
+        val input = "[%s]".format(body)
+        try {
+          JsonParser.parse(input)
+        } catch {
+          case t => {
+            println("####%s####".format(input))
+            for (i <- 0 until input.length) {
+              println(input.charAt(i): Int)
+            }
+            println("####")
+            throw t
+          }
+        }
+      }
+      
+      val minimized = minimize(expected) getOrElse JArray(Nil)
+      arrayM.copoint mustEqual minimized
+    }
+    
     "in cogroup" >> {
-      "perform a simple cogroup" in testSimpleCogroup
+      "perform a simple cogroup" in testSimpleCogroup(identity[Table])
       "perform another simple cogroup" in testAnotherSimpleCogroup
       "cogroup for unions" in testUnionCogroup
       "perform yet another simple cogroup" in testAnotherSimpleCogroupSwitched
@@ -160,12 +289,19 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "give a transformation for a big decimal and a long" in testMod2Filter
       "perform an object dereference" in checkObjectDeref
       "perform an array dereference" in checkArrayDeref
+      "perform metadata dereference on data without metadata" in checkMetaDeref
       "perform a trivial map2 add" in checkMap2Add
       "perform a trivial map2 eq" in checkMap2Eq
       "perform a map2 add over but not into arrays and objects" in testMap2ArrayObject
       "perform a trivial equality check" in checkEqualSelf
       "perform a trivial equality check on an array" in checkEqualSelfArray
       "perform a slightly less trivial equality check" in checkEqual
+      "test a failing equality example" in testEqual1
+      "perform a simple equality check" in testSimpleEqual
+      "perform another simple equality check" in testAnotherSimpleEqual
+      "perform yet another simple equality check" in testYetAnotherSimpleEqual
+      "perform a equal-literal check" in checkEqualLiteral
+      "perform a not-equal-literal check" in checkNotEqualLiteral
       "wrap the results of a transform in an object as the specified field" in checkWrapObject
       "give the identity transform for self-object concatenation" in checkObjectConcatSelf
       "use a right-biased overwrite strategy in object concat conflicts" in checkObjectConcatOverwrite
@@ -240,12 +376,20 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "cross a simple borg result set" in simpleCrossAllTest
   }
 
+  "logging" should {
+    "run" in {
+      testSimpleCogroup(t => t.logged(logger, "test-logging", "start stream", "end stream") {
+        slice => "size: " + slice.size
+      })
+    }
+  }
+
   "grouping support" >> {
     import Table._
     import Table.Universe._
 
-    def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => JPathField(c.toString))))
-    def ticvars(str: String) = str.toSeq.map((c: Char) => JPathField(c.toString))
+    def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => CPathField(c.toString))))
+    def ticvars(str: String) = str.toSeq.map((c: Char) => CPathField(c.toString))
     def order(str: String) = OrderingConstraint.fromFixed(ticvars(str))
     def mergeNode(str: String) = MergeNode(ticvars(str).toSet, null)
 
@@ -254,7 +398,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
         val spec = GroupingSource(
           Table.empty, 
           SourceKey.Single, Some(TransSpec1.Id), 2, 
-          GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
+          GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
 
         Table.findBindingUniverses(spec) must haveSize(1)
       }
@@ -264,8 +408,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
           Table.empty,
           SourceKey.Single, Some(SourceValue.Single), 3,
           GroupKeySpecAnd(
-            GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+            GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
+            GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
 
         Table.findBindingUniverses(spec) must haveSize(1)
       }
@@ -274,16 +418,16 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
         val spec1 = GroupingSource(
           Table.empty,
           SourceKey.Single, Some(TransSpec1.Id), 2,
-          GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
+          GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
           
         val spec2 = GroupingSource(
           Table.empty,
           SourceKey.Single, Some(TransSpec1.Id), 3,
-          GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
+          GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
           
         val union = GroupingAlignment(
-          DerefObjectStatic(Leaf(Source), JPathField("1")),
-          DerefObjectStatic(Leaf(Source), JPathField("1")),
+          DerefObjectStatic(Leaf(Source), CPathField("1")),
+          DerefObjectStatic(Leaf(Source), CPathField("1")),
           spec1,
           spec2, GroupingSpec.Union)
 
@@ -295,8 +439,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
           Table.empty,
           SourceKey.Single, Some(SourceValue.Single), 3,
           GroupKeySpecOr(
-            GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+            GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
+            GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
 
         Table.findBindingUniverses(spec) must haveSize(2)
       }
@@ -306,19 +450,19 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
           Table.empty,
           SourceKey.Single, Some(TransSpec1.Id), 2,
           GroupKeySpecOr(
-            GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+            GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
+            GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
           
         val spec2 = GroupingSource(
           Table.empty,
           SourceKey.Single, Some(TransSpec1.Id), 3,
           GroupKeySpecOr(
-            GroupKeySpecSource(JPathField("1"), DerefObjectStatic(Leaf(Source), JPathField("a"))),
-            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+            GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
+            GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
           
         val union = GroupingAlignment(
-          DerefObjectStatic(Leaf(Source), JPathField("1")),
-          DerefObjectStatic(Leaf(Source), JPathField("1")),
+          DerefObjectStatic(Leaf(Source), CPathField("1")),
+          DerefObjectStatic(Leaf(Source), CPathField("1")),
           spec1,
           spec2, GroupingSpec.Union)
 
@@ -329,9 +473,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "derive a correct TransSpec for a conjunctive GroupKeySpec" in {
       val keySpec = GroupKeySpecAnd(
         GroupKeySpecAnd(
-          GroupKeySpecSource(JPathField("tica"), DerefObjectStatic(SourceValue.Single, JPathField("a"))),
-          GroupKeySpecSource(JPathField("ticb"), DerefObjectStatic(SourceValue.Single, JPathField("b")))),
-        GroupKeySpecSource(JPathField("ticc"), DerefObjectStatic(SourceValue.Single, JPathField("c"))))
+          GroupKeySpecSource(CPathField("tica"), DerefObjectStatic(SourceValue.Single, CPathField("a"))),
+          GroupKeySpecSource(CPathField("ticb"), DerefObjectStatic(SourceValue.Single, CPathField("b")))),
+        GroupKeySpecSource(CPathField("ticc"), DerefObjectStatic(SourceValue.Single, CPathField("c"))))
 
       val transspec = GroupKeyTrans(Table.Universe.sources(keySpec))
       val JArray(data) = JsonParser.parse("""[
@@ -534,9 +678,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 
       val trans = GroupKeyTrans(
         InnerObjectConcat(
-          WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("a")), keyName(0)),
-          WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("b")), keyName(1)),
-          WrapObject(DerefObjectStatic(SourceValue.Single, JPathField("c")), keyName(2))
+          WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("a")), keyName(0)),
+          WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("b")), keyName(1)),
+          WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("c")), keyName(2))
         ),
         ticvars("abc")
       )

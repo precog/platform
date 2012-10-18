@@ -27,12 +27,12 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonParser
 import blueeyes.json.Printer
 
-import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.Extractor._
+import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Extractor._
 
 import scalaz._
-import Scalaz._
+import scalaz.syntax.apply._
 
 sealed trait IngestMessage
 
@@ -48,29 +48,6 @@ class IngestMessageSerialization {
 
 object IngestMessage extends IngestMessageSerialization
 
-//case class SyncMessage(producerId: Int, syncId: Int, eventIds: List[Int]) extends IngestMessage
-
-// trait SyncMessageSerialization {
-//   implicit val SyncMessageDecomposer: Decomposer[SyncMessage] = new Decomposer[SyncMessage] {
-//     override def decompose(eventMessage: SyncMessage): JValue = JObject(
-//       List(
-//         JField("producerId", eventMessage.producerId.serialize),
-//         JField("syncId", eventMessage.syncId.serialize),
-//         JField("eventIds", eventMessage.eventIds.serialize)))
-//   }
-// 
-//   implicit val SyncMessageExtractor: Extractor[SyncMessage] = new Extractor[SyncMessage] with ValidatedExtraction[SyncMessage] {
-//     override def validated(obj: JValue): Validation[Error, SyncMessage] =
-//       ((obj \ "producerId").validated[Int] |@|
-//         (obj \ "syncId").validated[Int] |@|
-//         (obj \ "eventIds").validated[List[Int]]).apply(SyncMessage(_, _, _))
-//   }  
-// }
-// 
-// object SyncMessage extends SyncMessageSerialization {
-//   val start = SyncMessage(_: Int, 0, List.empty)
-//   def finish = SyncMessage(_: Int, Int.MaxValue, _: List[Int])
-// }
 
 case class EventId(producerId: ProducerId, sequenceId: SequenceId) {
   val uid = (producerId.toLong << 32) | (sequenceId.toLong & 0xFFFFFFFFL)
@@ -96,11 +73,11 @@ trait EventMessageSerialization {
 }
 
 object EventMessage extends EventMessageSerialization {
-
   def apply(producerId: ProducerId, sequenceId: SequenceId, event: Event): EventMessage = {
     EventMessage(EventId(producerId, sequenceId), event)
   }
 }
+
 
 case class ArchiveId(producerId: ProducerId, sequenceId: SequenceId) {
   val uid = (producerId.toLong << 32) | (sequenceId.toLong & 0xFFFFFFFFL)
@@ -132,6 +109,7 @@ object ArchiveMessage extends ArchiveMessageSerialization {
   }
 }
 
+
 object IngestMessageSerialization {
   private val stopByte: Byte = 0x00
   private val jsonEventFlag: Byte = 0x01
@@ -162,9 +140,6 @@ object IngestMessageSerialization {
     })(msg)(buffer)
   }
   
-//  def writeSync(msg: IngestMessage): ByteBuffer => ByteBuffer = (writeHeader(_: ByteBuffer, jsonSyncFlag)) andThen 
-//                                                                (writeMessage(_: ByteBuffer, msg))
-
   def writeEvent(msg: IngestMessage): ByteBuffer => ByteBuffer = (writeHeader(_: ByteBuffer, jsonEventFlag)) andThen 
                                                                  (writeMessage(_: ByteBuffer, msg))
   
@@ -198,23 +173,13 @@ object IngestMessageSerialization {
       (stop, msgType) match {
         case (`stopByte`, `jsonEventFlag`) => parseEvent(buffer)
         case (`stopByte`, `jsonArchiveFlag`) => parseArchive(buffer)
-        //case (`stopByte`, `jsonSyncFlag`)  => parseSync(buffer)
       }
     }
   }
   
-  //def parseSync = (parseJValue _) andThen (jvalueToSync _)
-  
   def parseEvent = (parseJValue _) andThen (jvalueToEvent _)
 
   def parseArchive = (parseJValue _) andThen (jvalueToArchive _)
-  
-//  def jvalueToSync(jvalue: JValue): Validation[String, IngestMessage] = {
-//    jvalue.validated[SyncMessage] match {
-//      case Failure(e)  => Failure(e.message)
-//      case Success(sm) => Success(sm)
-//    }
-//  }
   
   def jvalueToEvent(jvalue: JValue): Validation[String, IngestMessage] = {
     jvalue.validated[EventMessage] match {

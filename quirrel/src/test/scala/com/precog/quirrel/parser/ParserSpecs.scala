@@ -465,6 +465,21 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("1.`test \\` ing \\\\ with $%^&*!@#$ me!`") must beLike { case Descent(_, NumLit(_, "1"), "test ` ing \\ with $%^&*!@#$ me!") => ok }
     }
     
+    "accept a metadata descent" in {
+      parse("1@foo") must beLike { case MetaDescent(_, NumLit(_, "1"), "foo") => ok }
+      parse("1@e42") must beLike { case MetaDescent(_, NumLit(_, "1"), "e42") => ok }
+    }
+    
+    "reject metadta descent with invalid property" in {
+      parse("1@-sdf") must throwA[ParseException]
+      parse("1@42lkj") must throwA[ParseException]
+    }
+    
+    "accept a metadata descent with a backtic-delimited property" in {
+      parse("1@`$see! what I can do___`") must beLike { case MetaDescent(_, NumLit(_, "1"), "$see! what I can do___") => ok }
+      parse("1@`test \\` ing \\\\ with $%^&*!@#$ me!`") must beLike { case MetaDescent(_, NumLit(_, "1"), "test ` ing \\ with $%^&*!@#$ me!") => ok }
+    }
+    
     "accept an array dereference" in {
       parse("1[2]") must beLike { case Deref(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
       parse("x[y]") must beLike { case Deref(_, Dispatch(_, Identifier(Vector(), "x"), Vector()), Dispatch(_, Identifier(Vector(), "y"), Vector())) => ok }
@@ -803,6 +818,14 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       
       parse("neg 1.x") must beLike {
         case Neg(_, Descent(_, NumLit(_, "1"), "x")) => ok
+      }
+      
+      parse("!1@x") must beLike {
+        case Comp(_, MetaDescent(_, NumLit(_, "1"), "x")) => ok
+      }
+      
+      parse("neg 1@x") must beLike {
+        case Neg(_, MetaDescent(_, NumLit(_, "1"), "x")) => ok
       }
       
       parse("!1[2]") must beLike {

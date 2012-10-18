@@ -99,6 +99,12 @@ object NullProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    "propagate through metadescent" in {
+      val tree = compile("(//a + //b)@foo")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
     "propagate through dereference" in {
       {
         val tree = compile("(//a + //b)[42]")

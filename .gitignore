@@ -23,3 +23,6 @@ yggdrasil/data
 /TAGS
 /standaloneArtifacts
 *.jps
+jprofiler.db
+jprofiler.jnilib
+.cache

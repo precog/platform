@@ -23,13 +23,12 @@ package jdbm3
 import com.precog.yggdrasil.table._
 import com.precog.util.ByteBufferPool
 
+import com.precog.common.json._
 import blueeyes.json.{ JPath, JPathIndex }
 
 import org.joda.time.DateTime
 
 import java.nio.ByteBuffer
-
-import scala.collection.immutable.BitSet
 
 import org.specs2._
 import org.specs2.mutable.Specification
@@ -45,7 +44,7 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
   // This should generate some jpath ids, then generate CTypes for these.
   def genColumnRefs: Gen[List[ColumnRef]] = Gen.listOf(Gen.alphaStr filter (_.size > 0)) flatMap { paths =>
     Gen.sequence[List, List[ColumnRef]](paths.distinct.map { name =>
-      Gen.listOf(genCType) map { _.distinct map (ColumnRef(JPath(name), _)) }
+      Gen.listOf(genCType) map { _.distinct map (ColumnRef(CPath(name), _)) }
     }).map(_.flatten)
   }
 
@@ -74,7 +73,7 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
     }) map (_.flatten)
 
   def arrayColumnsFor(size: Int, refs: List[ColumnRef]): List[ArrayColumn[_]] =
-    refs map JDBMSlice.columnFor(JPath.Identity, size) map (_._2)
+    refs map JDBMSlice.columnFor(CPath.Identity, size) map (_._2)
 
   def verify(rows: List[List[CValue]], cols: List[Column]) = {
     rows.zipWithIndex foreach { case (values, row) =>
@@ -101,6 +100,44 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
 
   "ValueRowFormat" should {
     checkRoundTrips(RowFormat.forValues(_))
+  }
+
+  private def identityCols(len: Int): List[ColumnRef] = (0 until len).map({ i =>
+    ColumnRef(CPath(CPathIndex(i)), CLong)
+  })(scala.collection.breakOut)
+
+  "IdentitiesRowFormat" should {
+    "round-trip CLongs" in {
+      check { id: List[Long] =>
+        val rowFormat = RowFormat.IdentitiesRowFormatV1(identityCols(id.size))
+        val cId: List[CValue] = id map (CLong(_))
+        rowFormat.decode(rowFormat.encode(cId)) must_== cId
+      }
+    }
+
+    "encodeIdentities matches encode format" in {
+      check { id: List[Long] =>
+        val rowFormat = RowFormat.IdentitiesRowFormatV1(identityCols(id.size))
+        val cId: List[CValue] = id map (CLong(_))
+        rowFormat.decode(rowFormat.encodeIdentities(id.toArray)) must_== cId
+      }
+    }
+
+    "round-trip CLongs -> Column -> CLongs" in {
+      check { id: List[Long] =>
+        val columns = arrayColumnsFor(1, identityCols(id.size))
+        val rowFormat = RowFormat.IdentitiesRowFormatV1(identityCols(id.size))
+        val columnDecoder = rowFormat.ColumnDecoder(columns)
+        val columnEncoder = rowFormat.ColumnEncoder(columns)
+
+        val cId: List[CValue] = id map (CLong(_))
+        columnDecoder.decodeToRow(0, rowFormat.encode(cId))
+
+        verify(cId :: Nil, columns)
+
+        rowFormat.decode(columnEncoder.encodeFromRow(0)) must_== cId
+      }
+    }
   }
 
   "SortingKeyRowFormat" should {
@@ -165,7 +202,7 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
           verify(rows, columns)
 
           rows.zipWithIndex foreach { case (vals, row) =>
-            rowFormat.decode(columnEncoder.encodeFromRow(row)) == vals
+            rowFormat.decode(columnEncoder.encodeFromRow(row)) must_== vals
           }
         }
       }

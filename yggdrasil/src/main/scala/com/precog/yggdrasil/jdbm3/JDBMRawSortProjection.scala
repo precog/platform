@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package jdbm3
 
+import com.precog.common.json._
 import com.precog.common.Path
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.TableModule._
@@ -46,7 +47,8 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
 
   // These should not actually be used in sorting
   def descriptor: ProjectionDescriptor = sys.error("Sort projections do not have full ProjectionDescriptors")
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("Insertion on sort projections is unsupported")
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("Insertion on sort projections is unsupported")
+  def commit(): IO[Unit] = sys.error("Commit on sort projections is unsupported")
 
   def foreach(f : java.util.Map.Entry[Array[Byte], Array[Byte]] => Unit) {
     val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
@@ -79,19 +81,43 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
       }
 
       val constrainedMap = id.map { idKey => index.tailMap(idKey) }.getOrElse(index)
-      val rawIterator = constrainedMap.entrySet.iterator.asScala
-      if (id.isDefined && rawIterator.hasNext) rawIterator.next(); // TODO Ensure first matches id before drop?
+      val iteratorSetup = () => {
+        val rawIterator = constrainedMap.entrySet.iterator.asScala
+        // Since our key to retrieve after was the last key we retrieved, we know it exists,
+        // so we can safely discard it
+        if (id.isDefined && rawIterator.hasNext) rawIterator.next();
+        rawIterator
+      }
 
-      if (rawIterator.isEmpty) {
+      // FIXME: this is brokenness in JDBM somewhere      
+      val iterator = {
+        var initial: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]] = null
+        var tries = 0
+        while (tries < JDBMProjection.MAX_SPINS && initial == null) {
+          try {
+            initial = iteratorSetup()
+          } catch {
+            case t: Throwable => logger.warn("Failure on load iterator initialization")
+          }
+          tries += 1
+        }
+        if (initial == null) {
+          throw new VicciniException("Initial drop failed with too many concurrent mods.")
+        } else {
+          initial
+        }
+      }
+
+      if (iterator.isEmpty) {
         None
       } else {
-        val keyColumns = sortKeyRefs.map(JDBMSlice.columnFor(JPath("[0]"), sliceSize))
-        val valColumns = valRefs.map(JDBMSlice.columnFor(JPath("[1]"), sliceSize))
+        val keyColumns = sortKeyRefs.map(JDBMSlice.columnFor(CPath("[0]"), sliceSize))
+        val valColumns = valRefs.map(JDBMSlice.columnFor(CPath("[1]"), sliceSize))
 
         val keyColumnDecoder = keyFormat.ColumnDecoder(keyColumns.map(_._2)(collection.breakOut))
         val valColumnDecoder = rowFormat.ColumnDecoder(valColumns.map(_._2)(collection.breakOut))
 
-        val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, rawIterator, keyColumnDecoder, valColumnDecoder)
+        val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, iteratorSetup, keyColumnDecoder, valColumnDecoder)
 
         val slice = new Slice { 
           val size = rows 

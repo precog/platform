@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.bytecode._
-import scala.collection.immutable.BitSet
+import com.precog.common.json._
 import scala.util.Random
 
 import blueeyes.json._
@@ -61,7 +61,7 @@ trait PartitionMergeSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with S
       "4a" 
     ]""")
 
-    val result: M[Table] = tbl.partitionMerge(DerefObjectStatic(Leaf(Source), JPathField("key"))) { table =>
+    val result: M[Table] = tbl.partitionMerge(DerefObjectStatic(Leaf(Source), CPathField("key"))) { table =>
       val reducer = new Reducer[String] {
         def reduce(columns: JType => Set[Column], range: Range): String = {
           columns(JTextT).head match {
@@ -70,7 +70,7 @@ trait PartitionMergeSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with S
         }
       }
 
-      val derefed = table.transform(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("a")))
+      val derefed = table.transform(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("a")))
       
       derefed.reduce(reducer).map(s => Table.constString(Set(CString(s))))
     }

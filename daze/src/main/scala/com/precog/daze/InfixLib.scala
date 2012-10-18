@@ -20,18 +20,46 @@
 package com.precog
 package daze
 
-import bytecode.{ BinaryOperationType, JNumberT, JBooleanT, JTextT, Library }
+import bytecode.{ BinaryOperationType, JNumberT, JBooleanT, JTextT, Library, Instructions }
 
 import yggdrasil._
 import yggdrasil.table._
 
 import com.precog.util.NumericComparisons
 
-trait InfixLib[M[+_]] extends GenOpcode[M] {
+trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
 
   import StdLib.{BoolFrom, DoubleFrom, LongFrom, NumFrom, StrFrom}
   
   def PrimitiveEqualsF2 = yggdrasil.table.cf.std.Eq
+  
+  def op2ForBinOp(op: instructions.BinaryOperation): Option[Op2] = {
+    import instructions._
+    
+    op match {
+      case BuiltInFunction2Op(op2) => Some(op2)
+      
+      case instructions.Add => Some(Infix.Add)
+      case instructions.Sub => Some(Infix.Sub)
+      case instructions.Mul => Some(Infix.Mul)
+      case instructions.Div => Some(Infix.Div)
+      case instructions.Mod => Some(Infix.Mod)
+      
+      case instructions.Lt => Some(Infix.Lt)
+      case instructions.LtEq => Some(Infix.LtEq)
+      case instructions.Gt => Some(Infix.Gt)
+      case instructions.GtEq => Some(Infix.GtEq)
+      
+      case instructions.Eq | instructions.NotEq => None
+      
+      case instructions.Or => Some(Infix.Or)
+      case instructions.And => Some(Infix.And)
+      
+      case instructions.WrapObject | instructions.JoinObject |
+      instructions.JoinArray | instructions.ArraySwap | instructions.DerefMetadata |
+      instructions.DerefObject | instructions.DerefArray => None
+    }
+  }
   
   object Infix {
     val InfixNamespace = Vector("std", "infix")

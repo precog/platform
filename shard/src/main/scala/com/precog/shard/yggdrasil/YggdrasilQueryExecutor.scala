@@ -21,14 +21,15 @@ package com.precog
 package shard
 package yggdrasil 
 
-import blueeyes.json._
 import blueeyes.json.JsonAST._
+import blueeyes.json.JsonDSL
 
 import daze._
 
 import muspelheim.ParseEvalStack
 
 import com.precog.common._
+import com.precog.common.json._
 import com.precog.common.security._
 
 import com.precog.yggdrasil._
@@ -48,9 +49,10 @@ import akka.util.duration._
 import akka.util.Duration
 import akka.util.Timeout
 
-import com.weiglewilczek.slf4s.Logging
+import org.slf4j.{LoggerFactory, MDC}
 
 import java.io.File
+import java.nio.CharBuffer
 
 import scalaz._
 import scalaz.Validation._
@@ -63,15 +65,18 @@ import org.streum.configrity.Configuration
 
 trait YggdrasilQueryExecutorConfig extends 
     BaseConfig with 
-    DatasetConsumersConfig with 
-    ProductionShardSystemConfig {
+    ProductionShardSystemConfig with
+    SystemActorStorageConfig with
+    EvaluatorConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
 }
 
 trait YggdrasilQueryExecutorComponent {
-  import blueeyes.json.xschema.Extractor
+  import blueeyes.json.serialization.Extractor
+
+  implicit def M: Monad[Future]
 
   private def wrapConfig(wrappedConfig: Configuration) = {
     new YggdrasilQueryExecutorConfig {
@@ -81,16 +86,40 @@ trait YggdrasilQueryExecutorComponent {
       val memoizationWorkDir = scratchDir
 
       val clock = blueeyes.util.Clock.System
-
-      object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+      
+      val maxSliceSize = 10000
 
       //TODO: Get a producer ID
       val idSource = new IdSource {
         private val source = new java.util.concurrent.atomic.AtomicLong
         def nextId() = source.getAndIncrement
+      }
+    }
+  }
+
+  def renderStream(stream: StreamT[Future, Slice]): Future[StreamT[Future, CharBuffer]] = {
+    import JsonDSL._
+    stream.uncons map { unconsed =>
+      if (unconsed.isDefined) {
+        val rendered = StreamT.unfoldM[Future, CharBuffer, Option[(Slice, StreamT[Future, Slice])]](unconsed) { 
+          case Some((head, tail)) =>
+            tail.uncons map { next =>
+              if (next.isDefined) {
+                Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",") + ","), next))
+              } else {            
+                Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",")), None))
+              }
+            }
+
+          case None => 
+            M.point(None)
+        }
+        
+        rendered
+        //(CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
+      } else {
+        StreamT.empty[Future, CharBuffer]
+        //CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
       }
     }
   }
@@ -107,15 +136,14 @@ trait YggdrasilQueryExecutorComponent {
         def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
       }
 
-      def jsonChunks(table: Future[Table]): StreamT[Future, List[JValue]] = {
-        val slices = StreamT[Future, Slice](table map { table =>
-          StreamT.Skip(table.slices)
-        })
-
-        slices map { slice =>
-          val jVals: List[JValue] = (0 until slice.size).flatMap(slice.toJson(_) map (_ \ "value"))(collection.breakOut)
-          jVals
-        }
+      def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
+        import trans._
+        
+        StreamT.wrapEffect(
+          tableM flatMap { table =>
+            renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)).slices)
+          }
+        )
       }
 
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
@@ -124,19 +152,21 @@ trait YggdrasilQueryExecutorComponent {
 
       val storage = new Storage
 
-      object Projection extends JDBMProjectionCompanion with Logging {
+      object Projection extends JDBMProjectionCompanion {
+        private lazy val logger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.YggdrasilQueryExecutor.Projection")
+
         private implicit val askTimeout = yggConfig.projectionRetrievalTimeout
              
         val fileOps = FilesystemFileOps
 
         def baseDir(descriptor: ProjectionDescriptor) = {
-          logger.debug("Finding base dir for " + descriptor)
+          logger.trace("Finding base dir for " + descriptor)
           val base = (storage.shardSystemActor ? FindDescriptorRoot(descriptor, true)).mapTo[IO[Option[File]]]
           Await.result(base, yggConfig.maxEvalDuration)
         }
 
         def archiveDir(descriptor: ProjectionDescriptor) = {
-          logger.debug("Finding archive dir for " + descriptor)
+          logger.trace("Finding archive dir for " + descriptor)
           val archive = (storage.shardSystemActor ? FindDescriptorArchive(descriptor)).mapTo[IO[Option[File]]]
           Await.result(archive, yggConfig.maxEvalDuration)
         }
@@ -156,19 +186,20 @@ trait YggdrasilQueryExecutor
     extends QueryExecutor[Future]
     with ParseEvalStack[Future]
     with IdSourceScannerModule[Future]
-    with SystemActorStorageModule
-    with Logging  { self =>
+    with SystemActorStorageModule { self =>
+
+  private lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.YggdrasilQueryExecutor")
 
   type YggConfig = YggdrasilQueryExecutorConfig
 
   def startup() = storage.start.onComplete {
-    case Left(error) => logger.error("Startup of actor ecosystem failed!", error)
-    case Right(_) => logger.info("Actor ecosystem started.")
+    case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
+    case Right(_) => queryLogger.info("Actor ecosystem started.")
   }
 
   def shutdown() = storage.stop.onComplete {
-    case Left(error) => logger.error("An error was encountered in actor ecosystem shutdown!", error)
-    case Right(_) => logger.info("Actor ecossytem shutdown complete.")
+    case Left(error) => queryLogger.error("An error was encountered in actor ecosystem shutdown!", error)
+    case Right(_) => queryLogger.info("Actor ecossytem shutdown complete.")
   }
 
   case class StackException(error: StackError) extends Exception(error.toString)
@@ -177,11 +208,11 @@ trait YggdrasilQueryExecutor
     import trans._
 
     def sort(table: Future[Table]): Future[Table] = if (!opts.sortOn.isEmpty) {
-      val sortKey = ArrayConcat(opts.sortOn map { jpath =>
-        WrapArray(jpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
-          case (inner, f @ JPathField(_)) =>
+      val sortKey = ArrayConcat(opts.sortOn map { cpath =>
+        WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
+          case (inner, f @ CPathField(_)) =>
             DerefObjectStatic(inner, f)
-          case (inner, i @ JPathIndex(_)) =>
+          case (inner, i @ CPathIndex(_)) =>
             DerefArrayStatic(inner, i)
         })
       }: _*)
@@ -198,26 +229,39 @@ trait YggdrasilQueryExecutor
     page(sort(table map (_.compact(constants.SourceValue.Single))))
   }
 
-  def jsonChunks(table: Future[Table]): StreamT[Future, List[JValue]]
+  def jsonChunks(table: Future[Table]): StreamT[Future, CharBuffer]
 
-  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, List[JValue]]] = {
-    logger.debug("Executing for %s: %s, prefix: %s".format(userUID, query,prefix))
+  private val queryId = new java.util.concurrent.atomic.AtomicLong
+
+  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
+    val qid = queryId.getAndIncrement
+    queryLogger.info("Executing query for %s: %s, prefix: %s".format(userUID, query,prefix))
 
     import EvaluationError._
 
-    val solution: Validation[Throwable, Validation[EvaluationError, StreamT[Future, List[JValue]]]] = Validation.fromTryCatch {
+    val solution: Validation[Throwable, Validation[EvaluationError, StreamT[Future, CharBuffer]]] = Validation.fromTryCatch {
       asBytecode(query) flatMap { bytecode =>
         ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
           /*(systemError _) <-: */
           // TODO: How can jsonChunks return a Validation... or report evaluation error to user....
           Validation.success(jsonChunks(withContext { ctx =>
-            applyQueryOptions(opts)(eval(userUID, dag, ctx, prefix, true))
+            applyQueryOptions(opts) {
+              if (queryLogger.isDebugEnabled) {
+                eval(userUID, dag, ctx, prefix, true) map {
+                  _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
+                    slice => "size: " + slice.size
+                  }
+                }
+              } else {
+                eval(userUID, dag, ctx, prefix, true)
+              }
+            }
           }))
         }
       }
     }
 
-    ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[Future, List[JValue]]]])
+    ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[Future, CharBuffer]]])
   }
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
@@ -227,7 +271,7 @@ trait YggdrasilQueryExecutor
   }
 
   def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = {
-    val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, JPath(""))
+    val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, CPath(""))
 
     def transform(children: Set[PathMetadata]): JObject = {
       // Rewrite with collect or fold?
@@ -264,11 +308,11 @@ trait YggdrasilQueryExecutor
 
   // private def evaluateDag(userUID: String, dag: DepGraph,prefix: Path): Validation[Throwable, JArray] = {
   //   withContext { ctx =>
-  //     logger.debug("Evaluating DAG for " + userUID)
-  //     val result = consumeEval(userUID, dag, ctx, prefix) map { events => logger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+  //     queryLogger.debug("Evaluating DAG for " + userUID)
+  //     val result = consumeEval(userUID, dag, ctx, prefix) map { events => queryLogger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
   //     // FIXME: The next line should really handle resource cleanup. Not quite there with current MemoizationContext
   //     //ctx.memoizationContext.release.unsafePerformIO
-  //     logger.debug("DAG evaluated to " + result)
+  //     queryLogger.debug("DAG evaluated to " + result)
   //     result
   //   }
   // }
@@ -280,16 +324,18 @@ trait YggdrasilQueryExecutor
       else failure(
         UserError(
           JArray(
-            (tree.errors: Set[Error]) map {
-              case Error(loc, tp) =>
-                JObject(
-                  JField("message", JString("Errors occurred compiling your query.")) 
-                  :: JField("line", JString(loc.line))
-                  :: JField("lineNum", JNum(loc.lineNum))
-                  :: JField("colNum", JNum(loc.colNum))
-                  :: JField("detail", JString(tp.toString))
-                  :: Nil
-                )
+            (tree.errors: Set[Error]) map { err =>
+              val loc = err.loc
+              val tp = err.tp
+
+              JObject(
+                JField("message", JString("Errors occurred compiling your query.")) 
+                :: JField("line", JString(loc.line))
+                :: JField("lineNum", JNum(loc.lineNum))
+                :: JField("colNum", JNum(loc.colNum))
+                :: JField("detail", JString(tp.toString))
+                :: Nil
+              )
             } toList
           )
         )

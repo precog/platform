@@ -36,9 +36,11 @@ import scalaz.effect._
 
 import com.weiglewilczek.slf4s.Logging
 
+trait SystemActorStorageConfig extends ShardConfig with ActorStorageModuleConfig
+
 trait SystemActorStorageModule extends ActorStorageModule with ShardSystemActorModule {
   type Storage <: SystemActorStorageLike
-  //type YggConfig <: ShardSystemActorModule#YggConfig with ActorStorageModule#YggConfig
+  type YggConfig <: SystemActorStorageConfig
 
   abstract class SystemActorStorageLike(metadataStorage: MetadataStorage) extends ActorStorageLike {
     private var shardSystemActor0: ActorRef = _

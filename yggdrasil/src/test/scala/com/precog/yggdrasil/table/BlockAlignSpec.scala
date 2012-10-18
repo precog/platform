@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common._
+import com.precog.common.json._
 import com.precog.util._
 import com.precog.yggdrasil.util._
 
@@ -311,8 +312,8 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
     import module.trans._
     import module.trans.constants._
 
-    val alignOnL = DerefArrayStatic(Leaf(Source), JPathIndex(1))
-    val alignOnR = DerefArrayStatic(Leaf(Source), JPathIndex(1))
+    val alignOnL = DerefArrayStatic(Leaf(Source), CPathIndex(1))
+    val alignOnR = DerefArrayStatic(Leaf(Source), CPathIndex(1))
     val JArray(sourceLeft) = JsonParser.parse("""[
       [[3],{ "000000":-1 },-1],
       [[4],{ "000000":0 },0],

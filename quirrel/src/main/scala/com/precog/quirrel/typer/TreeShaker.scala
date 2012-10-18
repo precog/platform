@@ -141,6 +141,11 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       (Descent(loc, child2, property), names, vars, errors)
     }
     
+    case MetaDescent(loc, child, property) => {
+      val (child2, bindings, vars, errors) = performShake(child)
+      (MetaDescent(loc, child2, property), bindings, vars, errors)
+    }
+    
     case Deref(loc, left, right) => {
       val (left2, leftNames, leftVars, leftErrors) = performShake(left)
       val (right2, rightNames, rightVars, rightErrors) = performShake(right)

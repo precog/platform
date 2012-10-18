@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common._
+import com.precog.common.json._
 import com.precog.util._
 import com.precog.yggdrasil.util._
 
@@ -63,10 +64,10 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
         idCount, 
         subschema flatMap {
           case (jpath, CNum | CLong | CDouble) =>
-            List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), jpath, _, Authorities.None) }
+            List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), CPath(jpath), _, Authorities.None) }
           
           case (jpath, ctype) =>
-            List(ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None))
+            List(ColumnDescriptor(Path("/test"), CPath(jpath), ctype, Authorities.None))
         } toList
       )
 
@@ -115,7 +116,9 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       (back \ "value" != JNothing).option(back)
     }
 
-    module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(module.schema).get).flatMap(_.toJson).copoint.toStream must_== expected
+    val cschema = module.schema map { case (jpath, ctype) => (CPath(jpath), ctype) }
+
+    module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(cschema).get).flatMap(_.toJson).copoint.toStream must_== expected
   }
 
   def checkLoadDense = {

@@ -247,6 +247,7 @@ trait Instructions extends Library {
     case object DerefObject extends BinaryOperation {
       val tpe = BinaryOperationType(JObjectUnfixedT, JTextT, JType.JUnfixedT)
     }
+    case object DerefMetadata extends UnfixedBinaryOperation
     case object DerefArray extends BinaryOperation {
       val tpe = BinaryOperationType(JArrayUnfixedT, JNumberT, JType.JUnfixedT)
     }

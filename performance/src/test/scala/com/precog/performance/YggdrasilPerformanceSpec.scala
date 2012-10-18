@@ -86,7 +86,7 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
         var i = 0
         while(i < batchSize) {
           val jval = AdSamples.adCampaignSample.sample.get
-          val event = Event(path, "token", jval, Map.empty)
+          val event = Event(path, "apiKey", jval, Map.empty)
           batch(i) = EventMessage(EventId(pid, id), event)
           i += 1
           id += 1
@@ -131,7 +131,7 @@ histogram
                 var cnt = 0
                 while(cnt < i) {
                   val q = queries(rand.nextInt(queries.length))  
-                  val result = executor.execute("token", q,"") 
+                  val result = executor.execute("apiKey", q,"") 
                   result match {
                     case Success(jval) => 
                     case Failure(e) => new RuntimeException("Query result failure")
@@ -169,7 +169,7 @@ histogram
     }
    
     def testRead() = {
-      executor.execute("token", "count(load(//test/large))")
+      executor.execute("apiKey", "count(load(//test/large))")
     }
 
     "read large" in {
@@ -189,7 +189,7 @@ histogram
       def test(i: Int) = {
         var cnt = 0
         while(cnt < i) {
-          val result = executor.execute("token", "count(load(//test/small1))") 
+          val result = executor.execute("apiKey", "count(load(//test/small1))") 
           result match {
             case Success(jval) =>
             case Failure(e) => new RuntimeException("Query result failure")
@@ -216,7 +216,7 @@ histogram
             override def run() {
               var cnt = 0
               while(cnt < i) {
-                val result = executor.execute("token", "(load(//test/small2))") 
+                val result = executor.execute("apiKey", "(load(//test/small2))") 
                 result match {
                   case Success(jval) =>
                   case Failure(e) => new RuntimeException("Query result failure")
@@ -252,7 +252,7 @@ count(tests where tests.gender = "male")
       def test(i: Int) = {
         var cnt = 0
         while(cnt < i) {
-          val result = executor.execute("token", query) 
+          val result = executor.execute("apiKey", query) 
           result match {
             case Success(jval) =>
             case Failure(e) => new RuntimeException("Query result failure")
@@ -283,7 +283,7 @@ histogram
       def test(i: Int) = {
         var cnt = 0
         while(cnt < i) {
-          val result = executor.execute("token", query) 
+          val result = executor.execute("apiKey", query) 
           result match {
             case Success(jval) =>
             case Failure(e) => new RuntimeException("Query result failure")
@@ -376,7 +376,7 @@ histogram
         case JArray(jvals) =>
           jvals.zipWithIndex.map {
             case (jval, idx) =>
-              val event = Event(Path("/test/null"), "token", jval, Map.empty)
+              val event = Event(Path("/test/null"), "apiKey", jval, Map.empty)
               EventMessage(EventId(1,idx), event)
           }
       }
@@ -385,7 +385,7 @@ histogram
 
       Thread.sleep(10000)
 
-      val result = executor.execute("token", "load(//test/null)")
+      val result = executor.execute("apiKey", "load(//test/null)")
       result must beLike {
         case Success(JArray(vals)) => vals.size must_== 2
       }
@@ -466,7 +466,7 @@ histogram
         case JArray(jvals) =>
           jvals.zipWithIndex.map {
             case (jval, idx) =>
-              val event = Event(Path("/test/mixed"), "token", jval, Map.empty)
+              val event = Event(Path("/test/mixed"), "apiKey", jval, Map.empty)
               EventMessage(EventId(2,idx), event)
           }
       }
@@ -475,7 +475,7 @@ histogram
       
       Thread.sleep(10000)
 
-      val result = executor.execute("token", "load(//test/mixed)")
+      val result = executor.execute("apiKey", "load(//test/mixed)")
       result must beLike {
         case Success(JArray(vals)) => vals.size must_== 2
       }

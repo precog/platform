@@ -303,6 +303,28 @@ object ProvenanceComputationSpecs extends Specification
       }
     }
     
+    "identify metadescent according to its child expression" in {
+      {
+        val tree = compile("1@foo")
+        tree.provenance mustEqual ValueProvenance
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compile("//bar@foo")
+        tree.provenance mustEqual StaticProvenance("/bar")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compile("(new 1)@foo")
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
+      }
+    }
+    
     "identify dereference according to its children" in {
       {
         val tree = compile("1[2]")

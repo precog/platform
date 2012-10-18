@@ -21,12 +21,13 @@ package com.precog
 package muspelheim
 
 import yggdrasil._
+import blueeyes.json.JsonAST._
 import com.precog.common._
 import org.specs2.mutable._
 
 trait EvalStackSpecs extends Specification {
   def eval(str: String, debug: Boolean = false): Set[SValue]
-  def evalE(str: String, debug: Boolean = false): Set[SEvent]
+  def evalE(str: String, debug: Boolean = false): Set[(Vector[Long], SValue)]
 
   "the full stack" should {
     "count a filtered clicks dataset" in {
@@ -221,6 +222,173 @@ trait EvalStackSpecs extends Specification {
           obj must haveKey("covariance")
           obj must haveKey("count")
       }
+    }
+
+    "perform filter based on rank" >> {
+      val input = """
+        clicks := //clicks
+
+        foo := solve 'userId
+          clicks.time where clicks.userId = 'userId
+
+        rank := std::stats::rank(foo)
+
+        foo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(//clicks.time)"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("//clicks.time") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
+
+    "perform filter on distinct set based on rank with a solve" >> {
+      val input = """
+        clicks := //clicks
+
+        foo := solve 'userId
+          clicks.time where clicks.userId = 'userId
+
+        distinctFoo := distinct(foo)
+
+        rank := std::stats::rank(distinctFoo)
+
+        distinctFoo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(distinct(//clicks.time))"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("distinct(//clicks.time)") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
+
+    "perform another filter with rank" in {
+      val input = """
+        data := //summer_games/athletes 
+        
+        perCapitaAthletes := solve 'Countryname 
+          data' := data where data.Countryname = 'Countryname
+          {country: 'Countryname, 
+            athletesPerMillion: count(data')/(data'.Population/1000000)} 
+        
+        distinctData := distinct(perCapitaAthletes) 
+        
+        rank := std::stats::rank(distinctData.athletesPerMillion) 
+        distinctData with {rank: rank}
+        """.stripMargin
+
+      val result = evalE(input)
+      val input2 = """
+        data := //summer_games/athletes 
+        
+        perCapitaAthletes := solve 'Countryname 
+          data' := data where data.Countryname = 'Countryname
+          {country: 'Countryname, 
+            athletesPerMillion: count(data')/(data'.Population/1000000)} 
+        
+        distinct(perCapitaAthletes)""".stripMargin
+
+      val result2 = evalE(input2)
+      val size = result2.size
+
+      result must haveSize(size)
+
+      forall(result) {
+        case (ids, SObject(obj)) => {
+          ids.length must_== 1
+          obj must haveSize(3)
+          obj must haveKey("rank")
+          obj must haveKey("country")
+          obj must haveKey("athletesPerMillion")
+        }
+      }
+    }
+
+    "perform filter on distinct set based on rank without a solve" >> {
+      val input = """
+        clicks := //clicks
+
+        distinctFoo := distinct(clicks.time)
+
+        rank := std::stats::rank(distinctFoo)
+
+        distinctFoo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(distinct(//clicks.time))"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("distinct(//clicks.time)") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
+   
+    "perform filter on new set based on rank without a solve" >> {
+      val input = """
+        clicks := //clicks
+
+        newFoo := new(clicks.time)
+
+        rank := std::stats::rank(newFoo)
+
+        newFoo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(//clicks.time)"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("//clicks.time") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must not(beEmpty)
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
+    
+    "ensure rows of rank 1 exist" >> {
+      val input = """
+        clicks := //clicks
+
+        newFoo := new(clicks.time)
+
+        rank := std::stats::rank(newFoo)
+
+        newFoo where rank = 1
+      """.stripMargin
+
+      val input2 = """count(//clicks where //clicks.time = min(//clicks.time))"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("//clicks.time where //clicks.time = min(//clicks.time)") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
     }
     
     "have the correct number of identities and values in a relate" >> {
@@ -736,6 +904,22 @@ trait EvalStackSpecs extends Specification {
         
         results mustEqual Set(SDecimal(38))
       }
+
+      "using a solve" >> {
+        val input = """
+          | import std::stats::denseRank
+          |
+          | campaigns := //campaigns
+          |
+          | histogram := solve 'cpm
+          |  {count: count(campaigns.cpm where campaigns.cpm = 'cpm), age: 'cpm}
+          |
+          | histogram with {rank: std::stats::rank(neg histogram.count)}""".stripMargin
+
+        val results = eval(input)
+
+        results must not be empty
+      }
       
       "on a set of strings" >> {
         val input = """
@@ -1034,6 +1218,53 @@ trait EvalStackSpecs extends Specification {
       results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("7")))))
     }
 
+    "evaluate a function of multiple counts" in {
+      val input = """
+        | import std::math::floor
+        | clicks := //clicks
+        | 
+        | solve 'timeZone
+        |   page0 := count(clicks.pageId where clicks.pageId = "page-0" & clicks.timeZone = 'timeZone)
+        |   page1 := count(clicks.pageId where clicks.pageId = "page-1" & clicks.timeZone = 'timeZone)
+        |   
+        |   { timeZone: 'timeZone, ratio: floor(100 * (page0 / page1)) }
+        """.stripMargin
+
+      val resultsE = evalE(input)
+      val results = resultsE.map(_._2)
+
+      results must haveSize(11)
+      results must contain(SObject(Map("timeZone" -> SString("+14:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-02:00"), "ratio" -> SDecimal(BigDecimal("50.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-03:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+11:00"), "ratio" -> SDecimal(BigDecimal("200.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+12:00"), "ratio" -> SDecimal(BigDecimal("33.0"))))) //TODO: this should be 33.3333 - find out why precision is hosed
+      results must contain(SObject(Map("timeZone" -> SString("+04:00"), "ratio" -> SDecimal(BigDecimal("200.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+01:00"), "ratio" -> SDecimal(BigDecimal("25.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-01:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-06:00"), "ratio" -> SDecimal(BigDecimal("300.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+02:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-05:00"), "ratio" -> SDecimal(BigDecimal("50.0")))))
+    }
+
+    "evaluate reductions inside and outside of solves" in {
+      val input = """
+        | clicks := //clicks
+        |
+        | countsForTimezone := solve 'timeZone
+        |   clicksForZone := clicks where clicks.timeZone = 'timeZone
+        |   {timeZone: 'timeZone, clickCount: count(clicksForZone)}
+        |
+        | mostClicks := max(countsForTimezone.clickCount)
+        |
+        | countsForTimezone where countsForTimezone.clickCount = mostClicks
+        """.stripMargin
+
+      val resultsE = evalE(input)
+
+      println(resultsE)
+    }
+
     "determine click times around each click" in {
       val input = """
         | clicks := //clicks
@@ -1322,7 +1553,7 @@ trait EvalStackSpecs extends Specification {
            //richie1/test 
         """.stripMargin
 
-        eval(input) must not(throwA[Throwable])
+        eval(input) must haveSize(100)
       }
 
       "handle query on empty array" >> {
@@ -1362,7 +1593,6 @@ trait EvalStackSpecs extends Specification {
         eval("//fastspring_nulls") must haveSize(2)
         eval("//fastspring_mixed_type") must haveSize(2)
       }
-
 
       // times out...
 //      "handle chained characteristic functions" in {

@@ -24,10 +24,7 @@ import org.specs2.mutable._
 import com.precog.yggdrasil._
 import com.precog.common.Path
 import scalaz._
-import scalaz.effect._
-import scalaz.iteratee._
 import scalaz.std.list._
-import Iteratee._
 
 import com.precog.util.IdGen
 
@@ -55,7 +52,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(length),
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -71,7 +68,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(trim),
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -87,7 +84,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toUpperCase),
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -103,7 +100,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toLowerCase),
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -119,7 +116,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(isEmpty),
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -135,7 +132,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(intern),
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -152,8 +149,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(codePointAt), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushNum("7")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CLong(7)))
         
       val result = testEval(input)
       
@@ -169,8 +166,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(codePointAt), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushNum("7.5")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CDouble(7.5)))
         
       val result = testEval(input)
       
@@ -186,8 +183,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(startsWith), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushString("s")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CString("s")))
         
       val result = testEval(input)
       
@@ -203,8 +200,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(lastIndexOf), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushString("s")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CString("s")))
         
       val result = testEval(input)
       
@@ -220,8 +217,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(concat), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushString("7")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CString("7")))
         
       val result = testEval(input)
       
@@ -237,8 +234,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(endsWith), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushString("y")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CString("y")))
         
       val result = testEval(input)
       
@@ -254,8 +251,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(codePointBefore), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushNum("7")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CLong(7)))
         
       val result = testEval(input)
       
@@ -271,8 +268,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(codePointBefore), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushNum("7.5")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CDouble(7.5)))
         
       val result = testEval(input)
       
@@ -288,8 +285,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(substring), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushNum("7")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CLong(7)))
         
       val result = testEval(input)
       
@@ -305,8 +302,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(substring), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushNum("7.5")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CDouble(7.5)))
         
       val result = testEval(input)
       
@@ -322,8 +319,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(matches), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushString("quirky"))) //todo put regex here!
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CString("quirky"))) //todo put regex here!
         
       val result = testEval(input)
       
@@ -339,8 +336,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(compareTo), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushString("quirky")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CString("quirky")))
         
       val result = testEval(input)
       
@@ -356,8 +353,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(compareToIgnoreCase), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushString("QUIRKY")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CString("QUIRKY")))
         
       val result = testEval(input)
       
@@ -373,8 +370,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(equals), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushString("quirky")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CString("quirky")))
         
       val result = testEval(input)
       
@@ -390,8 +387,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(indexOf), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
-        Root(line, PushString("e")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))),
+        Root(line, CString("e")))
         
       val result = testEval(input)
       
@@ -407,8 +404,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(equalsIgnoreCase), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))), 
-        Root(line, PushString("QUIRKY")))
+        dag.LoadLocal(line, Root(line, CString("/hom/strings"))), 
+        Root(line, CString("QUIRKY")))
         
       val result = testEval(input)
       
@@ -427,7 +424,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(length),
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -443,7 +440,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(trim),
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -459,7 +456,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toUpperCase),
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -475,7 +472,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toLowerCase),
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -491,7 +488,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(isEmpty),
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -507,7 +504,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(intern),
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -524,8 +521,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(codePointAt), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushNum("7")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CLong(7)))
         
       val result = testEval(input)
       
@@ -541,8 +538,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(codePointAt), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushNum("7.5")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CDouble(7.5)))
         
       val result = testEval(input)
       
@@ -558,8 +555,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(startsWith), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushString("s")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CString("s")))
         
       val result = testEval(input)
       
@@ -575,8 +572,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(lastIndexOf), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushString("s")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CString("s")))
         
       val result = testEval(input)
       
@@ -592,8 +589,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(concat), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushString("7")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CString("7")))
         
       val result = testEval(input)
       
@@ -609,8 +606,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(endsWith), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushString("y")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CString("y")))
         
       val result = testEval(input)
       
@@ -626,8 +623,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(codePointBefore), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushNum("7")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CLong(7)))
         
       val result = testEval(input)
       
@@ -643,8 +640,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(codePointBefore), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushNum("7.5")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CDouble(7.5)))
         
       val result = testEval(input)
       
@@ -660,8 +657,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(substring), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushNum("7")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CLong(7)))
         
       val result = testEval(input)
       
@@ -677,8 +674,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(substring), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushNum("7.5")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CDouble(7.5)))
         
       val result = testEval(input)
       
@@ -695,8 +692,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(matches), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushString("quirky"))) //todo put regex here!
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CString("quirky"))) //todo put regex here!
         
       val result = testEval(input)
       
@@ -712,8 +709,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(compareTo), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushString("quirky")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CString("quirky")))
         
       val result = testEval(input)
       
@@ -729,8 +726,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(compareToIgnoreCase), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushString("QUIRKY")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CString("QUIRKY")))
         
       val result = testEval(input)
       
@@ -746,8 +743,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(equals), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushString("quirky")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CString("quirky")))
         
       val result = testEval(input)
       
@@ -763,8 +760,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(indexOf), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
-        Root(line, PushString("e")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))),
+        Root(line, CString("e")))
         
       val result = testEval(input)
       
@@ -780,8 +777,8 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(equalsIgnoreCase), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, PushString("/het/strings"))), 
-        Root(line, PushString("QUIRKY")))
+        dag.LoadLocal(line, Root(line, CString("/het/strings"))), 
+        Root(line, CString("QUIRKY")))
         
       val result = testEval(input)
       

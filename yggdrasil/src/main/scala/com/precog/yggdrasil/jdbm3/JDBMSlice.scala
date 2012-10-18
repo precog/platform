@@ -20,7 +20,8 @@
 package com.precog.yggdrasil
 package jdbm3
 
-import com.weiglewilczek.slf4s.Logging
+import com.precog.common.json._
+import org.slf4j.LoggerFactory
 
 import org.joda.time.DateTime
 
@@ -39,7 +40,9 @@ import scala.annotation.tailrec
 import JDBMProjection._
 
 object JDBMSlice {
-  def load(size: Int, source: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]], keyDecoder: ColumnDecoder, valDecoder: ColumnDecoder): (Array[Byte], Array[Byte], Int) = {
+  private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.jdbm3.JDBMSlice")
+
+  def load(size: Int, source: () => Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]], keyDecoder: ColumnDecoder, valDecoder: ColumnDecoder): (Array[Byte], Array[Byte], Int) = {
     var firstKey: Array[Byte] = null.asInstanceOf[Array[Byte]]
     var lastKey: Array[Byte]  = null.asInstanceOf[Array[Byte]]
 
@@ -60,12 +63,31 @@ object JDBMSlice {
       }
     }
     
-    val rows = consumeRows(source.take(size), 0)
+    val rows = {
+      // FIXME: Looping here is a blatantly poor way to work around ConcurrentModificationExceptions
+      // From the Javadoc for CME, the exception is an indication of a bug
+      var finalCount = -1
+      var tries = 0
+      while (tries < JDBMProjection.MAX_SPINS && finalCount == -1) {
+        try {
+          finalCount = consumeRows(source().take(size), 0)
+        } catch {
+          case t: Throwable =>
+            logger.warn("Error during block read, retrying")
+        }
+        tries += 1
+      }
+      if (finalCount == -1) {
+        throw new VicciniException("Block read failed with too many concurrent mods.")
+      } else {
+        finalCount
+      }
+    }
 
     (firstKey, lastKey, rows)
   }
 
-  def columnFor(prefix: JPath, sliceSize: Int)(ref: ColumnRef): (ColumnRef, ArrayColumn[_]) =
+  def columnFor(prefix: CPath, sliceSize: Int)(ref: ColumnRef): (ColumnRef, ArrayColumn[_]) =
     (ref.copy(selector = (prefix \ ref.selector)), (ref.ctype match {
       case CString      => ArrayStrColumn.empty(sliceSize)
       case CBoolean     => ArrayBoolColumn.empty()

@@ -44,6 +44,12 @@ trait Phases {
   private[quirrel] def runPhasesInSequence(tree: Expr): Set[Error] =
     Phases.foldLeft(Set[Error]()) { _ ++ _(tree) }
   
-  def Error(node: Expr, tp: ErrorType): Error
+  val Error: ErrorCompanion
+
   def showError(error: Error): String
+
+  trait ErrorCompanion {
+    def apply(node: Expr, tp: ErrorType): Error
+    def unapply(err: Error): Option[ErrorType]
+  }
 }

@@ -43,6 +43,7 @@ object PlatformBuild extends Build {
       "Typesafe Repository"               at "http://repo.typesafe.com/typesafe/releases/",
       "Maven Repo 1"                      at "http://repo1.maven.org/maven2/",
       "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/",
+      "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/releases/",
       "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/snapshots/"
     ),
 
@@ -57,7 +58,7 @@ object PlatformBuild extends Build {
 
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "2.0.0-SNAPSHOT",
+    version := "2.0.1-SNAPSHOT",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalaVersion := "2.9.2",
@@ -71,7 +72,6 @@ object PlatformBuild extends Build {
       "com.weiglewilczek.slf4s"     % "slf4s_2.9.1"         % "1.0.7",
       "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
-      "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT" changing(),
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
       "org.specs2"                  %% "specs2"             % "1.12.2" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
@@ -82,6 +82,7 @@ object PlatformBuild extends Build {
 
   val jprofilerSettings = Seq(
     fork in profileTask := true,
+    fork in run := true,
 
     jprofilerLib := "/Applications/jprofiler7/bin/macos/libjprofilerti.jnilib",
     jprofilerConf := "src/main/resources/jprofile.xml",
@@ -89,10 +90,10 @@ object PlatformBuild extends Build {
     
     javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) {
       (opts, lib, conf, id, d) =>
-      opts ++ Seq("-agentpath:%s=offline,config=%s/%s,id=%s" format (lib, d, conf, id))
-    },
-
-    fullRunInputTask(profileTask, Test, "com.precog.jprofiler.Run")
+      // download jnilib if necessary. a bit sketchy, but convenient
+      Process("./jprofiler/setup-jnilib.py").!!
+      opts ++ Seq("-agentpath:%s/jprofiler.jnilib=offline,config=%s/%s,id=%s" format (d, d, conf, id))
+    }
   )
 
   val commonNexusSettings = nexusSettings ++ commonSettings
@@ -116,6 +117,9 @@ object PlatformBuild extends Build {
   lazy val yggdrasil = Project(id = "yggdrasil", base = file("yggdrasil")).
     settings(commonNexusSettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util)
 
+  lazy val yggdrasilProf = Project(id = "yggdrasilProf", base = file("yggdrasilProf")).
+    settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test")
+
   lazy val daze = Project(id = "daze", base = file("daze")).
     settings(commonNexusSettings: _*).dependsOn (common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util)
 
@@ -134,6 +138,9 @@ object PlatformBuild extends Build {
   lazy val auth = Project(id = "auth", base = file("auth")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test")
 
+  lazy val accounts     = Project(id = "accounts", base = file("accounts")).
+    settings(commonAssemblySettings: _*) dependsOn (common % "compile->compile;test->test", auth, common)
+ 
   lazy val performance = Project(id = "performance", base = file("performance")).
     settings(commonNexusSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard)
 
@@ -141,5 +148,5 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test")
 
   lazy val jprofiler = Project(id = "jprofiler", base = file("jprofiler")).
-    settings(jprofilerSettings ++ commonNexusSettings: _*).dependsOn(ragnarok)
+    settings(jprofilerSettings ++ commonNexusSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.jprofiler.Run")): _*).dependsOn(ragnarok)
 }

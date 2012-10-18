@@ -21,14 +21,18 @@ package com.precog.yggdrasil
 package table
 
 import org.joda.time.DateTime
-import scala.collection.BitSet
+
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
+
 import scala.annotation.tailrec
+import org.apache.commons.collections.primitives.ArrayIntList
 
 class BitsetColumn(definedAt: BitSet) { this: Column =>
   def isDefinedAt(row: Int): Boolean = definedAt(row)
 
   override def toString = {
-    val limit = definedAt.reduce(_ max _)
+    val limit = definedAt.max
     val repr = (row: Int) => if (definedAt(row)) 'x' else '_'
     getClass.getName + "(" + (0 until limit).map(repr).mkString("[", ",", "]") + ", " + limit + ")"
   }
@@ -36,7 +40,13 @@ class BitsetColumn(definedAt: BitSet) { this: Column =>
 
 object BitsetColumn {
   def bitset(definedAt: Seq[Boolean]) = {
-    BitSet(definedAt.zipWithIndex collect { case (v, i) if v => i }: _*)
+    val bs = new BitSet
+    var i = 0
+    definedAt.foreach { v =>
+      if (v) bs.set(i)
+      i += 1
+    }
+    bs
   }
 }
 
@@ -64,12 +74,59 @@ class ConcatColumn[T <: Column](at: Int, c1: T, c2: T) { this: T =>
   def isDefinedAt(row: Int) = row >= 0 && ((row < at && c1.isDefinedAt(row)) || (row >= at && c2.isDefinedAt(row - at)))
 }
 
+class NConcatColumn[T <: Column](offsets: Array[Int], columns: Array[T]) { this: T =>
+
+  // Is this worth it? For some operations, but not sorting... all the more
+  // reason to add materialise I suppose.
+
+  @volatile private var lastIndex = 0
+
+  @inline private final def inBound(row: Int, idx: Int): Boolean = {
+    val lb = if (idx < 0) 0 else offsets(idx)
+    val ub = if ((idx + 1) < offsets.length) offsets(idx + 1) else (row + 1)
+    row >= lb && row < ub
+  }
+
+  /** Returns the index info `offsets` and `columns` for row. */
+  protected def indexOf(row: Int): Int = {
+    val lastIdx = lastIndex
+    if (inBound(row, lastIdx)) {
+      lastIdx
+    } else {
+      var idx = java.util.Arrays.binarySearch(offsets, row)
+      idx = if (idx < 0) -idx - 2 else idx
+      lastIndex = idx
+      idx
+    }
+  }
+
+  def isDefinedAt(row: Int) = {
+    val idx = indexOf(row)
+    if (idx < 0) false else {
+      val column = columns(idx)
+      val offset = offsets(idx)
+      column.isDefinedAt(row - offset)
+    }
+  }
+}
+
 class ShiftColumn[T <: Column](by: Int, c1: T) { this: T =>
   def isDefinedAt(row: Int) = c1.isDefinedAt(row - by)
 }
 
-class RemapColumn[T <: Column](delegate: T, f: PartialFunction[Int, Int]) { this: T =>
-  def isDefinedAt(row: Int) = f.isDefinedAt(row) && delegate.isDefinedAt(f(row))
+class RemapColumn[T <: Column](delegate: T, f: Int => Int) {
+  this: T =>
+  def isDefinedAt(row: Int) = delegate.isDefinedAt(f(row))
+}
+
+class RemapFilterColumn[T <: Column](delegate: T, filter: Int => Boolean, offset: Int) {
+  this: T =>
+  def isDefinedAt(row: Int) = filter(row) && delegate.isDefinedAt(row + offset)
+}
+
+class RemapIndicesColumn[T <: Column](delegate: T, indices: ArrayIntList) { this: T =>
+  private val _size = indices.size
+  def isDefinedAt(row: Int) = row >= 0 && row < _size && delegate.isDefinedAt(indices.get(row))
 }
 
 class SparsenColumn[T <: Column](delegate: T, idx: Array[Int], toSize: Int) { this: T =>

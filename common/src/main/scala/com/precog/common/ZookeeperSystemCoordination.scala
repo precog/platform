@@ -25,9 +25,9 @@ import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 import blueeyes.json.Printer 
 
-import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.Extractor._
+import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Extractor._
 
 import com.weiglewilczek.slf4s._
 
@@ -91,7 +91,7 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID, yg
     // sequential nodes created by zookeeper will be suffixed with a new 10-character
     // integer that represents a montonic increase of the underlying counter.
     val data = toNodeData(ProducerState(initialSequenceId).serialize)
-    val createdPath = zkc.createPersistentSequential(producerIdPath,  data)
+    val createdPath = zkc.createPersistentSequential(producerIdPath, data)
     createdPath.substring(createdPath.length - 10).toInt
   }
 

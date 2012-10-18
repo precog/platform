@@ -27,7 +27,9 @@ import org.joda.time.DateTime
 
 import java.math.MathContext
 
-import scala.collection.mutable.BitSet
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
+
 import scalaz.Semigroup
 import scalaz.std.option._
 import scalaz.syntax.apply._
@@ -44,7 +46,8 @@ sealed trait Column {
   def toString(row: Int): String = if (isDefinedAt(row)) strValue(row) else "(undefined)"
   def toString(range: Range): String = range.map(toString(_: Int)).mkString("(", ",", ")")
 
-  def definedAt(from: Int, to: Int): BitSet = BitSet((for (i <- from until to if isDefinedAt(i)) yield i) : _*)
+  def definedAt(from: Int, to: Int): BitSet =
+    BitSetUtil.filteredRange(from, to)(isDefinedAt)
 }
 
 private[yggdrasil] trait ExtensibleColumn extends Column // TODO: or should we just unseal Column?
@@ -208,5 +211,13 @@ object Column {
         sys.error("Illgal attempt to merge columns of dissimilar type: " + c1.tpe + "," + c2.tpe)
       }
     }
+  }
+
+  def isDefinedAt(cols: Array[Column], row: Int): Boolean = {
+    var i = 0
+    while (i < cols.length && !cols(i).isDefinedAt(row)) {
+      i += 1
+    }
+    i < cols.length
   }
 }

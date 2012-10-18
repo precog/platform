@@ -27,14 +27,15 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.JsonAST.JValue
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
 
 import com.precog.common.Path
 import com.precog.common.security._
+import com.precog.common.json._
 import com.precog.ingest.service._
 import com.precog.daze.QueryOptions
 import com.precog.yggdrasil.TableModule
@@ -59,7 +60,7 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
   private val Limit = """([1-9][0-9]*)""".r
   private val Offset = """(0|[1-9][0-9]*)""".r
 
-  private def getSortOn(request: HttpRequest[_]): Validation[String, List[JPath]] = {
+  private def getSortOn(request: HttpRequest[_]): Validation[String, List[CPath]] = {
     import JsonAST._
     import JsonParser.ParseException
     request.parameters.get('sortOn).filter(_ != null) map { paths =>
@@ -67,9 +68,9 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
         val jpaths = JsonParser.parse(paths)
         jpaths match {
           case JArray(elems) =>
-            Validation.success(elems collect { case JString(path) => JPath(path) })
+            Validation.success(elems collect { case JString(path) => CPath(path) })
           case JString(path) =>
-            Validation.success(JPath(path) :: Nil)
+            Validation.success(CPath(path) :: Nil)
           case badJVal =>
             Validation.failure("The sortOn query parameter was expected to be JSON string or array, but found " + badJVal)
         }
@@ -77,13 +78,13 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
         case ex: ParseException =>
           Validation.failure("Couldn't parse sortOn query parameter: " + ex.getMessage())
       }
-    } getOrElse Validation.success[String, List[JPath]](Nil)
+    } getOrElse Validation.success[String, List[CPath]](Nil)
   }
 
   private def getSortOrder(request: HttpRequest[_]): Validation[String, DesiredSortOrder] = {
     request.parameters.get('sortOrder) filter (_ != null) map (_.toLowerCase) map {
-      case "asc" | "ascending" => success(TableModule.SortAscending)
-      case "desc" | "descending" => success(TableModule.SortDescending)
+      case "asc" | "\"asc\"" | "ascending" | "\"ascending\"" => success(TableModule.SortAscending)
+      case "desc" | "\"desc\"" |  "descending" | "\"descending\"" => success(TableModule.SortDescending)
       case badOrder => failure("Unknown sort ordering: %s." format badOrder)
     } getOrElse success(TableModule.SortAscending)
   }
@@ -94,7 +95,7 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
       case _ => Validation.failure("The limit query parameter must be a positive integer.")
     } getOrElse Validation.success(None)
 
-    val offset: Validation[String, Option[Int]] = request.parameters.get('offset).filter(_ != null) map {
+    val offset: Validation[String, Option[Int]] = request.parameters.get('skip).filter(_ != null) map {
       case Offset(str) if limit.map(_.isDefined) | true => Validation.success(Some(str.toInt))
       case Offset(str) => Validation.failure("The offset query parameter cannot be used without a limit.")
       case _ => Validation.failure("The offset query parameter must be a non-negative integer.")
@@ -105,8 +106,8 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
     }
   }
 
-  def query[A, B](next: HttpService[A, (Token, Path, Query, QueryOptions) => Future[B]]) = {
-    new DelegatingService[A, (Token, Path) => Future[B], A, (Token, Path, Query, QueryOptions) => Future[B]] {
+  def query[A, B](next: HttpService[A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]]) = {
+    new DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]] {
       val delegate = next
       val metadata = None
       val service = (request: HttpRequest[A]) => {
@@ -123,7 +124,7 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
           )
 
           query map { q =>
-            next.service(request) map { f => (token: Token, path: Path) => f(token, path, q, opts) }
+            next.service(request) map { f => (apiKey: APIKeyRecord, path: Path) => f(apiKey, path, q, opts) }
           } getOrElse {
             failure(inapplicable)
           }

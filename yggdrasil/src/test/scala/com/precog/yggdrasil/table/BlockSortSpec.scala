@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common.json._
 import com.precog.bytecode._
 import com.precog.common._
 import com.precog.util._
@@ -55,15 +56,8 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def testSortDense(sample: SampleData, sortOrder: DesiredSortOrder, unique: Boolean, sortKeys: JPath*) = {
     val module = BlockStoreTestModule.empty[M]
-    val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
-      import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
 
-      def compare(a: JValue, b: JValue): Int = (a,b) match {
-        case (JNum(ai), JNum(bd)) => ai.compare(bd)
-        case _                    => JValueOrdering.compare(a, b)
-      } 
-    }
-
+    val jvalueOrdering = JValue.order.toScalaOrdering
     val desiredJValueOrder = if (sortOrder.isAscending) jvalueOrdering else jvalueOrdering.reverse
 
     val globalIdPath = JPath(".globalId")
@@ -82,8 +76,10 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     }.sortBy({ v => { JArray(sortKeys.map(_.extract(v \ "value")).toList ::: List(v \ "globalId")).asInstanceOf[JValue] }       
     })(desiredJValueOrder).map(_.delete(globalIdPath).get).toList
 
+    val cSortKeys = sortKeys map { CPath(_) }
+
     val resultM = for {
-      sorted <- module.fromSample(sample).sort(module.sortTransspec(sortKeys: _*), sortOrder)
+      sorted <- module.fromSample(sample).sort(module.sortTransspec(cSortKeys: _*), sortOrder)
       json <- sorted.toJson
     } yield (json, sorted)
 

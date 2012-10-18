@@ -20,16 +20,26 @@
 package com.precog.yggdrasil
 package table
 
+import util.CPathUtils
+
 import com.precog.common.VectorCase
 import com.precog.bytecode._
 import com.precog.util._
+
+import com.precog.common.json._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 
-import scala.annotation.tailrec
-import scala.collection.{breakOut, BitSet, mutable}
+import org.joda.time.DateTime
+
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
+
+import scala.annotation.{switch, tailrec}
+
+import scala.collection.{breakOut, mutable}
 import scalaz._
 import scalaz.Ordering._
 import scalaz.Validation._
@@ -37,48 +47,8 @@ import scalaz.syntax.foldable._
 import scalaz.syntax.semigroup._
 import scalaz.std.iterable._
 
-trait RowComparator { self =>
-  def compare(i1: Int, i2: Int): Ordering
+import java.nio.CharBuffer
 
-  def swap: RowComparator = new RowComparator {
-    def compare(i1: Int, i2: Int) = self.compare(i2, i1).complement
-  }
-
-  @tailrec
-  final def nextLeftIndex(lmin: Int, lmax: Int, ridx: Int): Int = {
-    compare(lmax, ridx) match {
-      case LT => lmax + 1
-      case GT => 
-        if (lmax - lmin <= 1) {
-          compare(lmin, ridx) match {
-            case LT => lmax
-            case GT | EQ => lmin
-          }
-        } else {
-          val lmid = lmin + ((lmax - lmin) / 2)
-          compare(lmid, ridx) match {
-            case LT => nextLeftIndex(lmid + 1, lmax, ridx)
-            case GT | EQ => nextLeftIndex(lmin, lmid - 1, ridx)
-          }
-        }
-    
-      case EQ => 
-        if (lmax - lmin <= 1) {
-          compare(lmin, ridx) match {
-            case LT => lmax
-            case GT | EQ => lmin
-          }
-        } else {
-          val lmid = lmin + ((lmax - lmin) / 2)
-          compare(lmid, ridx) match {
-            case LT => nextLeftIndex(lmid + 1, lmax, ridx)
-            case GT => sys.error("inputs on the left not sorted.")
-            case EQ => nextLeftIndex(lmin, lmid - 1, ridx)
-          }
-        }
-    }
-  }
-}
 
 trait Slice { source =>
   import Slice._
@@ -96,7 +66,7 @@ trait Slice { source =>
     } toSet
   }
 
-  lazy val valueColumns: Set[Column] = columns collect { case (ColumnRef(JPath.Identity, _), col) => col } toSet
+  lazy val valueColumns: Set[Column] = columns collect { case (ColumnRef(CPath.Identity, _), col) => col } toSet
   
   def isDefinedAt(row: Int) = columns.values.exists(_.isDefinedAt(row))
 
@@ -105,21 +75,28 @@ trait Slice { source =>
 
     val columns: Map[ColumnRef, Column] = {
       val resultColumns = for {
-        col <- source.columns collect { case (ref, col) if ref.selector == JPath.Identity => col }
+        col <- source.columns collect { case (ref, col) if ref.selector == CPath.Identity => col }
         result <- f(col)
       } yield result
 
       resultColumns.groupBy(_.tpe) map { 
-        case (tpe, cols) => (ColumnRef(JPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+        case (tpe, cols) => (ColumnRef(CPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
       }
     }
   }
 
   def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
-    val columns = source.columns flatMap {
-      case (ref, col) => 
-        f(col) map { ncol => (ref.copy(ctype = ncol.tpe), ncol) }  
+
+    val columns: Map[ColumnRef, Column] = {
+      val resultColumns: Map[ColumnRef, Column] = for {
+        (ref, col) <- source.columns
+        result <- f(col)
+      } yield (ref.copy(ctype = result.tpe), result)
+
+      resultColumns.groupBy(_._1) map {
+        case (ref, pairs) => (ref, pairs.map(_._2).reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+      }
     }
   }
 
@@ -134,37 +111,37 @@ trait Slice { source =>
     val columns = {
       Map(
         value match {
-          case CString(s) => (ColumnRef(JPath.Identity, CString), new StrColumn {
+          case CString(s) => (ColumnRef(CPath.Identity, CString), new StrColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = s
           })
-          case CBoolean(b) => (ColumnRef(JPath.Identity, CBoolean), new BoolColumn {
+          case CBoolean(b) => (ColumnRef(CPath.Identity, CBoolean), new BoolColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = b
           })
-          case CLong(l) => (ColumnRef(JPath.Identity, CLong), new LongColumn {
+          case CLong(l) => (ColumnRef(CPath.Identity, CLong), new LongColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = l
           })
-          case CDouble(d) => (ColumnRef(JPath.Identity, CDouble), new DoubleColumn {
+          case CDouble(d) => (ColumnRef(CPath.Identity, CDouble), new DoubleColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = d
           })
-          case CNum(n) => (ColumnRef(JPath.Identity, CNum), new NumColumn {
+          case CNum(n) => (ColumnRef(CPath.Identity, CNum), new NumColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = n
           })
-          case CDate(d) => (ColumnRef(JPath.Identity, CDate), new DateColumn {
+          case CDate(d) => (ColumnRef(CPath.Identity, CDate), new DateColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = d
           })
-          case CNull => (ColumnRef(JPath.Identity, CNull), new NullColumn {
+          case CNull => (ColumnRef(CPath.Identity, CNull), new NullColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
-          case CEmptyObject => (ColumnRef(JPath.Identity, CEmptyObject), new EmptyObjectColumn {
+          case CEmptyObject => (ColumnRef(CPath.Identity, CEmptyObject), new EmptyObjectColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
-          case CEmptyArray => (ColumnRef(JPath.Identity, CEmptyArray), new EmptyArrayColumn {
+          case CEmptyArray => (ColumnRef(CPath.Identity, CEmptyArray), new EmptyArrayColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
           case CUndefined => sys.error("Cannot define a constant undefined value")
@@ -173,37 +150,37 @@ trait Slice { source =>
     }
   }
 
-  def deref(node: JPathNode): Slice = {
+  def deref(node: CPathNode): Slice = {
     new Slice {
       val size = source.size
       val columns = source.columns.collect {
-        case (ColumnRef(JPath(`node`, xs @ _*), ctype), col) => (ColumnRef(JPath(xs: _*), ctype), col)
+        case (ColumnRef(CPath(`node`, xs @ _*), ctype), col) => (ColumnRef(CPath(xs: _*), ctype), col)
       }
     }
   }
 
-  def wrap(wrapper: JPathNode): Slice = {
+  def wrap(wrapper: CPathNode): Slice = {
     new Slice {
       val size = source.size
       val columns = source.columns.map {
-        case (ColumnRef(JPath(nodes @ _*), ctype), col) => (ColumnRef(JPath(wrapper +: nodes : _*), ctype), col)
+        case (ColumnRef(CPath(nodes @ _*), ctype), col) => (ColumnRef(CPath(wrapper +: nodes : _*), ctype), col)
       }
     }
   }
 
   def delete(jtype: JType): Slice = new Slice {
     def fixArrays(columns: Map[ColumnRef, Column]): Map[ColumnRef, Column] = {
-      columns.toSeq.sortBy(_._1).foldLeft((Map.empty[Vector[JPathNode], Int], Map.empty[ColumnRef, Column])) {
+      columns.toSeq.sortBy(_._1).foldLeft((Map.empty[Vector[CPathNode], Int], Map.empty[ColumnRef, Column])) {
         case ((arrayPaths, acc), (ColumnRef(jpath, ctype), col)) => 
-          val (arrayPaths0, nodes) = jpath.nodes.foldLeft((arrayPaths, Vector.empty[JPathNode])) {
-            case ((ap, nodes), JPathIndex(_)) => 
+          val (arrayPaths0, nodes) = jpath.nodes.foldLeft((arrayPaths, Vector.empty[CPathNode])) {
+            case ((ap, nodes), CPathIndex(_)) => 
               val idx = ap.getOrElse(nodes, -1) + 1
-              (ap + (nodes -> idx), nodes :+ JPathIndex(idx))
+              (ap + (nodes -> idx), nodes :+ CPathIndex(idx))
 
             case ((ap, nodes), fieldNode) => (ap, nodes :+ fieldNode)
           }
 
-          (arrayPaths0, acc + (ColumnRef(JPath(nodes: _*), ctype) -> col))
+          (arrayPaths0, acc + (ColumnRef(CPath(nodes: _*), ctype) -> col))
       }._2
     }
     
@@ -215,11 +192,11 @@ trait Slice { source =>
     )
   }
 
-  def deleteFields(prefixes: scala.collection.Set[JPathField]) = {
+  def deleteFields(prefixes: scala.collection.Set[CPathField]) = {
     new Slice {
       val size = source.size
       val columns = source.columns filterNot {
-        case (ColumnRef(JPath(head @ JPathField(_), _ @ _*), _), _) => prefixes contains head
+        case (ColumnRef(CPath(head @ CPathField(_), _ @ _*), _), _) => prefixes contains head
         case _ => false
       }
     }
@@ -232,7 +209,7 @@ trait Slice { source =>
     }
   }
 
-  def nest(selectorPrefix: JPath) = new Slice {
+  def nest(selectorPrefix: CPath) = new Slice {
     val size = source.size
     val columns = source.columns map { case (ColumnRef(selector, ctype), v) => ColumnRef(selectorPrefix \ selector, ctype) -> v }
   }
@@ -240,13 +217,13 @@ trait Slice { source =>
   def arraySwap(index: Int) = new Slice {
     val size = source.size
     val columns = source.columns.collect {
-      case (ColumnRef(JPath(JPathIndex(0), xs @ _*), ctype), col) => 
-        (ColumnRef(JPath(JPathIndex(index) +: xs : _*), ctype), col)
+      case (ColumnRef(CPath(CPathIndex(0), xs @ _*), ctype), col) => 
+        (ColumnRef(CPath(CPathIndex(index) +: xs : _*), ctype), col)
 
-      case (ColumnRef(JPath(JPathIndex(`index`), xs @ _*), ctype), col) => 
-        (ColumnRef(JPath(JPathIndex(0) +: xs : _*), ctype), col)
+      case (ColumnRef(CPath(CPathIndex(`index`), xs @ _*), ctype), col) => 
+        (ColumnRef(CPath(CPathIndex(0) +: xs : _*), ctype), col)
 
-      case c @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), ctype), col) => c
+      case c @ (ColumnRef(CPath(CPathIndex(i), xs @ _*), ctype), col) => c
     }
   }
 
@@ -262,19 +239,26 @@ trait Slice { source =>
   def remap(indices: ArrayIntList) = new Slice {
     val size = indices.size
     val columns: Map[ColumnRef, Column] = source.columns mapValues { col => 
-      cf.util.Remap.forIndices(indices).apply(col).get //Remap is total
+      cf.util.RemapIndices(indices).apply(col).get
     }
   }
 
-  def map(from: JPath, to: JPath)(f: CF1): Slice = new Slice {
+  def map(from: CPath, to: CPath)(f: CF1): Slice = new Slice {
     val size = source.size
-    val columns = source.columns flatMap {
-      case (ref, col) if ref.selector.hasPrefix(from) => f(col) map {v => (ref, v)}
-      case unchanged => Some(unchanged)
+
+    val columns: Map[ColumnRef, Column] = {
+      val resultColumns = for {
+        col <- source.columns collect { case (ref, col) if ref.selector.hasPrefix(from) => col }
+        result <- f(col)
+      } yield result
+
+      resultColumns.groupBy(_.tpe) map { 
+        case (tpe, cols) => (ColumnRef(to, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+      }
     }
   }
 
-  def map2(froml: JPath, fromr: JPath, to: JPath)(f: CF2): Slice = new Slice {
+  def map2(froml: CPath, fromr: CPath, to: CPath)(f: CF2): Slice = new Slice {
     val size = source.size
 
     val columns: Map[ColumnRef, Column] = {
@@ -290,40 +274,52 @@ trait Slice { source =>
 
   def filterDefined(filter: Slice, definedness: Definedness) = {
     new Slice {
-      private val colValues = filter.columns.values
-      private val defined = definedness match {
+      private val colValues = filter.columns.values.toArray
+      lazy val defined = definedness match {
         case AnyDefined =>
-          (0 until source.size).foldLeft(new mutable.BitSet()) {
-            case (acc, i) => if (colValues.exists(_.isDefinedAt(i))) acc + i else acc
+          BitSetUtil.filteredRange(0, source.size) {
+            i => colValues.exists(_.isDefinedAt(i))
           }
 
         case AllDefined =>
-          (0 until source.size).foldLeft(new mutable.BitSet()) {
-            case (acc, i) => if (colValues.nonEmpty && colValues.forall(_.isDefinedAt(i))) acc + i else acc
-          }
+          if (colValues.isEmpty)
+            new BitSet
+          else
+            BitSetUtil.filteredRange(0, source.size) {
+              i => colValues.forall(_.isDefinedAt(i))
+            }
       }
 
       val size = source.size
-      val columns: Map[ColumnRef, Column] = source.columns mapValues { col => cf.util.filter(0, source.size, defined)(col).get }
+      val columns: Map[ColumnRef, Column] = source.columns mapValues {
+        col => cf.util.filter(0, source.size, defined)(col).get
+      }
     }
   }
 
   def compact(filter: Slice, definedness: Definedness): Slice = {
     new Slice {
+      private val cols = filter.columns.values.toArray
       lazy val retained = definedness match {
         case AnyDefined =>
-          (0 until filter.size).foldLeft(new ArrayIntList) {
-            case (acc, i) => if (filter.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
+          val acc = new ArrayIntList
+          Loop.range(0, filter.size) {
+            i => if (cols.exists(_.isDefinedAt(i))) acc.add(i)
           }
+          acc
 
         case AllDefined =>
-          (0 until filter.size).foldLeft(new ArrayIntList) {
-            case (acc, i) => if (filter.columns.values.forall(_.isDefinedAt(i))) acc.add(i) ; acc
+          val acc = new ArrayIntList
+          Loop.range(0, filter.size) {
+            i => if (cols.forall(_.isDefinedAt(i))) acc.add(i)
           }
+          acc
       }
 
       lazy val size = retained.size
-      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }
+      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues {
+        col => (col |> cf.util.RemapIndices(retained)).get
+      }
     }
   }
 
@@ -392,49 +388,79 @@ trait Slice { source =>
       }
 
       lazy val size = retained.size
-      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }
-    }
-  }
-
-  def sortBy(refs: VectorCase[JPath]): Slice = {
-    val sortedIndices: Array[Int] = {
-      import java.util.Arrays
-      val arr = Array.range(0, source.size)
-
-      val comparator = new IntOrder {
-        def order(i1: Int, i2: Int) = {
-          var i = 0
-          var result: Ordering = EQ
-          //while (i < accessors.length && (result eq EQ)) {
-            sys.error("todo")
-          //}
-          result
-        }
+      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues {
+        col => (col |> cf.util.RemapIndices(retained)).get
       }
-
-      Slice.qsort(arr, comparator)
-      arr
     }
-
-    source mapRoot cf.util.Remap(sortedIndices)
   }
 
-  def split(idx: Int): (Slice, Slice) = (
-    new Slice {
-      val size = idx
-      val columns = source.columns mapValues { col => (col |> cf.util.Remap({case i if i < idx => i})).get }
-    },
-    new Slice {
-      val size = source.size - idx
-      val columns = source.columns mapValues { col => (col |> cf.util.Remap({case i if i < size => i + idx})).get }
+  def sortBy(cPaths: VectorCase[CPath]): Slice = {
+    val byRef = columns.groupBy(_._1.selector)
+    val colGroups: Array[Array[Column]] = cPaths.collect({ case path if byRef contains path =>
+      val cols: Array[Column] = byRef(path).map(_._2)(collection.breakOut)
+      cols
+    })(collection.breakOut)
+    val comparators: Array[RowComparator] = colGroups map { cols => RowComparator(cols, cols) }
+    val rowComparator = new RowComparator {
+      def compare(i: Int, j: Int): Ordering = {
+        var k = 0
+        var cmp: Ordering = EQ
+        while (cmp == EQ && k < comparators.length) {
+          cmp = comparators(k).compare(i, j)
+          k += 1
+        }
+        cmp
+      }
     }
-  )
+
+    val order: Array[Int] = Array.range(0, source.size)
+    spire.math.MergeSort.sort(order)(new spire.math.Order[Int] {
+      def compare(i: Int, j: Int) = rowComparator.compare(i, j).toInt
+      def eqv(i: Int, j: Int) = compare(i, j) == 0
+    }, implicitly)
+
+    val remapOrder = new ArrayIntList(order.size)
+    var i = 0
+    while (i < order.length) {
+      remapOrder.add(i, order(i))
+      i += 1
+    }
+    source.remap(remapOrder)
+  }
+
+  /**
+   * Split the table at the specified index, exclusive. The
+   * new prefix will contain all indices less than that index, and
+   * the new suffix will contain indices >= that index.
+   */
+  def split(idx: Int): (Slice, Slice) = {
+    (take(idx), drop(idx))
+  }
+
+  def take(sz: Int): Slice = if (sz >= source.size) source else {
+    new Slice {
+      val size = sz
+      val columns = source.columns mapValues {
+        col => (col |> cf.util.RemapFilter(_ < sz, 0)).get
+      }
+    }
+  }
+
+  def drop(sz: Int): Slice = if (sz <= 0) source else {
+    new Slice {
+      val size = source.size - sz
+      val columns = source.columns mapValues {
+        col => (col |> cf.util.RemapFilter(_ < size, sz)).get
+      }
+    }
+  }
 
   def takeRange(startIndex: Int, numberToTake: Int): Slice = {
+    val take2 = math.min(this.size, startIndex + numberToTake) - startIndex
     new Slice {
-      val size = numberToTake
+      val size = take2
       val columns = source.columns mapValues { 
-        col => (col |> cf.util.Remap( { case i if i < numberToTake => i + startIndex} )).get  //remaps new to old
+        col => (col |> cf.util.RemapFilter(_ < take2, startIndex)).get
       }
     }
   }
@@ -463,17 +489,643 @@ trait Slice { source =>
       }
     }
   }
+  
+  def renderJson[M[+_]](delimiter: Char)(implicit M: Monad[M]): (StreamT[M, CharBuffer], Boolean) = {
+    if (columns.isEmpty) {
+      (StreamT.empty, false)
+    } else {
+      val delimiterStr = delimiter.toString
+      val BufferSize = 1024 * 10    // 10 KB
+      
+      val optSchema = {
+        def insert(target: SchemaNode, ref: ColumnRef, col: Column): SchemaNode = {
+          val ColumnRef(selector, ctype) = ref
+          
+          selector.nodes match {
+            case CPathField(name) :: tail => {
+              target match {
+                case SchemaNode.Obj(nodes) => {
+                  val subTarget = nodes get name getOrElse SchemaNode.Union(Set())
+                  val result = insert(subTarget, ColumnRef(CPath(tail), ctype), col)
+                  SchemaNode.Obj(nodes + (name -> result))
+                }
+                
+                case SchemaNode.Union(nodes) => {
+                  val objNode = nodes find {
+                    case _: SchemaNode.Obj => true
+                    case _ => false
+                  }
+                  
+                  val subTarget = objNode getOrElse SchemaNode.Obj(Map())
+                  SchemaNode.Union(nodes - subTarget + insert(subTarget, ref, col))
+                }
+                
+                case node =>
+                  SchemaNode.Union(Set(node, insert(SchemaNode.Obj(Map()), ref, col)))
+              }
+            }
+            
+            case CPathIndex(idx) :: tail => {
+              target match {
+                case SchemaNode.Arr(map) => {
+                  val subTarget = map get idx getOrElse SchemaNode.Union(Set())
+                  val result = insert(subTarget, ColumnRef(CPath(tail), ctype), col)
+                  SchemaNode.Arr(map + (idx -> result))
+                }
+                
+                case SchemaNode.Union(nodes) => {
+                  val objNode = nodes find {
+                    case _: SchemaNode.Arr => true
+                    case _ => false
+                  }
+                  
+                  val subTarget = objNode getOrElse SchemaNode.Arr(Map())
+                  SchemaNode.Union(nodes - subTarget + insert(subTarget, ref, col))
+                }
+                
+                case node =>
+                  SchemaNode.Union(Set(node, insert(SchemaNode.Arr(Map()), ref, col)))
+              }
+            }
+            
+            case CPathMeta(_) :: _ => target
+            
+            case Nil => {
+              val node = SchemaNode.Leaf(ctype, col)
+              
+              target match {
+                case SchemaNode.Union(nodes) => SchemaNode.Union(nodes + node)
+                case oldNode => SchemaNode.Union(Set(oldNode, node))
+              }
+            }
+          }
+        }
+        
+        def normalize(schema: SchemaNode): Option[SchemaNode] = schema match {
+          case SchemaNode.Obj(nodes) => {
+            val nodes2 = nodes flatMap {
+              case (key, value) => normalize(value) map { key -> _ }
+            }
+            
+            val back = if (nodes2.isEmpty)
+              None
+            else
+              Some(SchemaNode.Obj(nodes2))
+            
+            back foreach { obj =>
+              obj.keys = new Array[String](nodes2.size)
+              obj.values = new Array[SchemaNode](nodes2.size)
+            }
+            
+            var i = 0
+            back foreach { obj =>
+              for ((key, value) <- nodes2) {
+                obj.keys(i) = key
+                obj.values(i) = value
+                i += 1
+              }
+            }
+            
+            back
+          }
+          
+          case SchemaNode.Arr(map) => {
+            val map2 = map flatMap {
+              case (idx, value) => normalize(value) map { idx -> _ }
+            }
+            
+            val back = if (map2.isEmpty)
+              None
+            else
+              Some(SchemaNode.Arr(map2))
+            
+            back foreach { arr =>
+              arr.nodes = new Array[SchemaNode](map2.size)
+            }
+            
+            var i = 0
+            back foreach { arr =>
+              val values = map2.toSeq sortBy { _._1 } map { _._2 }
+              
+              for (value <- values) {
+                arr.nodes(i) = value
+                i += 1
+              }
+            }
+            
+            back
+          }
+          
+          case SchemaNode.Union(nodes) => {
+            val nodes2 = nodes flatMap normalize
+            
+            if (nodes2.isEmpty)
+              None
+            else if (nodes2.size == 1)
+              nodes2.headOption
+            else {
+              val union = SchemaNode.Union(nodes2)
+              union.possibilities = nodes2.toArray
+              Some(union)
+            }
+          }
+          
+          case lf: SchemaNode.Leaf => Some(lf)
+        }
+        
+        val schema = columns.foldLeft(SchemaNode.Union(Set()): SchemaNode) {
+          case (acc, (ref, col)) => insert(acc, ref, col)
+        }
+        
+        normalize(schema)
+      }
+      
+      // don't remove!  @tailrec bugs if you use optSchema.map
+      if (optSchema.isDefined) {
+        val schema = optSchema.get
+        
+        val depth = {
+          def loop(schema: SchemaNode): Int = schema match {
+            case obj: SchemaNode.Obj =>
+              4 + (obj.values map loop max)
+            
+            case arr: SchemaNode.Arr =>
+              2 + (arr.nodes map loop max)
+            
+            case union: SchemaNode.Union =>
+              union.possibilities map loop max
+            
+            case SchemaNode.Leaf(_, _) => 0
+          }
+          
+          loop(schema)
+        }
+        
+        // we have the schema, now emit
+        
+        var buffer = CharBuffer.allocate(BufferSize)
+        val vector = new mutable.ArrayBuffer[CharBuffer](math.max(1, size / 10))
+        
+        @inline
+        def checkPush(length: Int) {
+          if (buffer.remaining < length) {
+            buffer.flip()
+            vector += buffer
+            
+            buffer = CharBuffer.allocate(BufferSize)
+          }
+        }
+        
+        @inline
+        def push(c: Char) {
+          checkPush(1)
+          buffer.put(c)
+        }
+        
+        @inline
+        def pushStr(str: String) {
+          checkPush(str.length)
+          buffer.put(str)
+        }
+        
+        val in = new RingDeque[String](depth)
+        val inFlags = new RingDeque[Boolean](depth)
+        
+        @inline
+        def pushIn(str: String, flag: Boolean) {
+          in.pushBack(str)
+          inFlags.pushBack(flag)
+        }
+        
+        @inline
+        def popIn() {
+          in.popBack()
+          inFlags.popBack()
+        }
+        
+        @inline
+        @tailrec
+        def flushIn() {
+          if (!in.isEmpty) {
+            val str = in.popFront()
+            
+            val flag = inFlags.popFront()
+            
+            if (flag) {
+              renderString(str)
+            } else {
+              checkPush(str.length)
+              buffer.put(str)
+            }
+            
+            flushIn()
+          }
+        }
+        
+        // emitters
+        
+        @inline
+        @tailrec
+        def renderString(str: String, idx: Int = 0) {
+          if (idx == 0) {
+            push('"')
+          }
+          
+          if (idx < str.length) {
+            val c = str.charAt(idx)
+            
+            (c: @switch) match {
+              case '"' => pushStr("\\\"")
+              case '\\' => pushStr("\\\\")
+              case '\b' => pushStr("\\b")
+              case '\f' => pushStr("\\f")
+              case '\n' => pushStr("\\n")
+              case '\r' => pushStr("\\r")
+              case '\t' => pushStr("\\t")
+              
+              case c => {
+                if ((c >= '\u0000' && c < '\u001f') || (c >= '\u0080' && c < '\u00a0') || (c >= '\u2000' && c < '\u2100')) {
+                  pushStr("\\u")
+                  pushStr("%04x".format(Character.codePointAt(str, idx)))
+                } else {
+                  push(c)
+                }
+              }
+            }
+            
+            renderString(str, idx + 1)
+          } else {
+            push('"')
+          }
+        }
+        
+        @inline
+        def renderLong(ln: Long) {
+          
+          @inline
+          @tailrec
+          def power10(ln: Long, seed: Long = 1): Long = {
+            // note: we could be doing binary search here
+            
+            if (seed * 10 < 0)    // overflow
+              seed
+            else if (seed * 10 > ln)
+              seed
+            else
+              power10(ln, seed * 10)
+          }
+          
+          @inline
+          @tailrec
+          def renderPositive(ln: Long, power: Long) {
+            if (power > 0) {
+              val c = Character.forDigit((ln / power % 10).toInt, 10)
+              push(c)
+              renderPositive(ln, power / 10)
+            }
+          }
+          
+          if (ln == Long.MinValue) {
+            val MinString = "-9223372036854775808"
+            checkPush(MinString.length)
+            buffer.put(MinString)
+          } else if (ln == 0) {
+            push('0')
+          } else if (ln < 0) {
+            push('-')
+            
+            val ln2 = ln * -1
+            renderPositive(ln2, power10(ln2))
+          } else {
+            renderPositive(ln, power10(ln))
+          }
+        }
+        
+        // TODO is this a problem?
+        @inline
+        def renderDouble(d: Double) {
+          val str = d.toString
+          checkPush(str.length)
+          buffer.put(str)
+        }
+        
+        // TODO is this a problem?
+        @inline
+        def renderNum(d: BigDecimal) {
+          val str = d.toString
+          checkPush(str.length)
+          buffer.put(str)
+        }
+        
+        @inline
+        def renderBoolean(b: Boolean) {
+          if (b) {
+            pushStr("true")
+          } else {
+            pushStr("false")
+          }
+        }
+        
+        @inline
+        def renderNull() {
+          pushStr("null")
+        }
+        
+        @inline
+        def renderEmptyObject() {
+          pushStr("{}")
+        }
+        
+        @inline
+        def renderEmptyArray() {
+          pushStr("[]")
+        }
+        
+        @inline
+        def renderDate(date: DateTime) {
+          renderString(date.toString)
+        }
+        
+        def traverseSchema(row: Int, schema: SchemaNode): Boolean = schema match {
+          case obj: SchemaNode.Obj => {
+            val keys = obj.keys
+            val values = obj.values
+            
+            @inline
+            @tailrec
+            def loop(idx: Int, done: Boolean): Boolean = {
+              if (idx < keys.length) {
+                val key = keys(idx)
+                val value = values(idx)
+                
+                if (done) {
+                  pushIn(",", false)
+                }
+                
+                pushIn(key, true)
+                pushIn(":", false)
+                
+                val emitted = traverseSchema(row, value)
+                
+                if (!emitted) {     // less efficient
+                  popIn()
+                  popIn()
+                  
+                  if (done) {
+                    popIn()
+                  }
+                }
+                
+                loop(idx + 1, done || emitted)
+              } else {
+                done
+              }
+            }
+            
+            pushIn("{", false)
+            val done = loop(0, false)
+            
+            if (done) {
+              push('}')
+            } else {
+              popIn()
+            }
+            
+            done
+          }
+          
+          case arr: SchemaNode.Arr => {
+            val values = arr.nodes
+            
+            @inline
+            @tailrec
+            def loop(idx: Int, done: Boolean): Boolean = {
+              if (idx < values.length) {
+                val value = values(idx)
+                
+                if (done) {
+                  pushIn(",", false)
+                }
+                
+                val emitted = traverseSchema(row, value)
+                
+                if (!emitted && done) {     // less efficient
+                  popIn()
+                }
+                
+                loop(idx + 1, done || emitted)
+              } else {
+                done
+              }
+            }
+            
+            pushIn("[", false)
+            val done = loop(0, false)
+            
+            if (done) {
+              push(']')
+            } else {
+              popIn()
+            }
+            
+            done
+          }
+          
+          case union: SchemaNode.Union => {
+            val pos = union.possibilities
+            
+            @inline
+            @tailrec
+            def loop(idx: Int): Boolean = {
+              if (idx < pos.length) {
+                traverseSchema(row, pos(idx)) || loop(idx + 1)
+              } else {
+                false
+              }
+            }
+            
+            loop(0)
+          }
+          
+          case SchemaNode.Leaf(tpe, col) => tpe match {
+            case CString => {
+              val specCol = col.asInstanceOf[StrColumn]
+              
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderString(specCol(row))
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CBoolean => {
+              val specCol = col.asInstanceOf[BoolColumn]
+              
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderBoolean(specCol(row))
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CLong => {
+              val specCol = col.asInstanceOf[LongColumn]
+              
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderLong(specCol(row))
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CDouble => {
+              val specCol = col.asInstanceOf[DoubleColumn]
+              
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderDouble(specCol(row))
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CNum => {
+              val specCol = col.asInstanceOf[NumColumn]
+              
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderNum(specCol(row))
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CNull => {
+              val specCol = col.asInstanceOf[NullColumn]
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderNull()
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CEmptyObject => {
+              val specCol = col.asInstanceOf[EmptyObjectColumn]
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderEmptyObject()
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CEmptyArray => {
+              val specCol = col.asInstanceOf[EmptyArrayColumn]
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderEmptyArray()
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CDate => {
+              val specCol = col.asInstanceOf[DateColumn]
+              
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderDate(specCol(row))
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CUndefined => false
+          }
+        }
+        
+        @tailrec
+        def render(row: Int, delimit: Boolean): Boolean = {
+          if (row < size) {
+            if (delimit) {
+              pushIn(delimiterStr, false)
+            }
+            
+            val rowRendered = traverseSchema(row, schema)
+            
+            if (delimit && !rowRendered) {
+              popIn()
+            }
+            
+            render(row + 1, delimit || rowRendered)
+          } else {
+            delimit
+          }
+        }
+        
+        val rendered = render(0, false)
+        
+        buffer.flip()
+        vector += buffer
+        
+        val stream = StreamT.unfoldM(0) { idx =>
+          val back = if (idx < vector.length)
+            Some((vector(idx), idx + 1))
+          else
+            None
+          
+          M.point(back)
+        }
+        
+        (stream, rendered)
+      } else {
+        (StreamT.empty, false)
+      }
+    }
+  }
 
-  def toJson(row: Int): Option[JValue] = {
+  def toJValue(row: Int) = {
     columns.foldLeft[JValue](JNothing) {
       case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
-        jv.unsafeInsert(selector, col.jValue(row))
+        CPathUtils.cPathToJPaths(selector, col.cValue(row)).foldLeft(jv) {
+          case (jv, (path, value)) => jv.unsafeInsert(path, value.toJValue)
+        }
 
       case (jv, _) => jv
-    } match {
+    } 
+  }
+
+  def toJson(row: Int): Option[JValue] = {
+    toJValue(row) match {
       case JNothing => None
       case jv       => Some(jv)
     }
+  }
+
+  def toJsonElements: Vector[JValue] = {
+    @tailrec def rec(i: Int, acc: Vector[JValue]): Vector[JValue] = {
+      if (i < source.size) {
+        toJValue(i) match {
+          case JNothing => rec(i + 1, acc)
+          case jv => rec(i + 1, acc :+ jv)
+        }
+      } else acc
+    }
+
+    rec(0, Vector())
   }
 
   def toString(row: Int): Option[String] = {
@@ -496,210 +1148,33 @@ object Slice {
     }
   }
 
-  // scalaz order isn't @specialized
-  trait IntOrder {
-    def order(i1: Int, i2: Int): Ordering
-  }
+  /**
+   * Concatenate multiple slices into 1 big slice. The slices will be
+   * concatenated in the order they appear in `slices`.
+   */
+  def concat(slices: List[Slice]): Slice = {
+    val (_columns, _size) = slices.foldLeft((Map.empty[ColumnRef, List[(Int, Column)]], 0)) {
+      case ((cols, offset), slice) =>
+        (slice.columns.foldLeft(cols) { case (acc, (ref, col)) =>
+          acc + (ref -> ((offset, col) :: acc.getOrElse(ref, Nil)))
+        }, offset + slice.size)
+      }
 
-  private val MIN_QSORT_SIZE = 7; 
-
-  def qsort(x: Array[Int], ord: IntOrder): Unit = {
-    val random = new java.util.Random();
-    qsortPartial(x, 0, x.length-1, ord, random);
-    isort(x, ord);
-  }
-
-  private def isort(x: Array[Int], ord: IntOrder): Unit = {
-    @tailrec def sort(i: Int): Unit = if (i < x.length) {
-      val t = x(i);
-      var j = i;
-      while(j > 0 && (ord.order(t, x(j-1)) eq LT)) { x(j) = x(j-1); j -= 1 } 
-      x(j) = t;
-      sort(i + 1)
-    }
-
-    sort(0)
-  }
-
-  private def qsortPartial(x: Array[Int], lower: Int, upper: Int, ord: IntOrder, random: java.util.Random): Unit = {
-    if (upper - lower >= MIN_QSORT_SIZE) {
-      swap(x, lower, lower + random.nextInt(upper-lower+1));
-      val t = x(lower);
-      var i = lower;
-      var j = upper + 1;
-      var cont = true
-      while (cont) {
-        do { i += 1 } while (i <= upper && (ord.order(x(i), t) eq LT))
-        do { j -= 1 } while (ord.order(t, x(j)) eq LT)
-        if (i > j) cont = false
-        swap(x, i, j)
+    new Slice {
+      val size = _size
+      val columns = _columns.flatMap { case (ref, parts) =>
+        cf.util.NConcat(parts) map ((ref, _))
       }
     }
-  }
-
-  @inline 
-  private def swap(xs: Array[Int], i: Int, j: Int) {
-    val temp = xs(i);
-    xs(i) = xs(j);
-    xs(j) = temp;
   }
 
   def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): RowComparator = {
-    def compare0(cols: (Column, Column)): RowComparator = {
-      cols match {
-        case (c1: BoolColumn, c2: BoolColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow) 
-            if (thisVal == c2(thatRow)) EQ else if (thisVal) GT else LT
-          }
-        }
-
-        case (c1: LongColumn, c2: LongColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
-          }
-        }
-
-        case (c1: LongColumn, c2: DoubleColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
-          }
-        }
-
-        case (c1: LongColumn, c2: NumColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
-          }
-        }
-
-        case (c1: DoubleColumn, c2: LongColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
-          }
-        }
-
-        case (c1: DoubleColumn, c2: DoubleColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
-          }
-        }
-
-        case (c1: DoubleColumn, c2: NumColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = BigDecimal(c1(thisRow))
-            val thatVal = c2(thatRow)
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
-          }
-        }
-
-        case (c1: NumColumn, c2: LongColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = BigDecimal(c2(thatRow))
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
-          }
-        }
-
-        case (c1: NumColumn, c2: DoubleColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = BigDecimal(c2(thatRow))
-            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
-          }
-        }
-
-        case (c1: NumColumn, c2: NumColumn) => new RowComparator {
-          val ord = Order[BigDecimal]
-          def compare(thisRow: Int, thatRow: Int) = {
-            ord.order(c1(thisRow), c2(thatRow))
-          }
-        }
-
-        case (c1: StrColumn, c2: StrColumn) => new RowComparator {
-          val ord = Order[String]
-          def compare(thisRow: Int, thatRow: Int) = {
-            ord.order(c1(thisRow), c2(thatRow))
-          }
-        }
-
-        case (c1: DateColumn, c2: DateColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = {
-            val thisVal = c1(thisRow)
-            val thatVal = c2(thatRow)
-            if (thisVal isAfter thatVal) GT else if (thisVal == thatVal) EQ else LT
-          }
-        }
-
-        case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = EQ
-        }
-
-        case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = EQ
-        }
-
-        case (c1: NullColumn, c2: NullColumn) => new RowComparator {
-          def compare(thisRow: Int, thatRow: Int) = EQ
-        }
-        
-        case (c1, c2) => {
-          val ordering = implicitly[Order[CType]].apply(c1.tpe, c2.tpe)
-          
-          new RowComparator {
-            def compare(thisRow: Int, thatRow: Int) = ordering
-          }
-        }
-      }
-    }
 
     val refs1 = keyf(s1)
     val refs2 = keyf(s2)
 
-    // Return the first column in the array defined at the row, or -1 if none are defined for that row
-    @inline def firstDefinedIndexFor(columns: Array[Column], row: Int): Int = {
-      var i = 0
-      while (i < columns.length && ! columns(i).isDefinedAt(row)) { i += 1 }
-      if (i == columns.length) -1 else i
-    }
-
     @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): RowComparator = {
-      new RowComparator {
-        private val array1 = l1.map(s1.columns).toArray
-        private val array2 = l2.map(s2.columns).toArray
-
-        // Build an array of pairwise comparator functions for later use
-        private val comparators: Array[RowComparator] = (for {
-          i1 <- 0 until array1.length
-          i2 <- 0 until array2.length
-        } yield compare0(array1(i1), array2(i2))).toArray
-
-        def compare(i: Int, j: Int) = {
-          val first1 = firstDefinedIndexFor(array1, i)
-          val first2 = firstDefinedIndexFor(array2, j)
-
-          // In the following, undefined always sorts LT defined values
-          if (first1 == -1 && first2 == -1) {
-            EQ
-          } else if (first1 == -1) {
-            LT
-          } else if (first2 == -1) {
-            GT
-          } else {
-            // We have the indices, so use it to look up the comparator for the rows
-            comparators(first1 * array2.length + first2).compare(i, j)
-          }
-        }
-      }
+      RowComparator(l1.map(s1.columns).toArray, l2.map(s2.columns).toArray)
     }
 
     @inline @tailrec
@@ -759,5 +1234,25 @@ object Slice {
         result
       }
     }
-  } 
+  }
+  
+  
+  private sealed trait SchemaNode
+  
+  private object SchemaNode {
+    final case class Obj(nodes: Map[String, SchemaNode]) extends SchemaNode {
+      final var keys: Array[String] = _
+      final var values: Array[SchemaNode] = _
+    }
+    
+    final case class Arr(map: Map[Int, SchemaNode]) extends SchemaNode {
+      final var nodes: Array[SchemaNode] = _
+    }
+    
+    final case class Union(nodes: Set[SchemaNode]) extends SchemaNode {
+      final var possibilities: Array[SchemaNode] = _
+    }
+    
+    final case class Leaf(tpe: CType, col: Column) extends SchemaNode
+  }
 }
