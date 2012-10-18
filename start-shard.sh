@@ -77,7 +77,7 @@ JAVA="java $GC_OPTS"
 
 # pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
 if [ ! -f $INGEST_ASSEMBLY -o ! -f $SHARD_ASSEMBLY -o ! -f $YGGDRASIL_ASSEMBLY -o ! -f $AUTH_ASSEMBLY -o ! -f $ACCOUNTS_ASSEMBLY ]; then
-    echo "Ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run."
+    echo "Ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run." >&2
     exit 1
 fi
 
@@ -92,7 +92,10 @@ service_ports[30070]="Shard"
 
 for PORT in 9082 9092 $MONGOPORT 30060 30062 30064 30070; do
     if port_is_open $PORT; then
-        echo "You appear to already have a conflicting ${service_ports[$PORT]} service running on port $PORT"
+        echo "You appear to already have a conflicting ${service_ports[$PORT]} service running on port $PORT" >&2
+        if [[ $PORT == $MONGPORT ]]; then
+            echo "You can use the -m flag to override the mongo port" >&2
+        fi
         exit 1
     fi
 done
@@ -125,8 +128,8 @@ echo "Using artifacts in $ARTIFACTDIR"
     echo "Downloading current ZooKeeper artifact"
     pushd $ARTIFACTDIR > /dev/null
     wget -nd -q -r -l 1 -A tar.gz http://mirrors.gigenet.com/apache/zookeeper/current/ || { 
-        echo "Failed to download zookeeper"
-        exit 3 
+        echo "Failed to download zookeeper" >&2
+        exit 3
     }
     popd > /dev/null
 }
@@ -135,8 +138,8 @@ echo "Using artifacts in $ARTIFACTDIR"
     echo "Downloading current Kafka artifact"
     pushd $ARTIFACTDIR > /dev/null
     wget -nd -q http://s3.amazonaws.com/ops.reportgrid.com/kafka/kafka-0.7.5.zip || { 
-        echo "Failed to download kafka"
-        exit 3 
+        echo "Failed to download kafka" >&2
+        exit 3
     }
     popd > /dev/null
 }
@@ -145,7 +148,7 @@ echo "Using artifacts in $ARTIFACTDIR"
     echo "Downloading current Mongo artifact"
     pushd $ARTIFACTDIR > /dev/null
     wget -nd -q $MONGOURL || { 
-        echo "Failed to download kafka"
+        echo "Failed to download kafka" >&2
         exit 3 
     }
     popd > /dev/null
@@ -161,7 +164,7 @@ fi
 if [ "$WORKDIR" == "" ]; then  
     WORKDIR=`mktemp -d -t standaloneShard.XXXXXX 2>&1`
     if [ $? -ne 0 ]; then
-        echo "Couldn't create temp workdir! ($WORKDIR)"
+        echo "Couldn't create temp workdir! ($WORKDIR)" >&2
         exit 1
     fi
 else
@@ -254,7 +257,7 @@ trap on_exit EXIT
 # Get zookeeper up and running first
 pushd $ZKBASE > /dev/null
 tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-maven*' --exclude='contrib*' --exclude='recipes*' -xvzf $ARTIFACTDIR/zookeeper* > /dev/null 2>&1 || {
-    echo "Failed to unpack zookeeper"
+    echo "Failed to unpack zookeeper" >&2
     exit 3
 }
 popd > /dev/null
@@ -272,7 +275,7 @@ cd $ZKBASE/bin
 # Now, start global and local kafkas
 cd $WORKDIR
 unzip $ARTIFACTDIR/kafka* > /dev/null || {
-    echo "Failed to unpack kafka"
+    echo "Failed to unpack kafka" >&2
     exit 3
 }
 
@@ -308,7 +311,7 @@ if [ ! -e $WORKDIR/root_token.json ]; then
     echo "Creating new root token"
     $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -n "/" -a "Local test" -r "Unused" || exit 3
     echo 'db.tokens.find({}, {"tid":1})' | $MONGOBASE/bin/mongo localhost:$MONGOPORT/dev_auth_v1 > $WORKDIR/root_token.json || {
-        echo "Error retrieving new root token"
+        echo "Error retrieving new root token" >&2
         exit 3
     }
 fi
@@ -334,7 +337,7 @@ cd $BASEDIR
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
 if [ ! -e $WORKDIR/initial_checkpoint.json ]; then
     $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY zk -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
-        echo "Couldn't set initial checkpoint!"
+        echo "Couldn't set initial checkpoint!" >&2
         exit 3
     }
     touch $WORKDIR/initial_checkpoint.json
