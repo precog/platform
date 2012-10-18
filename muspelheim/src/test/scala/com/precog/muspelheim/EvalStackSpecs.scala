@@ -11,7 +11,6 @@ trait EvalStackSpecs extends Specification {
   def evalE(str: String, debug: Boolean = false): Set[(Vector[Long], SValue)]
 
   "the full stack" should {
-    /*
     "count a filtered clicks dataset" in {
       val input = """
         | clicks := //clicks
@@ -161,7 +160,6 @@ trait EvalStackSpecs extends Specification {
       results must contain(SString("page-2page-4"))
       results must contain(SString("page-2page-0")) 
     }
-    */
 
     "union sets coming out of a solve" >> {
       val input = """
@@ -206,7 +204,6 @@ trait EvalStackSpecs extends Specification {
         case obj => obj("pageId")
       } mustEqual Set(SString("page-0"), SString("page-1"), SString("page-2"), SString("page-3"), SString("page-4"))
     }
-    /*
 
     "accept covariance inside an object with'd with another object" >> {
       val input = """
@@ -1618,7 +1615,6 @@ trait EvalStackSpecs extends Specification {
 //        result must haveSize(4)
 //      } 
     }
-    */
   }
 }
 
