@@ -169,25 +169,43 @@ abstract class KafkaShardIngestActor(shardId: String,
    */
   protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]): Unit
 
-  private def readRemote(fromCheckpoint: YggCheckpoint): Validation[Throwable, (Vector[IngestMessage], YggCheckpoint)] = {
+  private def readRemote(fromCheckpoint: YggCheckpoint):
+    Validation[Throwable, (Vector[IngestMessage], YggCheckpoint)] = {
+
+    // The shard ingest actor needs to compute the maximum offset, so it has
+    // to traverse the full message set in process; to avoid traversing it
+    // twice, we simply read the payload into event messages at this point.
+    // We stop at the first archive message, either including it if it's the
+    // initial message, or using all inserts up to that point
+    @tailrec
+    def buildBatch(
+      input: Stream[(IngestMessage,Long)],
+      batch: Vector[IngestMessage],
+      checkpoint: YggCheckpoint
+    ): (Vector[IngestMessage], YggCheckpoint) = input match {
+      case Stream.Empty =>
+        (batch, checkpoint)
+      case (em @ EventMessage(EventId(pid, sid), _), offset) #:: tail =>
+        buildBatch(tail, batch :+ em, checkpoint.update(offset, pid, sid))
+      case (ar: ArchiveMessage, _) #:: tail if batch.nonEmpty =>
+        (batch, checkpoint)
+      case (ar @ ArchiveMessage(ArchiveId(pid, sid), _), offset) #:: tail =>
+        (Vector(ar), checkpoint.update(offset, pid, sid))
+    }
+
     Validation.fromTryCatch {
-      val messageSet = consumer.fetch(new FetchRequest(topic, partition = 0, offset = lastCheckpoint.offset, maxSize = fetchBufferSize))
+      val req = new FetchRequest(
+        topic,
+        partition = 0,
+        offset = lastCheckpoint.offset,
+        maxSize = fetchBufferSize
+      )
+      val messageSet = consumer.fetch(req)
 
-      // The shard ingest actor needs to compute the maximum offset, so it has to traverse the full 
-      // message set in process; to avoid traversing it twice, we simply read the payload into 
-      // event messages at this point. We stop at the first archive message, either including it
-      // if it's the initial message, or using all inserts up to that point
-      @tailrec
-      def buildBatch(input: Stream[(IngestMessage,Long)], batch: Vector[IngestMessage], checkpoint: YggCheckpoint): (Vector[IngestMessage], YggCheckpoint) = input match {
-        case Stream.Empty => (batch, checkpoint)
-        case (em @ EventMessage(EventId(pid, sid), _), offset) #:: tail     => buildBatch(tail, batch :+ em, checkpoint.update(offset, pid, sid))
-        case (ar: ArchiveMessage, _) #:: tail if batch.nonEmpty             => (batch, checkpoint)
-        case (ar @ ArchiveMessage(ArchiveId(pid, sid), _), offset) #:: tail => (Vector(ar), checkpoint.update(offset, pid, sid))
-      }
-
-      buildBatch(messageSet.toStream.map { msgAndOffset => (IngestMessageSerialization.read(msgAndOffset.message.payload), msgAndOffset.offset) },
-                 Vector.empty,
-                 fromCheckpoint)
+      buildBatch(messageSet.toStream.map {
+        msgAndOffset =>
+          (IngestMessageSerialization.read(msgAndOffset.message.payload), msgAndOffset.offset)
+        }, Vector.empty, fromCheckpoint)
     }
   }
 
