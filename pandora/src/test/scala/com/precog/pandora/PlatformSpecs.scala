@@ -76,56 +76,16 @@ trait PlatformSpecs[M[+_]]
   object yggConfig  extends YggConfig
 }
 
-class TrampolinePlatformSpecs extends PlatformSpecs[YId] 
-    with BaseBlockStoreTestModule[YId] 
-    with StubStorageModule[YId] {
-
-  implicit val M: Monad[YId] with Copointed[YId] = YId.M //Trampoline.trampolineMonad
-
-  val projections = Map.empty[ProjectionDescriptor, Projection]
-  
-  private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
-  private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
-  private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
-  
-  private val groupId = new java.util.concurrent.atomic.AtomicInteger
-  def newGroupId = groupId.getAndIncrement
-
-  override def load(table: Table, uid: UserId, jtpe: JType) = {
-    table.toJson map { events =>
-      fromJson {
-        events.toStream flatMap {
-          case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
-            val path = Path(pathStr)
-      
-            val index = initialIndices get path getOrElse {
-              initialIndices += (path -> currentIndex)
-              currentIndex
-            }
-            
-            val target = path.path.replaceAll("/$", ".json")
-            val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-            val JArray(parsed) = JsonParser.parse(src.getLines.mkString(" "))
-            
-            currentIndex += parsed.length
-            
-            parsed.toStream zip (Stream from index) map {
-              case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
-            }
-          }
-
-          case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
-        }
-      }
-    } 
-  }
-}
-
-class FuturePlatformSpecs extends PlatformSpecs[Future] 
+object FuturePlatformSpecs 
+    extends ParseEvalStackSpecs[Future] 
+    with BlockStoreColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 
-    with JDBMProjectionModule {
+    with JDBMProjectionModule { 
 
+  class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig with JDBMProjectionModuleConfig
+  object yggConfig  extends YggConfig
+      
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
