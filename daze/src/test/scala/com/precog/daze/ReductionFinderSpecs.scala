@@ -150,10 +150,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         joinDeref(megaR, 0, 0, line))
 
       val expectedReductions = MegaReduceState(
-        mutable.Map(left -> parent, right -> parent),
-        mutable.Map(parent -> List(parent)),
-        mutable.Map(parent -> List(left, right)),
-        mutable.Map(parent -> trans.Leaf(trans.Source))
+        Map(left -> parent, right -> parent),
+        Map(parent -> List(parent)),
+        Map(parent -> List(left, right)),
+        Map(parent -> trans.Leaf(trans.Source))
       )
 
       findReductions(input) mustEqual expectedReductions
@@ -540,10 +540,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val input = dag.LoadLocal(line, Root(line, CString("/foo")))
       val expected = MegaReduceState(
-        mutable.Map(),
-        mutable.Map(),
-        mutable.Map(),
-        mutable.Map()
+        Map(),
+        Map(),
+        Map(),
+        Map()
       )
 
       findReductions(input) mustEqual expected
@@ -557,10 +557,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val r = dag.Reduce(line, reduction, load)
 
       val expected = MegaReduceState(
-        mutable.Map(r -> load),
-        mutable.Map(load -> List(load)),
-        mutable.Map(load -> List(r)),
-        mutable.Map(load -> trans.Leaf(trans.Source))
+        Map(r -> load),
+        Map(load -> List(load)),
+        Map(load -> List(r)),
+        Map(load -> trans.Leaf(trans.Source))
       )
 
       findReductions(r) mustEqual expected
@@ -576,10 +576,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val input = Join(line, Add, CrossLeftSort, r1, r2)
 
       val expected = MegaReduceState(
-        mutable.Map(r1 -> load, r2 -> load),
-        mutable.Map(load -> List(load)),
-        mutable.Map(load -> List(r1, r2)),
-        mutable.Map(load -> trans.Leaf(trans.Source))
+        Map(r1 -> load, r2 -> load),
+        Map(load -> List(load)),
+        Map(load -> List(r1, r2)),
+        Map(load -> trans.Leaf(trans.Source))
       )
 
       findReductions(input) mustEqual expected
@@ -593,10 +593,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val r2 = dag.Reduce(line, Count, r1)
 
       val expected = MegaReduceState(
-        mutable.Map(r2 -> r1, r1 -> load),
-        mutable.Map(load -> List(load), r1 -> List(r1)),
-        mutable.Map(load -> List(r1), r1 -> List(r2)),
-        mutable.Map(load -> trans.Leaf(trans.Source), r1 -> trans.Leaf(trans.Source))
+        Map(r2 -> r1, r1 -> load),
+        Map(load -> List(load), r1 -> List(r1)),
+        Map(load -> List(r1), r1 -> List(r2)),
+        Map(load -> trans.Leaf(trans.Source), r1 -> trans.Leaf(trans.Source))
       )
 
       findReductions(r2) mustEqual expected
@@ -613,20 +613,20 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val input = dag.Reduce(line, Count, parentCount)
 
       val expected = MegaReduceState(
-        mutable.Map(
+        Map(
           mean -> foo,
           stdDev -> foo,
           input -> parentCount
         ),
-        mutable.Map(
+        Map(
           foo -> List(foo),
           parentCount -> List(parentCount)
         ),
-        mutable.Map(
+        Map(
           foo -> List(mean, stdDev),
           parentCount -> List(input)
         ),
-        mutable.Map(
+        Map(
           foo -> trans.Leaf(trans.Source),
           parentCount -> trans.Leaf(trans.Source)
         )
@@ -650,10 +650,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         SplitParam(line, 1)(input))
         
       val expected = MegaReduceState(
-        mutable.Map(count -> clicks),
-        mutable.Map(clicks -> List(clicks)),
-        mutable.Map(clicks -> List(count)),
-        mutable.Map(clicks -> trans.Leaf(trans.Source))
+        Map(count -> clicks),
+        Map(clicks -> List(clicks)),
+        Map(clicks -> List(count)),
+        Map(clicks -> trans.Leaf(trans.Source))
       )
 
       findReductions(input) mustEqual expected
@@ -669,10 +669,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         val input = Join(line, Add, CrossLeftSort, dag.Operate(line, Neg, load), r)
 
         val expected = MegaReduceState(
-          mutable.Map(r -> load),
-          mutable.Map(load -> List(load)),
-          mutable.Map(load -> List(r)),
-          mutable.Map(load -> trans.Leaf(trans.Source))
+          Map(r -> load),
+          Map(load -> List(load)),
+          Map(load -> List(r)),
+          Map(load -> trans.Leaf(trans.Source))
         )
 
         findReductions(input) mustEqual expected
@@ -682,10 +682,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         val input = Join(line, Add, CrossRightSort, r, dag.Operate(line, Neg, load))
 
         val expected = MegaReduceState(
-          mutable.Map(r -> load),
-          mutable.Map(load -> List(load)),
-          mutable.Map(load -> List(r)),
-          mutable.Map(load -> trans.Leaf(trans.Source))
+          Map(r -> load),
+          Map(load -> List(load)),
+          Map(load -> List(r)),
+          Map(load -> trans.Leaf(trans.Source))
         )
 
         findReductions(input) mustEqual expected
@@ -714,10 +714,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       lazy val input: dag.Split = dag.Split(line, group, join)
 
       lazy val expected = MegaReduceState(
-        mutable.Map(r -> parent),
-        mutable.Map(parent -> List(parent)),
-        mutable.Map(parent -> List(r)),
-        mutable.Map(parent -> trans.Leaf(trans.Source))
+        Map(r -> parent),
+        Map(parent -> List(parent)),
+        Map(parent -> List(r)),
+        Map(parent -> trans.Leaf(trans.Source))
       )
 
       findReductions(input) mustEqual expected
@@ -762,10 +762,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
             Join(line, WrapObject, CrossLeftSort, maxRoot, r2))))
 
       val expected = MegaReduceState(
-        mutable.Map(r1 -> parent, r2 -> parent),
-        mutable.Map(parent -> List(parent)),
-        mutable.Map(parent -> List(r1, r2)),
-        mutable.Map(parent -> trans.Leaf(trans.Source))
+        Map(r1 -> parent, r2 -> parent),
+        Map(parent -> List(parent)),
+        Map(parent -> List(r1, r2)),
+        Map(parent -> trans.Leaf(trans.Source))
       )
 
       findReductions(input) mustEqual expected

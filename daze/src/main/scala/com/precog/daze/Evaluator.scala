@@ -391,27 +391,23 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pendingTable <- prepareEval(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
-            result = pendingTable.table.flatMap { parentTable =>
+            result = pendingTable.table flatMap { parentTable =>
               reduction(
-                parentTable.
-                  transform(liftedTrans).
-                  transform(DerefObjectStatic(Leaf(Source), paths.Value)).
-                  transform(spec)
-              )
+                parentTable
+                  .transform(liftedTrans)
+                  .transform(DerefObjectStatic(Leaf(Source), paths.Value))
+                  .transform(spec))
             }
 
             keyWrapped = trans.WrapObject(
               trans.ConstLiteral(
                 CEmptyArray,
-                trans.DerefArrayStatic(Leaf(Source), CPathIndex(0))
-              ),
-              paths.Key.name
-            )
+                trans.DerefArrayStatic(Leaf(Source), CPathIndex(0))),
+              paths.Key.name)
 
             valueWrapped = trans.InnerObjectConcat(
               keyWrapped,
-              trans.WrapObject(Leaf(Source), paths.Value.name)
-            )
+              trans.WrapObject(Leaf(Source), paths.Value.name))
 
             wrapped = result map { table =>
               table.transform(valueWrapped)
@@ -1168,11 +1164,8 @@ trait Evaluator[M[+_]] extends DAG
   private def liftToValues(trans: TransSpec1): TransSpec1 =
     TableTransSpec.makeTransSpec(Map(paths.Value -> trans))
 
-  def combineTransSpecs(specs: List[TransSpec1]): TransSpec1 = specs match {
-    case spec :: Nil => trans.WrapArray(spec)
-    case spec :: tail => trans.ArrayConcat(trans.WrapArray(spec), combineTransSpecs(tail))
-    case Nil => sys.error("todo: should this crash or be Option?")
-  }
+  def combineTransSpecs(specs: List[TransSpec1]): TransSpec1 =
+    specs map { trans.WrapArray(_): TransSpec1 } reduceOption { trans.ArrayConcat(_, _) } get   // TODO should this crash or be Option?
   
   type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
   type TableTransSpec1 = TableTransSpec[Source1]
