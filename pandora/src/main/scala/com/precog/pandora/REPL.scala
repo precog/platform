@@ -238,7 +238,9 @@ object Console extends App {
   class REPLConfig(dataDir: Option[String]) extends 
       BaseConfig with 
       EvaluatorConfig with
-      StandaloneShardSystemConfig {
+      StandaloneShardSystemConfig with
+      BlockStoreColumnarTableModuleConfig with
+      JDBMProjectionModuleConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
     val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
 

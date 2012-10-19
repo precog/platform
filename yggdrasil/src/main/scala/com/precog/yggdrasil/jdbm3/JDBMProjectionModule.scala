@@ -37,12 +37,17 @@ import scalaz.syntax.validation._
 
 import com.weiglewilczek.slf4s.Logger
 
-trait JDBMProjectionModule extends ProjectionModule {
+trait JDBMProjectionModuleConfig {
+  def maxSliceSize: Int
+}
+
+trait JDBMProjectionModule extends ProjectionModule with YggConfigComponent {
+  type YggConfig <: JDBMProjectionModuleConfig
   val pmLogger = Logger("JDBMProjectionModule")
 
   // type Key = Identities
   type Key = Array[Byte]
-  class Projection private[JDBMProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends JDBMProjection(baseDir, descriptor)
+  class Projection private[JDBMProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends JDBMProjection(baseDir, descriptor, yggConfig.maxSliceSize)
 
   trait JDBMProjectionCompanion extends ProjectionCompanion {
     def fileOps: FileOps

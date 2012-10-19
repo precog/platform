@@ -29,7 +29,9 @@ import blueeyes.json.JsonAST.{ JValue,  JArray  }
 import blueeyes.json.Printer.{ compact, render }
 import blueeyes.json.serialization.DefaultSerialization._
 
-import akka.dispatch.Future
+import akka.dispatch.{Await, Future}
+import akka.util.Duration
+
 import scalaz._
 
 
@@ -43,7 +45,7 @@ object BijectionsChunkQueryResult {
   implicit def JValueResponseToQueryResultResponse(r1: Future[HttpResponse[JValue]]): Future[HttpResponse[QueryResult]] =
     r1 map { response => response.copy(content = response.content map (Left(_))) }
 
-  implicit def QueryResultToChunk(implicit M: Monad[Future]) = new Bijection[Either[JValue, StreamT[Future, CharBuffer]], ByteChunk] {
+  implicit def QueryResultToChunk(implicit M: Monad[Future]) = new Bijection[Either[JValue, StreamT[Future, CharBuffer]], Future[ByteChunk]] {
     import scalaz.syntax.monad._
     import BijectionsChunkJson.JValueToChunk
 
@@ -58,7 +60,7 @@ object BijectionsChunkQueryResult {
       }
     }
 
-    def unapply(chunk: ByteChunk): Either[JValue, StreamT[Future, CharBuffer]] = {
+    def unapply(chunkM: Future[ByteChunk]): Either[JValue, StreamT[Future, CharBuffer]] = {
       def next(chunk: ByteChunk): StreamT.Step[CharBuffer, StreamT[Future, CharBuffer]] = {
         val json = new String(chunk.data)
         val buffer = CharBuffer.allocate(json.length)
@@ -75,21 +77,67 @@ object BijectionsChunkQueryResult {
 
       // All chunks generated from Streams have at least 2 parts, otherwise, if
       // we have one, we can just slurp the entire chunk up as JSON.
-
-      chunk.next map { _ =>
-        Right(StreamT(next(chunk).point[Future]))
-      } getOrElse {
-        Left(JValueToChunk.unapply(chunk))
+      
+      val backM = chunkM map { chunk =>
+        chunk.next map { _ =>
+          Right(StreamT(next(chunk).point[Future]))
+        } getOrElse {
+          Left(JValueToChunk.unapply(chunk))
+        }
       }
+      
+      Await.result(backM, Duration(1, "seconds"))
     }
 
-    def apply(queryResult: Either[JValue, StreamT[Future, CharBuffer]]): ByteChunk = {
+    def apply(queryResult: Either[JValue, StreamT[Future, CharBuffer]]): Future[ByteChunk] = {
       val encoder = Charset.forName("UTF-8").newEncoder
       
-      def next(chunked: StreamT[Future, CharBuffer]): Future[ByteChunk] = {
+      val Threshold = 10000000     // 10 million characters should be enough for anyone...
+      val TrimmedTail = "\"subsequent output has been truncated...\""
+      
+      def page(chunked: StreamT[Future, CharBuffer], acc: Vector[CharBuffer], size: Int): Future[(Vector[CharBuffer], Int)] = {
+        chunked.uncons flatMap {
+          case Some((chunk, tail)) => {
+            val acc2 = acc :+ chunk
+            val size2 = size + chunk.remaining()
+            
+            if (size > Threshold) {
+              val buffer = CharBuffer.allocate(TrimmedTail.length + 1)
+              buffer.put(TrimmedTail)
+              buffer.put(']')
+              buffer.flip()
+              M.point((acc :+ buffer, size + buffer.remaining()))
+            } else {
+              page(tail, acc2, size2)
+            }
+          }
+          
+          case None => {
+            val buffer = CharBuffer.allocate(1)
+            buffer.put(']')
+            buffer.flip()
+            M.point((acc :+ buffer, size + 1))
+          }
+        }
+      }
+      
+      def collapse(acc: Vector[CharBuffer], size: Int): CharBuffer = {
+        val back = CharBuffer.allocate(size)
+        
+        acc foreach { buffer =>
+          back.put(buffer)
+          buffer.flip()
+        }
+        
+        back.flip()
+        back
+      }
+      
+      /* def next(chunked: StreamT[Future, CharBuffer]): Future[ByteChunk] = {
         chunked.uncons flatMap {
           case Some((chunk, chunkStream)) =>
             val buffer = encoder.encode(chunk)
+            chunk.flip()
             
             val array = new Array[Byte](buffer.remaining())
             buffer.get(array)
@@ -101,13 +149,30 @@ object BijectionsChunkQueryResult {
 
           case None => M.point(Chunk("]".getBytes(DefaultCharset), None))
         }
-      }
+      } */
 
       queryResult match {
         case Left(jval) =>
-          JValueToChunk(jval)
-        case Right(chunkedQueryResult) =>
-          Chunk("[".getBytes(DefaultCharset), Some(next(chunkedQueryResult)))
+          M.point(JValueToChunk(jval))
+        
+        case Right(chunkedQueryResult) => {
+          // Chunk("[".getBytes(DefaultCharset), Some(next(chunkedQueryResult)))
+          
+          val buffer = CharBuffer.allocate(1)
+          buffer.put('[')
+          buffer.flip()
+          
+          val resultF = page(chunkedQueryResult, Vector(buffer), 1) map Function.tupled(collapse)
+          
+          resultF map { buffer =>
+            val byteBuffer = encoder.encode(buffer)
+            
+            val array = new Array[Byte](byteBuffer.remaining())
+            byteBuffer.get(array)
+            
+            Chunk(array, None)
+          }
+        }
       }
     }
   }

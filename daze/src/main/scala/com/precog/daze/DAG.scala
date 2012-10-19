@@ -37,7 +37,7 @@ import scalaz.{NonEmptyList => NEL, _}
 
 import java.math.MathContext
 
-trait DAG extends Instructions {
+trait DAG extends Instructions with TransSpecModule {
   import instructions._
   
   def decorate(stream: Vector[Instruction]): Either[StackError, DepGraph] = {
@@ -721,7 +721,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class MegaReduce(loc: Line, reds: NEL[Reduction], parent: DepGraph) extends DepGraph with StagingPoint {
+    case class MegaReduce(loc: Line, reds: List[(trans.TransSpec1, List[Reduction])], parent: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = Vector()
       
       val sorting = IdentitySort

@@ -327,12 +327,11 @@ trait Binder extends parser.AST with Library {
     def buildChains(env: Map[(Identifier, Let), Set[List[Expr]]])(expr: Expr): Set[List[Expr]] = expr match {
       case Let(_, _, _, _, right) => buildChains(env)(right) map { expr :: _ }
       
-      case Solve(_, constraints, right) =>
-        ((constraints map buildChains(env) reduce { _ ++ _ }) ++ buildChains(env)(right)) map { expr :: _ }
+      case expr @ Solve(_, _, _) => Set(expr :: Nil)
       
       case Import(_, _, child) => buildChains(env)(child) map { expr :: _ }
       case New(_, child) => buildChains(env)(child) map { expr :: _ }
-      case Relate(_, _, _, in) => buildChains(env)(in) map { expr :: _ }
+      case expr @ Relate(_, _, _, _) => Set(expr :: Nil)
       
       case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => Set()
       
@@ -372,14 +371,8 @@ trait Binder extends parser.AST with Library {
       case With(_, left, right) => 
         (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
       
-      case Union(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Intersect(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Difference(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
+      case expr @ (Union(_, _, _) | Intersect(_, _, _) | Difference(_, _, _)) =>
+        Set(expr :: Nil)
       
       case Add(_, left, right) =>
         (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }

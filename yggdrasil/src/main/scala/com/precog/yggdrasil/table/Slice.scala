@@ -28,6 +28,8 @@ import com.precog.util._
 
 import com.precog.common.json._
 
+import TransSpecModule._
+
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
@@ -797,8 +799,8 @@ trait Slice { source =>
           buffer.put(str)
         }
         
-        val in = new RingDeque[String](depth)
-        val inFlags = new RingDeque[Boolean](depth)
+        val in = new RingDeque[String](depth + 1)
+        val inFlags = new RingDeque[Boolean](depth + 1)
         
         @inline
         def pushIn(str: String, flag: Boolean) {
@@ -1206,7 +1208,7 @@ trait Slice { source =>
     }
   }
 
-  def toJson(row: Int): Option[JValue] = {
+  def toJValue(row: Int) = {
     columns.foldLeft[JValue](JNothing) {
       case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
         CPathUtils.cPathToJPaths(selector, col.cValue(row)).foldLeft(jv) {
@@ -1214,10 +1216,27 @@ trait Slice { source =>
         }
 
       case (jv, _) => jv
-    } match {
+    } 
+  }
+
+  def toJson(row: Int): Option[JValue] = {
+    toJValue(row) match {
       case JNothing => None
       case jv       => Some(jv)
     }
+  }
+
+  def toJsonElements: Vector[JValue] = {
+    @tailrec def rec(i: Int, acc: Vector[JValue]): Vector[JValue] = {
+      if (i < source.size) {
+        toJValue(i) match {
+          case JNothing => rec(i + 1, acc)
+          case jv => rec(i + 1, acc :+ jv)
+        }
+      } else acc
+    }
+
+    rec(0, Vector())
   }
 
   def toString(row: Int): Option[String] = {
@@ -1227,7 +1246,9 @@ trait Slice { source =>
     }
   }
 
-  def toJsonString: String = (0 until size).map(toJson).mkString("\n")
+  def toJsonString(prefix: String = ""): String = {
+    (0 until size).map(i => prefix +" "+ toJson(i)).mkString("\n")
+  }
 
   override def toString = (0 until size).map(toString(_).getOrElse("")).mkString("\n")
 }

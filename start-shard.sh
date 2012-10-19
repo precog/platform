@@ -22,13 +22,16 @@
 MONGOPORT=27017
 
 # Parse opts to determine settings
-while getopts ":d:lm:" opt; do
+while getopts ":d:lbm:" opt; do
     case $opt in
         d) 
             WORKDIR=$OPTARG
             ;;
         l)
             DONTCLEAN=1
+            ;;
+        b)
+            BUILDMISSING=1
             ;;
         m)
             echo "Overriding default mongo port with $OPTARG"
@@ -40,7 +43,7 @@ while getopts ":d:lm:" opt; do
             echo "  -l: If a temp workdir is used, don't clean up afterward"
             echo "  -d: Use the provided workdir"
             echo "  -m: Use the specified port for mongo"
-            echo "Done"
+            echo "  -b: Build missing artifacts prior to run (depends on sbt in path)"
             exit 1
             ;;
     esac
@@ -49,7 +52,7 @@ done
 # Taken from http://blog.publicobject.com/2006/06/canonical-path-of-file-in-bash.html
 function path-canonical-simple() {
 local dst="${1}"
-cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")"
+cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")" | sed 's#/\.##'
 }
 
 function port_is_open() {
@@ -64,7 +67,7 @@ function wait_until_port_open () {
 
 BASEDIR=$(path-canonical-simple `dirname $0`)
 
-VERSION=`grep "version :=" project/Build.scala | sed 's/.*"\(.*\)".*/\1/'`
+VERSION=`git describe`
 INGEST_ASSEMBLY=$BASEDIR/ingest/target/ingest-assembly-$VERSION.jar
 AUTH_ASSEMBLY=$BASEDIR/auth/target/auth-assembly-$VERSION.jar
 ACCOUNTS_ASSEMBLY=$BASEDIR/accounts/target/accounts-assembly-$VERSION.jar
@@ -76,8 +79,30 @@ GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPaci
 JAVA="java $GC_OPTS"
 
 # pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
-if [ ! -f $INGEST_ASSEMBLY -o ! -f $SHARD_ASSEMBLY -o ! -f $YGGDRASIL_ASSEMBLY -o ! -f $AUTH_ASSEMBLY -o ! -f $ACCOUNTS_ASSEMBLY ]; then
-    echo "Ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run."
+MISSING_ARTIFACTS=""
+for ASM in $INGEST_ASSEMBLY $SHARD_ASSEMBLY $YGGDRASIL_ASSEMBLY $AUTH_ASSEMBLY $ACCOUNTS_ASSEMBLY; do
+    if [ ! -f $ASM ]; then
+        if [ -n "$BUILDMISSING" ]; then
+            # Darn you, bash! zsh can do this in one go, a la ${$(basename $ASM)%%-*}
+            BUILDTARGETBASE=$(basename $ASM)
+            BUILDTARGET=${BUILDTARGETBASE%%-*}/assembly
+            echo "Building $BUILDTARGET"
+            sbt $BUILDTARGET || {
+                echo "Failed to build $BUILDTARGET!" >&2
+                exit 1
+            }
+        else
+            MISSING_ARTIFACTS="$MISSING_ARTIFACTS $ASM"
+        fi
+    fi
+done
+
+
+if [ -n "$MISSING_ARTIFACTS" ]; then
+    echo "Up-to-date ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run." >&2
+    for ASM in $MISSING_ARTIFACTS; do
+        echo "  missing `basename $ASM`" >&2
+    done
     exit 1
 fi
 
@@ -92,7 +117,10 @@ service_ports[30070]="Shard"
 
 for PORT in 9082 9092 $MONGOPORT 30060 30062 30064 30070; do
     if port_is_open $PORT; then
-        echo "You appear to already have a conflicting ${service_ports[$PORT]} service running on port $PORT"
+        echo "You appear to already have a conflicting ${service_ports[$PORT]} service running on port $PORT" >&2
+        if [[ $PORT == $MONGPORT ]]; then
+            echo "You can use the -m flag to override the mongo port" >&2
+        fi
         exit 1
     fi
 done
@@ -124,9 +152,9 @@ echo "Using artifacts in $ARTIFACTDIR"
 (exists $ARTIFACTDIR/zookeeper* && echo "  ZooKeeper exists") || {
     echo "Downloading current ZooKeeper artifact"
     pushd $ARTIFACTDIR > /dev/null
-    wget -nd -q -r -l 1 -A tar.gz http://mirrors.gigenet.com/apache/zookeeper/current/ || { 
-        echo "Failed to download zookeeper"
-        exit 3 
+    wget -nd -q http://ops.reportgrid.com.s3.amazonaws.com/zookeeper/zookeeper-3.4.3.tar.gz || { 
+        echo "Failed to download zookeeper" >&2
+        exit 3
     }
     popd > /dev/null
 }
@@ -135,8 +163,8 @@ echo "Using artifacts in $ARTIFACTDIR"
     echo "Downloading current Kafka artifact"
     pushd $ARTIFACTDIR > /dev/null
     wget -nd -q http://s3.amazonaws.com/ops.reportgrid.com/kafka/kafka-0.7.5.zip || { 
-        echo "Failed to download kafka"
-        exit 3 
+        echo "Failed to download kafka" >&2
+        exit 3
     }
     popd > /dev/null
 }
@@ -145,7 +173,7 @@ echo "Using artifacts in $ARTIFACTDIR"
     echo "Downloading current Mongo artifact"
     pushd $ARTIFACTDIR > /dev/null
     wget -nd -q $MONGOURL || { 
-        echo "Failed to download kafka"
+        echo "Failed to download kafka" >&2
         exit 3 
     }
     popd > /dev/null
@@ -161,7 +189,7 @@ fi
 if [ "$WORKDIR" == "" ]; then  
     WORKDIR=`mktemp -d -t standaloneShard.XXXXXX 2>&1`
     if [ $? -ne 0 ]; then
-        echo "Couldn't create temp workdir! ($WORKDIR)"
+        echo "Couldn't create temp workdir! ($WORKDIR)" >&2
         exit 1
     fi
 else
@@ -240,7 +268,7 @@ function on_exit() {
     cd $ZKBASE/bin
     ./zkServer.sh stop
 
-    if [ "$DONTCLEAN" != "1" ]; then
+    if [ -n "$DONTCLEAN" ]; then
         echo "Cleaning up temp work dir"
         rm -rf $WORKDIR
     fi
@@ -254,7 +282,7 @@ trap on_exit EXIT
 # Get zookeeper up and running first
 pushd $ZKBASE > /dev/null
 tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-maven*' --exclude='contrib*' --exclude='recipes*' -xvzf $ARTIFACTDIR/zookeeper* > /dev/null 2>&1 || {
-    echo "Failed to unpack zookeeper"
+    echo "Failed to unpack zookeeper" >&2
     exit 3
 }
 popd > /dev/null
@@ -272,7 +300,7 @@ cd $ZKBASE/bin
 # Now, start global and local kafkas
 cd $WORKDIR
 unzip $ARTIFACTDIR/kafka* > /dev/null || {
-    echo "Failed to unpack kafka"
+    echo "Failed to unpack kafka" >&2
     exit 3
 }
 
@@ -308,7 +336,7 @@ if [ ! -e $WORKDIR/root_token.json ]; then
     echo "Creating new root token"
     $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -n "/" -a "Local test" -r "Unused" || exit 3
     echo 'db.tokens.find({}, {"tid":1})' | $MONGOBASE/bin/mongo localhost:$MONGOPORT/dev_auth_v1 > $WORKDIR/root_token.json || {
-        echo "Error retrieving new root token"
+        echo "Error retrieving new root token" >&2
         exit 3
     }
 fi
@@ -334,7 +362,7 @@ cd $BASEDIR
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
 if [ ! -e $WORKDIR/initial_checkpoint.json ]; then
     $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY zk -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
-        echo "Couldn't set initial checkpoint!"
+        echo "Couldn't set initial checkpoint!" >&2
         exit 3
     }
     touch $WORKDIR/initial_checkpoint.json

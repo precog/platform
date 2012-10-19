@@ -20,7 +20,8 @@
 #!/bin/bash
 
 function usage {
-    echo "Usage: ./run.sh [-q directory] [ingest.json ...]" 1>&2
+    echo "Usage: ./run.sh [-b] [-m <mongo port>] [-q directory] [ingest.json ...]" >&2
+    echo "  -b: Build any required artifacts for the run" >&2
     exit 1
 }
 
@@ -29,12 +30,17 @@ if [ $# -eq 0 ]; then
     usage
 fi
 
-while getopts ":q:" opt; do
+while getopts ":q:m:b" opt; do
     case $opt in
         q)
             QUERYDIR=$OPTARG
-            shift
-            shift
+            ;;
+        m)
+            echo "Overriding mongo port to $OPTARG"
+            MONGOPORT="-m $OPTARG"
+            ;;
+        b)
+            BUILDFLAG="-b"
             ;;
         \?)
             echo "Unknown option $OPTARG!"
@@ -43,13 +49,24 @@ while getopts ":q:" opt; do
     esac
 done
 
+shift $(( $OPTIND - 1 ))
+
 INGEST_PORT=30060
 QUERY_PORT=30070
 
 WORKDIR=$(mktemp -d -t standaloneShard.XXXXXX 2>&1)
 echo "Starting..."
-./start-shard.sh -d $WORKDIR 2>/dev/null 1>/dev/null &
+./start-shard.sh -d $WORKDIR $BUILDFLAG $MONGOPORT 1>/dev/null &
 RUN_LOCAL_PID=$!
+
+# Wait to make sure things haven't died
+sleep 2
+if ! kill -0 $RUN_LOCAL_PID &> /dev/null ; then
+    echo "Shard failed to start!"
+    exit 2
+else
+    echo "Shard starting up..."
+fi
 
 function finished {
     echo "Hang on, killing start-shard.sh: $RUN_LOCAL_PID"
@@ -67,12 +84,6 @@ done
 
 TOKEN=$(cat $WORKDIR/root_token.txt)
 
-for f in $@; do
-    echo "Ingesting: $f"
-    ./muspelheim/src/test/python/newlinejson.py $f | curl -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$(basename "$f" ".json")?apiKey=$TOKEN"
-    echo ""
-done
-
 function query {
     curl -s -m 60 -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$QUERY_PORT/analytics/fs/"
 }
@@ -84,10 +95,26 @@ function repl {
             finished
             exit 0
         fi
-        query $QUERY
+        query "$QUERY"
         echo ""
     done
 }
+
+for f in $@; do
+    echo "Ingesting: $f"
+    TABLE=$(basename "$f" ".json")
+    DATA=$(./muspelheim/src/test/python/newlinejson.py $f)
+    COUNT=$(echo "$DATA" | wc -l)
+    echo "$DATA" | curl -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$TABLE?apiKey=$TOKEN"
+
+    COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
+    while [ $COUNT_RESULT -lt $COUNT ]; do
+        sleep 2
+        COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
+    done
+
+    echo ""
+done
 
 EXIT_CODE=0
 
@@ -96,14 +123,13 @@ if [ "$QUERYDIR" = "" ]; then
     echo "WORKDIR=$WORKDIR"
     repl
 else
-    sleep 1
     for f in $(find $QUERYDIR -type f); do
         RESULT=$(query "$(cat $f)")
 
         echo $RESULT | python -m json.tool 1>/dev/null 2>/dev/null
         VALID_JSON=$?
 
-        if [ ! $VALID_JSON ] || [ ${RESULT:0:1} != "[" ] || [ $RESULT = "[]" ]; then
+        if [ ! $VALID_JSON ] || [ ${RESULT:0:1} != "[" ] || [ "$RESULT" = "[]" ]; then
             echo "Query $f returned a bad result" 1>&2
             EXIT_CODE=1
         fi

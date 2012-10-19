@@ -19,16 +19,18 @@
 ## 
 #!/bin/bash
 
+SRCDIR=muspelheim/src/test/resources/test_data
+OWNERTOKEN=C18ED787-BF07-4097-B819-0415C759C8D5
+
 function usage() {
-    echo "Usage: `basename $0` [-n] [-t <owner token>] [-s <source directory>] <target data directory> <sbt launcher JAR>"
-    echo "  For now target is normally pandora/dist/data-jdbm/data/"
-    echo "  -n : don't wipe existing data"
+    echo "Usage: `basename $0` [-n] [-t <owner token>] [-s <source directory>] <target data directory>" >&2
+    echo "  -n : don't wipe existing data" >&2
+    echo "  -t : Specify the owner token (defaults to $OWNERTOKEN)" >&2
+    echo "  -s : Specify the source directory (defaults to `dirname $0`/$SRCDIR)" >&2
     exit 1
 }
 
-VERSION=`sed -n 's/.*version.*:=.*"\(.*\)".*/\1/p' project/Build.scala`
-SRCDIR=muspelheim/src/test/resources/test_data
-OWNERTOKEN=C18ED787-BF07-4097-B819-0415C759C8D5
+VERSION=`git describe`
 
 while getopts "nt:s:" OPTNAME; do
     case $OPTNAME in
@@ -37,7 +39,7 @@ while getopts "nt:s:" OPTNAME; do
             ;;
         s)
             [ -d $OPTARG ] || {
-                echo "Could not open source directory: $OPTARG"
+                echo "Could not open source directory: $OPTARG" >&2
                 exit 2
             }
             SRCDIR=$OPTARG
@@ -54,12 +56,12 @@ done
 
 shift $(( $OPTIND - 1 ))
 
-if [[ $# != 2 ]]; then
+if [[ $# != 1 ]]; then
     usage
 fi
 
 [ -d $1 ] || {
-    echo "Could not open target directory: $1"
+    echo "Could not open target directory: $1" >&2
     exit 2
 }
 
@@ -70,7 +72,7 @@ cd `dirname $0`
 echo "Loading data from $SRCDIR with owner token $OWNERTOKEN"
 
 if [ ! -d $SRCDIR -o ! -d $DATADIR ]; then
-    echo "Source or dest dir does not exist!"
+    echo "Source or dest dir does not exist!" >&2
     exit 2
 fi
 
@@ -84,9 +86,8 @@ done
 popd > /dev/null
 
 [ -f yggdrasil/target/yggdrasil-assembly-$VERSION.jar ] || {
-    for target in "yggdrasil/compile" "yggdrasil/assembly"; do
-        java -Xmx4096m -Xms512m -jar $2 "$target"
-    done
+    echo "Error: you must build yggdrasil/assembly before running tasks that extract data"
+    exit 2
 }
 
 [ -z "$DONTWIPE" ] && rm -rf $DATADIR/*
