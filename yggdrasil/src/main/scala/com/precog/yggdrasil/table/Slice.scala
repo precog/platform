@@ -576,7 +576,7 @@ trait Slice { source =>
 
         case col =>
           sys.error("Cannot materialise non-standard (extensible) column")
-      }
+      } map identity
     }
   }
   
