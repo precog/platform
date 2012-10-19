@@ -282,6 +282,33 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "correctly assign reductions to the correct field in an object with three reductions each on the same set" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        |
+        | x := solve 'age
+        |   medals' := medals where medals.Age = 'age
+        |   sum(medals'.Weight where medals'.Sex = "F")
+        | 
+        | { min: min(x), max: max(x), stdDev: stdDev(x) }
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+          
+          obj.keys mustEqual Set("min", "max", "stdDev")
+  
+          (obj("min") match { case SDecimal(num) => num.toDouble ~= 50 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 2768 }) mustEqual true
+          (obj("stdDev") match { case SDecimal(num) => num.toDouble ~= 917.6314704474534 }) mustEqual true
+      }
+    }
+
     "accept covariance inside an object with'd with another object" >> {
       val input = """
         clicks := //clicks
