@@ -134,7 +134,7 @@ trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with InfixLib[
         val (targetTrans, targetAncestor) = loop(target, identity _)
         val (booleanTrans, booleanAncestor) = loop(boolean, identity _)
 
-        if (targetAncestor == booleanAncestor) (f(trans.Filter(targetTrans, booleanTrans)), targetAncestor)
+        if (targetAncestor == booleanAncestor) { println("targetTrans: " + targetTrans); println("booleanTrans: " + booleanTrans); (f(trans.Filter(targetTrans, booleanTrans)), targetAncestor) }
         else (f(Leaf(Source)), graph)
 
       case dag.Operate(_, instructions.WrapArray, parent) => loop(parent, t => f(trans.WrapArray(t)))
@@ -145,6 +145,8 @@ trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with InfixLib[
     }
 
     val (spec, ancestor) = loop(reduce.parent, identity _)
+    println("final spec: " + spec)
+    println("ancestor: " + ancestor)
     ReduceInfo(reduce, spec, ancestor)
   }
 }

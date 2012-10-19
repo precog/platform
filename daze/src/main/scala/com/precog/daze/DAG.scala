@@ -400,55 +400,6 @@ trait DAG extends Instructions with TransSpecModule {
     case dag.Extra(_) => None
   }
   
-  def buildChains(graph: DepGraph): Set[List[DepGraph]] = {
-    val parents = enumerateParents(graph)
-    val recursive = parents flatMap buildChains map { graph :: _ }
-    if (!parents.isEmpty && recursive.isEmpty) Set(graph :: Nil) else recursive
-  }
-  
-  def enumerateParents(graph: DepGraph): Set[DepGraph] = graph match {
-    case dag.SplitParam(_, _) => Set()
-    case dag.SplitGroup(_, _, _) => Set()
-    case dag.Root(_, _) => Set()
-    case dag.New(_, parent) => Set(parent)
-    case dag.Morph1(_, _, parent) => Set(parent)
-    case dag.Morph2(_, _, left, right) => Set(left, right)
-    case dag.Distinct(_, parent) => Set(parent)
-    case dag.LoadLocal(_, parent, _) => Set(parent)
-    case dag.Operate(_, _, parent) => Set(parent)
-    case dag.Reduce(_, _, parent) => Set(parent)
-    case dag.MegaReduce(_, _, parent) => Set(parent)
-    case dag.Split(_, spec, _) => enumerateGraphs(spec)
-    case dag.Join(_, _, _, left, right) => Set(left, right)
-    case dag.Filter(_, _, target, boolean) => Set(target, boolean)
-    case dag.Sort(parent, _) => Set(parent)
-    case dag.SortBy(parent, _, _, _) => Set(parent)
-    case dag.Memoize(parent, _) => Set(parent)
-  }
-
-  def findCommonality(forest: Set[DepGraph]): Option[DepGraph] = {
-    if (forest.size == 1) {
-      Some(forest.head)
-    } else {
-      val sharedPrefixReversed = forest flatMap buildChains map { _.reverse } reduceOption { (left, right) =>
-        left zip right takeWhile { case (a, b) => a == b } map { _._1 }
-      }
-
-      sharedPrefixReversed flatMap { _.lastOption }
-    }
-  }
-
-  def enumerateGraphs(forest: dag.BucketSpec): Set[DepGraph] = forest match {
-    case dag.UnionBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)
-    case dag.IntersectBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)
-    
-    case dag.Group(_, target, subForest) =>
-      enumerateGraphs(subForest) + target
-    
-    case dag.UnfixedSolution(_, graph) => Set(graph)
-    case dag.Extra(graph) => Set(graph)
-  }
-  
   private class IdentityContainer(private val self: AnyRef) {
     
     override def equals(that: Any) = that match {

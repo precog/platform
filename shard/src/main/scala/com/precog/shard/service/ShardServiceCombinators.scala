@@ -44,6 +44,7 @@ import com.precog.yggdrasil.TableModule._
 import scalaz.{ Validation, Success, Failure }
 import scalaz.ValidationNEL
 import scalaz.Validation._
+import scalaz.Monad
 
 trait ShardServiceCombinators extends IngestServiceCombinators {
 
@@ -136,8 +137,14 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
     }
   }
 
-  def jsonpcb[A](delegate: HttpService[Future[JValue], Future[HttpResponse[A]]])(implicit bi: Bijection[A, ByteChunk]) =
-    jsonpc[Array[Byte], Array[Byte]](delegate map (_ map { response =>
-      response.copy(content = response.content map (bi(_)))
+  def jsonpcb[A](delegate: HttpService[Future[JValue], Future[HttpResponse[A]]])(implicit bi: Bijection[A, Future[ByteChunk]], M: Monad[Future]) =
+    jsonpc[Array[Byte], Array[Byte]](delegate map (_ flatMap { response =>
+      val contentM = response.content map { c =>
+        bi(c) map { Some(_) }
+      } getOrElse M.point(None)
+      
+      contentM map { content =>
+        response.copy(content = content)
+      }
     }))
 }

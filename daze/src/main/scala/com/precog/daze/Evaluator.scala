@@ -54,7 +54,6 @@ import scalaz.syntax.traverse._
 import scala.collection.immutable.Queue
 
 trait EvaluatorConfig extends IdSourceConfig {
-  def maxEvalDuration: akka.util.Duration
   def maxSliceSize: Int
 }
 
@@ -380,6 +379,8 @@ trait Evaluator[M[+_]] extends DAG
         returns an array (to be dereferenced later) containing the result of each reduction
         */
         case m @ MegaReduce(_, reds, parent) => {
+          println("reds: " + reds)
+          println("parent: " + parent)
           val firstCoalesce = reds.map {
             case (_, reductions) => coalesce(reductions.map((_, None)))
           }
@@ -387,6 +388,8 @@ trait Evaluator[M[+_]] extends DAG
           val reduction = coalesce(firstCoalesce.zipWithIndex map { case (r, j) => (r, Some(j)) })
 
           val spec = combineTransSpecs(reds.map(_._1))
+
+          println("spec in evaluator: " + spec)
           
           for {
             pendingTable <- prepareEval(parent, splits)
@@ -1070,6 +1073,59 @@ trait Evaluator[M[+_]] extends DAG
   
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
     left.identities zip right.identities takeWhile { case (a, b) => a == b } length
+
+  private def buildChains(graph: DepGraph): Set[List[DepGraph]] = {
+    val parents = enumerateParents(graph)
+    val recursive = parents flatMap buildChains map { graph :: _ }
+    if (!parents.isEmpty && recursive.isEmpty) Set(graph :: Nil) else recursive
+  }
+  
+  private def enumerateParents(graph: DepGraph): Set[DepGraph] = graph match {
+    case dag.SplitParam(_, _) => Set()
+    case dag.SplitGroup(_, _, _) => Set()
+    case dag.Root(_, _) => Set()
+    case dag.New(_, parent) => Set(parent)
+    case dag.Morph1(_, _, parent) => Set(parent)
+    case dag.Morph2(_, _, left, right) => Set(left, right)
+    case dag.Distinct(_, parent) => Set(parent)
+    case dag.LoadLocal(_, parent, _) => Set(parent)
+    case dag.Operate(_, _, parent) => Set(parent)
+    case dag.Reduce(_, _, parent) => Set(parent)
+    case dag.MegaReduce(_, _, parent) => Set(parent)
+    case dag.Split(_, spec, _) => enumerateGraphs(spec)
+    case dag.IUI(_, _, left, right) => Set(left, right)
+    case dag.Diff(_, left, right) => Set(left, right)
+    case dag.Join(_, _, _, left, right) => Set(left, right)
+    case dag.Filter(_, _, target, boolean) => Set(target, boolean)
+    case dag.Sort(parent, _) => Set(parent)
+    case dag.SortBy(parent, _, _, _) => Set(parent)
+    case dag.ReSortBy(parent, _) => Set(parent)
+    case dag.Memoize(parent, _) => Set(parent)
+  }
+  
+  private def findCommonality(forest: Set[DepGraph]): Option[DepGraph] = {
+    if (forest.size == 1) {
+      Some(forest.head)
+    } else {
+      val sharedPrefixReversed = forest flatMap buildChains map { _.reverse } reduceOption { (left, right) =>
+        left zip right takeWhile { case (a, b) => a == b } map { _._1 }
+      }
+
+      sharedPrefixReversed flatMap { _.lastOption }
+    }
+  }
+
+  private def enumerateGraphs(forest: BucketSpec): Set[DepGraph] = forest match {
+    case UnionBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)
+    case IntersectBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)
+    
+    case dag.Group(_, target, subForest) =>
+      enumerateGraphs(subForest) + target
+    
+    case UnfixedSolution(_, graph) => Set(graph)
+    case dag.Extra(graph) => Set(graph)
+  }
+
   
   private def svalueToCValue(sv: SValue) = sv match {
     case STrue => CBoolean(true)
@@ -1165,7 +1221,7 @@ trait Evaluator[M[+_]] extends DAG
     TableTransSpec.makeTransSpec(Map(paths.Value -> trans))
 
   def combineTransSpecs(specs: List[TransSpec1]): TransSpec1 =
-    specs map { trans.WrapArray(_): TransSpec1 } reduceOption { trans.ArrayConcat(_, _) } get   // TODO should this crash or be Option?
+    specs map { trans.WrapArray(_): TransSpec1 } reduceOption { trans.ArrayConcat(_, _) } get
   
   type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
   type TableTransSpec1 = TableTransSpec[Source1]

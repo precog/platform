@@ -690,8 +690,8 @@ trait Slice { source =>
           buffer.put(str)
         }
         
-        val in = new RingDeque[String](depth)
-        val inFlags = new RingDeque[Boolean](depth)
+        val in = new RingDeque[String](depth + 1)
+        val inFlags = new RingDeque[Boolean](depth + 1)
         
         @inline
         def pushIn(str: String, flag: Boolean) {
@@ -1137,7 +1137,9 @@ trait Slice { source =>
     }
   }
 
-  def toJsonString: String = (0 until size).map(toJson).mkString("\n")
+  def toJsonString(prefix: String = ""): String = {
+    (0 until size).map(i => prefix +" "+ toJson(i)).mkString("\n")
+  }
 
   override def toString = (0 until size).map(toString(_).getOrElse("")).mkString("\n")
 }
