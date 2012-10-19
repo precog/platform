@@ -58,10 +58,12 @@ object PlatformBuild extends Build {
 
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "2.0.1-SNAPSHOT",
+    version := "2.1-SNAPSHOT",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalaVersion := "2.9.2",
+
+    defaultJarName in assembly <<= (name) { name => name + "-assembly-" + ("git describe".!!.trim) + ".jar" },
 
     EclipseKeys.createSrc := EclipseCreateSrc.Default+EclipseCreateSrc.Resource,
     EclipseKeys.withSource := true,
@@ -115,7 +117,7 @@ object PlatformBuild extends Build {
     settings(commonNexusSettings: _*) dependsOn (bytecode % "compile->compile;test->test", util)
 
   lazy val yggdrasil = Project(id = "yggdrasil", base = file("yggdrasil")).
-    settings(commonNexusSettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util)
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util)
 
   lazy val yggdrasilProf = Project(id = "yggdrasilProf", base = file("yggdrasilProf")).
     settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test")

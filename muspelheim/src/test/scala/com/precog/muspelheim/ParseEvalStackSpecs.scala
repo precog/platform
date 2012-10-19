@@ -21,6 +21,7 @@ package com.precog
 package muspelheim
 
 import common.Path
+import common.json.CPathField
 import common.kafka._
 
 import daze._
@@ -49,6 +50,7 @@ import java.io.File
 
 import scalaz._
 import scalaz.std.anyVal._
+import scalaz.syntax.copointed._
 import scalaz.effect.IO
 
 import org.streum.configrity.Configuration
@@ -124,6 +126,29 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       }
     }
   )
+  
+  "full stack rendering" should {
+    def evalTable(str: String, debug: Boolean = false): Table = {
+      import trans._
+      
+      parseEvalLogger.debug("Beginning evaluation of query: " + str)
+      val tree = compile(str)
+      tree.errors must beEmpty
+      val Right(dag) = decorate(emit(tree))
+      withContext { ctx => 
+        val tableM = eval("dummyUID", dag, ctx, Path.Root, true)
+        tableM map { _ transform DerefObjectStatic(Leaf(Source), CPathField("value")) } copoint
+      }
+    }
+    
+    "render a set of numbers interleaved by delimiters" in {
+      val stream = evalTable("//tutorial/transactions.quantity") renderJson ','
+      val strings = stream map { _.toString }
+      val str = strings.foldLeft("") { _ + _ } copoint
+      
+      str must contain(",")
+    }
+  }
   
   step {
     shutdown()

@@ -67,6 +67,8 @@ trait YggdrasilQueryExecutorConfig extends
     BaseConfig with 
     ProductionShardSystemConfig with
     SystemActorStorageConfig with
+    JDBMProjectionModuleConfig with
+    BlockStoreColumnarTableModuleConfig with
     EvaluatorConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
@@ -86,40 +88,12 @@ trait YggdrasilQueryExecutorComponent {
       val memoizationWorkDir = scratchDir
 
       val clock = blueeyes.util.Clock.System
-      
       val maxSliceSize = 10000
 
       //TODO: Get a producer ID
       val idSource = new IdSource {
         private val source = new java.util.concurrent.atomic.AtomicLong
         def nextId() = source.getAndIncrement
-      }
-    }
-  }
-
-  def renderStream(stream: StreamT[Future, Slice]): Future[StreamT[Future, CharBuffer]] = {
-    import JsonDSL._
-    stream.uncons map { unconsed =>
-      if (unconsed.isDefined) {
-        val rendered = StreamT.unfoldM[Future, CharBuffer, Option[(Slice, StreamT[Future, Slice])]](unconsed) { 
-          case Some((head, tail)) =>
-            tail.uncons map { next =>
-              if (next.isDefined) {
-                Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",") + ","), next))
-              } else {            
-                Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",")), None))
-              }
-            }
-
-          case None => 
-            M.point(None)
-        }
-        
-        rendered
-        //(CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
-      } else {
-        StreamT.empty[Future, CharBuffer]
-        //CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
       }
     }
   }
@@ -141,10 +115,40 @@ trait YggdrasilQueryExecutorComponent {
         
         StreamT.wrapEffect(
           tableM flatMap { table =>
-            renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)).slices)
+            renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)))
           }
         )
       }
+
+      /* def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] = {
+        import JsonDSL._
+        table.slices.uncons map { unconsed =>
+          if (unconsed.isDefined) {
+            val rendered = StreamT.unfoldM[Future, CharBuffer, Option[(Slice, StreamT[Future, Slice])]](unconsed) { 
+              case Some((head, tail)) =>
+                tail.uncons map { next =>
+                  if (next.isDefined) {
+                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",") + ","), next))
+                  } else {            
+                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",")), None))
+                  }
+                }
+    
+              case None => 
+                M.point(None)
+            }
+            
+            rendered
+            //(CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
+          } else {
+            StreamT.empty[Future, CharBuffer]
+            //CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
+          }
+        }
+      } */
+      
+      def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
+        M.point(table renderJson ',')
 
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
         val accessControl = extAccessControl
