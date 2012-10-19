@@ -27,7 +27,7 @@ import scala.collection._
 
 trait DefinedAtIndex {
   protected[this] val defined: BitSet
-  def isDefinedAt(row: Int) = defined(row)
+  def isDefinedAt(row: Int) = row >= 0 && defined(row)
 }
 
 trait ArrayColumn[@specialized(Boolean, Long, Double) A] extends DefinedAtIndex with ExtensibleColumn { 
