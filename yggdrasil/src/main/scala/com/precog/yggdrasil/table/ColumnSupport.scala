@@ -126,7 +126,7 @@ class RemapFilterColumn[T <: Column](delegate: T, filter: Int => Boolean, offset
 
 class RemapIndicesColumn[T <: Column](delegate: T, indices: ArrayIntList) { this: T =>
   private val _size = indices.size
-  def isDefinedAt(row: Int) = row >= 0 && row < _size && delegate.isDefinedAt(indices.get(row))
+  def isDefinedAt(row: Int) = row >= 0 && row < _size && indices.get(row) >= 0 && delegate.isDefinedAt(indices.get(row))
 }
 
 class SparsenColumn[T <: Column](delegate: T, idx: Array[Int], toSize: Int) { this: T =>
