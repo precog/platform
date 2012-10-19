@@ -2371,23 +2371,24 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
     
     def takeRange(startIndex: Long, numberToTake: Long): Table = {
-      def loop(s: Stream[Slice], readSoFar: Long): Stream[Slice] = s match {
-        case h #:: rest if (readSoFar + h.size) < startIndex + 1 => loop(rest, readSoFar + h.size)
-        case rest if readSoFar < startIndex + 1 => {
-          inner(rest, 0, (startIndex - readSoFar).toInt)
+      def loop(stream: StreamT[M, Slice], readSoFar: Long): M[StreamT[M, Slice]] = stream.uncons flatMap {
+        // Prior to first needed slice, so skip
+        case Some((head, tail)) if (readSoFar + head.size) < (startIndex + 1) => loop(tail, readSoFar + head.size)
+        // Somewhere in between, need to transition to splitting/reading
+        case Some(_) if readSoFar < (startIndex + 1) => inner(stream, 0, (startIndex - readSoFar).toInt)
+        // Read off the end (we took nothing)
+        case _ => M.point(StreamT.empty[M, Slice])
+      }
+          
+      def inner(stream: StreamT[M, Slice], takenSoFar: Long, sliceStartIndex: Int): M[StreamT[M, Slice]] = stream.uncons flatMap {
+        case Some((head, tail)) if takenSoFar < numberToTake => {
+          val needed = head.takeRange(sliceStartIndex, (numberToTake - takenSoFar).toInt)
+          inner(tail, takenSoFar + (head.size - (sliceStartIndex)), 0).map(needed :: _)
         }
-        case _ => Stream.empty[Slice]
+        case _ => M.point(StreamT.empty[M, Slice])
       }
 
-      def inner(s: Stream[Slice], takenSoFar: Long, sliceStartIndex: Int): Stream[Slice] = s match {
-        case h #:: rest if takenSoFar < numberToTake => {
-          val needed = h.takeRange(sliceStartIndex, (numberToTake - takenSoFar).toInt)
-          needed #:: inner(rest, takenSoFar + (h.size - (sliceStartIndex)), 0)
-        }
-        case _ => Stream.empty[Slice]
-      }
-
-      Table(StreamT.fromStream(slices.toStream.map(loop(_, 0))))
+      Table(StreamT.wrapEffect(loop(slices, 0)))
     }
 
     /**
