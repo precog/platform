@@ -1794,7 +1794,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           body(
             groupKeyForBody,
             (groupId: GroupId) => for {
-              groupIdJson <- groupKeyForBody.toJson
+              //groupIdJson <- groupKeyForBody.toJson
               groupTable <- groups.map(_(groupId))
             } yield groupTable
           )
