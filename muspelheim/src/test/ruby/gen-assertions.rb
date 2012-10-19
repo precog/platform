@@ -28,7 +28,18 @@ module Tests
       medals_prime = medals.select { |m| m['Sex'] = 'F' }
 
       # max(medals.G where medals.Sex = "F")
-      results = medals_G = medals_prime.map { |p| p['G'] }.max
+      results = medals_prime.map { |p| p['G'] }.max
+
+      results_must " haveSize(1)"
+      results_must " contain(#{render_value results})"
+    end
+
+    def test_evaluate_max_of_object_deref
+      # medals := //summer_games/london_medals
+      medals = load_file 'summer_games/london_medals.json'
+
+      # max(medals.G)
+      results =  medals.map { |p| p['G'] }.max
 
       results_must " haveSize(1)"
       results_must " contain(#{render_value results})"

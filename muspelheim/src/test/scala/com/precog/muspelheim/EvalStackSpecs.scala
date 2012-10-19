@@ -33,7 +33,6 @@ trait EvalStackSpecs extends Specification {
   implicit val precision = Precision(0.000000001)
 
   "the full stack" should {
-/*
     "count a filtered clicks dataset" in {
       val input = """
         | clicks := //clicks
@@ -1217,7 +1216,6 @@ trait EvalStackSpecs extends Specification {
         sanityCheck must not be empty
       }
     }
-*/
     "evaluate reductions on filters" in {
       val input = """
         | medals := //summer_games/london_medals
@@ -1243,7 +1241,7 @@ trait EvalStackSpecs extends Specification {
 
           (obj("sum") match { case SDecimal(num) => num.toDouble ~= 1590 }) mustEqual true
           (obj("mean") match { case SDecimal(num) => num.toDouble ~= 26.371933267909714 }) mustEqual true
-          (obj("max") match { case SDecimal(num) => num.toDouble ~= 4.5 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 2.5 }) mustEqual true
           (obj("stdDev") match { case SDecimal(num) => num.toDouble ~= 0.36790736209203007 }) mustEqual true
       }
     }
@@ -1266,7 +1264,24 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-/*
+    "evaluate single reduction on a object deref" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | 
+        | max(medals.G)
+        """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SDecimal(num)) =>
+          ids must haveSize(0)
+          num mustEqual(2.5)
+      }
+    }
+
     "evaluate functions from each library" >> {
       "Stringlib" >> {
         val input = """
@@ -1893,7 +1908,6 @@ trait EvalStackSpecs extends Specification {
 //        result must haveSize(4)
 //      } 
     }
-    */
   }
 }
 

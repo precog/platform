@@ -107,7 +107,7 @@ trait Evaluator[M[+_]] extends DAG
     (if (optimize) optimizeJoins(_) else identity) andThen
     (orderCrosses _) andThen
     (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
-    (if (optimize) { g => megaReduce(g, findReductions(g)) } else identity) andThen
+    //(if (optimize) { g => megaReduce(g, findReductions(g)) } else identity) andThen
     (if (optimize) (memoize _) else identity)
   }
   
@@ -379,8 +379,6 @@ trait Evaluator[M[+_]] extends DAG
         returns an array (to be dereferenced later) containing the result of each reduction
         */
         case m @ MegaReduce(_, reds, parent) => {
-          println("reds: " + reds)
-          println("parent: " + parent)
           val firstCoalesce = reds.map {
             case (_, reductions) => coalesce(reductions.map((_, None)))
           }
@@ -389,8 +387,6 @@ trait Evaluator[M[+_]] extends DAG
 
           val spec = combineTransSpecs(reds.map(_._1))
 
-          println("spec in evaluator: " + spec)
-          
           for {
             pendingTable <- prepareEval(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
