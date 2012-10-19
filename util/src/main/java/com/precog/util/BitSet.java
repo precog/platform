@@ -288,10 +288,12 @@ public class BitSet extends FastCollection <Index>  implements Set <Index> , Reu
 
     // added for scala compatibility
     public boolean apply(int bitIndex) {
+        if (bitIndex < 0) return false;
         int i = bitIndex >> 6;
         return (i >= _length) ? false : (bits[i] & (1L << bitIndex)) != 0;
     }
     public boolean contains(int bitIndex) {
+        if (bitIndex < 0) return false;
         int i = bitIndex >> 6;
         return (i >= _length) ? false : (bits[i] & (1L << bitIndex)) != 0;
     }
