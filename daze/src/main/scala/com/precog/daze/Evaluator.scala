@@ -408,9 +408,6 @@ trait Evaluator[M[+_]] extends DAG
               paths.Key.name
             )
 
-            // TODO deref by index 0 is WRONG, if we are are reducing on a set
-            // with no identities
-
             valueWrapped = trans.InnerObjectConcat(
               keyWrapped,
               trans.WrapObject(Leaf(Source), paths.Value.name)
