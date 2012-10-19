@@ -100,10 +100,6 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     }
   }
 
-  step {
-    startup()
-  }
-  
   include(
     new EvalStackSpecs {
       def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
@@ -124,14 +120,6 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       }
     }
   )
-  
-  step {
-    shutdown()
-  }
-  
-  def startup() = ()
-  
-  def shutdown() = ()
 }
 
 /*
