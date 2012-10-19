@@ -13,10 +13,6 @@ libraryDependencies ++= Seq(
 
 mainClass := Some("com.precog.pandora.Console")
 
-//mainTest := "com.precog.pandora.TrampolinePlatformSpecs"
-
-mainTest := "com.precog.pandora.FuturePlatformSpecs"
-
 dataDir := {
   val file = File.createTempFile("pandora", ".db")
   file.delete()
