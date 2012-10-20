@@ -32,7 +32,7 @@ import org.scalacheck.Gen._
 
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
-import akka.dispatch.Future
+import akka.dispatch.{Await, Future}
 import akka.util.Duration
 
 import org.joda.time._
@@ -111,6 +111,11 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
+  
+  implicit def AwaitBijection(implicit bi: Bijection[QueryResult, Future[ByteChunk]]): Bijection[QueryResult, ByteChunk] = new Bijection[QueryResult, ByteChunk] {
+    def unapply(chunk: ByteChunk): QueryResult = bi.unapply(Future(chunk))
+    def apply(res: QueryResult) = Await.result(bi(res), Duration(1, "second"))
+  }
 }
 
 class ShardServiceSpec extends TestShardService with FutureMatchers {
@@ -124,7 +129,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   "Shard query service" should {
     "handle query from root path" in {
       query(testQuery) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(Right(_)), _) => ok
+        case HttpResponse(HttpStatus(OK, _), _, Some(Left(_)), _) => ok
       }}
     }
     "handle query from non-root path" in {

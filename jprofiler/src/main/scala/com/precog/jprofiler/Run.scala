@@ -34,8 +34,6 @@ object Run {
       case _ => "jprofiler/jprofiler.db"
     }
 
-    val args2 = args.toList ++ List("--root-dir", db)
-    val config = RunConfig.fromCommandLine(args2) | sys.error("invalid arguments!")
 
     val queries = (
       /* "count(//obnoxious)" ::
@@ -43,16 +41,32 @@ object Run {
       "sum(//obnoxious.v)" :: "mean(//obnoxious.v)" ::
       "geometricMean(//obnoxious.v)" :: "sumSq(//obnoxious.v)" ::
       "variance(//obnoxious.v)" :: "stdDev(//obnoxious.v)" */
+      //"""
+      //| medals := //summer_games/london_medals
+      //| athletes := //summer_games/athletes
+      //| 
+      //| medals' := medals where medals.Age > 33
+      //| athletes' := athletes where athletes.Countryname = "Tanzania"
+      //| 
+      //| medals' ~ athletes'
+      //|   [medals', athletes']
+      //| """.stripMargin :: Nil
       """
-      | medals := //summer_games/london_medals
-      | athletes := //summer_games/athletes
-      | 
-      | medals' := medals where medals.Age > 33
-      | athletes' := athletes where athletes.Countryname = "Tanzania"
-      | 
-      | medals' ~ athletes'
-      |   [medals', athletes']
-      | """.stripMargin :: Nil
+      athletes := //summer_games/athletes
+
+      solve 'athlete
+        athlete := athletes where athletes = 'athlete
+
+        athlete' := {
+          "Countryname": athlete.Countryname,
+          "Population": athlete.Population,
+          "Sex": athlete.Sex,
+          "Sportname": athlete.Sportname,
+          "Name": athlete.Name
+        }
+
+        { count: count(athlete), athlete: athlete' }
+      """ :: Nil
     )
 
     config.rootDir match {

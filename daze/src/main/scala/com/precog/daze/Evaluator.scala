@@ -63,7 +63,8 @@ trait Evaluator[M[+_]] extends DAG
     with TypeInferencer
     with JoinOptimizer
     with StaticInliner[M]
-    with ReductionFinder
+    with EvaluatorMethods[M]
+    with ReductionFinder[M]
     with TableModule[M]        // TODO specific implementation
     with ImplLibrary[M]
     with InfixLib[M]
@@ -105,8 +106,8 @@ trait Evaluator[M[+_]] extends DAG
     (if (optimize) inlineStatics(_) else identity[DepGraph] _) andThen
     (if (optimize) optimizeJoins(_) else identity) andThen
     (orderCrosses _) andThen
-    (if (optimize) (g => megaReduce(g, findReductions(g))) else identity) andThen
     (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
+    //(if (optimize) { g => megaReduce(g, findReductions(g)) } else identity) andThen
     (if (optimize) (memoize _) else identity)
   }
   
@@ -378,22 +379,47 @@ trait Evaluator[M[+_]] extends DAG
         returns an array (to be dereferenced later) containing the result of each reduction
         */
         case m @ MegaReduce(_, reds, parent) => {
-          val red: ReductionImpl = coalesce(reds)  
+          val firstCoalesce = reds.map {
+            case (_, reductions) => coalesce(reductions.map((_, None)))
+          }
+
+          val reduction = coalesce(firstCoalesce.zipWithIndex map { case (r, j) => (r, Some(j)) })
+
+          val spec = combineTransSpecs(reds.map(_._1))
 
           for {
             pendingTable <- prepareEval(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
+            result = pendingTable.table flatMap { parentTable =>
+              reduction(
+                parentTable
+                  .transform(liftedTrans)
+                  .transform(DerefObjectStatic(Leaf(Source), paths.Value))
+                  .transform(spec))
+            }
 
-            result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, paths.Value))) }
-            keyWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, trans.DerefArrayStatic(Leaf(Source), CPathIndex(0))), paths.Key.name)  //TODO deref by index 0 is WRONG
-            valueWrapped = trans.InnerObjectConcat(keyWrapped, trans.WrapObject(Leaf(Source), paths.Value.name))
-            wrapped = result map { _ transform valueWrapped }
-            _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (m -> wrapped)) }
+            keyWrapped = trans.WrapObject(
+              trans.ConstLiteral(
+                CEmptyArray,
+                trans.DerefArrayStatic(Leaf(Source), CPathIndex(0))),
+              paths.Key.name)
+
+            valueWrapped = trans.InnerObjectConcat(
+              keyWrapped,
+              trans.WrapObject(Leaf(Source), paths.Value.name))
+
+            wrapped = result map { table =>
+              table.transform(valueWrapped)
+            }
+
+            _ <- modify[EvaluatorState] { state =>
+              state.copy(assume = state.assume + (m -> wrapped))
+            }
           } yield {
             PendingTable(wrapped, graph, TransSpec1.Id)
           }
         }
-        
+
         case r @ dag.Reduce(_, red, parent) => {
           for {
             pendingTable <- prepareEval(parent, splits)
@@ -668,10 +694,10 @@ trait Evaluator[M[+_]] extends DAG
 
               val result = for {
                 parentLeftTable <- pendingTableLeft.table
-                val leftResult = parentLeftTable/*.printer("left before transform: ")*/.transform(liftToValues(pendingTableLeft.trans))//.printer("left transformed: ")
+                val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
                 
                 parentRightTable <- pendingTableRight.table
-                val rightResult = parentRightTable/*.printer("right before transform: ")*/.transform(liftToValues(pendingTableRight.trans))//.printer("right transformed: ")
+                val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
 
               } yield join(leftResult, rightResult)(key, spec)
 
@@ -1017,18 +1043,6 @@ trait Evaluator[M[+_]] extends DAG
     }
   }
   
-  private def findCommonality(forest: Set[DepGraph]): Option[DepGraph] = {
-    if (forest.size == 1) {
-      Some(forest.head)
-    } else {
-      val sharedPrefixReversed = forest flatMap buildChains map { _.reverse } reduceOption { (left, right) =>
-        left zip right takeWhile { case (a, b) => a == b } map { _._1 }
-      }
-
-      sharedPrefixReversed flatMap { _.lastOption }
-    }
-  }
-  
   private def findCommonIds(left: BucketSpec, right: BucketSpec): Set[Int] =
     enumerateSolutionIds(left) & enumerateSolutionIds(right)
   
@@ -1053,6 +1067,9 @@ trait Evaluator[M[+_]] extends DAG
     parts reduceOption { (left, right) => trans.InnerObjectConcat(left, right) } getOrElse ConstLiteral(CEmptyArray, Leaf(Source))
   }
   
+  private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
+    left.identities zip right.identities takeWhile { case (a, b) => a == b } length
+
   private def buildChains(graph: DepGraph): Set[List[DepGraph]] = {
     val parents = enumerateParents(graph)
     val recursive = parents flatMap buildChains map { graph :: _ }
@@ -1060,25 +1077,40 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def enumerateParents(graph: DepGraph): Set[DepGraph] = graph match {
-    case SplitParam(_, _) => Set()
-    case SplitGroup(_, _, _) => Set()
-    case Root(_, _) => Set()
+    case dag.SplitParam(_, _) => Set()
+    case dag.SplitGroup(_, _, _) => Set()
+    case dag.Root(_, _) => Set()
     case dag.New(_, parent) => Set(parent)
     case dag.Morph1(_, _, parent) => Set(parent)
     case dag.Morph2(_, _, left, right) => Set(left, right)
     case dag.Distinct(_, parent) => Set(parent)
     case dag.LoadLocal(_, parent, _) => Set(parent)
-    case Operate(_, _, parent) => Set(parent)
+    case dag.Operate(_, _, parent) => Set(parent)
     case dag.Reduce(_, _, parent) => Set(parent)
     case dag.MegaReduce(_, _, parent) => Set(parent)
     case dag.Split(_, spec, _) => enumerateGraphs(spec)
-    case Join(_, _, _, left, right) => Set(left, right)
+    case dag.IUI(_, _, left, right) => Set(left, right)
+    case dag.Diff(_, left, right) => Set(left, right)
+    case dag.Join(_, _, _, left, right) => Set(left, right)
     case dag.Filter(_, _, target, boolean) => Set(target, boolean)
     case dag.Sort(parent, _) => Set(parent)
     case dag.SortBy(parent, _, _, _) => Set(parent)
-    case Memoize(parent, _) => Set(parent)
+    case dag.ReSortBy(parent, _) => Set(parent)
+    case dag.Memoize(parent, _) => Set(parent)
   }
   
+  private def findCommonality(forest: Set[DepGraph]): Option[DepGraph] = {
+    if (forest.size == 1) {
+      Some(forest.head)
+    } else {
+      val sharedPrefixReversed = forest flatMap buildChains map { _.reverse } reduceOption { (left, right) =>
+        left zip right takeWhile { case (a, b) => a == b } map { _._1 }
+      }
+
+      sharedPrefixReversed flatMap { _.lastOption }
+    }
+  }
+
   private def enumerateGraphs(forest: BucketSpec): Set[DepGraph] = forest match {
     case UnionBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)
     case IntersectBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)
@@ -1089,31 +1121,7 @@ trait Evaluator[M[+_]] extends DAG
     case UnfixedSolution(_, graph) => Set(graph)
     case dag.Extra(graph) => Set(graph)
   }
-  
-  private def op1(op: UnaryOperation): Op1 = op match {
-    case BuiltInFunction1Op(op1) => op1
-    
-    case instructions.New | instructions.WrapArray => sys.error("assertion error")
-    
-    case Comp => Unary.Comp
-    case Neg => Unary.Neg
-  }
-  
-  private def transFromBinOp[A <: SourceType](op: BinaryOperation)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = op match {
-    case Eq => trans.Equal(left, right)
-    case NotEq => trans.Map1(trans.Equal(left, right), op1(Comp).f1)
-    case instructions.WrapObject => WrapObjectDynamic(left, right)
-    case JoinObject => InnerObjectConcat(left, right)
-    case JoinArray => ArrayConcat(left, right)
-    case instructions.ArraySwap => sys.error("nothing happens")
-    case DerefObject => DerefObjectDynamic(left, right)
-    case DerefMetadata => sys.error("cannot do a dynamic metadata deref")
-    case DerefArray => DerefArrayDynamic(left, right)
-    case _ => trans.Map2(left, right, op2ForBinOp(op).get.f2)     // if this fails, we're missing a case above
-  }
 
-  private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
-    left.identities zip right.identities takeWhile { case (a, b) => a == b } length
   
   private def svalueToCValue(sv: SValue) = sv match {
     case STrue => CBoolean(true)
@@ -1207,7 +1215,9 @@ trait Evaluator[M[+_]] extends DAG
   
   private def liftToValues(trans: TransSpec1): TransSpec1 =
     TableTransSpec.makeTransSpec(Map(paths.Value -> trans))
-   
+
+  def combineTransSpecs(specs: List[TransSpec1]): TransSpec1 =
+    specs map { trans.WrapArray(_): TransSpec1 } reduceOption { trans.ArrayConcat(_, _) } get
   
   type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
   type TableTransSpec1 = TableTransSpec[Source1]
