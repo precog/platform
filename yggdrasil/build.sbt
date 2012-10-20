@@ -59,8 +59,6 @@ ivyXML :=
     </dependency>
   </dependencies>
 
-seq(assemblySettings: _*)
-
 mainClass := Some("com.precog.yggdrasil.util.YggUtils")
 
 test in assembly := {}
