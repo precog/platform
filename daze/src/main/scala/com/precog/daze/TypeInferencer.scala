@@ -67,8 +67,10 @@ trait TypeInferencer extends DAG {
           case Operate(_, op, parent) => inner(op.tpe.arg, typing, parent)
     
           case Reduce(_, red, parent) => inner(red.tpe.arg, typing, parent)
-  
-          case MegaReduce(_, reds, parent) => inner((reds map { _.tpe.arg } list) reduce JUnionT, typing, parent)
+
+          // TODO: this is correct, but could be more precise
+          // we should use the trans specs to narrow the possible types of parent
+          case MegaReduce(_, _, parent) => inner(JType.JUnfixedT, typing, parent)
     
           case Morph1(_, m, parent) => inner(m.tpe.arg, typing, parent)
     

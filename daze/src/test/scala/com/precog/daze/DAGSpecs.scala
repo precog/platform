@@ -24,7 +24,7 @@ import org.specs2.mutable._
 import bytecode._
 import com.precog.yggdrasil._
 
-object DAGSpecs extends Specification with DAG with RandomLibrary {
+object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyModule {
   import instructions._
   import dag._
   

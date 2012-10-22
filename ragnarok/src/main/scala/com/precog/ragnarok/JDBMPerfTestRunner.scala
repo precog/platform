@@ -24,6 +24,7 @@ import yggdrasil.{ ProjectionDescriptor, BaseConfig }
 import yggdrasil.jdbm3._
 import yggdrasil.actor._
 import yggdrasil.table.BlockStoreColumnarTableModule
+import yggdrasil.table.BlockStoreColumnarTableModuleConfig
 import yggdrasil.metadata.FileMetadataStorage
 
 import common.security.UnlimitedAccessControl
@@ -68,7 +69,6 @@ trait StandalonePerfTestRunner[T] extends EvaluatingPerfTestRunner[Future, T]
   }
 }
 
-
 final class JDBMPerfTestRunner[T](val timer: Timer[T], val userUID: String, val optimize: Boolean,
       val actorSystem: ActorSystem, _rootDir: Option[File])(implicit val M: Monad[Future], val coM: Copointed[Future])
     extends StandalonePerfTestRunner[T]
@@ -77,7 +77,10 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val userUID: String, val 
     with JDBMProjectionModule
     with StandaloneShardSystemActorModule { self =>
 
-  type YggConfig = StandalonePerfTestRunnerConfig 
+  trait JDBMPerfTestRunnerConfig extends StandalonePerfTestRunnerConfig with JDBMProjectionModuleConfig
+    with BlockStoreColumnarTableModuleConfig
+
+  type YggConfig = JDBMPerfTestRunnerConfig
   object yggConfig extends YggConfig {
     val userUID = self.userUID
     val optimize = self.optimize

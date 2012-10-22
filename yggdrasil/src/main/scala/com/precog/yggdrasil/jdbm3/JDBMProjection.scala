@@ -71,7 +71,7 @@ object JDBMProjection {
 class VicciniException(message: String) extends java.io.IOException("Inconceivable! " + message)
 
 abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int) extends BlockProjectionLike[Array[Byte], Slice] { projection =>
-  import TableModule.paths._
+  import TransSpecModule.paths._
   import JDBMProjection._
 
   val logger = LoggerFactory.getLogger("com.precog.yggdrasil.jdbm3.JDBMProjection")

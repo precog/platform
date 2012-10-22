@@ -24,7 +24,7 @@ import bytecode.RandomLibrary
 import com.precog.yggdrasil._
 import org.specs2.mutable._
 
-object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLibrary {
+object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLibrary with FNDummyModule {
   import dag._
   import instructions._
   import bytecode._

@@ -24,7 +24,7 @@ import bytecode.StaticLibrary
 import com.precog.yggdrasil._
 import org.specs2.mutable._
 
-object MemoizerSpecs extends Specification with Memoizer with StaticLibrary {
+object MemoizerSpecs extends Specification with Memoizer with StaticLibrary with FNDummyModule {
   import instructions._
   import dag._
   
