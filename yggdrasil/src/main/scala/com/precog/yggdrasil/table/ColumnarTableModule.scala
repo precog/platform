@@ -79,6 +79,8 @@ trait ColumnarTableTypes {
 
 trait ColumnarTableModuleConfig {
   def maxSliceSize: Int
+  
+  def maxSaneCrossSize: Long = 2400000000L    // 2.4 billion
 }
 
 trait ColumnarTableModule[M[+_]]
@@ -2361,7 +2363,20 @@ trait ColumnarTableModule[M[+_]]
         case (ExactSize(l), EstimateSize(rn, rx)) => EstimateSize(l max rn, l * rx)
         case _ => UnknownSize // Bail on anything else for now (see above TODO)
       }
-      Table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }), newSize)
+      
+      val newSizeM = newSize match {
+        case ExactSize(s) => Some(s)
+        case EstimateSize(_, s) => Some(s)
+        case _ => None
+      }
+
+      val sizeCheck = for (resultSize <- newSizeM) yield
+        resultSize < yggConfig.maxSaneCrossSize && resultSize >= 0
+
+      if (sizeCheck getOrElse true)
+        Table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }), newSize)
+      else
+        throw EnormousCartesianException(this.size, that.size)
     }
     
     /**
