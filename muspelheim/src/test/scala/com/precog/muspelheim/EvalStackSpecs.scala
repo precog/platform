@@ -1058,6 +1058,31 @@ trait EvalStackSpecs extends Specification {
       results must contain(SObject(Map("count" -> SDecimal(BigDecimal("186")), "state" -> SString("56"))))
       results must contain(SObject(Map("count" -> SDecimal(BigDecimal("153")), "state" -> SString("72"))))
     }
+    
+    "evaluate nathan's query, once and for all" in {
+      val input = """
+        | import std::time::*
+        | 
+        | lastHour := //election/tweets 
+        | thisHour:= //election/tweets2 
+        | 
+        | lastHour' := lastHour where minuteOfHour(lastHour.timeStamp) > 36
+        | data := thisHour union lastHour'
+        | 
+        | combined := solve 'stateName, 'state 
+        |   data' := data where data.stateName = 'stateName & data.STATE = 'state 
+        |   {stateName: 'stateName,
+        |    state: 'state, 
+        |    obamaSentimentScore: sum(data'.score where data'.candidate = "Obama") 
+        |                         / count(data' where data'.candidate = "Obama"), 
+        |    romneySentimentScore: sum(data'.score where data'.candidate = "Romney") 
+        |                         / count(data' where data'.candidate = "Romney")} 
+        | 
+        | {stateName: combined.stateName, state: combined.state, sentiment: (50 * (combined.obamaSentimentScore - combined.romneySentimentScore)) + 50}
+        | """.stripMargin
+      
+      evalE(input) must not(beEmpty)
+    }
 
     "load a nonexistent dataset with a dot in the name" in {
       val input = """

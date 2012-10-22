@@ -1072,7 +1072,24 @@ trait Evaluator[M[+_]] extends DAG
 
   private def buildChains(graph: DepGraph): Set[List[DepGraph]] = {
     val parents = enumerateParents(graph)
-    val recursive = parents flatMap buildChains map { graph :: _ }
+    
+    val recursive: Set[List[DepGraph]] = graph match {
+      case _: dag.IUI => Set()
+      case _: dag.Diff => Set()
+      case _: dag.Split => Set()
+      case _: dag.Distinct => Set()
+      case _: dag.Morph1 => Set()
+      case _: dag.Morph2 => Set()
+      case _: dag.New => Set()
+      case _: dag.Reduce => Set()
+      case _: dag.MegaReduce => Set()
+      case _: dag.Sort => Set()
+      case _: dag.SortBy => Set()
+      case _: dag.ReSortBy => Set()
+      case _: dag.Memoize => Set()
+      case _ => parents flatMap buildChains map { graph :: _ }
+    }
+    
     if (!parents.isEmpty && recursive.isEmpty) Set(graph :: Nil) else recursive
   }
   
