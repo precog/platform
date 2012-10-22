@@ -39,6 +39,7 @@ import yggdrasil.jdbm3._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
+import yggdrasil.util._
 import yggdrasil.test.YId
 import muspelheim._
 
@@ -72,7 +73,14 @@ trait PlatformSpecs[M[+_]]
 
   implicit def M: Monad[M] with Copointed[M]
 
-  class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig with JDBMProjectionModuleConfig
+  class YggConfig extends ParseEvalStackSpecConfig
+      with StandaloneShardSystemConfig
+      with IdSourceConfig
+      with ColumnarTableModuleConfig
+      with EvaluatorConfig
+      with BlockStoreColumnarTableModuleConfig
+      with JDBMProjectionModuleConfig
+      
   object yggConfig  extends YggConfig
 }
 

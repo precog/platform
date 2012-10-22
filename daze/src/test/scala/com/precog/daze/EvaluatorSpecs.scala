@@ -66,7 +66,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
   private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
   private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
   
-  class YggConfig extends EvaluatorConfig with BlockStoreColumnarTableModuleConfig {
+  class YggConfig extends IdSourceConfig with ColumnarTableModuleConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig {
     val sortBufferSize = 1000
     val sortWorkDir: File = IOUtils.createTmpDir("idsoSpec").unsafePerformIO
     val clock = blueeyes.util.Clock.System

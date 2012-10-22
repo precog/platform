@@ -77,10 +77,22 @@ trait ColumnarTableTypes {
   type RowId = Int
 }
 
-trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes with IdSourceScannerModule[M] with SliceTransforms[M] {
+trait ColumnarTableModuleConfig {
+  def maxSliceSize: Int
+}
+
+trait ColumnarTableModule[M[+_]]
+    extends TableModule[M]
+    with ColumnarTableTypes
+    with IdSourceScannerModule[M]
+    with SliceTransforms[M]
+    with YggConfigComponent {
+      
   import TableModule._
   import trans._
   import trans.constants._
+  
+  type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig
 
   type Table <: ColumnarTable
   type TableCompanion <: ColumnarTableCompanion

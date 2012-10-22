@@ -21,6 +21,7 @@ package com.precog
 package daze
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.table.ColumnarTableModuleConfig
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.util.IdSourceConfig
 import com.precog.util._
@@ -53,9 +54,9 @@ import scalaz.syntax.traverse._
 
 import scala.collection.immutable.Queue
 
-trait EvaluatorConfig extends IdSourceConfig {
+trait EvaluatorConfig /* {
   def maxSliceSize: Int
-}
+} */
 
 trait Evaluator[M[+_]] extends DAG
     with CrossOrdering
@@ -66,7 +67,6 @@ trait Evaluator[M[+_]] extends DAG
     with EvaluatorMethods[M]
     with ReductionFinder[M]
     with TableModule[M]        // TODO specific implementation
-    with ImplLibrary[M]
     with InfixLib[M]
     with UnaryLib[M]
     with BigDecimalOperations
@@ -87,7 +87,7 @@ trait Evaluator[M[+_]] extends DAG
   import constants._
   import TableModule._
 
-  type YggConfig <: EvaluatorConfig
+  type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig with EvaluatorConfig
   
   def withContext[A](f: Context => A): A = {
     f(new Context { })
