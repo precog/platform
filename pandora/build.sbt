@@ -89,6 +89,8 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
 
 definedTests in Test := Seq()
 
+parallelExecution in Test := false
+
 test <<= (streams, extractData, fullClasspath in Test, outputStrategy in Test, mainTest) map { (s, dataDir, cp, os, testName) =>
   val delim = java.io.File.pathSeparator
   val cpStr = cp map { _.data } mkString delim

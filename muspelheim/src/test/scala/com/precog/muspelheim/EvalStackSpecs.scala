@@ -156,6 +156,46 @@ trait EvalStackSpecs extends Specification {
       actual must contain(true).only
     }
 
+    "accept division inside an object" in {
+      val input = """
+        | data := //conversions
+        | 
+        | x := solve 'productID
+        |   data' := data where data.product.ID = 'productID
+        |   { count: count(data' where data'.customer.isCasualGamer = false),
+        |     sum: sum(data'.marketing.uniqueVisitors  where data'.customer.isCasualGamer = false) }
+        | 
+        | { max: max(x.sum/x.count), min: min(x.sum/x.count) }
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+
+          obj.keys mustEqual(Set("min", "max"))
+          (obj("min") match { case SDecimal(num) => num.toDouble ~= 862.7464285714286 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 941.0645161290323 }) mustEqual true
+      }
+    }
+
+    "accept division of two BigDecimals" in {
+      val input = "92233720368547758073 / 12223372036854775807"
+
+      val result = evalE(input)
+
+      result must haveSize(1)
+
+      forall(result) {
+        case (ids, SDecimal(num)) =>
+          ids must haveSize(0)
+          (num.toDouble ~= 7.54568543692) mustEqual true
+      }
+    }
+
     "perform various reductions on transspecable sets" in {
       val input = """
         | medals := //summer_games/london_medals
@@ -1415,46 +1455,6 @@ trait EvalStackSpecs extends Specification {
           obj must contain("gender" -> SString("male"))
         }
         case r => failure("Result has wrong shape: "+r)
-      }
-    }
-
-    "accept division inside an object" in {
-      val input = """
-        | data := //conversions
-        | 
-        | x := solve 'productID
-        |   data' := data where data.product.ID = 'productID
-        |   { count: count(data' where data'.customer.isCasualGamer = false),
-        |     sum: sum(data'.marketing.uniqueVisitors  where data'.customer.isCasualGamer = false) }
-        | 
-        | { max: max(x.sum/x.count), min: min(x.sum/x.count) }
-      """.stripMargin
-
-      val results = evalE(input)
-
-      results must haveSize(1)
-
-      forall(results) {
-        case (ids, SObject(obj)) =>
-          ids must haveSize(0)
-
-          obj.keys mustEqual(Set("min", "max"))
-          (obj("min") match { case SDecimal(num) => num.toDouble ~= 862.7464285714286 }) mustEqual true
-          (obj("max") match { case SDecimal(num) => num.toDouble ~= 941.0645161290323 }) mustEqual true
-      }
-    }
-
-    "accept division of two BigDecimals" in {
-      val input = "92233720368547758073 / 12223372036854775807"
-
-      val result = evalE(input)
-
-      result must haveSize(1)
-
-      forall(result) {
-        case (ids, SDecimal(num)) =>
-          ids must haveSize(0)
-          (num.toDouble ~= 7.54568543692) mustEqual true
       }
     }
 
