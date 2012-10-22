@@ -102,7 +102,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
   }
 
   trait ColumnarTableCompanion extends TableCompanionLike {
-    def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize): Table
+    def apply(slices: StreamT[M, Slice], size: TableSize): Table
     
     def singleton(slice: Slice): Table
 
@@ -200,7 +200,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def intersect(identitySpec: TransSpec1, tables: Table*): M[Table] = {
       val inputCount = tables.size
       val mergedSlices: StreamT[M, Slice] = tables.map(_.slices).reduce( _ ++ _ )
-      Table(mergedSlices).sort(identitySpec).map {
+      Table(mergedSlices, UnknownSize).sort(identitySpec).map {
         sortedTable => {
           sealed trait CollapseState
           case class Boundary(prevSlice: Slice, prevStartIdx: Int) extends CollapseState
@@ -292,7 +292,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           // Break the idents out into field "0", original data in "1"
           val splitIdentsTransSpec = OuterObjectConcat(WrapObject(identitySpec, "0"), WrapObject(Leaf(Source), "1"))
 
-          Table(transformStream(collapse, sortedTable.transform(splitIdentsTransSpec).compact(Leaf(Source)).slices)).transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
+          Table(transformStream(collapse, sortedTable.transform(splitIdentsTransSpec).compact(Leaf(Source)).slices), UnknownSize).transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
         }
       }
     }
@@ -1756,7 +1756,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           (right.table.transform(remapFullSpec), left.groupKeys ++ extraRight.toSeq)
         }
 
-        BorgResult(Table(left.table.slices ++ rightRemapped.slices),
+        BorgResult(Table(left.table.slices ++ rightRemapped.slices, UnknownSize),
                    groupKeys,
                    left.groups ++ right.groups)
       }
@@ -2236,7 +2236,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           }
         }
 
-        Table(StreamT.wrapEffect(initialState map { state => StreamT.unfoldM[M, Slice, CogroupState](state getOrElse CogroupDone)(step) }))
+        Table(StreamT.wrapEffect(initialState map { state => StreamT.unfoldM[M, Slice, CogroupState](state getOrElse CogroupDone)(step) }), UnknownSize)
       }
 
       cogroup0(composeSliceTransform(leftKey), 
@@ -2372,7 +2372,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             }
         )
         
-        Table(stream((id.initial, filter.initial), slices))
+        Table(stream((id.initial, filter.initial), slices), UnknownSize)
       }
 
       distinct0(SliceTransform.identity(None : Option[Slice]), composeSliceTransform(spec))
@@ -2404,7 +2404,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         case UnknownSize => UnknownSize
       }
 
-      Table(StreamT.wrapEffect(loop(slices, 0)))
+      Table(StreamT.wrapEffect(loop(slices, 0)), newSize)
     }
 
     /**
@@ -2498,7 +2498,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       this.transform(keyTrans).compact(TransSpec1.Id).slices.uncons map {
         case Some((head, tail)) =>
-          Table(stepPartition(head, 0, tail))
+          Table(stepPartition(head, 0, tail), UnknownSize)
         case None =>
           Table.empty
       }
@@ -2539,14 +2539,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
 
     def slicePrinter(prelude: String)(f: Slice => String): Table = {
-      Table(StreamT(StreamT.Skip({println(prelude); slices map { s => println(f(s)); s }}).point[M]))
+      Table(StreamT(StreamT.Skip({println(prelude); slices map { s => println(f(s)); s }}).point[M]), size)
     }
 
     def logged(logger: Logger, logPrefix: String = "", prelude: String = "", appendix: String = "")(f: Slice => String): Table = {
       val preludeEffect = StreamT(StreamT.Skip({logger.debug(logPrefix + " " + prelude); StreamT.empty[M, Slice]}).point[M])
       val appendixEffect = StreamT(StreamT.Skip({logger.debug(logPrefix + " " + appendix); StreamT.empty[M, Slice]}).point[M])
       val sliceEffect = if (logger.isTraceEnabled) slices map { s => logger.trace(logPrefix + " " + f(s)); s } else slices
-      Table(preludeEffect ++ sliceEffect ++ appendixEffect)
+      Table(preludeEffect ++ sliceEffect ++ appendixEffect, size)
     }
 
     def printer(prelude: String = "", flag: String = ""): Table = slicePrinter(prelude)(s => s.toJsonString(flag))
