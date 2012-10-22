@@ -909,15 +909,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     import SliceTransform._
     import trans._
     
-//    val stackTrace = Thread.currentThread.getStackTrace.mkString("\n")
-//    for(l <- slices.length; slice <- slices.head) yield {
-//      println("New Table: slices.length: "+l+" slices.head.size: "+slice.size)
-//      if(l == 1 && slice.size == 1) {
-//        println(stackTrace)
-//        //System.exit(1)
-//      }
-//    }
-    
     def load(uid: UserId, tpe: JType): M[Table] = self.load(this, uid, tpe)
 
     /**
@@ -949,6 +940,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     protected def writeSorted(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[(File, List[String], IndexMap)] = {
       import sortMergeEngine._
 
+      println("writeSorted: "+size)
+      
       // Open a JDBM3 DB for use in sorting under a temp directory
       val dbFile = new File(newScratchDir(), "writeSortedSpace")
       
