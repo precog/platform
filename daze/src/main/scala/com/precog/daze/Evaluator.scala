@@ -107,7 +107,7 @@ trait Evaluator[M[+_]] extends DAG
     (if (optimize) optimizeJoins(_) else identity) andThen
     (orderCrosses _) andThen
     (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
-    //(if (optimize) { g => megaReduce(g, findReductions(g)) } else identity) andThen
+    (if (optimize) { g => megaReduce(g, findReductions(g)) } else identity) andThen
     (if (optimize) (memoize _) else identity)
   }
   
