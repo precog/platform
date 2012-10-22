@@ -89,6 +89,22 @@ object GroupSolverSpecs extends Specification
       tree.errors mustEqual Set(ConstraintsWithinInnerScope)
     }    
 
+    "accept a solve on a union with a `with`" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | athletes := //summer_games/athletes
+        | 
+        | data := medals union (athletes with { gender: athletes.Sex })
+        | 
+        | solve 'gender 
+        |   { gender: 'gender, num: count(data.gender where data.gender = 'gender) } 
+      """.stripMargin
+
+      val let @ Let(_, _, _, _, _) = compile(input)
+
+      let.errors must beEmpty
+    }
+
     "accept acceptable case of nested solves" in {
       val input = """
         medals := //summer_games/london_medals
