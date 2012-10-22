@@ -97,8 +97,9 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       MDC.put("metadata_batch", ingestBatchId.getAndIncrement().toString)
       for(update <- updates) update match {
         case (descriptor, Some(metadata)) =>
-          logger.trace("Dirty metadata on %s".format(descriptor))
-          projections += (descriptor -> metadata)
+          val newMetadata = projections.get(descriptor).map { _ |+| metadata }.getOrElse(metadata)
+          logger.trace("Updating descriptor from %s to %s".format(projections.get(descriptor), newMetadata))
+          projections += (descriptor -> newMetadata)
           dirty += descriptor
         case (descriptor, None) =>
           logger.trace("Archive metadata on %s".format(descriptor))

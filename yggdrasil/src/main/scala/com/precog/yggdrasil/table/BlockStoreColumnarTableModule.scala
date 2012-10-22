@@ -297,7 +297,13 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       )
     }
 
-    def apply(slices: StreamT[M, Slice], size: Option[Long] = None) = new Table(slices, size)
+    def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize) =
+      size match {
+        case ExactSize(1) => new SingletonTable(slices)
+        case _            => new ExternalTable(slices, size)
+      }
+
+    def singleton(slice: Slice) = new SingletonTable(slice :: StreamT.empty[M, Slice])
 
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = {
       sealed trait AlignState
@@ -759,7 +765,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         )
       )
       
-      Table(StreamT(M.point(head)), Some(totalCount)).transform(TransSpec1.DerefArray1)
+      Table(StreamT(M.point(head)), ExactSize(totalCount)).transform(TransSpec1.DerefArray1)
     }
   }
   
@@ -804,7 +810,14 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       paths          <- pathsM
       projectionData <- (paths map { path => loadable(metadataView, path, CPath.Identity, tpe) }).sequence map { _.flatten }
       val (coveringProjections, colMetadata) = projectionData.unzip
-      val maxSize = colMetadata.toList.flatMap { _.values.flatMap { _.values.collect { case stats: MetadataStats => stats.count } } }.sorted.lastOption
+      val projectionSizes = colMetadata.toList.flatMap { _.values.flatMap { _.values.collect { case stats: MetadataStats => stats.count } } }.sorted
+      val tableSize: TableSize = projectionSizes.headOption.flatMap { minSize => projectionSizes.lastOption.map { maxSize => {
+        if (coveringProjections.size == 1) {
+          ExactSize(minSize)
+        } else {
+          EstimateSize(minSize, maxSize)
+        }
+      }}}.getOrElse(UnknownSize)
     } yield {
       val head = StreamT.Skip(
         StreamT.wrapEffect(
@@ -819,14 +832,25 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         )
       )
   
-      Table(StreamT(M.point(head)), maxSize)
+      Table(StreamT(M.point(head)), tableSize)
     }
   }
-
-  class Table(slices: StreamT[M, Slice], size: Option[Long]) extends ColumnarTable(slices, size) {
+  
+  abstract class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size)
+  
+  class ExternalTable(slices: StreamT[M, Slice], size: TableSize) extends Table(slices, size) {
     import Table._
     import SliceTransform._
     import trans._
+    
+//    val stackTrace = Thread.currentThread.getStackTrace.mkString("\n")
+//    for(l <- slices.length; slice <- slices.head) yield {
+//      println("New Table: slices.length: "+l+" slices.head.size: "+slice.size)
+//      if(l == 1 && slice.size == 1) {
+//        println(stackTrace)
+//        //System.exit(1)
+//      }
+//    }
     
     def load(uid: UserId, tpe: JType): M[Table] = self.load(this, uid, tpe)
 
@@ -837,7 +861,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
      * @see com.precog.yggdrasil.TableModule#sort(TransSpec1, DesiredSortOrder, Boolean)
      */
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder, unique).map {
-      _.headOption getOrElse Table(this.slices, Some(0)) // If we start with an empty table, we always end with an empty table (but then we know that we have zero size)
+      _.headOption getOrElse Table(StreamT.empty[M, Slice], ExactSize(0)) // If we start with an empty table, we always end with an empty table (but then we know that we have zero size)
     }
 
     /**
@@ -851,7 +875,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         case (dbFile, streamIds, indices) => 
           val streams = indices.groupBy(_._1.streamId)
           streamIds.toStream map { streamId =>
-            streams get streamId map (loadTable(dbFile, sortMergeEngine, _, sortOrder)) getOrElse Table(this.slices, Some(0))
+            streams get streamId map (loadTable(dbFile, sortMergeEngine, _, sortOrder)) getOrElse Table(StreamT.empty[M, Slice], ExactSize(0))
           }
           // indices.groupBy(_._1.streamId).values.toStream.map(loadTable(dbFile, sortMergeEngine, _, sortOrder))
       }
@@ -887,7 +911,23 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       } yield (dbFile, result._1, result._2)
     }
   }
-} 
+  
+  class SingletonTable(slices0: StreamT[M, Slice]) extends Table(slices0, ExactSize(1)) {
+    import TableModule._
+    
+    // TODO assert that this table only has one row
+    
+    //println("New SingletonTable")
+
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("TODO")
+    
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = M.point(this)
+    
+    def load(uid: UserId, tpe: JType): M[Table] = self.load(this, uid, tpe)
+    
+    override def compact(spec: TransSpec1): Table = this
+  }
+}
 
 object BlockStoreColumnarTableModule {
   protected lazy val blockModuleLogger = LoggerFactory.getLogger("com.precog.yggdrasil.table.BlockStoreColumnarTableModule")

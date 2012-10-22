@@ -102,50 +102,52 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
   }
 
   trait ColumnarTableCompanion extends TableCompanionLike {
-    def apply(slices: StreamT[M, Slice], size: Option[Long] = None): Table
+    def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize): Table
+    
+    def singleton(slice: Slice): Table
 
     implicit def groupIdShow: Show[GroupId] = Show.showFromToString[GroupId]
 
-    def empty: Table = Table(StreamT.empty[M, Slice], Some(0))
+    def empty: Table = Table(StreamT.empty[M, Slice], ExactSize(0))
     
     def constBoolean(v: collection.Set[CBoolean]): Table = {
       val column = ArrayBoolColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(CPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
     def constLong(v: collection.Set[CLong]): Table = {
       val column = ArrayLongColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(CPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
     def constDouble(v: collection.Set[CDouble]): Table = {
       val column = ArrayDoubleColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(CPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
     def constDecimal(v: collection.Set[CNum]): Table = {
       val column = ArrayNumColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(CPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
     def constString(v: collection.Set[CString]): Table = {
       val column = ArrayStrColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(CPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
     def constDate(v: collection.Set[CDate]): Table =  {
       val column = ArrayDateColumn(v.map(_.value).toArray)
-      Table(Slice(Map(ColumnRef(CPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], Some(v.size))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
     def constNull: Table = 
-      Table(Slice(Map(ColumnRef(CPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice], Some(1))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice], ExactSize(1))
 
     def constEmptyObject: Table = 
-      Table(Slice(Map(ColumnRef(CPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice], Some(1))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice], ExactSize(1))
 
     def constEmptyArray: Table = 
-      Table(Slice(Map(ColumnRef(CPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice], Some(1))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice], ExactSize(1))
 
     def transformStream[A](sliceTransform: SliceTransform1[A], slices: StreamT[M, Slice]): StreamT[M, Slice] = {
       def stream(state: A, slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT(
@@ -472,7 +474,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     //   "identities": { "<string value of groupId1>": <identities for groupId1>, "<string value of groupId2>": ... },
     //   "values": { "<string value of groupId1>": <values for groupId1>, "<string value of groupId2>": ... },
     // }
-    case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId], size: Option[Long] = None)
+    case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId], size: TableSize = UnknownSize)
 
     object BorgResult {
       val allFields = Set(CPathField("groupKeys"), CPathField("identities"), CPathField("values"))
@@ -916,7 +918,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     //  }
     //}
 
-    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], sortedByIdentities: Boolean = false, size: Option[Long] = None) {
+    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], sortedByIdentities: Boolean = false, size: TableSize = UnknownSize) {
       def sortedOn = groupKeyTrans.alignTo(groupKeyPrefix).prefixTrans(groupKeyPrefix.size)
 
       def groupId = node.binding.groupId
@@ -1510,7 +1512,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           (borgLeft, borgRight, compatiblePrefix).point[M]
         } orElse {
           // one or the other will require a re-sort
-          if (borgLeft.size.exists(s => borgRight.size.exists(_ < s))) {
+          if (borgLeft.size lessThan borgRight.size) {
             resortLeft(borgLeft, borgRight) orElse
             // Well, that didn't work, so let's at least attempt the reverse constraints
             resortRight(borgLeft, borgRight)
@@ -1536,7 +1538,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               // choose compatible ordering for both sides from requiredOrders
               OrderingConstraints.findCompatiblePrefix(requiredOrders(left.node), requiredOrders(right.node)) match {
                 case Some(prefix) =>
-                  val (toSort, toAssimilate) = if (left.size.exists(ls => right.size.exists(ls < _))) (left, right) 
+                  val (toSort, toAssimilate) = if (left.size lessThan right.size) (left, right) 
                                                else (right, left)
 
                   resortVictimToBorgResult(toSort, prefix) flatMap { assimilator =>
@@ -1851,7 +1853,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     }
   }
 
-  abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: Option[Long]) extends TableLike { self: Table =>
+  abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: TableSize) extends TableLike { self: Table =>
     import SliceTransform._
 
     private final val readStarts = new java.util.concurrent.atomic.AtomicInteger
@@ -1882,7 +1884,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def compact(spec: TransSpec1): Table = {
       val specTransform = SliceTransform.composeSliceTransform(spec)
       val compactTransform = SliceTransform.composeSliceTransform(Leaf(Source)).zip(specTransform) { (s1, s2) => s1.compact(s2, AnyDefined) }
-      Table(Table.transformStream(compactTransform, slices)).normalize
+      Table(Table.transformStream(compactTransform, slices), size).normalize
     }
 
     /**
@@ -2036,8 +2038,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                     case GT => 
                       // catch input-out-of-order errors early
                       if (xrend == -1) {
-                        println("lhead\n" + lhead.toJsonString())
-                        println("rhead\n" + rhead.toJsonString())
+                        //println("lhead\n" + lhead.toJsonString())
+                        //println("rhead\n" + rhead.toJsonString())
                         sys.error("Inputs are not sorted; value on the left exceeded value on the right at the end of equal span. lpos = %d, rpos = %d".format(lpos, rpos))
                       }
 
@@ -2340,7 +2342,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         }
       }
       
-      Table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }))
+      // TODO: We should be able to fully compute the size of the result above.
+      val newSize = (size, that.size) match {
+        case (ExactSize(l), ExactSize(r))         => EstimateSize(l max r, l * r)
+        case (EstimateSize(ln, lx), ExactSize(r)) => EstimateSize(ln max r, lx * r)
+        case (ExactSize(l), EstimateSize(rn, rx)) => EstimateSize(l max rn, l * rx)
+        case _ => UnknownSize // Bail on anything else for now (see above TODO)
+      }
+      Table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }), newSize)
     }
     
     /**
@@ -2387,6 +2396,14 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         }
         case _ => M.point(StreamT.empty[M, Slice])
       }
+      
+      def calcNewSize(current: Long): Long = ((current-startIndex) max 0) min numberToTake
+
+      val newSize = size match {
+        case ExactSize(sz) => ExactSize(calcNewSize(sz))
+        case EstimateSize(sMin, sMax) => EstimateSize(calcNewSize(sMin), calcNewSize(sMax))
+        case UnknownSize => UnknownSize
+      }
 
       Table(StreamT.wrapEffect(loop(slices, 0)))
     }
@@ -2423,20 +2440,24 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         }
       }
 
-      def subTable(comparatorGen: Slice => (Int => Ordering), slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT.wrapEffect {
-        slices.uncons map {
-          case Some((head, tail)) =>
-            val headComparator = comparatorGen(head)
-            val spanEnd = findEnd(headComparator, 0, head.size - 1)
-            if (spanEnd < head.size) {
-              head.take(spanEnd) :: StreamT.empty[M, Slice]
-            } else {
-              head :: subTable(comparatorGen, tail)
-            }
-            
-          case None =>
-            StreamT.empty[M, Slice]
+      def subTable(comparatorGen: Slice => (Int => Ordering), slices: StreamT[M, Slice]): M[Table] = {
+        def subTable0(slices: StreamT[M, Slice], subSlices: StreamT[M, Slice], size: Int): M[Table] = {
+          slices.uncons flatMap {
+            case Some((head, tail)) =>
+              val headComparator = comparatorGen(head)
+              val spanEnd = findEnd(headComparator, 0, head.size - 1)
+              if (spanEnd < head.size) {
+                M.point(Table(subSlices ++ (head.take(spanEnd) :: StreamT.empty[M, Slice]), ExactSize(size+spanEnd)))
+              } else {
+                subTable0(tail, subSlices ++ (head :: StreamT.empty[M, Slice]), size+head.size)
+              }
+              
+            case None =>
+              M.point(Table(subSlices, ExactSize(size)))
+          }
         }
+        
+        subTable0(slices, StreamT.empty[M, Slice], 0)
       }
 
       def dropAndSplit(comparatorGen: Slice => (Int => Ordering), slices: StreamT[M, Slice], spanStart: Int): StreamT[M, Slice] = StreamT.wrapEffect {
@@ -2463,9 +2484,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
           (i: Int) => rowComparator.compare(spanStart, i)
         }
-
-        val groupTable = Table(subTable(comparatorGen, head.drop(spanStart) :: tail)).transform(DerefObjectStatic(Leaf(Source), CPathField("1")))
-        val groupedM: M[Table] = f(groupTable)
+        
+        val groupTable = subTable(comparatorGen, head.drop(spanStart) :: tail)
+        val groupedM = groupTable.map(_.transform(DerefObjectStatic(Leaf(Source), CPathField("1")))).flatMap(f)
         val groupedStream: StreamT[M, Slice] = StreamT.wrapEffect(groupedM.map(_.slices))
 
         groupedStream ++ dropAndSplit(comparatorGen, head :: tail, spanStart)
@@ -2484,7 +2505,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       }
     }
 
-    def normalize: Table = Table(slices.filter(!_.isEmpty))
+    def normalize: Table = Table(slices.filter(!_.isEmpty), size)
     
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
       val delimiterBuffer = {
