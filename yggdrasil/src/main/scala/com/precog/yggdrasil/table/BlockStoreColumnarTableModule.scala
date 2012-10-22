@@ -908,7 +908,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
      * @see com.precog.yggdrasil.TableModule#sort(TransSpec1, DesiredSortOrder, Boolean)
      */
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder, unique).map {
-      _.headOption getOrElse Table(StreamT.empty[M, Slice], ExactSize(0)) // If we start with an empty table, we always end with an empty table (but then we know that we have zero size)
+      _.headOption getOrElse Table.empty // If we start with an empty table, we always end with an empty table (but then we know that we have zero size)
     }
 
     /**
@@ -922,7 +922,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         case (dbFile, streamIds, indices) => 
           val streams = indices.groupBy(_._1.streamId)
           streamIds.toStream map { streamId =>
-            streams get streamId map (loadTable(dbFile, sortMergeEngine, _, sortOrder)) getOrElse Table(StreamT.empty[M, Slice], ExactSize(0))
+            streams get streamId map (loadTable(dbFile, sortMergeEngine, _, sortOrder)) getOrElse Table.empty
           }
       }
     }
@@ -976,6 +976,9 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     override def paged(limit: Int): Table = this
 
     override def distinct(spec: TransSpec1): Table = this
+
+    override def takeRange(startIndex: Long, numberToTake: Long): Table =
+      if(startIndex == 0 && numberToTake == 0) this else Table.empty
   }
 }
 
