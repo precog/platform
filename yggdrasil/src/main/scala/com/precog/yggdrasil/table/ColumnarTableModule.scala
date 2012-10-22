@@ -2332,11 +2332,12 @@ trait ColumnarTableModule[M[+_]]
                   lempty <- ltail.isEmpty //TODO: Scalaz result here is negated from what it should be!
                   rempty <- rtail.isEmpty
                 } yield {
+                  val frontSize = lhead.size * rhead.size
                   
-                  if (lempty) {
+                  if (lempty && frontSize <= yggConfig.maxSliceSize) {
                     // left side is a small set, so restart it in memory
                     crossLeftSingle(lhead, rhead :: rtail)
-                  } else if (rempty) {
+                  } else if (rempty && frontSize <= yggConfig.maxSliceSize) {
                     // right side is a small set, so restart it in memory
                     crossRightSingle(lhead :: ltail, rhead)
                   } else {
