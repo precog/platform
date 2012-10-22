@@ -1694,7 +1694,7 @@ trait EvalStackSpecs extends Specification {
         |     below: click.time - belowTime,
         |     above: aboveTime - click.time
         |   }
-        |   
+        | 
         | meanAbove := mean(spacings.above)
         | meanBelow := mean(spacings.below)
         | 

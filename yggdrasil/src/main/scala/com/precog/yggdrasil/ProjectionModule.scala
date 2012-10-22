@@ -45,6 +45,12 @@ trait ProjectionLike {
   def commit(): IO[Unit]
 }
 
+trait SortProjectionLike extends ProjectionLike {
+  def descriptor: ProjectionDescriptor = sys.error("Sort projections do not have full ProjectionDescriptors")
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("Insertion on sort projections is unsupported")
+  def commit(): IO[Unit] = sys.error("Commit on sort projections is unsupported")
+}
+
 case class BlockProjectionData[Key, Block](minKey: Key, maxKey: Key, data: Block)
 
 trait BlockProjectionLike[Key, Block] extends ProjectionLike {
