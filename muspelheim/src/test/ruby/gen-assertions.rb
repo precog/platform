@@ -20,6 +20,31 @@ module Tests
       arr.inject(0) { |a, b| a + b } / arr.size
     end
     
+    def test_evaluate_max_of_filter
+      # medals := //summer_games/london_medals
+      medals = load_file 'summer_games/london_medals.json'
+
+      # medals where medals.Sex = "F"
+      medals_prime = medals.select { |m| m['Sex'] = 'F' }
+
+      # max(medals.G where medals.Sex = "F")
+      results = medals_prime.map { |p| p['G'] }.max
+
+      results_must " haveSize(1)"
+      results_must " contain(#{render_value results})"
+    end
+
+    def test_evaluate_max_of_object_deref
+      # medals := //summer_games/london_medals
+      medals = load_file 'summer_games/london_medals.json'
+
+      # max(medals.G)
+      results =  medals.map { |p| p['G'] }.max
+
+      results_must " haveSize(1)"
+      results_must " contain(#{render_value results})"
+    end
+
     def test_evaluate_a_histogram_of_state_on_tweets_union_tweets
       # tweets = //election/tweets
       tweets = load_file 'election/tweets.json'

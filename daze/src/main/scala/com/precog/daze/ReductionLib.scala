@@ -125,7 +125,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val maxs = cols(JNumberT) flatMap {
+        val maxs = cols(JNumberT) map {
           case col: LongColumn =>
             // for longs, we'll use a Boolean to track whether zmax was really
             // seen or not.
@@ -160,7 +160,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
         }
 
         // now we just find the max out of all of our column types
-        if (maxs.isEmpty) None else Some(maxs.suml)
+        if (maxs.isEmpty) None else maxs.suml(monoid)
       }
     }
 
@@ -182,7 +182,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val mins = cols(JType.JUnfixedT) flatMap {
+        val mins = cols(JNumberT) map {
           case col: LongColumn =>
             // for longs, we'll use a Boolean to track whether zmin was really
             // seen or not.
@@ -217,7 +217,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
         }
 
         // now we just find the min out of all of our column types
-        if (mins.isEmpty) None else Some(mins.suml)
+        if (mins.isEmpty) None else mins.suml(monoid)
       }
     }
 
@@ -236,7 +236,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range) = {
 
-        val sum = cols(JNumberT) flatMap {
+        val sum = cols(JNumberT) map {
 
           case col: LongColumn =>
             val ls = new LongAdder()
@@ -257,7 +257,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         }
 
-        if (sum.isEmpty) None else Some(sum.suml)
+        if (sum.isEmpty) None else sum.suml(monoid)
       }
     }
 
@@ -276,7 +276,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val results = cols(JNumberT) flatMap {
+        val results = cols(JNumberT) map {
 
           case col: LongColumn =>
             val ls = new LongAdder()
@@ -308,7 +308,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         }
 
-        if (results.isEmpty) None else Some(results.suml)
+        if (results.isEmpty) None else results.suml(monoid)
       }
     }
 
@@ -333,7 +333,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def reducer: Reducer[Result] = new Reducer[Option[(BigDecimal, Long)]] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val results = cols(JNumberT) flatMap {
+        val results = cols(JNumberT) map {
           case col: LongColumn =>
             var prod = BigDecimal(1)
             var count = 0L
@@ -364,7 +364,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         }
 
-        if (results.isEmpty) None else Some(results.suml)
+        if (results.isEmpty) None else results.suml(monoid)
       }
     }
 
@@ -387,7 +387,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val result = cols(JNumberT) flatMap {
+        val result = cols(JNumberT) map {
 
           case col: LongColumn =>
             val ls = new LongAdder()
@@ -413,7 +413,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         }
           
-        if (result.isEmpty) None else Some(result.suml)
+        if (result.isEmpty) None else result.suml(monoid)
       }
     }
 
@@ -424,7 +424,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
   class CountSumSumSqReducer extends Reducer[Option[(Long, BigDecimal, BigDecimal)]] {
     def reduce(cols: JType => Set[Column], range: Range):
       Option[(Long, BigDecimal, BigDecimal)] = {
-      val result = cols(JNumberT) flatMap {
+      val result = cols(JNumberT) map {
         case col: LongColumn =>
           var count = 0L
           var sum = new LongAdder()
@@ -467,7 +467,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
         case _ => None
       }
 
-      if (result.isEmpty) None else Some(result.suml)
+      if (result.isEmpty) None else result.suml
     }
   }
 
