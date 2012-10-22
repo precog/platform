@@ -810,7 +810,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           M.point(Some(CellState(index, new Array[Byte](0), slice, (k: SortingKey) => M.point(None))))
 
         case (SliceIndex(name, _, _, _, keyColumns, valColumns, _), index) => 
-          val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns, sortOrder)
+          val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns, sortOrder, yggConfig.maxSliceSize)
           val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
           
           succ(None) map { 
