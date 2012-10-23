@@ -2036,8 +2036,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                     case GT => 
                       // catch input-out-of-order errors early
                       if (xrend == -1) {
-                        println("lhead\n" + lhead.toJsonString())
-                        println("rhead\n" + rhead.toJsonString())
+                        //println("lhead\n" + lhead.toJsonString())
+                        //println("rhead\n" + rhead.toJsonString())
                         sys.error("Inputs are not sorted; value on the left exceeded value on the right at the end of equal span. lpos = %d, rpos = %d".format(lpos, rpos))
                       }
 
