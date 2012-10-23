@@ -24,7 +24,11 @@ import com.codecommit.gll.ast.Node
 
 import org.specs2.mutable.Specification
 
-object SolverSpecs extends Specification with parser.Parser with Solver with StubPhases {
+object SolverSpecs extends Specification
+    with parser.Parser
+    with Solver
+    with StubPhases {
+      
   import ast._
 
   val someFunction = Dispatch(LineStream(),Identifier(Vector(),"x"), Vector())
@@ -315,13 +319,21 @@ object SolverSpecs extends Specification with parser.Parser with Solver with Stu
 
   
   def solve(str: String, id: Symbol): Option[Expr] = {
-    val f = solve(parse(LineStream(str))) { case TicVar(_, id2) => id.toString == id2 }
+    val f = solve(parseSingle(LineStream(str))) { case TicVar(_, id2) => id.toString == id2 }
     f(someFunction)
   }
 
   def solveRelation(str: String, id: Symbol): Option[Expr] = {
-    val expr = parse(LineStream(str))
+    val expr = parseSingle(LineStream(str))
 
     solveRelation(expr.asInstanceOf[RelationExpr]) { case TicVar(_, id2) => id.toString == id2; }
   }
+  
+  private def parseSingle(str: LineStream): Expr = {
+    val set = parse(str)
+    set must haveSize(1)
+    set.head
+  }
+  
+  private def parseSingle(str: String): Expr = parseSingle(LineStream(str))
 }
