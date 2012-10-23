@@ -10,6 +10,7 @@ import emitter._
 
 object PhasesSpecs extends Specification
     with StubPhases
+    with CompilerUtils
     with Compiler
     with ProvenanceChecker
     with GroupSolver
@@ -18,7 +19,7 @@ object PhasesSpecs extends Specification
   
   "full compiler" should {
     "self-populate AST errors atom" in {
-      val tree = compile("fubar")
+      val tree = compileSingle("fubar")
       tree.errors must not(beEmpty)
     }
   }
