@@ -129,7 +129,8 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
             makeSlice(events.toStream)
           }
         }
-      }
+      },
+      UnknownSize
     )
   }
 
