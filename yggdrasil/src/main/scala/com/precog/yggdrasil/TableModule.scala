@@ -30,6 +30,21 @@ import scalaz.{Monad, Monoid, StreamT}
 
 import java.nio.CharBuffer
 
+sealed trait TableSize {
+  def maxSize: Long
+  def lessThan (other: TableSize): Boolean = maxSize < other.maxSize
+}
+
+case class ExactSize(minSize: Long) extends TableSize {
+  val maxSize = minSize
+}
+
+case class EstimateSize(minSize: Long, maxSize: Long) extends TableSize
+
+case object UnknownSize extends TableSize {
+  val maxSize = Long.MaxValue
+}
+
 object TableModule {
   val paths = TransSpecModule.paths
   
@@ -79,6 +94,11 @@ trait TableModule[M[+_]] extends TransSpecModule {
 
   trait TableLike { this: Table =>
     import trans._
+
+    /**
+     * Return an indication of table size, if known
+     */
+    def size: TableSize
 
     /**
      * For each distinct path in the table, load all columns identified by the specified

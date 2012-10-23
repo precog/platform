@@ -39,10 +39,8 @@ case class JObjectFixedT(fields: Map[String, JType]) extends JObjectT
 case object JObjectUnfixedT extends JObjectT
 
 case class JUnionT(left: JType, right: JType) extends JType {
-  private lazy val JUniverseT = JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JNumberT, JTextT), JBooleanT),JNullT), JObjectUnfixedT), JArrayUnfixedT)
-  
   override def toString = {
-    if (this == JUniverseT)
+    if (this == JType.JUniverseT)
       "JUniverseT"
     else
       super.toString
@@ -52,6 +50,7 @@ case class JUnionT(left: JType, right: JType) extends JType {
 object JType {
   val JPrimitiveUnfixedT = JNumberT | JTextT | JBooleanT | JNullT
   val JUnfixedT = JPrimitiveUnfixedT | JObjectUnfixedT | JArrayUnfixedT
+  val JUniverseT = JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JNumberT, JTextT), JBooleanT),JNullT), JObjectUnfixedT), JArrayUnfixedT)
 }
 
 case class UnaryOperationType(arg: JType, result: JType)

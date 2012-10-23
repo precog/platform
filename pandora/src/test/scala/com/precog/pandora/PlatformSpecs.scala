@@ -47,6 +47,7 @@ import com.precog.common.Path
 import com.precog.util.FilesystemFileOps
 
 import org.specs2.mutable._
+import org.specs2.specification.Fragments
   
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -56,6 +57,8 @@ import java.io.File
 
 import blueeyes.json._
 import JsonAST._
+
+import org.slf4j.LoggerFactory
 
 import scalaz._
 import scalaz.std.anyVal._
@@ -68,12 +71,21 @@ import org.streum.configrity.io.BlockFormat
 
 trait PlatformSpecs[M[+_]]
     extends ParseEvalStackSpecs[M] 
-    with BlockStoreColumnarTableModule[M] { 
+    with BlockStoreColumnarTableModule[M] 
+    with ProjectionMetadataSpecs[M] 
+    with Specification { 
+
+  lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
   implicit def M: Monad[M] with Copointed[M]
 
   class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig with JDBMProjectionModuleConfig
   object yggConfig  extends YggConfig
+
+  override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
+
+  def startup() = ()
+  def shutdown() = ()
 }
 
 object FuturePlatformSpecs 
@@ -115,9 +127,11 @@ object FuturePlatformSpecs
   override def startup() {
     // start storage shard 
     Await.result(storage.start(), controlTimeout)
+    psLogger.info("Test shard started")
   }
   
   override def shutdown() {
+    psLogger.info("Shutting down test shard")
     // stop storage shard
     Await.result(storage.stop(), controlTimeout)
     
