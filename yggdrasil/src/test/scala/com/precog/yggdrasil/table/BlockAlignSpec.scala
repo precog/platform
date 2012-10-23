@@ -439,8 +439,8 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
 
       val rsortedOn = DerefArrayStatic(Leaf(Source),CPathIndex(1))
 
-      val ltable = Table(fromJson(ljson.toStream).slices ++ fromJson(ljson2.toStream).slices)
-      val rtable = Table(fromJson(rjson.toStream).slices ++ fromJson(rjson2.toStream).slices)
+      val ltable = Table(fromJson(ljson.toStream).slices ++ fromJson(ljson2.toStream).slices, UnknownSize)
+      val rtable = Table(fromJson(rjson.toStream).slices ++ fromJson(rjson2.toStream).slices, UnknownSize)
 
       test(ltable, lsortedOn, rtable, rsortedOn)
     }

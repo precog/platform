@@ -71,7 +71,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
 
   val sliceSize = 10
   
-  def controlTimeout = Duration(90, "seconds")      // it's just unreasonable to run tests longer than this
+  def controlTimeout = Duration(120, "seconds")      // it's just unreasonable to run tests longer than this
   
   implicit val actorSystem = ActorSystem("platformSpecsActorSystem")
 
@@ -100,10 +100,6 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     }
   }
 
-  step {
-    startup()
-  }
-  
   include(
     new EvalStackSpecs {
       def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
@@ -125,36 +121,30 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     }
   )
   
-  "full stack rendering" should {
-    def evalTable(str: String, debug: Boolean = false): Table = {
-      import trans._
+  include(
+    "full stack rendering" should {
+      def evalTable(str: String, debug: Boolean = false): Table = {
+        import trans._
+        
+        parseEvalLogger.debug("Beginning evaluation of query: " + str)
+        val tree = compile(str)
+        tree.errors must beEmpty
+        val Right(dag) = decorate(emit(tree))
+        withContext { ctx => 
+          val tableM = eval("dummyUID", dag, ctx, Path.Root, true)
+          tableM map { _ transform DerefObjectStatic(Leaf(Source), CPathField("value")) } copoint
+        }
+      }
       
-      parseEvalLogger.debug("Beginning evaluation of query: " + str)
-      val tree = compile(str)
-      tree.errors must beEmpty
-      val Right(dag) = decorate(emit(tree))
-      withContext { ctx => 
-        val tableM = eval("dummyUID", dag, ctx, Path.Root, true)
-        tableM map { _ transform DerefObjectStatic(Leaf(Source), CPathField("value")) } copoint
+      "render a set of numbers interleaved by delimiters" in {
+        val stream = evalTable("//tutorial/transactions.quantity") renderJson ','
+        val strings = stream map { _.toString }
+        val str = strings.foldLeft("") { _ + _ } copoint
+        
+        str must contain(",")
       }
     }
-    
-    "render a set of numbers interleaved by delimiters" in {
-      val stream = evalTable("//tutorial/transactions.quantity") renderJson ','
-      val strings = stream map { _.toString }
-      val str = strings.foldLeft("") { _ + _ } copoint
-      
-      str must contain(",")
-    }
-  }
-  
-  step {
-    shutdown()
-  }
-  
-  def startup() = ()
-  
-  def shutdown() = ()
+  )
 }
 
 /*

@@ -114,7 +114,10 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
     // div needs to make sure to use Double even for division with longs
     val Div = new Op2(InfixNamespace, "divide") {
       def doublef(x: Double, y: Double) = x / y
-      def numf(x: BigDecimal, y: BigDecimal) = x / y
+
+      val context = java.math.MathContext.DECIMAL128  
+      def numf(x: BigDecimal, y: BigDecimal) = x(context) / y(context)
+
       val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) =>
