@@ -1,0 +1,17 @@
+clicks := //clicks
+
+spacings := solve 'time
+  click := clicks where clicks.time = 'time
+  belowTime := max(clicks.time where clicks.time < 'time)
+  aboveTime := min(clicks.time where clicks.time > 'time)
+  
+  {
+    click: click,
+    below: click.time - belowTime,
+    above: aboveTime - click.time
+  }
+
+meanAbove := mean(spacings.above)
+meanBelow := mean(spacings.below)
+
+spacings.click where spacings.below > meanBelow & spacings.above > meanAbove
