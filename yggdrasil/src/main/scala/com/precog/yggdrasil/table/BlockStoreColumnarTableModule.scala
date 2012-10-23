@@ -978,7 +978,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     
     // TODO assert that this table only has one row
     
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("TODO")
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] =
+      M.point(groupKeys.map { groupSpec => transform(InnerObjectConcat(WrapObject(groupSpec, "0"), WrapObject(valueSpec, "1"))) }) 
     
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = M.point(this)
     
