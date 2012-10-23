@@ -1,6 +1,7 @@
 package com.precog.daze
 
 import org.apache.commons.lang.StringEscapeUtils.escapeJava
+import com.precog.yggdrasil._
 
 trait PrettyPrinter extends DAG {
   import dag._
@@ -52,8 +53,7 @@ trait PrettyPrinter extends DAG {
       else {
         graph match {
           case Root(_, instr) => "Root(line, "+(instr match {
-            case PushString(str) => "PushString("+prettyString(str)+")"
-            case PushNum(numStr) => "PushNum("+prettyString(numStr)+")"
+            case CString(str) => "CString("+prettyString(str)+")"
             case other => other
           })+")"
 

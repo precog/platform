@@ -26,13 +26,13 @@ object math {
       def apply(row: Int) = c1(row) + c2(row)
     }
     case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-      def apply(row: Int) = (c1(row): BigDecimal) + c2(row)
+      def apply(row: Int) = c1(row) + c2(row)
     }
     case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
       def apply(row: Int) = c1(row) + c2(row)
     }
     case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-      def apply(row: Int) = (c1(row): BigDecimal) + c2(row)
+      def apply(row: Int) = c1(row) + c2(row)
     }
     case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
       def apply(row: Int) = c1(row) + c2(row)
@@ -56,13 +56,13 @@ object math {
       def apply(row: Int) = c1(row) % c2(row)
     }
     case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
-      def apply(row: Int) = (c1(row): BigDecimal) % c2(row)
+      def apply(row: Int) = c1(row) % c2(row)
     }
     case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
       def apply(row: Int) = c1(row) % c2(row)
     }
     case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
-      def apply(row: Int) = (c1(row): BigDecimal) % c2(row)
+      def apply(row: Int) = c1(row) % c2(row)
     }
     case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
       def apply(row: Int) = c1(row) % c2(row)

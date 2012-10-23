@@ -5,8 +5,8 @@ import org.specs2.mutable.Specification
 import blueeyes.json.JPath
 import blueeyes.json.Printer
 import blueeyes.json.JsonParser
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import com.precog.common._
 import com.precog.common.json._
@@ -23,9 +23,7 @@ class ProjectionDescriptorSpec extends Specification {
     ColumnDescriptor(Path("/def"), CPath(".bar.baz"), CLong, Authorities(Set()))
   )
 
-  val pdValidation = ProjectionDescriptor(3, descriptors)
-
-  val testDescriptor = pdValidation.toOption.get
+  val testDescriptor = ProjectionDescriptor(3, descriptors)
 
   "ProjectionDescriptor" should {
     "serialize correctly" in {
@@ -39,7 +37,11 @@ class ProjectionDescriptorSpec extends Specification {
       }
 
       roundTrip(testDescriptor) must beLike {
-        case Success(pd) => pd must_== testDescriptor 
+        case Success(pd) => 
+          // println("testDescriptor: " + testDescriptor)
+          // println("roundtrip: " + pd)
+
+          pd must_== testDescriptor 
       }
     }
 

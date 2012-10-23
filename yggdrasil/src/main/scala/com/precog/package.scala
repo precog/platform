@@ -14,7 +14,7 @@ package object yggdrasil {
   type ProjectionDescriptorLocator = ProjectionDescriptor => IO[File]
   
   type Identity = Long
-  type Identities = VectorCase[Identity]
+  type Identities = Array[Identity]
   type SEvent = (Identities, SValue)
 
   object Identities {

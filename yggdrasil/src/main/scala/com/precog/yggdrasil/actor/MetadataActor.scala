@@ -9,12 +9,13 @@ import com.precog.util._
 import com.precog.common._
 
 import com.weiglewilczek.slf4s.Logging
+import org.slf4j.MDC
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 
-import blueeyes.json.xschema.Decomposer
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.Decomposer
+import blueeyes.json.serialization.DefaultSerialization._
 
 import akka.actor.Actor
 import akka.actor.ActorRef
@@ -67,14 +68,30 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
     flush(None).unsafePerformIO
   }
 
-  def receive = {
-    case Status => sender ! status
+  private val ingestBatchId = new java.util.concurrent.atomic.AtomicInteger()
 
-    case IngestBatchMetadata(patch, batchClock, batchOffset) => 
-      projections = projections |+| patch
-      dirty = dirty ++ patch.keySet
+  def receive = {
+    case Status => logger.trace(Status.toString); sender ! status
+
+    case msg @ IngestBatchMetadata(updates, batchClock, batchOffset) => {
+      //logger.trace(msg.toString)
+      MDC.put("metadata_batch", ingestBatchId.getAndIncrement().toString)
+      for(update <- updates) update match {
+        case (descriptor, Some(metadata)) =>
+          logger.trace("Dirty metadata on %s".format(descriptor))
+          projections += (descriptor -> metadata)
+          dirty += descriptor
+        case (descriptor, None) =>
+          logger.trace("Archive metadata on %s".format(descriptor))
+          flush(None).flatMap(_ => storage.archiveMetadata(descriptor)).unsafePerformIO
+          projections -= descriptor
+          dirty -= descriptor
+      }
+      MDC.remove("metadata_batch")
+      
       messageClock = messageClock |+| batchClock
       kafkaOffset = batchOffset orElse kafkaOffset
+    }
    
     case msg @ FindChildren(path) => 
       logger.trace(msg.toString)
@@ -96,7 +113,11 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ FindDescriptorRoot(descriptor, createOk) => 
       logger.trace(msg.toString)
-      sender ! storage.findDescriptorRoot(descriptor, createOk).unsafePerformIO
+      sender ! storage.findDescriptorRoot(descriptor, createOk)
+    
+    case msg @ FindDescriptorArchive(descriptor) => 
+      logger.trace(msg.toString)
+      sender ! storage.findArchiveRoot(descriptor)
     
     case msg @ FlushMetadata => 
       flush(Some(sender)).unsafePerformIO
@@ -108,7 +129,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
   private def flush(replyTo: Option[ActorRef]): IO[Unit] = {
     flushRequests += 1
-    logger.debug("Flushing metadata (request %d)...".format(flushRequests))
+    logger.debug("Flushing metadata (%s, request %d)...".format(if (replyTo.nonEmpty) "scheduled" else "forced", flushRequests))
 
     val io: IO[List[Unit]] = fullDataFor(dirty) flatMap { 
       _.toList.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, messageClock)) }).sequence[IO, Unit]
@@ -218,8 +239,9 @@ case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: CPath) extends ShardMetadataAction
 case class FindPathMetadata(path: Path, selector: CPath) extends ShardMetadataAction
 case class FindDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean) extends ShardMetadataAction
+case class FindDescriptorArchive(desc: ProjectionDescriptor) extends ShardMetadataAction
 case class MetadataSaved(saved: Set[ProjectionDescriptor]) extends ShardMetadataAction
 case object GetCurrentCheckpoint
 
-case class IngestBatchMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], messageClock: VectorClock, kafkaOffset: Option[Long]) extends ShardMetadataAction
+case class IngestBatchMetadata(updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])],  messageClock: VectorClock, kafkaOffset: Option[Long]) extends ShardMetadataAction
 case object FlushMetadata extends ShardMetadataAction

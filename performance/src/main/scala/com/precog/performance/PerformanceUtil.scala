@@ -8,9 +8,9 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonParser
 import blueeyes.json.Printer
 
-import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.Extractor._
+import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Extractor._
 
 import blueeyes.bkka._
 import blueeyes.core.service.engines.HttpClientXLightWeb
@@ -29,7 +29,7 @@ import org.joda.time.format._
 import scalaz._
 import Scalaz._
 
-class PerformanceUtil(apiEndpoint: String, token: String, path: String) {
+class PerformanceUtil(apiEndpoint: String, apiKey: String, path: String) {
 
   val format = ISODateTimeFormat.dateTime 
 
@@ -64,7 +64,7 @@ class PerformanceUtil(apiEndpoint: String, token: String, path: String) {
  
     val client = new HttpClientXLightWeb 
     val result = client.path(baseUrl)
-      .query("tokenId", token) 
+      .query("apiKey", apiKey) 
       .contentType(application/MimeTypes.json)
       .post[JValue](testId)(content)
 

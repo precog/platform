@@ -1,0 +1,29 @@
+# shard-v1-demo1 - ReportGrid demo1 shard service (v1)
+#
+#
+
+description "shard-v1 - ReportGrid demo1 shard service (v1)"
+
+start on runlevel [2345]
+stop on runlevel [06]
+
+limit nofile 100000 100000
+limit nproc 40000 40000
+
+respawn
+
+pre-start script
+  [ -d /var/run/precog ] || install -m 755 -o precog -g precog -d /var/run/precog
+end script
+
+script
+  if [ -f /etc/default/shard-v1-demo1 ]; then . /etc/default/shard-v1-demo1; fi
+  ulimit -n 100000
+  ulimit -u 40000
+  sudo -u precog /usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=/etc/precog/shard-v1-demo1.logging.xml -jar /usr/share/java/shard-v1-demo.jar --configFile /etc/precog/shard-v1-demo1.conf >> /var/log/precog/shard-v1-demo1.stdout.log 2>&1
+end script
+
+post-start script
+  echo `status shard-v1-demo1 | egrep -o '[0-9]+$' | head -n1` > /var/run/precog/shard-v1-demo1.pid
+end script
+

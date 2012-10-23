@@ -36,9 +36,15 @@ object NullProvenanceSpecs extends Specification
       }
     }
     
-    "not propagate through new" in {
+    "propagate through new" in {
       val tree = compile("new (//a + //b)")
-      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }    
+
+    "propagate through solve" in {
+      val tree = compile("solve 'foo = //a + //b 'foo")
+      tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
@@ -74,6 +80,12 @@ object NullProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    "propagate through metadescent" in {
+      val tree = compile("(//a + //b)@foo")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
     "propagate through dereference" in {
       {
         val tree = compile("(//a + //b)[42]")
@@ -89,7 +101,7 @@ object NullProvenanceSpecs extends Specification
     }
     
     "propagate through dispatch" in {
-      val tree = compile("a('b) := 'b a(//a + //b)")
+      val tree = compile("a(b) := b a(//a + //b)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -126,13 +138,13 @@ object NullProvenanceSpecs extends Specification
       {
         val tree = compile("(//a + //b) union 42")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, UnionProvenanceDifferentLength) 
+        tree.errors mustEqual Set(OperationOnUnrelatedSets) 
       }
       
       {
         val tree = compile("42 union (//a + //b)")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, UnionProvenanceDifferentLength)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     
@@ -140,13 +152,13 @@ object NullProvenanceSpecs extends Specification
       {
         val tree = compile("(//a + //b) intersect 42")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, IntersectProvenanceDifferentLength)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
         val tree = compile("42 intersect (//a + //b)")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, IntersectProvenanceDifferentLength)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }    
 
@@ -154,13 +166,13 @@ object NullProvenanceSpecs extends Specification
       {
         val tree = compile("(//a + //b) difference 42")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, DifferenceProvenanceDifferentLength)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
         val tree = compile("42 difference (//a + //b)")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, DifferenceProvenanceDifferentLength)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     
@@ -215,6 +227,20 @@ object NullProvenanceSpecs extends Specification
       
       {
         val tree = compile("42 / (//a + //b)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+    }
+    
+    "propagate through mod" in {
+      {
+        val tree = compile("(//a + //b) % 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+      
+      {
+        val tree = compile("42 % (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
