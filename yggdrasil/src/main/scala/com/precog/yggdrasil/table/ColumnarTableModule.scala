@@ -1078,7 +1078,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         
         for {
           sorts <- sortPairs
-          //_ = println("sorts: " + System.currentTimeMillis) 
+          // _ = println("sorts: " + System.currentTimeMillis) 
           groupedSubsets <- {
             val edgeAlignments = spanningGraph.edges flatMap {
               case MergeEdge(a, b) =>
@@ -1103,9 +1103,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                       //_ = println(bSorted.sortedOn)
                       //_ = println("rsorted\n" + rjson.map(_.toJsonString()).mkString("\n---\n"))
                       aligned <- Table.align(aSorted.table, aSorted.sortedOn, bSorted.table, bSorted.sortedOn)
-                      aljson <- aligned._1.slices.toStream
+                      //aljson <- aligned._1.slices.toStream
                       //_ = println("laligned\n" + aljson.map(_.toJsonString()).mkString("\n---\n"))
-                      arjson <- aligned._2.slices.toStream
+                      //arjson <- aligned._2.slices.toStream
                       //_ = println("raligned\n" + arjson.map(_.toJsonString()).mkString("\n---\n"))
                     } yield {
                       List(
@@ -1609,7 +1609,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     /* Take the distinctiveness of each node (in terms of group keys) and add it to the uber-cogrouped-all-knowing borgset */
     def borg(spanningGraph: MergeGraph, connectedSubgraph: Set[NodeSubset], requiredOrders: Map[MergeNode, Set[Seq[TicVar]]]): M[BorgResult] = {
       def assimilate(edges: Set[BorgEdge]): M[BorgResult] = {
-        //println("assimilate: edges = " + edges)
         val largestEdge = edges.maxBy(_.sharedKeys.size)
 
         //val prunedRequirements = orderingIndex.foldLeft(Map.empty[MergeNode, Set[Seq[TicVar]]]) {
@@ -1823,7 +1822,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           body(
             groupKeyForBody,
             (groupId: GroupId) => for {
-              groupIdJson <- groupKeyForBody.toJson
+              //groupIdJson <- groupKeyForBody.toJson
               groupTable <- groups.map(_(groupId))
             } yield groupTable
           )
@@ -1875,7 +1874,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       Table(Table.transformStream(composeSliceTransform(spec), slices), this.size)
     }
     
-    def force: M[Table] = this.sort(Scan(Leaf(Source), freshIdScanner), SortAscending)
+    def force: M[Table] = this.sort(Scan(Leaf(Source), freshIdScanner), SortAscending) //, unique = true)
     
     def paged(limit: Int): Table = {
       val slices2 = slices flatMap { slice =>
