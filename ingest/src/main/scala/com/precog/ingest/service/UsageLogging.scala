@@ -26,7 +26,7 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.persistence.cache._
 
 import java.util.concurrent.TimeUnit
@@ -35,17 +35,17 @@ import scalaz.Semigroup
 import com.precog.common._
 
 trait UsageLogging {
-  def tokenId: String
+  def apiKey: String
   def tracked(path: Path, count: Int)
   def tracked(path: Path, count: Int, complexity: Long)
 }
 
-class NullUsageLogging(val tokenId: String) extends UsageLogging {
+class NullUsageLogging(val apiKey: String) extends UsageLogging {
   def tracked(path: Path, count: Int) = Unit
   def tracked(path: Path, count: Int, complexity: Long) = Unit
 }
 
-class ReportGridUsageLogging(val tokenId: String) extends UsageLogging {
+class ReportGridUsageLogging(val apiKey: String) extends UsageLogging {
   def expirationPolicy = ExpirationPolicy(
     timeToIdle = Some(30), 
     timeToLive = Some(120),

@@ -24,9 +24,9 @@ import com.precog.util._
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.Extractor._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import scalaz._
 import scalaz.Ordering._

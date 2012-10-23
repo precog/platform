@@ -38,12 +38,18 @@ trait Phases {
   def checkProvenance(expr: Expr): Set[Error]
   def inferBuckets(expr: Expr): Set[Error]
   
-  def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]]
+  def findCriticalConditions(expr: Expr): Map[TicId, Set[ConditionTree]]
   def findGroups(expr: Expr): Set[GroupTree]
   
   private[quirrel] def runPhasesInSequence(tree: Expr): Set[Error] =
     Phases.foldLeft(Set[Error]()) { _ ++ _(tree) }
   
-  def Error(node: Expr, tp: ErrorType): Error
+  val Error: ErrorCompanion
+
   def showError(error: Error): String
+
+  trait ErrorCompanion {
+    def apply(node: Expr, tp: ErrorType): Error
+    def unapply(err: Error): Option[ErrorType]
+  }
 }

@@ -23,8 +23,8 @@ import table._
 import com.precog.util._
 
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import org.joda.time.DateTime
 
@@ -71,14 +71,10 @@ object CValue {
       (as.view zip bs.view) map { case (a, b) =>
         compareValues(atpe(a), btpe(b))
       } find (_ != 0) getOrElse (as.size - bs.size)
-
-    // The only safe way to compare any mix of the 3 types.
     case (a: CNumericValue[_], b: CNumericValue[_]) =>
-      compareValues(a.toCNum, b.toCNum)
-        
+      compareValues(a.toCNum, b.toCNum) // The only safe way to compare any mix of the 3 types.
     case (a: CNullValue, b: CNullValue) if a.cType == b.cType => 0
-
-    case invalid                      => sys.error("Invalid comparison for SortingKey of " + invalid)
+    case (a, b) => a.cType.typeIndex - b.cType.typeIndex
   }
 
   implicit object CValueOrder extends Order[CValue] {
@@ -97,8 +93,10 @@ sealed trait CType extends Serializable {
   def isNumeric: Boolean = false
 
   @inline 
-  private[CType] final def typeIndex = this match {
-    case CBoolean      => 0
+  private[yggdrasil] final def typeIndex = this match {
+    case CUndefined    => 0
+
+    case CBoolean      => 1
 
     case CString       => 2
     
@@ -110,13 +108,11 @@ sealed trait CType extends Serializable {
 
     case CEmptyArray   => 9
 
-    case CArrayType(_) => 10
+    case CArrayType(_) => 10 // TODO: Should this account for the element type?
 
     case CNull         => 11
 
     case CDate         => 12
-
-    case CUndefined    => 13
   }
 }
 

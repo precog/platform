@@ -21,19 +21,22 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common._
+
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary._
-import scala.collection.BitSet
+
+import org.joda.time.DateTime
+
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
 
 trait ArbitrarySlice extends ArbitraryProjectionDescriptor {
   def arbitraryBitSet(size: Int): Gen[BitSet] = {
     containerOfN[List, Boolean](size, arbitrary[Boolean]) map { BitsetColumn.bitset _ }
   }
 
-  private def fullBitSet(size: Int): BitSet = {
-    BitSet((0 until size).toSeq : _*)
-  }
+  private def fullBitSet(size: Int): BitSet = BitSetUtil.range(0, size)
 
   def genColumn(col: ColumnDescriptor, size: Int): Gen[Column] = {
     val bs = fullBitSet(size)
@@ -41,11 +44,13 @@ trait ArbitrarySlice extends ArbitraryProjectionDescriptor {
       case CString            => containerOfN[Array, String](size, arbitrary[String]) map { strs => ArrayStrColumn(bs, strs) }
       case CBoolean           => containerOfN[Array, Boolean](size, arbitrary[Boolean]) map { bools => ArrayBoolColumn(bs, bools) }
       case CLong              => containerOfN[Array, Long](size, arbitrary[Long]) map { longs => ArrayLongColumn(bs, longs) }
+      case CDate              => containerOfN[Array, Long](size, arbitrary[Long]) map { longs => ArrayDateColumn(bs, longs.map { l => new DateTime(l) }) }
       case CDouble            => containerOfN[Array, Double](size, arbitrary[Double]) map { doubles => ArrayDoubleColumn(bs, doubles) }
       case CNum               => containerOfN[List, Double](size, arbitrary[Double]) map { arr => ArrayNumColumn(bs, arr.map(v => BigDecimal(v)).toArray) }
       case CNull              => arbitraryBitSet(size) map { s => new BitsetColumn(s) with NullColumn }
       case CEmptyObject       => arbitraryBitSet(size) map { s => new BitsetColumn(s) with EmptyObjectColumn }
       case CEmptyArray        => arbitraryBitSet(size) map { s => new BitsetColumn(s) with EmptyArrayColumn }
+      case CUndefined         => Gen.value(UndefinedColumn.raw)
     }
   }
 

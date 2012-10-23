@@ -55,6 +55,8 @@ import scalaz.syntax.traverse._
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
+import TableModule._
+
 trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
   implicit def M: Monad[M]
 
@@ -80,7 +82,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
         projections = json.elements.foldLeft(projections) { 
           case (acc, jobj) => 
             val evID = EventId(0, identity.getAndIncrement)
-            routingTable.route(EventMessage(evID, Event(path, "", jobj, Map()))).foldLeft(acc) {
+            routingTable.routeEvent(EventMessage(evID, Event(path, "", jobj, Map()))).foldLeft(acc) {
               case (acc, data) =>
                 acc + (data.descriptor -> (acc.getOrElse(data.descriptor, Vector.empty[JValue]) :+ data.toJValue))
           }
@@ -129,10 +131,21 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
   }
 }
 
-trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModule[M] with TestColumnarTableModule[M] {
-  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModuleTestSupport[M] {
+  import trans._
+  import TableModule._
+
+  trait TableCompanion extends ColumnarTableCompanion {
+    def apply(slices: StreamT[M, Slice], size: Option[Long] = None) = new Table(slices, size)
+    def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = sys.error("Feature not implemented in test stub.")
+  }
+  
+  class Table(slices: StreamT[M, Slice], size: Option[Long]) extends ColumnarTable(slices, size) {
     import trans._
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false) = sys.error("Feature not implemented in test stub")
+    
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("Feature not implemented in test stub.")
+
     def load(uid: UserId, tpe: JType): M[Table] = {
       val pathsM = this.reduce {
         new CReducer[Set[Path]] {
@@ -152,24 +165,20 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
         table <- path map { 
                    case (descriptor, _) => storage.projection(descriptor) map { projection => fromJson(projection._1.data.toStream) }
                  } getOrElse {
-                   M.point(ops.empty)
+                   M.point(Table.empty)
                  }
       } yield table
     }
   }
 
   class Projection(val descriptor: ProjectionDescriptor, val data: Vector[JValue]) extends ProjectionLike {
-    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("DummyProjection doesn't support insert")
+    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("DummyProjection doesn't support insert")
+    def commit(): IO[Unit] = sys.error("DummyProjection doesn't support commit")
   }
 
   object Projection extends ProjectionCompanion {
     def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = new Projection(descriptor, data)
   }
-
-  type MemoContext = DummyMemoizationContext
-  def newMemoContext = new DummyMemoizationContext
-  
-  def table(slices: StreamT[M, Slice]) = new Table(slices)
 
   object storage extends Storage
 }

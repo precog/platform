@@ -53,6 +53,7 @@ trait BaseConfig extends Config {
   lazy val rootDir = new File(cfg[String]("precog.storage.root"))
   
   lazy val dataDir = new File(rootDir, "data")
+  lazy val archiveDir = new File(rootDir, "archive")
   lazy val cacheDir = new File(rootDir, "cache")
   lazy val scratchDir = new File(rootDir, "scratch")
 

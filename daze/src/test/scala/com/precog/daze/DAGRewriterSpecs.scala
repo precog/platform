@@ -23,9 +23,7 @@ import org.specs2.mutable._
 
 import com.precog.yggdrasil._
 
-trait DAGRewriterSpecs[M[+_]] extends Specification 
-    with Evaluator[M]
-    with TestConfigComponent[M] {
+trait DAGRewriterSpecs[M[+_]] extends Specification with EvaluatorTestSupport[M] {
 
   import dag._
   import instructions._
@@ -34,7 +32,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
     "compute identities given a relative path" in {
       val line = Line(0, "")
 
-      val input = dag.LoadLocal(line, Root(line, PushString("/numbers")))
+      val input = dag.LoadLocal(line, Root(line, CString("/numbers")))
 
       val result = rewriteDAG(true)(input)
 
@@ -43,7 +41,4 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
   }
 }
 
-object DAGRewriterSpecs extends DAGRewriterSpecs[test.YId] {
-  val M = test.YId.M
-  val coM = test.YId.M
-}
+object DAGRewriterSpecs extends DAGRewriterSpecs[test.YId] with test.YIdInstances

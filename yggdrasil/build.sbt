@@ -64,7 +64,8 @@ libraryDependencies ++= Seq(
   "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.2-SNAPSHOT" changing(),
   "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.2-SNAPSHOT" changing(),
   "com.google.guava"            %  "guava"              % "12.0",
-  "org.apfloat"                 %  "apfloat"            % "1.6.3"
+  "org.apfloat"                 %  "apfloat"            % "1.6.3",
+  "org.spire-math"              %% "spire"              % "0.2.0-M2"
 )
 
 ivyXML :=
@@ -76,8 +77,6 @@ ivyXML :=
       <exclude org="jline"/>
     </dependency>
   </dependencies>
-
-seq(assemblySettings: _*)
 
 mainClass := Some("com.precog.yggdrasil.util.YggUtils")
 

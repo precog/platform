@@ -19,8 +19,6 @@
  */
 package com.precog.yggdrasil
 
-import scala.collection.immutable.BitSet
-
 import com.precog.common.json._
 
 import com.precog.bytecode._
@@ -58,12 +56,10 @@ object Schema {
       case _ => None
     }
 
-    val indices = ctpes.foldLeft(BitSet()) {
-      case (acc, (CPath(CPathIndex(i), _*), _)) => acc+i
-      case (acc, _) => acc
-    }
-
-    val elements = indices.flatMap { i =>
+    val elements = ctpes.collect {
+      case (CPath(CPathIndex(i), _*), _) => i
+    }.toSet.flatMap {
+      (i: Int) =>
       mkType(ctpes.collect {
         case (CPath(CPathIndex(`i`), tail @ _*), ctpe) => (CPath(tail : _*), ctpe)
       }).map(i -> _)
@@ -117,8 +113,11 @@ object Schema {
     case (JObjectUnfixedT, (CPath.Identity, CEmptyObject)) => true
     case (JObjectUnfixedT, (CPath(CPathField(_), _*), _)) => true
     case (JObjectFixedT(fields), (CPath.Identity, CEmptyObject)) if fields.isEmpty => true
-    case (JObjectFixedT(fields), (CPath(CPathField(head), tail @ _*), ctpe)) =>
+
+    case (JObjectFixedT(fields), (CPath(CPathField(head), tail @ _*), ctpe)) => {
+      val fieldHead = fields.get(head)
       fields.get(head).map(includes(_, CPath(tail: _*), ctpe)).getOrElse(false)
+    }
 
     case (JArrayUnfixedT, (CPath.Identity, CEmptyArray)) => true
     case (JArrayUnfixedT, (CPath(CPathArray, _*), CArrayType(_))) => true
@@ -151,10 +150,7 @@ object Schema {
       case _ => false
     }
 
-    case JTextT => ctpes.exists {
-      case (CPath.Identity, CString) => true
-      case _ => false
-    }
+    case JTextT => ctpes.contains(CPath.Identity -> CString)
 
     case JBooleanT => ctpes.contains(CPath.Identity, CBoolean)
 

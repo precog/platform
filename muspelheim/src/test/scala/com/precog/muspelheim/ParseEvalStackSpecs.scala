@@ -21,7 +21,7 @@ package com.precog
 package muspelheim
 
 import common.Path
-import common.VectorCase
+import common.json.CPathField
 import common.kafka._
 
 import daze._
@@ -35,7 +35,6 @@ import bytecode.JType
 
 import yggdrasil._
 import yggdrasil.actor._
-import yggdrasil.memoization._
 import yggdrasil.serialization._
 import yggdrasil.table._
 import yggdrasil.util._
@@ -50,12 +49,14 @@ import akka.util.Duration
 import java.io.File
 
 import scalaz._
+import scalaz.std.anyVal._
+import scalaz.syntax.copointed._
 import scalaz.effect.IO
 
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-import com.weiglewilczek.slf4s.Logging
+import org.slf4j.LoggerFactory
 
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
@@ -64,21 +65,22 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
     with StorageModule[M]
     with MemoryDatasetConsumer[M] 
-    with IdSourceScannerModule[M]
-    with Logging {
+    with IdSourceScannerModule[M] {
+
+  protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 
   val sliceSize = 10
   
-  def controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
+  def controlTimeout = Duration(120, "seconds")      // it's just unreasonable to run tests longer than this
   
   implicit val actorSystem = ActorSystem("platformSpecsActorSystem")
 
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  type YggConfig <: DatasetConsumersConfig with IdSourceConfig
+  type YggConfig <: EvaluatorConfig with IdSourceConfig
   
-  class ParseEvalStackSpecConfig extends BaseConfig with DatasetConsumersConfig with IdSourceConfig {
-    logger.trace("Init yggConfig")
+  class ParseEvalStackSpecConfig extends BaseConfig with IdSourceConfig {
+    parseEvalLogger.trace("Init yggConfig")
     val config = Configuration parse {
       Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
     }
@@ -91,13 +93,9 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val projectionRetrievalTimeout = akka.util.Timeout(Duration(10, "seconds"))
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
+    
+    val maxSliceSize = 10
 
-    object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-
-    //TODO: Get a producer ID
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
       def nextId() = source.getAndIncrement
@@ -112,15 +110,15 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     new EvalStackSpecs {
       def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
       
-      def evalE(str: String, debug: Boolean = false) = {
-        logger.debug("Beginning evaluation of query: " + str)
+      def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
+        parseEvalLogger.debug("Beginning evaluation of query: " + str)
         val tree = compile(str)
         tree.errors must beEmpty
         val Right(dag) = decorate(emit(tree))
         withContext { ctx => 
           consumeEval("dummyUID", dag, ctx, Path.Root) match {
             case Success(result) => 
-              logger.debug("Evaluation complete for query: " + str)
+              parseEvalLogger.debug("Evaluation complete for query: " + str)
               result
             case Failure(error) => throw error
           }
@@ -128,6 +126,29 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       }
     }
   )
+  
+  "full stack rendering" should {
+    def evalTable(str: String, debug: Boolean = false): Table = {
+      import trans._
+      
+      parseEvalLogger.debug("Beginning evaluation of query: " + str)
+      val tree = compile(str)
+      tree.errors must beEmpty
+      val Right(dag) = decorate(emit(tree))
+      withContext { ctx => 
+        val tableM = eval("dummyUID", dag, ctx, Path.Root, true)
+        tableM map { _ transform DerefObjectStatic(Leaf(Source), CPathField("value")) } copoint
+      }
+    }
+    
+    "render a set of numbers interleaved by delimiters" in {
+      val stream = evalTable("//tutorial/transactions.quantity") renderJson ','
+      val strings = stream map { _.toString }
+      val str = strings.foldLeft("") { _ + _ } copoint
+      
+      str must contain(",")
+    }
+  }
   
   step {
     shutdown()
@@ -138,10 +159,15 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
   def shutdown() = ()
 }
 
+/*
 object RawJsonStackSpecs extends ParseEvalStackSpecs[Free.Trampoline] with RawJsonColumnarTableStorageModule[Free.Trampoline] {
   implicit val M = Trampoline.trampolineMonad
-  implicit val coM = Trampoline.trampolineMonad
   type YggConfig = ParseEvalStackSpecConfig
   object yggConfig extends ParseEvalStackSpecConfig
+
+  object Table extends TableCompanion {
+    implicit val geq: scalaz.Equal[Int] = intInstance
+  }
 }
+*/
 // vim: set ts=4 sw=4 et:

@@ -32,7 +32,7 @@ trait Morphism1Like {
 }
 
 object Morphism1Like {
-  def unapply(m : Morphism1Like) : Option[(Vector[String], String, Int, UnaryOperationType)] =
+  def unapply(m: Morphism1Like): Option[(Vector[String], String, Int, UnaryOperationType)] =
     Some(m.namespace, m.name, m.opcode, m.tpe)
 }
 
@@ -48,7 +48,7 @@ trait Morphism2Like {
 }
 
 object Morphism2Like {
-  def unapply(m : Morphism2Like) : Option[(Vector[String], String, Int, BinaryOperationType)] =
+  def unapply(m: Morphism2Like): Option[(Vector[String], String, Int, BinaryOperationType)] =
     Some(m.namespace, m.name, m.opcode, m.tpe)
 }
 
@@ -63,7 +63,7 @@ trait Op1Like {
 }
 
 object Op1Like {
-  def unapply(op1 : Op1Like) : Option[(Vector[String], String, Int, UnaryOperationType)] =
+  def unapply(op1: Op1Like): Option[(Vector[String], String, Int, UnaryOperationType)] =
     Some(op1.namespace, op1.name, op1.opcode, op1.tpe)
 }
 
@@ -78,7 +78,7 @@ trait Op2Like {
 }
 
 object Op2Like {
-  def unapply(op2 : Op2Like) : Option[(Vector[String], String, Int, BinaryOperationType)] =
+  def unapply(op2: Op2Like): Option[(Vector[String], String, Int, BinaryOperationType)] =
     Some(op2.namespace, op2.name, op2.opcode, op2.tpe)
 }
 
@@ -93,7 +93,7 @@ trait ReductionLike {
 }
 
 object ReductionLike {
-  def unapply(red : ReductionLike) : Option[(Vector[String], String, Int)] = Some(red.namespace, red.name, red.opcode)
+  def unapply(red: ReductionLike): Option[(Vector[String], String, Int)] = Some(red.namespace, red.name, red.opcode)
 }
 
 trait Library {

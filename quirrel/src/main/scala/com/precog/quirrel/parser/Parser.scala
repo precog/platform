@@ -78,7 +78,7 @@ trait Parser extends RegexParsers with Filters with AST {
         Let(loc, Identifier(Vector(), id), Vector(), e1, e2)
       }
 
-    | """forall\b""".r ~ ticId ~ expr ^# { (loc, _, t, e) => Forall(loc, t, e) }
+    | """solve\b""".r ~ actuals ~ expr ^# { (loc, _, t, e) => Solve(loc, t, e) }
     
     | """import\b""".r ~ importSpec ~ expr ^# { (loc, _, s, e) => Import(loc, s, e) }
     
@@ -96,21 +96,24 @@ trait Parser extends RegexParsers with Filters with AST {
     
     | "{" ~ properties ~ "}"      ^# { (loc, _, ps, _) => ObjectDef(loc, ps) }
     | "[" ~ nullableActuals ~ "]" ^# { (loc, _, as, _) => ArrayDef(loc, as) }
+    
     | expr ~ "." ~ propertyName   ^# { (loc, e, _, p) => Descent(loc, e, p) }
+    | expr ~ "@" ~ propertyName   ^# { (loc, e, _, p) => MetaDescent(loc, e, p) }
     | expr ~ "[" ~ expr ~ "]"     ^# { (loc, e1, _, e2, _) => Deref(loc, e1, e2) }
     
     | namespacedId ~ "(" ~ actuals ~ ")" ^# { (loc, id, _, as, _) => Dispatch(loc, id, as) }  
 
-    | expr ~ """where\b""".r ~ expr     ^# { (loc, e1, _, e2) => Where(loc, e1, e2) }
-    | expr ~ """with\b""".r ~ expr      ^# { (loc, e1, _, e2) => With(loc, e1, e2) }
-    | expr ~ """union\b""".r ~ expr     ^# { (loc, e1, _, e2) => Union(loc, e1, e2) }
-    | expr ~ """intersect\b""".r ~ expr ^# { (loc, e1, _, e2) => Intersect(loc, e1, e2) }
-    | expr ~ """difference\b""".r ~ expr      ^# { (loc, e1, _, e2) => Difference(loc, e1, e2) }
+    | expr ~ """where\b""".r ~ expr      ^# { (loc, e1, _, e2) => Where(loc, e1, e2) }
+    | expr ~ """with\b""".r ~ expr       ^# { (loc, e1, _, e2) => With(loc, e1, e2) }
+    | expr ~ """union\b""".r ~ expr      ^# { (loc, e1, _, e2) => Union(loc, e1, e2) }
+    | expr ~ """intersect\b""".r ~ expr  ^# { (loc, e1, _, e2) => Intersect(loc, e1, e2) }
+    | expr ~ """difference\b""".r ~ expr ^# { (loc, e1, _, e2) => Difference(loc, e1, e2) }
     
     | expr ~ "+" ~ expr ^# { (loc, e1, _, e2) => Add(loc, e1, e2) }
     | expr ~ "-" ~ expr ^# { (loc, e1, _, e2) => Sub(loc, e1, e2) }
     | expr ~ "*" ~ expr ^# { (loc, e1, _, e2) => Mul(loc, e1, e2) }
     | expr ~ "/" ~ expr ^# { (loc, e1, _, e2) => Div(loc, e1, e2) }
+    | expr ~ "%" ~ expr ^# { (loc, e1, _, e2) => Mod(loc, e1, e2) }
     
     | expr ~ "<" ~ expr  ^# { (loc, e1, _, e2) => Lt(loc, e1, e2) }
     | expr ~ "<=" ~ expr ^# { (loc, e1, _, e2) => LtEq(loc, e1, e2) }
@@ -145,8 +148,8 @@ trait Parser extends RegexParsers with Filters with AST {
   )
 
   private lazy val formals: Parser[Vector[String]] = (
-      formals ~ "," ~ ticId ^^ { (fs, _, f) => fs :+ f }
-    | ticId                 ^^ { Vector(_) }
+      formals ~ "," ~ id ^^ { (fs, _, f) => fs :+ f }
+    | id                 ^^ { Vector(_) }
   )
   
   private lazy val relations: Parser[Vector[Expr]] = (
@@ -195,18 +198,18 @@ trait Parser extends RegexParsers with Filters with AST {
 
   private lazy val nullLiteral = """null\b""".r
   
-  private lazy val keywords = "new|true|false|where|with|union|intersect|difference|neg|null|import|forall".r
+  private lazy val keywords = "new|true|false|where|with|union|intersect|difference|neg|null|import|solve".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-\))+""".r
   override val skipWhitespace = true
   
   private val precedence =
     prec(
-      Descent,
+      (Descent, MetaDescent),
       Deref,
       Comp,
       Neg,
-      (Mul, Div),
+      (Mul, Div, Mod),
       (Add, Sub),
       (Lt, LtEq, Gt, GtEq),
       (Eq, NotEq),
@@ -217,7 +220,7 @@ trait Parser extends RegexParsers with Filters with AST {
       Where,
       Relate,
       Let,
-      Forall,
+      Solve,
       Import)
       
   private def arrayDefDeref = new com.codecommit.gll.ast.Filter[Node] {

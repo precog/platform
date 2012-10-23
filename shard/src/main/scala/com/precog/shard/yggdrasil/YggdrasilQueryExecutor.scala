@@ -22,6 +22,7 @@ package shard
 package yggdrasil 
 
 import blueeyes.json.JsonAST._
+import blueeyes.json.JsonDSL
 
 import daze._
 
@@ -43,11 +44,15 @@ import com.precog.util.FilesystemFileOps
 
 import akka.actor.ActorSystem
 import akka.dispatch._
+import akka.pattern.ask
 import akka.util.duration._
 import akka.util.Duration
 import akka.util.Timeout
 
-import com.weiglewilczek.slf4s.Logging
+import org.slf4j.{LoggerFactory, MDC}
+
+import java.io.File
+import java.nio.CharBuffer
 
 import scalaz._
 import scalaz.Validation._
@@ -60,15 +65,20 @@ import org.streum.configrity.Configuration
 
 trait YggdrasilQueryExecutorConfig extends 
     BaseConfig with 
-    DatasetConsumersConfig with 
-    ProductionShardSystemConfig {
+    ProductionShardSystemConfig with
+    SystemActorStorageConfig with
+    JDBMProjectionModuleConfig with
+    BlockStoreColumnarTableModuleConfig with
+    EvaluatorConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
 }
 
 trait YggdrasilQueryExecutorComponent {
-  import blueeyes.json.xschema.Extractor
+  import blueeyes.json.serialization.Extractor
+
+  implicit def M: Monad[Future]
 
   private def wrapConfig(wrappedConfig: Configuration) = {
     new YggdrasilQueryExecutorConfig {
@@ -78,11 +88,7 @@ trait YggdrasilQueryExecutorComponent {
       val memoizationWorkDir = scratchDir
 
       val clock = blueeyes.util.Clock.System
-
-      object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-      object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+      val maxSliceSize = 10000
 
       //TODO: Get a producer ID
       val idSource = new IdSource {
@@ -92,7 +98,7 @@ trait YggdrasilQueryExecutorComponent {
     }
   }
     
-  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor = {
+  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor[Future] = {
     val yConfig = wrapConfig(config)
     
     new YggdrasilQueryExecutor with BlockStoreColumnarTableModule[Future] with JDBMProjectionModule with ProductionShardSystemActorModule {
@@ -100,61 +106,166 @@ trait YggdrasilQueryExecutorComponent {
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
       val yggConfig = yConfig
       
-      implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
-      implicit val coM = new Copointed[Future] {
-        def map[A, B](m: Future[A])(f: A => B) = m map f
+      implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
         def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
       }
 
-      class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
+      def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
+        import trans._
+        
+        StreamT.wrapEffect(
+          tableM flatMap { table =>
+            renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)))
+          }
+        )
+      }
+
+      /* def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] = {
+        import JsonDSL._
+        table.slices.uncons map { unconsed =>
+          if (unconsed.isDefined) {
+            val rendered = StreamT.unfoldM[Future, CharBuffer, Option[(Slice, StreamT[Future, Slice])]](unconsed) { 
+              case Some((head, tail)) =>
+                tail.uncons map { next =>
+                  if (next.isDefined) {
+                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",") + ","), next))
+                  } else {            
+                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",")), None))
+                  }
+                }
+    
+              case None => 
+                M.point(None)
+            }
+            
+            rendered
+            //(CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
+          } else {
+            StreamT.empty[Future, CharBuffer]
+            //CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
+          }
+        }
+      } */
+      
+      def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
+        M.point(table renderJson ',')
+
+      class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
         val accessControl = extAccessControl
       }
 
       val storage = new Storage
 
       object Projection extends JDBMProjectionCompanion {
+        private lazy val logger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.YggdrasilQueryExecutor.Projection")
+
+        private implicit val askTimeout = yggConfig.projectionRetrievalTimeout
+             
         val fileOps = FilesystemFileOps
-        def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+
+        def baseDir(descriptor: ProjectionDescriptor) = {
+          logger.trace("Finding base dir for " + descriptor)
+          val base = (storage.shardSystemActor ? FindDescriptorRoot(descriptor, true)).mapTo[IO[Option[File]]]
+          Await.result(base, yggConfig.maxEvalDuration)
+        }
+
+        def archiveDir(descriptor: ProjectionDescriptor) = {
+          logger.trace("Finding archive dir for " + descriptor)
+          val archive = (storage.shardSystemActor ? FindDescriptorArchive(descriptor)).mapTo[IO[Option[File]]]
+          Await.result(archive, yggConfig.maxEvalDuration)
+        }
       }
+
+      trait TableCompanion extends BlockStoreColumnarTableCompanion {
+        import scalaz.std.anyVal._
+        implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
+      }
+
+      object Table extends TableCompanion
     }
   }
 }
 
 trait YggdrasilQueryExecutor 
-    extends QueryExecutor
+    extends QueryExecutor[Future]
     with ParseEvalStack[Future]
     with IdSourceScannerModule[Future]
-    with SystemActorStorageModule
-    with MemoryDatasetConsumer[Future]
-    with Logging  { self =>
+    with SystemActorStorageModule { self =>
+
+  private lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.YggdrasilQueryExecutor")
 
   type YggConfig = YggdrasilQueryExecutorConfig
 
   def startup() = storage.start.onComplete {
-    case Left(error) => logger.error("Startup of actor ecosystem failed!", error)
-    case Right(_) => logger.info("Actor ecosystem started.")
+    case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
+    case Right(_) => queryLogger.info("Actor ecosystem started.")
   }
 
   def shutdown() = storage.stop.onComplete {
-    case Left(error) => logger.error("An error was encountered in actor ecosystem shutdown!", error)
-    case Right(_) => logger.info("Actor ecossytem shutdown complete.")
+    case Left(error) => queryLogger.error("An error was encountered in actor ecosystem shutdown!", error)
+    case Right(_) => queryLogger.info("Actor ecossytem shutdown complete.")
   }
 
   case class StackException(error: StackError) extends Exception(error.toString)
 
-  def execute(userUID: String, query: String, prefix: Path): Validation[EvaluationError, JArray] = {
-    logger.debug("Executing for %s: %s, prefix: %s".format(userUID, query,prefix))
+  private def applyQueryOptions(opts: QueryOptions)(table: Future[Table]): Future[Table] = {
+    import trans._
+
+    def sort(table: Future[Table]): Future[Table] = if (!opts.sortOn.isEmpty) {
+      val sortKey = ArrayConcat(opts.sortOn map { cpath =>
+        WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
+          case (inner, f @ CPathField(_)) =>
+            DerefObjectStatic(inner, f)
+          case (inner, i @ CPathIndex(_)) =>
+            DerefArrayStatic(inner, i)
+        })
+      }: _*)
+
+      table flatMap (_.sort(sortKey, opts.sortOrder))
+    } else {
+      table
+    }
+
+    def page(table: Future[Table]): Future[Table] = opts.page map { case (offset, limit) =>
+      table map (_.takeRange(offset, limit))
+    } getOrElse table
+
+    page(sort(table map (_.compact(constants.SourceValue.Single))))
+  }
+
+  def jsonChunks(table: Future[Table]): StreamT[Future, CharBuffer]
+
+  private val queryId = new java.util.concurrent.atomic.AtomicLong
+
+  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
+    val qid = queryId.getAndIncrement
+    queryLogger.info("Executing query for %s: %s, prefix: %s".format(userUID, query,prefix))
 
     import EvaluationError._
-    val solution: Validation[Throwable, Validation[EvaluationError, JArray]] = Validation.fromTryCatch {
+
+    val solution: Validation[Throwable, Validation[EvaluationError, StreamT[Future, CharBuffer]]] = Validation.fromTryCatch {
       asBytecode(query) flatMap { bytecode =>
         ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
-          (systemError _) <-: evaluateDag(userUID, dag, prefix)
+          /*(systemError _) <-: */
+          // TODO: How can jsonChunks return a Validation... or report evaluation error to user....
+          Validation.success(jsonChunks(withContext { ctx =>
+            applyQueryOptions(opts) {
+              if (queryLogger.isDebugEnabled) {
+                eval(userUID, dag, ctx, prefix, true) map {
+                  _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
+                    slice => "size: " + slice.size
+                  }
+                }
+              } else {
+                eval(userUID, dag, ctx, prefix, true)
+              }
+            }
+          }))
         }
       }
-    } 
+    }
 
-    ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, JArray]])
+    ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[Future, CharBuffer]]])
   }
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
@@ -199,16 +310,16 @@ trait YggdrasilQueryExecutor
     Future(Failure("Status not supported yet"))
   }
 
-  private def evaluateDag(userUID: String, dag: DepGraph,prefix: Path): Validation[Throwable, JArray] = {
-    withContext { ctx =>
-      logger.debug("Evaluating DAG for " + userUID)
-      val result = consumeEval(userUID, dag, ctx,prefix) map { events => logger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
-      sys.error("todo: uncomment the next line (and make it work)")
-      //ctx.release.release.unsafePerformIO
-      logger.debug("DAG evaluated to " + result)
-      result
-    }
-  }
+  // private def evaluateDag(userUID: String, dag: DepGraph,prefix: Path): Validation[Throwable, JArray] = {
+  //   withContext { ctx =>
+  //     queryLogger.debug("Evaluating DAG for " + userUID)
+  //     val result = consumeEval(userUID, dag, ctx, prefix) map { events => queryLogger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+  //     // FIXME: The next line should really handle resource cleanup. Not quite there with current MemoizationContext
+  //     //ctx.memoizationContext.release.unsafePerformIO
+  //     queryLogger.debug("DAG evaluated to " + result)
+  //     result
+  //   }
+  // }
 
   private def asBytecode(query: String): Validation[EvaluationError, Vector[Instruction]] = {
     try {
@@ -217,16 +328,18 @@ trait YggdrasilQueryExecutor
       else failure(
         UserError(
           JArray(
-            (tree.errors: Set[Error]) map {
-              case Error(loc, tp) =>
-                JObject(
-                  JField("message", JString("Errors occurred compiling your query.")) 
-                  :: JField("line", JString(loc.line))
-                  :: JField("lineNum", JNum(loc.lineNum))
-                  :: JField("colNum", JNum(loc.colNum))
-                  :: JField("detail", JString(tp.toString))
-                  :: Nil
-                )
+            (tree.errors: Set[Error]) map { err =>
+              val loc = err.loc
+              val tp = err.tp
+
+              JObject(
+                JField("message", JString("Errors occurred compiling your query.")) 
+                :: JField("line", JString(loc.line))
+                :: JField("lineNum", JNum(loc.lineNum))
+                :: JField("colNum", JNum(loc.colNum))
+                :: JField("detail", JString(tp.toString))
+                :: Nil
+              )
             } toList
           )
         )

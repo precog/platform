@@ -21,10 +21,10 @@ package com.precog.yggdrasil
 
 import scala.collection.mutable
 
-import blueeyes.json.JPath
-import blueeyes.json.JPathField
-import blueeyes.json.JPathIndex
+import blueeyes.json._
 import blueeyes.json.JsonAST._
+
+import com.precog.common.json._
 import com.precog.common.VectorCase
 
 import org.specs2.mutable.Specification
@@ -41,16 +41,29 @@ import scalaz.std.anyVal._
 
 object CValueGenerators {
   type JSchema = Seq[(JPath, CType)]
+
+  def inferSchema(data: Seq[JValue]): JSchema = {
+    if (data.isEmpty) {
+      Seq.empty
+    } else {
+      val current = data.head.flattenWithPath flatMap {
+        case (path, jv) =>
+          CType.forJValue(jv) map { ct => (path, ct) }
+      }
+      
+      (current ++ inferSchema(data.tail)).distinct
+    }
+  }
 }
 
 trait CValueGenerators extends ArbitraryBigDecimal {
   import CValueGenerators._
-
+  
   def schema(depth: Int): Gen[JSchema] = {
     if (depth <= 0) leafSchema
     else oneOf(1, 2, 3) flatMap {
       case 1 => objectSchema(depth, choose(1, 3))
-      case 2 => arraySchema(depth, choose(1, 3))
+      case 2 => arraySchema(depth, choose(1, 5))
       case 3 => leafSchema
     }
   }
@@ -97,7 +110,7 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     CEmptyArray
   )
 
-  // FIXME: Should this provide some form for CDate?
+  // FIXME: TODO Should this provide some form for CDate?
   def jvalue(ctype: CType): Gen[JValue] = ctype match {
     case CString => alphaStr map (JString(_))
     case CBoolean => arbitrary[Boolean] map (JBool(_))
@@ -126,10 +139,18 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     for {
       idCount  <- choose(1, 3) 
       dataSize <- choose(0, 20)
-      ids      <- containerOfN[Set, Identities](dataSize, containerOfN[List, Long](idCount, posNum[Long]) map { i => VectorCase(i: _*) })
+      ids      <- containerOfN[Set, List[Long]](dataSize, containerOfN[List, Long](idCount, posNum[Long]))
       values   <- containerOfN[List, Seq[(JPath, JValue)]](dataSize, Gen.sequence[List, (JPath, JValue)](jschema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
+      
+      falseDepth  <- choose(1, 3)
+      falseSchema <- schema(falseDepth)
+      falseSize   <- choose(0, 5)
+      falseIds    <- containerOfN[Set, List[Long]](falseSize, containerOfN[List, Long](idCount, posNum[Long]))
+      falseValues <- containerOfN[List, Seq[(JPath, JValue)]](falseSize, Gen.sequence[List, (JPath, JValue)](falseSchema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
+
+      falseIds2 = falseIds -- ids     // distinct ids
     } yield {
-      (idCount, (ids zip values).toStream)
+      (idCount, (ids.map(_.toArray) zip values).toStream ++ (falseIds2.map(_.toArray) zip falseValues).toStream)
     }
 
   def assemble(parts: Seq[(JPath, JValue)]): JValue = {
@@ -182,7 +203,7 @@ trait SValueGenerators extends ArbitraryBigDecimal {
     for {
       ids <- containerOfN[Set, Long](idCount, posNum[Long])
       value <- svalue(vdepth)
-    } yield (VectorCase(ids.toList: _*), value)
+    } yield (ids.toArray, value)
   }
 
   def chunk(size: Int, idCount: Int, vdepth: Int): Gen[Vector[SEvent]] = 

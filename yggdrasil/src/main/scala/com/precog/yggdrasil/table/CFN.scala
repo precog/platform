@@ -25,6 +25,7 @@ import com.precog.bytecode.JType
 
 class CF1(f: Column => Option[Column]) { //extends (Column => Option[Column]) {
   def apply(c: Column): Option[Column] = f(c)
+  def apply(cv: CValue): Option[Column] = f(Column.const(cv))
 
   // Do not use PartialFunction.compose or PartialFunction.andThen for composition,
   // because they will fail out with MatchError.
@@ -55,7 +56,7 @@ class CF2P(f: PartialFunction[(Column, Column), Column]) extends CF2(Function.un
 trait CScanner {
   type A
   def init: A
-  def scan(a: A, col: Column, range: Range): (A, Option[Column])
+  def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column])
 }
 
 trait CReducer[A] {

@@ -26,7 +26,7 @@ import com.precog.util._
 import com.precog.yggdrasil.metadata._
 
 import blueeyes.json._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import org.specs2.mutable.Specification
 import org.specs2.specification.{Fragments, Scope, Step}
@@ -53,6 +53,7 @@ class MetadataStorageSpec extends Specification {
   val output = inputMetadata
   
   val base = IOUtils.createTmpDir("MetadataStorageSpec").unsafePerformIO
+  val archive = IOUtils.createTmpDir("MetadataStorageSpec-archive").unsafePerformIO
 
   def cleanupBaseDir = Step {
     IOUtils.recursiveDelete(base)
@@ -71,7 +72,7 @@ class MetadataStorageSpec extends Specification {
 
   trait metadataStore extends Scope {
     val fileOps = TestFileOps
-    val ms = FileMetadataStorage.load(base, fileOps).unsafePerformIO
+    val ms = FileMetadataStorage.load(base, archive, fileOps).unsafePerformIO
   }
 
   "metadata storage" should {

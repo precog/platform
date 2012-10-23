@@ -28,6 +28,8 @@ import bytecode.Op1Like
 import bytecode.Op2Like
 import bytecode.ReductionLike
 
+import common.json._
+
 import yggdrasil._
 import yggdrasil.table._
 
@@ -58,7 +60,9 @@ object GenOpcode {
   val defaultReductionOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
 }
 
-trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
+trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransSpecModule {
+  import trans._
+
   lazy val libMorphism1 = _libMorphism1
   lazy val libMorphism2 = _libMorphism2
   lazy val lib1 = _lib1
@@ -107,9 +111,19 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
     def extract(res: Result): Table
   }
 
-  class WrapArrayReductionImpl(val r: ReductionImpl) extends ReductionImpl {
+  class WrapArrayReductionImpl(val r: ReductionImpl, val idx: Option[Int]) extends ReductionImpl {
     type Result = r.Result
-    def reducer = r.reducer
+    def reducer = new CReducer[Result] {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        idx match {
+          case Some(jdx) =>
+            val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
+            r.reducer.reduce(cols0, range)
+          case None => 
+            r.reducer.reduce(cols, range)
+        }
+      }
+    }
     implicit def monoid = r.monoid
     def extract(res: Result): Table = {
       r.extract(res).transform(trans.WrapArray(trans.Leaf(trans.Source)))
@@ -121,15 +135,23 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
     val namespace = r.namespace
   }
 
-  def coalesce(reductions: NonEmptyList[ReductionImpl]): ReductionImpl = {
-    def rec(reductions: List[ReductionImpl], acc: ReductionImpl): ReductionImpl = {
+  def coalesce(reductions: List[(ReductionImpl, Option[Int])]): ReductionImpl = {
+    def rec(reductions: List[(ReductionImpl, Option[Int])], acc: ReductionImpl): ReductionImpl = {
       reductions match {
-        case x :: xs =>
-          new ReductionImpl {
+        case (x, idx) :: xs =>
+          val impl = new ReductionImpl {
             type Result = (x.Result, acc.Result) 
+
             val reducer = new CReducer[Result] {
               def reduce(cols: JType => Set[Column], range: Range): Result = {
-                (x.reducer.reduce(cols, range), acc.reducer.reduce(cols, range))
+                idx match {
+                  case Some(jdx) =>
+                    val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
+                    val (a, b) = (x.reducer.reduce(cols0, range), acc.reducer.reduce(cols, range))
+                    (a, b)
+                  case None => 
+                    (x.reducer.reduce(cols, range), acc.reducer.reduce(cols, range))
+                }
               }
             }
 
@@ -158,11 +180,14 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
             ) 
           }
 
+          rec(xs, impl)
+
         case Nil => acc
       }
     }
-
-    rec(reductions.tail, new WrapArrayReductionImpl(reductions.head))
+    
+    val (impl1, idx1) = reductions.head
+    rec(reductions.tail, new WrapArrayReductionImpl(impl1, idx1))
   }
 
   type Morphism1 <: Morphism1Impl
@@ -172,5 +197,486 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
   type Reduction <: ReductionImpl
 }
 
-trait StdLib[M[+_]] extends InfixLib[M] with ReductionLib[M] with TimeLib[M] with MathLib[M] with StringLib[M] with StatsLib[M] 
+trait StdLib[M[+_]] extends InfixLib[M] with ReductionLib[M] with TimeLib[M]
+with MathLib[M] with StringLib[M] with StatsLib[M]
 
+object StdLib {
+  import java.lang.Double.{isNaN, isInfinite}
+
+  def doubleIsDefined(n: Double) = !(isNaN(n) || isInfinite(n))
+
+  object StrFrom {
+    class S(c: StrColumn, defined: String => Boolean, f: String => String)
+    extends Map1Column(c) with StrColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
+    class SS(
+      c1: StrColumn, c2: StrColumn, defined: (String, String) => Boolean,
+      f: (String, String) => String
+    ) extends Map2Column(c1, c2) with StrColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+
+    class SD(
+      c1: StrColumn, c2: DoubleColumn, defined: (String, Double) => Boolean,
+      f: (String, Double) => String
+    ) extends Map2Column(c1, c2) with StrColumn {
+      override def isDefinedAt(row: Int) = super.isDefinedAt(row) &&
+        c1(row) != null && doubleIsDefined(c2(row)) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+
+    class SL(
+      c1: StrColumn, c2: LongColumn, defined: (String, Long) => Boolean,
+      f: (String, Long) => String
+    ) extends Map2Column(c1, c2) with StrColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && c1(row) != null && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+
+    class SN(
+      c1: StrColumn, c2: NumColumn, defined: (String, BigDecimal) => Boolean,
+      f: (String, BigDecimal) => String
+    ) extends Map2Column(c1, c2) with StrColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && c1(row) != null && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  }
+
+  object LongFrom {
+    class L(
+      c: LongColumn, defined: Long => Boolean, f: Long => Long
+    ) extends Map1Column(c) with LongColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
+    class S(
+      c: StrColumn, defined: String => Boolean, f: String => Long
+    ) extends Map1Column(c) with LongColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
+    class LL(
+      c1: LongColumn, c2: LongColumn, defined: (Long, Long) => Boolean,
+      f: (Long, Long) => Long
+    ) extends Map2Column(c1, c2) with LongColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+
+    class SS(
+      c1: StrColumn, c2: StrColumn, defined: (String, String) => Boolean,
+      f: (String, String) => Long
+    ) extends Map2Column(c1, c2) with LongColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+
+    class SD(
+      c1: StrColumn, c2: DoubleColumn, defined: (String, Double) => Boolean,
+      f: (String, Double) => Long
+    ) extends Map2Column(c1, c2) with LongColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+
+    class SL(
+      c1: StrColumn, c2: LongColumn, defined: (String, Long) => Boolean,
+      f: (String, Long) => Long
+    ) extends Map2Column(c1, c2) with LongColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+
+    class SN(
+      c1: StrColumn, c2: NumColumn, defined: (String, BigDecimal) => Boolean,
+      f: (String, BigDecimal) => Long
+    ) extends Map2Column(c1, c2) with LongColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  }
+
+  object DoubleFrom {
+    class D(
+      c: DoubleColumn, defined: Double => Boolean, f: Double => Double
+    ) extends Map1Column(c) with DoubleColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row)) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
+    class L(
+      c: LongColumn, defined: Double => Boolean, f: Double => Double
+    ) extends Map1Column(c) with DoubleColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row).toDouble) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
+    class N(
+      c: NumColumn, defined: Double => Boolean, f: Double => Double
+    ) extends Map1Column(c) with DoubleColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row).toDouble) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c(row).toDouble)
+    }
+
+    class DD(
+      c1: DoubleColumn, c2: DoubleColumn, defined: (Double, Double) => Boolean,
+      f: (Double, Double) => Double
+    ) extends Map2Column(c1, c2) with DoubleColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row)) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  
+    class DL(
+      c1: DoubleColumn, c2: LongColumn, defined: (Double, Double) => Boolean,
+      f: (Double, Double) => Double
+    ) extends Map2Column(c1, c2) with DoubleColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row).toDouble) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c1(row), c2(row).toDouble)
+    }
+  
+    class DN(
+      c1: DoubleColumn, c2: NumColumn, defined: (Double, Double) => Boolean,
+      f: (Double, Double) => Double
+    ) extends Map2Column(c1, c2) with DoubleColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row).toDouble) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c1(row), c2(row).toDouble)
+    }
+  
+    class LD(
+      c1: LongColumn, c2: DoubleColumn, defined: (Double, Double) => Boolean,
+      f: (Double, Double) => Double
+    ) extends Map2Column(c1, c2) with DoubleColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row).toDouble, c2(row)) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c1(row).toDouble, c2(row))
+    }
+  
+    class LL(
+      c1: LongColumn, c2: LongColumn, defined: (Double, Double) => Boolean,
+      f: (Double, Double) => Double
+    ) extends Map2Column(c1, c2) with DoubleColumn {
+      override def isDefinedAt(row: Int) = super.isDefinedAt(row) &&
+        defined(c1(row).toDouble, c2(row).toDouble) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c1(row).toDouble, c2(row).toDouble)
+    }
+
+    class LN(
+      c1: LongColumn, c2: NumColumn, defined: (Double, Double) => Boolean,
+      f: (Double, Double) => Double
+    ) extends Map2Column(c1, c2) with DoubleColumn {
+      override def isDefinedAt(row: Int) = super.isDefinedAt(row) &&
+        defined(c1(row).toDouble, c2(row).toDouble) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c1(row).toDouble, c2(row).toDouble)
+    }
+  
+    class ND(
+      c1: NumColumn, c2: DoubleColumn, defined: (Double, Double) => Boolean,
+      f: (Double, Double) => Double
+    ) extends Map2Column(c1, c2) with DoubleColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row).toDouble, c2(row)) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c1(row).toDouble, c2(row))
+    }
+  
+    class NL(
+      c1: NumColumn, c2: LongColumn, defined: (Double, Double) => Boolean,
+      f: (Double, Double) => Double
+    ) extends Map2Column(c1, c2) with DoubleColumn {
+      override def isDefinedAt(row: Int) = super.isDefinedAt(row) &&
+        defined(c1(row).toDouble, c2(row).toDouble) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c1(row).toDouble, c2(row).toDouble)
+    }
+  
+    class NN(
+      c1: NumColumn, c2: NumColumn, defined: (Double, Double) => Boolean,
+      f: (Double, Double) => Double
+    ) extends Map2Column(c1, c2) with DoubleColumn {
+      override def isDefinedAt(row: Int) = super.isDefinedAt(row) &&
+        defined(c1(row).toDouble, c2(row).toDouble) && doubleIsDefined(apply(row))
+
+      def apply(row: Int) = f(c1(row).toDouble, c2(row).toDouble)
+    }
+  }
+
+  object NumFrom {
+    class N(
+      c: NumColumn, defined: BigDecimal => Boolean, f: BigDecimal => BigDecimal
+    ) extends Map1Column(c) with NumColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
+    class DD(
+      c1: DoubleColumn, c2: DoubleColumn,
+      defined: (BigDecimal, BigDecimal) => Boolean,
+      f: (BigDecimal, BigDecimal) => BigDecimal
+    ) extends Map2Column(c1, c2) with NumColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(BigDecimal(c1(row)), BigDecimal(c2(row)))
+
+      def apply(row: Int) = f(BigDecimal(c1(row)), BigDecimal(c2(row)))
+    }
+  
+    class DL(
+      c1: DoubleColumn, c2: LongColumn,
+      defined: (BigDecimal, BigDecimal) => Boolean,
+      f: (BigDecimal, BigDecimal) => BigDecimal
+    ) extends Map2Column(c1, c2) with NumColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(BigDecimal(c1(row)), BigDecimal(c2(row)))
+
+      def apply(row: Int) = f(BigDecimal(c1(row)), BigDecimal(c2(row)))
+    }
+  
+    class DN(
+      c1: DoubleColumn, c2: NumColumn,
+      defined: (BigDecimal, BigDecimal) => Boolean,
+      f: (BigDecimal, BigDecimal) => BigDecimal
+    ) extends Map2Column(c1, c2) with NumColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(BigDecimal(c1(row)), c2(row))
+
+      def apply(row: Int) = f(BigDecimal(c1(row)), c2(row))
+    }
+  
+    class LD(
+      c1: LongColumn, c2: DoubleColumn,
+      defined: (BigDecimal, BigDecimal) => Boolean,
+      f: (BigDecimal, BigDecimal) => BigDecimal
+    ) extends Map2Column(c1, c2) with NumColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(BigDecimal(c1(row)), BigDecimal(c2(row)))
+
+      def apply(row: Int) = f(BigDecimal(c1(row)), BigDecimal(c2(row)))
+    }
+  
+    class LL(
+      c1: LongColumn, c2: LongColumn,
+      defined: (BigDecimal, BigDecimal) => Boolean,
+      f: (BigDecimal, BigDecimal) => BigDecimal
+    ) extends Map2Column(c1, c2) with NumColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(BigDecimal(c1(row)), BigDecimal(c2(row)))
+
+      def apply(row: Int) = f(BigDecimal(c1(row)), BigDecimal(c2(row).toDouble))
+    }
+  
+    class LN(
+      c1: LongColumn, c2: NumColumn,
+      defined: (BigDecimal, BigDecimal) => Boolean,
+      f: (BigDecimal, BigDecimal) => BigDecimal
+    ) extends Map2Column(c1, c2) with NumColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(BigDecimal(c1(row)), c2(row))
+
+      def apply(row: Int) = f(BigDecimal(c1(row)), c2(row))
+    }
+  
+    class ND(
+      c1: NumColumn, c2: DoubleColumn,
+      defined: (BigDecimal, BigDecimal) => Boolean,
+      f: (BigDecimal, BigDecimal) => BigDecimal
+    ) extends Map2Column(c1, c2) with NumColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), BigDecimal(c2(row)))
+
+      def apply(row: Int) = f(c1(row), BigDecimal(c2(row)))
+    }
+  
+    class NL(
+      c1: NumColumn, c2: LongColumn,
+      defined: (BigDecimal, BigDecimal) => Boolean,
+      f: (BigDecimal, BigDecimal) => BigDecimal
+    ) extends Map2Column(c1, c2) with NumColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), BigDecimal(c2(row)))
+
+      def apply(row: Int) = f(c1(row), BigDecimal(c2(row)))
+    }
+  
+    class NN(
+      c1: NumColumn, c2: NumColumn,
+      defined: (BigDecimal, BigDecimal) => Boolean,
+      f: (BigDecimal, BigDecimal) => BigDecimal
+    ) extends Map2Column(c1, c2) with NumColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  }
+
+  object BoolFrom {
+    class B(
+      c: BoolColumn, f: Boolean => Boolean
+    ) extends Map1Column(c) with BoolColumn {
+      def apply(row: Int) = f(c(row))
+    }
+
+    class BB(
+      c1: BoolColumn, c2: BoolColumn, f: (Boolean, Boolean) => Boolean
+    ) extends Map2Column(c1, c2) with BoolColumn {
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+
+    class S(
+      c: StrColumn, defined: String => Boolean, f: String => Boolean
+    ) extends Map1Column(c) with BoolColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
+    class SS(
+      c1: StrColumn, c2: StrColumn, defined: (String, String) => Boolean,
+      f: (String, String) => Boolean
+    ) extends Map2Column(c1, c2) with BoolColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  
+    class DD(
+      c1: DoubleColumn, c2: DoubleColumn, defined: (Double, Double) => Boolean,
+      f: (Double, Double) => Boolean
+    ) extends Map2Column(c1, c2) with BoolColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  
+    class DL(
+      c1: DoubleColumn, c2: LongColumn, defined: (Double, Long) => Boolean,
+      f: (Double, Long) => Boolean
+    ) extends Map2Column(c1, c2) with BoolColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  
+    class DN(
+      c1: DoubleColumn, c2: NumColumn,
+      defined: (Double, BigDecimal) => Boolean,
+      f: (Double, BigDecimal) => Boolean
+    ) extends Map2Column(c1, c2) with BoolColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  
+    class LD(
+      c1: LongColumn, c2: DoubleColumn, defined: (Long, Double) => Boolean,
+      f: (Long, Double) => Boolean
+    ) extends Map2Column(c1, c2) with BoolColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  
+    class LL(
+      c1: LongColumn, c2: LongColumn, defined: (Long, Long) => Boolean,
+      f: (Long, Long) => Boolean
+    ) extends Map2Column(c1, c2) with BoolColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  
+    class LN(
+      c1: LongColumn, c2: NumColumn, defined: (Long, BigDecimal) => Boolean,
+      f: (Long, BigDecimal) => Boolean
+    ) extends Map2Column(c1, c2) with BoolColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  
+    class ND(
+      c1: NumColumn, c2: DoubleColumn,
+      defined: (BigDecimal, Double) => Boolean,
+      f: (BigDecimal, Double) => Boolean
+    ) extends Map2Column(c1, c2) with BoolColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  
+    class NL(
+      c1: NumColumn, c2: LongColumn, defined: (BigDecimal, Long) => Boolean,
+      f: (BigDecimal, Long) => Boolean
+    ) extends Map2Column(c1, c2) with BoolColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  
+    class NN(
+      c1: NumColumn, c2: NumColumn,
+      defined: (BigDecimal, BigDecimal) => Boolean,
+      f: (BigDecimal, BigDecimal) => Boolean
+    ) extends Map2Column(c1, c2) with BoolColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+  }
+}

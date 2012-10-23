@@ -20,13 +20,15 @@
 package com.precog.yggdrasil
 package jdbm3
 
-import com.precog.util.ByteBufferPool
+import com.precog.util.{ ByteBufferPool, RawBitSet }
 
 import org.joda.time.DateTime
 
 import java.nio.ByteBuffer
 
-import scala.collection.immutable.BitSet
+import com.precog.util.BitSet
+import com.precog.util.BitSetUtil
+import com.precog.util.BitSetUtil.Implicits._
 
 import org.specs2._
 import org.specs2.mutable.Specification
@@ -39,17 +41,35 @@ class CodecSpec extends Specification with ScalaCheck {
   implicit lazy val arbBigDecimal: Arbitrary[BigDecimal] = Arbitrary(
     Gen.chooseNum(Double.MinValue / 2, Double.MaxValue / 2) map (BigDecimal(_)))
 
-  implicit def arbBitSet = Arbitrary(Gen.listOf(Gen.choose(0, 500)) map (BitSet(_: _*)))
+  //implicit def arbBitSet = Arbitrary(Gen.listOf(Gen.choose(0, 500)) map (BitSet(_: _*)))
+  implicit def arbBitSet = Arbitrary(Gen.listOf(Gen.choose(0, 500)) map BitSetUtil.create)
 
   implicit def arbSparseBitSet: Arbitrary[(Codec[BitSet], BitSet)] = {
     Arbitrary(Gen.chooseNum(0, 500) flatMap { size =>
       val codec = Codec.SparseBitSetCodec(size)
       if (size > 0) {
         Gen.listOf(Gen.choose(0, size - 1)) map { bits =>
-          (codec, BitSet(bits: _*))
+          //(codec, BitSet(bits: _*))
+          (codec, BitSetUtil.create(bits))
         }
       } else {
-        Gen.value((codec, BitSet()))
+        Gen.value((codec, new BitSet()))
+      }
+    })
+  }
+
+  implicit def arbSparseRawBitSet: Arbitrary[(Codec[RawBitSet], RawBitSet)] = {
+    Arbitrary(Gen.chooseNum(0, 500) flatMap { size =>
+      val codec = Codec.SparseRawBitSetCodec(size)
+      if (size > 0) {
+        Gen.listOf(Gen.choose(0, size - 1)) map { bits =>
+          //(codec, BitSet(bits: _*))
+          val bs = RawBitSet.create(size)
+          bits foreach { RawBitSet.set(bs, _) }
+          (codec, bs)
+        }
+      } else {
+        Gen.value((codec, RawBitSet.create(0)))
       }
     })
   }
@@ -92,7 +112,7 @@ class CodecSpec extends Specification with ScalaCheck {
   }
 
   "LongCodec" should surviveRoundTrip(Codec.LongCodec)
-  "PackedLongCodec" should surviveRoundTrip(Codec.LongCodec)
+  "PackedLongCodec" should surviveRoundTrip(Codec.PackedLongCodec)
   "BooleanCodec" should surviveRoundTrip(Codec.BooleanCodec)
   "DoubleCodec" should surviveRoundTrip(Codec.DoubleCodec)
   "Utf8Codec" should surviveRoundTrip(Codec.Utf8Codec)
@@ -107,6 +127,20 @@ class CodecSpec extends Specification with ScalaCheck {
       }
       "with small buffers" in {
         check { (sparse: (Codec[BitSet], BitSet)) =>
+          surviveHardRoundTrip(sparse._2)(sparse._1)
+        }
+      }
+    }
+  }
+  "SparseRawBitSet" should {
+    "survive round-trip" in {
+      "with large buffers" in {
+        check { (sparse: (Codec[RawBitSet], RawBitSet)) =>
+          surviveEasyRoundTrip(sparse._2)(sparse._1)
+        }
+      }
+      "with small buffers" in {
+        check { (sparse: (Codec[RawBitSet], RawBitSet)) =>
           surviveHardRoundTrip(sparse._2)(sparse._1)
         }
       }

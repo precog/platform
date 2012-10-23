@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 package actor
 
-import leveldb._
 import metadata._
 import com.precog.common._
 
@@ -37,7 +36,7 @@ import blueeyes.persistence.cache.Cache
 import blueeyes.persistence.cache.CacheSettings
 import blueeyes.persistence.cache.ExpirationPolicy
 
-import com.weiglewilczek.slf4s._
+import org.slf4j._
 
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -48,7 +47,10 @@ import scala.collection.mutable
 import scalaz._
 import scalaz.Validation._
 import scalaz.effect._
+import scalaz.std.list._
+import scalaz.syntax.show._
 import scalaz.syntax.std.option._
+import scalaz.syntax.traverse._
 
 //////////////
 // MESSAGES //
@@ -57,22 +59,30 @@ import scalaz.syntax.std.option._
 // To simplify routing, tag all messages for the ProjectionLike actor
 sealed trait ShardProjectionAction
 
-case class AcquireProjection(descriptor: ProjectionDescriptor) extends ShardProjectionAction
+case class AcquireProjection(descriptor: ProjectionDescriptor, lockForArchive: Boolean) extends ShardProjectionAction
 case class ReleaseProjection(descriptor: ProjectionDescriptor) extends ShardProjectionAction
 
-case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row]) extends ShardProjectionAction
+trait ProjectionUpdate extends ShardProjectionAction {
+  def descriptor: ProjectionDescriptor
+}
+
+case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row]) extends ProjectionUpdate
 object ProjectionInsert {
   case class Row(id: EventId, values: Seq[CValue], metadata: Seq[Set[Metadata]])
 }
 
-case class BatchInsert(rows: Seq[ProjectionInsert.Row], replyTo: ActorRef)
+case class ProjectionArchive(descriptor: ProjectionDescriptor, id: ArchiveId) extends ProjectionUpdate
+
 case class InsertMetadata(descriptor: ProjectionDescriptor, metadata: ColumnMetadata)
+case class ArchiveMetadata(descriptor: ProjectionDescriptor)
 case object InsertNoMetadata
 
 // projection retrieval result messages
 sealed trait ProjectionResult
 case class ProjectionAcquired(projection: ProjectionLike) extends ProjectionResult
 case class ProjectionError(descriptor: ProjectionDescriptor, error: Throwable) extends ProjectionResult
+
+case class LockedForArchive(descriptor: ProjectionDescriptor) 
 
 trait ProjectionsActorModule extends ProjectionModule {
   ////////////
@@ -82,155 +92,246 @@ trait ProjectionsActorModule extends ProjectionModule {
   /**
    * The responsibilities of
    */
-  class ProjectionsActor extends Actor with Logging { self =>
-    private val projectionCacheSettings = CacheSettings(
-      expirationPolicy = ExpirationPolicy(Some(2), Some(2), TimeUnit.MINUTES), 
-      evict = (descriptor: ProjectionDescriptor, projection: Projection) => Projection.close(projection).unsafePerformIO
-    )
+  class ProjectionsActor extends Actor { self =>
+    private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionsActor")
 
-    // Cache control map that stores reference counts for projection descriptors managed by the cache
-    private val outstandingReferences = mutable.Map.empty[ProjectionDescriptor, Int]
-
-    // Cache for active projections
-    private val projections = Cache.concurrentWithCheckedEviction[ProjectionDescriptor, Projection](projectionCacheSettings) {
-      (descriptor, _) => outstandingReferences.get(descriptor) forall { _ == 0 }
-    }
-
+    case class AcquisitionRequest(requestor: ActorRef, lockForArchive: Boolean) 
+    case class AcquisitionState(archiveLock: Boolean, count: Int, queue: List[AcquisitionRequest])
+    
+    private val acquisitionState = mutable.Map.empty[ProjectionDescriptor, AcquisitionState] 
+    
     def receive = {
       case Status =>
         sender ! status
 
-      // Increment the outstanding reference count for the specified descriptor
-      // and return the reference if available.
-      case AcquireProjection(descriptor) =>
-        logger.debug("Acquiring projection for " + descriptor)
-        val mySender = sender
+      case AcquireProjection(descriptor, lockForArchive) => 
+        val io = acquisitionState.get(descriptor) match {
+          case None =>
+            logger.debug("Fresh acquisition of " + descriptor.shows + (if(lockForArchive) " (archive)" else ""))
+            acquisitionState(descriptor) = AcquisitionState(lockForArchive, 1, Nil)
+            if (lockForArchive) archive(sender, descriptor) else acquired(sender, descriptor)
+            
+          case Some(s @ AcquisitionState(false, count0, Nil)) if !lockForArchive =>
+            logger.debug("Non-exclusive acquisition (%d prior) of %s".format(count0, descriptor.shows))
+            acquisitionState(descriptor) = s.copy(count = count0+1)
+            acquired(sender, descriptor)
+            
+          case Some(s @ AcquisitionState(_, _, queue0)) =>
+            logger.warn("Queueing due to exclusive lock on " + descriptor.shows)
+            IO(acquisitionState(descriptor) = s.copy(queue = AcquisitionRequest(sender, lockForArchive) :: queue0))
+        } 
 
-        cacheLookup(descriptor) map { p =>
-          reserved(p.descriptor)
-          mySender ! ProjectionAcquired(p)
-        } except {
-          error => IO(mySender ! ProjectionError(descriptor, error))
-        } unsafePerformIO
-      
-      // Decrement the outstanding reference count for the specified descriptor
-      case ReleaseProjection(descriptor) =>
-        logger.debug("Releasing projection for " + descriptor)
-        released(descriptor)
-      
-      case ProjectionInsert(descriptor, inserts) =>
+        io.unsafePerformIO
+
+      case ReleaseProjection(descriptor) => 
+        val io: IO[Any] = acquisitionState.get(descriptor) match {
+          case None =>
+            IO {
+              logger.warn("Extraneous request to release projection descriptor " + descriptor.shows + 
+                          "; no outstanding acquisitions for this descriptor recorded.")
+            }
+                        
+          case Some(s @ AcquisitionState(_, 1, Nil)) =>
+            IO {
+              logger.debug("Release of last acquisition of " + descriptor.shows)
+              acquisitionState -= descriptor
+            }
+          
+          case Some(s @ AcquisitionState(_, 1, queue)) =>
+            queue.reverse.span(!_.lockForArchive) match {
+              case (Nil, excl :: rest) =>
+                logger.debug("Dequeued exclusive archive lock request for " + descriptor.shows + " after release")
+                acquisitionState(descriptor) = AcquisitionState(true, 1, rest)
+                archive(excl.requestor, descriptor)
+
+              case (nonExcl, excl) =>
+                logger.debug("Dequeued non-exclusive acquisition of " + descriptor.shows + " after release")
+                acquisitionState(descriptor) = AcquisitionState(false, nonExcl.size, excl)
+                (nonExcl map { req => acquired(req.requestor, descriptor) }).sequence[IO, Unit]
+            }
+            
+          case Some(s @ AcquisitionState(_, count0, _)) =>
+            IO {
+              logger.debug("Non-exclusive release of %s, count now %d".format(descriptor.shows, count0 - 1))
+              acquisitionState(descriptor) = s.copy(count = count0-1)
+            }
+        }
+
+        io.unsafePerformIO
+
+      case ProjectionInsert(descriptor, rows) => 
         val coordinator = sender
-        logger.debug(coordinator + " is inserting into projection for " + descriptor)
-
-        cacheLookup(descriptor) map { p =>
-          logger.debug("Reserving " + descriptor)
-          reserved(p.descriptor)
-          // Spawn a new short-lived insert actor for the projection and send a batch insert
-          // request to it so that any IO involved doesn't block queries from obtaining projection
-          // references. This could alternately be a single actor, but this design conforms more closely
-          // to 'error kernel' or 'let it crash' style.
-          context.actorOf(Props(new ProjectionInsertActor(p))) ! BatchInsert(inserts, coordinator)
-        } except {
-          error => IO(coordinator ! ProjectionError(descriptor, error))
-        } unsafePerformIO
+        logger.trace(coordinator + " is inserting into projection " + descriptor.shows)
+        
+        val insertActor = context.actorOf(Props(new ProjectionInsertActor(rows, coordinator)))
+        self.tell(AcquireProjection(descriptor, false), insertActor)
+      
+      case ProjectionArchive(descriptor, archive) => 
+        val coordinator = sender
+        logger.info(coordinator + " is archiving projection " + descriptor.shows)
+        
+        val archiveActor = context.actorOf(Props(new ProjectionArchiveActor(coordinator)))
+        self.tell(AcquireProjection(descriptor, true), archiveActor)
     }
 
     override def postStop(): Unit = {
-      if (projections.size > 0) {
-        logger.info("Stopping remaining (cached) projections: " + projections.size)
-        projections.foreach { case (_,projection) => Projection.close(projection).except { t: Throwable => logger.error("Error closing " + projection, t); IO(()) }.unsafePerformIO }
+      if (openProjections.size > 0) {
+        logger.info("Stopping remaining (cached) projections: " + openProjections.size)
+        openProjections.foreach { case (_,(projection,_)) => Projection.close(projection).except { t: Throwable => logger.error("Error closing " + projection, t); IO(()) }.unsafePerformIO }
       }
 
       logger.info("Stopped ProjectionsActor")
     }
 
-    protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JNum(projections.size)) :: 
-                                                                  JField("outstandingReferences", JNum(outstandingReferences.size)) :: Nil)) :: Nil)
+    protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JNum(openProjections.size)) :: 
+                                                                  JField("outstandingReferences", JNum(acquisitionState.size)) :: Nil)) :: Nil)
 
-    private def cacheLookup(descriptor: ProjectionDescriptor): IO[Projection] = {
-      projections.get(descriptor) map { IO(_) } getOrElse {
-        for (p <- Projection.open(descriptor)) yield {
-          // funkiness due to putIfAbsent semantics of returning Some(v) only if k already exists in the map
-          projections.putIfAbsent(descriptor, p) getOrElse p 
+    val maxOpenProjections = 1000
+    private val openProjections = mutable.Map.empty[ProjectionDescriptor, (Projection, Long)]
+                             
+    private def evictProjection(descriptor: ProjectionDescriptor, projection: Projection): IO[Unit] = {
+      logger.debug("Evicting " + descriptor.shows)
+      openProjections -= descriptor
+      Projection.close(projection)
+    }
+
+    private def archive(sender: ActorRef, descriptor: ProjectionDescriptor)(implicit self: ActorRef): IO[Unit] = {
+      IO(openProjections.get(descriptor)) flatMap {
+        case Some((projection, _)) =>
+          for {
+            _ <- evictProjection(descriptor, projection)
+          } yield {
+            sender ! LockedForArchive(descriptor)
+          }
+
+        case None => 
+          IO {
+            sender ! LockedForArchive(descriptor)
+          }
+      }
+    }
+
+    private def evictExcessProjections: IO[Unit] = {
+      val overage = openProjections.size - maxOpenProjections
+      if (overage >= 0) {
+        logger.debug("Evicting " + overage + " projections")
+        // attempt to "evict" some unused projections to get us back under the limit
+        val (retained, unused) = openProjections.partition { case (d, _) => acquisitionState.contains(d) }
+        val toEvict = unused.toList.sortBy(_._2._2).take(overage + 1)
+
+        if ((openProjections.size - toEvict.size) > maxOpenProjections) {
+          logger.warn("Unable to evict sufficient projections to get under open projection limit (currently %d)".format(openProjections.size))
         }
+
+        toEvict.map({ case (d, (p, _)) => evictProjection(d, p) }).sequence.map(_ => ())
+      } else {
+        IO(())
       }
     }
 
-    private def reserved(descriptor: ProjectionDescriptor): Unit = {
-      val current = outstandingReferences.getOrElse(descriptor, 0)
-      outstandingReferences += (descriptor -> (current + 1))
+    private def acquired(sender: ActorRef, descriptor: ProjectionDescriptor)(implicit self: ActorRef) : IO[Unit] = {
+      IO(openProjections.get(descriptor)) flatMap { 
+        case Some((projection, _)) => 
+          IO { 
+            openProjections += (descriptor -> (projection, System.currentTimeMillis)) 
+            projection
+          }
+          
+        case None => 
+          for {
+            _ <- evictExcessProjections
+            p <- Projection.open(descriptor)
+            _ <- IO { openProjections += (descriptor -> (p, System.currentTimeMillis)) }
+          } yield p
+      } map { p =>
+        sender ! ProjectionAcquired(p)
+      } except {
+        error => IO(sender ! ProjectionError(descriptor, error))
+      }
     }
+  }
 
-    private def released(descriptor: ProjectionDescriptor): Unit = {
-      outstandingReferences.get(descriptor) match {
-        case Some(current) if current > 1 => 
-          outstandingReferences += (descriptor -> (current - 1))
+  
+  /**
+   * A short-lived worker actor intended to asynchronously and safely perform
+   * an insert on a projection. Replies to the sender of ingest messages when
+   * it is done with an insert.
+   */
+  class ProjectionInsertActor(rows: Seq[ProjectionInsert.Row], replyTo: ActorRef) extends Actor {
+    private val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionInsertActor")
 
-        case Some(current) if current == 1 => 
-          outstandingReferences -= descriptor
-
-        case None =>
-          logger.warn("Extraneous request to release reference to projection descriptor " + descriptor + 
-                      "; no outstanding references for this descriptor recorded.")
+    @tailrec
+    private def runInsert(projection: ProjectionLike, rows: Seq[ProjectionInsert.Row]) {
+      if (rows.nonEmpty) {
+        val row = rows.head
+        projection.insert(Array(row.id.uid), row.values)
+        runInsert(projection, rows.tail)
       }
     }
 
-    @inline @tailrec private def releaseAll(descriptors: Iterator[ProjectionDescriptor]): Unit = {
-      if (descriptors.hasNext) {
-        released(descriptors.next())
-        releaseAll(descriptors)
+    def receive = {
+      case ProjectionAcquired(projection) => { 
+        logger.debug("Inserting " + rows.size + " rows into " + projection)
+        
+        val startTime = System.currentTimeMillis
+
+        val insertRun: IO[Unit] = for {
+          _ <- IO { MDC.put("projection", projection.descriptor.shows) }
+          _ <- IO { runInsert(projection, rows) }
+          _ <- projection.commit()
+        } yield {
+          logger.debug("Insertion of %d rows in %d ms".format(rows.size, System.currentTimeMillis - startTime))          
+          replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
+        }
+
+        insertRun.except {
+          t: Throwable => IO { logger.error("Error during insert, aborting batch", t) }
+        }.ensuring {
+          IO { MDC.clear() }
+        }.unsafePerformIO
+
+        sender ! ReleaseProjection(projection.descriptor)
+
+        self ! PoisonPill
+      }
+      
+      case err: ProjectionError => {
+        replyTo ! err
+        self ! PoisonPill
       }
     }
   }
 
   /**
    * A short-lived worker actor intended to asynchronously and safely perform
-   * an insert on a projection. Replies to the sender of ingest messages when
-   * it is done with an insert.
+   * an archival on a projection. Replies to the sender of ingest messages when
+   * the archival is complete.
    */
-  class ProjectionInsertActor(projection: Projection) extends Actor with Logging {
-    override def preStart(): Unit = {
-      logger.debug("Preparing for insert on " + projection)
-    }
-    
-    import ProjectionInsert.Row
+  class ProjectionArchiveActor(replyTo: ActorRef) extends Actor {
+    private val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionArchiveActor")
 
     def receive = {
-      case BatchInsert(rows, replyTo) =>
-        logger.debug("Inserting " + rows.size + " rows into " + projection)
-        val insertOK = insertAll(rows)
-        sender  ! ReleaseProjection(projection.descriptor)
-
-        if (insertOK) {
-          // Notify the coordinator of the completeion of the insert of this projection batch,
-          // along with a patch for the associated metadata. This patch will be combined with the
-          // other patches for the *ingest* batch (the block of messages retrieved from kafka)
-          // and the result will be sent on to the metadata actor when the batch is complete.
-          replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
+      case LockedForArchive(descriptor) => { 
+        logger.debug("Archiving " + descriptor)
+        
+        try {
+          Projection.archive(descriptor).unsafePerformIO 
+          replyTo ! ArchiveMetadata(descriptor)
+        } catch {
+          case t: Throwable => logger.error("Error during archive on %s".format(descriptor), t)
         }
 
-        self    ! PoisonPill
-    }
+        sender ! ReleaseProjection(descriptor)
 
-    private def insertAll(batch: Seq[Row]): Boolean = {
-      try {
-        @tailrec def step(iter: Iterator[Row]) {
-          if (iter.hasNext) {
-            val Row(eventId, values, _) = iter.next
-            projection.insert(Vector1(eventId.uid), values).unsafePerformIO
-            step(iter)
-          }
-        }
-
-        step(batch.iterator)
-        true
-      } catch {
-        case t: Throwable => logger.error("Error during insert, aborting batch", t); false
+        self ! PoisonPill
+      }
+      
+      case err: ProjectionError => {
+        replyTo ! err
+        self ! PoisonPill
       }
     }
   }
 }
-
-
 
 // vim: set ts=4 sw=4 et:

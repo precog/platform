@@ -44,60 +44,70 @@ case class ProjectionData(descriptor: ProjectionDescriptor, values: Seq[CValue],
   }
 }
 
+case class ArchiveData(descriptor: ProjectionDescriptor)
+
 trait RoutingTable {
-  def route(msg: EventMessage): Seq[ProjectionData]
+  def routeEvent(msg: EventMessage): Seq[ProjectionData]
+  
+  def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ArchiveData]
 
-  def batchMessages(events: Iterable[IngestMessage]): Seq[ProjectionInsert] = {
+  def batchMessages(events: Iterable[IngestMessage], descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ProjectionUpdate] = {
     import ProjectionInsert.Row
-
-    val actions = mutable.Map.empty[ProjectionDescriptor, Seq[Row]]
-
-    @inline @tailrec
-    def update(eventId: EventId, updates: Iterator[ProjectionData]): Unit = {
-      if (updates.hasNext) {
-        val ProjectionData(descriptor, values, metadata) = updates.next()
-        val insert = Row(eventId, values, metadata)
-        
-        actions += (descriptor -> (actions.getOrElse(descriptor, Vector.empty) :+ insert))
-        update(eventId, updates)
-      } 
-    }
-
-    @inline @tailrec
-    def build(events: Iterator[IngestMessage]): Unit = {
-      if (events.hasNext) {
-        events.next() match {
-          case em @ EventMessage(eventId, _) => update(eventId, route(em).iterator)
-        }
-
-        build(events)
+    
+    val updates = events.flatMap {
+      case em @ EventMessage(eventId, _) => routeEvent(em).map {
+        case ProjectionData(descriptor, values, metadata) => (descriptor, Row(eventId, values, metadata)) 
+      }
+      
+      case am @ ArchiveMessage(archiveId, _) => routeArchive(am, descriptorMap).map { 
+        case ArchiveData(descriptor) => (descriptor, archiveId)
       }
     }
-
-    build(events.iterator);
-    actions.map({ case (descriptor, rows) => ProjectionInsert(descriptor, rows) })(collection.breakOut)
+    
+    val grouped = updates.groupBy(_._1).mapValues(_.map(_._2))
+    
+    // Group consecutive inserts into atomic ProjectionInsert messages for batching, but split at any archive requests
+    val revBatched = grouped.flatMap {
+      case (desc, updates) => updates.foldLeft(List.empty[ProjectionUpdate]) {
+        case (rest, id : ArchiveId) => ProjectionArchive(desc, id) :: rest
+        case (ProjectionInsert(_, inserts) :: rest, insert : Row) => ProjectionInsert(desc, insert +: inserts) :: rest
+        case (rest, insert : Row) => ProjectionInsert(desc, Seq(insert)) :: rest
+      }
+    }
+    
+    revBatched.map {
+      case ProjectionInsert(desc, inserts) => ProjectionInsert(desc, inserts.reverse)
+      case archive => archive
+    }.toSeq.reverse
   }
 }
 
 
 class SingleColumnProjectionRoutingTable extends RoutingTable {
-  import blueeyes.json._
-
-  final def route(msg: EventMessage): List[ProjectionData] = {
+  final def routeEvent(msg: EventMessage): Seq[ProjectionData] = {
     msg.event.data.flattenWithPath map { 
-      case (selector, value) => toProjectionData(msg, selector, value)
+      case (selector, value) => toProjectionData(msg, CPath(selector), value)
     }
   }
 
+  final def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ArchiveData] = {
+    (for {
+      desc <- descriptorMap.get(msg.archive.path).flatten 
+    } yield ArchiveData(desc))(collection.breakOut)
+  }
+  
   @inline
-  private final def toProjectionData(msg: EventMessage, selector: JPath, value: JValue): ProjectionData = {
-    val authorities = Set.empty + msg.event.tokenId
-    val colDesc = ColumnDescriptor(msg.event.path, CPath(selector), CType.forJValue(value).get, Authorities(authorities))
+  private final def toProjectionData(msg: EventMessage, selector: CPath, value: JValue): ProjectionData = {
+    val authorities = Set.empty + msg.event.apiKey
+    val colDesc = ColumnDescriptor(msg.event.path, selector, CType.forJValue(value).get, Authorities(authorities))
 
     val projDesc = ProjectionDescriptor(1, List(colDesc))
 
     val values = Vector1(CType.toCValue(value))
-    val metadata = msg.event.metadata.get(selector).getOrElse(Set.empty).asInstanceOf[Set[Metadata]] :: Nil
+    val metadata: List[Set[Metadata]] = CPathUtils.cPathToJPaths(selector, values.head) map {
+      case (path, _) => 
+        msg.event.metadata.get(path).getOrElse(Set()).asInstanceOf[Set[Metadata]]       // and now I hate my life...
+    }
 
     ProjectionData(projDesc, values, metadata)
   }

@@ -30,7 +30,7 @@ import akka.dispatch.Future
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.BlueEyesServiceBuilder
-import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
+import blueeyes.core.data.{ BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk }
 import blueeyes.health.metrics.{eternity}
 
 import org.streum.configrity.Configuration
@@ -38,7 +38,7 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
 
-case class ShardState(queryExecutor: QueryExecutor, tokenManager: TokenManager[Future], accessControl: AccessControl[Future])
+case class ShardState(queryExecutor: QueryExecutor[Future], apiKeyManager: APIKeyManager[Future], accessControl: AccessControl[Future])
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
@@ -48,14 +48,15 @@ trait ShardService extends
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
+  import BijectionsChunkQueryResult._
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
   implicit def M: Monad[Future]
 
-  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]): QueryExecutor
+  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]): QueryExecutor[Future]
 
-  def tokenManagerFactory(config: Configuration): TokenManager[Future]
+  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
 
   val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {
@@ -67,11 +68,11 @@ trait ShardService extends
           logger.info("Using config: " + config)
           logger.info("Security config = " + config.detach("security"))
 
-          val tokenManager = tokenManagerFactory(config.detach("security"))
+          val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
 
-          logger.trace("tokenManager loaded")
+          logger.trace("apiKeyManager loaded")
 
-          val accessControl = new TokenManagerAccessControl(tokenManager)
+          val accessControl = new APIKeyManagerAccessControl(apiKeyManager)
 
           logger.trace("accessControl loaded")
           
@@ -82,7 +83,7 @@ trait ShardService extends
           queryExecutor.startup.map { _ =>
             ShardState(
               queryExecutor,
-              tokenManager,
+              apiKeyManager,
               accessControl
             )
           }
@@ -92,12 +93,14 @@ trait ShardService extends
             path("/actors/status") {
                 get(new ActorStatusHandler(state.queryExecutor))
             }
-          } ~ jsonp[ByteChunk] {
-            token(state.tokenManager) {
-              dataPath("vfs") {
+          } ~ jsonpcb[QueryResult] {
+            apiKey(state.apiKeyManager) {
+              dataPath("analytics/fs") {
                 query {
                   get(new QueryServiceHandler(state.queryExecutor))
-                } ~ 
+                }
+              } ~
+              dataPath("meta/fs") {
                 get(new BrowseServiceHandler(state.queryExecutor, state.accessControl))
               }
             } ~ path("actors/status") {
@@ -105,7 +108,15 @@ trait ShardService extends
             }
           }
         } ->
-        shutdown { state => Future[Option[Stoppable]]( None ) }
+        shutdown { state =>
+          for {
+            shardShutdown <- state.queryExecutor.shutdown()
+            _             <- state.apiKeyManager.close()
+          } yield {
+            logger.info("Shard system clean shutdown: " + shardShutdown)            
+            Option.empty[Stoppable]
+          }
+        }
       }
     }
   }

@@ -28,7 +28,6 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.metadata._
-import com.precog.yggdrasil.memoization._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 
@@ -54,11 +53,13 @@ object ShardTestInit extends App with JDBMProjectionModule with SystemActorStora
   val dir = new File("./data") 
   dir.mkdirs
 
-  class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig
+  class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig with JDBMProjectionModuleConfig {
+    val maxSliceSize = config[Int]("precog.jdbm.maxSliceSize", 50000)
+  }
 
   val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
 
-  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO
+  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
   val actorSystem = ActorSystem("shard-test-init")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -72,6 +73,7 @@ object ShardTestInit extends App with JDBMProjectionModule with SystemActorStora
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
     def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+    def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
   }
 
   def usage() {

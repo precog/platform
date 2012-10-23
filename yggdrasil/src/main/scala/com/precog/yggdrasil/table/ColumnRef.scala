@@ -38,6 +38,3 @@ object ColumnRef {
 
   implicit val ordering: scala.math.Ordering[ColumnRef]  = order.toScalaOrdering
 }
-
-
-// vim: set ts=4 sw=4 et:

@@ -23,12 +23,13 @@ package daze
 import scala.collection.mutable
 
 import com.precog.util.IdGen
+import com.precog.yggdrasil.CString
 
 trait JoinOptimizer extends DAGTransform {
   import dag._
   import instructions.{ DerefObject, Eq, JoinObject, Line, PushString, WrapObject }
 
-  def optimize(graph: DepGraph, idGen: IdGen = IdGen): DepGraph = {
+  def optimizeJoins(graph: DepGraph, idGen: IdGen = IdGen): DepGraph = {
     
     def determinedBy(determinee: DepGraph, determiner: DepGraph): Boolean = {
       
@@ -74,11 +75,9 @@ trait JoinOptimizer extends DAGTransform {
             val (eqLHS, eqRHS, liftedLHS, liftedRHS) =
               if (determinedBy(lhs, eqA)) (eqA, eqB, liftedA, liftedB) else(eqB, eqA, liftedB, liftedA) 
  
-            Sort(
               Join(loc1, op, ValueSort(sortId),
                 liftRewrite(lhs, eqLHS, liftedLHS),
-                liftRewrite(rhs, eqRHS, liftedRHS)),
-              Vector(0 until j.identities.length: _*))
+                liftRewrite(rhs, eqRHS, liftedRHS))
           }
 
           case Join(loc1, op, IdentitySort, lhs, rhs)
@@ -99,10 +98,10 @@ trait JoinOptimizer extends DAGTransform {
             Join(_, Eq, CrossLeftSort | CrossRightSort,
               Join(_, DerefObject, CrossLeftSort,
                 eqLHS,
-                Root(_, PushString(sortFieldLHS))),
+                Root(_, CString(sortFieldLHS))),
               Join(_, DerefObject, CrossLeftSort,
                 eqRHS,
-                Root(_, PushString(sortFieldRHS))))) => {
+                Root(_, CString(sortFieldRHS))))) => {
                   
             val sortId = idGen.nextInt()
             
@@ -110,9 +109,9 @@ trait JoinOptimizer extends DAGTransform {
               SortBy(
                 Join(loc, JoinObject, IdentitySort,
                   Join(loc, WrapObject, CrossLeftSort,
-                    Root(loc, PushString("key")),
-                    Join(loc, DerefObject, CrossLeftSort, graph, Root(loc, PushString(sortField)))),
-                  Join(loc, WrapObject, CrossLeftSort, Root(loc, PushString("value")), graph)),
+                    Root(loc, CString("key")),
+                    Join(loc, DerefObject, CrossLeftSort, graph, Root(loc, CString(sortField)))),
+                  Join(loc, WrapObject, CrossLeftSort, Root(loc, CString("value")), graph)),
                 "key", "value", sortId) 
             }
             

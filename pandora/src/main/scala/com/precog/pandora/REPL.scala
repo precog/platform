@@ -39,7 +39,6 @@ import com.precog.common.security._
 import yggdrasil._
 import yggdrasil.actor._
 import yggdrasil.jdbm3._
-import yggdrasil.memoization._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
@@ -91,7 +90,7 @@ trait REPL
     def compile(oldTree: Expr): Option[Expr] = {
       bindRoot(oldTree, oldTree)
       
-      val tree = rewriteForall(shakeTree(oldTree))
+      val tree = shakeTree(oldTree)
       val strs = for (error <- tree.errors) yield showError(error)
       
       if (!tree.errors.isEmpty) {
@@ -132,7 +131,7 @@ trait REPL
       
       case PrintTree(tree) => {
         bindRoot(tree, tree)
-        val tree2 = rewriteForall(shakeTree(tree))
+        val tree2 = shakeTree(tree)
         
         out.println()
         out.println(prettyPrint(tree2))
@@ -238,8 +237,10 @@ object Console extends App {
   val controlTimeout = Duration(120, "seconds")
   class REPLConfig(dataDir: Option[String]) extends 
       BaseConfig with 
-      DatasetConsumersConfig with 
-      StandaloneShardSystemConfig {
+      EvaluatorConfig with
+      StandaloneShardSystemConfig with
+      BlockStoreColumnarTableModuleConfig with
+      JDBMProjectionModuleConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
     val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
 
@@ -251,11 +252,8 @@ object Console extends App {
     val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
-
-    object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
-    object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+    
+    val maxSliceSize = 10000
 
     //TODO: Get a producer ID
     val idSource = new IdSource {
@@ -268,16 +266,23 @@ object Console extends App {
     new REPLConfig(dataDir)
   }
 
-  val repl: IO[scalaz.Validation[blueeyes.json.xschema.Extractor.Error, Lifecycle]] = for {
+  val repl: IO[scalaz.Validation[blueeyes.json.serialization.Extractor.Error, Lifecycle]] = for {
     replConfig <- loadConfig(args.headOption) 
-    fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, FilesystemFileOps)
+    fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, replConfig.archiveDir, FilesystemFileOps)
   } yield {
-      scalaz.Success[blueeyes.json.xschema.Extractor.Error, Lifecycle](new REPL 
+      scalaz.Success[blueeyes.json.serialization.Extractor.Error, Lifecycle](new REPL 
           with Lifecycle 
           with BlockStoreColumnarTableModule[Future]
           with JDBMProjectionModule
           with SystemActorStorageModule
           with StandaloneShardSystemActorModule { self =>
+
+        trait TableCompanion extends BlockStoreColumnarTableCompanion {
+          import scalaz.std.anyVal._
+          implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
+        }
+
+        object Table extends TableCompanion
 
         val actorSystem = ActorSystem("replActorSystem")
         implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -285,9 +290,7 @@ object Console extends App {
         type YggConfig = REPLConfig
         val yggConfig = replConfig
 
-        implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
-        implicit val coM = new Copointed[Future] {
-          def map[A, B](m: Future[A])(f: A => B) = m map f
+        implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
           def copoint[A](m: Future[A]) = Await.result(m, yggConfig.maxEvalDuration)
         }
 
@@ -300,6 +303,7 @@ object Console extends App {
         object Projection extends JDBMProjectionCompanion {
           val fileOps = FilesystemFileOps
           def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+          def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
         }
 
         def startup = IO { Await.result(storage.start(), controlTimeout) }

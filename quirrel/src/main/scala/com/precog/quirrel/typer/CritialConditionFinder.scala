@@ -24,10 +24,10 @@ trait CriticalConditionFinder extends parser.AST with Binder {
   import Utils._
   import ast._
   
-  override def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = {
+  override def findCriticalConditions(expr: Expr): Map[TicId, Set[ConditionTree]] = {
     import condition._
     
-    def loop(root: Let, expr: Expr, currentWhere: Option[Expr]): Map[String, Set[ConditionTree]] = expr match {
+    def loop(root: Solve, expr: Expr, currentWhere: Option[Expr]): Map[TicId, Set[ConditionTree]] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
       
       case Import(_, _, child) => loop(root, child, currentWhere)
@@ -42,7 +42,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       }
       
       case t @ TicVar(_, id) => t.binding match {
-        case LetBinding(`root`) => currentWhere map { where => Map(id -> Set(Condition(where): ConditionTree)) } getOrElse Map()
+        case SolveBinding(`root`) => currentWhere map { where => Map(id -> Set(Condition(where): ConditionTree)) } getOrElse Map()
         case _ => Map()
       }
       
@@ -63,6 +63,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       
       case Descent(_, child, _) => loop(root, child, currentWhere)
       
+      case MetaDescent(_, child, _) => loop(root, child, currentWhere)
+      
       case Deref(loc, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
@@ -72,7 +74,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
         
         val fromDef = d.binding match {
           case LetBinding(e) => loop(root, e.left, currentWhere)
-          case _ => Map[String, Set[ConditionTree]]()
+          case _ => Map[TicId, Set[ConditionTree]]()
         }
         
         val back = merge(merged, fromDef)
@@ -115,6 +117,9 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       case Div(_, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
+      case Mod(_, left, right) =>
+        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+      
       case Lt(_, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
@@ -146,11 +151,60 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       case Paren(_, child) => loop(root, child, currentWhere)
     }
     
-    expr match {
-      case root @ Let(_, _, _, left, _) => {
-        val wheres = loop(root, left, None)
+    def loopConstraint(root: Solve)(expr: Expr): Map[TicId, Set[ConditionTree]] = {
+      def listVars(expr: Expr): Set[TicId] = expr match {
+        case Let(_, _, _, left, right) => listVars(left) ++ listVars(right)
+        case Solve(_, _, _) => Set()
+        case Import(_, _, child) => listVars(child)
+        case Relate(_, from, to, in) => listVars(from) ++ listVars(to) ++ listVars(in)
+        case tv @ TicVar(_, name) if tv.binding == FreeBinding(root) => Set(name)
+        case TicVar(_, _) => Set()
+        case StrLit(_, _) => Set()
+        case NumLit(_, _) => Set()
+        case BoolLit(_, _) => Set()
+        case NullLit(_) => Set()
+        case ObjectDef(_, props) => props map { _._2 } map listVars reduceOption { _ ++ _ } getOrElse Set()
+        case ArrayDef(_, values) => values map listVars reduceOption { _ ++ _ } getOrElse Set()
+        case Descent(_, child, _) => listVars(child)
+        case Dispatch(_, _, actuals) => actuals map listVars reduceOption { _ ++ _ } getOrElse Set()
+        case Where(_, left, right) => listVars(left) ++ listVars(right)
+        case With(_, left, right) => listVars(left) ++ listVars(right)
+        case Union(_, left, right) => listVars(left) ++ listVars(right)
+        case Intersect(_, left, right) => listVars(left) ++ listVars(right)
+        case Difference(_, left, right) => listVars(left) ++ listVars(right)
+        case Add(_, left, right) => listVars(left) ++ listVars(right)
+        case Sub(_, left, right) => listVars(left) ++ listVars(right)
+        case Mul(_, left, right) => listVars(left) ++ listVars(right)
+        case Div(_, left, right) => listVars(left) ++ listVars(right)
+        case Mod(_, left, right) => listVars(left) ++ listVars(right)
+        case Lt(_, left, right) => listVars(left) ++ listVars(right)
+        case LtEq(_, left, right) => listVars(left) ++ listVars(right)
+        case Gt(_, left, right) => listVars(left) ++ listVars(right)
+        case GtEq(_, left, right) => listVars(left) ++ listVars(right)
+        case Eq(_, left, right) => listVars(left) ++ listVars(right)
+        case NotEq(_, left, right) => listVars(left) ++ listVars(right)
+        case And(_, left, right) => listVars(left) ++ listVars(right)
+        case Or(_, left, right) => listVars(left) ++ listVars(right)
+        case Comp(_, child) => listVars(child)
+        case Neg(_, child) => listVars(child)
+        case Paren(_, child) => listVars(child)
+      }
+      
+      expr match {
+        case tv @ TicVar(_, _) if tv.binding == FreeBinding(root) =>
+          Map()
         
-        wheres map {
+        case _ =>
+          Map(listVars(expr).toSeq map { _ -> Set[ConditionTree](Condition(expr)) }: _*)
+      }
+    }
+    
+    expr match {
+      case root @ Solve(_, constraints, left) => {
+        val wheres = loop(root, left, None)
+        val constraintTrees = constraints map loopConstraint(root) reduceOption { merge(_, _) } getOrElse Map[TicId, Set[ConditionTree]]()
+        
+        merge(wheres, constraintTrees) map {
           case (key, value) => {
             val result = runAtLevels(value) { e => splitConj(e) filter referencesTicVar(root) }
             key -> result
@@ -178,7 +232,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
     case e => Set(e)
   }
   
-  private def referencesTicVar(root: Let)(expr: Expr): Boolean = expr match {
+  private def referencesTicVar(root: Solve)(expr: Expr): Boolean = expr match {
     case Let(_, _, _, _, right) => referencesTicVar(root)(right)
     
     case New(_, child) => referencesTicVar(root)(child)
@@ -187,7 +241,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       referencesTicVar(root)(from) || referencesTicVar(root)(to) || referencesTicVar(root)(in)
     
     case t @ TicVar(_, _) => t.binding match {
-      case LetBinding(`root`) => true
+      case SolveBinding(`root`) => true
+      case FreeBinding(`root`) => true
       case _ => false
     }
     
@@ -198,6 +253,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
     case ArrayDef(_, values) => values exists referencesTicVar(root)
     
     case Descent(_, child, _) => referencesTicVar(root)(child)
+    
+    case MetaDescent(_, child, _) => referencesTicVar(root)(child)
     
     case Deref(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     
@@ -228,6 +285,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
     case Mul(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     
     case Div(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
+    
+    case Mod(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     
     case Lt(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     

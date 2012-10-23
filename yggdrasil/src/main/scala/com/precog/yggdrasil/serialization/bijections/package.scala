@@ -32,6 +32,7 @@ import scala.collection.generic.CanBuildFrom
 package object bijections {
   private val UTF8 = java.nio.charset.Charset.forName("UTF-8")
 
+/*
   implicit object id2ab extends Bijection[Identities, Array[Byte]] {
     def apply(id : Identities) = id.foldLeft(ByteBuffer.allocate(8 * id.size))((b, id) => b.putLong(id)).array
     def unapply(ab : Array[Byte]) = {
@@ -43,6 +44,7 @@ package object bijections {
       VectorCase.fromSeq(read(Vector.empty[Long]))
     }
   }
+  */
 
   implicit object booltoab extends Bijection[Boolean, Array[Byte]] {
     def apply(b : Boolean) = ByteBuffer.allocate(1).put(if (b) (0x1: Byte) else (0x0: Byte)).array

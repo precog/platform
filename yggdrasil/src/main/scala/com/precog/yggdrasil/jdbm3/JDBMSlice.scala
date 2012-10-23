@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package jdbm3
 
 import com.precog.common.json._
-import com.weiglewilczek.slf4s.Logging
+import org.slf4j.LoggerFactory
 
 import org.joda.time.DateTime
 
@@ -34,45 +34,59 @@ import com.precog.yggdrasil.serialization.bijections._
 
 import scala.collection.JavaConverters._
 
+import blueeyes.json.JPath
+
+import scala.annotation.tailrec
 import JDBMProjection._
 
-/**
- * A slice built from a JDBMProjection with a backing array of key/value pairs
- *
- * @param source A source iterator of Map.Entry[Key,Array[Byte]] pairs, positioned at the first element of the slice
- * @param size How many entries to retrieve in this slice
- */
-trait JDBMSlice[Key] extends Slice with Logging {
-  protected def source: Iterator[java.util.Map.Entry[Key,Array[Byte]]]
-  protected def requestedSize: Int
+object JDBMSlice {
+  private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.jdbm3.JDBMSlice")
 
-  protected def keyColumns: Array[(ColumnRef, ArrayColumn[_])]
-  protected def valColumns: Array[(ColumnRef, ArrayColumn[_])]
+  def load(size: Int, source: () => Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]], keyDecoder: ColumnDecoder, valDecoder: ColumnDecoder): (Array[Byte], Array[Byte], Int) = {
+    var firstKey: Array[Byte] = null.asInstanceOf[Array[Byte]]
+    var lastKey: Array[Byte]  = null.asInstanceOf[Array[Byte]]
 
-  def columnDecoder: ColumnDecoder
+    @tailrec
+    def consumeRows(source: Iterator[java.util.Map.Entry[Array[Byte], Array[Byte]]], row: Int): Int = {
+      if (source.hasNext) {
+        val entry = source.next
+        val rowKey = entry.getKey
+        if (row == 0) { firstKey = rowKey }
+        lastKey = rowKey
 
-  // This method is responsible for loading the data from the key at the given row,
-  // most likely into one or more of the key columns defined above
-  protected def loadRowFromKey(row: Int, key: Key): Unit
+        keyDecoder.decodeToRow(row, rowKey)
+        valDecoder.decodeToRow(row, entry.getValue)
 
-  private var row = 0
-
-  protected def load() {
-    source.take(requestedSize).foreach {
-      entry => {
-        loadRowFromKey(row, entry.getKey)
-        columnDecoder.decodeToRow(row, entry.getValue)
-        row += 1
+        consumeRows(source, row + 1)
+      } else {
+        row
       }
     }
+    
+    val rows = {
+      // FIXME: Looping here is a blatantly poor way to work around ConcurrentModificationExceptions
+      // From the Javadoc for CME, the exception is an indication of a bug
+      var finalCount = -1
+      var tries = 0
+      while (tries < JDBMProjection.MAX_SPINS && finalCount == -1) {
+        try {
+          finalCount = consumeRows(source().take(size), 0)
+        } catch {
+          case t: Throwable =>
+            logger.warn("Error during block read, retrying")
+        }
+        tries += 1
+      }
+      if (finalCount == -1) {
+        throw new VicciniException("Block read failed with too many concurrent mods.")
+      } else {
+        finalCount
+      }
+    }
+
+    (firstKey, lastKey, rows)
   }
 
-  def size = row
-
-  def columns: Map[ColumnRef, Column] = keyColumns.++(valColumns)(collection.breakOut)
-}
-
-object JDBMSlice {
   def columnFor(prefix: CPath, sliceSize: Int)(ref: ColumnRef): (ColumnRef, ArrayColumn[_]) =
     (ref.copy(selector = (prefix \ ref.selector)), (ref.ctype match {
       case CString      => ArrayStrColumn.empty(sliceSize)

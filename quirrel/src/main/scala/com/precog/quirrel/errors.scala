@@ -28,7 +28,10 @@ trait Errors extends Phases {
 trait RawErrors extends Errors with Phases {
   type Error = ErrorType
   
-  override def Error(node: Expr, tp: ErrorType): Error = tp
+  override val Error: ErrorCompanion = new ErrorCompanion {
+    def apply(expr: Expr, tp: ErrorType) = tp
+    def unapply(tp: ErrorType) = Some(tp)
+  }
   
   def showError(error: Error) = error.toString
   
@@ -44,15 +47,18 @@ trait LineErrors extends Errors with Phases with parser.AST {
   
   def showError(error: Error) = error.loc.formatError(ErrorPattern format error.tp)
   
-  override def Error(node: Expr, tp: ErrorType) = Error(node.loc, tp)
+  override val Error: ErrorCompanion = new ErrorCompanion {
+    def apply(expr: Expr, tp: ErrorType): Error = new Error(expr.loc, tp)
+    def unapply(error: Error): Option[ErrorType] = Some(error.tp)
+  }
   
   override def isWarning(error: Error) = error match {
-    case Error(_, UnusedLetBinding(_)) => true
-    case Error(_, UnableToSolveCriticalCondition(_)) => true
+    case Error(UnusedLetBinding(_)) => true
+    case Error(UnableToSolveCriticalCondition(_)) => true
     case _ => false
   }
   
-  case class Error(loc: LineStream, tp: ErrorType)
+  class Error(val loc: LineStream, val tp: ErrorType)
 }
 
 
@@ -67,7 +73,7 @@ case class MultiplyDefinedTicVariable(name: TicId) extends ErrorType {
 }
 
 case class UndefinedFunction(name: Identifier) extends ErrorType {
-  override def toString = "undefined function: %s".format(name)
+  override def toString = "undefined name: %s".format(name)
 }
 
 case object OperationOnUnrelatedSets extends ErrorType {
@@ -102,17 +108,21 @@ case class UnspecifiedRequiredParams(missing: Seq[String]) extends ErrorType {
   override def toString = "unconstrained parameters on function invoked without specification: " + (missing mkString ", ")
 }
 
-case object SetFunctionAppliedToSet extends ErrorType {
-  override def toString = "cannot apply a set function to another set"
-}
-
 case object FunctionArgsInapplicable extends ErrorType {
   override def toString = "cannot apply function to specified arguments"
+}
+
+case object SolveLackingFreeVariables extends ErrorType {
+  override def toString = "nothing to solve"
 }
 
 // intended to be a warning
 case class UnusedLetBinding(id: Identifier) extends ErrorType {
   override def toString = "binding '%s' defined but not referenced in scope".format(id)
+}
+
+case class UnusedFormalBinding(id: Identifier) extends ErrorType {
+  override def toString = "parameter '%s' defined but not referenced in scope".format(id)
 }
 
 case class UnusedTicVariable(id: TicId) extends ErrorType {
@@ -126,6 +136,10 @@ case class UnableToSolveCriticalCondition(id: String) extends ErrorType {
 
 case class UnableToDetermineDefiningSet(id: String) extends ErrorType {
   override def toString = "unable to solve defining set for function parameter %s".format(id)
+}
+
+case object ConstraintsWithinInnerScope extends ErrorType {
+  override def toString = "cannot solve group set for constraints within a nested solve"
 }
 
 case object GroupSetInvolvingMultipleParameters extends ErrorType {

@@ -22,10 +22,11 @@ package ragnarok
 
 import common.Path
 
-import daze.{ Evaluator, EvaluatorConfig, IdSourceScannerModule }
+import daze.{ Evaluator, EvaluatorConfig }
 
 import yggdrasil.{ StorageModule, BaseConfig, IdSource }
 import yggdrasil.{ Identities, SValue, SEvent }
+import yggdrasil.util._
 import yggdrasil.serialization._
 
 import muspelheim.ParseEvalStack
@@ -66,6 +67,8 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
 
 
     val maxEvalDuration: Duration = Duration(30, "seconds")
+    
+    val maxSliceSize = 10000
 
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong()
@@ -73,7 +76,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
     }
   }
 
-  def eval(query: String): M[Result] = {
+  def eval(query: String): M[Result] = try {
     val tree = compile(query)
 
     if (!tree.errors.isEmpty) {
@@ -88,13 +91,22 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
         withContext { ctx =>
           for {
             table <- eval(yggConfig.userUID, dag, ctx, Path.Root, yggConfig.optimize)
-            json <- table.toJson
-          } yield json.size
+            size <- countStream(table.renderJson(','))
+          } yield size
         }
     }
+  } catch {
+    case e: com.precog.quirrel.parser.Parser$ParseException =>
+      sys.error("Error parsing query:\n\n%s\n\n%s" format (query, e.getMessage()))
+  }
+  
+  private def countStream[A](str: StreamT[M, A]): M[Int] = {
+    for {
+      optTail <- str.uncons
+      res = optTail map { _._2 } map { tail => countStream(tail) map (1 +) }
+      
+      back <- res getOrElse M.point(0)
+    } yield back
   }
 }
-
-
-
 

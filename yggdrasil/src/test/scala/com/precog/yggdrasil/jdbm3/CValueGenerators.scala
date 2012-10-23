@@ -79,6 +79,7 @@ trait CValueGenerators {
     case CDate    => arbLong.arbitrary.map { ts => CDate(new DateTime(ts)) }
     case cType @ CArrayType(_) =>
       genValueForCValueType(cType) map { a => CArray(a, cType) }
+    case CDate    => arbLong.arbitrary map { ts => CDate(new DateTime(if (ts < 0) ~ts else ts)) }
     case CNull    => Gen.value(CNull)
     case CEmptyObject => Gen.value(CEmptyObject)
     case CEmptyArray  => Gen.value(CEmptyArray)

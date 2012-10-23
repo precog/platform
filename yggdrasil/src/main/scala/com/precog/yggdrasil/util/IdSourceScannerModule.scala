@@ -19,10 +19,12 @@
  */
 package com.precog.yggdrasil.util
 
-import com.precog.yggdrasil.{ IdSource, TableModule, YggConfigComponent }
-import com.precog.yggdrasil.table.{ ArrayLongColumn, Column, CScanner }
+import com.precog.common.json.CPath
+import com.precog.yggdrasil.{ IdSource, TableModule, YggConfigComponent, CLong }
+import com.precog.yggdrasil.table._
 
-import scala.collection.immutable.BitSet
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
 
 trait IdSourceConfig {
   def idSource: IdSource
@@ -35,11 +37,17 @@ trait IdSourceScannerModule[M[+_]] extends TableModule[M] with YggConfigComponen
     type A = Unit
     def init = ()
     
-    def scan(a: Unit, col: Column, range: Range): (A, Option[Column]) = {
-      val defined = BitSet(range filter col.isDefinedAt: _*)
-      val values = range map { _ => yggConfig.idSource.nextId() } toArray
+    def scan(a: Unit, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+      val rawCols = cols.values.toArray
+      val defined = BitSetUtil.filteredRange(range.start, range.end) {
+        i => Column.isDefinedAt(rawCols, i)
+      }
+      val values = new Array[Long](range.size)
+      Loop.range(range.start, range.end) {
+        i => values(i) = yggConfig.idSource.nextId()
+      }
       
-      ((), Some(ArrayLongColumn(defined, values)))
+      ((), Map(ColumnRef(CPath.Identity, CLong) -> ArrayLongColumn(defined, values)))
     }
   }
 }

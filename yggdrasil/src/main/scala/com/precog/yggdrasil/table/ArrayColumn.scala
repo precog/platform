@@ -20,25 +20,25 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.util.bitset.makeMutable
 import org.joda.time.DateTime
 
+import com.precog.util.{BitSet, BitSetUtil, Loop}
 import scala.collection._
 
 trait DefinedAtIndex {
-  val defined: BitSet
-  def isDefinedAt(row: Int) = defined.contains(row)
+  protected[this] val defined: BitSet
+  def isDefinedAt(row: Int) = defined(row)
 }
 
 trait ArrayColumn[@specialized(Boolean, Long, Double) A] extends DefinedAtIndex with ExtensibleColumn { 
   def update(row: Int, value: A): Unit
 }
 
-class ArrayHomogeneousArrayColumn[A](val defined: mutable.BitSet, values: Array[IndexedSeq[A]])(val tpe: CArrayType[A]) extends HomogeneousArrayColumn[A] with ArrayColumn[IndexedSeq[A]] {
+class ArrayHomogeneousArrayColumn[A](val defined: BitSet, values: Array[IndexedSeq[A]])(val tpe: CArrayType[A]) extends HomogeneousArrayColumn[A] with ArrayColumn[IndexedSeq[A]] {
   def apply(row: Int) = values(row)
 
   def update(row: Int, value: IndexedSeq[A]) {
-    defined += row
+    defined.set(row)
     values(row) = value
   }
 }
@@ -53,132 +53,151 @@ object ArrayHomogeneousArrayColumn {
 }
 
 
-class ArrayBoolColumn(val defined: mutable.BitSet, values: mutable.BitSet) extends ArrayColumn[Boolean] with BoolColumn {
-  def apply(row: Int) = values.contains(row)
+class ArrayBoolColumn(val defined: BitSet, values: BitSet) extends ArrayColumn[Boolean] with BoolColumn {
+  def apply(row: Int) = values(row)
 
   def update(row: Int, value: Boolean) = {
-    defined += row
-    if (value) values += row else values -= row
+    defined.set(row)
+    if (value) values.set(row) else values.clear(row)
   }
 }
 
 object ArrayBoolColumn {
-  def apply(defined: BitSet, values: BitSet) = new ArrayBoolColumn(makeMutable(defined), makeMutable(values))
-  def apply(defined: BitSet, values: Array[Boolean]) = new ArrayBoolColumn(makeMutable(defined), mutable.BitSet((0 until values.length).filter(values): _*))
+  def apply(defined: BitSet, values: BitSet) =
+    new ArrayBoolColumn(defined.copy, values.copy)
+  def apply(defined: BitSet, values: Array[Boolean]) =
+    new ArrayBoolColumn(defined.copy, BitSetUtil.filteredRange(0, values.length)(values))
   def apply(values: Array[Boolean]) = {
-    val definedAt = mutable.BitSet(0 until values.length: _*)
-    new ArrayBoolColumn(definedAt, definedAt.filter(values))
+    val d = BitSetUtil.range(0, values.length)
+    val v = BitSetUtil.filteredRange(0, values.length)(values)
+    new ArrayBoolColumn(d, v)
   }
 
-  def empty(): ArrayBoolColumn = new ArrayBoolColumn(mutable.BitSet.empty, mutable.BitSet.empty)
+  def empty(): ArrayBoolColumn =
+    new ArrayBoolColumn(new BitSet, new BitSet)
 }
 
-class ArrayLongColumn(val defined: mutable.BitSet, values: Array[Long]) extends ArrayColumn[Long] with LongColumn {
+class ArrayLongColumn(val defined: BitSet, values: Array[Long]) extends ArrayColumn[Long] with LongColumn {
   def apply(row: Int) = values(row)
 
   def update(row: Int, value: Long) = {
-    defined += row
+    defined.set(row)
     values(row) = value
   }
 }
 
 object ArrayLongColumn {
-  def apply(values: Array[Long]) = new ArrayLongColumn(mutable.BitSet(0 until values.length: _*), values)
-  def apply(defined: BitSet, values: Array[Long]) = new ArrayLongColumn(makeMutable(defined), values)
-  def empty(size: Int): ArrayLongColumn = new ArrayLongColumn(mutable.BitSet.empty, new Array[Long](size))
+  def apply(values: Array[Long]) =
+    new ArrayLongColumn(BitSetUtil.range(0, values.length), values)
+  def apply(defined: BitSet, values: Array[Long]) =
+    new ArrayLongColumn(defined.copy, values)
+  def empty(size: Int): ArrayLongColumn =
+    new ArrayLongColumn(new BitSet, new Array[Long](size))
 }
 
 
-class ArrayDoubleColumn(val defined: mutable.BitSet, values: Array[Double]) extends ArrayColumn[Double] with DoubleColumn {
+class ArrayDoubleColumn(val defined: BitSet, values: Array[Double]) extends ArrayColumn[Double] with DoubleColumn {
   def apply(row: Int) = values(row)
 
   def update(row: Int, value: Double) = {
-    defined += row
+    defined.set(row)
     values(row) = value
   }
 }
 
 object ArrayDoubleColumn {
-  def apply(values: Array[Double]) = new ArrayDoubleColumn(mutable.BitSet(0 until values.length: _*), values)
-  def apply(defined: BitSet, values: Array[Double]) = new ArrayDoubleColumn(makeMutable(defined), values)
-  def empty(size: Int): ArrayDoubleColumn = new ArrayDoubleColumn(mutable.BitSet.empty, new Array[Double](size))
+  def apply(values: Array[Double]) =
+    new ArrayDoubleColumn(BitSetUtil.range(0, values.length), values)
+  def apply(defined: BitSet, values: Array[Double]) =
+    new ArrayDoubleColumn(defined.copy, values)
+  def empty(size: Int): ArrayDoubleColumn =
+    new ArrayDoubleColumn(new BitSet, new Array[Double](size))
 }
 
 
-class ArrayNumColumn(val defined: mutable.BitSet, values: Array[BigDecimal]) extends ArrayColumn[BigDecimal] with NumColumn {
+class ArrayNumColumn(val defined: BitSet, values: Array[BigDecimal]) extends ArrayColumn[BigDecimal] with NumColumn {
   def apply(row: Int) = values(row)
 
   def update(row: Int, value: BigDecimal) = {
-    defined += row
+    defined.set(row)
     values(row) = value
   }
 }
 
 object ArrayNumColumn {
-  def apply(values: Array[BigDecimal]) = new ArrayNumColumn(mutable.BitSet(0 until values.length: _*), values)
-  def apply(defined: BitSet, values: Array[BigDecimal]) = new ArrayNumColumn(makeMutable(defined), values)
-  def empty(size: Int): ArrayNumColumn = new ArrayNumColumn(mutable.BitSet.empty, new Array[BigDecimal](size))
+  def apply(values: Array[BigDecimal]) =
+    new ArrayNumColumn(BitSetUtil.range(0, values.length), values)
+  def apply(defined: BitSet, values: Array[BigDecimal]) =
+    new ArrayNumColumn(defined.copy, values)
+  def empty(size: Int): ArrayNumColumn =
+    new ArrayNumColumn(new BitSet, new Array[BigDecimal](size))
 }
 
 
-class ArrayStrColumn(val defined: mutable.BitSet, values: Array[String]) extends ArrayColumn[String] with StrColumn {
+class ArrayStrColumn(val defined: BitSet, values: Array[String]) extends ArrayColumn[String] with StrColumn {
   def apply(row: Int) = values(row)
 
   def update(row: Int, value: String) = {
-    defined += row
+    defined.set(row)
     values(row) = value
   }
 }
 
 object ArrayStrColumn {
-  def apply(values: Array[String]) = new ArrayStrColumn(mutable.BitSet(0 until values.length: _*), values)
-  def apply(defined: BitSet, values: Array[String]) = new ArrayStrColumn(makeMutable(defined), values)
-  def empty(size: Int): ArrayStrColumn = new ArrayStrColumn(mutable.BitSet.empty, new Array[String](size))
+  def apply(values: Array[String]) =
+    new ArrayStrColumn(BitSetUtil.range(0, values.length), values)
+  def apply(defined: BitSet, values: Array[String]) =
+    new ArrayStrColumn(defined.copy, values)
+  def empty(size: Int): ArrayStrColumn =
+    new ArrayStrColumn(new BitSet, new Array[String](size))
 }
 
-class ArrayDateColumn(val defined: mutable.BitSet, values: Array[DateTime]) extends ArrayColumn[DateTime] with DateColumn {
+class ArrayDateColumn(val defined: BitSet, values: Array[DateTime]) extends ArrayColumn[DateTime] with DateColumn {
   def apply(row: Int) = values(row)
 
   def update(row: Int, value: DateTime) = {
-    defined += row
+    defined.set(row)
     values(row) = value
   }
 }
 
 object ArrayDateColumn {
-  def apply(values: Array[DateTime]) = new ArrayDateColumn(mutable.BitSet(0 until values.length: _*), values)
-  def apply(defined: BitSet, values: Array[DateTime]) = new ArrayDateColumn(makeMutable(defined), values)
-  def empty(size: Int): ArrayDateColumn = new ArrayDateColumn(mutable.BitSet.empty, new Array[DateTime](size))
+  def apply(values: Array[DateTime]) =
+    new ArrayDateColumn(BitSetUtil.range(0, values.length), values)
+  def apply(defined: BitSet, values: Array[DateTime]) =
+    new ArrayDateColumn(defined.copy, values)
+  def empty(size: Int): ArrayDateColumn =
+    new ArrayDateColumn(new BitSet, new Array[DateTime](size))
 }
 
-class MutableEmptyArrayColumn(val defined: mutable.BitSet) extends ArrayColumn[Boolean] with EmptyArrayColumn {
+class MutableEmptyArrayColumn(val defined: BitSet) extends ArrayColumn[Boolean] with EmptyArrayColumn {
   def update(row: Int, value: Boolean) = {
-    if (value) defined += row else defined -= row
+    if (value) defined.set(row) else defined.clear(row)
   }
 }
 
 object MutableEmptyArrayColumn {
-  def empty(): MutableEmptyArrayColumn = new MutableEmptyArrayColumn(mutable.BitSet.empty)
+  def empty(): MutableEmptyArrayColumn = new MutableEmptyArrayColumn(new BitSet)
 }
 
-class MutableEmptyObjectColumn(val defined: mutable.BitSet) extends ArrayColumn[Boolean] with EmptyObjectColumn {
+class MutableEmptyObjectColumn(val defined: BitSet) extends ArrayColumn[Boolean] with EmptyObjectColumn {
   def update(row: Int, value: Boolean) = {
-    if (value) defined += row else defined -= row
+    if (value) defined.set(row) else defined.clear(row)
   }
 }
 
 object MutableEmptyObjectColumn {
-  def empty(): MutableEmptyObjectColumn = new MutableEmptyObjectColumn(mutable.BitSet.empty)
+  def empty(): MutableEmptyObjectColumn = new MutableEmptyObjectColumn(new BitSet)
 }
 
-class MutableNullColumn(val defined: mutable.BitSet) extends ArrayColumn[Boolean] with NullColumn {
+class MutableNullColumn(val defined: BitSet) extends ArrayColumn[Boolean] with NullColumn {
   def update(row: Int, value: Boolean) = {
-    if (value) defined += row else defined -= row
+    if (value) defined.set(row) else defined.clear(row)
   }
 }
 
 object MutableNullColumn {
-  def empty(): MutableNullColumn = new MutableNullColumn(mutable.BitSet.empty)
+  def empty(): MutableNullColumn = new MutableNullColumn(new BitSet)
 }
 
 /* help for ctags

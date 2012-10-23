@@ -40,7 +40,16 @@ sealed trait JObjectT extends JType
 case class JObjectFixedT(fields: Map[String, JType]) extends JObjectT
 case object JObjectUnfixedT extends JObjectT
 
-case class JUnionT(left: JType, right: JType) extends JType
+case class JUnionT(left: JType, right: JType) extends JType {
+  private lazy val JUniverseT = JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JNumberT, JTextT), JBooleanT),JNullT), JObjectUnfixedT), JArrayUnfixedT)
+  
+  override def toString = {
+    if (this == JUniverseT)
+      "JUniverseT"
+    else
+      super.toString
+  }
+}
 
 object JType {
   // TODO JArrayHomogeneousT can't go in here. Is this just used for tests?

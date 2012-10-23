@@ -21,12 +21,16 @@ package com.precog
 package muspelheim
 
 import yggdrasil._
+import blueeyes.json.JsonAST._
 import com.precog.common._
 import org.specs2.mutable._
 
 trait EvalStackSpecs extends Specification {
   def eval(str: String, debug: Boolean = false): Set[SValue]
-  def evalE(str: String, debug: Boolean = false): Set[SEvent]
+  def evalE(str: String, debug: Boolean = false): Set[(Vector[Long], SValue)]
+
+  implicit def add_~=(d: Double) = new AlmostEqual(d)
+  implicit val precision = Precision(0.000000001)
 
   "the full stack" should {
     "count a filtered clicks dataset" in {
@@ -65,8 +69,7 @@ trait EvalStackSpecs extends Specification {
 
     "reduce the obnoxiously large dataset" >> {
       "<root>" >> {
-        eval("mean(//obnoxious.v)", true) mustEqual Set(SDecimal(50000.5))
-        //failure //TODO: the above fails with an NPE, not sure of the origin.
+        eval("mean(//obnoxious.v)") mustEqual Set(SDecimal(50000.5))
       }
     }
 
@@ -87,7 +90,7 @@ trait EvalStackSpecs extends Specification {
 
       "empty array" >> {
         eval("[].foo") mustEqual Set()
-      }.pendingUntilFixed
+      }
     }
 
     "accept a dereferenced object" >> {
@@ -97,65 +100,491 @@ trait EvalStackSpecs extends Specification {
 
       "empty object" >> {
         eval("{}[0]") mustEqual Set()
-      }.pendingUntilFixed
+      }
     }    
     
     "accept a where'd empty array and empty object" >> {
       "empty object (left)" >> {
-        eval("{} where true") mustEqual Set()
-      }.pendingUntilFixed
+        eval("{} where true") mustEqual Set(SObject(Map()))
+      }
 
       "empty object (right)" >> {
         eval("true where {}") mustEqual Set()
-      }.pendingUntilFixed
+      }
       
       "empty array (left)" >> {
-        eval("[] where true") mustEqual Set()
-      }.pendingUntilFixed
+        eval("[] where true") mustEqual Set(SArray(Vector()))
+      }
 
       "empty array (right)" >> {
         eval("true where []") mustEqual Set()
-      }.pendingUntilFixed
+      }
     }    
     
     "accept a with'd empty array and empty object" >> {
       "empty object (left)" >> {
         eval("{} with true") mustEqual Set()
-      }.pendingUntilFixed
+      }
 
       "empty object (right)" >> {
         eval("true with {}") mustEqual Set()
-      }.pendingUntilFixed
+      }
       
       "empty array (left)" >> {
         eval("[] with true") mustEqual Set()
-      }.pendingUntilFixed
+      }
 
       "empty array (right)" >> {
         eval("true with []") mustEqual Set()
-      }.pendingUntilFixed
-    }    
+      }
+    }
 
-    "union sets coming out of a forall" >> {
+    "reduce sets" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        |   sum(medals.HeightIncm) + mean(medals.Weight) - count(medals.Age) + stdDev(medals.S)
+      """.stripMargin
+
+      val result = evalE(input) 
+
+      result must haveSize(1)
+
+      val actual = result collect {
+        case (ids, SDecimal(num)) if ids.length == 0 => num.toDouble ~= 174257.3421888046
+      }
+
+      actual must contain(true).only
+    }
+
+    "accept division inside an object" in {
+      val input = """
+        | data := //conversions
+        | 
+        | x := solve 'productID
+        |   data' := data where data.product.ID = 'productID
+        |   { count: count(data' where data'.customer.isCasualGamer = false),
+        |     sum: sum(data'.marketing.uniqueVisitors  where data'.customer.isCasualGamer = false) }
+        | 
+        | { max: max(x.sum/x.count), min: min(x.sum/x.count) }
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+
+          obj.keys mustEqual(Set("min", "max"))
+          (obj("min") match { case SDecimal(num) => num.toDouble ~= 862.7464285714286 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 941.0645161290323 }) mustEqual true
+      }
+    }
+
+    "accept division of two BigDecimals" in {
+      val input = "92233720368547758073 / 12223372036854775807"
+
+      val result = evalE(input)
+
+      result must haveSize(1)
+
+      forall(result) {
+        case (ids, SDecimal(num)) =>
+          ids must haveSize(0)
+          (num.toDouble ~= 7.54568543692) mustEqual true
+      }
+    }
+
+    "perform various reductions on transspecable sets" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | 
+        | { sum: sum(std::math::floor(std::math::cbrt(medals.HeightIncm))),
+        |   max: max(medals.HeightIncm),
+        |   min: min(medals.Weight),
+        |   stdDev: stdDev(std::math::sqrt(medals.Weight)),
+        |   count: count(medals.Weight = 39),
+        |   minmax: min(max(medals.HeightIncm))
+        | }
+      """.stripMargin
+
+      val result = evalE(input)
+
+      result must haveSize(1)
+
+      forall(result) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+          
+          obj must haveKey("sum")
+          obj must haveKey("max")
+          obj must haveKey("min")
+          obj must haveKey("stdDev")
+          obj must haveKey("count")
+          obj must haveKey("minmax")
+
+          (obj("sum") match { case SDecimal(num) => num.toDouble ~= 4965 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 208 }) mustEqual true
+          (obj("min") match { case SDecimal(num) => num.toDouble ~= 39 }) mustEqual true
+          (obj("stdDev") match { case SDecimal(num) => num.toDouble ~= 0.9076874907113496 }) mustEqual true
+          (obj("count") match { case SDecimal(num) => num.toDouble ~= 1019 }) mustEqual true
+          (obj("minmax") match { case SDecimal(num) => num.toDouble ~= 208 }) mustEqual true
+      }
+    }
+
+    "perform a simple join by value sorting" in {
+      val input = """
+        | clicks := //clicks
+        | views := //views
+        |
+        | clicks ~ views
+        |   std::string::concat(clicks.pageId, views.pageId) where clicks.userId = views.userId
+        """.stripMargin
+
+      val resultsE = evalE(input)
+
+      resultsE must haveSize(473)
+
+      val results = resultsE collect {
+        case (ids, str) if ids.length == 2 => str
+      }
+
+      results must contain(SString("page-2page-2"))
+      results must contain(SString("page-2page-1"))
+      results must contain(SString("page-4page-3"))
+      results must contain(SString("page-4page-4"))
+      results must contain(SString("page-3page-4"))
+      results must contain(SString("page-3page-0"))
+      results must contain(SString("page-0page-2"))
+      results must contain(SString("page-0page-4"))
+      results must contain(SString("page-0page-0"))
+      results must contain(SString("page-0page-1"))
+      results must contain(SString("page-4page-2"))
+      results must contain(SString("page-0page-3"))
+      results must contain(SString("page-1page-1"))
+      results must contain(SString("page-1page-4"))
+      results must contain(SString("page-1page-0"))
+      results must contain(SString("page-1page-2"))
+      results must contain(SString("page-1page-3"))
+      results must contain(SString("page-3page-3"))
+      results must contain(SString("page-3page-1"))
+      results must contain(SString("page-4page-0"))
+      results must contain(SString("page-4page-1"))
+      results must contain(SString("page-3page-2"))
+      results must contain(SString("page-2page-3"))
+      results must contain(SString("page-2page-4"))
+      results must contain(SString("page-2page-0")) 
+    }
+
+    "union sets coming out of a solve" >> {
       val input = """
         clicks := //clicks
-        foobar := forall 'a {userId: 'a, size: count(clicks where clicks.userId = 'a)}
-        foobaz := forall 'b {pageId: 'b, size: count(clicks where clicks.pageId = 'b)}
+        foobar := solve 'a {userId: 'a, size: count(clicks where clicks.userId = 'a)}
+        foobaz := solve 'b {pageId: 'b, size: count(clicks where clicks.pageId = 'b)}
         foobar union foobaz
       """.stripMargin
 
       val results = evalE(input)
 
-      results must haveSize(10)
+      results must haveSize(26)
 
       forall(results) {
         case (ids, SObject(obj)) => {
           ids must haveSize(1)
-          obj must haveSize(1)
-          obj must haveKey("bar") or haveKey("baz")
+          obj must haveSize(2)
+          obj must haveKey("userId") or haveKey("pageId")
+          obj must haveKey("size")
         }
       }
-    }.pendingUntilFixed
+
+      val containsUserId = results collect {
+        case (_, SObject(obj)) if obj contains "userId" => obj
+      }
+
+      containsUserId must haveSize(21)
+      containsUserId collect {
+        case obj => obj("userId")
+      } mustEqual Set(
+        SString("user-1000"), SString("user-1001"), SString("user-1002"), SString("user-1003"), SString("user-1004"), SString("user-1005"),
+        SString("user-1006"), SString("user-1007"), SString("user-1008"), SString("user-1009"), SString("user-1010"), SString("user-1011"),
+        SString("user-1012"), SString("user-1013"), SString("user-1014"), SString("user-1015"), SString("user-1016"), SString("user-1017"),
+        SString("user-1018"), SString("user-1019"), SString("user-1020"))
+
+      val containsPageId = results collect {
+        case (_, SObject(obj)) if obj contains "pageId" => obj
+      }
+
+      containsPageId must haveSize(5)
+      containsPageId collect {
+        case obj => obj("pageId")
+      } mustEqual Set(SString("page-0"), SString("page-1"), SString("page-2"), SString("page-3"), SString("page-4"))
+    }
+
+    "correctly assign reductions to the correct field in an object" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        |
+        | x := solve 'age
+        |   medals' := medals where medals.Age = 'age
+        |   sum(medals'.Weight where medals'.Sex = "F")
+        | 
+        | { min: min(x), max: max(x) }
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+          obj mustEqual(Map("min" -> SDecimal(50), "max" -> SDecimal(2768)))
+      }
+    }
+
+    "correctly assign reductions to the correct field in an object with three reductions each on the same set" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        |
+        | x := solve 'age
+        |   medals' := medals where medals.Age = 'age
+        |   sum(medals'.Weight where medals'.Sex = "F")
+        | 
+        | { min: min(x), max: max(x), stdDev: stdDev(x) }
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+          
+          obj.keys mustEqual Set("min", "max", "stdDev")
+  
+          (obj("min") match { case SDecimal(num) => num.toDouble ~= 50 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 2768 }) mustEqual true
+          (obj("stdDev") match { case SDecimal(num) => num.toDouble ~= 917.6314704474534 }) mustEqual true
+      }
+    }
+
+    "correctly assign reductions to the correct field in an object with three reductions each on the same set" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        |
+        | x := solve 'age
+        |   medals' := medals where medals.Age = 'age
+        |   sum(medals'.Weight where medals'.Sex = "F")
+        | 
+        | { min: min(x), max: max(x), stdDev: stdDev(x) }
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+          
+          obj.keys mustEqual Set("min", "max", "stdDev")
+  
+          (obj("min") match { case SDecimal(num) => num.toDouble ~= 50 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 2768 }) mustEqual true
+          (obj("stdDev") match { case SDecimal(num) => num.toDouble ~= 917.6314704474534 }) mustEqual true
+      }
+    }
+
+    "accept covariance inside an object with'd with another object" >> {
+      val input = """
+        clicks := //clicks
+        counts := solve 'time
+          {count: count(clicks where clicks.time = 'time) }
+
+        cov := std::stats::cov(counts.count, counts.count)
+        counts with {covariance: cov}
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(81)  
+
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(1)
+          obj must haveKey("covariance")
+          obj must haveKey("count")
+      }
+    }
+
+    "perform filter based on rank" >> {
+      val input = """
+        clicks := //clicks
+
+        foo := solve 'userId
+          clicks.time where clicks.userId = 'userId
+
+        rank := std::stats::rank(foo)
+
+        foo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(//clicks.time)"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("//clicks.time") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
+
+    "perform filter on distinct set based on rank with a solve" >> {
+      val input = """
+        clicks := //clicks
+
+        foo := solve 'userId
+          clicks.time where clicks.userId = 'userId
+
+        distinctFoo := distinct(foo)
+
+        rank := std::stats::rank(distinctFoo)
+
+        distinctFoo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(distinct(//clicks.time))"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("distinct(//clicks.time)") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
+
+    "perform another filter with rank" in {
+      val input = """
+        data := //summer_games/athletes 
+        
+        perCapitaAthletes := solve 'Countryname 
+          data' := data where data.Countryname = 'Countryname
+          {country: 'Countryname, 
+            athletesPerMillion: count(data')/(data'.Population/1000000)} 
+        
+        distinctData := distinct(perCapitaAthletes) 
+        
+        rank := std::stats::rank(distinctData.athletesPerMillion) 
+        distinctData with {rank: rank}
+        """.stripMargin
+
+      val result = evalE(input)
+      val input2 = """
+        data := //summer_games/athletes 
+        
+        perCapitaAthletes := solve 'Countryname 
+          data' := data where data.Countryname = 'Countryname
+          {country: 'Countryname, 
+            athletesPerMillion: count(data')/(data'.Population/1000000)} 
+        
+        distinct(perCapitaAthletes)""".stripMargin
+
+      val result2 = evalE(input2)
+      val size = result2.size
+
+      result must haveSize(size)
+
+      forall(result) {
+        case (ids, SObject(obj)) => {
+          ids.length must_== 1
+          obj must haveSize(3)
+          obj must haveKey("rank")
+          obj must haveKey("country")
+          obj must haveKey("athletesPerMillion")
+        }
+      }
+    }
+
+    "perform filter on distinct set based on rank without a solve" >> {
+      val input = """
+        clicks := //clicks
+
+        distinctFoo := distinct(clicks.time)
+
+        rank := std::stats::rank(distinctFoo)
+
+        distinctFoo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(distinct(//clicks.time))"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("distinct(//clicks.time)") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
+   
+    "perform filter on new set based on rank without a solve" >> {
+      val input = """
+        clicks := //clicks
+
+        newFoo := new(clicks.time)
+
+        rank := std::stats::rank(newFoo)
+
+        newFoo where rank > 0
+      """.stripMargin
+
+      val input2 = """count(//clicks.time)"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("//clicks.time") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must not(beEmpty)
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
+    
+    "ensure rows of rank 1 exist" >> {
+      val input = """
+        clicks := //clicks
+
+        newFoo := new(clicks.time)
+
+        rank := std::stats::rank(newFoo)
+
+        newFoo where rank = 1
+      """.stripMargin
+
+      val input2 = """count(//clicks where //clicks.time = min(//clicks.time))"""
+      val results2 = evalE(input2)
+      val size = results2 collect { case (_, SDecimal(d)) => d.toInt }
+
+      val result = evalE(input)
+
+      val actual = result collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+      val expected = evalE("//clicks.time where //clicks.time = min(//clicks.time)") collect { case (ids, SDecimal(d)) if ids.size == 1 => d.toInt }
+
+      result must haveSize(size.head)
+      actual mustEqual expected
+    }
     
     "have the correct number of identities and values in a relate" >> {
       "with the sum plus the LHS" >> {
@@ -171,7 +600,7 @@ trait EvalStackSpecs extends Specification {
         forall(results) {
           case (ids, _) => ids must haveSize(2)
         }
-      }.pendingUntilFixed
+      }
       
       "with the sum plus the RHS" >> {
         val input = """
@@ -186,7 +615,7 @@ trait EvalStackSpecs extends Specification {
         forall(results) {
           case (ids, _) => ids must haveSize(2)
         }
-      }.pendingUntilFixed
+      }
     }
 
     "union two wheres of the same dynamic provenance" >> {
@@ -202,7 +631,7 @@ trait EvalStackSpecs extends Specification {
       val results = evalE(input)
 
       results must haveSize(200)
-    }.pendingUntilFixed
+    }
 
     "use the where operator on a unioned set" >> {
       "campaigns.gender" >> {
@@ -215,13 +644,14 @@ trait EvalStackSpecs extends Specification {
         results must haveSize(46)
         
         forall(results) {
-          case (VectorCase(_), SObject(obj)) => {
+          case (ids, SObject(obj)) => {
+            ids.length must_== 1
             obj must haveSize(5)
             obj must contain("gender" -> SString("female"))
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
 
       "clicks.platform" >> {
         val input = """
@@ -233,112 +663,119 @@ trait EvalStackSpecs extends Specification {
         results must haveSize(72)
         
         forall(results) {
-          case (VectorCase(_), SObject(obj)) => {
+          case (ids, SObject(obj)) => {
+            ids.length must_== 1
             obj must haveSize(5)
             obj must contain("platform" -> SString("android"))
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
     }
 
     "basic set difference queries" >> {
-      {
+      "clicks difference campaigns" >> {
         val input = "//clicks difference //campaigns"
         val results = evalE(input)
 
         results must haveSize(100)
       }
-      {
+      "clicks difference clicks" >> {
         val input = "//clicks difference //clicks"
         val results = evalE(input)
 
         results must haveSize(0)
       }
-      {
-        val input = "//clicks difference //clicks.timeString"
+      "clicks.timeString difference clicks.timeString" >> {
+        val input = "//clicks.timeString difference //clicks.timeString"
         val results = evalE(input)
 
         results must haveSize(0)
       }      
-      {
-        val input = "//clicks.time difference //clicks.timeString"
-        val results = evalE(input)
-
-        results must haveSize(0)
-      }
-    }.pendingUntilFixed
+    }
 
     "basic intersect and union queries" >> {
-      {
+      "constant intersection" >> {
         val input = "4 intersect 4"
         val results = evalE(input)
 
         results must haveSize(1)
         
         forall(results) {
-          case (VectorCase(_), SDecimal(d)) => { d mustEqual 4 }
+          case (ids, SDecimal(d)) => 
+            ids.length must_== 0
+            d mustEqual 4 
           case r => failure("Result has wrong shape: "+r)
         }
       }
-      {
+      "constant union" >> {
         val input = "4 union 5"
         val results = evalE(input)
 
         results must haveSize(2)
         
         forall(results) {
-          case (VectorCase(_), SDecimal(d)) => { Set(4,5) must contain(d) }
+          case (ids, SDecimal(d)) => 
+            ids.length must_== 0
+            Set(4,5) must contain(d) 
           case r => failure("Result has wrong shape: "+r)
         }
       }
-      {
+      "empty intersection" >> {
         val input = "//clicks intersect //views"
         val results = evalE(input)
 
         results must beEmpty
       }
-      {
+      "heterogeneous union" >> {
         val input = "{foo: 3} union 9"
         val results = evalE(input)
 
         results must haveSize(2)
         
         forall(results) {
-          case (VectorCase(_), SDecimal(d)) => { d mustEqual 4 }
-          case (VectorCase(_), SObject(obj)) => { obj must contain("foo" -> 3) }
+          case (ids, SDecimal(d)) => 
+            ids.length must_== 0
+            d mustEqual 9
+          case (ids, SObject(obj)) => 
+            ids.length must_== 0
+            obj must contain("foo" -> SDecimal(3)) 
           case r => failure("Result has wrong shape: "+r)
         }
       }
-      {
+      "heterogeneous intersection" >> {
         val input = "obj := {foo: 5} obj.foo intersect 5"
         val results = evalE(input)
 
         results must haveSize(1)
         
         forall(results) {
-          case (VectorCase(_), SDecimal(d)) => { d mustEqual 5 }
+          case (ids, SDecimal(d)) => 
+            ids.length must_== 0
+            d mustEqual 5 
           case r => failure("Result has wrong shape: "+r)
         }
       }
-      {
+      "intersection of differently sized arrays" >> {
         val input = "arr := [1,2,3] arr[0] intersect 1"
         val results = evalE(input)
 
         results must haveSize(1)
         
         forall(results) {
-          case (VectorCase(_), SDecimal(d)) => { d mustEqual 1 }
+          case (ids, SDecimal(d)) => 
+            ids.length must_== 0
+            d mustEqual 1 
           case r => failure("Result has wrong shape: "+r)
         }
       }
-      {
+      "heterogeneous union doing strange things with identities" >> {
         val input = "{foo: //clicks.pageId, bar: //clicks.userId} union //views"
         val results = evalE(input)
 
         results must haveSize(200)
       }
-    }.pendingUntilFixed
+    }
 
     "intersect a union" >> {
       "campaigns.gender" >> {
@@ -353,11 +790,12 @@ trait EvalStackSpecs extends Specification {
         results must haveSize(100)
         
         forall(results) {
-          case (VectorCase(_), SString(campaign)) =>
+          case (ids, SString(campaign)) =>
+            ids.length must_== 1
             Set("c16","c9","c21","c15","c26","c5","c18","c7","c4","c17","c11","c13","c12","c28","c23","c14","c10","c19","c6","c24","c22","c20") must contain(campaign)
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
 
       "union the same set when two different variables are assigned to it" >> {
           val input = """
@@ -368,7 +806,7 @@ trait EvalStackSpecs extends Specification {
           val results = evalE(input)
 
           results must haveSize(100)
-      }.pendingUntilFixed      
+      }
 
       "clicks.platform" >> {
         val input = """
@@ -382,12 +820,12 @@ trait EvalStackSpecs extends Specification {
         results must haveSize(100)
         
         forall(results) {
-          case (VectorCase(_), SDecimal(num)) => {
+          case (ids, SDecimal(num)) =>
+            ids.length must_== 1
             Set(100,39,91,77,96,99,48,67,10,17,90,58,20,38,1,43,49,23,72,42,94,16,9,21,52,5,40,62,4,33,28,54,70,82,76,22,6,12,65,31,80,45,51,89,69) must contain(num)
-          }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
     }
 
     "union with an object" >> {
@@ -400,7 +838,7 @@ trait EvalStackSpecs extends Specification {
       val results = evalE(input)
 
       results must haveSize(200)
-    }.pendingUntilFixed
+    }
 
     "use the where operator on a key with string values" in {
       val input = """//campaigns where //campaigns.platform = "android" """
@@ -409,7 +847,8 @@ trait EvalStackSpecs extends Specification {
       results must haveSize(72)
 
       forall(results) {
-        case (VectorCase(_), SObject(obj)) => {
+        case (ids, SObject(obj)) => {
+          ids.length must_== 1
           obj must haveSize(5)
           obj must contain("platform" -> SString("android"))
         }
@@ -424,7 +863,8 @@ trait EvalStackSpecs extends Specification {
       results must haveSize(34)
 
       forall(results) {
-        case (VectorCase(_), SObject(obj)) => {
+        case (ids, SObject(obj)) => {
+          ids.length must_== 1
           obj must haveSize(5)
           obj must contain("cpm" -> SDecimal(1))
         }
@@ -439,13 +879,14 @@ trait EvalStackSpecs extends Specification {
       results must haveSize(39)
 
       forall(results) {
-        case (VectorCase(_), SObject(obj)) => {
+        case (ids, SObject(obj)) => {
+          ids.length must_== 1
           obj must haveSize(5)
           obj must contain("ageRange" -> SArray(Vector(SDecimal(37), SDecimal(48))))
         }
         case r => failure("Result has wrong shape: "+r)
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate the with operator across the campaigns dataset" in {
       val input = "count(//campaigns with { t: 42 })"
@@ -468,7 +909,7 @@ trait EvalStackSpecs extends Specification {
           | distinct(gender union pageId)""".stripMargin
 
         eval(input) mustEqual Set(SString("female"), SString("male"), SString("page-0"), SString("page-1"), SString("page-2"), SString("page-3"), SString("page-4"))   
-      }.pendingUntilFixed
+      }
     }
 
     "map object creation over the campaigns dataset" in {
@@ -478,7 +919,8 @@ trait EvalStackSpecs extends Specification {
       results must haveSize(100)
       
       forall(results) {
-        case (VectorCase(_), SObject(obj)) => {
+        case (ids, SObject(obj)) => {
+          ids.length must_== 1
           obj must haveSize(1)
           obj must haveKey("aa")
         }
@@ -499,7 +941,8 @@ trait EvalStackSpecs extends Specification {
       results must haveSize(10000)
       
       forall(results) {
-        case (VectorCase(_, _), SObject(obj)) => {
+        case (ids, SObject(obj)) => {
+          ids.length must_== 2
           obj must haveSize(2)
           obj must haveKey("aa")
           obj must haveKey("bb")
@@ -518,8 +961,18 @@ trait EvalStackSpecs extends Specification {
         |     & clicks = clicks
         |     & clicks = clicks""".stripMargin
         
-      eval(input) must not(beEmpty)
-    }.pendingUntilFixed    
+      val results = evalE(input)
+      
+      results must haveSize(100 * 100)
+      
+      forall(results) {
+        case (ids, SBoolean(b)) => {
+          ids must haveSize(2)
+          b mustEqual true
+        }
+        case r => failure("Result has wrong shape: " + r)
+      }
+    }
 
     "add sets of different types" >> {
       "a set of numbers and a set of strings" >> {
@@ -541,66 +994,134 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "return only all possible value results from a" >> {
-      "characteristic function" >> {
-        val input = """
-          | campaigns := //campaigns
-          | f('a) :=
-          |   campaigns.gender where campaigns.platform = 'a
-          | f""".stripMargin
-          
-        val results = evalE(input)
+    "return all possible value results from an underconstrained solve" in {
+      val input = """
+        | campaigns := //campaigns
+        | solve 'a 
+        |   campaigns.gender where campaigns.platform = 'a""".stripMargin
         
-        results must haveSize(100)
-        
-        forall(results) {
-          case (VectorCase(_), SString(gender)) =>
-            gender must beOneOf("male", "female")
-          case r => failure("Result has wrong shape: "+r)
-        }
-      }.pendingUntilFixed
-
-      "forall expression" >> {
-        val input = """
-          | campaigns := //campaigns
-          | forall 'a 
-          |   campaigns.gender where campaigns.platform = 'a""".stripMargin
-          
-        val results = evalE(input)
-        
-        results must haveSize(100)
-        
-        forall(results) {
-          case (VectorCase(_), SString(gender)) =>
-            gender must beOneOf("male", "female")
-          case r => failure("Result has wrong shape: "+r)
-        }
-      }.pendingUntilFixed
+      val results = evalE(input)
+      
+      results must haveSize(100)
+      
+      forall(results) {
+        case (ids, SString(gender)) =>
+        ids.length must_== 1
+          gender must beOneOf("male", "female")
+        case r => failure("Result has wrong shape: "+r)
+      }
     }
     
-    "determine a histogram of genders on campaigns" >> {
-      "characteristic function" >> { 
-        val input = """
-          | campaigns := //campaigns
-          | hist('gender) :=
-          |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
-          | hist""".stripMargin
-          
-        eval(input) mustEqual Set(
-          SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
-          SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
-      }.pendingUntilFixed
-
-      "forall expression" >> { 
-        val input = """
-          | campaigns := //campaigns
-          | forall 'gender 
-          |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }""".stripMargin
-          
-        eval(input) mustEqual Set(
-          SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
-          SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
-      }.pendingUntilFixed
+    "determine a histogram of genders on campaigns" in {
+      val input = """
+        | campaigns := //campaigns
+        | solve 'gender 
+        |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }""".stripMargin
+        
+      eval(input) mustEqual Set(
+        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
+        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
+    }
+    
+    "determine a histogram of STATE on (tweets union tweets)" in {
+      val input = """
+        | tweets := //election/tweets 
+        | 
+        | data := tweets union tweets
+        | 
+        | solve 'state 
+        |   data' := data where data.STATE = 'state 
+        |   {
+        |     state: 'state, 
+        |     count: count(data')
+        |   }
+        | """.stripMargin
+        
+      val resultsE = evalE(input)
+      
+      resultsE must haveSize(52)
+      
+      val results = resultsE collect {
+        case (ids, sv) if ids.length == 1 => sv
+      }
+      
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("319")), "state" -> SString("01"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("267")), "state" -> SString("02"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("248")), "state" -> SString("04"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("229")), "state" -> SString("05"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("242")), "state" -> SString("06"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("265")), "state" -> SString("08"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("207")), "state" -> SString("09"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("265")), "state" -> SString("10"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("183")), "state" -> SString("11"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("275")), "state" -> SString("12"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("267")), "state" -> SString("13"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("240")), "state" -> SString("15"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("269")), "state" -> SString("16"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("268")), "state" -> SString("17"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("221")), "state" -> SString("18"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("238")), "state" -> SString("19"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("251")), "state" -> SString("20"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("220")), "state" -> SString("21"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("215")), "state" -> SString("22"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("245")), "state" -> SString("23"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("232")), "state" -> SString("24"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("234")), "state" -> SString("25"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("239")), "state" -> SString("26"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("242")), "state" -> SString("27"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("219")), "state" -> SString("28"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("213")), "state" -> SString("29"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("216")), "state" -> SString("30"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("195")), "state" -> SString("31"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("196")), "state" -> SString("32"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("223")), "state" -> SString("33"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("207")), "state" -> SString("34"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("221")), "state" -> SString("35"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("204")), "state" -> SString("36"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("221")), "state" -> SString("37"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("231")), "state" -> SString("38"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("167")), "state" -> SString("39"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("219")), "state" -> SString("40"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("200")), "state" -> SString("41"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("206")), "state" -> SString("42"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("230")), "state" -> SString("44"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("224")), "state" -> SString("45"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("184")), "state" -> SString("46"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("215")), "state" -> SString("47"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("189")), "state" -> SString("48"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("227")), "state" -> SString("49"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("233")), "state" -> SString("50"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("206")), "state" -> SString("51"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("232")), "state" -> SString("53"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("223")), "state" -> SString("54"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("193")), "state" -> SString("55"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("186")), "state" -> SString("56"))))
+      results must contain(SObject(Map("count" -> SDecimal(BigDecimal("153")), "state" -> SString("72"))))
+    }
+    
+    "evaluate nathan's query, once and for all" in {
+      val input = """
+        | import std::time::*
+        | 
+        | lastHour := //election/tweets 
+        | thisHour:= //election/tweets2 
+        | 
+        | lastHour' := lastHour where minuteOfHour(lastHour.timeStamp) > 36
+        | data := thisHour union lastHour'
+        | 
+        | combined := solve 'stateName, 'state 
+        |   data' := data where data.stateName = 'stateName & data.STATE = 'state 
+        |   {stateName: 'stateName,
+        |    state: 'state, 
+        |    obamaSentimentScore: sum(data'.score where data'.candidate = "Obama") 
+        |                         / count(data' where data'.candidate = "Obama"), 
+        |    romneySentimentScore: sum(data'.score where data'.candidate = "Romney") 
+        |                         / count(data' where data'.candidate = "Romney")} 
+        | 
+        | {stateName: combined.stateName, state: combined.state, sentiment: (50 * (combined.obamaSentimentScore - combined.romneySentimentScore)) + 50}
+        | """.stripMargin
+      
+      evalE(input) must not(beEmpty)
     }
 
     "load a nonexistent dataset with a dot in the name" in {
@@ -618,7 +1139,7 @@ trait EvalStackSpecs extends Specification {
       val results = eval(input)
 
       results must haveSize(0)
-    }.pendingUntilFixed
+    }
 
     "deref an object with a where" in {
       val input = """
@@ -628,7 +1149,7 @@ trait EvalStackSpecs extends Specification {
       val results = eval(input)
 
       results must haveSize(0)
-    }.pendingUntilFixed
+    }
 
     "evaluate rank" >> {
       "of the product of two sets" >> {
@@ -641,13 +1162,14 @@ trait EvalStackSpecs extends Specification {
         results must haveSize(2)
 
         forall(results) {
-          case (VectorCase(_), SObject(obj)) => {
+          case (ids, SObject(obj)) => {
+            ids.length must_== 1
             obj must haveSize(5)
             obj must contain("cpm" -> SDecimal(6))
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed      
+      }
       
       "using where" >> {
         val input = """
@@ -659,13 +1181,14 @@ trait EvalStackSpecs extends Specification {
         results must haveSize(2)
 
         forall(results) {
-          case (VectorCase(_), SObject(obj)) => {
+          case (ids, SObject(obj)) => {
+            ids.length must_== 1
             obj must haveSize(5)
             obj must contain("cpm" -> SDecimal(6))
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
 
       "using where and with" >> {
         val input = """
@@ -676,23 +1199,39 @@ trait EvalStackSpecs extends Specification {
         val results = eval(input)
         
         results mustEqual Set(SDecimal(38))
-      }.pendingUntilFixed      
+      }
+
+      "using a solve" >> {
+        val input = """
+          | import std::stats::denseRank
+          |
+          | campaigns := //campaigns
+          |
+          | histogram := solve 'cpm
+          |  {count: count(campaigns.cpm where campaigns.cpm = 'cpm), age: 'cpm}
+          |
+          | histogram with {rank: std::stats::rank(neg histogram.count)}""".stripMargin
+
+        val results = eval(input)
+
+        results must not be empty
+      }
       
       "on a set of strings" >> {
         val input = """
-          | std::stats::rank(//campaigns.userId)""".stripMargin
+          | std::stats::rank(//campaigns.campaign)""".stripMargin
 
         val results = eval(input) 
         
         val sanity = """
-          | //campaigns.userId""".stripMargin
+          | //campaigns.campaign""".stripMargin
 
         val sanityCheck = eval(sanity)
 
         results must be empty
 
         sanityCheck must not be empty
-      }.pendingUntilFixed
+      }
     }
 
     "evaluate denseRank" >> {
@@ -706,13 +1245,14 @@ trait EvalStackSpecs extends Specification {
         results must haveSize(2)
 
         forall(results) {
-          case (VectorCase(_), SObject(obj)) => {
+          case (ids, SObject(obj)) => {
+            ids.length must_== 1
             obj must haveSize(5)
             obj must contain("cpm" -> SDecimal(6))
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }.pendingUntilFixed
+      }
 
       "using where and with" >> {
         val input = """
@@ -723,23 +1263,88 @@ trait EvalStackSpecs extends Specification {
         val results = eval(input) 
         
         results mustEqual Set(SDecimal(39))
-      }.pendingUntilFixed      
+      }
       
       "on a set of strings" >> {
         val input = """
-          | std::stats::denseRank(//campaigns.userId)""".stripMargin
+          | std::stats::denseRank(//campaigns.campaign)""".stripMargin
 
         val results = eval(input) 
         
         val sanity = """
-          | //campaigns.userId""".stripMargin
+          | //campaigns.campaign""".stripMargin
 
         val sanityCheck = eval(sanity)
 
         results must be empty
 
         sanityCheck must not be empty
-      }.pendingUntilFixed
+      }
+    }
+    "evaluate reductions on filters" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | 
+        |   {
+        |   sum: sum(medals.Age where medals.Age = 30),
+        |   mean: mean(std::math::max(medals.B, medals.Age)),
+        |   max: max(medals.G where medals.Sex = "F"),
+        |   stdDev: stdDev(std::math::pow(medals.Total, medals.S))
+        |   }
+        """.stripMargin
+
+      val results = evalE(input)
+      
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+
+          obj must haveKey("sum")
+          obj must haveKey("mean")
+          obj must haveKey("max")
+          obj must haveKey("stdDev")
+
+          (obj("sum") match { case SDecimal(num) => num.toDouble ~= 1590 }) mustEqual true
+          (obj("mean") match { case SDecimal(num) => num.toDouble ~= 26.371933267909714 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 2.5 }) mustEqual true
+          (obj("stdDev") match { case SDecimal(num) => num.toDouble ~= 0.36790736209203007 }) mustEqual true
+      }
+    }
+
+    "evaluate single reduction on a filter" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | 
+        | max(medals.G where medals.Sex = "F")
+        """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SDecimal(num)) =>
+          ids must haveSize(0)
+          num mustEqual(2.5)
+      }
+    }
+
+    "evaluate single reduction on a object deref" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | 
+        | max(medals.G)
+        """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SDecimal(num)) =>
+          ids must haveSize(0)
+          num mustEqual(2.5)
+      }
     }
 
     "evaluate functions from each library" >> {
@@ -767,7 +1372,9 @@ trait EvalStackSpecs extends Specification {
 
         val results = evalE(input) 
         val results2 = results map {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+          case (ids, SDecimal(d)) => 
+            ids.length must_== 1
+            d.toInt
           case r => failure("Result has wrong shape: "+r)
         }
 
@@ -782,7 +1389,9 @@ trait EvalStackSpecs extends Specification {
 
           val results = evalE(input) 
           val results2 = results map {
-            case (VectorCase(), SDecimal(d)) => d.toDouble
+            case (ids, SDecimal(d)) => 
+              ids.length must_== 0
+              d.toDouble
             case r => failure("Result has wrong shape: "+r)
           }
 
@@ -798,7 +1407,9 @@ trait EvalStackSpecs extends Specification {
           results must haveSize(1)
 
           val results2 = results map {
-            case (VectorCase(), SDecimal(d)) => d.toDouble
+            case (ids, SDecimal(d)) => 
+              ids.length must_== 0
+              d.toDouble
             case r => failure("Result has wrong shape: "+r)
           }
           results2 must contain(0)
@@ -813,7 +1424,9 @@ trait EvalStackSpecs extends Specification {
           results must haveSize(1)
 
           val results2 = results map {
-            case (VectorCase(), SObject(fields)) => fields
+            case (ids, SObject(fields)) => 
+              ids.length must_== 0
+              fields
             case r => failure("Result has wrong shape: "+r)
           }
           results2 must contain(Map("slope" -> SDecimal(0), "intercept" -> SDecimal(10)))
@@ -821,23 +1434,13 @@ trait EvalStackSpecs extends Specification {
       }
     }
  
-    "set critical conditions given an empty set in" >> {
-      "characteristic function" >> {
-        val input = """
-          | function('a) :=
-          |   //campaigns where //campaigns.foo = 'a
-          | function""".stripMargin
+    "set critical conditions given an empty set in" in {
+      val input = """
+        | solve 'a
+        |   //campaigns where //campaigns.foo = 'a""".stripMargin
 
-        eval(input) mustEqual Set()
-      }.pendingUntilFixed
-
-      "forall expression" >> {
-        val input = """
-          | forall 'a
-          |   //campaigns where //campaigns.foo = 'a""".stripMargin
-
-        eval(input) mustEqual Set()
-      }.pendingUntilFixed
+      val results = evalE(input)
+      results must beEmpty
     }
 
     "use NotEq correctly" in {
@@ -846,7 +1449,8 @@ trait EvalStackSpecs extends Specification {
       val results = evalE(input)
 
       forall(results) {
-        case (VectorCase(_), SObject(obj)) => {
+        case (ids, SObject(obj)) => {
+          ids.length must_== 1
           obj must haveSize(5)
           obj must contain("gender" -> SString("male"))
         }
@@ -854,146 +1458,343 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "evaluate a solve constrained by inclusion" in {
+      val input = """
+        | clicks := //clicks
+        | views := //views
+        |
+        | solve 'page = views.pageId
+        |   count(clicks where clicks.pageId = 'page)
+        | """.stripMargin
+      
+      val results = evalE(input)
+      
+      results must haveSize(5)
+      
+      val stripped = results collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d
+      }
+      
+      stripped must contain(12)
+      stripped must contain(15)
+      stripped must contain(19)
+      stripped must contain(27)
+    }
+
     "evaluate sliding window in a" >> {
-        "characteristic function" >> {
+      "solve expression" >> {
         val input = """
           | campaigns := //campaigns
           | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
-          | sums('n) :=
-          |   m := max(nums where nums < 'n)
-          |   (nums where nums = 'n) + m 
-          | sums""".stripMargin
-
-        eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
-      }.pendingUntilFixed
-
-      "forall expression" >> {
-        val input = """
-          | campaigns := //campaigns
-          | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
-          | forall 'n
+          | solve 'n
           |   m := max(nums where nums < 'n)
           |   (nums where nums = 'n) + m""".stripMargin
 
         eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
-      }.pendingUntilFixed
+      }
     }
 
-    "evaluate a quantified characteristic function of two parameters" in {
+    "evaluate a function of two parameters" in {
       val input = """
-        | fun('a, 'b) := 
-        |   //campaigns where //campaigns.ageRange = 'a & //campaigns.gender = 'b
+        | fun(a, b) := 
+        |   //campaigns where //campaigns.ageRange = a & //campaigns.gender = b
         | fun([25,36], "female")""".stripMargin
 
       val results = evalE(input) 
       results must haveSize(14)
       
       forall(results) {
-        case (VectorCase(_), SObject(obj)) => {
+        case (ids, SObject(obj)) => {
+          ids.length must_== 1
           obj must haveSize(5)
           obj must contain("ageRange" -> SArray(Vector(SDecimal(25), SDecimal(36))))
           obj must contain("gender" -> SString("female"))
         }
         case r => failure("Result has wrong shape: "+r)
       }
-    }.pendingUntilFixed
-
-    "evaluate a function of two parameters" >> {  //note: this is NOT the the most efficient way to implement this query, but it still should work
-      "characteristic function" >> {
-        val input = """
-          | campaigns := //campaigns
-          | gender := campaigns.gender
-          | platform := campaigns.platform
-          | equality('a, 'b) :=
-          |   g := gender where gender = 'a
-          |   p := platform where platform = 'b
-          |   campaigns where g = p
-          | equality""".stripMargin
-
-        eval(input) mustEqual Set()
-      }.pendingUntilFixed
-
-      "forall expression" >> {
-        val input = """
-          | campaigns := //campaigns
-          | gender := campaigns.gender
-          | platform := campaigns.platform
-          | forall 'a forall 'b
-          |   g := gender where gender = 'a
-          |   p := platform where platform = 'b
-          |   campaigns where g = p""".stripMargin
-
-        eval(input) mustEqual Set()
-      }.pendingUntilFixed
     }
 
-    "determine a histogram of genders on category" in {
+    "evaluate a solve of two parameters" in {
+      val input = """
+        | campaigns := //campaigns
+        | gender := campaigns.gender
+        | platform := campaigns.platform
+        | solve 'a, 'b
+        |   g := gender where gender = 'a
+        |   p := platform where platform = 'b
+        |   campaigns where g = p""".stripMargin
+
+      eval(input) mustEqual Set()
+    }
+
+    "determine a histogram of a composite key of revenue and campaign" in {
       val input = """
         | campaigns := //campaigns
         | organizations := //organizations
         | 
-        | hist('revenue, 'campaign) :=
-        |   organizations' := organizations where organizations.revenue = 'revenue
+        | solve 'revenue = organizations.revenue & 'campaign = organizations.campaign
         |   campaigns' := campaigns where campaigns.campaign = 'campaign
-        |   organizations'' := organizations' where organizations'.campaign = 'campaign
-        |   
-        |   campaigns' ~ organizations''
-        |     { revenue: 'revenue, num: count(campaigns') }
-        |   
-        | hist""".stripMargin
+        |   { revenue: 'revenue, num: count(campaigns') }""".stripMargin
 
-      todo //eval(input) mustEqual Set()   
-    }.pendingUntilFixed
-     
-    "determine most isolated clicks in time" >> {
-      "characteristic function" >> {
-        val input = """
-          | clicks := //clicks
-          | 
-          | spacings('time) :=
-          |   click := clicks where clicks.time = 'time
-          |   belowTime := max(clicks.time where clicks.time < 'time)
-          |   aboveTime := min(clicks.time where clicks.time > 'time)
-          |   
-          |   {
-          |     click: click,
-          |     below: click.time - belowTime,
-          |     above: aboveTime - click.time
-          |   }
-          |   
-          | meanAbove := mean(spacings.above)
-          | meanBelow := mean(spacings.below)
-          | 
-          | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
+      val resultsE = evalE(input)
+      resultsE must haveSize(63)
 
-        todo //eval(input) must not(beEmpty)   
+      val results = resultsE collect {
+        case (ids, obj) if ids.length == 1 => obj
       }
-
-      "forall expression" >> {
-        val input = """
-          | clicks := //clicks
-          | 
-          | spacings := (forall 'time
-          |   click := clicks where clicks.time = 'time
-          |   belowTime := max(clicks.time where clicks.time < 'time)
-          |   aboveTime := min(clicks.time where clicks.time > 'time)
-          |   
-          |   {
-          |     click: click,
-          |     below: click.time - belowTime,
-          |     above: aboveTime - click.time
-          |   })
-          |   
-          | meanAbove := mean(spacings.above)
-          | meanBelow := mean(spacings.below)
-          | 
-          | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
-
-        
-        todo //eval(input) must not(beEmpty) 
-      }
+      
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("11")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("7")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("8")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("8")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("8")))))
+      results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SDecimal(BigDecimal("8")))))
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("1")))))
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("7")))))
+      results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SDecimal(BigDecimal("7")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("1")))))
+      results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("2")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("50-250M"), "num" -> SDecimal(BigDecimal("8")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("2")))))
+      results must contain(SObject(Map("revenue" -> SString("500M+"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("250-500M"), "num" -> SDecimal(BigDecimal("7")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("4")))))
+      results must contain(SObject(Map("revenue" -> SString("5-50M"), "num" -> SDecimal(BigDecimal("5")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("3")))))
+      results must contain(SObject(Map("revenue" -> SString("<500K"), "num" -> SDecimal(BigDecimal("1")))))
+      results must contain(SObject(Map("revenue" -> SString("500K-5M"), "num" -> SDecimal(BigDecimal("7")))))
     }
+
+    "evaluate a function of multiple counts" in {
+      val input = """
+        | import std::math::floor
+        | clicks := //clicks
+        | 
+        | solve 'timeZone
+        |   page0 := count(clicks.pageId where clicks.pageId = "page-0" & clicks.timeZone = 'timeZone)
+        |   page1 := count(clicks.pageId where clicks.pageId = "page-1" & clicks.timeZone = 'timeZone)
+        |   
+        |   { timeZone: 'timeZone, ratio: floor(100 * (page0 / page1)) }
+        """.stripMargin
+
+      val resultsE = evalE(input)
+      val results = resultsE.map(_._2)
+
+      results must haveSize(11)
+      results must contain(SObject(Map("timeZone" -> SString("+14:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-02:00"), "ratio" -> SDecimal(BigDecimal("50.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-03:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+11:00"), "ratio" -> SDecimal(BigDecimal("200.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+12:00"), "ratio" -> SDecimal(BigDecimal("33.0"))))) //TODO: this should be 33.3333 - find out why precision is hosed
+      results must contain(SObject(Map("timeZone" -> SString("+04:00"), "ratio" -> SDecimal(BigDecimal("200.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+01:00"), "ratio" -> SDecimal(BigDecimal("25.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-01:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-06:00"), "ratio" -> SDecimal(BigDecimal("300.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("+02:00"), "ratio" -> SDecimal(BigDecimal("100.0")))))
+      results must contain(SObject(Map("timeZone" -> SString("-05:00"), "ratio" -> SDecimal(BigDecimal("50.0")))))
+    }
+
+    "evaluate reductions inside and outside of solves" in {
+      val input = """
+        | clicks := //clicks
+        |
+        | countsForTimezone := solve 'timeZone
+        |   clicksForZone := clicks where clicks.timeZone = 'timeZone
+        |   {timeZone: 'timeZone, clickCount: count(clicksForZone)}
+        |
+        | mostClicks := max(countsForTimezone.clickCount)
+        |
+        | countsForTimezone where countsForTimezone.clickCount = mostClicks
+        """.stripMargin
+
+      val resultsE = evalE(input)
+
+      println(resultsE)
+    }
+
+    "determine click times around each click" in {
+      val input = """
+        | clicks := //clicks
+        | 
+        | solve 'time = clicks.time
+        |   belowTime := max(clicks.time where clicks.time < 'time)
+        |   aboveTime := min(clicks.time where clicks.time > 'time)
+        |   
+        |   {
+        |     time: 'time,
+        |     below: belowTime,
+        |     above: aboveTime
+        |   }
+        """.stripMargin
+
+      val resultsE = evalE(input)
+      val results = resultsE.map(_._2)
+
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329526464104")), "below" -> SDecimal(BigDecimal("1329470485350")), "time" -> SDecimal(BigDecimal("1329475769211")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329301670072")), "below" -> SDecimal(BigDecimal("1329262444197")), "time" -> SDecimal(BigDecimal("1329275667592")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873610")), "below" -> SDecimal(BigDecimal("1329629900716")), "time" -> SDecimal(BigDecimal("1329643873609")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873610")), "below" -> SDecimal(BigDecimal("1329629900716")), "time" -> SDecimal(BigDecimal("1329643873609")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329076541429")), "below" -> SDecimal(BigDecimal("1329004284627")), "time" -> SDecimal(BigDecimal("1329020233656")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873611")), "below" -> SDecimal(BigDecimal("1329643873609")), "time" -> SDecimal(BigDecimal("1329643873610")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329333416645")), "below" -> SDecimal(BigDecimal("1329324578771")), "time" -> SDecimal(BigDecimal("1329326691939")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873612")), "below" -> SDecimal(BigDecimal("1329643873610")), "time" -> SDecimal(BigDecimal("1329643873611")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873612")), "below" -> SDecimal(BigDecimal("1328779873610")), "time" -> SDecimal(BigDecimal("1328779873611")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873612")), "below" -> SDecimal(BigDecimal("1328779873610")), "time" -> SDecimal(BigDecimal("1328779873611")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328797020396")), "below" -> SDecimal(BigDecimal("1328788056054")), "time" -> SDecimal(BigDecimal("1328791229826")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873613")), "below" -> SDecimal(BigDecimal("1328779873611")), "time" -> SDecimal(BigDecimal("1328779873612")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328809637371")), "below" -> SDecimal(BigDecimal("1328791229826")), "time" -> SDecimal(BigDecimal("1328797020396")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873614")), "below" -> SDecimal(BigDecimal("1329643873611")), "time" -> SDecimal(BigDecimal("1329643873612")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329004284627")), "below" -> SDecimal(BigDecimal("1328984890189")), "time" -> SDecimal(BigDecimal("1328985989055")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329360253555")), "below" -> SDecimal(BigDecimal("1329333416645")), "time" -> SDecimal(BigDecimal("1329345853072")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873614")), "below" -> SDecimal(BigDecimal("1328779873612")), "time" -> SDecimal(BigDecimal("1328779873613")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873614")), "below" -> SDecimal(BigDecimal("1328779873612")), "time" -> SDecimal(BigDecimal("1328779873613")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873614")), "below" -> SDecimal(BigDecimal("1328779873612")), "time" -> SDecimal(BigDecimal("1328779873613")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873618")), "below" -> SDecimal(BigDecimal("1329643873612")), "time" -> SDecimal(BigDecimal("1329643873614")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873618")), "below" -> SDecimal(BigDecimal("1329643873612")), "time" -> SDecimal(BigDecimal("1329643873614")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329629900716")), "below" -> SDecimal(BigDecimal("1329554034828")), "time" -> SDecimal(BigDecimal("1329589296943")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873616")), "below" -> SDecimal(BigDecimal("1328779873613")), "time" -> SDecimal(BigDecimal("1328779873614")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328812534981")), "below" -> SDecimal(BigDecimal("1328797020396")), "time" -> SDecimal(BigDecimal("1328809637371")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329190541217")), "below" -> SDecimal(BigDecimal("1329164110718")), "time" -> SDecimal(BigDecimal("1329165986272")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328984890189")), "below" -> SDecimal(BigDecimal("1328887823569")), "time" -> SDecimal(BigDecimal("1328969812140")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329456302829")), "below" -> SDecimal(BigDecimal("1329441529486")), "time" -> SDecimal(BigDecimal("1329446825698")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873617")), "below" -> SDecimal(BigDecimal("1328779873614")), "time" -> SDecimal(BigDecimal("1328779873616")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873617")), "below" -> SDecimal(BigDecimal("1328779873614")), "time" -> SDecimal(BigDecimal("1328779873616")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328791229826")), "below" -> SDecimal(BigDecimal("1328780398002")), "time" -> SDecimal(BigDecimal("1328788056054")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329475769211")), "below" -> SDecimal(BigDecimal("1329456302829")), "time" -> SDecimal(BigDecimal("1329470485350")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329383567193")), "below" -> SDecimal(BigDecimal("1329369083745")), "time" -> SDecimal(BigDecimal("1329369428834")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873619")), "below" -> SDecimal(BigDecimal("1328779873616")), "time" -> SDecimal(BigDecimal("1328779873617")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873619")), "below" -> SDecimal(BigDecimal("1328779873616")), "time" -> SDecimal(BigDecimal("1328779873617")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329244747076")), "below" -> SDecimal(BigDecimal("1329190541217")), "time" -> SDecimal(BigDecimal("1329211954428")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329554034828")), "below" -> SDecimal(BigDecimal("1329475769211")), "time" -> SDecimal(BigDecimal("1329526464104")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329211954428")), "below" -> SDecimal(BigDecimal("1329165986272")), "time" -> SDecimal(BigDecimal("1329190541217")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873620")), "below" -> SDecimal(BigDecimal("1329643873614")), "time" -> SDecimal(BigDecimal("1329643873618")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329137951622")), "below" -> SDecimal(BigDecimal("1329076541429")), "time" -> SDecimal(BigDecimal("1329094347814")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328887823569")), "below" -> SDecimal(BigDecimal("1328847243682")), "time" -> SDecimal(BigDecimal("1328877415620")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873621")), "below" -> SDecimal(BigDecimal("1328779873617")), "time" -> SDecimal(BigDecimal("1328779873619")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873621")), "below" -> SDecimal(BigDecimal("1328779873617")), "time" -> SDecimal(BigDecimal("1328779873619")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873621")), "below" -> SDecimal(BigDecimal("1328779873617")), "time" -> SDecimal(BigDecimal("1328779873619")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873621")), "below" -> SDecimal(BigDecimal("1328779873617")), "time" -> SDecimal(BigDecimal("1328779873619")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329165986272")), "below" -> SDecimal(BigDecimal("1329159525492")), "time" -> SDecimal(BigDecimal("1329164110718")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329309914296")), "below" -> SDecimal(BigDecimal("1329275667592")), "time" -> SDecimal(BigDecimal("1329301670072")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873621")), "below" -> SDecimal(BigDecimal("1329643873618")), "time" -> SDecimal(BigDecimal("1329643873620")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329345853072")), "below" -> SDecimal(BigDecimal("1329326691939")), "time" -> SDecimal(BigDecimal("1329333416645")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329324578771")), "below" -> SDecimal(BigDecimal("1329309914296")), "time" -> SDecimal(BigDecimal("1329310139168")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329385943949")), "below" -> SDecimal(BigDecimal("1329369428834")), "time" -> SDecimal(BigDecimal("1329383567193")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873622")), "below" -> SDecimal(BigDecimal("1328779873619")), "time" -> SDecimal(BigDecimal("1328779873621")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873622")), "below" -> SDecimal(BigDecimal("1329643873620")), "time" -> SDecimal(BigDecimal("1329643873621")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873622")), "below" -> SDecimal(BigDecimal("1329643873620")), "time" -> SDecimal(BigDecimal("1329643873621")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873623")), "below" -> SDecimal(BigDecimal("1328779873621")), "time" -> SDecimal(BigDecimal("1328779873622")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329369428834")), "below" -> SDecimal(BigDecimal("1329360253555")), "time" -> SDecimal(BigDecimal("1329369083745")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329470485350")), "below" -> SDecimal(BigDecimal("1329446825698")), "time" -> SDecimal(BigDecimal("1329456302829")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873623")), "below" -> SDecimal(BigDecimal("1329643873621")), "time" -> SDecimal(BigDecimal("1329643873622")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329159525492")), "below" -> SDecimal(BigDecimal("1329094347814")), "time" -> SDecimal(BigDecimal("1329137951622")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873624")), "below" -> SDecimal(BigDecimal("1329643873622")), "time" -> SDecimal(BigDecimal("1329643873623")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873624")), "below" -> SDecimal(BigDecimal("1329643873622")), "time" -> SDecimal(BigDecimal("1329643873623")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329408502943")), "below" -> SDecimal(BigDecimal("1329383567193")), "time" -> SDecimal(BigDecimal("1329385943949")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873624")), "below" -> SDecimal(BigDecimal("1328779873622")), "time" -> SDecimal(BigDecimal("1328779873623")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329262444197")), "below" -> SDecimal(BigDecimal("1329244747076")), "time" -> SDecimal(BigDecimal("1329253270269")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873625")), "below" -> SDecimal(BigDecimal("1328779873623")), "time" -> SDecimal(BigDecimal("1328779873624")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873625")), "below" -> SDecimal(BigDecimal("1328779873623")), "time" -> SDecimal(BigDecimal("1328779873624")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873625")), "below" -> SDecimal(BigDecimal("1329643873623")), "time" -> SDecimal(BigDecimal("1329643873624")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329369083745")), "below" -> SDecimal(BigDecimal("1329345853072")), "time" -> SDecimal(BigDecimal("1329360253555")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329164110718")), "below" -> SDecimal(BigDecimal("1329137951622")), "time" -> SDecimal(BigDecimal("1329159525492")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873626")), "below" -> SDecimal(BigDecimal("1328779873624")), "time" -> SDecimal(BigDecimal("1328779873625")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328969812140")), "below" -> SDecimal(BigDecimal("1328877415620")), "time" -> SDecimal(BigDecimal("1328887823569")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329310139168")), "below" -> SDecimal(BigDecimal("1329301670072")), "time" -> SDecimal(BigDecimal("1329309914296")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873627")), "below" -> SDecimal(BigDecimal("1329643873624")), "time" -> SDecimal(BigDecimal("1329643873625")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329094347814")), "below" -> SDecimal(BigDecimal("1329020233656")), "time" -> SDecimal(BigDecimal("1329076541429")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329446825698")), "below" -> SDecimal(BigDecimal("1329408502943")), "time" -> SDecimal(BigDecimal("1329441529486")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873628")), "below" -> SDecimal(BigDecimal("1328779873625")), "time" -> SDecimal(BigDecimal("1328779873626")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328840918817")), "below" -> SDecimal(BigDecimal("1328809637371")), "time" -> SDecimal(BigDecimal("1328812534981")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329275667592")), "below" -> SDecimal(BigDecimal("1329253270269")), "time" -> SDecimal(BigDecimal("1329262444197")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328788056054")), "below" -> SDecimal(BigDecimal("1328779873631")), "time" -> SDecimal(BigDecimal("1328780398002")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873628")), "below" -> SDecimal(BigDecimal("1329643873625")), "time" -> SDecimal(BigDecimal("1329643873627")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873628")), "below" -> SDecimal(BigDecimal("1329643873625")), "time" -> SDecimal(BigDecimal("1329643873627")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328847243682")), "below" -> SDecimal(BigDecimal("1328812534981")), "time" -> SDecimal(BigDecimal("1328840918817")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329253270269")), "below" -> SDecimal(BigDecimal("1329211954428")), "time" -> SDecimal(BigDecimal("1329244747076")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873629")), "below" -> SDecimal(BigDecimal("1328779873626")), "time" -> SDecimal(BigDecimal("1328779873628")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873629")), "below" -> SDecimal(BigDecimal("1328779873626")), "time" -> SDecimal(BigDecimal("1328779873628")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873629")), "below" -> SDecimal(BigDecimal("1328779873626")), "time" -> SDecimal(BigDecimal("1328779873628")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329020233656")), "below" -> SDecimal(BigDecimal("1328985989055")), "time" -> SDecimal(BigDecimal("1329004284627")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328985989055")), "below" -> SDecimal(BigDecimal("1328969812140")), "time" -> SDecimal(BigDecimal("1328984890189")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329589296943")), "below" -> SDecimal(BigDecimal("1329526464104")), "time" -> SDecimal(BigDecimal("1329554034828")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873630")), "below" -> SDecimal(BigDecimal("1328779873628")), "time" -> SDecimal(BigDecimal("1328779873629")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328877415620")), "below" -> SDecimal(BigDecimal("1328840918817")), "time" -> SDecimal(BigDecimal("1328847243682")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329326691939")), "below" -> SDecimal(BigDecimal("1329310139168")), "time" -> SDecimal(BigDecimal("1329324578771")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873631")), "below" -> SDecimal(BigDecimal("1328779873629")), "time" -> SDecimal(BigDecimal("1328779873630")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873631")), "below" -> SDecimal(BigDecimal("1328779873629")), "time" -> SDecimal(BigDecimal("1328779873630")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873631")), "below" -> SDecimal(BigDecimal("1328779873629")), "time" -> SDecimal(BigDecimal("1328779873630")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328779873631")), "below" -> SDecimal(BigDecimal("1328779873629")), "time" -> SDecimal(BigDecimal("1328779873630")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329441529486")), "below" -> SDecimal(BigDecimal("1329385943949")), "time" -> SDecimal(BigDecimal("1329408502943")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1328780398002")), "below" -> SDecimal(BigDecimal("1328779873630")), "time" -> SDecimal(BigDecimal("1328779873631")))))
+      results must contain(SObject(Map("above" -> SDecimal(BigDecimal("1329643873609")), "below" -> SDecimal(BigDecimal("1329589296943")), "time" -> SDecimal(BigDecimal("1329629900716")))))
+    }
+     
   
+    "determine most isolated clicks in time" in {
+      val input = """
+        | clicks := //clicks
+        | 
+        | spacings := solve 'time
+        |   click := clicks where clicks.time = 'time
+        |   belowTime := max(clicks.time where clicks.time < 'time)
+        |   aboveTime := min(clicks.time where clicks.time > 'time)
+        |   
+        |   {
+        |     click: click,
+        |     below: click.time - belowTime,
+        |     above: aboveTime - click.time
+        |   }
+        |   
+        | meanAbove := mean(spacings.above)
+        | meanBelow := mean(spacings.below)
+        | 
+        | spacings.click where spacings.below > meanBelow & spacings.above > meanAbove""".stripMargin
+
+        val resultsE = evalE(input)
+
+        resultsE must haveSize(20)
+        
+        val results = resultsE collect {
+          case (ids, sv) if ids.length == 1 => sv
+        }
+        
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329275667592")), "timeZone" -> SString("+14:00"), "timeString" -> SString("2012-02-15T17:14:27.592+14:00"), "pageId" -> SString("page-4"), "userId" -> SString("user-1001"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329020233656")), "timeZone" -> SString("+14:00"), "timeString" -> SString("2012-02-12T18:17:13.656+14:00"), "pageId" -> SString("page-4"), "userId" -> SString("user-1017"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329345853072")), "timeZone" -> SString("-02:00"), "timeString" -> SString("2012-02-15T20:44:13.072-02:00"), "pageId" -> SString("page-1"), "userId" -> SString("user-1014"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329589296943")), "timeZone" -> SString("+03:00"), "timeString" -> SString("2012-02-18T21:21:36.943+03:00"), "pageId" -> SString("page-3"), "userId" -> SString("user-1006"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1328969812140")), "timeZone" -> SString("+01:00"), "timeString" -> SString("2012-02-11T15:16:52.140+01:00"), "pageId" -> SString("page-1"), "userId" -> SString("user-1019"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329211954428")), "timeZone" -> SString("+13:00"), "timeString" -> SString("2012-02-14T22:32:34.428+13:00"), "pageId" -> SString("page-4"), "userId" -> SString("user-1020"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329526464104")), "timeZone" -> SString("+13:00"), "timeString" -> SString("2012-02-18T13:54:24.104+13:00"), "pageId" -> SString("page-3"), "userId" -> SString("user-1020"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329190541217")), "timeZone" -> SString("-12:00"), "timeString" -> SString("2012-02-13T15:35:41.217-12:00"), "pageId" -> SString("page-2"), "userId" -> SString("user-1016"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329094347814")), "timeZone" -> SString("+12:00"), "timeString" -> SString("2012-02-13T12:52:27.814+12:00"), "pageId" -> SString("page-1"), "userId" -> SString("user-1015"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1328877415620")), "timeZone" -> SString("-12:00"), "timeString" -> SString("2012-02-10T00:36:55.620-12:00"), "pageId" -> SString("page-3"), "userId" -> SString("user-1018"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329456302829")), "timeZone" -> SString("-03:00"), "timeString" -> SString("2012-02-17T02:25:02.829-03:00"), "pageId" -> SString("page-4"), "userId" -> SString("user-1001"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329137951622")), "timeZone" -> SString("+04:00"), "timeString" -> SString("2012-02-13T16:59:11.622+04:00"), "pageId" -> SString("page-0"), "userId" -> SString("user-1017"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329360253555")), "timeZone" -> SString("+11:00"), "timeString" -> SString("2012-02-16T13:44:13.555+11:00"), "pageId" -> SString("page-1"), "userId" -> SString("user-1020"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1328887823569")), "timeZone" -> SString("+12:00"), "timeString" -> SString("2012-02-11T03:30:23.569+12:00"), "pageId" -> SString("page-4"), "userId" -> SString("user-1007"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329076541429")), "timeZone" -> SString("+12:00"), "timeString" -> SString("2012-02-13T07:55:41.429+12:00"), "pageId" -> SString("page-1"), "userId" -> SString("user-1016"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329262444197")), "timeZone" -> SString("-06:00"), "timeString" -> SString("2012-02-14T17:34:04.197-06:00"), "pageId" -> SString("page-0"), "userId" -> SString("user-1019"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329004284627")), "timeZone" -> SString("+01:00"), "timeString" -> SString("2012-02-12T00:51:24.627+01:00"), "pageId" -> SString("page-1"), "userId" -> SString("user-1011"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329554034828")), "timeZone" -> SString("+06:00"), "timeString" -> SString("2012-02-18T14:33:54.828+06:00"), "pageId" -> SString("page-2"), "userId" -> SString("user-1016"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329408502943")), "timeZone" -> SString("+13:00"), "timeString" -> SString("2012-02-17T05:08:22.943+13:00"), "pageId" -> SString("page-4"), "userId" -> SString("user-1006"))))
+        results must contain(SObject(Map("time" -> SDecimal(BigDecimal("1329629900716")), "timeZone" -> SString("-07:00"), "timeString" -> SString("2012-02-18T22:38:20.716-07:00"), "pageId" -> SString("page-0"), "userId" -> SString("user-1014"))))   
+    }
+
     "evaluate the 'hello, quirrel' examples" >> {
       "json" >> {
         "object" >> {
@@ -1034,10 +1835,28 @@ trait EvalStackSpecs extends Specification {
           result must contain(SDecimal(7))
         }
         
+        "subtraction" >> {
+          val result = eval("5 - 2")
+          result must haveSize(1)
+          result must contain(SDecimal(3))
+        }
+        
         "multiplication" >> {
           val result = eval("8 * 2")
           result must haveSize(1)
           result must contain(SDecimal(16))
+        }
+        
+        "division" >> {
+          val result = eval("12 / 3")
+          result must haveSize(1)
+          result must contain(SDecimal(4))
+        }
+        
+        "mod" >> {
+          val result = eval("5 % 2")
+          result must haveSize(1)
+          result must contain(SDecimal(1))
         }
       }
       
@@ -1088,15 +1907,15 @@ trait EvalStackSpecs extends Specification {
 
           val result = eval(input)
           result must haveSize(5)
-      }.pendingUntilFixed
+      }
       
       "should merge objects without timing out" >> {
         val input = """
            //richie1/test 
         """.stripMargin
 
-        eval(input) must not(throwA[Throwable])
-      }.pendingUntilFixed
+        eval(input) must haveSize(100)
+      }
 
       "handle query on empty array" >> {
         val input = """
@@ -1104,7 +1923,7 @@ trait EvalStackSpecs extends Specification {
         """.stripMargin
 
         eval(input) mustEqual Set(SArray(Vector()), SObject(Map("foo" -> SArray(Vector()))))
-      }.pendingUntilFixed
+      }
       
       "handle query on empty object" >> {
         val input = """
@@ -1112,7 +1931,7 @@ trait EvalStackSpecs extends Specification {
         """.stripMargin
 
         eval(input) mustEqual Set(SObject(Map()), SObject(Map("foo" -> SObject(Map()))))
-      }.pendingUntilFixed
+      }
 
       "handle query on null" >> {
         val input = """
@@ -1132,29 +1951,35 @@ trait EvalStackSpecs extends Specification {
       }
 
       "handle load of error-prone fastspring data" >> {
-        (eval("//fastspring_nulls") must haveSize(2)) and
-        (eval("//fastspring_mixed_type") must haveSize(2))
-      }.pendingUntilFixed
+        eval("//fastspring_nulls") must haveSize(2)
+        eval("//fastspring_mixed_type") must haveSize(2)
+      }
 
       // times out...
-      /* "handle chained characteristic functions" in {
-        val input = """
-          | cust := //fs1/customers
-          | tran := //fs1/transactions
-          | relations('customer) :=
-          |   cust' := cust where cust.customer = 'customer
-          |   tran' := tran where tran.customer = 'customer
-          |   tran' ~ cust'
-          |     { country : cust'.country,  time : tran'.time, quantity : tran'.quantity }
-          | grouping('country) :=
-          |   { country: 'country, count: sum((relations where relations.country = 'country).quantity) }
-          | grouping""".stripMargin
-
-        val result = eval(input)
-        result must haveSize(4)
-      } */
+//      "handle chained characteristic functions" in {
+//        val input = """
+//          | cust := //fs1/customers
+//          | tran := //fs1/transactions
+//          | relations('customer) :=
+//          |   cust' := cust where cust.customer = 'customer
+//          |   tran' := tran where tran.customer = 'customer
+//          |   tran' ~ cust'
+//          |     { country : cust'.country,  time : tran'.time, quantity : tran'.quantity }
+//          | grouping('country) :=
+//          |   { country: 'country, count: sum((relations where relations.country = 'country).quantity) }
+//          | grouping""".stripMargin
+//
+//        val result = eval(input)
+//        result must haveSize(4)
+//      } 
     }
   }
 }
+
+case class Precision(p: Double)
+class AlmostEqual(d: Double) {
+  def ~=(d2: Double)(implicit p: Precision) = (d - d2).abs <= p.p
+}
+
 
 // vim: set ts=4 sw=4 et:

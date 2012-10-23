@@ -35,7 +35,10 @@ case class RunConfig(
     outliers: Double = 0.05,
     dryRuns: Int = 10,
     optimize: Boolean = true,
-    baseline: Option[File] = None) {
+    baseline: Option[File] = None,
+    rootDir: Option[File] = None,
+    ingest: List[(String, File)] = Nil,
+    queryTimeout: Int = 5 * 60) {
   def tails: Int = (runs * (outliers / 2)).toInt
 }
 
@@ -67,6 +70,7 @@ object RunConfig {
     }
   }
 
+  def fromCommandLine(args: Array[String]): ValidationNEL[String, RunConfig] = fromCommandLine(args.toList)
 
   @tailrec
   def fromCommandLine(args: List[String], config: ValidationNEL[String, RunConfig] = RunConfig().successNel): ValidationNEL[String, RunConfig] = args match {
@@ -85,7 +89,7 @@ object RunConfig {
       fromCommandLine(args, config map (_.copy(format = OutputFormat.Json)))
 
     case "--no-optimize" :: args =>
-      fromCommandLine(args, config map (_.copy(optimize = true)))
+      fromCommandLine(args, config map (_.copy(optimize = false)))
 
     case "--dry-runs" :: NonNegativeInt(runs) :: args =>
       fromCommandLine(args, config map (_.copy(dryRuns = runs.toInt)))
@@ -104,6 +108,20 @@ object RunConfig {
 
     case "--outliers" :: _ :: args =>
       fromCommandLine(args, config *> "The argument to --outliers must be a real number in [0, 0.5)".failureNel)
+
+    case "--root-dir" :: rootDir :: args =>
+      fromCommandLine(args, config map (_.copy(rootDir = Some(new File(rootDir)))))
+
+    case "--ingest" :: db :: file :: args =>
+      fromCommandLine(args, config map { cfg =>
+        cfg.copy(ingest = cfg.ingest :+ (db -> new File(file)))
+      })
+
+    case "--timeout" :: NonNegativeInt(to) :: args =>
+      fromCommandLine(args, config map (_.copy(queryTimeout = to.toInt)))
+
+    case "--timeout" :: _ :: args =>
+      fromCommandLine(args, config *> "The argument to --timeout must be a non-negative number".failureNel)
 
     case test :: args =>
       fromCommandLine(args, config map { config =>

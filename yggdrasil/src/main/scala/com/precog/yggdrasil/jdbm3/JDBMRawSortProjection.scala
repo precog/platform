@@ -23,6 +23,9 @@ package jdbm3
 import com.precog.common.json._
 import com.precog.common.Path
 import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.TableModule._
+
+import blueeyes.json._
 
 import org.apache.jdbm._
 import org.joda.time.DateTime
@@ -32,6 +35,7 @@ import scalaz.effect.IO
 
 import java.io.File
 import java.util.SortedMap
+import java.nio.ByteBuffer
 
 import scala.collection.JavaConverters._
 
@@ -39,14 +43,14 @@ import scala.collection.JavaConverters._
  * A Projection wrapping a raw JDBM TreeMap index used for sorting. It's assumed that
  * the index has been created and filled prior to creating this wrapper.
  */
-abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, idCount: Int, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte],Slice] with Logging { projection =>
-  import TableModule.paths._
+class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sortOrder: DesiredSortOrder, sliceSize: Int) extends BlockProjectionLike[Array[Byte],Slice] with Logging {
 
   // These should not actually be used in sorting
   def descriptor: ProjectionDescriptor = sys.error("Sort projections do not have full ProjectionDescriptors")
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("Insertion on sort projections is unsupported")
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("Insertion on sort projections is unsupported")
+  def commit(): IO[Unit] = sys.error("Commit on sort projections is unsupported")
 
-  def foreach(f : java.util.Map.Entry[Array[Byte],Array[Byte]] => Unit) {
+  def foreach(f : java.util.Map.Entry[Array[Byte], Array[Byte]] => Unit) {
     val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
     val index: SortedMap[Array[Byte],Array[Byte]] = DB.getTreeMap(indexName)
 
@@ -55,73 +59,75 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
     DB.close()
   }
 
-  private def keyAfter(k: Array[Byte]): Array[Byte] = {
-
-    // TODO This won't be nearly as fast as Derek's, since JDBMSlice can no
-    // longer get into the same level of detail about the encoded format. Is
-    // this a problem? Should we allow writes w/ "holes?"
-
-    val vals = keyFormat.decode(k)
-    val last = vals.last match {
-      case CLong(n) => CLong(n + 1)
-      case v => sys.error("Expected a long (global ID) in the last position, but found: " + v)
-    }
-    keyFormat.encode(vals.init :+ last)
-  }
+  val keyAfterDelta = if (sortOrder.isAscending) 1 else -1
 
   val rowFormat = RowFormat.forValues(valRefs)
-  val keyFormat = RowFormat.forValues(sortKeyRefs)
+  val keyFormat = RowFormat.forSortingKey(sortKeyRefs)
 
-  def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Array[Byte],Slice]] = try {
+  def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Array[Byte], Slice]] = {
     // TODO: Make this far, far less ugly
     if (columns.size > 0) {
       throw new IllegalArgumentException("JDBM Sort Projections may not be constrained by column descriptor")
     }
 
-    val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
-    val index: SortedMap[Array[Byte],Array[Byte]] = DB.getTreeMap(indexName)
+    // At this point we have completed all valid writes, so we open readonly + no locks, allowing for concurrent use of sorted data
+    //println("opening: " + dbFile.getCanonicalPath)
+    val db = DBMaker.openFile(dbFile.getCanonicalPath).readonly().disableLocking().make()
+    try {
+      val index: SortedMap[Array[Byte],Array[Byte]] = db.getTreeMap(indexName)
 
-    if (index == null) {
-      throw new IllegalArgumentException("No such index in DB: %s:%s".format(dbFile, indexName))
-    }
-
-    var constrainedMap = id.map { idKey => index.tailMap(keyAfter(idKey)) }.getOrElse(index)
-    constrainedMap.lastKey() // should throw an exception if the map is empty, but...
-
-    var firstKey: Array[Byte] = null
-    var lastKey: Array[Byte]  = null
-
-    val slice = new JDBMSlice[Array[Byte]] {
-      def source = constrainedMap.entrySet.iterator.asScala
-      def requestedSize = sliceSize
-
-      lazy val keyColumns: Array[(ColumnRef, ArrayColumn[_])] =
-        sortKeyRefs.map(JDBMSlice.columnFor(CPath.Identity, sliceSize))(collection.breakOut)
-
-      lazy val valColumns: Array[(ColumnRef, ArrayColumn[_])] =
-        valRefs.map(JDBMSlice.columnFor(CPath(Value), sliceSize))(collection.breakOut)
-
-      val columnDecoder = rowFormat.ColumnDecoder(valColumns map (_._2))
-      val keyColumnDecoder = keyFormat.ColumnDecoder(keyColumns map (_._2))
-
-      def loadRowFromKey(row: Int, rowKey: Array[Byte]) {
-        if (row == 0) { firstKey = rowKey }
-        lastKey = rowKey
-
-        keyColumnDecoder.decodeToRow(row, rowKey)
+      if (index == null) {
+        throw new IllegalArgumentException("No such index in DB: %s:%s".format(dbFile, indexName))
       }
 
-      load()
-    }
+      val constrainedMap = id.map { idKey => index.tailMap(idKey) }.getOrElse(index)
+      val iteratorSetup = () => {
+        val rawIterator = constrainedMap.entrySet.iterator.asScala
+        // Since our key to retrieve after was the last key we retrieved, we know it exists,
+        // so we can safely discard it
+        if (id.isDefined && rawIterator.hasNext) rawIterator.next();
+        rawIterator
+      }
 
-    DB.close() // creating the slice should have already read contents into memory
+      // FIXME: this is brokenness in JDBM somewhere      
+      val iterator = {
+        var initial: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]] = null
+        var tries = 0
+        while (tries < JDBMProjection.MAX_SPINS && initial == null) {
+          try {
+            initial = iteratorSetup()
+          } catch {
+            case t: Throwable => logger.warn("Failure on load iterator initialization")
+          }
+          tries += 1
+        }
+        if (initial == null) {
+          throw new VicciniException("Initial drop failed with too many concurrent mods.")
+        } else {
+          initial
+        }
+      }
 
-    if (firstKey == null) { // Just guard against an empty slice
-      None
-    } else {
-      Some(BlockProjectionData[Array[Byte],Slice](firstKey, lastKey, slice))
+      if (iterator.isEmpty) {
+        None
+      } else {
+        val keyColumns = sortKeyRefs.map(JDBMSlice.columnFor(CPath("[0]"), sliceSize))
+        val valColumns = valRefs.map(JDBMSlice.columnFor(CPath("[1]"), sliceSize))
+
+        val keyColumnDecoder = keyFormat.ColumnDecoder(keyColumns.map(_._2)(collection.breakOut))
+        val valColumnDecoder = rowFormat.ColumnDecoder(valColumns.map(_._2)(collection.breakOut))
+
+        val (firstKey, lastKey, rows) = JDBMSlice.load(sliceSize, iteratorSetup, keyColumnDecoder, valColumnDecoder)
+
+        val slice = new Slice { 
+          val size = rows 
+          val columns = keyColumns.toMap ++ valColumns
+        }
+
+        Some(BlockProjectionData[Array[Byte],Slice](firstKey, lastKey, slice))
+      }
+    } finally {
+      db.close() // creating the slice should have already read contents into memory
     }
-  } catch {
-    case e: java.util.NoSuchElementException => None
   }
 }

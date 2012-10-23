@@ -21,17 +21,12 @@ package com.precog
 package daze
 
 import bytecode.RandomLibrary
-
+import com.precog.yggdrasil._
 import org.specs2.mutable._
 
-object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLibrary {
+object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLibrary with FNDummyModule {
   import dag._
-  import instructions.{
-    Line,
-    Add,
-    DerefObject,
-    PushString, PushNum
-  }
+  import instructions._
   import bytecode._
 
   "pretty printing" should {
@@ -40,8 +35,8 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
 
       val input =
         Join(line, DerefObject, CrossLeftSort,
-          LoadLocal(line, Root(line, PushString("/file"))),
-          Root(line, PushString("column")))
+          dag.LoadLocal(line, Root(line, CString("/file"))),
+          Root(line, CString("column")))
 
       val result = prettyPrint(input)
       
@@ -51,9 +46,9 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
            |lazy val input =
            |  Join(line, DerefObject, CrossLeftSort,
            |    LoadLocal(line,
-           |      Root(line, PushString("/file"))
+           |      Root(line, CString("/file"))
            |    ),
-           |    Root(line, PushString("column"))
+           |    Root(line, CString("column"))
            |  )
            |""".stripMargin
 
@@ -62,16 +57,16 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
 
     "format a DAG with shared structure" in {
       val line = Line(0, "")
-      val file = LoadLocal(line, Root(line, PushString("/file"))) 
+      val file = dag.LoadLocal(line, Root(line, CString("/file"))) 
       
       val input =
         Join(line, Add, IdentitySort,
           Join(line, DerefObject, CrossLeftSort, 
             file,
-            Root(line, PushString("time"))),
+            Root(line, CString("time"))),
           Join(line, DerefObject, CrossLeftSort,
             file,
-            Root(line, PushString("height"))))
+            Root(line, CString("height"))))
 
       val result = prettyPrint(input)
 
@@ -80,18 +75,18 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
            |
            |lazy val node =
            |  LoadLocal(line,
-           |    Root(line, PushString("/file"))
+           |    Root(line, CString("/file"))
            |  )
            |
            |lazy val input =
            |  Join(line, Add, IdentitySort,
            |    Join(line, DerefObject, CrossLeftSort,
            |      node,
-           |      Root(line, PushString("time"))
+           |      Root(line, CString("time"))
            |    ),
            |    Join(line, DerefObject, CrossLeftSort,
            |      node,
-           |      Root(line, PushString("height"))
+           |      Root(line, CString("height"))
            |    )
            |  )
            |""".stripMargin
@@ -102,24 +97,24 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
     "format a DAG containing a Split" in {
       val line = Line(0, "")
 
-      def clicks = LoadLocal(line, Root(line, PushString("/file")))
+      def clicks = dag.LoadLocal(line, Root(line, CString("/file")))
 
-      lazy val input: Split =
-        Split(line,
-          Group(
+      lazy val input: dag.Split =
+        dag.Split(line,
+          dag.Group(
             1,
             clicks,
             UnfixedSolution(0, 
               Join(line, DerefObject, CrossLeftSort,
                 clicks,
-                Root(line, PushString("column0"))))),
+                Root(line, CString("column0"))))),
           Join(line, Add, IdentitySort,
             Join(line, DerefObject, CrossLeftSort,
               SplitParam(line, 0)(input),
-              Root(line, PushString("column1"))),
+              Root(line, CString("column1"))),
             Join(line, DerefObject, CrossLeftSort,
               SplitGroup(line, 1, clicks.identities)(input),
-              Root(line, PushString("column2")))))
+              Root(line, CString("column2")))))
 
       val result = prettyPrint(input)
       
@@ -128,7 +123,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
            |
            |lazy val node =
            |  LoadLocal(line,
-           |    Root(line, PushString("/file"))
+           |    Root(line, CString("/file"))
            |  )
            |
            |lazy val input =
@@ -138,18 +133,18 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
            |      UnfixedSolution(line, 0,
            |        Join(line, DerefObject, CrossLeftSort,
            |          node,
-           |          Root(line, PushString("column0"))
+           |          Root(line, CString("column0"))
            |        )
            |      )
            |    ),
            |    Join(line, Add, IdentitySort,
            |      Join(line, DerefObject, CrossLeftSort,
            |        SplitParam(line, 0)(input),
-           |        Root(line, PushString("column1"))
+           |        Root(line, CString("column1"))
            |      ),
            |      Join(line, DerefObject, CrossLeftSort,
            |        SplitParam(line, 1, Vector(LoadIds("/file"))(input),
-           |        Root(line, PushString("column2"))
+           |        Root(line, CString("column2"))
            |      )
            |    )
            |  )

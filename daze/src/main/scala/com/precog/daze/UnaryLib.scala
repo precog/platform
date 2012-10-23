@@ -26,6 +26,9 @@ import yggdrasil._
 import yggdrasil.table._
 
 trait UnaryLib[M[+_]] extends GenOpcode[M] {
+
+  import StdLib.{BoolFrom, DoubleFrom, LongFrom, NumFrom, StrFrom, doubleIsDefined}
+
   def ConstantEmptyArray =
     new CF1(Function.const(Some(new InfiniteColumn with EmptyArrayColumn {})))
   
@@ -34,27 +37,18 @@ trait UnaryLib[M[+_]] extends GenOpcode[M] {
 
     object Comp extends Op1(UnaryNamespace, "comp") {
       val tpe = UnaryOperationType(JBooleanT, JBooleanT)
-      def f1: F1 = new CF1P({
-        case c: BoolColumn => new Map1Column(c) with BoolColumn {
-          def apply(row: Int) = !c(row)
-        }
+      val f1: F1 = new CF1P({
+        case c: BoolColumn => new BoolFrom.B(c, !_)
       })
     }
     
     object Neg extends Op1(UnaryNamespace, "neg") {
       val tpe = UnaryOperationType(JNumberT, JNumberT)
-      def f1: F1 = new CF1P({
-        case c: LongColumn => new Map1Column(c) with LongColumn {
-          def apply(row: Int) = -c(row)
-        }
-        case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
-          def apply(row: Int) = -c(row)
-        }
-        case c: NumColumn => new Map1Column(c) with NumColumn {
-          def apply(row: Int) = -c(row)
-        }
+      val f1: F1 = new CF1P({
+        case c: DoubleColumn => new DoubleFrom.D(c, doubleIsDefined, -_)
+        case c: LongColumn => new LongFrom.L(c, n => true, -_)
+        case c: NumColumn => new NumFrom.N(c, n => true, -_)
       })
     }
   }
 }
-

@@ -108,7 +108,7 @@ trait PerfTestSuite extends Logging {
     try {
 
       implicit val execContext = ExecutionContext.defaultExecutionContext(actorSystem)
-      val testTimeout = Duration(100, "seconds")
+      val testTimeout = Duration(config.queryTimeout, "seconds")
 
       implicit val futureIsCopointed: Copointed[Future] = new Copointed[Future] {
         def map[A, B](m: Future[A])(f: A => B) = m map f
@@ -116,12 +116,20 @@ trait PerfTestSuite extends Logging {
       }
 
       val runner = new JDBMPerfTestRunner(SimpleTimer,
-        optimize = config.optimize, userUID = "dummy", actorSystem = actorSystem)
+        optimize = config.optimize,
+        userUID = "dummy",
+        actorSystem = actorSystem,
+        _rootDir = config.rootDir)
 
       runner.startup()
 
+      config.ingest foreach { case (db, file) =>
+        runner.ingest(db, file).unsafePerformIO
+      }
+
       select(config.select getOrElse ((_, _) => true)) foreach { test =>
-        run(test, runner, runs = config.dryRuns, outliers = config.outliers)
+        if(config.dryRuns > 0)
+          run(test, runner, runs = config.dryRuns, outliers = config.outliers)
         val result = run(test, runner, runs = config.runs, outliers = config.outliers) map {
           case (t, stats) =>
             (t, stats map (_ * (1 / 1000000.0))) // Convert to ms.

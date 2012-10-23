@@ -37,15 +37,17 @@ import akka.util.duration._
 import akka.util.Timeout
 
 import com.weiglewilczek.slf4s._
+import org.slf4j._
 
 import _root_.kafka.api.FetchRequest
 import _root_.kafka.consumer.SimpleConsumer
 import _root_.kafka.message.MessageSet
 
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema.Decomposer
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.serialization.Decomposer
+import blueeyes.json.serialization.DefaultSerialization._
 
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.immutable.TreeMap
 import scalaz._
@@ -55,7 +57,7 @@ import scalaz.syntax.monoid._
 // MESSAGES //
 //////////////
 
-case class ProjectionInsertsExpected(projections: Int)
+case class ProjectionUpdatesExpected(projections: Int)
 
 ////////////
 // ACTORS //
@@ -76,18 +78,19 @@ abstract class KafkaShardIngestActor(shardId: String,
                                      fetchBufferSize: Int = 1024 * 1024,
                                      ingestTimeout: Timeout = 120 seconds, 
                                      maxCacheSize: Int = 5,
-                                     maxConsecutiveFailures: Int = 3) extends Actor with Logging {
+                                     maxConsecutiveFailures: Int = 3) extends Actor {
+  protected lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.KafkaShardIngestActor")
 
   private var lastCheckpoint: YggCheckpoint = initialCheckpoint
 
   private var totalConsecutiveFailures = 0
-  private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[EventMessage]] 
+  private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[IngestMessage]] 
   private var pendingCompletes = Vector.empty[BatchComplete]
 
   def receive = {
     case Status => sender ! status
 
-    case complete @ BatchComplete(checkpoint, projectionMetadata) => 
+    case complete @ BatchComplete(checkpoint, _) => 
       pendingCompletes :+= complete
 
       // the minimum value in the ingest cache is complete, so
@@ -99,8 +102,8 @@ abstract class KafkaShardIngestActor(shardId: String,
         totalConsecutiveFailures = 0
 
         pendingCompletes = pendingCompletes flatMap {
-          case BatchComplete(pendingCheckpoint, metadata) if pendingCheckpoint <= checkpoint =>
-            handleBatchComplete(pendingCheckpoint, metadata)
+          case BatchComplete(pendingCheckpoint, updated) if pendingCheckpoint <= checkpoint =>
+            handleBatchComplete(pendingCheckpoint, updated)
             None
 
           case stillPending => 
@@ -114,6 +117,7 @@ abstract class KafkaShardIngestActor(shardId: String,
       logger.warn("Incomplete ingest at " + checkpoint)
       totalConsecutiveFailures += 1
       if (totalConsecutiveFailures < maxConsecutiveFailures) {
+        logger.info("Retrying failed ingest")
         for (messages <- ingestCache.get(checkpoint)) {
           val batchHandler = context.actorOf(Props(new BatchHandler(self, requestor, checkpoint, ingestTimeout))) 
           requestor.tell(IngestData(messages), batchHandler)
@@ -121,12 +125,12 @@ abstract class KafkaShardIngestActor(shardId: String,
       } else {
         // Blow up in spectacular fashion.
         logger.error("Halting ingest due to excessive consecutive failures at Kafka offsets: " + ingestCache.keys.map(_.offset).mkString("[", ", ", "]"))
-        logger.error("Metadata is consistent up to the lower bound:"  + ingestCache.head)
+        logger.error("Metadata is consistent up to the lower bound:"  + ingestCache.head._1)
         self ! PoisonPill
       }
 
     case GetMessages(requestor) => 
-      logger.debug("Responding to GetMessages starting from checkpoint: " + lastCheckpoint)
+      logger.trace("Responding to GetMessages starting from checkpoint: " + lastCheckpoint)
       if (ingestEnabled) {
         if (ingestCache.size < maxCacheSize) {
           readRemote(lastCheckpoint) match {
@@ -143,7 +147,7 @@ abstract class KafkaShardIngestActor(shardId: String,
                 val batchHandler = context.actorOf(Props(new BatchHandler(self, sender, checkpoint, ingestTimeout))) 
                 requestor.tell(IngestData(messages), batchHandler)
               } else {
-                logger.debug("No new data found after checkpoint: " + checkpoint)
+                logger.trace("No new data found after checkpoint: " + checkpoint)
                 requestor ! IngestData(Nil)
               }
   
@@ -152,7 +156,7 @@ abstract class KafkaShardIngestActor(shardId: String,
               requestor ! IngestErrors(List("An error occurred retrieving data from Kafka: " + error.getMessage))
           }
         } else {
-          logger.debug("ingestCache.size too big (%d)".format(ingestCache.size))
+          logger.warn("Concurrent ingest window full (%d). Cannot start new ingest batch".format(ingestCache.size))
           requestor ! IngestData(Nil)
         }
       } else {
@@ -163,22 +167,45 @@ abstract class KafkaShardIngestActor(shardId: String,
   /**
    * This method will be called on each completed batch. Subclasses may perform additional work here.
    */
-  protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint, metadata: Map[ProjectionDescriptor, ColumnMetadata]): Unit
+  protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]): Unit
 
-  private def readRemote(fromCheckpoint: YggCheckpoint): Validation[Throwable, (Vector[EventMessage], YggCheckpoint)] = {
+  private def readRemote(fromCheckpoint: YggCheckpoint):
+    Validation[Throwable, (Vector[IngestMessage], YggCheckpoint)] = {
+
+    // The shard ingest actor needs to compute the maximum offset, so it has
+    // to traverse the full message set in process; to avoid traversing it
+    // twice, we simply read the payload into event messages at this point.
+    // We stop at the first archive message, either including it if it's the
+    // initial message, or using all inserts up to that point
+    @tailrec
+    def buildBatch(
+      input: Stream[(IngestMessage,Long)],
+      batch: Vector[IngestMessage],
+      checkpoint: YggCheckpoint
+    ): (Vector[IngestMessage], YggCheckpoint) = input match {
+      case Stream.Empty =>
+        (batch, checkpoint)
+      case (em @ EventMessage(EventId(pid, sid), _), offset) #:: tail =>
+        buildBatch(tail, batch :+ em, checkpoint.update(offset, pid, sid))
+      case (ar: ArchiveMessage, _) #:: tail if batch.nonEmpty =>
+        (batch, checkpoint)
+      case (ar @ ArchiveMessage(ArchiveId(pid, sid), _), offset) #:: tail =>
+        (Vector(ar), checkpoint.update(offset, pid, sid))
+    }
+
     Validation.fromTryCatch {
-      val messageSet = consumer.fetch(new FetchRequest(topic, partition = 0, offset = lastCheckpoint.offset, maxSize = fetchBufferSize))
+      val req = new FetchRequest(
+        topic,
+        partition = 0,
+        offset = lastCheckpoint.offset,
+        maxSize = fetchBufferSize
+      )
+      val messageSet = consumer.fetch(req)
 
-      // The shard ingest actor needs to compute the maximum offset, so it has to traverse the full 
-      // message set in process; to avoid traversing it twice, we simply read the payload into 
-      // event messages at this point.
-      messageSet.foldLeft((Vector.empty[EventMessage], fromCheckpoint)) {
-        case ((acc, YggCheckpoint(offset, clock)), msgAndOffset) => 
-          IngestMessageSerialization.read(msgAndOffset.message.payload) match {
-            case em @ EventMessage(EventId(pid, sid), _) =>
-              (acc :+ em, YggCheckpoint(offset max msgAndOffset.offset, clock.update(pid, sid)))
-          }
-      }
+      buildBatch(messageSet.toStream.map {
+        msgAndOffset =>
+          (IngestMessageSerialization.read(msgAndOffset.message.payload), msgAndOffset.offset)
+        }, Vector.empty, fromCheckpoint)
     }
   }
 

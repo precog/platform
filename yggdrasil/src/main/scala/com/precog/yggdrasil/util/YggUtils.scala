@@ -22,8 +22,6 @@ package util
 
 import com.precog.common.json._
 import actor._
-import iterable._
-import leveldb._
 import jdbm3._
 import metadata.MetadataStorage
 import metadata.FileMetadataStorage
@@ -42,9 +40,6 @@ import akka.pattern.gracefulStop
 
 import org.joda.time._
 
-import org.iq80.leveldb._
-import org.fusesource.leveldbjni.JniDBFactory._
-
 import java.io.File
 import java.nio.ByteBuffer
 
@@ -54,9 +49,9 @@ import collection.JavaConversions._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.Extractor._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Extractor._
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.persistence.mongo._
 
@@ -115,7 +110,7 @@ object YggUtils {
     ZookeeperTools,
     ImportTools,
     CSVTools,
-    TokenTools
+    APIKeyTools
   )
 
   val commandMap: Map[String, Command] = commands.map( c => (c.name, c) )(collection.breakOut)
@@ -395,16 +390,7 @@ object KafkaTools extends Command {
     val src = new FileMessageSet(source, false) 
     val dest = new FileMessageSet(destination, true) 
 
-    val outMessages = src.iterator.toList.map { mao =>
-      ingestCodec.toEvent(mao.message) match {
-        case EventMessage(_, event) =>
-          eventCodec.toMessage(event)  
-        case _ => sys.error("Unknown message type")
-      }
-    }
-
-    val outSet = new ByteBufferMessageSet(messages = outMessages.toArray: _*)
-    dest.append(outSet)
+    dest.append(src)
 
     src.close
     dest.close
@@ -461,12 +447,15 @@ object KafkaTools extends Command {
   }
 
   case object LocalFormat extends Format {
-    val codec = new KafkaEventCodec
+    val codec = new KafkaIngestMessageCodec
 
     def dump(i: Int, msg: MessageAndOffset) {
-      val event = codec.toEvent(msg.message)
-      println("Event-%06d Path: %s Token: %s".format(i+1, event.path, event.tokenId))
-      println(pretty(render(event.data)))
+      codec.toEvent(msg.message) match {
+        case EventMessage(EventId(pid, sid), Event(path, apiKey, data, _)) =>
+          println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s".format(i+1, pid, sid, path, apiKey))
+          println(pretty(render(data)))
+        case _ =>
+      }
     }
   }
 
@@ -475,8 +464,8 @@ object KafkaTools extends Command {
 
     def dump(i: Int, msg: MessageAndOffset) {
       codec.toEvent(msg.message) match {
-        case EventMessage(EventId(pid, sid), Event(path, tokenId, data, _)) =>
-          println("Event-%06d Id: (%d/%d) Path: %s Token: %s".format(i+1, pid, sid, path, tokenId))
+        case EventMessage(EventId(pid, sid), Event(path, apiKey, data, _)) =>
+          println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s".format(i+1, pid, sid, path, apiKey))
           println(pretty(render(data)))
         case _ =>
       }
@@ -520,12 +509,24 @@ object ZookeeperTools extends Command {
     }
     config.checkpointUpdate.foreach {
       case (path, data) =>
-        JsonParser.parse(data).validated[YggCheckpoint] match {
+        val newCheckpoint = if (data == "initial") {
+          """{"offset":0,"messageClock":[[0,0]]}"""
+        } else {
+          data
+        }
+        
+        println("Loading initial checkpoint: " + newCheckpoint)
+        JsonParser.parse(newCheckpoint).validated[YggCheckpoint] match {
           case Success(_) =>
+            if (! client.exists(path)) {
+              client.createPersistent(path, true)
+            }
+
             client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
-              def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
+              def update(cur: Array[Byte]): Array[Byte] = newCheckpoint.getBytes 
             })  
-            println("Checkpoint updated: %s with %s".format(path, data))
+
+            println("Checkpoint updated: %s with %s".format(path, newCheckpoint))
           case Failure(e) => println("Invalid json for checkpoint: %s".format(e))
       }
     }
@@ -533,6 +534,10 @@ object ZookeeperTools extends Command {
       case (path, data) =>
         JsonParser.parse(data).validated[EventRelayState] match {
           case Success(_) =>
+            if (! client.exists(path)) {
+              client.createPersistent(path, true)
+            }
+
             client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
               def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
             })  
@@ -684,8 +689,9 @@ object ImportTools extends Command with Logging {
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
-      opt("t", "token", "<token>", "token to insert data under", { s: String => config.token = s })
-      opt("s", "storage", "<storage root>", "directory containing leveldb data files", { s: String => config.storageRoot = new File(s) })
+      opt("t", "token", "<aki key>", "API key to insert data under", { s: String => config.apiKey = s })
+      opt("s", "storage", "<storage root>", "directory containing data files", { s: String => config.storageRoot = new File(s) })
+      opt("a", "archive", "<archive root>", "directory containing archived data files", { s: String => config.archiveRoot = new File(s) })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
         val parts = s.split("=")
         val t = (parts(0) -> parts(1))
@@ -705,16 +711,20 @@ object ImportTools extends Command with Logging {
 
   def process(config: Config) {
     config.storageRoot.mkdirs
+    config.archiveRoot.mkdirs
 
     val stopTimeout = Duration(310, "seconds")
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
-    val io = for (ms <- FileMetadataStorage.load(config.storageRoot, FilesystemFileOps)) yield {
+    val io = for (ms <- FileMetadataStorage.load(config.storageRoot, config.archiveRoot, FilesystemFileOps)) yield {
       object shardModule extends SystemActorStorageModule
                             with JDBMProjectionModule
                             with StandaloneShardSystemActorModule {
 
-        class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig
+        class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig with JDBMProjectionModuleConfig {
+          val maxSliceSize = config[Int]("precog.jdbm.maxSliceSize", 50000)
+        }
+
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
         val actorSystem = ActorSystem("yggutilImport")
@@ -722,7 +732,8 @@ object ImportTools extends Command with Logging {
 
         object Projection extends JDBMProjectionCompanion {
           def fileOps = FilesystemFileOps
-          def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
+          def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findDescriptorRoot(descriptor, true)
+          def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findArchiveRoot(descriptor)
         }
 
         class Storage extends SystemActorStorageLike(ms) {
@@ -741,17 +752,17 @@ object ImportTools extends Command with Logging {
       logger.info("Using PID: " + pid)
       config.input.foreach {
         case (db, input) =>
-          logger.debug("Inserting batch: %s:%s".format(db, input))
+          logger.info("Inserting batch: %s:%s".format(db, input))
           val reader = new FileReader(new File(input))
           val events = JsonParser.parse(reader).children.map { child =>
-            EventMessage(EventId(pid, sid.getAndIncrement), Event(Path(db), config.token, child, Map.empty))
+            EventMessage(EventId(pid, sid.getAndIncrement), Event(Path(db), config.apiKey, child, Map.empty))
           }
           
-          logger.debug(events.size + " total inserts")
+          logger.info(events.size + " total inserts")
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
               logger.info("Saving batch " + id + " of size " + batch.size)
-              Await.result(storage.storeBatch(batch), Duration(120, "seconds"))
+              Await.result(storage.storeBatch(batch), Duration(300, "seconds"))
               logger.info("Batch saved")
             }
           }
@@ -771,10 +782,11 @@ object ImportTools extends Command with Logging {
 
   class Config(
     var input: Vector[(String, String)] = Vector.empty, 
-    val batchSize: Int = 1000, 
-    var token: TokenID = "root",
+    val batchSize: Int = 10000,
+    var apiKey: APIKey = "root",
     var verbose: Boolean = false ,
-    var storageRoot: File = new File("./data")
+    var storageRoot: File = new File("./data"),
+    var archiveRoot: File = new File("./archive")
   )
 }
 
@@ -817,22 +829,22 @@ object CSVTools extends Command {
 }
 
 
-object TokenTools extends Command with AkkaDefaults with Logging {
+object APIKeyTools extends Command with AkkaDefaults with Logging {
   val name = "tokens"
-  val description = "Token management utils"
+  val description = "APIKey management utils"
     
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils csv") {
-      opt("l","list","List tokens", { config.list = true })
-//      opt("c","children","List children of token", { s: String => config.listChildren = Some(s) })
+      opt("l","list","List API keys", { config.list = true })
+//      opt("c","children","List children of API key", { s: String => config.listChildren = Some(s) })
       opt("n","new","New customer account at path", { s: String => config.path = Some(s) })
-      opt("a","name","Human-readable name for new token", { s: String => config.newTokenName = s })
-      opt("x","delete","Delete token", { s: String => config.delete = Some(s) })
-      opt("d","database","Token database name (ie: beta_auth_v1)", {s: String => config.database = s })
-      opt("t","tokens","Tokens collection name", {s: String => config.collection = s }) 
-      opt("r","root","root token for creation", {s: String => config.root = s })
-      opt("a","archive","Collection for deleted tokens", {s: String => config.deleted = Some(s) })
+      opt("a","name","Human-readable name for new API key", { s: String => config.newAPIKeyName = s })
+      opt("x","delete","Delete API key", { s: String => config.delete = Some(s) })
+      opt("d","database","APIKey database name (ie: beta_auth_v1)", {s: String => config.database = s })
+      opt("t","tokens","APIKeys collection name", {s: String => config.collection = s }) 
+      opt("r","root","root API key for creation", {s: String => config.root = s })
+      opt("a","archive","Collection for deleted API keys", {s: String => config.deleted = Some(s) })
       opt("s","servers","Mongo server config", {s: String => config.servers = s})
     }
     if (parser.parse(args)) {
@@ -843,10 +855,10 @@ object TokenTools extends Command with AkkaDefaults with Logging {
   }
   
   def process(config: Config) {
-    val tm = tokenManager(config)
+    val tm = apiKeyManager(config)
     val actions = (config.list).option(list(tm)).toSeq ++
 //                  config.listChildren.map(listChildren(_, tm)) ++
-                  config.path.map(p => create(config.newTokenName, Path(p), config.root, tm)) ++
+                  config.path.map(p => create(config.newAPIKeyName, Path(p), config.root, tm)) ++
                   config.delete.map(delete(_, tm))
 
     Await.result(Future.sequence(actions) onComplete {
@@ -856,20 +868,20 @@ object TokenTools extends Command with AkkaDefaults with Logging {
     }, Duration(30, "seconds"))
   }
 
-  def tokenManager(config: Config): TokenManager[Future] = {
+  def apiKeyManager(config: Config): APIKeyManager[Future] = {
     val mongo = RealMongo(config.mongoConfig)
-    new MongoTokenManager(mongo, mongo.database(config.database), config.mongoSettings)
+    new MongoAPIKeyManager(mongo, mongo.database(config.database), config.mongoSettings)
   }
 
-  def list(tokenManager: TokenManager[Future]) = {
-    for (tokens <- tokenManager.listTokens) yield {
-      tokens.foreach(printToken)
+  def list(apiKeyManager: APIKeyManager[Future]) = {
+    for (apiKeys <- apiKeyManager.listAPIKeys) yield {
+      apiKeys.foreach(printAPIKey)
     }
   }
 
-  def printToken(t: Token): Unit = {
+  def printAPIKey(t: APIKeyRecord): Unit = {
     println(t)
-//    println("Token: %s Issuer: %s".format(t.uid, t.issuer.getOrElse("NA")))
+//    println("APIKey: %s Issuer: %s".format(t.uid, t.issuer.getOrElse("NA")))
 //    println("  Permissions (Path)")
 //    t.permissions.path.foreach { p =>
 //      println("    " + p)
@@ -885,44 +897,45 @@ object TokenTools extends Command with AkkaDefaults with Logging {
 //    println()
 //  }
 
-//  def listChildren(tokenId: String, tokenManager: TokenManager[Future]) = {
-//    for (Some(parent) <- tokenManager.findToken(tokenId); children <- tokenManager.listChildren(parent)) yield {
-//      children.foreach(printToken)
+//  def listChildren(apiKey: String, apiKeyManager: APIKeyManager[Future]) = {
+//    for (Some(parent) <- apiKeyManager.findAPIKey(apiKey); children <- apiKeyManager.listChildren(parent)) yield {
+//      children.foreach(printAPIKey)
 //    }
 //  }
   }
 
-  def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager[Future]) = {
+  def create(apiKeyName: String, path: Path, root: APIKey, apiKeyManager: APIKeyManager[Future]) = {
     for {
-      token <- tokenManager.newToken(tokenName, Set())
-      val ownerGrant = tokenManager.newGrant(None, OwnerPermission(path, None))
-      val readGrant  = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
-      val writeGrant = tokenManager.newGrant(None, WritePermission(path, None))
-      grants <- Future.sequence(List(ownerGrant, readGrant, writeGrant))
-      result <- tokenManager.addGrants(token.tid, grants.map(_.gid).toSet)
+      apiKey <- apiKeyManager.newAPIKey(apiKeyName, root, Set())
+      val ownerGrant  = apiKeyManager.newGrant(None, OwnerPermission(path, None))
+      val readGrant   = apiKeyManager.newGrant(None, ReadPermission(path, apiKey.tid, None))
+      val writeGrant  = apiKeyManager.newGrant(None, WritePermission(path, None))
+      val reduceGrant = apiKeyManager.newGrant(None, ReducePermission(path, apiKey.tid, None))
+      grants <- Future.sequence(List(ownerGrant, readGrant, writeGrant, reduceGrant))
+      result <- apiKeyManager.addGrants(apiKey.tid, grants.map(_.gid).toSet)
     } yield {
       result match {
-        case Some(token) =>
-          println("Successfully created token: \n" + pretty(render(token.serialize)))
+        case Some(apiKey) =>
+          println("Successfully created API key: \n" + pretty(render(apiKey.serialize(APIKeyRecord.apiKeyRecordDecomposer))))
 
         case None =>
-          sys.error("Something went silently wrong in token or grant creation or update, please investigate.")
+          sys.error("Something went silently wrong in API key or grant creation or update, please investigate.")
       }
     }
   }
 
-  def delete(t: String, tokenManager: TokenManager[Future]) = sys.error("todo")
-//    for (Some(token) <- tokenManager.findToken(t); t <- tokenManager.deleteToken(token)) yield {
-//      println("Deleted token: ")
-//      printToken(token)
+  def delete(t: String, apiKeyManager: APIKeyManager[Future]) = sys.error("todo")
+//    for (Some(apiKey) <- apiKeyManager.findAPIKey(t); t <- apiKeyManager.deleteAPIKey(apiKey)) yield {
+//      println("Deleted API key: ")
+//      printAPIKey(apiKey)
 //    }
 //  }
   
   class Config {
     var delete: Option[String] = None
     var path: Option[String] = None
-    var newTokenName: String = ""
-    var root: TokenID = "root"
+    var newAPIKeyName: String = ""
+    var root: APIKey = "root"
     var list: Boolean = false
     var listChildren: Option[String] = None
     var database: String = "auth_v1"
@@ -934,9 +947,9 @@ object TokenTools extends Command with AkkaDefaults with Logging {
       deleted.getOrElse( collection + "_deleted" )
     }
 
-    def mongoSettings: MongoTokenManagerSettings = MongoTokenManagerSettings(
-      tokens = collection, 
-      deletedTokens = deletedCollection
+    def mongoSettings: MongoAPIKeyManagerSettings = MongoAPIKeyManagerSettings(
+      apiKeys = collection, 
+      deletedAPIKeys = deletedCollection
     )
 
     def mongoConfig: Configuration = {

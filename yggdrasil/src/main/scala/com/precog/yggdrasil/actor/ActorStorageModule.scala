@@ -37,10 +37,13 @@ import scalaz.effect._
 
 import com.weiglewilczek.slf4s.Logging
 
-trait ActorStorageModuleConfig extends BaseConfig {
+trait ActorStorageModuleConfig {
+  def metadataTimeout: Timeout
 }
 
-trait ActorStorageModule extends StorageModule[Future] {
+trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
+  type YggConfig <: ActorStorageModuleConfig
+
   protected implicit def actorSystem: ActorSystem
 
   trait ActorStorageLike extends StorageLike with Logging {
@@ -53,7 +56,7 @@ trait ActorStorageModule extends StorageModule[Future] {
     implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
     implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
 
-    private lazy val metadata: StorageMetadata[Future] = new ActorStorageMetadata(shardSystemActor)
+    private lazy val metadata: StorageMetadata[Future] = new ActorStorageMetadata(shardSystemActor, yggConfig.metadataTimeout)
     
     def userMetadataView(uid: String): StorageMetadata[Future] = {
       new UserMetadataView(uid, accessControl, metadata)
@@ -64,7 +67,7 @@ trait ActorStorageModule extends StorageModule[Future] {
       implicit val storageTimeout: Timeout = Timeout(300 seconds)
 
 
-      (for (ProjectionAcquired(projection) <- (shardSystemActor ? AcquireProjection(descriptor))) yield {
+      (for (ProjectionAcquired(projection) <- (shardSystemActor ? AcquireProjection(descriptor, false))) yield {
         logger.debug("  projection obtained")
         (projection.asInstanceOf[Projection], new Release(IO(shardSystemActor ! ReleaseProjection(descriptor))))
       }) onFailure {

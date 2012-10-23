@@ -21,8 +21,10 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.json._
-import scala.collection.immutable.BitSet
 import scala.util.Random
+
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -33,7 +35,7 @@ import scalaz.syntax.copointed._
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
-trait CompactSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTestSupport[M] with Specification with ScalaCheck {
+trait CompactSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specification with ScalaCheck {
   import SampleData._
   import trans._
   
@@ -85,18 +87,22 @@ trait CompactSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTest
         if(numSlices > 1 && Random.nextDouble < 0.25) {
           new Slice {
             val size = slice.size
-            val columns = slice.columns.mapValues { col => (col |> cf.util.filter(0, slice.size, BitSet())).get }
+            val columns = slice.columns.mapValues { col => (col |> cf.util.filter(0, slice.size, new BitSet)).get }
           }
         } else {
-          val retained = (0 until slice.size).map { (x : Int) => if(scala.util.Random.nextDouble < 0.75) Some(x) else None }.flatten
+          val retained = (0 until slice.size).flatMap {
+            x => if (scala.util.Random.nextDouble < 0.75) Some(x) else None
+          }
           new Slice {
             val size = slice.size 
-            val columns = slice.columns.mapValues { col => (col |> cf.util.filter(0, slice.size, BitSet(retained: _*))).get }
+            val columns = slice.columns.mapValues {
+              col => (col |> cf.util.filter(0, slice.size, BitSetUtil.create(retained))).get
+            }
           }
         }
       }
       
-      table(StreamT.fromStream(M.point(maskedSlices)))
+      Table(StreamT.fromStream(M.point(maskedSlices)))
   }
 
   def undefineColumn(fullTable: Table, path: CPath): Table = fullTable match {
@@ -110,10 +116,10 @@ trait CompactSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTest
           val col = slice.columns(colRef)
           val maskedCol =
             if(numSlices > 1 && Random.nextDouble < 0.25)
-              (col |> cf.util.filter(0, slice.size, BitSet())).get
+              (col |> cf.util.filter(0, slice.size, new BitSet)).get
             else {
               val retained = (0 until slice.size).map { (x : Int) => if(scala.util.Random.nextDouble < 0.75) Some(x) else None }.flatten
-              (col |> cf.util.filter(0, slice.size, BitSet(retained: _*))).get
+              (col |> cf.util.filter(0, slice.size, BitSetUtil.create(retained))).get
             }
           new Slice {
             val size = slice.size 
@@ -123,7 +129,7 @@ trait CompactSpec[M[+_]] extends TestColumnarTableModule[M] with TableModuleTest
         maskedSlice.getOrElse(slice)
       }
       
-      table(StreamT.fromStream(M.point(maskedSlices)))
+      Table(StreamT.fromStream(M.point(maskedSlices)))
   }
 
   def testCompactIdentity = {

@@ -32,7 +32,9 @@ libraryDependencies ++= Seq(
 
 mainClass := Some("com.precog.pandora.Console")
 
-mainTest := "com.precog.pandora.PlatformSpecs"
+//mainTest := "com.precog.pandora.TrampolinePlatformSpecs"
+
+mainTest := "com.precog.pandora.FuturePlatformSpecs"
 
 dataDir := {
   val file = File.createTempFile("pandora", ".db")
@@ -59,16 +61,37 @@ run <<= inputTask { argTask =>
 
 extractData <<= (dataDir, streams) map { (dir, s) =>
   val target = new File(dir)
-  s.log.info("Extracting sample projection data into %s...".format(dir))
-  IO.copyDirectory(new File("pandora/dist/data-jdbm/"), target, true, false)
-  target.getCanonicalPath
+  val dataTarget = new File(target, "data")
+  def performExtract = {
+    s.log.info("Extracting sample projection data into " + target.getCanonicalPath())
+    if (Process("./regen-jdbm-data.sh", Seq(dataTarget.getCanonicalPath)).! != 0) {
+      error("Failed to extract data")
+    } else {
+      s.log.info("Extraction complete.")
+      target.getCanonicalPath
+    }
+  }  
+  if (!dataTarget.isDirectory()) {
+    if (!dataTarget.mkdirs()) {
+      error("Failed to make temp projection directory")
+    } else {
+      performExtract
+    }
+  } else {
+    if (dataTarget.listFiles.length > 0) {
+      s.log.info("Using data in " + target.getCanonicalPath())
+      target.getCanonicalPath  
+    } else {
+      performExtract
+    }
+  }
 }
 
-definedTests in Test <<= (definedTests in Test, mainTest) map { (tests, name) =>
-  tests filter { _.name != name }
-}
+definedTests in Test := Seq()
 
-test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData, mainTest) map { (s, cp, os, dataDir, testName) =>
+parallelExecution in Test := false
+
+test <<= (streams, extractData, fullClasspath in Test, outputStrategy in Test, mainTest) map { (s, dataDir, cp, os, testName) =>
   val delim = java.io.File.pathSeparator
   val cpStr = cp map { _.data } mkString delim
   val opts2 =
@@ -84,7 +107,7 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData, m
   if (result != 0) error("Tests unsuccessful")    // currently has no effect (https://github.com/etorreborre/specs2/issues/55)
 }
 
-(console in Compile) <<= (streams, initialCommands in console, fullClasspath in Compile, scalaInstance, extractData) map { (s, init, cp, si, dataDir) =>
+(console in Compile) <<= (streams, extractData, initialCommands in console, fullClasspath in Compile, scalaInstance) map { (s, dataDir, init, cp, si) =>
   IO.withTemporaryFile("pandora", ".scala") { file =>
     IO.write(file, init)
     val delim = java.io.File.pathSeparator

@@ -43,7 +43,7 @@ import org.streum.configrity.Configuration
 object KafkaIngestServer extends 
     BlueEyesServer with 
     IngestService with 
-    MongoTokenManagerComponent with
+    MongoAPIKeyManagerComponent with
     KafkaEventStoreComponent {
 
   val clock = Clock.System
@@ -74,7 +74,7 @@ trait KafkaEventStoreComponent extends AkkaDefaults with Logging {
     val relayAgent = new KafkaRelayAgent(eventIdSeq, localConfig, centralConfig)
 
     new EventStore {
-      def save(event: Event, timeout: Timeout) = eventStore.save(event, timeout)
+      def save(action: Action, timeout: Timeout) = eventStore.save(action, timeout)
       def start() = relayAgent.start flatMap { _ => eventStore.start }
       def stop() = eventStore.stop flatMap { _ => relayAgent.stop }
     }

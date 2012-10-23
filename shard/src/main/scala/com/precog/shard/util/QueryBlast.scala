@@ -136,7 +136,7 @@ verboseErrors - whether to print verbose error messages (default: false)
     val apiUrl = properties.getProperty("baseUrl", "http://localhost:30070/query")
     val threads = properties.getProperty("threads", "1").toInt 
     val maxQuery = properties.getProperty("maxQuery", sampleSet.testQueries.size.toString).toInt 
-    val token = properties.getProperty("token", "root")
+    val apiKey = properties.getProperty("token", "root")
     val base = properties.getProperty("queryBase", "public")
     interval = properties.getProperty("iterations", "10").toInt
     intervalDouble = interval.toDouble
@@ -159,7 +159,7 @@ verboseErrors - whether to print verbose error messages (default: false)
               val started = System.nanoTime()
              
               val f: Future[HttpResponse[JValue]] = client.path(apiUrl)
-                                                          .query("tokenId", token)
+                                                          .query("apiKey", apiKey)
                                                           .query("q", query)
                                                           .contentType(application/MimeTypes.json)
                                                           .get[JValue]("")
@@ -179,7 +179,7 @@ verboseErrors - whether to print verbose error messages (default: false)
               case e =>
                 if(verboseErrors) {
                   println("QUERY - ERROR")
-                  println("URL: " + apiUrl + "?tokenId="+token)
+                  println("URL: " + apiUrl + "?apiKey="+apiKey)
                   println("QUERY: " + query)
                   println()
                   println("ERROR MESSAGE")
