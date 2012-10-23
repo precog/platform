@@ -994,7 +994,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     override def distinct(spec: TransSpec1): Table = this
 
     override def takeRange(startIndex: Long, numberToTake: Long): Table =
-      if(startIndex == 0 && numberToTake == 0) this else Table.empty
+      if(startIndex == 0 && numberToTake == 1) this else Table.empty
   }
 }
 
