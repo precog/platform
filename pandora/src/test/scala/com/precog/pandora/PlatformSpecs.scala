@@ -69,34 +69,19 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-trait PlatformSpecs[M[+_]]
-    extends ParseEvalStackSpecs[M] 
-    with BlockStoreColumnarTableModule[M] 
-    with ProjectionMetadataSpecs[M] 
-    with Specification { 
-
-  lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
-
-  implicit def M: Monad[M] with Copointed[M]
-
-  class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig with JDBMProjectionModuleConfig
-  object yggConfig  extends YggConfig
-
-  override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
-
-  def startup() = ()
-  def shutdown() = ()
-}
-
 object FuturePlatformSpecs 
     extends ParseEvalStackSpecs[Future] 
     with BlockStoreColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 
-    with JDBMProjectionModule { 
+    with JDBMProjectionModule {
+      
+  lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
   class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig with JDBMProjectionModuleConfig
   object yggConfig  extends YggConfig
+  
+  override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
       
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
@@ -124,13 +109,13 @@ object FuturePlatformSpecs
     implicit val geq: scalaz.Equal[Int] = intInstance
   }
 
-  override def startup() {
+  def startup() {
     // start storage shard 
     Await.result(storage.start(), controlTimeout)
     psLogger.info("Test shard started")
   }
   
-  override def shutdown() {
+  def shutdown() {
     psLogger.info("Shutting down test shard")
     // stop storage shard
     Await.result(storage.stop(), controlTimeout)
