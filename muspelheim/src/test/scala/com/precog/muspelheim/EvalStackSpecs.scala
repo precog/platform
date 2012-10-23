@@ -156,6 +156,46 @@ trait EvalStackSpecs extends Specification {
       actual must contain(true).only
     }
 
+    "accept division inside an object" in {
+      val input = """
+        | data := //conversions
+        | 
+        | x := solve 'productID
+        |   data' := data where data.product.ID = 'productID
+        |   { count: count(data' where data'.customer.isCasualGamer = false),
+        |     sum: sum(data'.marketing.uniqueVisitors  where data'.customer.isCasualGamer = false) }
+        | 
+        | { max: max(x.sum/x.count), min: min(x.sum/x.count) }
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+
+          obj.keys mustEqual(Set("min", "max"))
+          (obj("min") match { case SDecimal(num) => num.toDouble ~= 862.7464285714286 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 941.0645161290323 }) mustEqual true
+      }
+    }
+
+    "accept division of two BigDecimals" in {
+      val input = "92233720368547758073 / 12223372036854775807"
+
+      val result = evalE(input)
+
+      result must haveSize(1)
+
+      forall(result) {
+        case (ids, SDecimal(num)) =>
+          ids must haveSize(0)
+          (num.toDouble ~= 7.54568543692) mustEqual true
+      }
+    }
+
     "perform various reductions on transspecable sets" in {
       val input = """
         | medals := //summer_games/london_medals
@@ -1058,6 +1098,31 @@ trait EvalStackSpecs extends Specification {
       results must contain(SObject(Map("count" -> SDecimal(BigDecimal("186")), "state" -> SString("56"))))
       results must contain(SObject(Map("count" -> SDecimal(BigDecimal("153")), "state" -> SString("72"))))
     }
+    
+    "evaluate nathan's query, once and for all" in {
+      val input = """
+        | import std::time::*
+        | 
+        | lastHour := //election/tweets 
+        | thisHour:= //election/tweets2 
+        | 
+        | lastHour' := lastHour where minuteOfHour(lastHour.timeStamp) > 36
+        | data := thisHour union lastHour'
+        | 
+        | combined := solve 'stateName, 'state 
+        |   data' := data where data.stateName = 'stateName & data.STATE = 'state 
+        |   {stateName: 'stateName,
+        |    state: 'state, 
+        |    obamaSentimentScore: sum(data'.score where data'.candidate = "Obama") 
+        |                         / count(data' where data'.candidate = "Obama"), 
+        |    romneySentimentScore: sum(data'.score where data'.candidate = "Romney") 
+        |                         / count(data' where data'.candidate = "Romney")} 
+        | 
+        | {stateName: combined.stateName, state: combined.state, sentiment: (50 * (combined.obamaSentimentScore - combined.romneySentimentScore)) + 50}
+        | """.stripMargin
+      
+      evalE(input) must not(beEmpty)
+    }
 
     "load a nonexistent dataset with a dot in the name" in {
       val input = """
@@ -1429,7 +1494,7 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "evaluate a quantified characteristic function of two parameters" in {
+    "evaluate a function of two parameters" in {
       val input = """
         | fun(a, b) := 
         |   //campaigns where //campaigns.ageRange = a & //campaigns.gender = b
