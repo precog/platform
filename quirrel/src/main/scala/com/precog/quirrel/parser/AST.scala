@@ -489,7 +489,7 @@ trait AST extends Phases {
       case (Where(_, left1, right1), Where(_, left2, right2)) => 
         (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
       
-      case (With(_, left1, right1), Where(_, left2, right2)) => 
+      case (With(_, left1, right1), With(_, left2, right2)) => 
         (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
       
       case (Union(_, left1, right1), Union(_, left2, right2)) => 
