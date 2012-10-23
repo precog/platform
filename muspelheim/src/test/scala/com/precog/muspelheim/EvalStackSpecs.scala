@@ -137,6 +137,46 @@ trait EvalStackSpecs extends Specification {
       actual must contain(true).only
     }
 
+    /* "accept division inside an object" in {
+      val input = """
+        | data := //conversions
+        | 
+        | x := solve 'productID
+        |   data' := data where data.product.ID = 'productID
+        |   { count: count(data' where data'.customer.isCasualGamer = false),
+        |     sum: sum(data'.marketing.uniqueVisitors  where data'.customer.isCasualGamer = false) }
+        | 
+        | { max: max(x.sum/x.count), min: min(x.sum/x.count) }
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SObject(obj)) =>
+          ids must haveSize(0)
+
+          obj.keys mustEqual(Set("min", "max"))
+          (obj("min") match { case SDecimal(num) => num.toDouble ~= 862.7464285714286 }) mustEqual true
+          (obj("max") match { case SDecimal(num) => num.toDouble ~= 941.0645161290323 }) mustEqual true
+      }
+    } */
+
+    "accept division of two BigDecimals" in {
+      val input = "92233720368547758073 / 12223372036854775807"
+
+      val result = evalE(input)
+
+      result must haveSize(1)
+
+      forall(result) {
+        case (ids, SDecimal(num)) =>
+          ids must haveSize(0)
+          (num.toDouble ~= 7.54568543692) mustEqual true
+      }
+    }
+
     "perform various reductions on transspecable sets" in {
       val input = """
         | medals := //summer_games/london_medals
@@ -172,6 +212,28 @@ trait EvalStackSpecs extends Specification {
           (obj("count") match { case SDecimal(num) => num.toDouble ~= 1019 }) mustEqual true
           (obj("minmax") match { case SDecimal(num) => num.toDouble ~= 208 }) mustEqual true
       }
+    }
+
+    "solve on a union with a `with` clause" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | athletes := //summer_games/athletes
+        | 
+        | data := athletes union (medals with { winner: medals."Medal winner" })
+        | 
+        | solve 'winner 
+        |   { winner: 'winner, num: count(data.winner where data.winner = 'winner) } 
+      """.stripMargin
+
+      val result = evalE(input)
+
+      result must haveSize(2)
+
+      val results2 = result collect {
+        case (ids, obj) if ids.length == 1 => obj
+      }
+
+      results2 mustEqual(Set(SObject(Map("num" -> SDecimal(1018), "winner" -> SString("YES"))), SObject(Map("num" -> SDecimal(1), "winner" -> SString("YEs")))))
     }
 
     "perform a simple join by value sorting" in {
@@ -1040,7 +1102,7 @@ trait EvalStackSpecs extends Specification {
       results must contain(SObject(Map("count" -> SDecimal(BigDecimal("153")), "state" -> SString("72"))))
     }
     
-    "evaluate nathan's query, once and for all" in {
+    /* "evaluate nathan's query, once and for all" in {
       val input = """
         | import std::time::*
         | 
@@ -1063,7 +1125,7 @@ trait EvalStackSpecs extends Specification {
         | """.stripMargin
       
       evalE(input) must not(beEmpty)
-    }
+    } */
 
     "load a nonexistent dataset with a dot in the name" in {
       val input = """
@@ -1435,7 +1497,7 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "evaluate a quantified characteristic function of two parameters" in {
+    "evaluate a function of two parameters" in {
       val input = """
         | fun(a, b) := 
         |   //campaigns where //campaigns.ageRange = a & //campaigns.gender = b
@@ -1700,7 +1762,7 @@ trait EvalStackSpecs extends Specification {
         |     below: click.time - belowTime,
         |     above: aboveTime - click.time
         |   }
-        |   
+        | 
         | meanAbove := mean(spacings.above)
         | meanBelow := mean(spacings.below)
         | 
