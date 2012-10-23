@@ -69,75 +69,20 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-trait PlatformSpecs[M[+_]]
-    extends ParseEvalStackSpecs[M] 
-    with BlockStoreColumnarTableModule[M] 
-    with ProjectionMetadataSpecs[M] 
-    with Specification { 
-
-  lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
-
-  implicit def M: Monad[M] with Copointed[M]
-
-  class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig with JDBMProjectionModuleConfig
-  object yggConfig  extends YggConfig
-
-  override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
-
-  def startup() = ()
-  def shutdown() = ()
-}
-
-class TrampolinePlatformSpecs extends PlatformSpecs[YId] 
-    with BaseBlockStoreTestModule[YId] 
-    with StubStorageModule[YId] {
-
-  implicit val M: Monad[YId] with Copointed[YId] = YId.M //Trampoline.trampolineMonad
-
-  val projections = Map.empty[ProjectionDescriptor, Projection]
-  
-  private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
-  private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
-  private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
-  
-  private val groupId = new java.util.concurrent.atomic.AtomicInteger
-  def newGroupId = groupId.getAndIncrement
-
-  override def load(table: Table, uid: UserId, jtpe: JType) = {
-    table.toJson map { events =>
-      fromJson {
-        events.toStream flatMap {
-          case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
-            val path = Path(pathStr)
-      
-            val index = initialIndices get path getOrElse {
-              initialIndices += (path -> currentIndex)
-              currentIndex
-            }
-            
-            val target = path.path.replaceAll("/$", ".json")
-            val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-            val JArray(parsed) = JsonParser.parse(src.getLines.mkString(" "))
-            
-            currentIndex += parsed.length
-            
-            parsed.toStream zip (Stream from index) map {
-              case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
-            }
-          }
-
-          case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
-        }
-      }
-    } 
-  }
-}
-
-class FuturePlatformSpecs extends PlatformSpecs[Future] 
+object FuturePlatformSpecs 
+    extends ParseEvalStackSpecs[Future] 
+    with BlockStoreColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 
     with JDBMProjectionModule {
+      
+  lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
+  class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig with JDBMProjectionModuleConfig
+  object yggConfig  extends YggConfig
+  
+  override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
+      
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
@@ -164,13 +109,13 @@ class FuturePlatformSpecs extends PlatformSpecs[Future]
     implicit val geq: scalaz.Equal[Int] = intInstance
   }
 
-  override def startup() {
+  def startup() {
     // start storage shard 
     Await.result(storage.start(), controlTimeout)
     psLogger.info("Test shard started")
   }
   
-  override def shutdown() {
+  def shutdown() {
     psLogger.info("Shutting down test shard")
     // stop storage shard
     Await.result(storage.stop(), controlTimeout)

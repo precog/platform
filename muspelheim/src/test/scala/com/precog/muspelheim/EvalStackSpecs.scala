@@ -233,6 +233,28 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "solve on a union with a `with` clause" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | athletes := //summer_games/athletes
+        | 
+        | data := athletes union (medals with { winner: medals."Medal winner" })
+        | 
+        | solve 'winner 
+        |   { winner: 'winner, num: count(data.winner where data.winner = 'winner) } 
+      """.stripMargin
+
+      val result = evalE(input)
+
+      result must haveSize(2)
+
+      val results2 = result collect {
+        case (ids, obj) if ids.length == 1 => obj
+      }
+
+      results2 mustEqual(Set(SObject(Map("num" -> SDecimal(1018), "winner" -> SString("YES"))), SObject(Map("num" -> SDecimal(1), "winner" -> SString("YEs")))))
+    }
+
     "perform a simple join by value sorting" in {
       val input = """
         | clicks := //clicks
@@ -1122,7 +1144,7 @@ trait EvalStackSpecs extends Specification {
         | """.stripMargin
       
       evalE(input) must not(beEmpty)
-    }
+    }.pendingUntilFixed
 
     "load a nonexistent dataset with a dot in the name" in {
       val input = """
