@@ -3089,6 +3089,20 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }
     }
+    
+    "produce a preemptive error when crossing enormous sets" in {
+      val line = Line(0, "")
+      
+      val tweets = dag.LoadLocal(line, Root(line, CString("/election/tweets")))
+      
+      val input = dag.Join(line, Add, CrossLeftSort,
+        dag.Join(line, Add, CrossLeftSort,
+          tweets,
+          tweets),
+        tweets)
+        
+      testEval(input) { _ => failure } must throwAn[EnormousCartesianException]
+    }
   }
 
   def joinDeref(left: DepGraph, first: Int, second: Int, line: Line): DepGraph = 
