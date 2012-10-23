@@ -43,12 +43,7 @@ import scala.collection.JavaConverters._
  * A Projection wrapping a raw JDBM TreeMap index used for sorting. It's assumed that
  * the index has been created and filled prior to creating this wrapper.
  */
-class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sortOrder: DesiredSortOrder, sliceSize: Int) extends BlockProjectionLike[Array[Byte],Slice] with Logging {
-
-  // These should not actually be used in sorting
-  def descriptor: ProjectionDescriptor = sys.error("Sort projections do not have full ProjectionDescriptors")
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("Insertion on sort projections is unsupported")
-  def commit(): IO[Unit] = sys.error("Commit on sort projections is unsupported")
+class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sortOrder: DesiredSortOrder, sliceSize: Int) extends BlockProjectionLike[Array[Byte],Slice] with SortProjectionLike with Logging {
 
   def foreach(f : java.util.Map.Entry[Array[Byte], Array[Byte]] => Unit) {
     val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
