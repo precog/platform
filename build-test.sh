@@ -57,14 +57,16 @@ for PROJECT in util common daze auth accounts ragnarok ingest bytecode quirrel m
 done
 
 if [ $SUCCESS -eq 0 ]; then
-  sbt -mem 2048 accounts/assembly auth/assembly ingest/assembly yggdrasil/assembly shard/assembly
+  sbt -mem 2048 -J-Dsbt.log.noformat=true accounts/assembly auth/assembly ingest/assembly yggdrasil/assembly shard/assembly
   SUCCESS=$(($SUCCESS || $?))
 fi
 
-wait_until_port_open 27117
-
-shard/test.sh -m 27117
-SUCCESS=$(($SUCCESS || $?))
+if [ $SUCCESS -eq 0 ]; then
+	wait_until_port_open 27117
+	
+	shard/test.sh -m 27117
+	SUCCESS=$(($SUCCESS || $?))
+fi
 
 # re-enable errexit
 set -e
