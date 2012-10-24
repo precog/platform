@@ -105,7 +105,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     val resultIter = result.flatMap(_.toJson).copoint
     
     resultIter must haveSize(set.distinct.size)
-    
+
     val expectedSet = (set.toSeq groupBy identity values) map { _.length } map { JNum(_) }
     
     forall(resultIter) { i => expectedSet must contain(i) }
@@ -923,7 +923,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
   }
   
   "simple single-key grouping" should {
-    "scalacheck a histogram by value" in check (testHistogramByValue _)
+    "scalacheck a histogram by value" in check1NoShrink (testHistogramByValue _)
     "histogram for two of the same value" in testHistogramByValue(Stream(2147483647, 2147483647))
     "histogram when observing spans of equal values" in testHistogramByValue(Stream(24, -10, 0, -1, -1, 0, 24, 0, 0, 24, -1, 0, 0, 24))
     "compute a histogram by value (mapping target)" in check (testHistogramByValueMapped _)
@@ -969,6 +969,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       // TODO: the performance of the following is too awful to run under scalacheck, even with a minimal
       // number of examples.
       "or" >> propNoShrink (testCtrPartialJoinOr _).set(minTestsOk -> 10)
+      "or with empty 1st dataset" >> testCtrPartialJoinOr(Stream(), Stream(1))
+      "or with empty 2nd dataset" >> testCtrPartialJoinOr(Stream((1, Some(2))), Stream())
       "or with un-joinable datasets" >> testCtrPartialJoinOr(
         Stream((-2,Some(1))), 
         Stream(-1)

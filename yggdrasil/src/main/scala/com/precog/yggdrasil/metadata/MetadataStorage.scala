@@ -305,7 +305,9 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
         _ <- stageNext(dir, metadata)
         _ <- stagePrev(dir)
         _ <- rotateCurrent(dir)
-      } yield ()
+      } yield {
+        logger.debug("Metadata update complete for " + desc)
+      }
     } getOrElse {
       IO.throwIO(new IllegalStateException("Metadata update on missing projection for " + desc))
     }
@@ -376,10 +378,13 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
     fileOps.exists(src) flatMap { exists => if (exists) fileOps.copy(src, dest) else IO(()) }
   }
   
-  private def rotateCurrent(dir: File): IO[Unit] = IO {
+  private def rotateCurrent(dir: File): IO[Unit] = {
     val src  = new File(dir, nextFilename)
     val dest = new File(dir, curFilename)
-    fileOps.rename(src, dest)
+    for {
+      _ <- IO { logger.trace("Rotating metadata from %s to %s".format(nextFilename, curFilename)) }
+      _ <- fileOps.rename(src, dest)
+    } yield ()
   }
 }
 

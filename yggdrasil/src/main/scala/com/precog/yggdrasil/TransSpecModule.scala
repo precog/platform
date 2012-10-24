@@ -145,6 +145,8 @@ trait TransSpecModule extends FNModule {
           case trans.WrapObjectDynamic(left, right) => trans.WrapObjectDynamic(mapSources(left)(f), mapSources(right)(f))
           case trans.WrapArray(source) => trans.WrapArray(mapSources(source)(f))
           
+          case DerefMetadataStatic(source, field) => DerefMetadataStatic(mapSources(source)(f), field)
+
           case DerefObjectStatic(source, field) => DerefObjectStatic(mapSources(source)(f), field)
           case DerefObjectDynamic(left, right) => DerefObjectDynamic(mapSources(left)(f), mapSources(right)(f))
           case DerefArrayStatic(source, element) => DerefArrayStatic(mapSources(source)(f), element)
@@ -183,6 +185,8 @@ trait TransSpecModule extends FNModule {
         case trans.WrapObjectDynamic(source, right) => trans.WrapObjectDynamic(deepMap(source)(f), deepMap(right)(f))
         case trans.WrapArray(source) => trans.WrapArray(deepMap(source)(f))
         
+        case DerefMetadataStatic(source, field) => DerefMetadataStatic(deepMap(source)(f), field)
+
         case DerefObjectStatic(source, field) => DerefObjectStatic(deepMap(source)(f), field)
         case DerefObjectDynamic(left, right) => DerefObjectDynamic(deepMap(left)(f), deepMap(right)(f))
         case DerefArrayStatic(source, element) => DerefArrayStatic(deepMap(source)(f), element)
