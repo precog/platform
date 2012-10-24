@@ -58,10 +58,22 @@ trait ColumnarTableTypes {
   type RowId = Int
 }
 
-trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes with IdSourceScannerModule[M] with SliceTransforms[M] {
+trait ColumnarTableModuleConfig {
+  def maxSliceSize: Int
+}
+
+trait ColumnarTableModule[M[+_]]
+    extends TableModule[M]
+    with ColumnarTableTypes
+    with IdSourceScannerModule[M]
+    with SliceTransforms[M]
+    with YggConfigComponent {
+      
   import TableModule._
   import trans._
   import trans.constants._
+  
+  type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig
 
   type Table <: ColumnarTable
   type TableCompanion <: ColumnarTableCompanion
@@ -2302,11 +2314,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   lempty <- ltail.isEmpty //TODO: Scalaz result here is negated from what it should be!
                   rempty <- rtail.isEmpty
                 } yield {
+                  val frontSize = lhead.size * rhead.size
                   
-                  if (lempty) {
+                  if (lempty && frontSize <= yggConfig.maxSliceSize) {
                     // left side is a small set, so restart it in memory
                     crossLeftSingle(lhead, rhead :: rtail)
-                  } else if (rempty) {
+                  } else if (rempty && frontSize <= yggConfig.maxSliceSize) {
                     // right side is a small set, so restart it in memory
                     crossRightSingle(lhead :: ltail, rhead)
                   } else {

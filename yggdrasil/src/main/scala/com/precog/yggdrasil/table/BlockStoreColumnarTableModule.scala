@@ -54,7 +54,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   import SliceTransform._
   import BlockStoreColumnarTableModule._
     
-  type YggConfig <: IdSourceConfig with BlockStoreColumnarTableModuleConfig
+  type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig with BlockStoreColumnarTableModuleConfig
   override type UserId = String
   type Key
   type Projection <: BlockProjectionLike[Key, Slice]
