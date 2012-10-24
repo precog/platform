@@ -148,17 +148,17 @@ object CPathNode {
     def order(n1: CPathNode, n2: CPathNode): Ordering = (n1, n2) match {
       case (CPathField(s1), CPathField(s2)) => Ordering.fromInt(s1.compare(s2))
       case (CPathField(_) , _) => GT
-      case (CPathIndex(i1), CPathIndex(i2)) => if (i1 < i2) LT else if (i1 == i2) EQ else GT
-      case (CPathIndex(_) , CPathField(_)) => LT
+      case (_, CPathField(_)) => LT
+
       case (CPathArray, CPathArray) => EQ
-      case (_, CPathArray) => GT
-      case (CPathArray, _) => LT
-      case (CPathField(_) , _             ) => GT
-      case (CPathIndex(i1), CPathIndex(i2)) => Ordering.fromInt(i1.compare(i2))
-      case (CPathIndex(_) , CPathField(_) ) => LT
-      case (CPathIndex(_) , CPathMeta(_)  ) => GT
+      case (CPathArray, _) => GT
+      case (_, CPathArray) => LT
+
+      case (CPathIndex(i1), CPathIndex(i2)) => if (i1 < i2) LT else if (i1 == i2) EQ else GT
+      case (CPathIndex(_), _) => GT
+      case (_, CPathIndex(_)) => LT
+
       case (CPathMeta(m1) , CPathMeta(m2) ) => Ordering.fromInt(m1.compare(m2))
-      case (CPathMeta(_)  , _             ) => LT
     }
   }
 

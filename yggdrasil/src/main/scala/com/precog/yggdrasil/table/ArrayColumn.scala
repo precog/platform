@@ -45,11 +45,11 @@ class ArrayHomogeneousArrayColumn[A](val defined: BitSet, values: Array[IndexedS
 
 object ArrayHomogeneousArrayColumn {
   def apply[A: CValueType](values: Array[IndexedSeq[A]]) =
-    new ArrayHomogeneousArrayColumn(mutable.BitSet(0 until values.length: _*), values)(CArrayType(CValueType[A]))
+    new ArrayHomogeneousArrayColumn(BitSetUtil.range(0, values.length), values)(CArrayType(CValueType[A]))
   def apply[A: CValueType](defined: BitSet, values: Array[IndexedSeq[A]]) =
-    new ArrayHomogeneousArrayColumn(makeMutable(defined), values)(CArrayType(CValueType[A]))
+    new ArrayHomogeneousArrayColumn(defined.copy, values)(CArrayType(CValueType[A]))
   def empty[A](size: Int)(implicit elemType: CValueType[A]): ArrayHomogeneousArrayColumn[A] =
-    new ArrayHomogeneousArrayColumn(mutable.BitSet.empty, new Array[IndexedSeq[A]](size))(CArrayType(elemType))
+    new ArrayHomogeneousArrayColumn(new BitSet, new Array[IndexedSeq[A]](size))(CArrayType(elemType))
 }
 
 

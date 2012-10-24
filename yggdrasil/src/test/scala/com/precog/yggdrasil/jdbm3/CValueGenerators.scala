@@ -76,7 +76,6 @@ trait CValueGenerators {
       scale  <- arbInt.arbitrary
       bigInt <- arbBigInt.arbitrary
     } yield CNum(BigDecimal(new java.math.BigDecimal(bigInt.bigInteger, scale - 1 /* BigDecimal can't handle Integer min/max scales */), java.math.MathContext.UNLIMITED))
-    case CDate    => arbLong.arbitrary.map { ts => CDate(new DateTime(ts)) }
     case cType @ CArrayType(_) =>
       genValueForCValueType(cType) map { a => CArray(a, cType) }
     case CDate    => arbLong.arbitrary map { ts => CDate(new DateTime(if (ts < 0) ~ts else ts)) }

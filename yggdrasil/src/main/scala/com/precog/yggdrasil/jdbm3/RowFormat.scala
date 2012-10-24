@@ -592,7 +592,7 @@ trait SortingRowFormat extends RowFormat with StdCodecs with RowFormatSupport {
 
       case v: CWrappedValue[_] =>
         for {
-          _ <-writeFlagFor(v.cType)
+          _ <- writeFlagFor(v.cType)
           _ <- codecForCValueType(v.cType).write(v.value)
         } yield ()
     }.sequence
