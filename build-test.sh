@@ -8,7 +8,7 @@ port_is_open() {
 }
 
 wait_until_port_open() {
-    while ! port_is_open $1; do
+    while port_is_open $1; do
         sleep 1
     done
 }
