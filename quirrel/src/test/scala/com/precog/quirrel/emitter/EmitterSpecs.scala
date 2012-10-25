@@ -313,6 +313,62 @@ object EmitterSpecs extends Specification
           Map2Cross(JoinObject)))
     }
 
+    "emit two distinct callsites of the same function" in {
+      val input = """
+        | medals := //summer_games/london_medals 
+        |   stats(x) := max(x) 
+        |   [stats(medals.Weight), stats(medals.HeightIncm)]
+        """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("/summer_games/london_medals"), 
+          instructions.LoadLocal, 
+          Dup, 
+          PushString("Weight"), 
+          Map2Cross(DerefObject), 
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Map1(WrapArray), 
+          Swap(1), 
+          PushString("HeightIncm"), 
+          Map2Cross(DerefObject), 
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Map1(WrapArray), 
+          Map2Cross(JoinArray)))
+    }
+
+    "emit two distinct callsites of the same function version 2" in {
+      val input = """
+        | medals := //summer_games/london_medals 
+        | stats(x) := max(x) + min(x)
+        | stats(medals.Weight) - stats(medals.HeightIncm)
+        """.stripMargin
+
+      testEmit(input)(
+        Vector(PushString("/summer_games/london_medals"),
+          instructions.LoadLocal,
+          Dup,
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Dup,
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Swap(1),
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
+          Map2Cross(Add),
+          Swap(1),
+          PushString("HeightIncm"),
+          Map2Cross(DerefObject),
+          Dup,
+          Swap(2),
+          Swap(1),
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Swap(1),
+          Swap(2),
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
+          Map2Cross(Add),
+          Map2Cross(Sub)))
+    }
+
     "emit wrapped object as right side of Let" in {
       testEmit("clicks := //clicks {foo: clicks}")(
         Vector(

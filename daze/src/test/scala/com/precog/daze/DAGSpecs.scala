@@ -84,6 +84,42 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
     }
     
     // TODO morphisms
+
+    "parse an array join" in {
+      val result = decorate(Vector(
+        Line(0, ""),
+        PushString("/summer_games/london_medals"), 
+        instructions.LoadLocal, 
+        Dup, 
+        PushString("Weight"), 
+        Map2Cross(DerefObject), 
+        instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+        Map1(WrapArray), 
+        Swap(1), 
+        PushString("HeightIncm"), 
+        Map2Cross(DerefObject), 
+        instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+        Map1(WrapArray), 
+        Map2Cross(JoinArray)))
+
+      val line = Line(0, "")
+      val medals = dag.LoadLocal(line, Root(line, CString("/summer_games/london_medals")))
+
+      val expected = Join(line, JoinArray, CrossLeftSort,
+        Operate(line, WrapArray,
+          dag.Reduce(line, Reduction(Vector(), "max", 0x2001), 
+            Join(line, DerefObject, CrossLeftSort,
+              medals,
+              Root(line, CString("Weight"))))),
+        Operate(line, WrapArray,
+          dag.Reduce(line, Reduction(Vector(), "max", 0x2001), 
+            Join(line, DerefObject, CrossLeftSort,
+              medals,
+              Root(line, CString("HeightIncm"))))))
+
+      
+      result mustEqual Right(expected)
+    }
     
     "parse a single-level split" in {
       val line = Line(0, "")
