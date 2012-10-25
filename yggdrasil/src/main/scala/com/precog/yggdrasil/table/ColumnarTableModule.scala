@@ -429,7 +429,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 val other = if (a == from) b else a
                 // the other node's keys must be a superset of the constraint set we're concerned with in order to traverse it.
                 ((other.keys & constraintSet) == constraintSet) && {
-                  val pruned = outbound mapValues { _ - edge }
+                  val pruned = outbound mapValues { _ - edge } map identity
                   isConnected(other,to, pruned, constraintSet)
                 }
               }
@@ -446,7 +446,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             val fromNode = edge.a
             val toNode = edge.b
 
-            val pruned = outbound mapValues { _ - edge }
+            val pruned = outbound mapValues { _ - edge } map identity
 
             find0(if (isConnected(fromNode, toNode, pruned, edge.keys)) pruned else outbound, edges.tail)
           }
@@ -984,7 +984,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             acc + (a -> aConstraints) + (b -> bConstraints)
         }
         
-        fix(nodeList, unconstrained).mapValues(s => minimize(s).map(_.fixed))
+        fix(nodeList, unconstrained).mapValues(s => minimize(s).map(_.fixed)).map(identity)
       }
     }
 
@@ -1027,7 +1027,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             val ticVarColumns =
               cols.toList.collect { 
                 case (ref @ ColumnRef(CPath(CPathIndex(1), CPathField(ticVarIndex), _ @ _*), _), col) => (ticVarIndex, col)
-              }.groupBy(_._1).mapValues(_.unzip._2)
+              }.groupBy(_._1).mapValues(_.unzip._2).map(identity)
 
             if (ticVarColumns.keySet.map(_.toInt) == keyIndices) {
               //println("All group key columns present:\n  " + (new Slice { val size = range.end; val columns = cols }))
@@ -1042,7 +1042,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
               //println("Defined for " + defined)
 
-              ((), cols.mapValues { col => cf.util.filter(range.start, range.end, defined)(col).get })
+              ((), cols.lazyMapValues { col => cf.util.filter(range.start, range.end, defined)(col).get })
             } else {
               ((), Map.empty[ColumnRef, Column])
             }
@@ -2262,7 +2262,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 case Some((rhead, rtail0)) =>
                   val lslice = new Slice {
                     val size = rhead.size
-                    val columns = lhead.columns.mapValues(Remap(i => state.position)(_).get)
+                    val columns = lhead.columns.lazyMapValues(Remap(i => state.position)(_).get)
                   }
 
                   val (a0, resultSlice) = transform.f(state.a, lslice, rhead)
@@ -2286,17 +2286,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 val lslice = new Slice {
                   val size = rhead.size * lhead.size
                   val columns = if (rhead.size == 0)
-                    lhead.columns.mapValues(Empty(_).get)
+                    lhead.columns.lazyMapValues(Empty(_).get)
                   else
-                    lhead.columns.mapValues(Remap(_ / rhead.size)(_).get)
+                    lhead.columns.lazyMapValues(Remap(_ / rhead.size)(_).get)
                 }
 
                 val rslice = new Slice {
                   val size = rhead.size * lhead.size
                   val columns = if (rhead.size == 0)
-                    rhead.columns.mapValues(Empty(_).get)
+                    rhead.columns.lazyMapValues(Empty(_).get)
                   else
-                    rhead.columns.mapValues(Remap(_ % rhead.size)(_).get)
+                    rhead.columns.lazyMapValues(Remap(_ % rhead.size)(_).get)
                 }
 
                 val (a0, resultSlice) = transform.f(state.a, lslice, rslice)
