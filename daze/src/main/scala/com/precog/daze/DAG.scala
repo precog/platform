@@ -515,7 +515,7 @@ trait DAG extends Instructions with TransSpecModule {
       memoized(Map())(this)
     }
 
-    def foldDown[Z](f0: PartialFunction[DepGraph, Z])(implicit monoid: Monoid[Z]): Z = {
+    def foldDown[Z](enterSplitChild: Boolean)(f0: PartialFunction[DepGraph, Z])(implicit monoid: Monoid[Z]): Z = {
       val f: PartialFunction[DepGraph, Z] = f0.orElse { case _ => monoid.zero }
 
       def foldThroughSpec(spec: dag.BucketSpec, acc: Z): Z = spec match {
@@ -557,7 +557,12 @@ trait DAG extends Instructions with TransSpecModule {
 
         case node @ dag.MegaReduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.Split(_, specs, child) => foldDown0(child, foldThroughSpec(specs, acc) |+| f(child))
+        case dag.Split(_, specs, child) =>
+          val specsAcc = foldThroughSpec(specs, acc)
+          if (enterSplitChild)
+            foldDown0(child, specsAcc |+| f(child))
+          else
+            specsAcc
 
         case dag.IUI(_, _, left, right) =>
           val acc2 = foldDown0(left, acc |+| f(left))
