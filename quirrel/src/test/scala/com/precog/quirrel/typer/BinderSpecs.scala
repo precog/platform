@@ -203,6 +203,12 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       t.errors must beEmpty
     }
     
+    "attribute call sites onto functions" in {
+      val e1 @ Let(_, _, _, _, Add(_, d1: Dispatch, d2: Dispatch)) = parse("f(x) := x f(12) + f(16)")
+      e1.dispatches mustEqual Set(d1, d2)
+      e1.errors must beEmpty
+    }
+    
     "reject unbound dispatch" in {
       {
         val d @ Dispatch(_, _, _) = parse("foo")

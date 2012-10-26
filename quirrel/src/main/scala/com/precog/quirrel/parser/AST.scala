@@ -688,6 +688,12 @@ trait AST extends Phases {
       
       def child = right
       
+      private val _dispatches = attribute[Set[Dispatch]](bindNames)
+      def dispatches = _dispatches()
+      private[quirrel] def dispatches_=(dispatches: Set[Dispatch]) = _dispatches() = dispatches
+      private[quirrel] def dispatches_+=(dispatch: Dispatch) = _dispatches += dispatch
+      private[quirrel] def dispatches_++=(dispatches: Set[Dispatch]) = _dispatches ++= dispatches
+      
       private val _constraints = attribute[Set[ProvConstraint]](checkProvenance)
       def constraints = _constraints()
       private[quirrel] def constraints_=(constraints: Set[ProvConstraint]) = _constraints() = constraints

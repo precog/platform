@@ -194,6 +194,13 @@ trait Binder extends parser.AST with Library {
             case _ => false
           }
           
+          binding match {
+            case LetBinding(let) =>
+              let dispatches_+= d
+            
+            case _ =>
+          }
+          
           recursive ++ errors
         } else {
           d.binding = NullBinding
