@@ -26,6 +26,7 @@ import blueeyes.json.serialization.{ Decomposer, Extractor, ValidatedExtraction 
 import blueeyes.json.serialization.DefaultSerialization._
 
 import shapeless._
+import scalaz._
 
 class SerializationSpec extends Specification {
   case class Foo(s: String, i: Option[Int], b: Boolean)
@@ -38,6 +39,7 @@ class SerializationSpec extends Specification {
   case class Bar(d: Double, f: Foo, l: List[String])
   implicit val barIso = Iso.hlist(Bar.apply _, Bar.unapply _)
   val bar = Bar(2.3, foo, List("foo", "bar", "baz"))
+  val bar2 = Bar(2.3, foo2, List("foo", "bar", "baz"))
   val barSchema = "d" :: "f" :: "l" :: HNil
   val inlinedBarSchema = "d" :: Inline :: "l" :: HNil
   
@@ -162,6 +164,132 @@ class SerializationSpec extends Specification {
               ))
             )))
         ))
+    }
+  }
+  
+  "deserialization" should {
+    "extract to a simple case class" in {
+      val fooExtract = extractor[Foo](fooSchema)
+      
+      val result = fooExtract.extract(
+        JObject(List(
+          JField("s", "Hello world"),
+          JField("i", 23),
+          JField("b", true)
+        ))
+      )
+      
+      result must_== foo
+    }
+    
+    "extract to a simple case class with an absent optional field" in {
+      val fooExtract = extractor[Foo](fooSchema)
+      
+      val result = fooExtract.extract(
+        JObject(List(
+          JField("s", "Hello world"),
+          JField("b", true)
+        ))
+      )
+      
+      result must_== foo2
+    }
+    
+    "extract to a simple case class with omitted fields" in {
+      val fooExtract = extractor[Foo](safeFooSchema)
+      
+      val result = fooExtract.extract(
+        JObject(List(
+          JField("s", "Hello world"),
+          JField("b", true)
+        ))
+      )
+      
+      result must_== foo2
+    }
+    
+    "extract to a case class with a nested case class element" in {
+      implicit val fooExtract = extractor[Foo](fooSchema)
+      val barExtract = extractor[Bar](barSchema)
+      
+      val result = barExtract.extract(
+        JObject(List(
+          JField("d", 2.3),
+          JField("f",
+            JObject(List(
+              JField("s", "Hello world"),
+              JField("i", 23),
+              JField("b", true)
+            ))),
+          JField("l",
+            JArray(List("foo", "bar", "baz")))
+        ))
+      )
+      
+      result must_== bar
+    }
+    
+    "extract to a case class with a nested case class element respecting alternative schema" in {
+      implicit val fooExtract = extractor[Foo](fooSchema)
+      val barExtract = extractor[Bar](barSchema)
+      
+      val result = barExtract.extract(
+        JObject(List(
+          JField("d", 2.3),
+          JField("f",
+            JObject(List(
+              JField("s", "Hello world"),
+              JField("b", true)
+            ))),
+          JField("l",
+            JArray(List("foo", "bar", "baz")))
+        ))
+      )
+      
+      result must_== bar2
+    }
+    
+    "extract to a case class with a nested case class element from an inlined serialization" in {
+      implicit val fooExtract = extractor[Foo](fooSchema)
+      val barExtract = extractor[Bar](inlinedBarSchema)
+
+      val result = barExtract.extract(
+        JObject(List(
+          JField("d", 2.3),
+          JField("s", "Hello world"),
+          JField("i", 23),
+          JField("b", true),
+          JField("l",
+            JArray(List("foo", "bar", "baz")))
+        ))
+      )
+      
+      result must_== bar
+    }
+
+    "extract to a case class with a list of nested case class elements" in {
+      implicit val fooExtract = extractor[Foo](fooSchema)
+      val bazExtract = extractor[Baz](bazSchema)
+
+      val result = bazExtract.extract(
+        JObject(List(
+          JField("s", "Hello world"),
+          JField("l",
+            JArray(List(
+              JObject(List(
+                JField("s", "Hello world"),
+                JField("i", 23),
+                JField("b", true)
+              )),
+              JObject(List(
+                JField("s", "Hello world"),
+                JField("b", true)
+              ))
+            )))
+        ))
+      )
+      
+      result must_== baz
     }
   }
 }
