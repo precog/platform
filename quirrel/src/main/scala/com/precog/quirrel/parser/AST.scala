@@ -694,6 +694,12 @@ trait AST extends Phases {
       private[quirrel] def dispatches_+=(dispatch: Dispatch) = _dispatches += dispatch
       private[quirrel] def dispatches_++=(dispatches: Set[Dispatch]) = _dispatches ++= dispatches
       
+      lazy val substitutions: Map[Dispatch, Map[String, Expr]] = {
+        dispatches.map({ dispatch =>
+          dispatch -> Map(params zip dispatch.actuals: _*)
+        })(collection.breakOut)
+      }
+      
       private val _constraints = attribute[Set[ProvConstraint]](checkProvenance)
       def constraints = _constraints()
       private[quirrel] def constraints_=(constraints: Set[ProvConstraint]) = _constraints() = constraints
