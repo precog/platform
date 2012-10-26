@@ -95,7 +95,7 @@ trait Emitter extends AST
     }
 
     def emitInstr(i: Instruction): EmitterState = insertInstrAt(i, -1)
-
+    
     def emitOrDup(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       if (e.marks.contains(markType))
         emitDup(markType)(e) 
@@ -182,12 +182,12 @@ trait Emitter extends AST
         insertInstrAt(restoreSwaps, e.bytecode.length + pullUp.length + 1 + pushDown.length + saveSwaps.length))(e)
     }
     
-    def emitConstraints(expr: Expr): EmitterState = {
+    def emitConstraints(expr: Expr, dispatches: Set[ast.Dispatch]): EmitterState = {
       val optState = for (const <- expr.constrainingExpr if !(const equalsIgnoreLoc expr)) yield {
         if (expr.children exists { _.constrainingExpr == Some(const) })
           None
         else {
-          Some(emitExpr(const) >> emitInstr(Dup) >> emitInstr(Map2Match(Eq)) >> emitInstr(FilterMatch))
+          Some(emitExpr(const, dispatches) >> emitInstr(Dup) >> emitInstr(Map2Match(Eq)) >> emitInstr(FilterMatch))
         }
       }
       
@@ -218,12 +218,12 @@ trait Emitter extends AST
       )
     }
 
-    def emitMap(left: Expr, right: Expr, op: BinaryOperation): EmitterState = {
-      emitMapState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, op)
+    def emitMap(left: Expr, right: Expr, op: BinaryOperation, dispatches: Set[ast.Dispatch]): EmitterState = {
+      emitMapState(emitExpr(left, dispatches), left.provenance, emitExpr(right, dispatches), right.provenance, op)
     }
 
-    def emitUnary(expr: Expr, op: UnaryOperation): EmitterState = {
-      emitExpr(expr) >> emitInstr(Map1(op))
+    def emitUnary(expr: Expr, op: UnaryOperation, dispatches: Set[ast.Dispatch]): EmitterState = {
+      emitExpr(expr, dispatches) >> emitInstr(Map1(op))
     }
 
     def emitFilterState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance): EmitterState = {
@@ -233,34 +233,34 @@ trait Emitter extends AST
       )
     }
 
-    def emitFilter(left: Expr, right: Expr): EmitterState = {
-      emitFilterState(emitExpr(left), left.provenance, emitExpr(right), right.provenance)
+    def emitFilter(left: Expr, right: Expr, dispatches: Set[ast.Dispatch]): EmitterState = {
+      emitFilterState(emitExpr(left, dispatches), left.provenance, emitExpr(right, dispatches), right.provenance)
     }
     
-    def emitWhere(where: ast.Where): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    def emitWhere(where: ast.Where, dispatches: Set[ast.Dispatch]): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       val ast.Where(loc, left, right) = where
       
       val state = if (e.groups contains where) {
         val id = e.groups(where)
         emitOrDup(MarkGroup(where))(emitInstr(PushGroup(id)))
       } else {
-        emitFilter(left, right)
+        emitFilter(left, right, dispatches)
       }
       
       state(e)
     }
     
-    def emitBucketSpec(solve: ast.Solve, spec: BucketSpec): EmitterState = spec match {
+    def emitBucketSpec(solve: ast.Solve, spec: BucketSpec, dispatches: Set[ast.Dispatch]): EmitterState = spec match {
       case buckets.UnionBucketSpec(left, right) =>
-        emitBucketSpec(solve, left) >> emitBucketSpec(solve, right) >> emitInstr(MergeBuckets(false))
+        emitBucketSpec(solve, left, dispatches) >> emitBucketSpec(solve, right, dispatches) >> emitInstr(MergeBuckets(false))
       
       case buckets.IntersectBucketSpec(left, right) =>
-        emitBucketSpec(solve, left) >> emitBucketSpec(solve, right) >> emitInstr(MergeBuckets(true))
+        emitBucketSpec(solve, left, dispatches) >> emitBucketSpec(solve, right, dispatches) >> emitInstr(MergeBuckets(true))
       
       case buckets.Group(origin, target, forest) => {
         nextId { id =>
-          emitBucketSpec(solve, forest) >>
-            emitExpr(target) >>
+          emitBucketSpec(solve, forest, dispatches) >>
+            emitExpr(target, dispatches) >>
             (origin map { labelGroup(_, id) } getOrElse mzero[EmitterState]) >>
             emitInstr(Group(id))
         }
@@ -268,7 +268,7 @@ trait Emitter extends AST
       
       case buckets.UnfixedSolution(name, solution) => {
         def state(id: Int) = {
-          emitExpr(solution) >>
+          emitExpr(solution, dispatches) >>
             labelTicVar(solve, name)(emitInstr(PushKey(id))) >>
             emitInstr(KeyPart(id))
         }
@@ -290,35 +290,35 @@ trait Emitter extends AST
       }
       
       case buckets.FixedSolution(_, solution, expr) =>
-        emitMap(solution, expr, Eq) >> emitInstr(Extra)
+        emitMap(solution, expr, Eq, dispatches) >> emitInstr(Extra)
       
       case buckets.Extra(expr) =>
-        emitExpr(expr) >> emitInstr(Extra)
+        emitExpr(expr, dispatches) >> emitInstr(Extra)
     }
     
-    def emitExpr(expr: Expr): StateT[Id, Emission, Unit] = {
+    def emitExpr(expr: Expr, dispatches: Set[ast.Dispatch]): StateT[Id, Emission, Unit] = {
       emitLine(expr.loc.lineNum, expr.loc.line) >>
       (expr match {
         case ast.Let(loc, id, params, left, right) =>
-          emitExpr(right)
+          emitExpr(right, dispatches)
 
         case expr @ ast.Solve(loc, _, body) => 
-          val spec = expr.buckets.get
+          val spec = expr.buckets(dispatches)
           
-          emitBucketSpec(expr, spec) >> 
+          emitBucketSpec(expr, spec, dispatches) >> 
             emitInstr(Split) >>
-            emitExpr(body) >>
+            emitExpr(body, dispatches) >>
             emitInstr(Merge)
                   
         
         case ast.Import(_, _, child) =>
-          emitExpr(child)
+          emitExpr(child, dispatches)
 
         case ast.New(loc, child) => 
-          emitExpr(child) >> emitInstr(Map1(New))
+          emitExpr(child, dispatches) >> emitInstr(Map1(New))
         
         case ast.Relate(loc, from: Expr, to: Expr, in: Expr) => 
-          emitExpr(in)
+          emitExpr(in, dispatches)
         
         case t @ ast.TicVar(loc, name) => { 
           t.binding match {
@@ -352,7 +352,7 @@ trait Emitter extends AST
         case ast.ObjectDef(loc, Vector()) => emitInstr(PushObject)
         
         case ast.ObjectDef(loc, props) => 
-          def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2) >> emitInstr(Map2Cross(WrapObject))
+          def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2, dispatches) >> emitInstr(Map2Cross(WrapObject))
 
           val provToField = props.groupBy(_._2.provenance)
 
@@ -381,7 +381,7 @@ trait Emitter extends AST
 
           val (groups, indices) = provToElements.foldLeft((Vector.empty[EmitterState], Vector.empty[Int])) {
             case ((allStates, allIndices), (provenance, elements)) =>
-              val singles = elements.map { case (expr, idx) => emitExpr(expr) >> emitInstr(Map1(WrapArray)) }
+              val singles = elements.map { case (expr, idx) => emitExpr(expr, dispatches) >> emitInstr(Map1(WrapArray)) }
               val indices = elements.map(_._2)
 
               val joinInstr = emitInstr(if (provenance == ValueProvenance) Map2Cross(JoinArray) else Map2Match(JoinArray))
@@ -427,30 +427,30 @@ trait Emitter extends AST
           joined >> fixedState
         
         case ast.Descent(loc, child, property) => 
-          emitMapState(emitExpr(child), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefObject)
+          emitMapState(emitExpr(child, dispatches), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefObject)
         
         case ast.MetaDescent(loc, child, property) => 
-          emitMapState(emitExpr(child), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefMetadata)
+          emitMapState(emitExpr(child, dispatches), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefMetadata)
         
         case ast.Deref(loc, left, right) => 
-          emitMap(left, right, DerefArray)
+          emitMap(left, right, DerefArray, dispatches)
         
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
             case LoadBinding =>
-              emitExpr(actuals.head) >> emitInstr(LoadLocal)
+              emitExpr(actuals.head, dispatches) >> emitInstr(LoadLocal)
 
             case DistinctBinding =>
-              emitExpr(actuals.head) >> emitInstr(Distinct)
+              emitExpr(actuals.head, dispatches) >> emitInstr(Distinct)
 
             case Morphism1Binding(m) => 
-              emitExpr(actuals.head) >> emitInstr(Morph1(BuiltInMorphism1(m)))
+              emitExpr(actuals.head, dispatches) >> emitInstr(Morph1(BuiltInMorphism1(m)))
 
             case Morphism2Binding(m) => 
-              emitExpr(actuals(0)) >> emitExpr(actuals(1)) >> emitInstr(Morph2(BuiltInMorphism2(m)))
+              emitExpr(actuals(0), dispatches) >> emitExpr(actuals(1), dispatches) >> emitInstr(Morph2(BuiltInMorphism2(m)))
 
             case ReductionBinding(f) =>
-              emitExpr(actuals.head) >> emitInstr(Reduce(BuiltInReduction(f)))
+              emitExpr(actuals.head, dispatches) >> emitInstr(Reduce(BuiltInReduction(f)))
 
             case FormalBinding(let) =>
               emitOrDup(MarkFormal(name, let)) {
@@ -460,15 +460,15 @@ trait Emitter extends AST
               }
 
             case Op1Binding(op) =>  
-              emitUnary(actuals(0), BuiltInFunction1Op(op))
+              emitUnary(actuals(0), BuiltInFunction1Op(op), dispatches)
 
             case Op2Binding(op) =>
-              emitMap(actuals(0), actuals(1), BuiltInFunction2Op(op))
+              emitMap(actuals(0), actuals(1), BuiltInFunction2Op(op), dispatches)
 
             case LetBinding(let @ ast.Let(loc, id, params, left, right)) =>
               params.length match {
                 case 0 =>
-                  emitOrDup(MarkExpr(left))(emitExpr(left))
+                  emitOrDup(MarkExpr(left))(emitExpr(left, dispatches + d))
 
                 case n => emitOrDup(MarkDispatch(let, actuals)) {
                   val ids = let.params map { Identifier(Vector(), _) }
@@ -482,7 +482,7 @@ trait Emitter extends AST
                   
                   val actualStates = params zip actuals map {
                     case (name, expr) =>
-                      labelFormal(Identifier(Vector(), name), let)(emitExpr(expr))
+                      labelFormal(Identifier(Vector(), name), let)(emitExpr(expr, dispatches))
                   }
                   
                   StateT.apply[Id, Emission, Unit] { e =>
@@ -491,7 +491,7 @@ trait Emitter extends AST
                     
                     val e2 = e.copy(subResolve = e.subResolve compose subResolve2)
                     
-                    val (e3, ()) = (reduce(actualStates) >> emitExpr(left))(e2)
+                    val (e3, ()) = (reduce(actualStates) >> emitExpr(left, dispatches + d))(e2)
                     val e4 = e3.copy(formals = params.foldLeft(e3.formals)((fs, name) => fs - ((Identifier(Vector(), name), let))))
                     val e5 = e4.copy(marks = params.foldLeft(e4.marks)((fs, name) => fs - (MarkFormal(Identifier(Vector(), name), let))))
                     (e5.copy(subResolve = e.subResolve), ())
@@ -504,73 +504,73 @@ trait Emitter extends AST
           }
         
         case where @ ast.Where(_, _, _) =>
-          emitWhere(where)
+          emitWhere(where, dispatches)
 
         case ast.With(loc, left, right) =>
-          emitMap(left, right, JoinObject)
+          emitMap(left, right, JoinObject, dispatches)
 
         case ast.Union(loc, left, right) =>
-          emitExpr(left) >> emitExpr(right) >> emitInstr(IUnion)  
+          emitExpr(left, dispatches) >> emitExpr(right, dispatches) >> emitInstr(IUnion)  
 
         case ast.Intersect(loc, left, right) =>
-          emitExpr(left) >> emitExpr(right) >> emitInstr(IIntersect) 
+          emitExpr(left, dispatches) >> emitExpr(right, dispatches) >> emitInstr(IIntersect) 
 
         case ast.Difference(loc, left, right) =>
-          emitExpr(left) >> emitExpr(right) >> emitInstr(SetDifference) 
+          emitExpr(left, dispatches) >> emitExpr(right, dispatches) >> emitInstr(SetDifference) 
 
         case ast.Add(loc, left, right) => 
-          emitMap(left, right, Add)
+          emitMap(left, right, Add, dispatches)
         
         case ast.Sub(loc, left, right) => 
-          emitMap(left, right, Sub)
+          emitMap(left, right, Sub, dispatches)
 
         case ast.Mul(loc, left, right) => 
-          emitMap(left, right, Mul)
+          emitMap(left, right, Mul, dispatches)
         
         case ast.Div(loc, left, right) => 
-          emitMap(left, right, Div)
+          emitMap(left, right, Div, dispatches)
         
         case ast.Mod(loc, left, right) => 
-          emitMap(left, right, Mod)
+          emitMap(left, right, Mod, dispatches)
         
         case ast.Lt(loc, left, right) => 
-          emitMap(left, right, Lt)
+          emitMap(left, right, Lt, dispatches)
         
         case ast.LtEq(loc, left, right) => 
-          emitMap(left, right, LtEq)
+          emitMap(left, right, LtEq, dispatches)
         
         case ast.Gt(loc, left, right) => 
-          emitMap(left, right, Gt)
+          emitMap(left, right, Gt, dispatches)
         
         case ast.GtEq(loc, left, right) => 
-          emitMap(left, right, GtEq)
+          emitMap(left, right, GtEq, dispatches)
         
         case ast.Eq(loc, left, right) => 
-          emitMap(left, right, Eq)
+          emitMap(left, right, Eq, dispatches)
         
         case ast.NotEq(loc, left, right) => 
-          emitMap(left, right, NotEq)
+          emitMap(left, right, NotEq, dispatches)
         
         case ast.Or(loc, left, right) => 
-          emitMap(left, right, Or)
+          emitMap(left, right, Or, dispatches)
         
         case ast.And(loc, left, right) =>
-          emitMap(left, right, And)
+          emitMap(left, right, And, dispatches)
         
         case ast.Comp(loc, child) =>
-          emitExpr(child) >> emitInstr(Map1(Comp))
+          emitExpr(child, dispatches) >> emitInstr(Map1(Comp))
         
         case ast.Neg(loc, child) => 
-          emitExpr(child) >> emitInstr(Map1(Neg))
+          emitExpr(child, dispatches) >> emitInstr(Map1(Neg))
         
         case ast.Paren(loc, child) => 
           mzero[EmitterState]
-      }) >> emitConstraints(expr)
+      }) >> emitConstraints(expr, dispatches)
     }
   }
 
   def emit(expr: Expr): Vector[Instruction] = {
     import Emission._
-    emitExpr(expr).exec(Emission.empty).bytecode
+    emitExpr(expr, Set()).exec(Emission.empty).bytecode
   }
 }

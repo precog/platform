@@ -721,11 +721,17 @@ trait AST extends Phases {
       private[quirrel] def vars_=(vars: Set[TicId]) = _vars() = vars
       
       lazy val criticalConditions = findCriticalConditions(this)
-      lazy val groups = findGroups(this)
       
-      private val _buckets = attribute[Option[BucketSpec]](inferBuckets)
+      lazy val criticalConstraints = constraints filter {
+        case TicVar(_, _) => false
+        case _ => true
+      } toSet
+      
+      private val _buckets = attribute[Map[Set[Dispatch], BucketSpec]](inferBuckets)
       def buckets = _buckets()
-      private[quirrel] def buckets_=(spec: Option[BucketSpec]) = _buckets() = spec
+      private[quirrel] def buckets_=(spec: Map[Set[Dispatch], BucketSpec]) = _buckets() = spec
+      private[quirrel] def buckets_+=(spec: (Set[Dispatch], BucketSpec)) = _buckets += spec
+      private[quirrel] def buckets_++=(spec: Map[Set[Dispatch], BucketSpec]) = _buckets ++= spec
     }
 
     final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends ExprUnaryNode {

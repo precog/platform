@@ -20,162 +20,95 @@
 package com.precog.quirrel
 package emitter
 
-trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChecker with Solutions {
-  import Utils._
+import scala.annotation.tailrec
+
+trait GroupFinder extends parser.AST with Tracer {
   import ast._
   
-  override def findGroups(expr: Expr): Set[GroupTree] = {
-    import group._
+  def findGroups(solve: Solve): Set[(Map[Formal, Expr], Where)] = {
+    val vars = solve.vars map { findVars(solve, _)(solve.child) } reduceOption { _ ++ _ } getOrElse Set()
     
-    def loop(root: Solve, expr: Expr, currentWhere: Option[Where]): Set[GroupTree] = expr match {
-      case Let(_, _, _, left, right) => loop(root, right, currentWhere)
-
-      case Solve(_, _, child) => loop(root, child, currentWhere)
-
-      case Import(_, _, child) => loop(root, child, currentWhere)
-      
-      case New(_, child) => loop(root, child, currentWhere)
-      
-      case Relate(_, from, to, in) => {
-        val first = loop(root, from, currentWhere)
-        val second = loop(root, to, currentWhere)
-        val third = loop(root, in, currentWhere)
-        first ++ second ++ third
-      }
-      
-      case t @ TicVar(_, id) => t.binding match {
-        case SolveBinding(`root`) =>
-          currentWhere map { where => Set(GroupCondition(where): GroupTree) } getOrElse Set()
-        
-        case _ => Set()
-      }
-      
-      case StrLit(_, _) => Set()
-      case NumLit(_, _) => Set()
-      case BoolLit(_, _) => Set()
-      case NullLit(_) => Set()
-      
-      case ObjectDef(_, props) => {
-        val sets = props map { case (_, expr) => loop(root, expr, currentWhere) }
-        sets.fold(Set()) { _ ++ _ }
-      }
-      
-      case ArrayDef(_, values) => {
-        val sets = values map { expr => loop(root, expr, currentWhere) }
-        sets.fold(Set()) { _ ++ _ }
-      }
-      
-      case Descent(_, child, _) => loop(root, child, currentWhere)
-      
-      case MetaDescent(_, child, _) => loop(root, child, currentWhere)
-      
-      case Deref(loc, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case d @ Dispatch(_, _, actuals) => {
-        val sets = actuals map { expr => loop(root, expr, currentWhere) }
-        val merged = sets.fold(Set()) { _ ++ _ }
-        
-        val fromDef = d.binding match {
-          case LetBinding(e) => loop(root, e.left, currentWhere)
-          case _ => Set[GroupTree]()
-        }
-        
-        merged ++ fromDef
-      }
-      
-      case op @ Where(_, left, right) => {
-        lazy val hasSingularCommonality = ExprUtils.findCommonality(Set(left, right)).isDefined
-        
-        val leftSet = loop(root, left, currentWhere)
-        val rightSet = if (left.provenance.makeCanonical == right.provenance.makeCanonical && hasSingularCommonality)
-          loop(root, right, Some(op))
-        else
-          loop(root, right, currentWhere)
-        
-        leftSet ++ rightSet
-      }
-      
-      case With(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Union(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Intersect(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-            
-      case Difference(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Add(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Sub(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Mul(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Div(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Mod(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Lt(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case LtEq(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Gt(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case GtEq(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Eq(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case NotEq(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case And(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Or(_, left, right) =>
-        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
-      
-      case Comp(_, child) => loop(root, child, currentWhere)
-      
-      case Neg(_, child) => loop(root, child, currentWhere)
-      
-      case Paren(_, child) => loop(root, child, currentWhere)
-    }
+    val trace = buildTrace(Map())(solve.root)
     
-    expr match {
-      case root @ Solve(_, constraints, child) => {
-        val filtered = constraints filter { 
-          case TicVar(_, _) => false
-          case _ => true
-        }
-
-        val groupTrees = filtered map GroupConstraint toSet
-
-        groupTrees ++ loop(root, child, None)
-      }
-      
-      case _ => Set()
-    }
+    vars flatMap buildBacktrace(trace) flatMap codrill      // TODO minimize by sigma subsetting
   }
-
   
+  private def codrill(btrace: List[(Map[Formal, Expr], Expr)]): Option[(Map[Formal, Expr], Where)] = {
+    @tailrec
+    def state1(btrace: List[(Map[Formal, Expr], Expr)]): Option[(Map[Formal, Expr], Where)] = btrace match {
+      case (_, _: Add | _: Sub | _: Mul | _: Div | _: Neg | _: Paren) :: tail => state1(tail)
+      case (_, _: RelationExpr) :: tail => state2(tail)
+      case _ => None
+    }
+    
+    @tailrec
+    def state2(btrace: List[(Map[Formal, Expr], Expr)]): Option[(Map[Formal, Expr], Where)] = btrace match {
+      case (_, _: Comp | _: And | _: Or) :: tail => state2(tail)
+      case (sigma, where: Where) :: _ => Some((sigma, where))
+      case _ => None
+    }
+    
+    state1(btrace)
+  }
   
-  sealed trait GroupTree
-  
-  object group {
-    case class GroupCondition(op: Where) extends GroupTree
-    case class GroupConstraint(constr: Expr) extends GroupTree
+  private def findVars(solve: Solve, id: TicId)(expr: Expr): Set[TicVar] = expr match {
+    case Let(_, _, _, left, right) =>
+      findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    
+    case Solve(_, constraints, child) => {
+      val constrVars = constraints map findVars(solve, id) reduceOption { _ ++ _ } getOrElse Set()
+      constrVars ++ findVars(solve, id)(child)
+    }
+    
+    case Import(_, _, child) => findVars(solve, id)(child)
+    case New(_, child) => findVars(solve, id)(child)
+    
+    case Relate(_, from, to, in) =>
+      findVars(solve, id)(from) ++ findVars(solve, id)(to) ++ findVars(solve, id)(in)
+    
+    case expr @ TicVar(_, `id`) if expr.binding == SolveBinding(solve) =>
+      Set(expr)
+    
+    case _: TicVar | _: StrLit | _: NumLit | _: BoolLit | _: NullLit => Set()
+    
+    case ObjectDef(_, props) =>
+      props map { _._2 } map findVars(solve, id) reduceOption { _ ++ _ } getOrElse Set()
+    
+    case ArrayDef(_, values) =>
+      values map findVars(solve, id) reduceOption { _ ++ _ } getOrElse Set()
+    
+    case Descent(_, child, _) => findVars(solve, id)(child)
+    
+    case Deref(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    
+    case Dispatch(_, _, actuals) =>
+      actuals map findVars(solve, id) reduceOption { _ ++ _ } getOrElse Set()
+    
+    case Where(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case With(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case Union(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case Intersect(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case Difference(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    
+    case Add(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case Sub(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case Mul(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case Div(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case Mod(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    
+    case Lt(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case LtEq(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case Gt(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case GtEq(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    
+    case Eq(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case NotEq(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    
+    case And(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    case Or(_, left, right) => findVars(solve, id)(left) ++ findVars(solve, id)(right)
+    
+    case Comp(_, child) => findVars(solve, id)(child)
+    case Neg(_, child) => findVars(solve, id)(child)
+    case Paren(_, child) => findVars(solve, id)(child)
   }
 }

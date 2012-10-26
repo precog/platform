@@ -19,12 +19,14 @@
  */
 package com.precog.quirrel
 
+import com.precog.bytecode.RandomLibrary
+
 import com.codecommit.gll.LineStream
 import com.codecommit.gll.ast.Node
 
 import org.specs2.mutable.Specification
 
-object SolverSpecs extends Specification with parser.Parser with Solver with StubPhases {
+object SolverSpecs extends Specification with parser.Parser with StubPhases with Solver with RandomLibrary {
   import ast._
 
   val someFunction = Dispatch(LineStream(),Identifier(Vector(),"x"), Vector())
@@ -315,13 +317,13 @@ object SolverSpecs extends Specification with parser.Parser with Solver with Stu
 
   
   def solve(str: String, id: Symbol): Option[Expr] = {
-    val f = solve(parse(LineStream(str))) { case TicVar(_, id2) => id.toString == id2 }
+    val f = solve(parse(LineStream(str)), Map[Formal, Expr]()) { case TicVar(_, id2) => id.toString == id2 }
     f(someFunction)
   }
 
   def solveRelation(str: String, id: Symbol): Option[Expr] = {
     val expr = parse(LineStream(str))
 
-    solveRelation(expr.asInstanceOf[RelationExpr]) { case TicVar(_, id2) => id.toString == id2; }
+    solveRelation(expr.asInstanceOf[RelationExpr], Map[Formal, Expr]()) { case TicVar(_, id2) => id.toString == id2; }
   }
 }

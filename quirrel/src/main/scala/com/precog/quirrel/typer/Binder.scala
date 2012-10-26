@@ -26,6 +26,8 @@ import bytecode.Library
 trait Binder extends parser.AST with Library {
   import ast._
   
+  type Formal = (Identifier, Let)
+  
   protected override lazy val LoadId = Identifier(Vector(), "load")
   protected override lazy val DistinctId = Identifier(Vector(), "distinct")
 
@@ -319,108 +321,6 @@ trait Binder extends parser.AST with Library {
     case Comp(_, child) => listFreeVars(env)(child)
     case Neg(_, child) => listFreeVars(env)(child)
     case Paren(_, child) => listFreeVars(env)(child)
-  }
-  
-  
-  object ExprUtils {
-    def findCommonality(exprs: Set[Expr]): Option[Expr] = {
-      val sharedPrefixReversed = exprs flatMap buildChains(Map()) map { _.reverse } reduceOption { (left, right) =>
-        left zip right takeWhile { case (a, b) => a equalsIgnoreLoc b } map { _._1 }
-      }
-      
-      sharedPrefixReversed flatMap { _.lastOption }
-    }
-    
-    def buildChains(env: Map[(Identifier, Let), Set[List[Expr]]])(expr: Expr): Set[List[Expr]] = expr match {
-      case Let(_, _, _, _, right) => buildChains(env)(right) map { expr :: _ }
-      
-      case expr @ Solve(_, _, _) => Set(expr :: Nil)
-      
-      case Import(_, _, child) => buildChains(env)(child) map { expr :: _ }
-      case New(_, child) => buildChains(env)(child) map { expr :: _ }
-      case expr @ Relate(_, _, _, _) => Set(expr :: Nil)
-      
-      case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => Set()
-      
-      case ObjectDef(_, props) =>
-        props map { _._2 } map buildChains(env) reduceOption { _ ++ _ } getOrElse Set[List[Expr]]() map { expr :: _ }
-      
-      case ArrayDef(_, values) =>
-        values map buildChains(env) reduceOption { _ ++ _ } getOrElse Set[List[Expr]]() map { expr :: _ }
-      
-      case Descent(_, left, _) =>
-        buildChains(env)(left) map { expr :: _ }
-      
-      case expr @ Dispatch(_, id, actuals) => {
-        val actualChains = actuals map buildChains(env)
-        
-        val dispatchChains = expr.binding match {
-          case FormalBinding(let) => env.getOrElse((id, let), Set[List[Expr]]())
-          
-          case LetBinding(let) => {
-            val env2 = env ++ (let.params map { Identifier(Vector(), _) } zip (Stream continually let) zip actualChains)
-            buildChains(env2)(let.left)
-          }
-          
-          case ReductionBinding(_) => Set[List[Expr]]()
-          
-          case Op1Binding(_) | Op2Binding(_) => actualChains reduce { _ ++ _ }
-          
-          case _ => Set[List[Expr]](Nil)
-        }
-        
-        dispatchChains map { expr :: _ }
-      }
-      
-      case Where(_, left, right) => 
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case With(_, left, right) => 
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case expr @ (Union(_, _, _) | Intersect(_, _, _) | Difference(_, _, _)) =>
-        Set(expr :: Nil)
-      
-      case Add(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Sub(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Mul(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Div(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Lt(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case LtEq(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Gt(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case GtEq(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Eq(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case NotEq(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case And(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Or(_, left, right) =>
-        (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-      
-      case Comp(_, child) => buildChains(env)(child) map { expr :: _ }
-      case Neg(_, child) => buildChains(env)(child) map { expr :: _ }
-      case Paren(_, child) => buildChains(env)(child) map { expr :: _ }
-    }
   }
   
   
