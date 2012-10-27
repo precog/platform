@@ -83,7 +83,7 @@ trait CompactSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
         }
       }
       
-      Table(StreamT.fromStream(M.point(maskedSlices)))
+      Table(StreamT.fromStream(M.point(maskedSlices)), UnknownSize)
   }
 
   def undefineColumn(fullTable: Table, path: CPath): Table = fullTable match {
@@ -110,7 +110,7 @@ trait CompactSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
         maskedSlice.getOrElse(slice)
       }
       
-      Table(StreamT.fromStream(M.point(maskedSlices)))
+      Table(StreamT.fromStream(M.point(maskedSlices)), UnknownSize)
   }
 
   def testCompactIdentity = {
