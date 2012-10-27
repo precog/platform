@@ -47,6 +47,7 @@ import com.precog.common.Path
 import com.precog.util.FilesystemFileOps
 
 import org.specs2.mutable._
+import org.specs2.specification.Fragments
   
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -57,6 +58,8 @@ import java.io.File
 import blueeyes.json._
 import JsonAST._
 
+import org.slf4j.LoggerFactory
+
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.syntax.monad._
@@ -66,25 +69,19 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-trait PlatformSpecs[M[+_]]
-    extends ParseEvalStackSpecs[M] 
-    with BlockStoreColumnarTableModule[M] { 
-
-  implicit def M: Monad[M] with Copointed[M]
-
-  class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig with JDBMProjectionModuleConfig
-  object yggConfig  extends YggConfig
-}
-
 object FuturePlatformSpecs 
     extends ParseEvalStackSpecs[Future] 
     with BlockStoreColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 
-    with JDBMProjectionModule { 
+    with JDBMProjectionModule {
+      
+  lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
   class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig with JDBMProjectionModuleConfig
   object yggConfig  extends YggConfig
+  
+  override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
       
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
@@ -112,12 +109,14 @@ object FuturePlatformSpecs
     implicit val geq: scalaz.Equal[Int] = intInstance
   }
 
-  override def startup() {
+  def startup() {
     // start storage shard 
     Await.result(storage.start(), controlTimeout)
+    psLogger.info("Test shard started")
   }
   
-  override def shutdown() {
+  def shutdown() {
+    psLogger.info("Shutting down test shard")
     // stop storage shard
     Await.result(storage.stop(), controlTimeout)
     

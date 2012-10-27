@@ -98,7 +98,7 @@ object GroupSolverSpecs extends Specification
         |   { gender: 'gender, num: count(data.gender where data.gender = 'gender) } 
       """.stripMargin
 
-      val let @ Let(_, _, _, _, _) = compile(input)
+      val let @ Let(_, _, _, _, _) = compileSingle(input)
 
       let.errors must beEmpty
     }

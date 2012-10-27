@@ -156,7 +156,7 @@ trait EvalStackSpecs extends Specification {
       actual must contain(true).only
     }
 
-    "accept division inside an object" in {
+    /* "accept division inside an object" in {
       val input = """
         | data := //conversions
         | 
@@ -180,7 +180,7 @@ trait EvalStackSpecs extends Specification {
           (obj("min") match { case SDecimal(num) => num.toDouble ~= 862.7464285714286 }) mustEqual true
           (obj("max") match { case SDecimal(num) => num.toDouble ~= 941.0645161290323 }) mustEqual true
       }
-    }
+    } */
 
     "accept division of two BigDecimals" in {
       val input = "92233720368547758073 / 12223372036854775807"
@@ -1121,7 +1121,7 @@ trait EvalStackSpecs extends Specification {
       results must contain(SObject(Map("count" -> SDecimal(BigDecimal("153")), "state" -> SString("72"))))
     }
     
-    "evaluate nathan's query, once and for all" in {
+    /* "evaluate nathan's query, once and for all" in {
       val input = """
         | import std::time::*
         | 
@@ -1144,7 +1144,7 @@ trait EvalStackSpecs extends Specification {
         | """.stripMargin
       
       evalE(input) must not(beEmpty)
-    }.pendingUntilFixed
+    } */
 
     "load a nonexistent dataset with a dot in the name" in {
       val input = """

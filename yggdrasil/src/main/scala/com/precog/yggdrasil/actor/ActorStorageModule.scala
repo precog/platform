@@ -83,8 +83,13 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
       val batchHandler = actorSystem.actorOf(Props(new BatchHandler(notifier, null, YggCheckpoint.Empty, Timeout(120000))))
       shardSystemActor.tell(DirectIngestData(msgs), batchHandler)
 
-      result map { complete =>
-        logger.debug("Batch store complete: " + complete)
+      for {
+        complete <- result
+        checkpoint = complete.checkpoint
+        _ = logger.debug("Batch store complete: " + complete)
+        _ = logger.debug("Sending metadata updates")
+      } yield {
+        shardSystemActor ! IngestBatchMetadata(complete.updatedProjections, checkpoint.messageClock, Some(checkpoint.offset))
       }
     }
   }

@@ -233,14 +233,14 @@ trait Slice { source =>
   // and the values give the indices in the sparsened slice.
   def sparsen(index: Array[Int], toSize: Int): Slice = new Slice {
     val size = toSize
-    val columns = source.columns mapValues { col => 
+    val columns = source.columns lazyMapValues { col => 
       cf.util.Sparsen(index, toSize)(col).get //sparsen is total
     }
   }
 
   def remap(indices: ArrayIntList) = new Slice {
     val size = indices.size
-    val columns: Map[ColumnRef, Column] = source.columns mapValues { col => 
+    val columns: Map[ColumnRef, Column] = source.columns lazyMapValues { col => 
       cf.util.RemapIndices(indices).apply(col).get
     }
   }
@@ -293,7 +293,7 @@ trait Slice { source =>
       }
 
       val size = source.size
-      val columns: Map[ColumnRef, Column] = source.columns mapValues {
+      val columns: Map[ColumnRef, Column] = source.columns lazyMapValues {
         col => cf.util.filter(0, source.size, defined)(col).get
       }
     }
@@ -319,7 +319,7 @@ trait Slice { source =>
       }
 
       lazy val size = retained.size
-      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues {
+      lazy val columns: Map[ColumnRef, Column] = source.columns lazyMapValues {
         col => (col |> cf.util.RemapIndices(retained)).get
       }
     }
@@ -390,7 +390,7 @@ trait Slice { source =>
       }
 
       lazy val size = retained.size
-      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues {
+      lazy val columns: Map[ColumnRef, Column] = source.columns lazyMapValues {
         col => (col |> cf.util.RemapIndices(retained)).get
       }
     }
@@ -475,7 +475,7 @@ trait Slice { source =>
   def take(sz: Int): Slice = if (sz >= source.size) source else {
     new Slice {
       val size = sz
-      val columns = source.columns mapValues {
+      val columns = source.columns lazyMapValues {
         col => (col |> cf.util.RemapFilter(_ < sz, 0)).get
       }
     }
@@ -484,7 +484,7 @@ trait Slice { source =>
   def drop(sz: Int): Slice = if (sz <= 0) source else {
     new Slice {
       val size = source.size - sz
-      val columns = source.columns mapValues {
+      val columns = source.columns lazyMapValues {
         col => (col |> cf.util.RemapFilter(_ < size, sz)).get
       }
     }
@@ -494,7 +494,7 @@ trait Slice { source =>
     val take2 = math.min(this.size, startIndex + numberToTake) - startIndex
     new Slice {
       val size = take2
-      val columns = source.columns mapValues { 
+      val columns = source.columns lazyMapValues { 
         col => (col |> cf.util.RemapFilter(_ < take2, startIndex)).get
       }
     }
@@ -532,7 +532,7 @@ trait Slice { source =>
   def materialized: Slice = {
     new Slice {
       val size = source.size
-      val columns = source.columns mapValues {
+      val columns = source.columns lazyMapValues {
         case col: BoolColumn =>
           val defined = col.definedAt(0, source.size)
           val values = BitSetUtil.filteredRange(0, source.size) { row =>
@@ -597,7 +597,7 @@ trait Slice { source =>
 
         case col =>
           sys.error("Cannot materialise non-standard (extensible) column")
-      } map identity
+      }
     }
   }
   
