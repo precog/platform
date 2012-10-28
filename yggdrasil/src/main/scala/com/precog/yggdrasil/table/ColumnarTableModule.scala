@@ -1115,12 +1115,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 common map {
                   case (aSorted, bSorted) => 
                     for {
-                      ljson <- aSorted.table.slices.toStream
+                      //ljson <- aSorted.table.slices.toStream
                       //_ = println("=============================================================")
                       //_ = println("using merge edge (" + a.describe + " with " + aSorted.groupKeyPrefix + ")-(" + b.describe + " with " + bSorted.groupKeyPrefix + ")")
                       //_ = println(aSorted.sortedOn)
                       //_ = println("lsorted\n" + ljson.map(_.toJsonString()).mkString("\n---\n"))
-                      rjson <- bSorted.table.slices.toStream
+                      //rjson <- bSorted.table.slices.toStream
                       //_ = println(bSorted.sortedOn)
                       //_ = println("rsorted\n" + rjson.map(_.toJsonString()).mkString("\n---\n"))
                       aligned <- Table.align(aSorted.table, aSorted.sortedOn, bSorted.table, bSorted.sortedOn)

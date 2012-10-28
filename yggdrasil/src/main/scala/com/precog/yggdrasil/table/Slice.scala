@@ -425,7 +425,7 @@ trait Slice { source =>
 
     // We filter out rows that are completely undefined.
     val order: Array[Int] = Array.range(0, source.size) filter { row =>
-      keySlice.isDefinedAt(row) || source.isDefinedAt(row)
+      keySlice.isDefinedAt(row) && source.isDefinedAt(row)
     }
     spire.math.MergeSort.sort(order)(new spire.math.Order[Int] {
       def compare(i: Int, j: Int) = rowComparator.compare(i, j).toInt
