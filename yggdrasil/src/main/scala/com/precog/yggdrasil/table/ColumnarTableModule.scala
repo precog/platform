@@ -455,7 +455,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     //   "identities": { "<string value of groupId1>": <identities for groupId1>, "<string value of groupId2>": ... },
     //   "values": { "<string value of groupId1>": <values for groupId1>, "<string value of groupId2>": ... },
     // }
-    case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId], size: TableSize = UnknownSize)
+    case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId], size: TableSize = UnknownSize, sorted: Boolean = false)
 
     object BorgResult {
       val allFields = Set(CPathField("groupKeys"), CPathField("identities"), CPathField("values"))
@@ -473,7 +473,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         BorgResult(nodeSubset.table.transform(trans), 
                    nodeSubset.groupKeyTrans.keyOrder, 
                    Set(groupId),
-                   nodeSubset.size)
+                   nodeSubset.size,
+                   sorted = true)
       }
 
       def groupKeySpec[A <: SourceType](source: A) = DerefObjectStatic(Leaf(source), CPathField("groupKeys"))
@@ -1383,7 +1384,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         //sjson <- sorted.toJson
         //_ = println("post-sort-victim " + victim.groupId + ": " + sjson.mkString("\n"))
       } yield {
-        BorgResult(sorted, newOrder, Set(victim.node.binding.groupId))
+        BorgResult(sorted, newOrder, Set(victim.node.binding.groupId), sorted = true)
       }
     }
 
@@ -1409,7 +1410,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           //sjson <- sorted.toJson
           //_ = println("post-resort-borg\n" + sjson.mkString("\n"))
         } yield {
-          borgResult.copy(table = sorted, groupKeys = newAssimilatorOrder)
+          borgResult.copy(table = sorted, groupKeys = newAssimilatorOrder, sorted = true)
         }
       }
 
@@ -1585,7 +1586,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               BorgResult(
                 cogrouped,
                 leftJoinable.groupKeys ++ neededRight,
-                leftJoinable.groups union rightJoinable.groups
+                leftJoinable.groups union rightJoinable.groups,
+                UnknownSize,
+                sorted = false
               )
             )
         }
@@ -1680,7 +1683,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
         BorgResult(left.table.cross(right.table)(omniverseTrans),
                    left.groupKeys ++ right.groupKeys,
-                   left.groups ++ right.groups)
+                   left.groups ++ right.groups,
+                   UnknownSize, sorted = false)
       }
 
       borgResults.reduceLeft(cross2)
@@ -1739,7 +1743,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
         BorgResult(Table(left.table.slices ++ rightRemapped.slices, UnknownSize),
                    groupKeys,
-                   left.groups ++ right.groups)
+                   left.groups ++ right.groups,
+                   UnknownSize, sorted = false)
       }
 
       borgResults.reduceLeft(union2)
@@ -1789,7 +1794,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
         //json <- omniverse.table.toJson
         //_ = println("omniverse: \n" + json.mkString("\n"))
-        sorted <- omniverse.table.compact(groupKeySpec(Source)).sort(groupKeySpec(Source))
+        sorted <- if (omniverse.sorted) {
+            M.point(omniverse.table)
+          } else {
+            omniverse.table.sort(groupKeySpec(Source))
+          }
+        //sorted <- omniverse.table.compact(groupKeySpec(Source)).sort(groupKeySpec(Source))
         result <- sorted.partitionMerge(DerefObjectStatic(Leaf(Source), CPathField("groupKeys"))) { partition =>
           val groupKeyTrans = OuterObjectConcat(
             omniverse.groupKeys.zipWithIndex map { case (ticvar, i) =>
