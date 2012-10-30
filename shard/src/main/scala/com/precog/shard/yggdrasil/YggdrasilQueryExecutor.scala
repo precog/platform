@@ -46,9 +46,7 @@ import org.streum.configrity.Configuration
 
 trait YggdrasilQueryExecutorConfig
     extends BaseConfig
-    with ProductionShardSystemConfig
     with SystemActorStorageConfig
-    with JDBMProjectionModuleConfig
     with BlockStoreColumnarTableModuleConfig
     with IdSourceConfig
     with ColumnarTableModuleConfig
@@ -62,10 +60,8 @@ trait YggdrasilQueryExecutorConfig
 trait YggdrasilQueryExecutorComponent {
   import blueeyes.json.serialization.Extractor
 
-  implicit def M: Monad[Future]
-
   private def wrapConfig(wrappedConfig: Configuration) = {
-    new YggdrasilQueryExecutorConfig {
+    new YggdrasilQueryExecutorConfig with ProductionShardSystemConfig with JDBMProjectionModuleConfig {
       val config = wrappedConfig 
       val sortWorkDir = scratchDir
       val memoizationBufferSize = sortBufferSize
@@ -88,55 +84,32 @@ trait YggdrasilQueryExecutorComponent {
     new YggdrasilQueryExecutor
         with BlockStoreColumnarTableModule[Future]
         with JDBMProjectionModule
-        with ProductionShardSystemActorModule {
-          
-      implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
-      implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+        with ProductionShardSystemActorModule
+        with SystemActorStorageModule {
+
+      type YggConfig = YggdrasilQueryExecutorConfig with ProductionShardSystemConfig with JDBMProjectionModuleConfig
+
       val yggConfig = yConfig
       
-      implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
-        def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
+      val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
+      implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
+      implicit val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
+
+      def startup() = storage.start.onComplete {
+        case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
+        case Right(_) => queryLogger.info("Actor ecosystem started.")
       }
 
-      def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
-        import trans._
-        
-        StreamT.wrapEffect(
-          tableM flatMap { table =>
-            renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)))
-          }
-        )
+      def shutdown() = storage.stop.onComplete {
+        case Left(error) => queryLogger.error("An error was encountered in actor ecosystem shutdown!", error)
+        case Right(_) => queryLogger.info("Actor ecossytem shutdown complete.")
       }
 
-      /* def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] = {
-        import JsonDSL._
-        table.slices.uncons map { unconsed =>
-          if (unconsed.isDefined) {
-            val rendered = StreamT.unfoldM[Future, CharBuffer, Option[(Slice, StreamT[Future, Slice])]](unconsed) { 
-              case Some((head, tail)) =>
-                tail.uncons map { next =>
-                  if (next.isDefined) {
-                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",") + ","), next))
-                  } else {            
-                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",")), None))
-                  }
-                }
-    
-              case None => 
-                M.point(None)
-            }
-            
-            rendered
-            //(CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
-          } else {
-            StreamT.empty[Future, CharBuffer]
-            //CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
-          }
-        }
-      } */
-      
-      def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
-        M.point(table renderJson ',')
+      def status(): Future[Validation[String, JValue]] = {
+        //storage.actorsStatus.map { success(_) }
+        Future(Failure("Status not supported yet"))
+      }
 
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
         val accessControl = extAccessControl
@@ -178,21 +151,11 @@ trait YggdrasilQueryExecutor
     extends QueryExecutor[Future]
     with ParseEvalStack[Future]
     with IdSourceScannerModule[Future]
-    with SystemActorStorageModule { self =>
+    with StorageModule[Future] { self =>
 
-  private lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.YggdrasilQueryExecutor")
+  protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.YggdrasilQueryExecutor")
 
-  type YggConfig = YggdrasilQueryExecutorConfig
-
-  def startup() = storage.start.onComplete {
-    case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
-    case Right(_) => queryLogger.info("Actor ecosystem started.")
-  }
-
-  def shutdown() = storage.stop.onComplete {
-    case Left(error) => queryLogger.error("An error was encountered in actor ecosystem shutdown!", error)
-    case Right(_) => queryLogger.info("Actor ecossytem shutdown complete.")
-  }
+  type YggConfig <: YggdrasilQueryExecutorConfig
 
   case class StackException(error: StackError) extends Exception(error.toString)
 
@@ -221,7 +184,18 @@ trait YggdrasilQueryExecutor
     page(sort(table map (_.compact(constants.SourceValue.Single))))
   }
 
-  def jsonChunks(table: Future[Table]): StreamT[Future, CharBuffer]
+  def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
+    import trans._
+
+    StreamT.wrapEffect(
+      tableM flatMap { table =>
+        renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)))
+      }
+    )
+  }
+
+  private def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
+    M.point(table renderJson ',')
 
   private val queryId = new java.util.concurrent.atomic.AtomicLong
 
@@ -291,11 +265,6 @@ trait YggdrasilQueryExecutor
     }
 
     futRoot.map { pr => Success(transform(pr.children)) } 
-  }
-
-  def status(): Future[Validation[String, JValue]] = {
-    //storage.actorsStatus.map { success(_) } 
-    Future(Failure("Status not supported yet"))
   }
 
   // private def evaluateDag(userUID: String, dag: DepGraph,prefix: Path): Validation[Throwable, JArray] = {
