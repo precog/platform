@@ -27,9 +27,10 @@ import scalaz.std.anyVal._
 import java.io.File
 
 import com.precog.common.VectorCase
+import com.precog.util.PrecogUnit
 
 package object yggdrasil {
-  type ProjectionDescriptorIO = ProjectionDescriptor => IO[Unit] 
+  type ProjectionDescriptorIO = ProjectionDescriptor => IO[PrecogUnit] 
   type ProjectionDescriptorLocator = ProjectionDescriptor => IO[File]
   
   type Identity = Long

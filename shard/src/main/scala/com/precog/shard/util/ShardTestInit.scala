@@ -115,7 +115,7 @@ object ShardTestInit extends App with JDBMProjectionModule with SystemActorStora
           Await.result(fut, timeout.duration) // FIXME: is correct, or the line above?
       }
     } except {
-      err => println(err); IO(())
+      err => println(err); IO(PrecogUnit)
     } unsafePerformIO
   }
 

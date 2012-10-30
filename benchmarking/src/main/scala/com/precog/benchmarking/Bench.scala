@@ -19,8 +19,7 @@
  */
 package com.precog.benchmarking
 
-import com.google.common.io.Files
-import org.apache.commons.io.FileUtils
+import com.precog.util.IOUtils
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -35,14 +34,14 @@ trait Bench extends Logging {
   }
 
   def setup(): File = {
-    Files.createTempDir()
+    IOUtils.createTmpDir("benchmark").unsafePerformIO
   }
 
   def performWrites(baseDir: File, count: Long): Unit
   def performReads(baseDir: File, count: Long): Unit
 
   def teardown(baseDir: File) {
-    FileUtils.deleteDirectory(baseDir)
+    IOUtils.recursiveDelete(baseDir).unsafePerformIO
   }
 
   def run(warmups: Int, runs: Int, elementCount: Long) = {

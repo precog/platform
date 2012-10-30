@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package actor
 
 import metadata._
+import com.precog.util.PrecogUnit
 import com.precog.common._
 
 import akka.actor.Actor
@@ -124,17 +125,19 @@ trait ProjectionsActorModule extends ProjectionModule {
         io.unsafePerformIO
 
       case ReleaseProjection(descriptor) => 
-        val io: IO[Any] = acquisitionState.get(descriptor) match {
+        val io: IO[PrecogUnit] = acquisitionState.get(descriptor) match {
           case None =>
             IO {
               logger.warn("Extraneous request to release projection descriptor " + descriptor.shows + 
                           "; no outstanding acquisitions for this descriptor recorded.")
+              PrecogUnit
             }
                         
           case Some(s @ AcquisitionState(_, 1, Nil)) =>
             IO {
               logger.debug("Release of last acquisition of " + descriptor.shows)
               acquisitionState -= descriptor
+              PrecogUnit
             }
           
           case Some(s @ AcquisitionState(_, 1, queue)) =>
@@ -142,18 +145,19 @@ trait ProjectionsActorModule extends ProjectionModule {
               case (Nil, excl :: rest) =>
                 logger.debug("Dequeued exclusive archive lock request for " + descriptor.shows + " after release")
                 acquisitionState(descriptor) = AcquisitionState(true, 1, rest)
-                archive(excl.requestor, descriptor)
+                archive(excl.requestor, descriptor).map { _ => PrecogUnit }
 
               case (nonExcl, excl) =>
                 logger.debug("Dequeued non-exclusive acquisition of " + descriptor.shows + " after release")
                 acquisitionState(descriptor) = AcquisitionState(false, nonExcl.size, excl)
-                (nonExcl map { req => acquired(req.requestor, descriptor) }).sequence[IO, Unit]
+                (nonExcl map { req => acquired(req.requestor, descriptor) }).sequence[IO, PrecogUnit].map(_ => PrecogUnit)
             }
             
           case Some(s @ AcquisitionState(_, count0, _)) =>
             IO {
               logger.debug("Non-exclusive release of %s, count now %d".format(descriptor.shows, count0 - 1))
               acquisitionState(descriptor) = s.copy(count = count0-1)
+              PrecogUnit
             }
         }
 
@@ -189,29 +193,32 @@ trait ProjectionsActorModule extends ProjectionModule {
     val maxOpenProjections = 1000
     private val openProjections = mutable.Map.empty[ProjectionDescriptor, (Projection, Long)]
                              
-    private def evictProjection(descriptor: ProjectionDescriptor, projection: Projection): IO[Unit] = {
+    private def evictProjection(descriptor: ProjectionDescriptor, projection: Projection): IO[PrecogUnit] = IO {
       logger.debug("Evicting " + descriptor.shows)
       openProjections -= descriptor
-      Projection.close(projection)
+    } flatMap {
+      _ => Projection.close(projection)
     }
 
-    private def archive(sender: ActorRef, descriptor: ProjectionDescriptor)(implicit self: ActorRef): IO[Unit] = {
+    private def archive(sender: ActorRef, descriptor: ProjectionDescriptor)(implicit self: ActorRef): IO[PrecogUnit] = {
       IO(openProjections.get(descriptor)) flatMap {
         case Some((projection, _)) =>
           for {
             _ <- evictProjection(descriptor, projection)
           } yield {
             sender ! LockedForArchive(descriptor)
+            PrecogUnit
           }
 
         case None => 
           IO {
             sender ! LockedForArchive(descriptor)
+            PrecogUnit
           }
       }
     }
 
-    private def evictExcessProjections: IO[Unit] = {
+    private def evictExcessProjections: IO[PrecogUnit] = {
       val overage = openProjections.size - maxOpenProjections
       if (overage >= 0) {
         logger.debug("Evicting " + overage + " projections")
@@ -223,13 +230,13 @@ trait ProjectionsActorModule extends ProjectionModule {
           logger.warn("Unable to evict sufficient projections to get under open projection limit (currently %d)".format(openProjections.size))
         }
 
-        toEvict.map({ case (d, (p, _)) => evictProjection(d, p) }).sequence.map(_ => ())
+        toEvict.map({ case (d, (p, _)) => evictProjection(d, p) }).sequence.map(_ => PrecogUnit)
       } else {
-        IO(())
+        IO(PrecogUnit)
       }
     }
 
-    private def acquired(sender: ActorRef, descriptor: ProjectionDescriptor)(implicit self: ActorRef) : IO[Unit] = {
+    private def acquired(sender: ActorRef, descriptor: ProjectionDescriptor)(implicit self: ActorRef) : IO[PrecogUnit] = {
       IO(openProjections.get(descriptor)) flatMap { 
         case Some((projection, _)) => 
           IO { 
@@ -245,8 +252,9 @@ trait ProjectionsActorModule extends ProjectionModule {
           } yield p
       } map { p =>
         sender ! ProjectionAcquired(p)
+        PrecogUnit
       } except {
-        error => IO(sender ! ProjectionError(descriptor, error))
+        error => IO { sender ! ProjectionError(descriptor, error); PrecogUnit }
       }
     }
   }
@@ -275,13 +283,14 @@ trait ProjectionsActorModule extends ProjectionModule {
         
         val startTime = System.currentTimeMillis
 
-        val insertRun: IO[Unit] = for {
+        val insertRun: IO[PrecogUnit] = for {
           _ <- IO { MDC.put("projection", projection.descriptor.shows) }
           _ <- IO { runInsert(projection, rows) }
           _ <- projection.commit()
         } yield {
           logger.debug("Insertion of %d rows in %d ms".format(rows.size, System.currentTimeMillis - startTime))          
           replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
+          PrecogUnit
         }
 
         insertRun.except {

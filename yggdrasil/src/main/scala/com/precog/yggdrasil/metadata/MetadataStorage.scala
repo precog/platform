@@ -61,8 +61,8 @@ trait MetadataStorage {
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] 
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit]
-  def archiveMetadata(desc: ProjectionDescriptor): IO[Unit]
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[PrecogUnit]
+  def archiveMetadata(desc: ProjectionDescriptor): IO[PrecogUnit]
 
   def findChildren(path: Path): Set[Path] =
     findDescriptors(_ => true) flatMap { descriptor => 
@@ -253,9 +253,9 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
     metadataLocations.keySet.filter(f)
   }
 
-  def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[Unit] = {
+  def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[PrecogUnit] = {
     if (metadataLocations.contains(desc)) {
-      IO(())
+      IO(PrecogUnit)
     } else {
       for {
         newRoot <- newRandomDir(baseDir)
@@ -263,6 +263,7 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
       } yield {
         logger.info("Created new projection for " + desc)
         metadataLocations += (desc -> newRoot) 
+        PrecogUnit
       }
     }
   }
@@ -296,7 +297,7 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
     }
   }
  
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = {
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[PrecogUnit] = {
     logger.debug("Updating metadata for " + desc)
     metadataLocations.get(desc) map { dir =>
       metadataLocations += (desc -> dir)
@@ -307,18 +308,19 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
         _ <- rotateCurrent(dir)
       } yield {
         logger.debug("Metadata update complete for " + desc)
+        PrecogUnit
       }
     } getOrElse {
       IO.throwIO(new IllegalStateException("Metadata update on missing projection for " + desc))
     }
   }
   
-  def archiveMetadata(desc: ProjectionDescriptor): IO[Unit] = {
+  def archiveMetadata(desc: ProjectionDescriptor): IO[PrecogUnit] = IO {
     // Metadata file should already have been moved as a side-effect of archiving
     // the projection, so here we just remove it from the map.
     logger.debug("Archiving metadata for " + desc)
     metadataLocations -= desc
-    IO(())
+    PrecogUnit
   }
 
   override def toString = "FileMetadataStorage(root = " + baseDir + " archive = " + archiveDir +")"
@@ -350,7 +352,7 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
     }
   }
 
-  private def writeDescriptor(desc: ProjectionDescriptor, baseDir: File): IO[Unit] = {
+  private def writeDescriptor(desc: ProjectionDescriptor, baseDir: File): IO[PrecogUnit] = {
     val df = new File(baseDir, descriptorName)
     fileOps.exists(df) map {
       case true => 
@@ -359,32 +361,32 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
       case false =>
         val writer = new FileWriter(df)
         try {
-          writer.write(Printer.pretty(Printer.render(desc.serialize)))
+          writer.write(Printer.pretty(Printer.render(desc.serialize))); PrecogUnit
         } finally {
           writer.close()
         }
     }
   }
 
-  private def stageNext(dir: File, metadata: MetadataRecord): IO[Unit] = {
+  private def stageNext(dir: File, metadata: MetadataRecord): IO[PrecogUnit] = {
     val json = Printer.pretty(Printer.render(metadata.serialize))
     val next = new File(dir, nextFilename)
     fileOps.write(next, json)
   }
   
-  private def stagePrev(dir: File): IO[Unit] = {
+  private def stagePrev(dir: File): IO[PrecogUnit] = {
     val src = new File(dir, curFilename)
     val dest = new File(dir, prevFilename)
-    fileOps.exists(src) flatMap { exists => if (exists) fileOps.copy(src, dest) else IO(()) }
+    fileOps.exists(src) flatMap { exists => if (exists) fileOps.copy(src, dest) else IO(PrecogUnit) }
   }
   
-  private def rotateCurrent(dir: File): IO[Unit] = {
+  private def rotateCurrent(dir: File): IO[PrecogUnit] = {
     val src  = new File(dir, nextFilename)
     val dest = new File(dir, curFilename)
     for {
       _ <- IO { logger.trace("Rotating metadata from %s to %s".format(nextFilename, curFilename)) }
       _ <- fileOps.rename(src, dest)
-    } yield ()
+    } yield PrecogUnit
   }
 }
 

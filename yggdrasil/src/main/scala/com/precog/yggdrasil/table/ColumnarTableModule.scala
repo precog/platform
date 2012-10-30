@@ -44,7 +44,7 @@ import org.apache.jdbm.DBMaker
 import java.io.File
 import java.util.SortedMap
 
-import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.{BitSet, BitSetUtil, IOUtils, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
 import scala.collection.mutable
@@ -86,7 +86,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
   type TableCompanion <: ColumnarTableCompanion
   case class TableMetrics(startCount: Int, sliceTraversedCount: Int)
 
-  def newScratchDir(): File = Files.createTempDir()
+  def newScratchDir(): File = IOUtils.createTmpDir("ctmscratch").unsafePerformIO
   def jdbmCommitInterval: Long = 200000l
 
   implicit def liftF1(f: F1) = new F1Like {
@@ -474,7 +474,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     //   "identities": { "<string value of groupId1>": <identities for groupId1>, "<string value of groupId2>": ... },
     //   "values": { "<string value of groupId1>": <values for groupId1>, "<string value of groupId2>": ... },
     // }
-    case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId], size: TableSize = UnknownSize)
+    case class BorgResult(table: Table, groupKeys: Seq[TicVar], groups: Set[GroupId], size: TableSize)
 
     object BorgResult {
       val allFields = Set(CPathField("groupKeys"), CPathField("identities"), CPathField("values"))
@@ -918,7 +918,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     //  }
     //}
 
-    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], sortedByIdentities: Boolean = false, size: TableSize = UnknownSize) {
+    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], sortedByIdentities: Boolean = false, size: TableSize) {
       def sortedOn = groupKeyTrans.alignTo(groupKeyPrefix).prefixTrans(groupKeyPrefix.size)
 
       def groupId = node.binding.groupId
@@ -1402,7 +1402,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         //sjson <- sorted.toJson
         //_ = println("post-sort-victim " + victim.groupId + ": " + sjson.mkString("\n"))
       } yield {
-        BorgResult(sorted, newOrder, Set(victim.node.binding.groupId))
+        BorgResult(sorted, newOrder, Set(victim.node.binding.groupId), sorted.size)
       }
     }
 
@@ -1604,7 +1604,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
               BorgResult(
                 cogrouped,
                 leftJoinable.groupKeys ++ neededRight,
-                leftJoinable.groups union rightJoinable.groups
+                leftJoinable.groups union rightJoinable.groups,
+                cogrouped.size
               )
             )
         }
@@ -1697,9 +1698,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def cross2(left: BorgResult, right: BorgResult): BorgResult = {
         val omniverseTrans = crossAllTrans(left.groupKeys.size, right.groupKeys.size)
 
-        BorgResult(left.table.cross(right.table)(omniverseTrans),
+        val crossed = left.table.cross(right.table)(omniverseTrans)
+        BorgResult(crossed,
                    left.groupKeys ++ right.groupKeys,
-                   left.groups ++ right.groups)
+                   left.groups ++ right.groups,
+                   crossed.size)
       }
 
       borgResults.reduceLeft(cross2)
@@ -1758,7 +1761,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
         BorgResult(Table(left.table.slices ++ rightRemapped.slices, UnknownSize),
                    groupKeys,
-                   left.groups ++ right.groups)
+                   left.groups ++ right.groups,
+                   UnknownSize)
       }
 
       borgResults.reduceLeft(union2)

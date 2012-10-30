@@ -61,12 +61,14 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
     updates.get(desc).map(_.last).orElse(data.get(desc).map(MetadataRecord(_, VectorClock.empty))).get
   }
 
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = IO {
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[PrecogUnit] = IO {
     updates += (desc -> (updates.getOrElse(desc, Vector.empty[MetadataRecord]) :+ metadata))
+    PrecogUnit
   }
 
-  def archiveMetadata(desc: ProjectionDescriptor): IO[Unit] = IO {
+  def archiveMetadata(desc: ProjectionDescriptor): IO[PrecogUnit] = IO {
     updates -= desc
+    PrecogUnit
   }
 }
 

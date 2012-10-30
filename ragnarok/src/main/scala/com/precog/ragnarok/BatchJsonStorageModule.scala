@@ -81,7 +81,7 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
    * Reads in the JSON file (or several zipped JSON files) into the specified
    * DB.
    */
-  def ingest(db: String, data: File, apiKey: String = "root", batchSize: Int = 1000): IO[Unit] = IO {
+  def ingest(db: String, data: File, apiKey: String = "root", batchSize: Int = 1000): IO[PrecogUnit] = IO {
     logger.debug("Ingesting %s to '//%s'." format (data, db))
 
     // Same as used by YggUtil's import command.
@@ -95,6 +95,8 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
     }
 
     logger.debug("Ingested %s." format data)
+
+    PrecogUnit
   }
 }
 
