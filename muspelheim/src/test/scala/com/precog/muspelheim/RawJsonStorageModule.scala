@@ -64,7 +64,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
     def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
   }
 
-  val Projection: ProjectionCompanion
+  def rawProjection: ProjectionCompanion
 
   abstract class Storage extends StorageLike {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
@@ -98,7 +98,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
       import scala.collection.JavaConverters._
       import java.util.regex.Pattern
 
-      val reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forPackage("test_data")).setScanners(new ResourcesScanner()));
+      val reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forPackage("test_data")).setScanners(new ResourcesScanner()))
       val jsonFiles = reflections.getResources(Pattern.compile(".*\\.json"))
       for (resource <- jsonFiles.asScala) load(Path(resource.replaceAll("test_data/", "").replaceAll("\\.json", "")))
 
@@ -125,7 +125,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
     def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)] = {
       M.point {
         if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
-        (Projection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(())))
+        (rawProjection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(())))
       }
     }
   }
@@ -138,19 +138,26 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
   trait TableCompanion extends ColumnarTableCompanion {
     def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize) = new Table(slices, size)
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = sys.error("Feature not implemented in test stub.")
+    def singleton(slice: Slice) = sys.error("Feature not implemented in test stub")
   }
   
   class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size) {
     import trans._
+
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false) = sys.error("Feature not implemented in test stub")
     
     def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("Feature not implemented in test stub.")
 
+    private var initialIndices = collection.mutable.Map[Path, Int]()
+    private var currentIndex = 0
+
     def load(uid: UserId, tpe: JType): M[Table] = {
-      val pathsM = this.reduce {
+      val metadataView = storage.userMetadataView(uid.toString)
+
+      val pathsM = reduce {
         new CReducer[Set[Path]] {
-          def reduce(columns: JType => Set[Column], range: Range): Set[Path] = {
-            columns(JObjectFixedT(Map("value" -> JTextT))) flatMap {
+          def reduce(columns: JType => Set[Column], range: Range) = {
+            columns(JTextT) flatMap {
               case s: StrColumn => range.filter(s.isDefinedAt).map(i => Path(s(i)))
               case _ => Set()
             }
@@ -160,7 +167,7 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
 
       for {
         paths <- pathsM
-        data  <- paths.toList.map(storage.userMetadataView("").findProjections).sequence
+        data  <- paths.toList.map(metadataView.findProjections).sequence
         path  = data.flatten.headOption
         table <- path map { 
                    case (descriptor, _) => storage.projection(descriptor) map { projection => fromJson(projection._1.data.toStream) }
@@ -176,7 +183,7 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
     def commit(): IO[Unit] = sys.error("DummyProjection doesn't support commit")
   }
 
-  object Projection extends ProjectionCompanion {
+  object rawProjection extends ProjectionCompanion {
     def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = new Projection(descriptor, data)
   }
 
