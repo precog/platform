@@ -56,6 +56,16 @@ trait HomogeneousArrayColumn[A] extends Column with (Int => IndexedSeq[A]) { sel
   def apply(row: Int): IndexedSeq[A]
 
   val tpe: CArrayType[A]
+
+  def leafTpe: CValueType[_] = {
+    @tailrec def loop(a: CValueType[_]): CValueType[_] = a match {
+      case CArrayType(elemType) => loop(elemType)
+      case vType => vType
+    }
+
+    loop(tpe)
+  }
+
   override def jValue(row: Int) = tpe.jValueFor(this(row))
   override def cValue(row: Int) = tpe(this(row))
   override def strValue(row: Int) = this(row) mkString ("[", ",", "]")
