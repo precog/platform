@@ -11,6 +11,7 @@ import scala.io.Source
 
 object NullProvenanceSpecs extends Specification
     with StubPhases
+    with CompilerUtils
     with Compiler
     with ProvenanceChecker 
     with RandomLibrary {
@@ -19,102 +20,102 @@ object NullProvenanceSpecs extends Specification
   
   "null provenance" should {
     "synthesize when name binding is null in dispatch" in {
-      compile("fubar").provenance mustEqual NullProvenance
+      compileSingle("fubar").provenance mustEqual NullProvenance
     }
     
     "propagate through let" in {
       {
-        val tree = compile("a := //foo + //b a")
+        val tree = compileSingle("a := //foo + //b a")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("a := //foo a + //bar")
+        val tree = compileSingle("a := //foo a + //bar")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     
     "propagate through new" in {
-      val tree = compile("new (//a + //b)")
+      val tree = compileSingle("new (//a + //b)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }    
 
     "propagate through solve" in {
-      val tree = compile("solve 'foo = //a + //b 'foo")
+      val tree = compileSingle("solve 'foo = //a + //b 'foo")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through relate" in {
       {
-        val tree = compile("(//a + //b) ~ //c 42")
+        val tree = compileSingle("(//a + //b) ~ //c 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("//c ~ (//a + //b) 42")
+        val tree = compileSingle("//c ~ (//a + //b) 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     
     "propagate through object definition" in {
-      val tree = compile("{ a: //a + //b, b: 42 }")
+      val tree = compileSingle("{ a: //a + //b, b: 42 }")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through array definition" in {
-      val tree = compile("[//a + //b, 42]")
+      val tree = compileSingle("[//a + //b, 42]")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through descent" in {
-      val tree = compile("(//a + //b).foo")
+      val tree = compileSingle("(//a + //b).foo")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through metadescent" in {
-      val tree = compile("(//a + //b)@foo")
+      val tree = compileSingle("(//a + //b)@foo")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through dereference" in {
       {
-        val tree = compile("(//a + //b)[42]")
+        val tree = compileSingle("(//a + //b)[42]")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42[//a + //b]")
+        val tree = compileSingle("42[//a + //b]")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     
     "propagate through dispatch" in {
-      val tree = compile("a(b) := b a(//a + //b)")
+      val tree = compileSingle("a(b) := b a(//a + //b)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through where" in {
       {
-        val tree = compile("(//a + //b) where 42")
+        val tree = compileSingle("(//a + //b) where 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 + (//a where //b)")
+        val tree = compileSingle("42 + (//a where //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -122,13 +123,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through with" in {
       {
-        val tree = compile("(//a + //b) with 42")
+        val tree = compileSingle("(//a + //b) with 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 + (//a with //b)")
+        val tree = compileSingle("42 + (//a with //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -136,13 +137,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through union" in {
       {
-        val tree = compile("(//a + //b) union 42")
+        val tree = compileSingle("(//a + //b) union 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets) 
       }
       
       {
-        val tree = compile("42 union (//a + //b)")
+        val tree = compileSingle("42 union (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -150,13 +151,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through intersect" in {
       {
-        val tree = compile("(//a + //b) intersect 42")
+        val tree = compileSingle("(//a + //b) intersect 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 intersect (//a + //b)")
+        val tree = compileSingle("42 intersect (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -164,13 +165,13 @@ object NullProvenanceSpecs extends Specification
 
     "propagate through difference" in {
       {
-        val tree = compile("(//a + //b) difference 42")
+        val tree = compileSingle("(//a + //b) difference 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 difference (//a + //b)")
+        val tree = compileSingle("42 difference (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -178,13 +179,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through addition" in {
       {
-        val tree = compile("(//a + //b) + 42")
+        val tree = compileSingle("(//a + //b) + 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 + (//a + //b)")
+        val tree = compileSingle("42 + (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -192,13 +193,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through subtraction" in {
       {
-        val tree = compile("(//a + //b) - 42")
+        val tree = compileSingle("(//a + //b) - 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 - (//a + //b)")
+        val tree = compileSingle("42 - (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -206,13 +207,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through multiplication" in {
       {
-        val tree = compile("(//a + //b) * 42")
+        val tree = compileSingle("(//a + //b) * 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 * (//a + //b)")
+        val tree = compileSingle("42 * (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -220,13 +221,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through division" in {
       {
-        val tree = compile("(//a + //b) / 42")
+        val tree = compileSingle("(//a + //b) / 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 / (//a + //b)")
+        val tree = compileSingle("42 / (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -234,13 +235,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through mod" in {
       {
-        val tree = compile("(//a + //b) % 42")
+        val tree = compileSingle("(//a + //b) % 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 % (//a + //b)")
+        val tree = compileSingle("42 % (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -248,13 +249,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through less-than" in {
       {
-        val tree = compile("(//a + //b) < 42")
+        val tree = compileSingle("(//a + //b) < 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 < (//a + //b)")
+        val tree = compileSingle("42 < (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -262,13 +263,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through less-than-equal" in {
       {
-        val tree = compile("(//a + //b) <= 42")
+        val tree = compileSingle("(//a + //b) <= 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 <= (//a + //b)")
+        val tree = compileSingle("42 <= (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -276,13 +277,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through greater-than" in {
       {
-        val tree = compile("(//a + //b) > 42")
+        val tree = compileSingle("(//a + //b) > 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 > (//a + //b)")
+        val tree = compileSingle("42 > (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -290,13 +291,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through greater-than-equal" in {
       {
-        val tree = compile("(//a + //b) >= 42")
+        val tree = compileSingle("(//a + //b) >= 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 >= (//a + //b)")
+        val tree = compileSingle("42 >= (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -304,13 +305,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through equality" in {
       {
-        val tree = compile("(//a + //b) = 42")
+        val tree = compileSingle("(//a + //b) = 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 = (//a + //b)")
+        val tree = compileSingle("42 = (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -318,13 +319,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through not-equality" in {
       {
-        val tree = compile("(//a + //b) != 42")
+        val tree = compileSingle("(//a + //b) != 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 != (//a + //b)")
+        val tree = compileSingle("42 != (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -332,13 +333,13 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through boolean and" in {
       {
-        val tree = compile("(//a + //b) & 42")
+        val tree = compileSingle("(//a + //b) & 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 & (//a + //b)")
+        val tree = compileSingle("42 & (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -346,32 +347,32 @@ object NullProvenanceSpecs extends Specification
     
     "propagate through boolean or" in {
       {
-        val tree = compile("(//a + //b) | 42")
+        val tree = compileSingle("(//a + //b) | 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 | (//a + //b)")
+        val tree = compileSingle("42 | (//a + //b)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     
     "propagate through complementation" in {
-      val tree = compile("!(//a + //b)")
+      val tree = compileSingle("!(//a + //b)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through negation" in {
-      val tree = compile("neg (//a + //b)")
+      val tree = compileSingle("neg (//a + //b)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through parenthetical" in {
-      val tree = compile("(//a + //b)")
+      val tree = compileSingle("(//a + //b)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -379,33 +380,33 @@ object NullProvenanceSpecs extends Specification
   
   "constraining expression determination" should {
     "leave values unconstrained" in {
-      compile("42").constrainingExpr must beNone
+      compileSingle("42").constrainingExpr must beNone
     }
     
     "leave loads unconstrained when outside a relation" in {
-      compile("//foo").constrainingExpr must beNone
+      compileSingle("//foo").constrainingExpr must beNone
     }
     
     "constrain loads within a relation" in {
       {
-        val Relate(_, from, _, in) = compile("//foo ~ //bar //foo")
+        val Relate(_, from, _, in) = compileSingle("//foo ~ //bar //foo")
         in.constrainingExpr must beSome(from)
       }
       
       {
-        val Relate(_, _, to, in) = compile("//foo ~ //bar //bar")
+        val Relate(_, _, to, in) = compileSingle("//foo ~ //bar //bar")
         in.constrainingExpr must beSome(to)
       }
     }
     
     "leave unconnected loads unconstrained within a relation" in {
-      val Relate(_, from, _, in) = compile("//foo ~ //bar //baz")
+      val Relate(_, from, _, in) = compileSingle("//foo ~ //bar //baz")
       in.constrainingExpr must beNone
     }
     
     "propagate constraints through a nested relation" in {
       {
-        val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compile("""
+        val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compileSingle("""
           | //foo ~ //bar
           |   //foo ~ //baz
           |     //foo""".stripMargin)
@@ -414,7 +415,7 @@ object NullProvenanceSpecs extends Specification
       }
       
       {
-        val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compile("""
+        val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compileSingle("""
           | //foo ~ //bar
           |   //foo ~ //baz
           |     //bar""".stripMargin)
@@ -423,7 +424,7 @@ object NullProvenanceSpecs extends Specification
       }
       
       {
-        val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compile("""
+        val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compileSingle("""
           | //foo ~ //bar
           |   //foo ~ //baz
           |     //baz""".stripMargin)
