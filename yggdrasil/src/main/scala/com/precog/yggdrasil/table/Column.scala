@@ -27,8 +27,12 @@ import org.joda.time.DateTime
 
 import java.math.MathContext
 
+import com.precog.yggdrasil.table._
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
+
+import scala.{ specialized => spec }
+import scala.annotation.tailrec
 
 import scalaz.Semigroup
 import scalaz.std.option._
@@ -52,8 +56,8 @@ sealed trait Column {
 
 private[yggdrasil] trait ExtensibleColumn extends Column // TODO: or should we just unseal Column?
 
-trait HomogeneousArrayColumn[A] extends Column with (Int => IndexedSeq[A]) { self =>
-  def apply(row: Int): IndexedSeq[A]
+trait HomogeneousArrayColumn[@spec(Boolean, Long, Double) A] extends Column with (Int => Array[A]) { self =>
+  def apply(row: Int): Array[A]
 
   val tpe: CArrayType[A]
 
@@ -76,18 +80,18 @@ trait HomogeneousArrayColumn[A] extends Column with (Int => IndexedSeq[A]) { sel
    */
   def select(i: Int) = HomogeneousArrayColumn.select(this, i)
 
-  /**
-   * Returns a view of this column, whose indicies, defined in `removed` have
-   * been removed. For example, `col.without(Set(0, 2))`, returns a view of
-   * this column, but removes the 1st and 3rd element from the returned
-   * arrays.
-   */
-  def without(removed: Set[Int]) = new HomogeneousArrayColumn[A] {
-    def apply(row: Int): IndexedSeq[A] =
-      self.apply(row).zipWithIndex filterNot (e => removed(e._2)) map (_._1)
-    def isDefinedAt(row: Int) = self.isDefinedAt(row)
-    val tpe = self.tpe
-  }
+  ///**
+  // * Returns a view of this column, whose indicies, defined in `removed` have
+  // * been removed. For example, `col.without(Set(0, 2))`, returns a view of
+  // * this column, but removes the 1st and 3rd element from the returned
+  // * arrays.
+  // */
+  //def without(removed: Set[Int]) = new HomogeneousArrayColumn[A] {
+  //  def apply(row: Int): Array[A] =
+  //    self.apply(row).zipWithIndex filterNot (e => removed(e._2)) map (_._1)
+  //  def isDefinedAt(row: Int) = self.isDefinedAt(row)
+  //  val tpe = self.tpe
+  //}
 }
 
 object HomogeneousArrayColumn {
@@ -129,7 +133,7 @@ object HomogeneousArrayColumn {
       val tpe = cType
       def isDefinedAt(row: Int): Boolean =
         i >= 0 && col.isDefinedAt(row) && i < col(row).length
-      def apply(row: Int): IndexedSeq[a] = col(row)(i)
+      def apply(row: Int): Array[a] = col(row)(i)
     }
   }
 }
@@ -257,7 +261,7 @@ object Column {
     case CNum(v)      => const(v)
     case CString(v)   => const(v)
     case CDate(v)     => const(v)
-    case CArray(v, CArrayType(elemType)) => const(v)(elemType)
+    case CArray(v, t @ CArrayType(elemType)) => const(v)(elemType)
     case CEmptyObject => new InfiniteColumn with EmptyObjectColumn 
     case CEmptyArray  => new InfiniteColumn with EmptyArrayColumn 
     case CNull        => new InfiniteColumn with NullColumn 
@@ -288,7 +292,7 @@ object Column {
     def apply(row: Int) = v
   }
 
-  @inline def const[A: CValueType](v: IndexedSeq[A]) = new InfiniteColumn with HomogeneousArrayColumn[A] {
+  @inline def const[@spec(Boolean, Long, Double) A: CValueType](v: Array[A]) = new InfiniteColumn with HomogeneousArrayColumn[A] {
     val tpe = CArrayType(CValueType[A])
     def apply(row: Int) = v
   }
@@ -297,32 +301,32 @@ object Column {
     case col: BoolColumn => new HomogeneousArrayColumn[Boolean] {
       val tpe = CArrayType(CBoolean)
       def isDefinedAt(row: Int) = col.isDefinedAt(row)
-      def apply(row: Int) = Vector(col(row))
+      def apply(row: Int) = Array(col(row))
     }
     case col: LongColumn => new HomogeneousArrayColumn[Long] {
       val tpe = CArrayType(CLong)
       def isDefinedAt(row: Int) = col.isDefinedAt(row)
-      def apply(row: Int) = Vector(col(row))
+      def apply(row: Int) = Array(col(row))
     }
     case col: NumColumn => new HomogeneousArrayColumn[BigDecimal] {
       val tpe = CArrayType(CNum)
       def isDefinedAt(row: Int) = col.isDefinedAt(row)
-      def apply(row: Int) = Vector(col(row))
+      def apply(row: Int) = Array(col(row))
     }
     case col: StrColumn => new HomogeneousArrayColumn[String] {
       val tpe = CArrayType(CString)
       def isDefinedAt(row: Int) = col.isDefinedAt(row)
-      def apply(row: Int) = Vector(col(row))
+      def apply(row: Int) = Array(col(row))
     }
     case col: DateColumn => new HomogeneousArrayColumn[DateTime] {
       val tpe = CArrayType(CDate)
       def isDefinedAt(row: Int) = col.isDefinedAt(row)
-      def apply(row: Int) = Vector(col(row))
+      def apply(row: Int) = Array(col(row))
     }
-    case col: HomogeneousArrayColumn[a] => new HomogeneousArrayColumn[IndexedSeq[a]] {
+    case col: HomogeneousArrayColumn[a] => new HomogeneousArrayColumn[Array[a]] {
       val tpe = CArrayType(col.tpe)
       def isDefinedAt(row: Int) = col.isDefinedAt(row)
-      def apply(row: Int): IndexedSeq[IndexedSeq[a]] = Vector(col(row))
+      def apply(row: Int): Array[Array[a]] = Array(col(row))(col.tpe.manifest)
     }
     case _ => sys.error("Cannot lift non-value column.")
   }

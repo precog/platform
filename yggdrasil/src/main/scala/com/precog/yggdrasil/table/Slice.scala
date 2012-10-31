@@ -178,7 +178,7 @@ trait Slice { source =>
   def wrap(wrapper: CPathNode): Slice = new Slice {
     val size = source.size
 
-    // TODO This is a little weird; CPathArray actually wraps in CPathIndex(0).
+    // This is a little weird; CPathArray actually wraps in CPathIndex(0).
     // Unfortunately, CArrayType(_) cannot wrap CNullTypes, so we can't just
     // arbitrarily wrap everything in a CPathArray.
 
@@ -266,7 +266,7 @@ trait Slice { source =>
         Some((ref, new HomogeneousArrayColumn[a] {
           val tpe = ctype
           def isDefinedAt(row: Int) = col.isDefinedAt(row)
-          def apply(row: Int): IndexedSeq[a] = trans(col(row).asInstanceOf[IndexedSeq[a]]) getOrElse sys.error("Oh dear, this cannot be happening to me.")
+          def apply(row: Int): Array[a] = trans(col(row).asInstanceOf[Array[a]]) getOrElse sys.error("Oh dear, this cannot be happening to me.")
         }))
 
       case (ref, col) =>
@@ -311,15 +311,26 @@ trait Slice { source =>
     val columns = source.columns.collect {
       case (ColumnRef(cPath @ CPath(CPathArray, _*), cType), col: HomogeneousArrayColumn[a]) =>
         (ColumnRef(cPath, cType), new HomogeneousArrayColumn[a] {
-           val tpe = col.tpe
-           def isDefinedAt(row: Int) = col.isDefinedAt(row)
-           def apply(row: Int) = {
-             val xs = col(row)
-             if (xs.size == 0 || index >= xs.size) xs else {
-               xs.updated(0, xs(index)).updated(index, xs(0))
-             }
-           }
+          val tpe = col.tpe
+          def isDefinedAt(row: Int) = col.isDefinedAt(row)
+          def apply(row: Int) = {
+            val xs = col(row)
+            if (index >= xs.length) xs else {
+              val ys = tpe.elemType.manifest.newArray(xs.length)
+
+              var i = 1
+              while (i < ys.length) {
+                ys(i) = xs(i)
+                i += 1
+              }
+
+              ys(0) = xs(index)
+              ys(index) = xs(0)
+              ys
+            }
+          }
         })
+
       case (ColumnRef(CPath(CPathIndex(0), xs @ _*), ctype), col) => 
         (ColumnRef(CPath(CPathIndex(index) +: xs : _*), ctype), col)
 

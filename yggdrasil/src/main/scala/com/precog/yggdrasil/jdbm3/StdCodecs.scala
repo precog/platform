@@ -38,6 +38,7 @@ trait StdCodecs {
   implicit def BitSetCodec: Codec[BitSet]
   implicit def RawBitSetCodec: Codec[RawBitSet]
   implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]): Codec[IndexedSeq[A]]
+  implicit def ArrayCodec[A](implicit elemCodec: Codec[A], m: Manifest[A]): Codec[Array[A]]
 
   def codecForCType(cType: CType): Codec[_] = cType match {
     case cType: CValueType[_] => codecForCValueType(cType)
@@ -51,7 +52,7 @@ trait StdCodecs {
     case CDouble => DoubleCodec
     case CNum => BigDecimalCodec
     case CDate => DateTimeCodec
-    case CArrayType(elemType) => IndexedSeqCodec(codecForCValueType(elemType))
+    case CArrayType(elemType) => ArrayCodec(codecForCValueType(elemType), elemType.manifest)
   } } catch {
     case ex: Throwable =>
       println(cType)
@@ -72,6 +73,7 @@ trait RowFormatCodecs extends StdCodecs { self: RowFormat =>
   @transient implicit lazy val BitSetCodec: Codec[BitSet] = Codec.SparseBitSetCodec(columnRefs.size)
   @transient implicit lazy val RawBitSetCodec: Codec[RawBitSet] = Codec.SparseRawBitSetCodec(columnRefs.size)
   implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]): Codec[IndexedSeq[A]] = Codec.IndexedSeqCodec(elemCodec)
+  implicit def ArrayCodec[A](implicit elemCodec: Codec[A], m: Manifest[A]): Codec[Array[A]] = Codec.ArrayCodec(elemCodec, m)
 }
 
 

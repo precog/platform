@@ -200,7 +200,7 @@ object ArraySetColumn {
 
       case ctype: CArrayType[a] => new ArraySetColumn[HomogeneousArrayColumn[a]](ctype, columnSet.map(_.asInstanceOf[HomogeneousArrayColumn[a]])) with HomogeneousArrayColumn[a] {
         override val tpe = ctype
-        def apply(row: Int): IndexedSeq[a] = backing(firstDefinedIndexAt(row)).asInstanceOf[HomogeneousArrayColumn[a]].apply(row)
+        def apply(row: Int): Array[a] = backing(firstDefinedIndexAt(row)).asInstanceOf[HomogeneousArrayColumn[a]].apply(row)
       }
 
       case CNull        => new ArraySetColumn[NullColumn](ctype, columnSet.map(_.asInstanceOf[NullColumn])) with NullColumn {}

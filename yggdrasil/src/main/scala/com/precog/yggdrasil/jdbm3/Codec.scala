@@ -537,6 +537,7 @@ object Codec {
 
   implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]) = new IndexedSeqCodec(elemCodec)
 
+  // FIXME: This should have its own codec.
   implicit def ArrayCodec[A: Codec: Manifest]: Codec[Array[A]] = Codec[IndexedSeq[A]].as[Array[A]](_.toIndexedSeq, _.toArray)
 
 

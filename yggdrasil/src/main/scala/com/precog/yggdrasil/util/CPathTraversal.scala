@@ -20,7 +20,12 @@
 package com.precog.yggdrasil
 package util
 
+import com.precog.yggdrasil.table._
 import com.precog.common.json._
+
+import org.joda.time.DateTime
+
+import scala.collection.mutable
 import scala.annotation.tailrec
 
 
@@ -28,7 +33,7 @@ import scala.annotation.tailrec
  * Represents a way to traverse a list of CPaths in sorted order. This takes
  * into account mixes of homogeneous and heterogeneous arrays.
  */
-sealed trait CPathTraversal {
+sealed trait CPathTraversal { self =>
   import CPathTraversal._
 
   /**
@@ -41,7 +46,7 @@ sealed trait CPathTraversal {
   def rowOrder(cpaths: List[CPath], left: CPath => Set[Column], optRight: Option[CPath => Set[Column]] = None): spire.math.Order[Int] = {
     val right = optRight getOrElse left
 
-    def plan0(t: CPathTraversal, paths: List[(List[CPathNode], List[CPathNode])], idx: Int) = t match {
+    def plan0(t: CPathTraversal, paths: List[(List[CPathNode], List[CPathNode])], idx: Int): CPathComparator = t match {
       case Done =>
         val validPaths = paths map { case (_, nodes) => CPath(nodes.reverse) }
 
@@ -55,7 +60,7 @@ sealed trait CPathTraversal {
 
         val comparators: Array[CPathComparator] = (for ((lPath, lCol) <- lCols; (rPath, rCol) <- rCols) yield {
           CPathComparator(lPath, lCol, rPath, rCol)
-        })(comparator.breakOut)
+        })(collection.breakOut)
 
         // Return the first column in the array defined at the row, or -1 if none are defined for that row
         @inline def firstDefinedIndexFor(columns: Array[(CPath, Column)], row: Int): Int = {
@@ -65,7 +70,7 @@ sealed trait CPathTraversal {
         }
 
         new CPathComparator {
-          def compare(r1: Int, r2: Int, indices: Array[Int]): Int = {
+          def compare(r1: Int, r2: Int, indices: Array[Int]) = {
             val i = firstDefinedIndexFor(lCols, r1)
             val j = firstDefinedIndexFor(rCols, r2)
             if (i == -1) {
@@ -86,9 +91,9 @@ sealed trait CPathTraversal {
         val comparators: Array[CPathComparator] = ts.map(plan0(_, paths, idx))(collection.breakOut)
 
         new CPathComparator {
-          def compare(r1: Int, r2: Int, indices: Array[Int]): Ordering = {
+          def compare(r1: Int, r2: Int, indices: Array[Int]): MaybeOrdering = {
             var i = 0
-            val result: MaybeOrdering = NoComp
+            var result: MaybeOrdering = NoComp
             while ((result == Eq || result == NoComp) && i < comparators.length) {
               val iResult = comparators(i).compare(r1, r2, indices)
               if (iResult != NoComp) {
@@ -149,12 +154,14 @@ sealed trait CPathTraversal {
     }
 
     new spire.math.Order[Int] {
-      private val indices = new Array[Int](this.arrayDepth)
-      private val pathComp = plan0(this, (cpaths map (_.nodes), Nil), 0)
+      private val indices = new Array[Int](self.arrayDepth)
+      private val pathComp = plan0(self, cpaths map (_.nodes -> Nil), 0)
 
       def compare(row1: Int, row2: Int) = {
-        pathComp.compare(row1, row2, indices)
+        pathComp.compare(row1, row2, indices).toInt
       }
+
+      def eqv(row1: Int, row2: Int) = compare(row1, row2) == 0
     }
   }
 
@@ -163,9 +170,10 @@ sealed trait CPathTraversal {
    */
   def arrayDepth: Int = this match {
     case Done => 0
+    case Select(CPathArray, tail) => 1 + tail.arrayDepth
     case Select(CPathIndex(_), tail) => 1 + tail.arrayDepth
     case Select(_, tail) => tail.arrayDepth
-    case Sequence(ts) => ts.maxBy(_.arrayDepth)
+    case Sequence(ts) => ts.map(_.arrayDepth).max
     case Loop(_, _, tail) => 1 + tail.arrayDepth
   }
 }
@@ -246,12 +254,13 @@ object CPathTraversal {
       loop(ps, path.nodes)
     }
 
-    implicit object CPathPositionOrder extends Order[CPathPosition] {
+    implicit object CPathPositionOrder extends scalaz.Order[CPathPosition] {
       import scalaz.std.int._
+      import scalaz.Ordering.{ EQ, LT, GT }
 
-      private val nodeOrder = implicitly[Order[CPathNode]]
+      private val nodeOrder = implicitly[scalaz.Order[CPathNode]]
 
-      def order(p1: CPathPosition, p2: CPathPosition): Ordering = (p1, p2) match {
+      def order(p1: CPathPosition, p2: CPathPosition): scalaz.Ordering = (p1, p2) match {
         case (CPathPoint(CPathIndex(i)), CPathRange(_, l, r)) =>
           if (i < l) LT else if (i > l) GT else EQ //if (r map (_ == i) getOrElse false) EQ else GT
         case (CPathRange(_, l, r), CPathPoint(CPathIndex(i))) =>
@@ -259,7 +268,7 @@ object CPathTraversal {
         case (CPathRange(_, l1, r1), CPathRange(_, l2, r2)) =>
           if (l1 < l2) LT else if (l2 < l1) GT else {
             (r1, r2) match {
-              case (Some(r1), Some(r2)) => implicitly[Order[Int]].order(r1, r2)
+              case (Some(r1), Some(r2)) => implicitly[scalaz.Order[Int]].order(r1, r2)
               case (None, None) => EQ
               case (_, None) => LT
               case (None, _) => GT
@@ -384,7 +393,9 @@ object CPathTraversal {
     def disjointOrder(paths: List[CPath]): List[List[CPathPosition]] = {
       import scalaz.std.list._
 
-      val pq = mutable.PriorityQueue[List[CPathPosition]](paths map (position(_)): _*)(implicitly[Order[List[CPathPosition]]].reverseOrder.toScalaOrdering)
+      val pq = mutable.PriorityQueue[List[CPathPosition]](paths map (position(_)): _*) {
+        implicitly[scalaz.Order[List[CPathPosition]]].reverseOrder.toScalaOrdering
+      }
 
       def rec(a: List[CPathPosition], ts: List[List[CPathPosition]]): List[List[CPathPosition]] = {
         if (!pq.isEmpty) {

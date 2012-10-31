@@ -35,6 +35,8 @@ import scalaz.std._
 import scalaz.std.math._
 import scalaz.std.AllInstances._
 
+import scala.{ specialized => spec }
+
 import _root_.java.io.{Externalizable,ObjectInput,ObjectOutput}
 import _root_.java.math.MathContext
 
@@ -48,13 +50,13 @@ sealed trait CNullValue extends CValue { self: CNullType =>
   def cType: CNullType = self
 }
 
-sealed trait CWrappedValue[@specialized(Boolean, Long, Double) A] extends CValue {
+sealed trait CWrappedValue[@spec(Boolean, Long, Double) A] extends CValue {
   def cType: CValueType[A]
   def value: A
   def toJValue = cType.jValueFor(value)
 }
 
-sealed trait CNumericValue[A] extends CWrappedValue[A] {
+sealed trait CNumericValue[@spec(Long, Double) A] extends CWrappedValue[A] {
   def cType: CNumericType[A]
   def toCNum: CNum = CNum(cType.bigDecimalFor(value))
 }
@@ -89,7 +91,6 @@ object CValue {
 
 sealed trait CType extends Serializable {
   def readResolve(): CType
-  def format: StorageFormat
   def isNumeric: Boolean = false
 
   @inline 
@@ -116,18 +117,18 @@ sealed trait CType extends Serializable {
   }
 }
 
-sealed trait CNullType extends CType with CNullValue {
-  val format = FixedWidth(0)
-}
+sealed trait CNullType extends CType with CNullValue
 
-sealed abstract class CValueType[A](val format: StorageFormat) extends CType { self =>
+sealed trait CValueType[@spec(Boolean, Long, Double) A] extends CType { self =>
+  def manifest: Manifest[A]
+
   def readResolve(): CValueType[A]
   def apply(a: A): CWrappedValue[A]
   def order(a: A, b: A): Ordering
   def jValueFor(a: A): JValue
 }
 
-sealed abstract class CNumericType[A](format: StorageFormat) extends CValueType[A](format) {
+sealed trait CNumericType[@spec(Long, Double) A] extends CValueType[A] {
   override def isNumeric: Boolean = true
   def bigDecimalFor(a: A): BigDecimal
 }
@@ -191,7 +192,7 @@ case object CType extends CTypeSerialization {
   def unify(t1: CType, t2: CType): Option[CType] = {
     (t1, t2) match {
       case (CLong, CLong)     => Some(CLong)
-      case (CLong, CDouble)   => Some(CDouble)
+      case (CLong, CDouble)   => Some(CNum)
       case (CLong, CNum)      => Some(CNum)
       case (CDouble, CLong)   => Some(CNum)
       case (CDouble, CDouble) => Some(CDouble)
@@ -278,8 +279,8 @@ case object CType extends CTypeSerialization {
 }
 
 object CValueType {
-  def apply[A](implicit A: CValueType[A]): CValueType[A] = A
-  def apply[A](a: A)(implicit A: CValueType[A]): CWrappedValue[A] = A(a)
+  def apply[@spec(Boolean, Long, Double) A](implicit A: CValueType[A]): CValueType[A] = A
+  def apply[@spec(Boolean, Long, Double) A](a: A)(implicit A: CValueType[A]): CWrappedValue[A] = A(a)
 
   // These let us do, def const[A: CValueType](a: A): CValue = CValueType[A](a)
 
@@ -289,27 +290,28 @@ object CValueType {
   implicit def double: CValueType[Double] = CDouble
   implicit def bigDecimal: CValueType[BigDecimal] = CNum
   implicit def dateTime: CValueType[DateTime] = CDate
-  implicit def array[A](implicit elemType: CValueType[A]) = CArrayType(elemType)
+  implicit def array[@spec(Boolean, Long, Double) A](implicit elemType: CValueType[A]) = CArrayType(elemType)
 }
 
 
 //
 // Homogeneous arrays
-// TODO Array[x] backed numeric arrays may be faster (if specialized on A).
 //
-case class CArray[A](value: IndexedSeq[A], cType: CArrayType[A]) extends CWrappedValue[IndexedSeq[A]]
+case class CArray[@spec(Boolean, Long, Double) A](value: Array[A], cType: CArrayType[A]) extends CWrappedValue[Array[A]]
 
-case class CArrayType[A](elemType: CValueType[A]) extends CValueType[IndexedSeq[A]](LengthEncoded) {
+case class CArrayType[@spec(Boolean, Long, Double) A](elemType: CValueType[A]) extends CValueType[Array[A]] {
+  val manifest: Manifest[Array[A]] = elemType.manifest.arrayManifest
+
   def readResolve() = CArrayType(elemType.readResolve())
 
-  def apply(value: IndexedSeq[A]) = CArray(value, this)
+  def apply(value: Array[A]) = CArray(value, this)
 
-  def order(as: IndexedSeq[A], bs: IndexedSeq[A]) =
+  def order(as: Array[A], bs: Array[A]) =
     (as zip bs) map { case (a, b) =>
       elemType.order(a, b)
     } find (_ != EQ) getOrElse Ordering.fromInt(as.size - bs.size)
 
-  def jValueFor(as: IndexedSeq[A]) =
+  def jValueFor(as: Array[A]) =
     JArray(as.map(elemType.jValueFor _)(collection.breakOut))
 }
 
@@ -320,7 +322,8 @@ case class CString(value: String) extends CWrappedValue[String] {
   val cType = CString
 }
 
-case object CString extends CValueType[String](LengthEncoded) {
+case object CString extends CValueType[String] {
+  val manifest: Manifest[String] = implicitly[Manifest[String]]
   def readResolve() = CString
   def order(s1: String, s2: String) = stringInstance.order(s1, s2)
   def jValueFor(s: String) = JString(s)
@@ -333,7 +336,8 @@ case class CBoolean(value: Boolean) extends CWrappedValue[Boolean] {
   val cType = CBoolean
 }
 
-case object CBoolean extends CValueType[Boolean](FixedWidth(1)) {
+case object CBoolean extends CValueType[Boolean] {
+  val manifest: Manifest[Boolean] = implicitly[Manifest[Boolean]]
   def readResolve() = CBoolean
   def order(v1: Boolean, v2: Boolean) = booleanInstance.order(v1, v2)
   def jValueFor(v: Boolean) = JBool(v)
@@ -346,7 +350,8 @@ case class CLong(value: Long) extends CNumericValue[Long] {
   val cType = CLong
 }
 
-case object CLong extends CNumericType[Long](FixedWidth(8)) {
+case object CLong extends CNumericType[Long] {
+  val manifest: Manifest[Long] = implicitly[Manifest[Long]]
   def readResolve() = CLong
   def order(v1: Long, v2: Long) = longInstance.order(v1, v2)
   def jValueFor(v: Long): JValue = JNum(BigDecimal(v, MathContext.UNLIMITED))
@@ -357,7 +362,8 @@ case class CDouble(value: Double) extends CNumericValue[Double] {
   val cType = CDouble
 }
 
-case object CDouble extends CNumericType[Double](FixedWidth(8)) {
+case object CDouble extends CNumericType[Double] {
+  val manifest: Manifest[Double] = implicitly[Manifest[Double]]
   def readResolve() = CDouble
   def order(v1: Double, v2: Double) = doubleInstance.order(v1, v2)
   def jValueFor(v: Double) = JNum(BigDecimal(v.toString, MathContext.UNLIMITED))
@@ -368,7 +374,8 @@ case class CNum(value: BigDecimal) extends CNumericValue[BigDecimal] {
   val cType = CNum
 }
 
-case object CNum extends CNumericType[BigDecimal](LengthEncoded) {
+case object CNum extends CNumericType[BigDecimal] {
+  val manifest: Manifest[BigDecimal] = implicitly[Manifest[BigDecimal]]
   def readResolve() = CNum
   def order(v1: BigDecimal, v2: BigDecimal) = bigDecimalInstance.order(v1, v2)
   def jValueFor(v: BigDecimal) = JNum(v)
@@ -382,7 +389,8 @@ case class CDate(value: DateTime) extends CWrappedValue[DateTime] {
   val cType = CDate
 }
 
-case object CDate extends CValueType[DateTime](FixedWidth(8)) {
+case object CDate extends CValueType[DateTime] {
+  val manifest: Manifest[DateTime] = implicitly[Manifest[DateTime]]
   def readResolve() = CDate
   def order(v1: DateTime, v2: DateTime) = sys.error("todo")
   def jValueFor(v: DateTime) = JString(v.toString)
