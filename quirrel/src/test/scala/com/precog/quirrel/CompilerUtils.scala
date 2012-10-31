@@ -17,29 +17,18 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package quirrel
+package com.precog.quirrel
 
 import org.specs2.mutable._
 
-import bytecode.RandomLibrary
-import parser._
-import typer._
-import emitter._
+import com.codecommit.gll._
 
-object PhasesSpecs extends Specification
-    with StubPhases
-    with CompilerUtils
-    with Compiler
-    with ProvenanceChecker
-    with GroupSolver
-    with RawErrors 
-    with RandomLibrary {
-  
-  "full compiler" should {
-    "self-populate AST errors atom" in {
-      val tree = compileSingle("fubar")
-      tree.errors must not(beEmpty)
-    }
+trait CompilerUtils extends Specification with Compiler {
+  def compileSingle(str: LineStream): Expr = {
+    val forest = compile(str)
+    forest must haveSize(1)
+    forest.head
   }
+  
+  def compileSingle(str: String): Expr = compileSingle(LineStream(str))
 }
