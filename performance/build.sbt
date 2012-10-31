@@ -45,9 +45,3 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, mainTest) map 
   val result = Fork.java.fork(None, opts2, None, Map(), false, LoggedOutput(s.log)).exitValue()
   if (result != 0) error("Tests unsuccessful")    // currently has no effect (https://github.com/etorreborre/specs2/issues/55)
 }
-
-libraryDependencies ++= Seq(
-  "org.fusesource.leveldbjni"   %  "leveldbjni"         % "1.2-SNAPSHOT"   changing(),
-  "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.2-SNAPSHOT"   changing(),
-  "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.2-SNAPSHOT"   changing() 
-)

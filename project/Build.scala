@@ -30,7 +30,7 @@ object PlatformBuild extends Build {
   val archiveDir = SettingKey[String]("archive-dir", "The temporary directory to which deleted projections will be moved")
   val dataDir = SettingKey[String]("data-dir", "The temporary directory into which to extract the test data")
   val profileTask = InputKey[Unit]("profile", "Runs the given project under JProfiler")
-  val extractData = TaskKey[String]("extract-data", "Extracts the LevelDB data files used by the tests and the REPL")
+  val extractData = TaskKey[String]("extract-data", "Extracts the data files used by the tests and the REPL")
   val mainTest = SettingKey[String]("main-test", "The primary test class for the project (just used for pandora)")
 
   val nexusSettings : Seq[Project.Setting[_]] = Seq(
