@@ -67,7 +67,10 @@ trait Tracer extends parser.AST with typer.Binder {
           val ids = let.params map { Identifier(Vector(), _) }
           val sigma2 = sigma ++ (ids zip Stream.continually(let) zip actuals)
           
-          buildTrace(sigma2)(let.left)
+          if (actuals.length > 0)
+            Tree.node((sigma, expr), buildTrace(sigma2)(let.left) #:: SNil)
+          else
+            buildTrace(sigma2)(let.left)
         }
         
         case FormalBinding(let) =>
@@ -114,12 +117,11 @@ trait Tracer extends parser.AST with typer.Binder {
   def buildBacktrace(trace: Tree[(Map[Formal, Expr], Expr)])(target: Expr): Set[List[(Map[Formal, Expr], Expr)]] = {
     def loop(stack: List[(Map[Formal, Expr], Expr)])(trace: Tree[(Map[Formal, Expr], Expr)]): Set[List[(Map[Formal, Expr], Expr)]] = {
       val Tree.Node(pair @ (_, expr), children) = trace
-      children map loop(pair :: stack) reduceOption { _ ++ _ } getOrElse {
-        if (target == expr)
-          Set(stack)
-        else
-          Set()
-      }
+      
+      if (expr == target)
+        Set(stack)
+      else
+        children map loop(pair :: stack) reduceOption { _ ++ _ } getOrElse Set()
     }
     
     loop(Nil)(trace)

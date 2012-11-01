@@ -337,6 +337,51 @@ object EmitterSpecs extends Specification
           Map2Cross(JoinArray)))
     }
 
+    "solve with a generic where inside a function" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | athletes := //summer_games/athletes
+        | 
+        | data := athletes union (medals with { winner: medals."Medal winner" })
+        | 
+        | f(x, y) := x where y
+        | 
+        | solve 'winner 
+        |   count(f(data.winner, data.winner = 'winner))
+      """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("/summer_games/athletes"),
+          LoadLocal,
+          PushString("/summer_games/london_medals"),
+          LoadLocal,
+          Dup,
+          Swap(2),
+          Swap(1),
+          PushString("winner"),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("Medal winner"),
+          Map2Cross(DerefObject),
+          Map2Cross(WrapObject),
+          Map2Match(JoinObject),
+          IUnion,
+          Dup,
+          PushString("winner"),
+          Map2Cross(DerefObject),
+          KeyPart(1),
+          Swap(1),
+          PushString("winner"),
+          Map2Cross(DerefObject),
+          Group(0),
+          Split,
+          PushGroup(0),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
+          Merge))
+    }
+
     "emit two distinct callsites of the same function version 2" in {
       val input = """
         | medals := //summer_games/london_medals 
@@ -1367,7 +1412,7 @@ object EmitterSpecs extends Specification
           |       { impression: impressions, nextConversion: conversions }
           """.stripMargin)(
           Vector(
-            PushString("/impressions"),
+            PushString("/conversions"),
             LoadLocal,
             Dup,
             PushString("userId"),
@@ -1375,7 +1420,7 @@ object EmitterSpecs extends Specification
             KeyPart(1),
             Swap(1),
             Group(0),
-            PushString("/conversions"),
+            PushString("/impressions"),
             LoadLocal,
             Dup,
             Swap(2),
@@ -1388,7 +1433,7 @@ object EmitterSpecs extends Specification
             Group(2),
             MergeBuckets(true),
             Split,
-            PushGroup(0),
+            PushGroup(2),
             Dup,
             Dup,
             PushString("time"),
@@ -1407,7 +1452,7 @@ object EmitterSpecs extends Specification
             FilterMatch,
             Map2Cross(WrapObject),
             PushString("nextConversion"),
-            PushGroup(2),
+            PushGroup(0),
             Dup,
             Swap(3),
             Swap(2),

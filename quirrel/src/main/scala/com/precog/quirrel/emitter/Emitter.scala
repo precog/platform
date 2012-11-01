@@ -32,7 +32,8 @@ trait Emitter extends AST
     with Instructions
     with Binder
     with ProvenanceChecker
-    with GroupSolver {
+    with GroupSolver
+    with Tracer {
       
   import instructions._
 
@@ -53,7 +54,7 @@ trait Emitter extends AST
   private case class MarkDispatch(let: ast.Let, actuals: Vector[Expr]) extends MarkType
   private case class MarkGroup(op: ast.Where) extends MarkType
 
-  private case class Emission private (
+  private case class Emission(
     bytecode: Vector[Instruction] = Vector(),
     marks: Map[MarkType, Mark] = Map(),
     curLine: Option[(Int, String)] = None,
@@ -74,10 +75,10 @@ trait Emitter extends AST
 
   private def reduce[A](xs: Iterable[A])(implicit m: Monoid[A]) = xs.foldLeft(mzero[A])(_ |+| _)
 
-  private object Emission {
-    def empty = new Emission()
+  def emit(expr: Expr): Vector[Instruction] = {
+    val trace = buildTrace(Map())(expr)
     
-    def insertInstrAt(is: Seq[Instruction], _idx: Int): EmitterState = StateT.apply[Id, Emission, Unit] { e => 
+    def insertInstrAtMulti(is: Seq[Instruction], _idx: Int): EmitterState = StateT.apply[Id, Emission, Unit] { e => 
       val idx = if (_idx < 0) (e.bytecode.length + 1 + _idx) else _idx
 
       val before = e.bytecode.take(idx)
@@ -88,7 +89,7 @@ trait Emitter extends AST
         marks = e.marks.transform((k, v) => v.insert(idx, is.length))), ())
     }
 
-    def insertInstrAt(i: Instruction, idx: Int): EmitterState = insertInstrAt(i :: Nil, idx)
+    def insertInstrAt(i: Instruction, idx: Int): EmitterState = insertInstrAtMulti(i :: Nil, idx)
     
     def nextId(f: Int => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       f(e.currentId)(e.copy(currentId = e.currentId + 1))
@@ -111,7 +112,7 @@ trait Emitter extends AST
       }
     }
 
-    private def operandStackSizes(is: Vector[Instruction]): Vector[Int] = {
+    def operandStackSizes(is: Vector[Instruction]): Vector[Int] = {
       (is.foldLeft((Vector(0), 0)) {
         case ((vector, cur), instr) => 
           val delta = (instr.operandStackDelta._2 - instr.operandStackDelta._1)
@@ -123,7 +124,7 @@ trait Emitter extends AST
     }
 
     // Emits the bytecode and marks it so it can be reused in DUPing operations.
-    private def emitAndMark(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    def emitAndMark(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       f(e) match {
         case (e, _) =>
           val mark = Mark(e.bytecode.length, 0)
@@ -132,26 +133,29 @@ trait Emitter extends AST
       }
     }
     
-    private def labelTicVar(solve: ast.Solve, name: TicId)(state: => EmitterState): EmitterState = {
+    def labelTicVar(solve: ast.Solve, name: TicId)(state: => EmitterState): EmitterState = {
       StateT.apply[Id, Emission, Unit] { e =>
         (e.copy(ticVars = e.ticVars + ((solve, name) -> state)), ())
       }
     }
     
-    private def labelFormal(id: Identifier, let: ast.Let)(state: => EmitterState): EmitterState = {
+    def labelFormal(id: Identifier, let: ast.Let)(state: => EmitterState): EmitterState = {
       StateT.apply[Id, Emission, Unit] { e =>
-        (e.copy(formals = e.formals + ((id, let) -> state)), ())
+        if (e.formals contains ((id, let)))
+          (e, ())
+        else
+          (e.copy(formals = e.formals + ((id, let) -> state)), ())
       }
     }
 
-    private def labelGroup(where: ast.Where, id: Int): EmitterState = {
+    def labelGroup(where: ast.Where, id: Int): EmitterState = {
       StateT.apply[Id, Emission, Unit] { e =>
         (e.copy(groups = e.groups + (where -> id)), ())
       }
     }
     
     // Dup's previously marked bytecode:
-    private def emitDup(markType: MarkType): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    def emitDup(markType: MarkType): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       val Mark(insertIdx, offset) = e.marks(markType)
 
       val stackSizes = operandStackSizes(e.bytecode)
@@ -178,8 +182,8 @@ trait Emitter extends AST
       else
         (1 until finalStackSize) map Swap
 
-      (insertInstrAt((pullUp :+ Dup) ++ pushDown ++ saveSwaps, insertIdx) >> 
-        insertInstrAt(restoreSwaps, e.bytecode.length + pullUp.length + 1 + pushDown.length + saveSwaps.length))(e)
+      (insertInstrAtMulti((pullUp :+ Dup) ++ pushDown ++ saveSwaps, insertIdx) >> 
+        insertInstrAtMulti(restoreSwaps, e.bytecode.length + pullUp.length + 1 + pushDown.length + saveSwaps.length))(e)
     }
     
     def emitConstraints(expr: Expr, dispatches: Set[ast.Dispatch]): EmitterState = {
@@ -250,17 +254,29 @@ trait Emitter extends AST
       state(e)
     }
     
-    def emitBucketSpec(solve: ast.Solve, spec: BucketSpec, dispatches: Set[ast.Dispatch]): EmitterState = spec match {
+    def emitBucketSpec(solve: ast.Solve, spec: BucketSpec, contextualDispatches: Map[Expr, Set[List[ast.Dispatch]]], dispatches: Set[ast.Dispatch]): EmitterState = spec match {
       case buckets.UnionBucketSpec(left, right) =>
-        emitBucketSpec(solve, left, dispatches) >> emitBucketSpec(solve, right, dispatches) >> emitInstr(MergeBuckets(false))
+        emitBucketSpec(solve, left, contextualDispatches, dispatches) >> emitBucketSpec(solve, right, contextualDispatches, dispatches) >> emitInstr(MergeBuckets(false))
       
       case buckets.IntersectBucketSpec(left, right) =>
-        emitBucketSpec(solve, left, dispatches) >> emitBucketSpec(solve, right, dispatches) >> emitInstr(MergeBuckets(true))
+        emitBucketSpec(solve, left, contextualDispatches, dispatches) >> emitBucketSpec(solve, right, contextualDispatches, dispatches) >> emitInstr(MergeBuckets(true))
       
-      case buckets.Group(origin, target, forest) => {
+      case buckets.Group(origin, target, forest, dtrace) => {
         nextId { id =>
-          emitBucketSpec(solve, forest, dispatches) >>
-            emitExpr(target, dispatches) >>
+          val candidates: Set[List[ast.Dispatch]] = contextualDispatches(target)
+          
+          val dtracePrefix = dtrace.reverse
+          
+          val context = if (!(candidates forall { _.isEmpty })) {
+            candidates map { _.reverse } find { c =>
+              (c zip dtracePrefix takeWhile { case (a, b) => a == b } map { _._2 }) == dtracePrefix
+            } get
+          } else {
+            Nil
+          }
+          
+          emitBucketSpec(solve, forest, contextualDispatches, dispatches) >>
+            prepareContext(context, dispatches) { dispatches => emitExpr(target, dispatches) } >>
             (origin map { labelGroup(_, id) } getOrElse mzero[EmitterState]) >>
             emitInstr(Group(id))
         }
@@ -296,6 +312,53 @@ trait Emitter extends AST
         emitExpr(expr, dispatches) >> emitInstr(Extra)
     }
     
+    def prepareContext(context: List[ast.Dispatch], dispatches: Set[ast.Dispatch])(f: Set[ast.Dispatch] => EmitterState): EmitterState = context match {
+      case d :: tail => {
+        d.binding match {
+          case LetBinding(let) => {
+            emitDispatch(d, let, dispatches) { dispatches =>
+              prepareContext(tail, dispatches)(f)
+            }
+          }
+          
+          case _ => prepareContext(tail, dispatches)(f)
+        }
+      }
+      
+      case Nil => f(dispatches)
+    }
+    
+    def emitDispatch(expr: ast.Dispatch, let: ast.Let, dispatches: Set[ast.Dispatch])(f: Set[ast.Dispatch] => EmitterState): EmitterState = {
+      val ast.Dispatch(_, name, actuals) = expr
+      val ast.Let(_, _, params, left, right) = let
+      
+      val ids = let.params map { Identifier(Vector(), _) }
+      val zipped = ids zip (actuals map { _.provenance })
+      
+      def sub(target: Provenance): Provenance = {
+        zipped.foldLeft(target) {
+          case (target, (id, sub)) => substituteParam(id, let, target, sub)
+        }
+      }
+      
+      val actualStates = params zip actuals map {
+        case (name, expr) =>
+          labelFormal(Identifier(Vector(), name), let)(emitExpr(expr, dispatches))
+      }
+      
+      StateT.apply[Id, Emission, Unit] { e =>
+        def subResolve2(prov: Provenance): Provenance =
+          resolveUnifications(expr.relations)(sub(prov))
+        
+        val e2 = e.copy(subResolve = e.subResolve compose subResolve2)
+        
+        val (e3, ()) = (reduce(actualStates) >> f(dispatches + expr))(e2)
+        val e4 = e3.copy(formals = params.foldLeft(e3.formals)((fs, name) => fs - ((Identifier(Vector(), name), let))))
+        val e5 = e4.copy(marks = params.foldLeft(e4.marks)((fs, name) => fs - (MarkFormal(Identifier(Vector(), name), let))))
+        (e5.copy(subResolve = e.subResolve), ())
+      }
+    }
+    
     def emitExpr(expr: Expr, dispatches: Set[ast.Dispatch]): StateT[Id, Emission, Unit] = {
       emitLine(expr.loc.lineNum, expr.loc.line) >>
       (expr match {
@@ -304,8 +367,28 @@ trait Emitter extends AST
 
         case expr @ ast.Solve(loc, _, body) => 
           val spec = expr.buckets(dispatches)
+        
+          val btraces: Map[Expr, Set[List[(Map[Formal, Expr], Expr)]]] =
+            spec.exprs.map({ expr =>
+              val btrace = buildBacktrace(trace)(expr)
+              (expr -> btrace)
+            })(collection.breakOut)
           
-          emitBucketSpec(expr, spec, dispatches) >> 
+          val contextualDispatches: Map[Expr, Set[List[ast.Dispatch]]] = btraces map {
+            case (key, pairPaths) => {
+              val paths: Set[List[Expr]] = pairPaths map { pairs => pairs map { _._2 } }
+              
+              val innerDispatches = paths filter { _ contains expr } map { btrace =>
+                btrace takeWhile (expr !=) collect {
+                  case d: ast.Dispatch if d.binding.isInstanceOf[LetBinding] => d
+                }
+              }
+              
+              key -> innerDispatches
+            }
+          }
+          
+          emitBucketSpec(expr, spec, contextualDispatches, dispatches) >> 
             emitInstr(Split) >>
             emitExpr(body, dispatches) >>
             emitInstr(Merge)
@@ -471,30 +554,8 @@ trait Emitter extends AST
                   emitOrDup(MarkExpr(left))(emitExpr(left, dispatches + d))
 
                 case n => emitOrDup(MarkDispatch(let, actuals)) {
-                  val ids = let.params map { Identifier(Vector(), _) }
-                  val zipped = ids zip (actuals map { _.provenance })
-                  
-                  def sub(target: Provenance): Provenance = {
-                    zipped.foldLeft(target) {
-                      case (target, (id, sub)) => substituteParam(id, let, target, sub)
-                    }
-                  }
-                  
-                  val actualStates = params zip actuals map {
-                    case (name, expr) =>
-                      labelFormal(Identifier(Vector(), name), let)(emitExpr(expr, dispatches))
-                  }
-                  
-                  StateT.apply[Id, Emission, Unit] { e =>
-                    def subResolve2(prov: Provenance): Provenance =
-                      resolveUnifications(expr.relations)(sub(prov))
-                    
-                    val e2 = e.copy(subResolve = e.subResolve compose subResolve2)
-                    
-                    val (e3, ()) = (reduce(actualStates) >> emitExpr(left, dispatches + d))(e2)
-                    val e4 = e3.copy(formals = params.foldLeft(e3.formals)((fs, name) => fs - ((Identifier(Vector(), name), let))))
-                    val e5 = e4.copy(marks = params.foldLeft(e4.marks)((fs, name) => fs - (MarkFormal(Identifier(Vector(), name), let))))
-                    (e5.copy(subResolve = e.subResolve), ())
+                  emitDispatch(d, let, dispatches) { dispatches =>
+                    emitExpr(left, dispatches)
                   }
                 }
               }
@@ -567,10 +628,7 @@ trait Emitter extends AST
           mzero[EmitterState]
       }) >> emitConstraints(expr, dispatches)
     }
-  }
-
-  def emit(expr: Expr): Vector[Instruction] = {
-    import Emission._
-    emitExpr(expr, Set()).exec(Emission.empty).bytecode
+    
+    emitExpr(expr, Set()).exec(Emission()).bytecode
   }
 }

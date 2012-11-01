@@ -25,12 +25,24 @@ import scala.annotation.tailrec
 trait GroupFinder extends parser.AST with Tracer {
   import ast._
   
-  def findGroups(solve: Solve): Set[(Map[Formal, Expr], Where)] = {
+  def findGroups(solve: Solve): Set[(Map[Formal, Expr], Where, List[Dispatch])] = {
     val vars = solve.vars map { findVars(solve, _)(solve.child) } reduceOption { _ ++ _ } getOrElse Set()
     
     val trace = buildTrace(Map())(solve.root)
     
-    vars flatMap buildBacktrace(trace) flatMap codrill      // TODO minimize by sigma subsetting
+    // TODO minimize by sigma subsetting
+    vars flatMap buildBacktrace(trace) flatMap { btrace =>
+      val result = codrill(btrace)
+      
+      result map {
+        case (sigma, where) =>
+          val dtrace = btrace map { _._2 } dropWhile { !_.isInstanceOf[Where] } collect {
+            case d: Dispatch if d.binding.isInstanceOf[LetBinding] => d
+          }
+          
+          (sigma, where, dtrace)
+      }
+    }
   }
   
   private def codrill(btrace: List[(Map[Formal, Expr], Expr)]): Option[(Map[Formal, Expr], Where)] = {
@@ -38,6 +50,7 @@ trait GroupFinder extends parser.AST with Tracer {
     def state1(btrace: List[(Map[Formal, Expr], Expr)]): Option[(Map[Formal, Expr], Where)] = btrace match {
       case (_, _: Add | _: Sub | _: Mul | _: Div | _: Neg | _: Paren) :: tail => state1(tail)
       case (_, _: RelationExpr) :: tail => state2(tail)
+      case (_, _: Dispatch) :: tail => state1(tail)
       case _ => None
     }
     
@@ -45,6 +58,7 @@ trait GroupFinder extends parser.AST with Tracer {
     def state2(btrace: List[(Map[Formal, Expr], Expr)]): Option[(Map[Formal, Expr], Where)] = btrace match {
       case (_, _: Comp | _: And | _: Or) :: tail => state2(tail)
       case (sigma, where: Where) :: _ => Some((sigma, where))
+      case (_, _: Dispatch) :: tail => state2(tail)
       case _ => None
     }
     
