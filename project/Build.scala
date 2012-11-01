@@ -101,7 +101,7 @@ object PlatformBuild extends Build {
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
 
   lazy val platform = Project(id = "platform", base = file(".")).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*)
