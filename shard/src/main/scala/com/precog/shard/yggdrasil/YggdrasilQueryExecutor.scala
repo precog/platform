@@ -115,16 +115,6 @@ trait YggdrasilQueryExecutorComponent {
 
       implicit val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
 
-      def startup() = storage.start.onComplete {
-        case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
-        case Right(_) => queryLogger.info("Actor ecosystem started.")
-      }
-
-      def shutdown() = storage.stop.onComplete {
-        case Left(error) => queryLogger.error("An error was encountered in actor ecosystem shutdown!", error)
-        case Right(_) => queryLogger.info("Actor ecossytem shutdown complete.")
-      }
-
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
         val accessControl = extAccessControl
       }
@@ -157,6 +147,16 @@ trait YggdrasilQueryExecutorComponent {
       }
 
       object Table extends TableCompanion
+      
+      def startup() = storage.start.onComplete {
+        case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
+        case Right(_) => queryLogger.info("Actor ecosystem started.")
+      }
+
+      def shutdown() = storage.stop.onComplete {
+        case Left(error) => queryLogger.error("An error was encountered in actor ecosystem shutdown!", error)
+        case Right(_) => queryLogger.info("Actor ecossytem shutdown complete.")
+      }
     }
   }
 }
