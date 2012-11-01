@@ -72,7 +72,7 @@ trait ShardService extends
         request { (state: ShardState) =>
           jvalue {
             path("/actors/status") {
-                get(new ActorStatusHandler(state.queryExecutor))
+              get(new ActorStatusHandler(state.queryExecutor))
             }
           } ~ jsonpcb[QueryResult] {
             apiKey(state.apiKeyManager) {
