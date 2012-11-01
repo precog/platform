@@ -4,7 +4,6 @@ import metadata.StorageMetadata
 import com.precog.common._
 
 import akka.dispatch.Future 
-import akka.util.Timeout
 
 import scalaz._
 import scalaz.effect._

@@ -6,6 +6,7 @@ import com.precog.common.json._
 import com.precog.common.VectorCase
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.util._
+import jdbm3._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -51,10 +52,14 @@ trait BlockStoreTestModule[M[+_]] extends BaseBlockStoreTestModule[M] {
   }
 
   val yggConfig = new YggConfig
+
+  trait TableCompanion extends BaseBlockStoreTestTableCompanion
+
+  object Table extends TableCompanion
 }
 
 trait BaseBlockStoreTestModule[M[+_]] extends 
-  BlockStoreColumnarTableModule[M] with
+  JDBMColumnarTableModule[M] with
   ColumnarTableModuleTestSupport[M] with 
   StubStorageModule[M] {
 
@@ -107,11 +112,9 @@ trait BaseBlockStoreTestModule[M[+_]] extends
       }
     }
 
-    trait TableCompanion extends BlockStoreColumnarTableCompanion {
+    trait BaseBlockStoreTestTableCompanion extends JDBMColumnarTableCompanion {
       implicit val geq: scalaz.Equal[Int] = intInstance
     }
-
-    object Table extends TableCompanion
 
     def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
       case (_: JNum, CNum | CLong | CDouble) => true
