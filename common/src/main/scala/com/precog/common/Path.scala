@@ -28,6 +28,7 @@ import scalaz._
 import scalaz.syntax.std.boolean._
 
 class Path private (val elements: String*) {
+  def components = elements.toList
   val path = elements.mkString("/", "/", "/").replaceAll("/+", "/")
   val length = elements.length
 
