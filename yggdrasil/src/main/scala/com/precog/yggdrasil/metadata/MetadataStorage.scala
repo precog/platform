@@ -324,12 +324,15 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
 
   override def toString = "FileMetadataStorage(root = " + baseDir + " archive = " + archiveDir +")"
 
+  private final val disallowedPathComponents = Set(".", "..")
   /**
    * Computes the stable path for a given descriptor relative to the given base dir
    */
   private def descriptorDir(baseDir: File, descriptor: ProjectionDescriptor): IO[File] = IO {
     // The path component maps directly to the FS, with a hash on the columnrefs as the final dir
-    new File(baseDir, (descriptor.commonPrefix :+ descriptor.stableHash).mkString(File.separator))
+    val prefix = descriptor.commonPrefix.filterNot(disallowedPathComponents.contains)
+
+    new File(baseDir, (prefix :+ descriptor.stableHash).mkString(File.separator))
   }
   
   private def writeDescriptor(desc: ProjectionDescriptor, baseDir: File): IO[Unit] = {
