@@ -16,4 +16,4 @@ ivyXML :=
     </dependency>
   </dependencies>
 
-mainClass := Some("com.precog.shard.KafkaShardServer")
+mainClass := Some("com.precog.shard.jdbm3.JDBMShardServer")
