@@ -185,7 +185,7 @@ trait ShardQueryExecutor
 
   private def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
     import trans._
-    
+
     StreamT.wrapEffect(
       tableM flatMap { table =>
         renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)))

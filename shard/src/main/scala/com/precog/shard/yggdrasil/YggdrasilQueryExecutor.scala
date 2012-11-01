@@ -64,22 +64,23 @@ import scalaz.syntax.std.either._
 
 import org.streum.configrity.Configuration
 
-trait YggdrasilQueryExecutorConfig extends 
-    BaseConfig with 
-    ProductionShardSystemConfig with
-    SystemActorStorageConfig with
-    JDBMProjectionModuleConfig with
-    BlockStoreColumnarTableModuleConfig with
-    EvaluatorConfig {
+trait BaseYggdrasilQueryExecutorConfig
+    extends BaseConfig
+    with ColumnarTableModuleConfig
+    with BlockStoreColumnarTableModuleConfig 
+    with JDBMProjectionModuleConfig
+    with IdSourceConfig
+    with EvaluatorConfig {
+      
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
 }
 
+trait YggdrasilQueryExecutorConfig extends BaseYggdrasilQueryExecutorConfig with ProductionShardSystemConfig with SystemActorStorageConfig
+
 trait YggdrasilQueryExecutorComponent {
   import blueeyes.json.serialization.Extractor
-
-  implicit def M: Monad[Future]
 
   private def wrapConfig(wrappedConfig: Configuration) = {
     new YggdrasilQueryExecutorConfig {
@@ -100,13 +101,28 @@ trait YggdrasilQueryExecutorComponent {
   }
     
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor[Future] = {
-    new YggdrasilQueryExecutor with JDBMColumnarTableModule[Future] with JDBMProjectionModule with ProductionShardSystemActorModule {
-      implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
-      implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+    new YggdrasilQueryExecutor
+        with JDBMColumnarTableModule[Future]
+        with JDBMProjectionModule
+        with ProductionShardSystemActorModule
+        with SystemActorStorageModule {
+
+      type YggConfig = YggdrasilQueryExecutorConfig
       val yggConfig = wrapConfig(config)
       
-      implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
-        def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
+      val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
+      implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
+      implicit val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
+
+      def startup() = storage.start.onComplete {
+        case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
+        case Right(_) => queryLogger.info("Actor ecosystem started.")
+      }
+
+      def shutdown() = storage.stop.onComplete {
+        case Left(error) => queryLogger.error("An error was encountered in actor ecosystem shutdown!", error)
+        case Right(_) => queryLogger.info("Actor ecossytem shutdown complete.")
       }
 
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
@@ -145,18 +161,8 @@ trait YggdrasilQueryExecutorComponent {
   }
 }
 
-trait YggdrasilQueryExecutor extends ShardQueryExecutor with SystemActorStorageModule { self =>
-  type YggConfig = YggdrasilQueryExecutorConfig
-
-  def startup() = storage.start.onComplete {
-    case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
-    case Right(_) => queryLogger.info("Actor ecosystem started.")
-  }
-
-  def shutdown() = storage.stop.onComplete {
-    case Left(error) => queryLogger.error("An error was encountered in actor ecosystem shutdown!", error)
-    case Right(_) => queryLogger.info("Actor ecossytem shutdown complete.")
-  }
+trait YggdrasilQueryExecutor extends ShardQueryExecutor with StorageModule[Future] { self =>
+  type YggConfig <: BaseYggdrasilQueryExecutorConfig
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
     storage.userMetadataView(userUID).findChildren(path) map {

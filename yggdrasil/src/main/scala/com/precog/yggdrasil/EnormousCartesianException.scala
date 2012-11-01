@@ -17,23 +17,9 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package shard
+package com.precog.yggdrasil
 
-import common.security._
-import ingest.service.NullUsageLogging
-import shard.yggdrasil.YggdrasilQueryExecutorComponent
-
-import blueeyes.BlueEyesServer
-import blueeyes.util.Clock
-
-import org.streum.configrity.Configuration
-
-object KafkaShardServer extends BlueEyesServer with ShardService with YggdrasilQueryExecutorComponent with MongoAPIKeyManagerComponent {
-  
-  val clock = Clock.System
-
-  def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
-
-  val asyncContext = defaultFutureDispatch
+case class EnormousCartesianException(left: TableSize, right: TableSize) extends RuntimeException {
+  override def getMessage =
+    "cannot evaluate cartesian of sets with size %s and %s".format(left, right)
 }

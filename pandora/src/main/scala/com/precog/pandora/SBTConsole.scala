@@ -64,7 +64,9 @@ object SBTConsole {
       with StandaloneShardSystemActorModule {
 
     trait YggConfig
-        extends BaseConfig 
+        extends BaseConfig
+        with IdSourceConfig
+        with ColumnarTableModuleConfig
         with EvaluatorConfig
         with StandaloneShardSystemConfig
         with JDBMProjectionModuleConfig

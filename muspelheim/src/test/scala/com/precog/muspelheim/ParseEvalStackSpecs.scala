@@ -65,7 +65,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
     with StorageModule[M]
     with MemoryDatasetConsumer[M] 
-    with IdSourceScannerModule[M] {
+    with IdSourceScannerModule[M] { self =>
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 
@@ -77,8 +77,6 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
 
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  type YggConfig <: EvaluatorConfig with IdSourceConfig
-  
   class ParseEvalStackSpecConfig extends BaseConfig with IdSourceConfig {
     parseEvalLogger.trace("Init yggConfig")
     val config = Configuration parse {
@@ -94,7 +92,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
     
-    val maxSliceSize = 10
+    val maxSliceSize = self.sliceSize
 
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
@@ -157,15 +155,4 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
   )
 }
 
-/*
-object RawJsonStackSpecs extends ParseEvalStackSpecs[Free.Trampoline] with RawJsonColumnarTableStorageModule[Free.Trampoline] {
-  implicit val M = Trampoline.trampolineMonad
-  type YggConfig = ParseEvalStackSpecConfig
-  object yggConfig extends ParseEvalStackSpecConfig
-
-  object Table extends TableCompanion {
-    implicit val geq: scalaz.Equal[Int] = intInstance
-  }
-}
-*/
 // vim: set ts=4 sw=4 et:
