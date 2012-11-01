@@ -18,7 +18,7 @@
  *
  */
 package com.precog.shard
-package yggdrasil
+package jdbm3
 
 import org.specs2.mutable.Specification
 
@@ -40,16 +40,16 @@ import com.precog.muspelheim.RawJsonColumnarTableStorageModule
 import com.precog.yggdrasil.{ IdSource, ProjectionDescriptor }
 import com.precog.yggdrasil.actor.{ StandaloneShardSystemActorModule, StandaloneShardSystemConfig }
 
-trait TestYggdrasilQueryExecutor extends YggdrasilQueryExecutor
+trait TestJDBMQueryExecutor extends JDBMQueryExecutor
     with RawJsonColumnarTableStorageModule[Future]
     with StandaloneShardSystemActorModule {
 
-  type YggConfig = BaseYggdrasilQueryExecutorConfig with StandaloneShardSystemConfig
+  type YggConfig = BaseJDBMQueryExecutorConfig with StandaloneShardSystemConfig
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
 
-  val yggConfig = new BaseYggdrasilQueryExecutorConfig with StandaloneShardSystemConfig {
+  val yggConfig = new BaseJDBMQueryExecutorConfig with StandaloneShardSystemConfig {
     val config = Configuration(Map.empty[String, String])
     val maxSliceSize = 10000
     val idSource = new IdSource {
@@ -79,8 +79,8 @@ trait TestYggdrasilQueryExecutor extends YggdrasilQueryExecutor
   object Table extends TableCompanion
 }
 
-class YggdrasilQueryExecutorSpec extends Specification
-    with TestYggdrasilQueryExecutor {
+class JDBMQueryExecutorSpec extends Specification
+    with TestJDBMQueryExecutor {
 
   val options = QueryOptions()
 

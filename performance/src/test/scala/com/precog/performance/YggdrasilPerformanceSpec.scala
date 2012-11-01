@@ -52,7 +52,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scalaz._
 import Scalaz._
 
-trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
+trait JDBMPerformanceSpec extends Specification with PerformanceSpec {
   sequential 
 
   val timeout = Duration(5000, "seconds")
@@ -490,14 +490,14 @@ histogram
 }
 
 class TestQueryExecutor(config: Configuration, testShard: TestShard) extends 
-    YggdrasilQueryExecutor with
+    JDBMQueryExecutor with
     IterableDatasetOpsComponent { 
 
   override type Dataset[A] = IterableDataset[A]
 
   lazy val actorSystem = ActorSystem("testQueryExecutor")
   implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  lazy val yggConfig = new YggdrasilQueryExecutorConfig {
+  lazy val yggConfig = new JDBMQueryExecutorConfig {
       val config = TestQueryExecutor.this.config
       val sortWorkDir = scratchDir
       val memoizationBufferSize = sortBufferSize

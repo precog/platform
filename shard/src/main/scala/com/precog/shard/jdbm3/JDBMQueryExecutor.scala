@@ -17,18 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package shard
-package yggdrasil 
+package com.precog.shard
+package jdbm3 
 
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL
 
-import daze._
-
-import muspelheim.ParseEvalStack
-
-import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
 
@@ -41,6 +35,10 @@ import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.jdbm3._
 import com.precog.yggdrasil.util._
 
+import com.precog.daze._
+import com.precog.muspelheim.ParseEvalStack
+
+import com.precog.common._
 import com.precog.util.FilesystemFileOps
 
 import akka.actor.ActorSystem
@@ -64,7 +62,7 @@ import scalaz.syntax.std.either._
 
 import org.streum.configrity.Configuration
 
-trait BaseYggdrasilQueryExecutorConfig
+trait BaseJDBMQueryExecutorConfig
     extends BaseConfig
     with ColumnarTableModuleConfig
     with BlockStoreColumnarTableModuleConfig 
@@ -77,13 +75,13 @@ trait BaseYggdrasilQueryExecutorConfig
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
 }
 
-trait YggdrasilQueryExecutorConfig extends BaseYggdrasilQueryExecutorConfig with ProductionShardSystemConfig with SystemActorStorageConfig
+trait JDBMQueryExecutorConfig extends BaseJDBMQueryExecutorConfig with ProductionShardSystemConfig with SystemActorStorageConfig
 
-trait YggdrasilQueryExecutorComponent {
+trait JDBMQueryExecutorComponent {
   import blueeyes.json.serialization.Extractor
 
   private def wrapConfig(wrappedConfig: Configuration) = {
-    new YggdrasilQueryExecutorConfig {
+    new JDBMQueryExecutorConfig {
       val config = wrappedConfig 
       val sortWorkDir = scratchDir
       val memoizationBufferSize = sortBufferSize
@@ -101,13 +99,13 @@ trait YggdrasilQueryExecutorComponent {
   }
     
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor[Future] = {
-    new YggdrasilQueryExecutor
+    new JDBMQueryExecutor
         with JDBMColumnarTableModule[Future]
         with JDBMProjectionModule
         with ProductionShardSystemActorModule
         with SystemActorStorageModule {
 
-      type YggConfig = YggdrasilQueryExecutorConfig
+      type YggConfig = JDBMQueryExecutorConfig
       val yggConfig = wrapConfig(config)
       
       val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
@@ -122,7 +120,7 @@ trait YggdrasilQueryExecutorComponent {
       val storage = new Storage
 
       object Projection extends JDBMProjectionCompanion {
-        private lazy val logger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.YggdrasilQueryExecutor.Projection")
+        private lazy val logger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.JDBMQueryExecutor.Projection")
 
         private implicit val askTimeout = yggConfig.projectionRetrievalTimeout
              
@@ -161,8 +159,8 @@ trait YggdrasilQueryExecutorComponent {
   }
 }
 
-trait YggdrasilQueryExecutor extends ShardQueryExecutor with StorageModule[Future] { self =>
-  type YggConfig <: BaseYggdrasilQueryExecutorConfig
+trait JDBMQueryExecutor extends ShardQueryExecutor with StorageModule[Future] { self =>
+  type YggConfig <: BaseJDBMQueryExecutorConfig
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
     storage.userMetadataView(userUID).findChildren(path) map {
