@@ -69,7 +69,7 @@ trait JDBMQueryExecutorComponent {
       val memoizationWorkDir = scratchDir
 
       val clock = blueeyes.util.Clock.System
-      val maxSliceSize = 10000
+      val maxSliceSize = config[Int]("jdbm.max_slice_size", 10000)
 
       //TODO: Get a producer ID
       val idSource = new IdSource {
@@ -89,7 +89,7 @@ trait JDBMQueryExecutorComponent {
       type YggConfig = JDBMQueryExecutorConfig
       val yggConfig = wrapConfig(config)
       
-      val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
+      val actorSystem = ActorSystem("jdbmExecutorActorSystem")
       implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
       implicit val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)

@@ -16,6 +16,16 @@ import com.precog.util.BitSetUtil.Implicits._
 
 import akka.dispatch.Future
 
+import com.mongodb.Mongo;
+import com.mongodb.MongoException;
+import com.mongodb.WriteConcern;
+import com.mongodb.DB;
+import com.mongodb.DBCollection;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBObject;
+import com.mongodb.DBCursor;
+import com.mongodb.ServerAddress;
+
 import java.io.File
 import java.util.SortedMap
 import java.util.Comparator
@@ -47,8 +57,14 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
   type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig with BlockStoreColumnarTableModuleConfig with MongoColumnarTableModuleConfig
 
   trait MongoColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
+    def mongo: Mongo
+
     def load(table: Table, uid: UserId, tpe: JType): Future[Table] = {
-      sys.error("todo")
+      for {
+        paths <- pathsM(table)
+      } yield {
+        sys.error("todo")
+      }
     }
   }
 }
