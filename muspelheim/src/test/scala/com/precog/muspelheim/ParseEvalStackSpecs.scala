@@ -106,8 +106,12 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       
       def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
         parseEvalLogger.debug("Beginning evaluation of query: " + str)
-        val tree = compile(str)
-        tree.errors must beEmpty
+        
+        val forest = compile(str) filter { _.errors.isEmpty }
+        forest must haveSize(1)
+        
+        val tree = forest.head
+        
         val Right(dag) = decorate(emit(tree))
         withContext { ctx => 
           consumeEval("dummyUID", dag, ctx, Path.Root) match {
@@ -127,7 +131,11 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
         import trans._
         
         parseEvalLogger.debug("Beginning evaluation of query: " + str)
-        val tree = compile(str)
+        
+        val forest = compile(str) filter { _.errors.isEmpty }
+        forest must haveSize(1)
+        
+        val tree = forest.head
         tree.errors must beEmpty
         val Right(dag) = decorate(emit(tree))
         withContext { ctx => 

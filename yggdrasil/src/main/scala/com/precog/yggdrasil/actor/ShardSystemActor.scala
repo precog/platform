@@ -53,6 +53,8 @@ trait ShardConfig extends BaseConfig {
   def metadataTimeout: Timeout = config[Long]("actors.metadata.timeout", 30) seconds
   def stopTimeout: Timeout = config[Long]("actors.stop.timeout", 300) seconds
 
+  def maxOpenProjections: Int = config[Int]("actors.store.max_open_projections", 5000)
+
   def metadataSyncPeriod: Duration = config[Int]("actors.metadata.sync_minutes", 1) minutes
   def batchStoreDelay: Duration    = config[Long]("actors.store.idle_millis", 1000) millis
   def batchShutdownCheckInterval: Duration = config[Int]("actors.store.shutdown_check_seconds", 1) seconds
@@ -94,7 +96,7 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
       metadataActor = context.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint)), "metadata")
 
       logger.debug("Initializing ProjectionsActor")
-      projectionsActor = context.actorOf(Props(new ProjectionsActor), "projections")
+      projectionsActor = context.actorOf(Props(new ProjectionsActor(yggConfig.maxOpenProjections)), "projections")
 
       val ingestActorInit: Option[() => Actor] = initialCheckpoint flatMap {
         checkpoint: YggCheckpoint => initIngestActor(checkpoint, metadataActor)

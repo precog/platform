@@ -27,6 +27,6 @@ import com.codecommit.gll.LineStream
  * you mix in the other requisite traits.
  */
 trait Compiler extends Phases with parser.Parser with typer.TreeShaker {
-  def compile(str: LineStream): Expr = shakeTree(parse(str))
-  def compile(str: String): Expr = compile(LineStream(str))
+  def compile(str: LineStream): Set[Expr] = parse(str) map shakeTree
+  def compile(str: String): Set[Expr] = compile(LineStream(str))
 }

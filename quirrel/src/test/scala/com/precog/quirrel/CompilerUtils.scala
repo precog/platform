@@ -17,13 +17,18 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.performance
+package com.precog.quirrel
 
-import org.specs2.mutable.Specification
+import org.specs2.mutable._
 
-import java.io.File
-import java.nio.ByteBuffer
+import com.codecommit.gll._
 
-class PerformanceSuite 
-  with RoutingPerformanceSpec 
-  with YggdrasilPerformanceSpec 
+trait CompilerUtils extends Specification with Compiler {
+  def compileSingle(str: LineStream): Expr = {
+    val forest = compile(str)
+    forest must haveSize(1)
+    forest.head
+  }
+  
+  def compileSingle(str: String): Expr = compileSingle(LineStream(str))
+}
