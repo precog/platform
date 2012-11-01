@@ -100,56 +100,14 @@ trait YggdrasilQueryExecutorComponent {
   }
     
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor[Future] = {
-    val yConfig = wrapConfig(config)
-    
     new YggdrasilQueryExecutor with JDBMColumnarTableModule[Future] with JDBMProjectionModule with ProductionShardSystemActorModule {
       implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-      val yggConfig = yConfig
+      val yggConfig = wrapConfig(config)
       
       implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
         def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
       }
-
-      def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
-        import trans._
-        
-        StreamT.wrapEffect(
-          tableM flatMap { table =>
-            renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)))
-          }
-        )
-      }
-
-      /* def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] = {
-        import JsonDSL._
-        table.slices.uncons map { unconsed =>
-          if (unconsed.isDefined) {
-            val rendered = StreamT.unfoldM[Future, CharBuffer, Option[(Slice, StreamT[Future, Slice])]](unconsed) { 
-              case Some((head, tail)) =>
-                tail.uncons map { next =>
-                  if (next.isDefined) {
-                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",") + ","), next))
-                  } else {            
-                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",")), None))
-                  }
-                }
-    
-              case None => 
-                M.point(None)
-            }
-            
-            rendered
-            //(CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
-          } else {
-            StreamT.empty[Future, CharBuffer]
-            //CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
-          }
-        }
-      } */
-      
-      def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
-        M.point(table renderJson ',')
 
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
         val accessControl = extAccessControl
@@ -187,14 +145,7 @@ trait YggdrasilQueryExecutorComponent {
   }
 }
 
-trait YggdrasilQueryExecutor 
-    extends QueryExecutor[Future]
-    with ParseEvalStack[Future]
-    with IdSourceScannerModule[Future]
-    with SystemActorStorageModule { self =>
-
-  private lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.YggdrasilQueryExecutor")
-
+trait YggdrasilQueryExecutor extends ShardQueryExecutor with SystemActorStorageModule { self =>
   type YggConfig = YggdrasilQueryExecutorConfig
 
   def startup() = storage.start.onComplete {
@@ -205,68 +156,6 @@ trait YggdrasilQueryExecutor
   def shutdown() = storage.stop.onComplete {
     case Left(error) => queryLogger.error("An error was encountered in actor ecosystem shutdown!", error)
     case Right(_) => queryLogger.info("Actor ecossytem shutdown complete.")
-  }
-
-  case class StackException(error: StackError) extends Exception(error.toString)
-
-  private def applyQueryOptions(opts: QueryOptions)(table: Future[Table]): Future[Table] = {
-    import trans._
-
-    def sort(table: Future[Table]): Future[Table] = if (!opts.sortOn.isEmpty) {
-      val sortKey = ArrayConcat(opts.sortOn map { cpath =>
-        WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
-          case (inner, f @ CPathField(_)) =>
-            DerefObjectStatic(inner, f)
-          case (inner, i @ CPathIndex(_)) =>
-            DerefArrayStatic(inner, i)
-        })
-      }: _*)
-
-      table flatMap (_.sort(sortKey, opts.sortOrder))
-    } else {
-      table
-    }
-
-    def page(table: Future[Table]): Future[Table] = opts.page map { case (offset, limit) =>
-      table map (_.takeRange(offset, limit))
-    } getOrElse table
-
-    page(sort(table map (_.compact(constants.SourceValue.Single))))
-  }
-
-  def jsonChunks(table: Future[Table]): StreamT[Future, CharBuffer]
-
-  private val queryId = new java.util.concurrent.atomic.AtomicLong
-
-  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
-    val qid = queryId.getAndIncrement
-    queryLogger.info("Executing query for %s: %s, prefix: %s".format(userUID, query,prefix))
-
-    import EvaluationError._
-
-    val solution: Validation[Throwable, Validation[EvaluationError, StreamT[Future, CharBuffer]]] = Validation.fromTryCatch {
-      asBytecode(query) flatMap { bytecode =>
-        ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
-          /*(systemError _) <-: */
-          // TODO: How can jsonChunks return a Validation... or report evaluation error to user....
-          Validation.success(jsonChunks(withContext { ctx =>
-            applyQueryOptions(opts) {
-              if (queryLogger.isDebugEnabled) {
-                eval(userUID, dag, ctx, prefix, true) map {
-                  _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
-                    slice => "size: " + slice.size
-                  }
-                }
-              } else {
-                eval(userUID, dag, ctx, prefix, true)
-              }
-            }
-          }))
-        }
-      }
-    }
-
-    ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[Future, CharBuffer]]])
   }
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
@@ -304,72 +193,6 @@ trait YggdrasilQueryExecutor
     }
 
     futRoot.map { pr => Success(transform(pr.children)) } 
-  }
-
-  def status(): Future[Validation[String, JValue]] = {
-    //storage.actorsStatus.map { success(_) } 
-    Future(Failure("Status not supported yet"))
-  }
-
-  // private def evaluateDag(userUID: String, dag: DepGraph,prefix: Path): Validation[Throwable, JArray] = {
-  //   withContext { ctx =>
-  //     queryLogger.debug("Evaluating DAG for " + userUID)
-  //     val result = consumeEval(userUID, dag, ctx, prefix) map { events => queryLogger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
-  //     // FIXME: The next line should really handle resource cleanup. Not quite there with current MemoizationContext
-  //     //ctx.memoizationContext.release.unsafePerformIO
-  //     queryLogger.debug("DAG evaluated to " + result)
-  //     result
-  //   }
-  // }
-
-  private def asBytecode(query: String): Validation[EvaluationError, Vector[Instruction]] = {
-    try {
-      val forest = compile(query)
-      val validForest = forest filter { _.errors.isEmpty }
-      
-      if (validForest.size == 1) {
-        success(emit(validForest.head))
-      } else if (validForest.size > 1) {
-        failure(UserError(
-          JArray(
-            JArray(
-              JObject(
-                JField("message", JString("Ambiguous parse results.")) :: Nil) :: Nil) :: Nil)))
-      } else {
-        val nested = forest map { tree =>
-          JArray(
-            (tree.errors: Set[Error]) map { err =>
-              val loc = err.loc
-              val tp = err.tp
-
-              JObject(
-                JField("message", JString("Errors occurred compiling your query.")) 
-                :: JField("line", JString(loc.line))
-                :: JField("lineNum", JNum(loc.lineNum))
-                :: JField("colNum", JNum(loc.colNum))
-                :: JField("detail", JString(tp.toString))
-                :: Nil)
-            } toList)
-        }
-        
-        failure(UserError(JArray(nested.toList)))
-      }
-    } catch {
-      case ex: ParseException => failure(
-        UserError(
-          JArray(
-            JObject(
-              JField("message", JString("An error occurred parsing your query."))
-              :: JField("line", JString(ex.failures.head.tail.line))
-              :: JField("lineNum", JNum(ex.failures.head.tail.lineNum))
-              :: JField("colNum", JNum(ex.failures.head.tail.colNum))
-              :: JField("detail", JString(ex.mkString))
-              :: Nil
-            ) :: Nil
-          )
-        )
-      )
-    }
   }
 }
 
