@@ -38,6 +38,7 @@ import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.table.jdbm3._
 import com.precog.yggdrasil.util._
 
 import com.precog.util.FilesystemFileOps
@@ -101,7 +102,7 @@ trait YggdrasilQueryExecutorComponent {
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor[Future] = {
     val yConfig = wrapConfig(config)
     
-    new YggdrasilQueryExecutor with BlockStoreColumnarTableModule[Future] with JDBMProjectionModule with ProductionShardSystemActorModule {
+    new YggdrasilQueryExecutor with JDBMColumnarTableModule[Future] with JDBMProjectionModule with ProductionShardSystemActorModule {
       implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
       val yggConfig = yConfig
@@ -176,7 +177,7 @@ trait YggdrasilQueryExecutorComponent {
         }
       }
 
-      trait TableCompanion extends BlockStoreColumnarTableCompanion {
+      trait TableCompanion extends JDBMColumnarTableCompanion {
         import scalaz.std.anyVal._
         implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
       }

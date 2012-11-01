@@ -22,7 +22,7 @@ package table
 
 import com.precog.common.{Path, VectorCase}
 import com.precog.common.json._
-import com.precog.bytecode.JType
+import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
 import com.precog.util._
@@ -1849,6 +1849,25 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           )
         }
       } yield result
+    }
+
+    /// Utility Methods ///
+
+    /**
+     * Reduce the specified table to obtain the in-memory set of strings representing the vfs paths
+     * to be loaded.
+     */
+    protected def pathsM(table: Table) = {
+      table reduce {
+        new CReducer[Set[Path]] {
+          def reduce(columns: JType => Set[Column], range: Range): Set[Path] = {
+            columns(JTextT) flatMap {
+              case s: StrColumn => range.filter(s.isDefinedAt).map(i => Path(s(i)))
+              case _ => Set()
+            }
+          }
+        }
+      }
     }
   }
 

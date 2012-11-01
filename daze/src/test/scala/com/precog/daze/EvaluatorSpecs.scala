@@ -83,35 +83,38 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
 
   object yggConfig extends YggConfig 
 
-  override def load(table: Table, uid: UserId, jtpe: JType) = {
-    table.toJson map { events =>
-      fromJson {
-        events.toStream flatMap {
-          case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
-            val path = Path(pathStr)
-      
-            val index = initialIndices get path getOrElse {
-              initialIndices += (path -> currentIndex)
-              currentIndex
-            }
-            
-            val target = path.path.replaceAll("/$", ".json")
-            val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-            val parsed = src.getLines map JsonParser.parse toStream
-            
-            currentIndex += parsed.length
-            
-            parsed zip (Stream from index) map {
-              case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
-            }
-          }
+  object Table extends TableCompanion
 
-          case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
+  trait TableCompanion extends BaseBlockStoreTestTableCompanion {
+    override def load(table: Table, uid: UserId, jtpe: JType) = {
+      table.toJson map { events =>
+        fromJson {
+          events.toStream flatMap {
+            case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
+              val path = Path(pathStr)
+        
+              val index = initialIndices get path getOrElse {
+                initialIndices += (path -> currentIndex)
+                currentIndex
+              }
+              
+              val target = path.path.replaceAll("/$", ".json")
+              val src = io.Source fromInputStream getClass.getResourceAsStream(target)
+              val parsed = src.getLines map JsonParser.parse toStream
+              
+              currentIndex += parsed.length
+              
+              parsed zip (Stream from index) map {
+                case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
+              }
+            }
+
+            case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
+          }
         }
       }
     }
   }
-  
 }
 
 

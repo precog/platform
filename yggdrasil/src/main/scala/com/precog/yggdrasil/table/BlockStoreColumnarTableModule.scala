@@ -62,7 +62,6 @@ trait BlockStoreColumnarTableModuleConfig {
 
 trait BlockStoreColumnarTableModule[M[+_]] extends
   ColumnarTableModule[M] with
-  StorageModule[M] with
   IdSourceScannerModule[M] with
   YggConfigComponent { self =>
 
@@ -71,17 +70,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   import trans._
   import TransSpec.deepMap
   import SliceTransform._
-  import BlockStoreColumnarTableModule._
     
   type YggConfig <: IdSourceConfig with BlockStoreColumnarTableModuleConfig
-  override type UserId = String
-  type Key
-  type Projection <: BlockProjectionLike[Key, Slice]
   type TableCompanion <: BlockStoreColumnarTableCompanion
 
-  type BD = BlockProjectionData[Key,Slice]
-  
-  private class MergeEngine[KeyType, BlockData <: BlockProjectionData[KeyType, Slice]] {
+  protected class MergeEngine[KeyType, BlockData <: BlockProjectionData[KeyType, Slice]] {
     case class CellState(index: Int, maxKey: KeyType, slice0: Slice, succf: KeyType => M[Option[BlockData]], remap: Array[Int], position: Int) {
       def toCell = {
         new Cell(index, maxKey, slice0)(succf, remap.clone, position)
@@ -307,7 +300,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
     case class WriteState(jdbmState: JDBMState, valueTrans: SliceTransform1[_], keyTransformsWithIds: List[(SliceTransform1[_], String)])
 
-    private[BlockStoreColumnarTableModule] object loadMergeEngine extends MergeEngine[Key, BD]
     private[BlockStoreColumnarTableModule] object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
 
     private[BlockStoreColumnarTableModule] def addGlobalId(spec: TransSpec1) = {
@@ -846,83 +838,18 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       
       Table(StreamT(M.point(head)), ExactSize(totalCount)).transform(TransSpec1.DerefArray1)
     }
-  }
-  
-  // because I *can*!
-  def load(table: Table, uid: UserId, tpe: JType): M[Table] = {
-    import Table.loadMergeEngine._
-    val metadataView = storage.userMetadataView(uid)
 
-    // Reduce this table to obtain the in-memory set of strings representing the vfs paths
-    // to be loaded.
-    val pathsM = table reduce {
-      new CReducer[Set[Path]] {
-        def reduce(columns: JType => Set[Column], range: Range): Set[Path] = {
-          columns(JTextT) flatMap {
-            case s: StrColumn => range.filter(s.isDefinedAt).map(i => Path(s(i)))
-            case _ => Set()
-          }
-        }
-      }
-    }
-
-    def cellsM(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Stream[M[Option[CellState]]] = {
-      for (((desc, cols), i) <- projections.toStream.zipWithIndex) yield {
-        val succ: Option[Key] => M[Option[BD]] = (key: Option[Key]) => storage.projection(desc) map {
-          case (projection, release) => try {
-            val result = projection.getBlockAfter(key, cols)
-            release.release.unsafePerformIO
-            result
-          } catch {
-            case t: Throwable => blockModuleLogger.error("Error in cell fetch", t); throw t
-          }
-        }
-
-        succ(None) map { 
-          _ map { nextBlock => CellState(i, nextBlock.maxKey, nextBlock.data, (k: Key) => succ(Some(k))) }
-        }
-      }
-    }
-
-    // In order to get a size, we pre-run the metadata fetch
-    for {
-      paths          <- pathsM
-      projectionData <- (paths map { path => loadable(metadataView, path, CPath.Identity, tpe) }).sequence map { _.flatten }
-      val (coveringProjections, colMetadata) = projectionData.unzip
-      val projectionSizes = colMetadata.toList.flatMap { _.values.flatMap { _.values.collect { case stats: MetadataStats => stats.count } } }.sorted
-      val tableSize: TableSize = projectionSizes.headOption.flatMap { minSize => projectionSizes.lastOption.map { maxSize => {
-        if (coveringProjections.size == 1) {
-          ExactSize(minSize)
-        } else {
-          EstimateSize(minSize, maxSize)
-        }
-      }}}.getOrElse(UnknownSize)
-    } yield {
-      val head = StreamT.Skip(
-        StreamT.wrapEffect(
-          for {
-            cellOptions    <- cellsM(minimalCover(tpe, coveringProjections)).sequence
-          } yield {
-            mergeProjections(SortAscending, // Projections are always sorted in ascending identity order
-                             cellOptions.flatMap(a => a)) { slice => 
-              slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(CPathField("key") :: Nil) }).toList.sorted
-            }
-          }
-        )
-      )
-  
-      Table(StreamT(M.point(head)), tableSize)
-    }
+    def load(table: Table, uid: UserId, tpe: JType): M[Table] 
   }
   
   abstract class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size)
-  
+
   class ExternalTable(slices: StreamT[M, Slice], size: TableSize) extends Table(slices, size) {
     import Table._
     import SliceTransform._
     import trans._
     
-    def load(uid: UserId, tpe: JType): M[Table] = self.load(this, uid, tpe)
+    def load(uid: UserId, tpe: JType): M[Table] = Table.load(this, uid, tpe)
 
     /**
      * Sorts the KV table by ascending or descending order of a transformation
@@ -983,7 +910,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = M.point(this)
     
-    def load(uid: UserId, tpe: JType): M[Table] = self.load(this, uid, tpe)
+    def load(uid: UserId, tpe: JType): M[Table] = Table.load(this, uid, tpe)
     
     override def compact(spec: TransSpec1): Table = this
 
@@ -998,82 +925,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   }
 }
 
-object BlockStoreColumnarTableModule {
-  protected lazy val blockModuleLogger = LoggerFactory.getLogger("com.precog.yggdrasil.table.BlockStoreColumnarTableModule")
-  
-  /**
-   * Find the minimal set of projections (and the relevant columns from each projection) that
-   * will be loaded to provide a dataset of the specified type.
-   */
-  protected def minimalCover(tpe: JType, descriptors: Set[ProjectionDescriptor]): Map[ProjectionDescriptor, Set[ColumnDescriptor]] = {
-    @inline @tailrec
-    def cover0(uncovered: Set[ColumnDescriptor], unused: Map[ProjectionDescriptor, Set[ColumnDescriptor]], covers: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Map[ProjectionDescriptor, Set[ColumnDescriptor]] = {
-      if (uncovered.isEmpty) {
-        covers
-      } else {
-        val (b0, covered) = unused map { case (b, dcols) => (b, dcols & uncovered) } maxBy { _._2.size } 
-        cover0(uncovered &~ covered, unused - b0, covers + (b0 -> covered))
-      }
-    }
 
-    cover0(
-      descriptors.flatMap(_.columns.toSet) filter { cd => includes(tpe, cd.selector, cd.valueType) }, 
-      descriptors map { b => (b, b.columns.toSet) } toMap, 
-      Map.empty)
-  }
-
-  /** 
-   * Determine the set of all projections that could potentially provide columns
-   * representing the requested dataset.
-   */
-  protected def loadable[M[+_]: Monad](metadataView: StorageMetadata[M], path: Path, prefix: CPath, jtpe: JType): M[Set[(ProjectionDescriptor, ColumnMetadata)]] = {
-    jtpe match {
-      case p: JPrimitiveType => ctypes(p).map(metadataView.findProjections(path, prefix, _)).sequence map { _.flatten }
-
-      case JArrayFixedT(elements) =>
-        if (elements.isEmpty) {
-          metadataView.findProjections(path, prefix, CEmptyArray) map { _.toSet }
-        } else {
-          (elements map { case (i, jtpe) => loadable(metadataView, path, prefix \ i, jtpe) } toSet).sequence map { _.flatten }
-        }
-
-      case JArrayUnfixedT =>
-        val emptyM = metadataView.findProjections(path, prefix, CEmptyArray) map { _.toSet }
-        val nonEmptyM = metadataView.findProjections(path, prefix) map { sources =>
-          sources.toSet filter { 
-            _._1.columns exists { 
-              case ColumnDescriptor(`path`, selector, _, _) => 
-                (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[CPathIndex])
-            }
-          }
-        }
-
-        for (empty <- emptyM; nonEmpty <- nonEmptyM) yield empty ++ nonEmpty
-
-      case JObjectFixedT(fields) =>
-        if (fields.isEmpty) {
-          metadataView.findProjections(path, prefix, CEmptyObject) map { _.toSet }
-        } else {
-          (fields map { case (n, jtpe) => loadable(metadataView, path, prefix \ n, jtpe) } toSet).sequence map { _.flatten }
-        }
-
-      case JObjectUnfixedT =>
-        val emptyM = metadataView.findProjections(path, prefix, CEmptyObject) map { _.toSet }
-        val nonEmptyM = metadataView.findProjections(path, prefix) map { sources =>
-          sources.toSet filter { 
-            _._1.columns exists { 
-              case ColumnDescriptor(`path`, selector, _, _) => 
-                (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[CPathField])
-            }
-          }
-        }
-
-        for (empty <- emptyM; nonEmpty <- nonEmptyM) yield empty ++ nonEmpty
-
-      case JUnionT(tpe1, tpe2) =>
-        (Set(loadable(metadataView, path, prefix, tpe1), loadable(metadataView, path, prefix, tpe2))).sequence map { _.flatten }
-    }
-  }
-}
 
 // vim: set ts=4 sw=4 et:

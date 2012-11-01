@@ -55,6 +55,8 @@ import CValueGenerators._
 
 trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
   class BlockStoreLoadTestModule(sampleData: SampleData) extends BlockStoreTestModule[M] {
+    override type UserId = String
+
     val M = self.M
     val Some((idCount, schema)) = sampleData.schema
     val actualSchema = inferSchema(sampleData.data map { _ \ "value" })

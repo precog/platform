@@ -121,6 +121,9 @@ object PlatformBuild extends Build {
   lazy val yggdrasilProf = Project(id = "yggdrasilProf", base = file("yggdrasilProf")).
     settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test")
 
+  lazy val mongo = Project(id = "mongo", base = file("mongo")).
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util)
+
   lazy val daze = Project(id = "daze", base = file("daze")).
     settings(commonNexusSettings: _*).dependsOn (common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util)
 
