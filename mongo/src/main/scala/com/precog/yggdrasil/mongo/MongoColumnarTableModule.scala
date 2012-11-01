@@ -33,6 +33,8 @@ import metadata._
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
+import akka.dispatch.Future
+
 import java.io.File
 import java.util.SortedMap
 import java.util.Comparator
@@ -57,10 +59,15 @@ import scala.collection.mutable
 
 import TableModule._
 
+trait MongoColumnarTableModuleConfig {
+}
+
 trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
+  type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig with BlockStoreColumnarTableModuleConfig with MongoColumnarTableModuleConfig
 
   trait MongoColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
-    def load(table: Table, uid: UserId, tpe: JType): M[Table] = {
+    def load(table: Table, uid: UserId, tpe: JType): Future[Table] = {
+      sys.error("todo")
     }
   }
 }

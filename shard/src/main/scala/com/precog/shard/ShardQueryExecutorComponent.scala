@@ -68,7 +68,7 @@ trait ShardQueryExecutor
 
   implicit def asyncContext: ExecutionContext
 
-  protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.YggdrasilQueryExecutor")
+  protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
   private lazy val queryId = new java.util.concurrent.atomic.AtomicLong
 
   case class StackException(error: StackError) extends Exception(error.toString)
