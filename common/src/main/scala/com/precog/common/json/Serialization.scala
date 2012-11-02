@@ -55,9 +55,9 @@ object DecomposerAux {
       }
     }
   
-  implicit def hlistDecomposer3[FT <: HList, H, T <: HList](implicit dt: DecomposerAux[FT, T]) =
-    new DecomposerAux[Omit.type :: FT, Option[H] :: T] {
-      def decompose(fields: Omit.type :: FT, values: Option[H] :: T) =
+  implicit def hlistDecomposer3[FT <: HList, H, T <: HList](implicit dt: DecomposerAux[FT, T], m: Monoid[H]) =
+    new DecomposerAux[Omit.type :: FT, H :: T] {
+      def decompose(fields: Omit.type :: FT, values: H :: T) =
         dt.decompose(fields.tail, values.tail)
     }
   
@@ -87,12 +87,12 @@ object ExtractorAux {
         } yield h :: t
     }
   
-  implicit def hlistExtractor2[FT <: HList, H, T <: HList](implicit et: ExtractorAux[FT, T]) =
-    new ExtractorAux[Omit.type :: FT, Option[H] :: T] {
+  implicit def hlistExtractor2[FT <: HList, H, T <: HList](implicit et: ExtractorAux[FT, T], m: Monoid[H]) =
+    new ExtractorAux[Omit.type :: FT, H :: T] {
       def extract(source: JValue, fields: Omit.type :: FT) =
         for {
           t <- et.extract(source, fields.tail)
-        } yield None :: t
+        } yield m.zero :: t
     }
   
   implicit def hlistExtractor3[FT <: HList, H, T <: HList](implicit eh: Extractor[H], et: ExtractorAux[FT, T]) =

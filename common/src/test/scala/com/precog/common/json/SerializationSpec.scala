@@ -27,6 +27,7 @@ import blueeyes.json.serialization.DefaultSerialization._
 
 import shapeless._
 import scalaz._
+import scalaz.Scalaz._
 
 class SerializationSpec extends Specification {
   case class Foo(s: String, i: Option[Int], b: Boolean)
