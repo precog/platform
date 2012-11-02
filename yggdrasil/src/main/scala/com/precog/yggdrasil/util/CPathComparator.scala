@@ -28,6 +28,12 @@ import org.joda.time.DateTime
 import scala.annotation.tailrec
 import scala.{ specialized => spec }
 
+/**
+ * Represents the result of an ordering, but with the possibility that no
+ * ordering exists. This is isomorphic to Option[Ordering] (and a partial
+ * ordering), but I wanted to ensure we weren't allocating objects when
+ * returning results.
+ */
 sealed trait MaybeOrdering {
   def toScalazOrdering: scalaz.Ordering
   def reverse: MaybeOrdering
@@ -62,9 +68,14 @@ object MaybeOrdering {
 trait CPathComparator { self =>
   def compare(row1: Int, row2: Int, indices: Array[Int]): MaybeOrdering
 
-  def reverse: CPathComparator = new CPathComparator {
+  def swap: CPathComparator = new CPathComparator {
     def compare(row1: Int, row2: Int, indices: Array[Int]): MaybeOrdering =
       self.compare(row2, row1, indices).reverse
+  }
+
+  def reverse: CPathComparator = new CPathComparator {
+    def compare(row1: Int, row2: Int, indices: Array[Int]): MaybeOrdering =
+      self.compare(row1, row2, indices).reverse
   }
 }
 
@@ -95,7 +106,7 @@ object CPathComparator {
     case (lCol: DateColumn, rCol: DateColumn) => CPathComparator(lCol(_), rCol(_))
     case (lCol: HomogeneousArrayColumn[_], rCol: HomogeneousArrayColumn[_]) => CPathComparator(lPath, lCol, rPath, rCol)
     case (lCol: HomogeneousArrayColumn[_], rCol) => CPathComparator(lPath, lCol, rPath, rCol)
-    case (lCol, rCol: HomogeneousArrayColumn[_]) => CPathComparator(rPath, rCol, lPath, lCol).reverse
+    case (lCol, rCol: HomogeneousArrayColumn[_]) => CPathComparator(rPath, rCol, lPath, lCol).swap
     case (lCol, rCol) =>
       val ordering = MaybeOrdering.fromInt {
         implicitly[scalaz.Order[CType]].apply(lCol.tpe, rCol.tpe).toInt

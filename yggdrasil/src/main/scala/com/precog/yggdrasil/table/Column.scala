@@ -79,19 +79,6 @@ trait HomogeneousArrayColumn[@spec(Boolean, Long, Double) A] extends Column with
    * underlying arrays.
    */
   def select(i: Int) = HomogeneousArrayColumn.select(this, i)
-
-  ///**
-  // * Returns a view of this column, whose indicies, defined in `removed` have
-  // * been removed. For example, `col.without(Set(0, 2))`, returns a view of
-  // * this column, but removes the 1st and 3rd element from the returned
-  // * arrays.
-  // */
-  //def without(removed: Set[Int]) = new HomogeneousArrayColumn[A] {
-  //  def apply(row: Int): Array[A] =
-  //    self.apply(row).zipWithIndex filterNot (e => removed(e._2)) map (_._1)
-  //  def isDefinedAt(row: Int) = self.isDefinedAt(row)
-  //  val tpe = self.tpe
-  //}
 }
 
 object HomogeneousArrayColumn {

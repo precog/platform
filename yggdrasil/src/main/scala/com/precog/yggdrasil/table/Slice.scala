@@ -143,6 +143,11 @@ trait Slice { source =>
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = d
           })
+          case value: CArray[a] => (ColumnRef(CPath.Identity, value.cType), new HomogeneousArrayColumn[a] {
+            val tpe = value.cType
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = value.value
+          })
           case CNull => (ColumnRef(CPath.Identity, CNull), new NullColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
@@ -502,41 +507,21 @@ trait Slice { source =>
     }
   }
 
+  def order: spire.math.Order[Int] = {
+    val cols = columns groupBy (_._1.selector) lazyMapValues (_.values.toSet)
+    val paths = cols.keys.toList
+    val traversal = CPathTraversal(paths)
+    traversal.rowOrder(paths, cols)
+  }
+
   def sortWith(keySlice: Slice, sortOrder: DesiredSortOrder = SortAscending): (Slice, Slice) = {
-
-    val colGroups = keySlice.columns.groupBy(_._1.selector).toArray sortBy (_._1) collect {
-      case (path, cols) => cols.map(_._2).toArray
-    }
-    val comparators: Array[RowComparator] = colGroups map { cols => RowComparator(cols, cols) }
-    val ascRowComparator = new RowComparator {
-      def compare(i: Int, j: Int): Ordering = {
-        var k = 0
-        var cmp: Ordering = EQ
-        while (cmp == EQ && k < comparators.length) {
-          cmp = comparators(k).compare(i, j)
-          k += 1
-        }
-        cmp
-      }
-    }
-
-    // Use the branch outside of the comparison.
-    val rowComparator = if (sortOrder == SortAscending) {
-      ascRowComparator
-    } else {
-      new RowComparator {
-        def compare(i: Int, j: Int) = ascRowComparator.compare(i, j).complement
-      }
-    }
 
     // We filter out rows that are completely undefined.
     val order: Array[Int] = Array.range(0, source.size) filter { row =>
       keySlice.isDefinedAt(row) && source.isDefinedAt(row)
     }
-    spire.math.MergeSort.sort(order)(new spire.math.Order[Int] {
-      def compare(i: Int, j: Int) = rowComparator.compare(i, j).toInt
-      def eqv(i: Int, j: Int) = compare(i, j) == 0
-    }, implicitly)
+    val rowOrder = if (sortOrder == SortAscending) keySlice.order else keySlice.order.reverse
+    spire.math.MergeSort.sort(order)(rowOrder, implicitly)
 
     val remapOrder = new ArrayIntList(order.size)
     var i = 0
