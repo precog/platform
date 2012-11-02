@@ -16,7 +16,7 @@ object Run {
     }
 
 
-    val queries = (
+    val queries = List(
       /* "count(//obnoxious)" ::
       "min(//obnoxious.v)" :: "max(//obnoxious.v)" ::
       "sum(//obnoxious.v)" :: "mean(//obnoxious.v)" ::
