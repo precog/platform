@@ -34,6 +34,7 @@ import scala.annotation.tailrec
  * into account mixes of homogeneous and heterogeneous arrays.
  */
 sealed trait CPathTraversal { self =>
+  import MaybeOrdering._
   import CPathTraversal._
 
   /**
@@ -191,6 +192,8 @@ object CPathTraversal {
    * given.
    */
   def apply(paths: List[CPath]): CPathTraversal = {
+
+    // Basically does a mix of collect, takeWhile and dropWhile all in one go.
     def collectWhile[A, B](xs: List[A])(f: PartialFunction[A, B]): (List[B], List[A]) = {
       def loop(left: List[B], right: List[A]): (List[B], List[A]) = right match {
         case x :: right if f.isDefinedAt(x) => loop(f(x) :: left, right)
@@ -200,6 +203,7 @@ object CPathTraversal {
       loop(Nil, xs)
     }
 
+    // Joins (merges) a list of sorted traversals into a single traversal.
     def join(os: List[CPathTraversal], seq: List[CPathTraversal]): CPathTraversal = os match {
       case Select(n, t) :: os =>
         val (ts, os2) = collectWhile(os) { case Select(`n`, t2) => t2 }
@@ -224,6 +228,7 @@ object CPathTraversal {
     join(ordered, Nil)
   }
 
+  // Beyond here be dragons (aka implementation details).
 
   private def fromPositioned(ps: List[CPathPosition]): CPathTraversal = {
     @tailrec
@@ -362,8 +367,6 @@ object CPathTraversal {
               rss0
           }
 
-          val l = math.max(l1, l2)
-          val r = ^(r1, r2)(math.min(_, _))
           loop(ps, qs, CPathRange(ns1 ++ ns2, math.max(l1, l2), ^(r1, r2)(math.min(_, _)) orElse r1 orElse r2) :: is, rss1)
 
         case (ps, qs) =>
@@ -400,6 +403,7 @@ object CPathTraversal {
         implicitly[scalaz.Order[List[CPathPosition]]].reverseOrder.toScalaOrdering
       }
 
+      @tailrec
       def rec(a: List[CPathPosition], ts: List[List[CPathPosition]]): List[List[CPathPosition]] = {
         if (!pq.isEmpty) {
           val b = pq.dequeue()

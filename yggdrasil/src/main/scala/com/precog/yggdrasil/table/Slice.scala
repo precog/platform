@@ -452,7 +452,7 @@ trait Slice { source =>
         val acc = new ArrayIntList
         
         def findSelfDistinct(prevRow: Int, curRow: Int) = {
-          val selfComparator = rowComparatorFor(filter, filter)(_.columns.keys.toList.sorted)
+          val selfComparator = rowComparatorFor(filter, filter)(_.columns.keys map (_.selector))
         
           @tailrec
           def findSelfDistinct0(prevRow: Int, curRow: Int) : ArrayIntList = {
@@ -468,7 +468,7 @@ trait Slice { source =>
         }
 
         def findStraddlingDistinct(prev: Slice, prevRow: Int, curRow: Int) = {
-          val straddleComparator = rowComparatorFor(prev, filter)(_.columns.keys.toList.sorted) 
+          val straddleComparator = rowComparatorFor(prev, filter)(_.columns.keys map (_.selector))
 
           @tailrec
           def findStraddlingDistinct0(prevRow: Int, curRow: Int): ArrayIntList = {
@@ -1375,8 +1375,8 @@ object Slice {
     }
   }
 
-  def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): RowComparator = {
-    val paths = (keyf(s1) ++ keyf(s2)) map (_.selector)
+  def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => Iterable[CPath]): RowComparator = {
+    val paths = (keyf(s1) ++ keyf(s2)).toList
     val traversal = CPathTraversal(paths)
     val lCols = s1.columns groupBy (_._1.selector) map { case (path, m) => path -> m.values.toSet }
     val rCols = s2.columns groupBy (_._1.selector) map { case (path, m) => path -> m.values.toSet }

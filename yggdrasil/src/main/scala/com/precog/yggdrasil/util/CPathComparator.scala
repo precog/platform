@@ -34,34 +34,17 @@ import scala.{ specialized => spec }
  * ordering), but I wanted to ensure we weren't allocating objects when
  * returning results.
  */
-sealed trait MaybeOrdering {
-  def toScalazOrdering: scalaz.Ordering
-  def reverse: MaybeOrdering
-  def toInt: Int
-}
-
-case object Lt extends MaybeOrdering {
-  val toScalazOrdering = scalaz.Ordering.LT
-  val reverse = Gt
-  val toInt = -1
-}
-case object Gt extends MaybeOrdering {
-  val toScalazOrdering = scalaz.Ordering.GT
-  val reverse = Lt
-  val toInt = 1
-}
-case object Eq extends MaybeOrdering {
-  val toScalazOrdering = scalaz.Ordering.EQ
-  val reverse = Eq
-  val toInt = 0
-}
-case object NoComp extends MaybeOrdering {
-  val toScalazOrdering = scalaz.Ordering.EQ
-  val reverse = NoComp
-  val toInt = 0
+sealed abstract class MaybeOrdering(val toInt: Int) {
+  val toScalazOrdering: scalaz.Ordering = scalaz.Ordering.fromInt(toInt)
+  def complement: MaybeOrdering
 }
 
 object MaybeOrdering {
+  case object Lt extends MaybeOrdering(-1) { def complement = Gt }
+  case object Gt extends MaybeOrdering(1) { def complement = Lt }
+  case object Eq extends MaybeOrdering(0) { def complement = Eq }
+  case object NoComp extends MaybeOrdering(0) { def complement = NoComp }
+
   def fromInt(n: Int): MaybeOrdering = if (n < 0) Lt else if (n == 0) Eq else Gt
 }
 
@@ -70,16 +53,17 @@ trait CPathComparator { self =>
 
   def swap: CPathComparator = new CPathComparator {
     def compare(row1: Int, row2: Int, indices: Array[Int]): MaybeOrdering =
-      self.compare(row2, row1, indices).reverse
+      self.compare(row2, row1, indices).complement
   }
 
-  def reverse: CPathComparator = new CPathComparator {
+  def complement: CPathComparator = new CPathComparator {
     def compare(row1: Int, row2: Int, indices: Array[Int]): MaybeOrdering =
-      self.compare(row1, row2, indices).reverse
+      self.compare(row1, row2, indices).complement
   }
 }
 
 object CPathComparator {
+  import MaybeOrdering._
   import ExtraOrders._
 
   def apply[@spec(Boolean, Long, Double, AnyRef) A,
@@ -214,6 +198,8 @@ private[yggdrasil] final class HalfArrayCPathComparator[@spec(Boolean, Long, Dou
   val lSelector = new ArraySelector[A]
 
   def compare(r1: Int, r2: Int, indices: Array[Int]): MaybeOrdering = {
+    import MaybeOrdering._
+
     val left = lCol(r1)
 
     val lPluckable = lSelector.canPluck(left, indices, lMask)
@@ -245,6 +231,8 @@ private[yggdrasil] final class ArrayCPathComparator[@spec(Boolean, Long, Double)
   val rSelector = new ArraySelector[B]
 
   def compare(r1: Int, r2: Int, indices: Array[Int]): MaybeOrdering = {
+    import MaybeOrdering._
+
     val left = lCol(r1)
     val right = rCol(r2)
 

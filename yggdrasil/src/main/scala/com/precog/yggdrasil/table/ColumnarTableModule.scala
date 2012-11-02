@@ -211,10 +211,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           case class Boundary(prevSlice: Slice, prevStartIdx: Int) extends CollapseState
           case object InitialCollapse extends CollapseState
 
-          def genComparator(sl1: Slice, sl2: Slice) = Slice.rowComparatorFor(sl1, sl2) {
+          def genComparator(sl1: Slice, sl2: Slice) = Slice.rowComparatorFor(sl1, sl2) { slice =>
             // only need to compare identities (field "0" of the sorted table) between projections
             // TODO: Figure out how we might do this directly with the identitySpec
-            slice => slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(CPathField("0") :: Nil) }).toList.sorted
+            slice.columns.keys collect { case ColumnRef(path, _) if path.nodes.startsWith(CPathField("0") :: Nil) => path }
           }
           
           def boundaryCollapse(prevSlice: Slice, prevStart: Int, curSlice: Slice): (BitSet, Int) = {
@@ -2029,10 +2029,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             val SlicePosition(lpos0, lkstate, lkey, lhead, ltail) = leftPosition
             val SlicePosition(rpos0, rkstate, rkey, rhead, rtail) = rightPosition
 
-            val comparator = Slice.rowComparatorFor(lkey, rkey) { slice => 
+            val comparator = Slice.rowComparatorFor(lkey, rkey) {
               // since we've used the key transforms, and since transforms are contracturally
               // forbidden from changing slice size, we can just use all
-              slice.columns.keys.toList.sorted
+              _.columns.keys map (_.selector)
             }
 
             // the inner tight loop; this will recur while we're within the bounds of
@@ -2537,8 +2537,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       def stepPartition(head: Slice, spanStart: Int, tail: StreamT[M, Slice]): StreamT[M, Slice] = {
         val comparatorGen = (s: Slice) => {
-          val rowComparator = Slice.rowComparatorFor(head, s) {
-            (s0: Slice) => s0.columns.keys.collect({ case ref @ ColumnRef(CPath(CPathField("0"), _ @ _*), _) => ref }).toList.sorted
+          val rowComparator = Slice.rowComparatorFor(head, s) { s0 =>
+            s0.columns.keys collect {
+              case ColumnRef(path @ CPath(CPathField("0"), _ @ _*), _) => path
+            }
           }
 
           (i: Int) => rowComparator.compare(spanStart, i)
