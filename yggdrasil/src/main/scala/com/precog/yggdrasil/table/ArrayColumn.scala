@@ -46,11 +46,11 @@ class ArrayHomogeneousArrayColumn[@spec(Boolean, Long, Double) A](val defined: B
 }
 
 object ArrayHomogeneousArrayColumn {
-  def apply[A: CValueType](values: Array[Array[A]]) =
+  def apply[@spec(Boolean, Long, Double) A: CValueType](values: Array[Array[A]]) =
     new ArrayHomogeneousArrayColumn(BitSetUtil.range(0, values.length), values)(CArrayType(CValueType[A]))
-  def apply[A: CValueType](defined: BitSet, values: Array[Array[A]]) =
+  def apply[@spec(Boolean, Long, Double) A: CValueType](defined: BitSet, values: Array[Array[A]]) =
     new ArrayHomogeneousArrayColumn(defined.copy, values)(CArrayType(CValueType[A]))
-  def empty[A](size: Int)(implicit elemType: CValueType[A]): ArrayHomogeneousArrayColumn[A] = {
+  def empty[@spec(Boolean, Long, Double) A](size: Int)(implicit elemType: CValueType[A]): ArrayHomogeneousArrayColumn[A] = {
     implicit val m: Manifest[A] = elemType.manifest
 
     new ArrayHomogeneousArrayColumn(new BitSet, new Array[Array[A]](size))(CArrayType(elemType))

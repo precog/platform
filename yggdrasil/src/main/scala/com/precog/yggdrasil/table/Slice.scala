@@ -286,14 +286,7 @@ trait Slice { source =>
 
   def typed(jtpe : JType) : Slice = new Slice {
     val size = source.size
-    val columns = {
-      if(size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe))
-        source.columns filter {
-          case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe)
-        }
-      else
-        Map.empty[ColumnRef, Column]
-    }
+    val columns = source.columns filter { case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe) }
   }
 
   def nest(selectorPrefix: CPath) = new Slice {

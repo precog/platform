@@ -40,8 +40,6 @@ sealed trait CPathTraversal { self =>
    * Creates an order on rows in a set of columns. You can also optionally use
    * 2 column sets for the 1st and 2nd paramters of the Order. This order will
    * not allocate any objects or arrays, but it is also not threadsafe.
-   *
-   * TODO: Remove cpaths paramters. This can be had from the constructor.
    */
   def rowOrder(cpaths: List[CPath], left: CPath => Set[Column], optRight: Option[CPath => Set[Column]] = None): spire.math.Order[Int] = {
     val right = optRight getOrElse left
@@ -139,7 +137,7 @@ sealed trait CPathTraversal { self =>
             var i = 1
             if (result != NoComp) {
               while (result == Eq && i < max) {
-                indices(idx) += i
+                indices(idx) = i
                 result = tailComp.compare(row1, row2, indices)
                 i += 1
               }

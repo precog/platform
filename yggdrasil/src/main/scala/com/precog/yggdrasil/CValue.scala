@@ -36,6 +36,7 @@ import scalaz.std.math._
 import scalaz.std.AllInstances._
 
 import scala.{ specialized => spec }
+import scala.annotation.tailrec
 
 import _root_.java.io.{Externalizable,ObjectInput,ObjectOutput}
 import _root_.java.math.MathContext
@@ -297,10 +298,60 @@ object CValueType {
 //
 // Homogeneous arrays
 //
-case class CArray[@spec(Boolean, Long, Double) A](value: Array[A], cType: CArrayType[A]) extends CWrappedValue[Array[A]]
+case class CArray[@spec(Boolean, Long, Double) A](value: Array[A], cType: CArrayType[A]) extends CWrappedValue[Array[A]] {
+  private final def leafEquiv[@spec(Boolean, Long, Double) A](as: Array[A], bs: Array[A]): Boolean = {
+    var i = 0
+    var result = as.length == bs.length
+    while (result && i < as.length) {
+      result = as(i) == bs(i)
+      i += 1
+    }
+    result
+  }
+
+  private final def equiv(a: Any, b: Any, elemType: CValueType[_]): Boolean = elemType match {
+    case CBoolean =>
+      leafEquiv(a.asInstanceOf[Array[Boolean]], b.asInstanceOf[Array[Boolean]])
+
+    case CLong =>
+      leafEquiv(a.asInstanceOf[Array[Long]], b.asInstanceOf[Array[Long]])
+
+    case CDouble =>
+      leafEquiv(a.asInstanceOf[Array[Double]], b.asInstanceOf[Array[Double]])
+
+    case CArrayType(elemType) =>
+      val as = a.asInstanceOf[Array[Array[_]]]
+      val bs = b.asInstanceOf[Array[Array[_]]]
+      var i = 0
+      var result = as.length == bs.length
+      while (result && i < as.length) {
+        result = equiv(as(i), bs(i), elemType)
+        i += 1
+      }
+      result
+
+    case _ =>
+      leafEquiv(a.asInstanceOf[Array[AnyRef]], b.asInstanceOf[Array[AnyRef]])
+  }
+
+  override def equals(that: Any): Boolean = that match {
+    case v @ CArray(_, thatCType) if cType == thatCType =>
+      equiv(value, v.value, cType.elemType)
+
+    case _ => false
+  }
+
+  override def toString: String = value.mkString("CArray(Array(", ", ", "), " + cType.toString + ")")
+}
+
+case object CArray {
+  def apply[@spec(Boolean, Long, Double) A](as: Array[A])(implicit elemType: CValueType[A]): CArray[A] =
+    CArray(as, CArrayType(elemType))
+}
 
 case class CArrayType[@spec(Boolean, Long, Double) A](elemType: CValueType[A]) extends CValueType[Array[A]] {
-  val manifest: Manifest[Array[A]] = elemType.manifest.arrayManifest
+  // Spec. bug: Leave lazy here.
+  lazy val manifest: Manifest[Array[A]] = elemType.manifest.arrayManifest
 
   def readResolve() = CArrayType(elemType.readResolve())
 
