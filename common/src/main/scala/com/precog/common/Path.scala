@@ -43,12 +43,10 @@ class Path private (val elements: String*) {
     parentList ++ parentList.flatMap(_.ancestors)
   }
 
-  lazy val parentChildRelations: List[(Path, Path)] = ancestors.zip(this :: ancestors)
-
   def / (that: Path) = new Path(elements ++ that.elements: _*)
   def - (that: Path): Option[Path] = elements.startsWith(that.elements).option(new Path(elements.drop(that.elements.length): _*))
 
-  def equalOrChild(that: Path) = !(that - this).isEmpty
+  def isEqualOrParent(that: Path) = !(that - this).isEmpty
 
   def isChildOf(that: Path) = elements.startsWith(that.elements) && length > that.length
 
