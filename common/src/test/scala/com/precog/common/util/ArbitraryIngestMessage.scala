@@ -20,7 +20,7 @@
 package com.precog.common
 package util
 
-import security.TestAPIKeyManager
+import security._
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -52,10 +52,11 @@ trait ArbitraryIngestMessage extends ArbitraryJValue {
 }
 
 trait RealisticIngestMessage extends ArbitraryIngestMessage {
-  
   import JsonAST._
   
-    def buildBoundedPaths(depth: Int): List[String] = {
+  val rootAPIKey: APIKey 
+  
+  def buildBoundedPaths(depth: Int): List[String] = {
     buildChildPaths(List.empty, depth).map("/" + _.reverse.mkString("/"))
   }
   
@@ -78,7 +79,7 @@ trait RealisticIngestMessage extends ArbitraryIngestMessage {
   
   def genEventMessage: Gen[EventMessage] = for(producerId <- choose(0,producers-1); event <- genEvent) yield EventMessage(producerId, eventIds(producerId).getAndIncrement, event) 
   
-  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event.fromJValue(Path(path), event, TestAPIKeyManager.rootUID)
+  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event.fromJValue(Path(path), event, rootAPIKey)
   
   def genRawEvent: Gen[JValue] = containerOfN[Set, JPath](10, genStableJPath).map(_.map((_, genSimpleNotNull.sample.get)).foldLeft[JValue](JObject(Nil)){ (acc, t) =>
       acc.set(t._1, t._2)

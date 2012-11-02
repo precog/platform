@@ -48,14 +48,16 @@ object MongoAPIKeyManagerSpec extends Specification {
   val timeout = Duration(30, "seconds")
 
   "mongo API key manager" should {
+    
     "find API key present" in new apiKeyManager { 
 
-      lazy val result = Await.result(apiKeyManager.findAPIKey(root.tid), timeout)
+      lazy val result = Await.result(apiKeyManager.findAPIKey(rootAPIKey), timeout)
 
       result must beLike {
-        case Some(APIKeyRecord(_,tid,_,_)) => tid must_== root.tid
+        case Some(APIKeyRecord(apiKey, _, _, _, _, _)) => apiKey must_== rootAPIKey
       }
     }
+    
     "not find missing API key" in new apiKeyManager { 
 
       val result = Await.result(apiKeyManager.findAPIKey(notFoundAPIKeyID), timeout)
@@ -64,27 +66,29 @@ object MongoAPIKeyManagerSpec extends Specification {
         case None => ok 
       }
     }
+    
     "issue new API key" in new apiKeyManager { 
       val name = "newAPIKey"
-      val fResult = apiKeyManager.newAPIKey(name, "", Set.empty)
+      val fResult = apiKeyManager.newAPIKey(Some(name), None, rootAPIKey, Set.empty)
 
       val result = Await.result(fResult, timeout)
 
       result must beLike {
-        case APIKeyRecord(n,_,_,g) => 
-          name must_== n 
+        case APIKeyRecord(_, n, _, _, g, _) => 
+          Some(name) must_== n
           Set.empty must_== g
       }
     }
+    
     "move API key to deleted pool on deletion" in new apiKeyManager { 
 
       type Results = (Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord])
 
       val fut: Future[Results] = for { 
-        before <- apiKeyManager.findAPIKey(root.tid)
-        deleted <- apiKeyManager.deleteAPIKey(before.get.tid)
-        after <- apiKeyManager.findAPIKey(root.tid)
-        deleteCol <- apiKeyManager.findDeletedAPIKey(root.tid)
+        before <- apiKeyManager.findAPIKey(child2.apiKey)
+        deleted <- apiKeyManager.deleteAPIKey(before.get.apiKey)
+        after <- apiKeyManager.findAPIKey(child2.apiKey)
+        deleteCol <- apiKeyManager.findDeletedAPIKey(child2.apiKey)
       } yield {
         (before, deleted, after, deleteCol)
       }
@@ -97,15 +101,16 @@ object MongoAPIKeyManagerSpec extends Specification {
           t1 must_== t3
       }
     }
+    
     "no failure on deleting API key that is already deleted" in new apiKeyManager { 
       type Results = (Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord])
 
       val fut: Future[Results] = for { 
-        before <- apiKeyManager.findAPIKey(root.tid)
-        deleted1 <- apiKeyManager.deleteAPIKey(before.get.tid)
-        deleted2 <- apiKeyManager.deleteAPIKey(before.get.tid)
-        after <- apiKeyManager.findAPIKey(root.tid)
-        deleteCol <- apiKeyManager.findDeletedAPIKey(root.tid)
+        before <- apiKeyManager.findAPIKey(child2.apiKey)
+        deleted1 <- apiKeyManager.deleteAPIKey(before.get.apiKey)
+        deleted2 <- apiKeyManager.deleteAPIKey(before.get.apiKey)
+        after <- apiKeyManager.findAPIKey(child2.apiKey)
+        deleteCol <- apiKeyManager.findDeletedAPIKey(child2.apiKey)
       } yield {
         (before, deleted1, deleted2, after, deleteCol)
       }
@@ -135,10 +140,10 @@ object MongoAPIKeyManagerSpec extends Specification {
   
     val notFoundAPIKeyID = "NOT-GOING-TO-FIND"
 
-    val root = Await.result(apiKeyManager.newAPIKey("root", "", Set.empty), to)
-    val child1 = Await.result(apiKeyManager.newAPIKey("child1", root.tid, Set.empty), to)
-    val child2 = Await.result(apiKeyManager.newAPIKey("child2", root.tid, Set.empty), to)
-    val grantChild1 = Await.result(apiKeyManager.newAPIKey("grandChild1", child1.tid, Set.empty), to)
+    val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
+    val child1 = Await.result(apiKeyManager.newAPIKey(Some("child1"), None, rootAPIKey, Set.empty), to)
+    val child2 = Await.result(apiKeyManager.newAPIKey(Some("child2"), None, rootAPIKey, Set.empty), to)
+    val grantChild1 = Await.result(apiKeyManager.newAPIKey(Some("grandChild1"), None, child1.apiKey, Set.empty), to)
 
     def after = { 
       defaultActorSystem.shutdown 

@@ -32,9 +32,9 @@ import org.joda.time.format.ISODateTimeFormat
 import scalaz._
 
 package object security {
-  type APIKey = String
-  type GrantID = String
-  type UID = String
+  type AccountID = String
+  type APIKey    = String
+  type GrantID   = String
 
   private val isoFormat = ISODateTimeFormat.dateTime
 
@@ -48,7 +48,4 @@ package object security {
       case _           => Failure(Invalid("Date time must be represented as JSON string"))
     }
   }
-
-  implicit val OptionDateTimeDecomposer: Decomposer[Option[DateTime]] = OptionDecomposer[DateTime]
-  implicit val OptionDateTimeExtractor: Extractor[Option[DateTime]] = OptionExtractor[DateTime]
 }
