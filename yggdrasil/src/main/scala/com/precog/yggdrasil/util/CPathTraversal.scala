@@ -41,7 +41,7 @@ sealed trait CPathTraversal { self =>
    * 2 column sets for the 1st and 2nd paramters of the Order. This order will
    * not allocate any objects or arrays, but it is also not threadsafe.
    */
-  def rowOrder(cpaths: List[CPath], left: CPath => Set[Column], optRight: Option[CPath => Set[Column]] = None): spire.math.Order[Int] = {
+  def rowOrder(cpaths: List[CPath], left: Map[CPath, Set[Column]], optRight: Option[Map[CPath, Set[Column]]] = None): spire.math.Order[Int] = {
     val right = optRight getOrElse left
 
     def plan0(t: CPathTraversal, paths: List[(List[CPathNode], List[CPathNode])], idx: Int): CPathComparator = t match {
@@ -49,11 +49,11 @@ sealed trait CPathTraversal { self =>
         val validPaths = paths map { case (_, nodes) => CPath(nodes.reverse) }
 
         val lCols: Array[(CPath, Column)] = validPaths.flatMap({ path =>
-          left(path).toList map ((path, _))
+          left.getOrElse(path, Set.empty).toList map ((path, _))
         })(collection.breakOut)
 
         val rCols: Array[(CPath, Column)] = validPaths.flatMap({ path =>
-          right(path).toList map ((path, _))
+          right.getOrElse(path, Set.empty).toList map ((path, _))
         })(collection.breakOut)
 
         val comparators: Array[CPathComparator] = (for ((lPath, lCol) <- lCols; (rPath, rCol) <- rCols) yield {
@@ -185,6 +185,11 @@ object CPathTraversal {
 
   def apply(p: CPath): CPathTraversal = p.nodes.foldRight(Done: CPathTraversal)(Select(_, _))
 
+  /**
+   * Creates a traversal for the given `CPath`s. Note that this will always
+   * create the traversal in sorted order of the paths, regardless of the order
+   * given.
+   */
   def apply(paths: List[CPath]): CPathTraversal = {
     def collectWhile[A, B](xs: List[A])(f: PartialFunction[A, B]): (List[B], List[A]) = {
       def loop(left: List[B], right: List[A]): (List[B], List[A]) = right match {

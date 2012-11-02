@@ -25,6 +25,7 @@ import util.CPathUtils
 import com.precog.common.VectorCase
 import com.precog.bytecode._
 import com.precog.util._
+import com.precog.yggdrasil.util._
 
 import com.precog.common.json._
 
@@ -1278,73 +1279,16 @@ object Slice {
   }
 
   def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): RowComparator = {
-
-    val refs1 = keyf(s1)
-    val refs2 = keyf(s2)
-
-    @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): RowComparator = {
-      RowComparator(l1.map(s1.columns).toArray, l2.map(s2.columns).toArray)
-    }
-
-    @inline @tailrec
-    def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[RowComparator]): List[RowComparator] = {
-      import scalaz.syntax.order._
-
-      (l1, l2) match {
-        case (h1 :: t1, h2 :: t2) if h1.selector == h2.selector => {
-          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
-
-          pairColumns(l1Rest, l2Rest, genComparatorFor(l1Equal, l2Equal) :: comparators)
-        }
-
-        case (h1 :: t1, h2 :: t2) if h1 ?|? h2 == LT => {
-          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-
-          pairColumns(l1Rest, l2, genComparatorFor(l1Equal, Nil) :: comparators)
-        }
-
-        case (h1 :: t1, h2 :: t2) if h1 ?|? h2 == GT => {
-          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
-
-          pairColumns(l1, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
-        }
-
-        case (h1 :: t1, Nil) => {
-          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-
-          pairColumns(l1Rest, Nil, genComparatorFor(l1Equal, Nil) :: comparators)
-        }
-
-        case (Nil, h2 :: t2) => {
-          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
-
-          pairColumns(Nil, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
-        }
-
-        case (Nil, Nil) => comparators.reverse
-
-        case (h1 :: t1, h2 :: t2) => sys.error("selector guard failure in pairColumns")
-      }
-    }
-
-    val comparators: Array[RowComparator] = pairColumns(refs1, refs2, Nil).toArray
-
+    val paths = (keyf(s1) ++ keyf(s2)) map (_.selector)
+    val traversal = CPathTraversal(paths)
+    val lCols = s1.columns groupBy (_._1.selector) map { case (path, m) => path -> m.values.toSet }
+    val rCols = s2.columns groupBy (_._1.selector) map { case (path, m) => path -> m.values.toSet }
+    val allPaths = (lCols.keys ++ rCols.keys).toList
+    val order = traversal.rowOrder(allPaths, lCols, Some(rCols))
     new RowComparator {
-      def compare(i1: Int, i2: Int) = {
-        var i = 0
-        var result: Ordering = EQ
-
-        while (i < comparators.length && result == EQ) {
-          result = comparators(i).compare(i1, i2)
-          i += 1
-        }
-        
-        result
-      }
+      def compare(r1: Int, r2: Int): Ordering = scalaz.Ordering.fromInt(order.compare(r1, r2))
     }
   }
-  
   
   private sealed trait SchemaNode
   
