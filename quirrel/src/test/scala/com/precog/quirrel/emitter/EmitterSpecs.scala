@@ -24,8 +24,6 @@ package emitter
 import com.precog.bytecode.Instructions
 import com.precog.bytecode.RandomLibrary
 
-import org.scalacheck.Prop
-import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
 import java.io.File
@@ -41,8 +39,8 @@ import scalaz.Scalaz._
 // import scalaz.syntax.arrow._
 
 object EmitterSpecs extends Specification
-    with ScalaCheck
     with StubPhases
+    with CompilerUtils
     with Compiler
     with Emitter
     with RawErrors 
@@ -51,7 +49,7 @@ object EmitterSpecs extends Specification
   import instructions._
 
   def compileEmit(input: String) = {
-    val tree = compile(input.stripMargin)
+    val tree = compileSingle(input.stripMargin)
     tree.errors must beEmpty
     emit(tree)
   }
@@ -311,6 +309,62 @@ object EmitterSpecs extends Specification
           PushTrue,
           Map2Cross(WrapObject),
           Map2Cross(JoinObject)))
+    }
+
+    "emit two distinct callsites of the same function" in {
+      val input = """
+        | medals := //summer_games/london_medals 
+        |   stats(x) := max(x) 
+        |   [stats(medals.Weight), stats(medals.HeightIncm)]
+        """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("/summer_games/london_medals"), 
+          instructions.LoadLocal, 
+          Dup, 
+          PushString("Weight"), 
+          Map2Cross(DerefObject), 
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Map1(WrapArray), 
+          Swap(1), 
+          PushString("HeightIncm"), 
+          Map2Cross(DerefObject), 
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Map1(WrapArray), 
+          Map2Cross(JoinArray)))
+    }
+
+    "emit two distinct callsites of the same function version 2" in {
+      val input = """
+        | medals := //summer_games/london_medals 
+        | stats(x) := max(x) + min(x)
+        | stats(medals.Weight) - stats(medals.HeightIncm)
+        """.stripMargin
+
+      testEmit(input)(
+        Vector(PushString("/summer_games/london_medals"),
+          instructions.LoadLocal,
+          Dup,
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Dup,
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Swap(1),
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
+          Map2Cross(Add),
+          Swap(1),
+          PushString("HeightIncm"),
+          Map2Cross(DerefObject),
+          Dup,
+          Swap(2),
+          Swap(1),
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Swap(1),
+          Swap(2),
+          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
+          Map2Cross(Add),
+          Map2Cross(Sub)))
     }
 
     "emit wrapped object as right side of Let" in {
@@ -1442,13 +1496,13 @@ object EmitterSpecs extends Specification
       for (file <- exampleDir.listFiles if file.getName endsWith ".qrl") {
         if (pending contains file.getName) {
           file.getName >> {
-            val result = compile(LineStream(Source.fromFile(file)))
+            val result = compileSingle(LineStream(Source.fromFile(file)))
             result.errors must beEmpty
             emit(result) must not(beEmpty)
           }.pendingUntilFixed
         } else {
           file.getName >> {
-            val result = compile(LineStream(Source.fromFile(file)))
+            val result = compileSingle(LineStream(Source.fromFile(file)))
             result.errors must beEmpty
             emit(result) must not(beEmpty)
           }

@@ -30,6 +30,7 @@ import scala.io.Source
 
 object RelationSpecs extends Specification
     with StubPhases
+    with CompilerUtils
     with Compiler
     with ProvenanceChecker
     with StaticLibrary {
@@ -39,39 +40,39 @@ object RelationSpecs extends Specification
   "explicit relation" should {
     "fail on natively-related sets" in {
       {
-        val tree = compile("//a ~ //a 42")
+        val tree = compileSingle("//a ~ //a 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(AlreadyRelatedSets)
       }
       
       {
-        val tree = compile("1 ~ 2 42")
+        val tree = compileSingle("1 ~ 2 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(AlreadyRelatedSets)
       }
       
       {
-        val tree = compile("a := new 1 a ~ a 42")
+        val tree = compileSingle("a := new 1 a ~ a 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(AlreadyRelatedSets)
       }
     }
     
     "fail on explicitly related sets" in {
-      val tree = compile("a := //a b := //b a ~ b a ~ b 42")
+      val tree = compileSingle("a := //a b := //b a ~ b a ~ b 42")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(AlreadyRelatedSets)
     }
     
     "accept object definition on different loads when related" in {
-      val tree @ Relate(_, _, _, in) = compile("//foo ~ //bar { a: //foo, b: //bar }")
+      val tree @ Relate(_, _, _, in) = compileSingle("//foo ~ //bar { a: //foo, b: //bar }")
       in.relations mustEqual Map(StaticProvenance("/foo") -> Set(StaticProvenance("/bar")), StaticProvenance("/bar") -> Set(StaticProvenance("/foo")))
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept object definition on static and dynamic provenances when related" in {
-      val tree @ Let(_, _, _, _, Relate(_, _, _, in)) = compile("s := new 1 //foo ~ s { a: //foo, b: s }")
+      val tree @ Let(_, _, _, _, Relate(_, _, _, in)) = compileSingle("s := new 1 //foo ~ s { a: //foo, b: s }")
       (in.relations.keys.toList sorted Provenance.order.toScalaOrdering) must beLike { case DynamicProvenance(_) :: StaticProvenance("/foo") :: Nil => ok }
       in.relations(StaticProvenance("/foo")).toList(0) must beLike { case DynamicProvenance(_) => ok }
       (in.relations.values.map(_.toList)) must beLike { case (DynamicProvenance(_) :: Nil) :: (StaticProvenance("/foo") :: Nil) :: Nil => ok }
@@ -80,377 +81,377 @@ object RelationSpecs extends Specification
     }
     
     "accept object definition on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 { a: s1, b: s2 }")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 { a: s1, b: s2 }")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept array definition on different loads when related" in {
-      val tree @ Relate(_, _, _, in) = compile("//foo ~ //bar [ //foo, //bar ]")
+      val tree @ Relate(_, _, _, in) = compileSingle("//foo ~ //bar [ //foo, //bar ]")
       in.relations mustEqual Map(StaticProvenance("/foo") -> Set(StaticProvenance("/bar")), StaticProvenance("/bar") -> Set(StaticProvenance("/foo")))
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept array definition on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s [ //foo, s ]")
+      val tree = compileSingle("s := new 1 //foo ~ s [ //foo, s ]")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept array definition on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 [ s1, s2 ]")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 [ s1, s2 ]")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept deref on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo[//bar]")
+      val tree = compileSingle("//foo ~ //bar //foo[//bar]")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept deref on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo[s]")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo[s]")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept deref on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1[s2]")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1[s2]")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept dispatch on different loads when related" in {
-      val tree = compile("//foo ~ //bar fun(a, b) := a + b fun(//foo, //bar)")
+      val tree = compileSingle("//foo ~ //bar fun(a, b) := a + b fun(//foo, //bar)")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty
     }
     
     "accept dispatch on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s fun(a, b) := a + b fun(//foo, s)")
+      val tree = compileSingle("s := new 1 //foo ~ s fun(a, b) := a + b fun(//foo, s)")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty
     }
     
     "accept dispatch on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 fun(a, b) := a + b fun(s1, s2)")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 fun(a, b) := a + b fun(s1, s2)")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty
     }
     
     "accept where on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo where //bar")
+      val tree = compileSingle("//foo ~ //bar //foo where //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept where on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo where s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo where s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept where on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 where s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 where s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }    
     "accept with on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo with //bar")
+      val tree = compileSingle("//foo ~ //bar //foo with //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept with on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo with s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo with s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept with on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 with s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 with s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }    
     "accept union on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo union //bar")
+      val tree = compileSingle("//foo ~ //bar //foo union //bar")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept union on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo union s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo union s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept union on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 union s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 union s2")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }    
     "accept intersect on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo intersect //bar")
+      val tree = compileSingle("//foo ~ //bar //foo intersect //bar")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept intersect on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo intersect s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo intersect s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept intersect on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 intersect s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 intersect s2")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }    
     
     "accept difference on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo difference //bar")
+      val tree = compileSingle("//foo ~ //bar //foo difference //bar")
       tree.provenance mustEqual StaticProvenance("/foo")
       tree.errors must beEmpty      
     }
     
     "accept difference on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo difference s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo difference s")
       tree.provenance mustEqual StaticProvenance("/foo")
       tree.errors must beEmpty      
     }
     
     "accept difference on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 difference s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 difference s2")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept addition on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo + //bar")
+      val tree = compileSingle("//foo ~ //bar //foo + //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept addition on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo + s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo + s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept addition on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 + s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 + s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept subtraction on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo - //bar")
+      val tree = compileSingle("//foo ~ //bar //foo - //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept subtraction on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo - s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo - s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept subtraction on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 - s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 - s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept multiplication on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo * //bar")
+      val tree = compileSingle("//foo ~ //bar //foo * //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept multiplication on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo * s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo * s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept multiplication on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 * s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 * s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept division on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo / //bar")
+      val tree = compileSingle("//foo ~ //bar //foo / //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept division on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo / s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo / s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept division on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 / s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 / s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept less-than on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo < //bar")
+      val tree = compileSingle("//foo ~ //bar //foo < //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept less-than on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo < s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo < s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept less-than on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 < s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 < s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept less-than-equal on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo <= //bar")
+      val tree = compileSingle("//foo ~ //bar //foo <= //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept less-than-equal on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo <= s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo <= s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept less-than-equal on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 <= s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 <= s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept greater-than on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo > //bar")
+      val tree = compileSingle("//foo ~ //bar //foo > //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept greater-than on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo > s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo > s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept greater-than on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 > s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 > s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept greater-than-equal on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo >= //bar")
+      val tree = compileSingle("//foo ~ //bar //foo >= //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept greater-than-equal on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo >= s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo >= s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept greater-than-equal on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 >= s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 >= s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept equality on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo = //bar")
+      val tree = compileSingle("//foo ~ //bar //foo = //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept equality on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo = s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo = s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept equality on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 = s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 = s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept not-equality on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo != //bar")
+      val tree = compileSingle("//foo ~ //bar //foo != //bar")
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
       tree.errors must beEmpty      
     }
     
     "accept not-equality on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo != s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo != s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty
     }
     
     "accept not-equality on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 != s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 != s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty
     }
     
     "accept boolean and on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo & //bar")
+      val tree = compileSingle("//foo ~ //bar //foo & //bar")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
       tree.errors must beEmpty      
     }
     
     "accept boolean and on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo & s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo & s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty
     }
     
     "accept boolean and on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 & s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 & s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty
     }
     
     "accept boolean or on different loads when related" in {
-      val tree = compile("//foo ~ //bar //foo | //bar")
+      val tree = compileSingle("//foo ~ //bar //foo | //bar")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
       tree.errors must beEmpty      
     }
     
     "accept boolean or on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 //foo ~ s //foo | s")
+      val tree = compileSingle("s := new 1 //foo ~ s //foo | s")
       tree.provenance must beLike { case UnionProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept boolean or on differing dynamic provenances when related" in {
-      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 | s2")
+      val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 | s2")
       tree.provenance must beLike { case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty
     }
     
     "reject addition with unrelated relation" in {
-      val tree = compile("//a ~ //b //c + //d")
+      val tree = compileSingle("//a ~ //b //c + //d")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "substitute and resolve relation unification within a function" in {
-      val tree = compile("f(a, b) := a ~ b a + b f(//foo, //bar)")
+      val tree = compileSingle("f(a, b) := a ~ b a + b f(//foo, //bar)")
       tree.errors must beEmpty
       tree.provenance mustEqual UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
     }
@@ -464,7 +465,7 @@ object RelationSpecs extends Specification
           | foo ~ bar
           |   foo + bar""".stripMargin
           
-        val tree = compile(input)
+        val tree = compileSingle(input)
         tree.provenance must beLike {
           case p: UnionProvenance => {
             p.possibilities must contain(StaticProvenance("/foo"))
@@ -482,7 +483,7 @@ object RelationSpecs extends Specification
           | foo ~ bar
           |   bar + foo""".stripMargin
           
-        val tree = compile(input)
+        val tree = compileSingle(input)
         tree.provenance must beLike {
           case p: UnionProvenance => {
             p.possibilities must contain(StaticProvenance("/foo"))
@@ -503,7 +504,7 @@ object RelationSpecs extends Specification
         |   bar ~ baz
         |     foo + baz""".stripMargin
         
-      val tree = compile(input)
+      val tree = compileSingle(input)
       tree.provenance must beLike {
           case p: UnionProvenance => {
             p.possibilities must contain(StaticProvenance("/foo"))
@@ -523,7 +524,7 @@ object RelationSpecs extends Specification
         |   bar ~ baz
         |     baz + foo""".stripMargin
         
-      val tree = compile(input)
+      val tree = compileSingle(input)
       tree.provenance must beLike {
           case p: UnionProvenance => {
             p.possibilities must contain(StaticProvenance("/foo"))
@@ -542,7 +543,7 @@ object RelationSpecs extends Specification
         | foo ~ bar
         |   foo + bar + foo""".stripMargin
         
-        val tree @ Let(_, _, _, _, Let(_, _, _, _, Relate(_, _, _, in))) = compile(input)
+        val tree @ Let(_, _, _, _, Let(_, _, _, _, Relate(_, _, _, in))) = compileSingle(input)
         in.relations mustEqual Map(StaticProvenance("/foo") -> Set(StaticProvenance("/bar")), StaticProvenance("/bar") -> Set(StaticProvenance("/foo")))
         tree.provenance must beLike {
           case p: UnionProvenance => {
@@ -561,7 +562,7 @@ object RelationSpecs extends Specification
         | foo ~ bar
         |   bar + foo + foo""".stripMargin
         
-        val tree = compile(input)
+        val tree = compileSingle(input)
         tree.provenance must beLike {
           case p: UnionProvenance => {
             p.possibilities must contain(StaticProvenance("/foo"))
@@ -584,7 +585,7 @@ object RelationSpecs extends Specification
         """.stripMargin
         
       val tree @ Let(_, _, _, _, Let(_, _, _, _, Let(_, _, _, _, Relate(_, _, _, Relate(_, _, _, body @ Mul(_, left @ Sub(_, minLeft, minRight), right @ Div(_, divLeft, divRight))))))) =
-        compile(input)
+        compileSingle(input)
 
       body.relations mustEqual Map(
         StaticProvenance("/foo") -> Set(StaticProvenance("/bar")),

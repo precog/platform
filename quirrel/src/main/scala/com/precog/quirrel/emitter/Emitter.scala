@@ -143,7 +143,7 @@ trait Emitter extends AST
         (e.copy(formals = e.formals + ((id, let) -> state)), ())
       }
     }
-    
+
     private def labelGroup(where: ast.Where, id: Int): EmitterState = {
       StateT.apply[Id, Emission, Unit] { e =>
         (e.copy(groups = e.groups + (where -> id)), ())
@@ -492,7 +492,9 @@ trait Emitter extends AST
                     val e2 = e.copy(subResolve = e.subResolve compose subResolve2)
                     
                     val (e3, ()) = (reduce(actualStates) >> emitExpr(left))(e2)
-                    (e3.copy(subResolve = e.subResolve), ())
+                    val e4 = e3.copy(formals = params.foldLeft(e3.formals)((fs, name) => fs - ((Identifier(Vector(), name), let))))
+                    val e5 = e4.copy(marks = params.foldLeft(e4.marks)((fs, name) => fs - (MarkFormal(Identifier(Vector(), name), let))))
+                    (e5.copy(subResolve = e.subResolve), ())
                   }
                 }
               }

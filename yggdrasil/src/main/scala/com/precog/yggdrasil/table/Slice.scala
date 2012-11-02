@@ -339,14 +339,14 @@ trait Slice { source =>
   // and the values give the indices in the sparsened slice.
   def sparsen(index: Array[Int], toSize: Int): Slice = new Slice {
     val size = toSize
-    val columns = source.columns mapValues { col => 
+    val columns = source.columns lazyMapValues { col => 
       cf.util.Sparsen(index, toSize)(col).get //sparsen is total
     }
   }
 
   def remap(indices: ArrayIntList) = new Slice {
     val size = indices.size
-    val columns: Map[ColumnRef, Column] = source.columns mapValues { col => 
+    val columns: Map[ColumnRef, Column] = source.columns lazyMapValues { col => 
       cf.util.RemapIndices(indices).apply(col).get
     }
   }
@@ -399,7 +399,7 @@ trait Slice { source =>
       }
 
       val size = source.size
-      val columns: Map[ColumnRef, Column] = source.columns mapValues {
+      val columns: Map[ColumnRef, Column] = source.columns lazyMapValues {
         col => cf.util.filter(0, source.size, defined)(col).get
       }
     }
@@ -425,7 +425,7 @@ trait Slice { source =>
       }
 
       lazy val size = retained.size
-      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues {
+      lazy val columns: Map[ColumnRef, Column] = source.columns lazyMapValues {
         col => (col |> cf.util.RemapIndices(retained)).get
       }
     }
@@ -496,20 +496,19 @@ trait Slice { source =>
       }
 
       lazy val size = retained.size
-      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues {
+      lazy val columns: Map[ColumnRef, Column] = source.columns lazyMapValues {
         col => (col |> cf.util.RemapIndices(retained)).get
       }
     }
   }
 
-  def sortBy(cPaths: VectorCase[CPath]): Slice = {
-    val byRef = columns.groupBy(_._1.selector)
-    val colGroups: Array[Array[Column]] = cPaths.collect({ case path if byRef contains path =>
-      val cols: Array[Column] = byRef(path).map(_._2)(collection.breakOut)
-      cols
-    })(collection.breakOut)
+  def sortWith(keySlice: Slice, sortOrder: DesiredSortOrder = SortAscending): (Slice, Slice) = {
+
+    val colGroups = keySlice.columns.groupBy(_._1.selector).toArray sortBy (_._1) collect {
+      case (path, cols) => cols.map(_._2).toArray
+    }
     val comparators: Array[RowComparator] = colGroups map { cols => RowComparator(cols, cols) }
-    val rowComparator = new RowComparator {
+    val ascRowComparator = new RowComparator {
       def compare(i: Int, j: Int): Ordering = {
         var k = 0
         var cmp: Ordering = EQ
@@ -521,7 +520,19 @@ trait Slice { source =>
       }
     }
 
-    val order: Array[Int] = Array.range(0, source.size)
+    // Use the branch outside of the comparison.
+    val rowComparator = if (sortOrder == SortAscending) {
+      ascRowComparator
+    } else {
+      new RowComparator {
+        def compare(i: Int, j: Int) = ascRowComparator.compare(i, j).complement
+      }
+    }
+
+    // We filter out rows that are completely undefined.
+    val order: Array[Int] = Array.range(0, source.size) filter { row =>
+      keySlice.isDefinedAt(row) && source.isDefinedAt(row)
+    }
     spire.math.MergeSort.sort(order)(new spire.math.Order[Int] {
       def compare(i: Int, j: Int) = rowComparator.compare(i, j).toInt
       def eqv(i: Int, j: Int) = compare(i, j) == 0
@@ -533,7 +544,29 @@ trait Slice { source =>
       remapOrder.add(i, order(i))
       i += 1
     }
-    source.remap(remapOrder)
+
+    val sortedSlice = source.remap(remapOrder)
+    val sortedKeySlice = keySlice.remap(remapOrder)
+
+    // TODO Remove the duplicate distinct call. Should be able to handle this in 1 pass.
+    (sortedSlice.distinct(None, sortedKeySlice), sortedKeySlice.distinct(None, sortedKeySlice))
+  }
+
+  def sortBy(prefixes: VectorCase[CPath], sortOrder: DesiredSortOrder = SortAscending): Slice = {
+    // TODO This is slow... Faster would require a prefix map or something... argh.
+    val keySlice = new Slice {
+      val size = source.size
+      val columns: Map[ColumnRef, Column] = {
+        prefixes.zipWithIndex.flatMap({ case (prefix, i) =>
+          source.columns collect {
+            case (ColumnRef(path, tpe), col) if path hasPrefix prefix =>
+              (ColumnRef(CPathIndex(i) \ path, tpe), col)
+          }
+        })(collection.breakOut)
+      }
+    }
+
+    source.sortWith(keySlice)._1
   }
 
   /**
@@ -548,7 +581,7 @@ trait Slice { source =>
   def take(sz: Int): Slice = if (sz >= source.size) source else {
     new Slice {
       val size = sz
-      val columns = source.columns mapValues {
+      val columns = source.columns lazyMapValues {
         col => (col |> cf.util.RemapFilter(_ < sz, 0)).get
       }
     }
@@ -557,7 +590,7 @@ trait Slice { source =>
   def drop(sz: Int): Slice = if (sz <= 0) source else {
     new Slice {
       val size = source.size - sz
-      val columns = source.columns mapValues {
+      val columns = source.columns lazyMapValues {
         col => (col |> cf.util.RemapFilter(_ < size, sz)).get
       }
     }
@@ -567,7 +600,7 @@ trait Slice { source =>
     val take2 = math.min(this.size, startIndex + numberToTake) - startIndex
     new Slice {
       val size = take2
-      val columns = source.columns mapValues { 
+      val columns = source.columns lazyMapValues { 
         col => (col |> cf.util.RemapFilter(_ < take2, startIndex)).get
       }
     }
@@ -594,6 +627,82 @@ trait Slice { source =>
       val size = source.size max other.size
       val columns: Map[ColumnRef, Column] = other.columns.foldLeft(source.columns) {
         case (acc, (ref, col)) => acc + (ref -> (acc get ref flatMap { c => cf.util.UnionRight(c, col) } getOrElse col))
+      }
+    }
+  }
+
+  /**
+   * This creates a new slice with the same size and columns as this slice, but
+   * whose values have been materialized and stored in arrays.
+   */
+  def materialized: Slice = {
+    new Slice {
+      val size = source.size
+      val columns = source.columns lazyMapValues {
+        case col: BoolColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = BitSetUtil.filteredRange(0, source.size) { row =>
+            defined(row) && col(row)
+          }
+          ArrayBoolColumn(defined, values)
+
+        case col: LongColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = new Array[Long](source.size)
+          Loop.range(0, source.size) { row =>
+            if (defined(row)) values(row) = col(row)
+          }
+          ArrayLongColumn(defined, values)
+
+        case col: DoubleColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = new Array[Double](source.size)
+          Loop.range(0, source.size) { row =>
+            if (defined(row)) values(row) = col(row)
+          }
+          ArrayDoubleColumn(defined, values)
+
+        case col: NumColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = new Array[BigDecimal](source.size)
+          Loop.range(0, source.size) { row =>
+            if (defined(row)) values(row) = col(row)
+          }
+          ArrayNumColumn(defined, values)
+
+        case col: StrColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = new Array[String](source.size)
+          Loop.range(0, source.size) { row =>
+            if (defined(row)) values(row) = col(row)
+          }
+          ArrayStrColumn(defined, values)
+
+        case col: DateColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = new Array[DateTime](source.size)
+          Loop.range(0, source.size) { row =>
+            if (defined(row)) values(row) = col(row)
+          }
+          ArrayDateColumn(defined, values)
+
+        case col: EmptyArrayColumn =>
+          val ncol = MutableEmptyArrayColumn.empty()
+          Loop.range(0, source.size) { row => ncol.update(row, col.isDefinedAt(row)) }
+          ncol
+
+        case col: EmptyObjectColumn =>
+          val ncol = MutableEmptyObjectColumn.empty()
+          Loop.range(0, source.size) { row => ncol.update(row, col.isDefinedAt(row)) }
+          ncol
+
+        case col: NullColumn =>
+          val ncol = MutableNullColumn.empty()
+          Loop.range(0, source.size) { row => ncol.update(row, col.isDefinedAt(row)) }
+          ncol
+
+        case col =>
+          sys.error("Cannot materialise non-standard (extensible) column")
       }
     }
   }
@@ -1264,11 +1373,14 @@ object Slice {
    */
   def concat(slices: List[Slice]): Slice = {
     val (_columns, _size) = slices.foldLeft((Map.empty[ColumnRef, List[(Int, Column)]], 0)) {
-      case ((cols, offset), slice) =>
+      case ((cols, offset), slice) if slice.size > 0 =>
         (slice.columns.foldLeft(cols) { case (acc, (ref, col)) =>
           acc + (ref -> ((offset, col) :: acc.getOrElse(ref, Nil)))
         }, offset + slice.size)
-      }
+
+      case  ((cols, offset), _) => (cols, offset)
+
+    }
 
     new Slice {
       val size = _size

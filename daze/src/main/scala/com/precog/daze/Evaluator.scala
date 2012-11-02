@@ -20,6 +20,8 @@
 package com.precog
 package daze
 
+import annotation.tailrec
+
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.util.IdSourceConfig
@@ -119,6 +121,9 @@ trait Evaluator[M[+_]] extends DAG
   def eval(userUID: UserId, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean): M[Table] = {
     evalLogger.debug("Eval for %s = %s".format(userUID.toString, graph))
   
+    val rewrittenDAG = rewriteDAG(optimize)(graph)
+    val stagingPoints = listStagingPoints(Queue(rewrittenDAG))
+
     def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, M[GroupingSpec]] = spec match {
       case UnionBucketSpec(left, right) => {
         for {
@@ -440,7 +445,7 @@ trait Evaluator[M[+_]] extends DAG
             for {
               grouping2 <- grouping
               result <- Table.merge(grouping2) { (key: Table, map: Int => M[Table]) =>
-                val back = fullEval(child, splits + (s -> (key -> map)), Some(s))
+                val back = fullEval(child, splits + (s -> (key -> map)), s :: splits.keys.toList)
 
                 back.eval(state)  //: M[Table]
               }
@@ -937,13 +942,13 @@ trait Evaluator[M[+_]] extends DAG
      * graph is considered to be a special forcing point, but as it is the endpoint,
      * it will perforce be evaluated last.
      */
-    def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])], currentSplit: Option[dag.Split]): StateT[Id, EvaluatorState, M[Table]] = {
+    def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])], parentSplits: List[dag.Split]): StateT[Id, EvaluatorState, M[Table]] = {
       import scalaz.syntax.monad._
       import scalaz.syntax.monoid._
       
       // find the topologically-sorted forcing points (excluding the endpoint)
       // at the current split level
-      val toEval = listStagingPoints(Queue(graph)) filter referencesOnlySplit(currentSplit)
+      val toEval = stagingPoints filter referencesOnlySplit(parentSplits)
       
       val preStates = toEval map { graph =>
         for {
@@ -961,7 +966,7 @@ trait Evaluator[M[+_]] extends DAG
     }
     
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 
-      fullEval(rewriteDAG(optimize)(graph), Map(), None)
+      fullEval(rewrittenDAG, Map(), Nil)
 
     (resultState.eval(EvaluatorState(Map())): M[Table]) map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
   }
@@ -969,7 +974,8 @@ trait Evaluator[M[+_]] extends DAG
   /**
    * Returns all forcing points in the graph, ordered topologically.
    */
-  private def listStagingPoints(queue: Queue[DepGraph], acc: List[dag.StagingPoint] = Nil): List[dag.StagingPoint] = {
+  @tailrec
+  private[this] def listStagingPoints(queue: Queue[DepGraph], acc: List[dag.StagingPoint] = Nil): List[dag.StagingPoint] = {
     def listParents(spec: BucketSpec): Set[DepGraph] = spec match {
       case UnionBucketSpec(left, right) => listParents(left) ++ listParents(right)
       case IntersectBucketSpec(left, right) => listParents(left) ++ listParents(right)
@@ -1017,7 +1023,7 @@ trait Evaluator[M[+_]] extends DAG
           case dag.SortBy(parent, _, _, _) => queue2 enqueue parent
           case dag.ReSortBy(parent, _) => queue2 enqueue parent
           
-          case node @ dag.Memoize(parent, _) => queue2 enqueue parent
+          case dag.Memoize(parent, _) => queue2 enqueue parent
         }
         
         val addend = Some(graph) collect {
@@ -1030,17 +1036,23 @@ trait Evaluator[M[+_]] extends DAG
       listStagingPoints(queue3, addend map { _ :: acc } getOrElse acc)
     }
   }
-  
-  private def referencesOnlySplit(split: Option[dag.Split])(graph: DepGraph): Boolean = {
-    implicit val m: Monoid[Boolean] = new Monoid[Boolean] {
-      def zero = true
-      def append(b1: Boolean, b2: => Boolean): Boolean = b1 && b2
+
+  // Takes a list of Splits, head is the current Split, which must be referenced.
+  // The rest of the referenced Splits must be in the the list.
+  private def referencesOnlySplit(parentSplits: List[dag.Split])(graph: DepGraph): Boolean = {
+    implicit val setMonoid = new Monoid[Set[dag.Split]] {
+      def zero = Set()
+      def append(a: Set[dag.Split], b: => Set[dag.Split]) = a ++ b
     }
-    
-    graph foldDown {
-      case s: dag.SplitParam => split map (s.parent ==) getOrElse false
-      case s: dag.SplitGroup => split map (s.parent ==) getOrElse false
+
+    val referencedSplits = graph.foldDown(false) {
+      case s: dag.SplitParam => Set(s.parent)
+      case s: dag.SplitGroup => Set(s.parent)
     }
+
+    val currentIsReferenced = parentSplits.headOption.map(referencedSplits.contains(_)).getOrElse(true)
+
+    currentIsReferenced && (referencedSplits -- parentSplits).isEmpty
   }
   
   private def findCommonIds(left: BucketSpec, right: BucketSpec): Set[Int] =

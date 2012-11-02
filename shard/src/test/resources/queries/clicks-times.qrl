@@ -1,0 +1,11 @@
+clicks := //clicks
+
+solve 'time = clicks.time
+  belowTime := max(clicks.time where clicks.time < 'time)
+  aboveTime := min(clicks.time where clicks.time > 'time)
+  
+  {
+    time: 'time,
+    below: belowTime,
+    above: aboveTime
+  }

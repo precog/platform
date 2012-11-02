@@ -17,13 +17,27 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.performance
+package com.precog
+package ragnarok
+package test
 
-import org.specs2.mutable.Specification
+object AthletesTestSuite extends PerfTestSuite {
+  query(
+    """
+      | athletes := //summer_games/athletes
+      | 
+      | solve 'athlete
+      | athlete := athletes where athletes = 'athlete
+      |
+      | athlete' := {
+      |   "Countryname": athlete.Countryname,
+      |   "Population": athlete.Population,
+      |   "Sex": athlete.Sex,
+      |   "Sportname": athlete.Sportname,
+      |   "Name": athlete.Name
+      | }
+      |
+      | { count: count(athlete), athlete: athlete' }
+      | """.stripMargin)
+}
 
-import java.io.File
-import java.nio.ByteBuffer
-
-class PerformanceSuite 
-  with RoutingPerformanceSpec 
-  with YggdrasilPerformanceSpec 

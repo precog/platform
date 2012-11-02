@@ -36,9 +36,9 @@ import com.codecommit.util.UniversalCharSet
 trait Parser extends RegexParsers with Filters with AST {
   import ast._
   
-  def parse(str: String): Expr = parse(LineStream(str))
+  def parse(str: String): Set[Expr] = parse(LineStream(str))
   
-  def parse(input: LineStream): Expr = {
+  def parse(input: LineStream): Set[Expr] = {
     val results = expr(input)
     val successes = results collect { case Success(tree, _) => tree }
     val failures = results collect { case f: Failure => f }
@@ -50,14 +50,13 @@ trait Parser extends RegexParsers with Filters with AST {
   }
   
   // TODO these functions need to be privatized
-  def handleSuccesses(forest: Stream[Expr]): Expr = {
-    val root = if ((forest lengthCompare 1) > 0)
-      throw new AssertionError("Fatal error: ambiguous parse results: " + forest.mkString(", "))
-    else
-      forest.head
+  def handleSuccesses(forest: Stream[Expr]): Set[Expr] = {
+    val back = forest map { root =>
+      bindRoot(root, root)
+      root
+    }
     
-    bindRoot(root, root)
-    root
+    Set(back: _*)
   }
   
   def handleFailures(forest: Stream[Failure]): Nothing = {

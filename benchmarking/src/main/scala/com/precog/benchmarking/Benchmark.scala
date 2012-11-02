@@ -22,7 +22,6 @@ package com.precog.benchmarking
 object Benchmark extends App {
   args match {
     case Array(warmups, runs, count) => {
-//      val benches = List(JDBMBench,LevelDBBench)
       val benches = List(JDBM3Bench)
       val times: List[(Seq[Long],Seq[Long])] = benches.map {
         bench => bench.run(warmups.toInt, runs.toInt, count.toLong)
