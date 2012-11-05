@@ -12,7 +12,6 @@ import com.precog.common.json._
 import TransSpecModule._
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 
 import org.joda.time.DateTime
@@ -1190,7 +1189,7 @@ trait Slice { source =>
   }
 
   def toJValue(row: Int) = {
-    columns.foldLeft[JValue](JNothing) {
+    columns.foldLeft[JValue](JUndefined) {
       case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
         CPathUtils.cPathToJPaths(selector, col.cValue(row)).foldLeft(jv) {
           case (jv, (path, value)) => jv.unsafeInsert(path, value.toJValue)
@@ -1202,8 +1201,8 @@ trait Slice { source =>
 
   def toJson(row: Int): Option[JValue] = {
     toJValue(row) match {
-      case JNothing => None
-      case jv       => Some(jv)
+      case JUndefined => None
+      case jv         => Some(jv)
     }
   }
 
@@ -1211,7 +1210,7 @@ trait Slice { source =>
     @tailrec def rec(i: Int, acc: Vector[JValue]): Vector[JValue] = {
       if (i < source.size) {
         toJValue(i) match {
-          case JNothing => rec(i + 1, acc)
+          case JUndefined => rec(i + 1, acc)
           case jv => rec(i + 1, acc :+ jv)
         }
       } else acc

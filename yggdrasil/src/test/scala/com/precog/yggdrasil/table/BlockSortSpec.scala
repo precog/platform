@@ -7,7 +7,6 @@ import com.precog.common._
 import com.precog.util._
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -57,6 +56,10 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     }.sortBy({ v => { JArray(sortKeys.map(_.extract(v \ "value")).toList ::: List(v \ "globalId")).asInstanceOf[JValue] }       
     })(desiredJValueOrder).map(_.delete(globalIdPath).get).toList
 
+    def xyz(v: JValue): JValue = {
+      JArray(sortKeys.map(_.extract(v \ "value")).toList ::: List(v \ "globalId"))
+    }
+
     val cSortKeys = sortKeys map { CPath(_) }
 
     val resultM = for {
@@ -66,13 +69,8 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
     val (result, resultTable) = resultM.copoint
 
-    //if (result != original) {
-    //   result zip original foreach {
-    //     case (r, o) => if (r != o) { println("%s != %s".format(r, o)) }
-    //   }
-    //}
-
     result.toList must_== sorted
+
     resultTable.size mustEqual ExactSize(sorted.size)
   }
 
@@ -90,7 +88,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   // Simple test of sorting on homogeneous data
   def homogeneousSortSample = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
         {
           "value":{
             "uid":"joe",
@@ -121,7 +119,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   // Simple test of partially undefined sort key data
   def partiallyUndefinedSortSample = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
         {
           "value":{
             "uid":"ted",
@@ -150,7 +148,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def heterogeneousBaseValueTypeSample = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
         {
           "value": [0, 1],
           "key":[1]
@@ -173,7 +171,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def badSchemaSortSample = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
         {
           "value":{
             "vxu":[],
@@ -210,7 +208,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   // Simple test of heterogeneous sort keys
   def heterogeneousSortSample = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
          {
            "value":{
             "uid": 12,
@@ -253,7 +251,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def secondHetSortSample = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
       {
         "value":[1.0,0,{
           
@@ -295,7 +293,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
    */
   def threeCellMerge = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
 {
   "value":-2355162409801206381,
   "key":[1.0,1.0,11.0]
@@ -441,9 +439,9 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def uniqueSort = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
         { "key" : [2], "value" : { "foo" : 10 } },
-        { "key" : [1], "value" : { "foo" : 10 } },
+        { "key" : [1], "value" : { "foo" : 10 } }
        ]""") --> classOf[JArray]).elements.toStream,
       Some(
         (1 , List())
@@ -455,7 +453,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def emptySort = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[]""") --> classOf[JArray]).elements.toStream,
+      (JParser.parse("""[]""") --> classOf[JArray]).elements.toStream,
       Some(
         (1 , List())
       )

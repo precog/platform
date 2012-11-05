@@ -12,7 +12,7 @@ import akka.actor.PoisonPill
 import akka.pattern.ask
 import akka.util.Timeout
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import blueeyes.persistence.cache.Cache
 import blueeyes.persistence.cache.CacheSettings
 import blueeyes.persistence.cache.ExpirationPolicy

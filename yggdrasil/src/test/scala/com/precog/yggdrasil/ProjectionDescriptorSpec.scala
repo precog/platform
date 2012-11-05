@@ -2,9 +2,7 @@ package com.precog.yggdrasil
 
 import org.specs2.mutable.Specification
 
-import blueeyes.json.JPath
-import blueeyes.json.Printer
-import blueeyes.json.JsonParser
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 
@@ -28,8 +26,8 @@ class ProjectionDescriptorSpec extends Specification {
   "ProjectionDescriptor" should {
     "serialize correctly" in {
       def roundTrip(in: ProjectionDescriptor): Validation[Extractor.Error, ProjectionDescriptor] = {
-        def print = Printer.render _ andThen Printer.pretty _ 
-        def parse = JsonParser.parse(_: String)
+        def print = (_: JValue).renderPretty
+        def parse = JParser.parse(_: String)
 
         val f = print andThen parse
 

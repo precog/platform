@@ -3,7 +3,8 @@ package com.precog.yggdrasil
 import com.precog.common.json._
 import com.precog.common.Path
 import com.precog.bytecode.JType
-import blueeyes.json.JsonAST._
+
+import blueeyes.json._
 
 import collection.Set
 

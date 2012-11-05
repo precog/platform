@@ -6,8 +6,6 @@ import com.precog.common._
 import com.precog.util.IOUtils
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.Printer.{pretty,render}
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -172,7 +170,7 @@ trait ProjectionDescriptorSerialization {
         case JArray(elements) => 
           elements.foldLeft(success[Error, (Vector[ColumnDescriptor], Int)]((Vector.empty[ColumnDescriptor], 0))) {
             case (Success((columns, identities)), obj @ JObject(fields)) =>
-              val idCount = ((obj \ "index") --> classOf[JNum]).value.toInt
+              val idCount = ((obj \ "index") --> classOf[JNum]).toLong.toInt
               (obj \ "descriptor").validated[ColumnDescriptor] map { d =>
                 (columns :+ d, idCount max identities)
               }
@@ -188,12 +186,12 @@ trait ProjectionDescriptorSerialization {
   }
 
   def toFile(descriptor: ProjectionDescriptor, path: File): IO[Boolean] = {
-    IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), path)
+    IOUtils.safeWriteToFile(descriptor.serialize.renderPretty, path)
   }
 
   def fromFile(path: File): IO[Validation[Error,ProjectionDescriptor]] = {
     IOUtils.readFileToString(path).map {
-      JsonParser.parse(_).validated[ProjectionDescriptor]
+      JParser.parse(_).validated[ProjectionDescriptor]
     }
   }
 

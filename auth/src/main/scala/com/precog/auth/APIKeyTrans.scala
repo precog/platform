@@ -1,9 +1,6 @@
 package com.precog.auth
 
-import blueeyes.json.JPath
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
 
 import java.io._
@@ -20,7 +17,7 @@ object APIKeyTrans {
     val apiKeyOutput = new FileWriter(input + ".newapikeys")
     val grantOutput = new FileWriter(input + ".newgrants")
     try {
-      val oldAPIKeys = source.getLines.map(JsonParser.parse(_)).toList
+      val oldAPIKeys = source.getLines.map(JParser.parse(_)).toList
 
       val output = process(oldAPIKeys)
 
@@ -28,10 +25,10 @@ object APIKeyTrans {
       val grants = output.values.flatten
 
       for (apiKey <- apiKeys) {
-        apiKeyOutput.write(compact(render(apiKey.serialize(APIKeyRecord.apiKeyRecordDecomposer))) + "\n")
+        apiKeyOutput.write(apiKey.serialize(APIKeyRecord.apiKeyRecordDecomposer).renderCompact + "\n")
       }
       for (grant <- grants) {
-        grantOutput.write(compact(render(grant.serialize(Grant.GrantDecomposer))) + "\n")
+        grantOutput.write(grant.serialize(Grant.GrantDecomposer).renderCompact + "\n")
       }
     } finally {
       source.close()
@@ -66,7 +63,7 @@ object APIKeyTrans {
           Grant(newGrantID, None, ReadPermission(Path(path), uid, None))
         )
 
-        val grants = if (writePermission == JNothing) readGrants else readGrants ++ writeGrants
+        val grants = if (writePermission == JUndefined) readGrants else readGrants ++ writeGrants
 
         val apiKey = APIKeyRecord(uid, path.replaceAll("/", " "), "", grants.map{ _.gid }.toSet)        
 
