@@ -28,16 +28,7 @@ import blueeyes.bkka.AkkaTypeClasses._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
-import blueeyes.json.JsonAST._
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
-
-
-import blueeyes.bkka.AkkaTypeClasses._
-import blueeyes.core.http._
-import blueeyes.core.http.HttpStatusCodes._
-import blueeyes.core.service._
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 import blueeyes.json.serialization.Extractor._
@@ -46,9 +37,7 @@ import blueeyes.core.data.BijectionsChunkJson._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.util.Clock
 
-
 import HttpHeaders.Authorization
-
 
 import akka.dispatch.{ ExecutionContext, Future, Await }
 import akka.util.Timeout
@@ -94,9 +83,11 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
     Success { (auth: Account) =>
       //TODO, if root then can see more
       accountManagement.listAccountIds(auth.apiKey).map { 
-        case accounts => 
-          HttpResponse[JValue](OK, 
-                               content = Some(JArray(accounts.map(account => JObject(List(JField("accountId", account.accountId))))(collection.breakOut))))
+        case accounts =>
+          val objs:List[JObject] = accounts.map {
+            account => JObject(Map("accountId" -> JString(account.accountId)))
+          } (collection.breakOut)
+          HttpResponse[JValue](OK, content = Some(JArray(objs)))
       }
     }
   }

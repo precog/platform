@@ -33,7 +33,7 @@ import TransSpecModule._
 
 import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
-import blueeyes.json.JsonAST._
+
 import org.apache.commons.collections.primitives.ArrayIntList
 import org.joda.time.DateTime
 import com.google.common.io.Files

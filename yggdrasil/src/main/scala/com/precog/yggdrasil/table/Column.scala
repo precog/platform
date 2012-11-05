@@ -22,7 +22,7 @@ package table
 
 import cf._
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import org.joda.time.DateTime
 
 import java.math.MathContext

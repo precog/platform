@@ -42,8 +42,6 @@ import blueeyes.json._
 
 // TODO decouple this from the evaluator specifics
 trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] {
-  import JsonAST._
-  
   type X = Throwable
   type SEvent = (Vector[Long], SValue)
 
@@ -53,7 +51,7 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] {
     Validation.fromTryCatch {
       val result = eval(userUID, graph, ctx, prefix, optimize)
       val json = result.flatMap(_.toJson).copoint filterNot { jvalue => {
-        (jvalue \ "value") == JNothing
+        (jvalue \ "value") == JUndefined
       }}
 
       val events = json map { jvalue =>
@@ -65,7 +63,7 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] {
   }
   
   private def jvalueToSValue(value: JValue): SValue = value match {
-    case JNothing => sys.error("don't use jnothing; doh!")
+    case JUndefined => sys.error("don't use jnothing; doh!")
     case JNull => SNull
     case JBool(value) => SBoolean(value)
     case JNum(bi) => SDecimal(bi)

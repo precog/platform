@@ -30,8 +30,7 @@ import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 import org.scalacheck.{Arbitrary,Gen}
 
-import blueeyes.json.JPath
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import com.precog.common.{Path,VectorCase}
 import com.precog.common.json._

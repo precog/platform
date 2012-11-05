@@ -27,7 +27,6 @@ import com.precog.common._
 import com.weiglewilczek.slf4s.Logging
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -225,16 +224,10 @@ object FileMetadataStorage extends Logging {
 
     def read(baseDir: File): Validation[String, ProjectionDescriptor] = {
       val df = new File(baseDir, descriptorName)
-      if (!df.exists) Failure("Unable to find serialized projection descriptor in " + baseDir)
-      else {
-        val reader = new FileReader(df)
-        try {
-          // TODO: scalaz eludes me... (DCB)
-          //{ (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor]
-          { (_: Extractor.Error).message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor] 
-        } finally {
-          reader.close
-        }
+      if (!df.exists) {
+        Failure("Unable to find serialized projection descriptor in " + baseDir)
+      } else {
+        JParser.parseFromFile(df).bimap(_.getMessage, s => s)
       }
     }
 
@@ -287,7 +280,7 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
       case Some(dir) =>
         val file = new File(dir, curFilename)
         fileOps.exists(file) flatMap {
-          case true  => fileOps.read(file) map { json => JsonParser.parse(json).deserialize[MetadataRecord] }
+          case true  => fileOps.read(file) map { json => JParser.parse(json).deserialize[MetadataRecord] }
           case false => IO(defaultMetadata(desc))
         }
 
@@ -359,7 +352,7 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
       case false =>
         val writer = new FileWriter(df)
         try {
-          writer.write(Printer.pretty(Printer.render(desc.serialize)))
+          writer.write(desc.serialize.renderPretty)
         } finally {
           writer.close()
         }
@@ -367,7 +360,7 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
   }
 
   private def stageNext(dir: File, metadata: MetadataRecord): IO[Unit] = {
-    val json = Printer.pretty(Printer.render(metadata.serialize))
+    val json = metadata.serialize.renderPretty
     val next = new File(dir, nextFilename)
     fileOps.write(next, json)
   }

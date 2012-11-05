@@ -22,7 +22,7 @@ package com.precog.yggdrasil
 import table._
 import com.precog.util._
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 
@@ -205,6 +205,8 @@ case object CType extends CTypeSerialization {
 
   // TODO Should return Option[CValue]... is this even used?
   // Yes; it is used only in RoutingTable.scala
+  private val emptyJArray = JArray(Nil)
+  private val emptyJObject = JObject(Map())
   @inline
   final def toCValue(jval: JValue): CValue = (jval: @unchecked) match {
     case JString(s) => CString(s)
@@ -220,7 +222,7 @@ case object CType extends CTypeSerialization {
     
     case JBool(b)   => CBoolean(b)
     case JNull      => CNull
-    case JObject(Nil) => CEmptyObject
+    case JObject(es) if es.size == 0 => CEmptyObject
     case JArray(Nil) => CEmptyArray
     case JArray(values) =>
       sys.error("TODO: Allow for homogeneous JArrays -> CArray.")
@@ -255,8 +257,8 @@ case object CType extends CTypeSerialization {
     case JString(_)   => Some(CString)
     case JNull        => Some(CNull)
     case JArray(Nil)  => Some(CEmptyArray)
-    case JObject(Nil) => Some(CEmptyObject)
-    case JArray(_)    => None // TODO Allow homogeneous JArrays -> CType
+    case o: JObject if o == emptyJObject => Some(CEmptyObject)
+    case o: JArray if o == emptyJArray => None // TODO Allow homogeneous JArrays -> CType
     case _            => None
   }
 
@@ -381,6 +383,6 @@ case object CEmptyArray extends CNullType with CNullValue {
 //
 case object CUndefined extends CNullType with CNullValue {
   def readResolve() = CUndefined
-  def toJValue = JNothing
+  def toJValue = JUndefined
 }
 

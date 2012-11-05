@@ -19,13 +19,12 @@
  */
 package com.precog.common.json
 
-import blueeyes.json.JsonAST
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 
 import util.matching.Regex
 
-import JsonAST._
 import scalaz.Order
 import scalaz.Ordering
 import scalaz.Ordering._
@@ -107,8 +106,8 @@ sealed trait CPath { self =>
           val R = name.r
           jvalue match {
             case JObject(fields) => 
-              fields flatMap { 
-                case JField(R(name), value) =>
+              fields.toList.flatMap { 
+                case (R(name), value) =>
                   val expandedNode = CPathField(name)
                   expand0(current :+ expandedNode, tail, value)
 

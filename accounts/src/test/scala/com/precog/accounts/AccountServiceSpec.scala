@@ -55,7 +55,7 @@ import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer 
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import blueeyes.util.Clock
 

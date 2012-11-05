@@ -24,8 +24,7 @@ import akka.actor.ActorSystem
 import akka.dispatch._
 import akka.util.Duration
 
-import blueeyes.json.Printer._
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import com.codecommit.gll.{Failure, LineStream, Success}
 
@@ -117,7 +116,7 @@ trait REPL
             val result = withContext { ctx =>
               consumeEval(dummyUID, graph, ctx,Path.Root) fold (
                 error   => "An error occurred processing your query: " + error.getMessage,
-                results => pretty(render(JArray(results.toList.map(_._2.toJValue))))
+                results => JArray(results.toList.map(_._2.toJValue)).renderPretty
               )
             }
             

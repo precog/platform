@@ -23,8 +23,7 @@ package table
 import org.specs2.mutable.Specification
 
 import com.precog.common.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 
 import scalaz._
 import scalaz.syntax.copointed._
@@ -35,7 +34,7 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
   override type GroupId = Int
 
   object unionAllData {
-    val JArray(leftData) = JsonParser.parse("""[
+    val JArray(leftData) = JParser.parse("""[
       {
         "groupKeys":  { "%1$s": "foo", "%2$s": false },
         "identities": { "1": [1,2] },
@@ -48,7 +47,7 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
       }
     ]""".format(GroupKeyTrans.keyName(0), GroupKeyTrans.keyName(1)))
   
-    val JArray(rightData) = JsonParser.parse("""[
+    val JArray(rightData) = JParser.parse("""[
       {
         "groupKeys":  { "%1$s": "bar", "%2$s": true },
         "identities": { "1": [5,1] },
@@ -61,7 +60,7 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
       }
     ]""".format(GroupKeyTrans.keyName(0), GroupKeyTrans.keyName(1)))
   
-    val JArray(rightDataReversed) = JsonParser.parse("""[
+    val JArray(rightDataReversed) = JParser.parse("""[
       {
         "groupKeys":  { "%2$s": "bar", "%1$s": true },
         "identities": { "1": [5,1] },

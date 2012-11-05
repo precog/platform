@@ -25,11 +25,7 @@ import java.nio.charset.Charset
 import scala.math.Ordering
 import scala.collection.mutable
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JPath
-import blueeyes.json.JsonParser
-import blueeyes.json.Printer
-
+import blueeyes.json._
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -84,7 +80,8 @@ trait MetadataSerialization {
   implicit val MetadataExtractor: Extractor[Metadata] = new Extractor[Metadata] with ValidatedExtraction[Metadata] {
    
     override def validated(obj: JValue): Validation[Error, Metadata] = obj match {
-      case metadata @ JObject(JField(key, value) :: Nil) => {
+      case metadata @ JObject(entries) if entries.size == 1 => {
+        val List((key, value)) = entries.toList
         MetadataType.fromName(key).map {
           case BooleanValueStats     => value.validated[BooleanValueStats] 
           case LongValueStats        => value.validated[LongValueStats] 
@@ -93,7 +90,7 @@ trait MetadataSerialization {
           case StringValueStats      => value.validated[StringValueStats] 
         } getOrElse { Failure(Invalid("Unknown metadata type: " + key)) }
       }
-      case _                                         => Failure(Invalid("Invalid metadata entry: " + obj))
+      case _ => Failure(Invalid("Invalid metadata entry: " + obj))
     }
   }
 }
@@ -120,7 +117,7 @@ sealed trait UserMetadata extends Metadata
 
 trait UserMetadataSerialization {
   implicit val UserMetadataDecomposer: Decomposer[UserMetadata] = new Decomposer[UserMetadata] {
-    override def decompose(metadata: UserMetadata): JValue = JNothing
+    override def decompose(metadata: UserMetadata): JValue = JUndefined
   }
 
   implicit val UserMetadataExtractor: Extractor[UserMetadata] = new Extractor[UserMetadata] with ValidatedExtraction[UserMetadata] {

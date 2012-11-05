@@ -21,8 +21,7 @@ package com.precog
 package shard
 package yggdrasil 
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL
+import blueeyes.json._
 
 import daze._
 
@@ -120,33 +119,6 @@ trait YggdrasilQueryExecutorComponent {
         )
       }
 
-      /* def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] = {
-        import JsonDSL._
-        table.slices.uncons map { unconsed =>
-          if (unconsed.isDefined) {
-            val rendered = StreamT.unfoldM[Future, CharBuffer, Option[(Slice, StreamT[Future, Slice])]](unconsed) { 
-              case Some((head, tail)) =>
-                tail.uncons map { next =>
-                  if (next.isDefined) {
-                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",") + ","), next))
-                  } else {            
-                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",")), None))
-                  }
-                }
-    
-              case None => 
-                M.point(None)
-            }
-            
-            rendered
-            //(CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
-          } else {
-            StreamT.empty[Future, CharBuffer]
-            //CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
-          }
-        }
-      } */
-      
       def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
         M.point(table renderJson ',')
 
@@ -270,7 +242,7 @@ trait YggdrasilQueryExecutor
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
     storage.userMetadataView(userUID).findChildren(path) map {
-      case paths => success(JArray(paths.map( p => JString(p.toString))(collection.breakOut)))
+      case paths => success(JArray(paths.map( p => JString(p.toString))(collection.breakOut): _*))
     }
   }
 

@@ -30,8 +30,7 @@ import akka.testkit.TestActorRef
 import akka.util.Timeout
 import akka.util.duration._
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 
 import com.precog.common._
 import com.precog.common.security._
@@ -76,8 +75,19 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
     private def load(path: Path) = {
       val resourceName = ("/test_data" + path.toString.init + ".json").replaceAll("/+", "/")   
       using(getClass.getResourceAsStream(resourceName)) { in =>
+        // FIXME: Refactor as soon as JParser can parse from InputStreams
         val reader = new InputStreamReader(in)
-        val json = JsonParser.parse(reader) --> classOf[JArray]
+        val buffer = new Array[Char](8192)
+        val builder = new java.lang.StringBuilder
+        var read = 0
+        do {
+          read = reader.read(buffer)
+          if (read >= 0) {
+            builder.append(buffer, 0, read)
+          }
+        } while (read >= 0)
+        
+        val json = JParser.parse(builder.toString) --> classOf[JArray]
 
         projections = json.elements.foldLeft(projections) { 
           case (acc, jobj) => 

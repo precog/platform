@@ -50,10 +50,7 @@ import scalaz.syntax.bifunctor
 import scalaz.syntax.show._
 import scalaz.Scalaz._
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
-import blueeyes.json.Printer
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -177,7 +174,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
       }
 
       // FIXME: this is brokenness in JDBM somewhere      
-      val iterator = {
+      val iterator: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]] = {
         var initial: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]] = null
         var tries = 0
         while (tries < JDBMProjection.MAX_SPINS && initial == null) {

@@ -35,9 +35,7 @@ import akka.testkit.TestActorRef
 import akka.util.Timeout
 import akka.util.duration._
 
-import blueeyes.json.JPath
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 
 import scalaz._
 import scalaz.effect._

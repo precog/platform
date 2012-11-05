@@ -19,14 +19,12 @@
  */
 package com.precog.common.util
 
-import blueeyes.json.JsonAST
+import blueeyes.json._
 import org.scalacheck._
 import Gen._
 import Arbitrary.arbitrary
 
 trait ArbitraryJValue {
-  import JsonAST._
-
   def genJValue:  Gen[JValue]  = frequency((10, genSimple), (1, wrap(choose(0, 5) flatMap genArray)), (1, wrap(choose(0, 5) flatMap genObject)))
   def genJNum:    Gen[JNum]    = arbitrary[BigDecimal].map(JNum(_))
   def genJBool:   Gen[JBool]   = arbitrary[Boolean].map(JBool(_))
@@ -51,7 +49,7 @@ trait ArbitraryJValue {
 
   def genJValueClass: Gen[Class[_ <: JValue]] = oneOf(
     JNull.getClass.asInstanceOf[Class[JValue]], 
-    JNothing.getClass.asInstanceOf[Class[JValue]], 
+    JUndefined.getClass.asInstanceOf[Class[JValue]], 
     classOf[JNum], 
     classOf[JBool], 
     classOf[JString], 

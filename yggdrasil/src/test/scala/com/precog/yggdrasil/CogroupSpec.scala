@@ -22,9 +22,8 @@ package com.precog.yggdrasil
 import table._
 import com.precog.util._
 import com.precog.common.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
+
+import blueeyes.json._
 
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.Ordering._
@@ -102,10 +101,32 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
 
     val keyOrder = Order[JValue].contramap((_: JValue) \ "key")
 
+    import scala.math.max
+
+    def mergeJsonPairwise(jv1: JValue, jv2: JValue): JValue = (jv1, jv2) match {
+      case (JArray(el1), JArray(el2)) => {
+        val len = max(el1.length, el2.length)
+        val pairs = el1.padTo(len, JUndefined).zip(el2.padTo(len, JUndefined))
+        JArray(pairs.map { case (a, b) => mergeJsonPairwise(a, b) })
+      }
+      case (JObject(m1), JObject(m2)) => {
+        val keys = m1.keys ++ m2.keys
+        JObject(keys.map(k => (k, mergeJsonPairwise(m1.getOrElse(k, JUndefined), m2.getOrElse(k, JUndefined)))).toMap)
+      }
+      case (v1, v2) => v1 merge v2
+    }     
+
     val expected = computeCogroup(l.data, r.data, Stream())(keyOrder) map {
       case Left3(jv) => jv
       case Middle3((jv1, jv2)) => 
-        jv1.insertAll(JObject(List(JField("value", jv2 \ "value")))) match { case Success(v) => v; case Failure(ts) => throw ts.head }
+        JObject(JField("key", jv1 \ "key"), JField("value", mergeJsonPairwise(jv1 \ "value", jv2 \ "value")))
+
+        //JObject(JField("key", jv1 \ "key"), JField("value", ((jv1 \ "value") merge (jv2 \ "value")).normalize))
+
+        //jv1.insertAll(JObject(List(JField("value", jv2 \ "value")))) match {
+        //  case Success(v) => v
+        //  case Failure(ts) => throw ts.head
+        //}
       case Right3(jv) => jv
     } 
 
@@ -258,7 +279,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
   }
 
   def testCogroupPathology1 = {
-    import JsonParser.parse
+    import JParser.parse
     val s1 = SampleData(Stream(toRecord(Array(1, 1, 1), parse("""{ "a":[] }"""))))
     val s2 = SampleData(Stream(toRecord(Array(1, 1, 1), parse("""{ "b":0 }"""))))
 
@@ -266,7 +287,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
   }
 
   def testCogroupSliceBoundaries = {
-    import JsonParser.parse
+    import JParser.parse
 
     val s1 = SampleData(Stream(
       toRecord(Array(1), parse("""{ "ruoh5A25Jaxa":-1.0 }""")),
@@ -325,34 +346,34 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     ))
 
     val s2 = SampleData(Stream(
-      toRecord(Array(19,49,71), JArray(JNothing :: JNum(2.2447601450142614E38) :: Nil)),
-      toRecord(Array(28,15,27), JArray(JNothing :: JNum(-1.0) :: Nil)),
-      toRecord(Array(33,11,79), JArray(JNothing :: JNum(-3.4028234663852886E38) :: Nil)),
-      toRecord(Array(38,9,3),   JArray(JNothing :: JNum(3.4028234663852886E38) :: Nil)),
-      toRecord(Array(44,75,87), JArray(JNothing :: JNum(3.4028234663852886E38) :: Nil)),
-      toRecord(Array(46,47,10), JArray(JNothing :: JNum(-7.090379511750481E37) :: Nil)),
-      toRecord(Array(47,17,78), JArray(JNothing :: JNum(2.646265046453461E38) :: Nil)),
-      toRecord(Array(47,89,84), JArray(JNothing :: JNum(0.0) :: Nil)),
-      toRecord(Array(48,47,76), JArray(JNothing :: JNum(1.3605700991092947E38) :: Nil)),
-      toRecord(Array(49,66,33), JArray(JNothing :: JNum(-1.4787158449349019E38) :: Nil)),
-      toRecord(Array(50,9,89),  JArray(JNothing :: JNum(-1.0) :: Nil)),
-      toRecord(Array(59,54,72), JArray(JNothing :: JNum(-3.4028234663852886E38) :: Nil)),
-      toRecord(Array(59,80,38), JArray(JNothing :: JNum(8.51654525599509E37) :: Nil)),
-      toRecord(Array(61,59,15), JArray(JNothing :: JNum(3.4028234663852886E38) :: Nil)),
-      toRecord(Array(65,34,89), JArray(JNothing :: JNum(-1.0) :: Nil)),
-      toRecord(Array(73,52,67), JArray(JNothing :: JNum(5.692401753312787E37) :: Nil)),
-      toRecord(Array(74,60,85), JArray(JNothing :: JNum(2.5390881291535566E38) :: Nil)),
-      toRecord(Array(76,41,86), JArray(JNothing :: JNum(-6.05866505535721E37) :: Nil)),
-      toRecord(Array(77,46,75), JArray(JNothing :: JNum(0.0) :: Nil)),
-      toRecord(Array(77,65,58), JArray(JNothing :: JNum(1.0) :: Nil)),
-      toRecord(Array(86,50,9),  JArray(JNothing :: JNum(-3.4028234663852886E38) :: Nil))
+      toRecord(Array(19,49,71), JArray(JUndefined :: JNum(2.2447601450142614E38) :: Nil)),
+      toRecord(Array(28,15,27), JArray(JUndefined :: JNum(-1.0) :: Nil)),
+      toRecord(Array(33,11,79), JArray(JUndefined :: JNum(-3.4028234663852886E38) :: Nil)),
+      toRecord(Array(38,9,3),   JArray(JUndefined :: JNum(3.4028234663852886E38) :: Nil)),
+      toRecord(Array(44,75,87), JArray(JUndefined :: JNum(3.4028234663852886E38) :: Nil)),
+      toRecord(Array(46,47,10), JArray(JUndefined :: JNum(-7.090379511750481E37) :: Nil)),
+      toRecord(Array(47,17,78), JArray(JUndefined :: JNum(2.646265046453461E38) :: Nil)),
+      toRecord(Array(47,89,84), JArray(JUndefined :: JNum(0.0) :: Nil)),
+      toRecord(Array(48,47,76), JArray(JUndefined :: JNum(1.3605700991092947E38) :: Nil)),
+      toRecord(Array(49,66,33), JArray(JUndefined :: JNum(-1.4787158449349019E38) :: Nil)),
+      toRecord(Array(50,9,89),  JArray(JUndefined :: JNum(-1.0) :: Nil)),
+      toRecord(Array(59,54,72), JArray(JUndefined :: JNum(-3.4028234663852886E38) :: Nil)),
+      toRecord(Array(59,80,38), JArray(JUndefined :: JNum(8.51654525599509E37) :: Nil)),
+      toRecord(Array(61,59,15), JArray(JUndefined :: JNum(3.4028234663852886E38) :: Nil)),
+      toRecord(Array(65,34,89), JArray(JUndefined :: JNum(-1.0) :: Nil)),
+      toRecord(Array(73,52,67), JArray(JUndefined :: JNum(5.692401753312787E37) :: Nil)),
+      toRecord(Array(74,60,85), JArray(JUndefined :: JNum(2.5390881291535566E38) :: Nil)),
+      toRecord(Array(76,41,86), JArray(JUndefined :: JNum(-6.05866505535721E37) :: Nil)),
+      toRecord(Array(77,46,75), JArray(JUndefined :: JNum(0.0) :: Nil)),
+      toRecord(Array(77,65,58), JArray(JUndefined :: JNum(1.0) :: Nil)),
+      toRecord(Array(86,50,9),  JArray(JUndefined :: JNum(-3.4028234663852886E38) :: Nil))
     ))
 
     testCogroup(s1, s2)
   }
 
   def testCogroupPathology3 = {
-    import JsonParser.parse
+    import JParser.parse
     val s1 = SampleData(Stream(
       parse("""{ "value":{ "ugsrry":3.0961191760668197E+307 }, "key":[2.0] }"""),
       parse("""{ "value":{ "ugsrry":0.0 }, "key":[3.0] }"""),
@@ -387,7 +408,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
   }
 
   def testPartialUndefinedCogroup = {
-    import JsonParser.parse
+    import JParser.parse
 
     val ltable = fromSample(SampleData(Stream(
       parse("""{ "id" : "foo", "val" : 4 }"""))))

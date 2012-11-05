@@ -21,7 +21,7 @@ package com.precog
 package muspelheim
 
 import yggdrasil._
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import com.precog.common._
 import org.specs2.mutable._
 

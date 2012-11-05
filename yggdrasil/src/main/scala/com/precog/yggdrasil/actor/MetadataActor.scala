@@ -31,8 +31,6 @@ import com.weiglewilczek.slf4s.Logging
 import org.slf4j.MDC
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-
 import blueeyes.json.serialization.Decomposer
 import blueeyes.json.serialization.DefaultSerialization._
 

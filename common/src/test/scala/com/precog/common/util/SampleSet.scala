@@ -23,8 +23,7 @@ import org.joda.time._
 import org.joda.time.format._
 import org.joda.time.DateTimeZone
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
+import blueeyes.json._
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
 import scalaz.syntax.std.boolean._
@@ -98,11 +97,13 @@ object AdSamples {
     ageRange <- gaussianIndex(ageRangeArrays.size).map{ ageRangeArrays(_) }
   } yield {
     JObject(
-      JField("gender", gender) ::
-      JField("platform", plat) ::
-      JField("campaign", camp) ::
-      JField("cpm", cpm) ::
-      JField("ageRange", ageRange) :: Nil
+      Map(
+        "gender" -> JString(gender),
+        "platform" -> JString(plat),
+        "campaign" -> JString(camp),
+        "cpm" -> JNum(cpm),
+        "ageRange" -> ageRange
+      )
     )
   }
 
@@ -113,10 +114,12 @@ object AdSamples {
     camp <- gaussianIndex(campaigns.size).map{ campaigns(_) } 
   } yield {
     JObject(
-      JField("employees", emps) ::
-      JField("revenue", rev) ::
-      JField("category", cat) ::
-      JField("campaign", camp) :: Nil
+      Map(
+        "employees" -> JString(emps),
+        "revenue" -> JString(rev),
+        "category" -> JString(cat),
+        "campaign" -> JString(camp)
+      )
     )
   }
 
@@ -128,11 +131,13 @@ object AdSamples {
     uid <- oneOf(userId)
   } yield {
     JObject(
-      JField("time", time) ::
-      JField("timeZone", tz) ::
-      JField("timeString", toISO8601(time, tz)) ::
-      JField("pageId", pid) :: 
-      JField("userId", uid) :: Nil
+      Map(
+        "time" -> JNum(time),
+        "timeZone" -> JString(tz),
+        "timeString" -> JString(toISO8601(time, tz)),
+        "pageId" -> JString(pid), 
+        "userId" -> JString(uid)
+      )
     )
   }
 
@@ -143,10 +148,12 @@ object AdSamples {
     uid <- oneOf(userId)
   } yield {
     JObject(
-      JField("time", time) ::
-      JField("timeZone", tz) ::
-      JField("pageId", pid) :: 
-      JField("userId", uid) :: Nil
+      Map(
+        "time" -> JNum(time),
+        "timeZone" -> JString(tz),
+        "pageId" -> JString(pid),
+        "userId" -> JString(uid)
+      )
     )
   }
 
@@ -156,9 +163,11 @@ object AdSamples {
     eventName <- oneOf(eventNames)
   } yield {
     JObject(
-      JField("time", time) ::
-      JField("platform", platform) :: 
-      JField("eventName", eventName) :: Nil
+      Map(
+        "time" -> JString(time),
+        "platform" -> JString(platform),
+        "eventName" -> JString(eventName)
+      )
     )
   }
   
@@ -168,9 +177,11 @@ object AdSamples {
     state <- oneOf(states)
   } yield {
     JObject(
-      JField("age", age) :: 
-      JField("income", income) ::  
-      JField("location", JObject(JField("state", state) :: Nil)) :: Nil 
+      Map(
+        "age" -> JNum(age),
+        "income" -> JNum(income),
+        "location" -> JObject(Map("state" -> JString(state)))
+      )
     )
   }
 
@@ -183,12 +194,14 @@ object AdSamples {
     val total = subTotal * taxRate + shipping + handling
   } yield {
     JObject(
-      JField("userId", userId) ::
-      JField("total", total) ::
-      JField("taxRate", taxRate) ::
-      JField("subTotal", subTotal) :: 
-      JField("shipping", shipping) :: 
-      JField("handling", handling) :: Nil
+      Map(
+        "userId" -> JNum(userId),
+        "total" -> JNum(total),
+        "taxRate" -> JNum(taxRate),
+        "subTotal" -> JNum(subTotal),
+        "shipping" -> JNum(shipping),
+        "handling" -> JNum(handling)
+      )
     )
   }
 
@@ -201,31 +214,22 @@ object AdSamples {
     recipients <- recipientsSample 
     amount <- chooseNum(500, 5000).map( _.toDouble / 100)
   } yield {
-    JObject(
-      JField("date", date ) :: 
-      JField("recipients", recipients) :: 
-      JField("amount", amount) :: Nil
-    )
+    JObject(Map("date" -> JNum(date), "recipients" -> recipients,
+        "amount" -> JNum(amount)))
   }
 
   def pageViewsSample = for {
     duration <- chooseNum(1,300)
     userId <- chooseNum(12345, 12360)
   } yield {
-    JObject(
-      JField("duration", duration) :: 
-      JField("userId", userId) :: Nil
-    )
+    JObject(Map("duration" -> JNum(duration), "userId" -> JNum(userId)))
   }
 
   def customersSample = for {
     userId <- chooseNum(12345, 12545)
     income <- chooseNum(10,250).map( _ * 1000)
   } yield {
-    JObject(
-      JField("userId", userId) ::
-      JField("income", income) :: Nil
-    )
+    JObject(Map("userId" -> JNum(userId), "income" -> JNum(income)))
   }
 
   def emptyObjectSample = JObject(List())

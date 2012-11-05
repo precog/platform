@@ -36,7 +36,6 @@ import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
 import blueeyes.json._
-import JsonAST._
 
 import java.io._
 import java.util.concurrent.Executors
@@ -97,7 +96,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
             
             val target = path.path.replaceAll("/$", ".json")
             val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-            val parsed = src.getLines map JsonParser.parse toStream
+            val parsed = src.getLines map JParser.parse toStream
             
             currentIndex += parsed.length
             

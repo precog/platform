@@ -24,7 +24,6 @@ import com.precog.common.{Path, VectorCase}
 import com.precog.common.json._
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 import org.joda.time.DateTime
 
 class DerefSlice(source: Slice, derefBy: PartialFunction[Int, CPathNode]) extends Slice {
