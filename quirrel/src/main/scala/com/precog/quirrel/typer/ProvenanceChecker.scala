@@ -118,19 +118,19 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           val card = leftCard orElse rightCard
           
           expr.provenance = card map { cardinality =>
-            Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take cardinality reduceOption UnionProvenance getOrElse ValueProvenance
+            Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take cardinality reduceOption ProductProvenance getOrElse ValueProvenance
           } getOrElse DynamicDerivedProvenance(left.provenance)
           
           (Set(), Set(SameCard(left.provenance, right.provenance)))
         } else {
           if (leftCard == rightCard) {
-            expr.provenance = Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take leftCard.get reduceOption UnionProvenance getOrElse ValueProvenance
+            expr.provenance = Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take leftCard.get reduceOption ProductProvenance getOrElse ValueProvenance
             (Set(), Set())
           } else {
             expr.provenance = NullProvenance
             
             val errorType = expr match {
-              case _: Union => UnionProvenanceDifferentLength
+              case _: Union => ProductProvenanceDifferentLength
               case _: Intersect => IntersectProvenanceDifferentLength
               case _ => sys.error("unreachable")
             }
@@ -299,7 +299,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                 
                 case SameCard(left, right) if !left.isParametric && !right.isParametric => {
                   if (left.cardinality != right.cardinality)
-                    Some(Left(Error(expr, UnionProvenanceDifferentLength)))
+                    Some(Left(Error(expr, ProductProvenanceDifferentLength)))
                   else
                     None
                 }
@@ -502,7 +502,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case (p1, p2) if pathExists(relations, p1, p2) || pathExists(relations, p2, p1) => 
       Some(p1 & p2)
     
-    case (UnionProvenance(left, right), p2) => {
+    case (ProductProvenance(left, right), p2) => {
       val leftP = unifyProvenance(relations)(left, p2)
       val rightP = unifyProvenance(relations)(right, p2)
       val unionP = (leftP.toList zip rightP.toList headOption) map {
@@ -512,7 +512,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       unionP orElse leftP orElse rightP
     }
     
-    case (p1, UnionProvenance(left, right)) => {
+    case (p1, ProductProvenance(left, right)) => {
       val leftP = unifyProvenance(relations)(p1, left)
       val rightP = unifyProvenance(relations)(p1, right)
       val unionP = (leftP.toList zip rightP.toList headOption) map {
@@ -577,14 +577,14 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case UnifiedProvenance(left, right) =>
       UnifiedProvenance(substituteParam(id, let, left, sub), substituteParam(id, let, right, sub))
     
-    case UnionProvenance(left, right) =>
-      UnionProvenance(substituteParam(id, let, left, sub), substituteParam(id, let, right, sub))
+    case ProductProvenance(left, right) =>
+      ProductProvenance(substituteParam(id, let, left, sub), substituteParam(id, let, right, sub))
     
     case DynamicDerivedProvenance(source) => {
       val source2 = substituteParam(id, let, source, sub)
       
       source2.cardinality map { cardinality =>
-        Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take cardinality reduceOption UnionProvenance getOrElse ValueProvenance
+        Stream continually { DynamicProvenance(currentId.getAndIncrement()): Provenance } take cardinality reduceOption ProductProvenance getOrElse ValueProvenance
       } getOrElse DynamicDerivedProvenance(source2)
     }
     
@@ -607,7 +607,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       UnifiedProvenance(left2, right2)
     }
     
-    case UnionProvenance(left, right) => {
+    case ProductProvenance(left, right) => {
       val left2 = resolveUnifications(relations)(left)
       val right2 = resolveUnifications(relations)(right)
       left2 & right2
@@ -626,7 +626,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       case (`that`, `that`) => that
       case (NullProvenance, _) => that
       case (_, NullProvenance) => this
-      case _ => UnionProvenance(this, that)
+      case _ => ProductProvenance(this, that)
     }
     
     def isParametric: Boolean
@@ -640,7 +640,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       } else {
         val back = possibilities filter {
           case ValueProvenance => false
-          case _: UnionProvenance => false
+          case _: ProductProvenance => false
           
           // should probably remove UnifiedProvenance, but it's never going to happen
           
@@ -656,8 +656,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       case UnifiedProvenance(left, right) => 
         findChildren(this, true).toList sorted Provenance.order.toScalaOrdering reduceLeft UnifiedProvenance
       
-      case UnionProvenance(left, right) => 
-        findChildren(this, false).toList sorted Provenance.order.toScalaOrdering reduceLeft UnionProvenance
+      case ProductProvenance(left, right) =>
+        findChildren(this, false).toList sorted Provenance.order.toScalaOrdering reduceLeft ProductProvenance
       
       case prov => prov
     }
@@ -665,14 +665,14 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     // TODO is this too slow?
     private def findChildren(prov: Provenance, unified: Boolean): Set[Provenance] = prov match { 
       case UnifiedProvenance(left, right) if unified => findChildren(left, unified) ++ findChildren(right, unified)
-      case UnionProvenance(left, right) if !unified => findChildren(left, unified) ++ findChildren(right, unified)
+      case ProductProvenance(left, right) if !unified => findChildren(left, unified) ++ findChildren(right, unified)
       case _ => Set(prov)
     }
 
     def makeCanonical: Provenance = {
       this match {
         case UnifiedProvenance(left, right) => UnifiedProvenance(left.makeCanonical, right.makeCanonical).associateLeft
-        case UnionProvenance(left, right) => UnionProvenance(left.makeCanonical, right.makeCanonical).associateLeft
+        case ProductProvenance(left, right) => ProductProvenance(left.makeCanonical, right.makeCanonical).associateLeft
         case DynamicDerivedProvenance(prov) => DynamicDerivedProvenance(prov.makeCanonical)
         case prov => prov
       }
@@ -705,9 +705,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         case (UnifiedProvenance(_, _), _) => GT
         case (_, UnifiedProvenance(_, _)) => LT
 
-        case (UnionProvenance(left1, right1), UnionProvenance(left2, right2)) => (left1 ?|? left2) |+| (right1 ?|? right2)
-        case (UnionProvenance(_, _), _) => GT
-        case (_, UnionProvenance(_, _)) => LT
+        case (ProductProvenance(left1, right1), ProductProvenance(left2, right2)) => (left1 ?|? left2) |+| (right1 ?|? right2)
+        case (ProductProvenance(_, _), _) => GT
+        case (_, ProductProvenance(_, _)) => LT
 
         case (StaticProvenance(v1), StaticProvenance(v2)) => {
           if (v1 == v2) EQ
@@ -753,7 +753,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     val isParametric = left.isParametric || right.isParametric
   }
   
-  case class UnionProvenance(left: Provenance, right: Provenance) extends Provenance {
+  case class ProductProvenance(left: Provenance, right: Provenance) extends Provenance {
     override val toString = "(%s & %s)".format(left, right)
     
     val isParametric = left.isParametric || right.isParametric

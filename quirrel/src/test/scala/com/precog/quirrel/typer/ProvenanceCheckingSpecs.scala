@@ -278,15 +278,15 @@ object ProvenanceCheckingSpecs extends Specification
       val tree @ Let(_, _, _, _, _) = compileSingle("back := //foo ~ //bar //foo + //bar back")
       
       tree.resultProvenance must beLike {
-        case UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
-        case UnionProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
+        case ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
+        case ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
       }
       
       tree.resultProvenance.isParametric mustEqual false
       
       tree.provenance must beLike {
-        case UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
-        case UnionProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
+        case ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
+        case ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
       }
       
       tree.errors must beEmpty
@@ -307,7 +307,7 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance must beLike {
-        case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+        case ProductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
       }
       
       tree.errors must beEmpty
@@ -328,7 +328,7 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance must beLike {
-        case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+        case ProductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
       }
       
       tree.errors must beEmpty
@@ -349,8 +349,8 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance must beLike {
-        case UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
-        case UnionProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
+        case ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
+        case ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
       }
       
       tree.errors must beEmpty
@@ -408,7 +408,7 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance must beLike {
-        case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+        case ProductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
       }
       
       tree.errors must beEmpty
@@ -430,7 +430,7 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance must beLike {
-        case UnionProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+        case ProductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
       }
       
       tree.errors must beEmpty
@@ -452,8 +452,8 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance must beLike {
-        case UnionProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
-        case UnionProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
+        case ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
+        case ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
       }
       
       tree.errors must beEmpty
@@ -472,7 +472,7 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+      tree.errors mustEqual Set(ProductProvenanceDifferentLength)
     }
     
     "reject intersect on non-matching union provenances" in {
@@ -523,7 +523,7 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+      tree.errors mustEqual Set(ProductProvenanceDifferentLength)
     }
     
     "accept intersect through a function on union provenances" in {
@@ -541,7 +541,7 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+      tree.errors mustEqual Set(ProductProvenanceDifferentLength)
     }
     
     "accept difference through a function on union provenances" in {
@@ -559,7 +559,7 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+      tree.errors mustEqual Set(ProductProvenanceDifferentLength)
     }
 
     "reject addition on different loads" in {
