@@ -73,7 +73,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   import SliceTransform._
   import BlockStoreColumnarTableModule._
     
-  type YggConfig <: IdSourceConfig with BlockStoreColumnarTableModuleConfig
+  type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig with BlockStoreColumnarTableModuleConfig
   override type UserId = String
   type Key
   type Projection <: BlockProjectionLike[Key, Slice]
@@ -978,8 +978,10 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     
     // TODO assert that this table only has one row
     
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] =
-      M.point(groupKeys.map { groupSpec => transform(InnerObjectConcat(WrapObject(groupSpec, "0"), WrapObject(valueSpec, "1"))) }) 
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = {
+      val xform = transform(valueSpec)
+      M.point(List.fill(groupKeys.size)(xform))
+    }
     
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = M.point(this)
     
@@ -994,7 +996,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     override def distinct(spec: TransSpec1): Table = this
 
     override def takeRange(startIndex: Long, numberToTake: Long): Table =
-      if(startIndex == 0 && numberToTake == 1) this else Table.empty
+      if (startIndex <= 0 && startIndex + numberToTake >= 1) this else Table.empty
   }
 }
 

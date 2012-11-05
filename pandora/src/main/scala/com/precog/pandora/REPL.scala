@@ -236,9 +236,11 @@ trait REPL
 object Console extends App {
   val controlTimeout = Duration(120, "seconds")
   class REPLConfig(dataDir: Option[String]) extends 
-      BaseConfig with 
+      BaseConfig with
+      IdSourceConfig with
       EvaluatorConfig with
       StandaloneShardSystemConfig with
+      ColumnarTableModuleConfig with
       BlockStoreColumnarTableModuleConfig with
       JDBMProjectionModuleConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
