@@ -1,0 +1,9 @@
+clicks := //clicks
+
+countsForTimezone := solve 'timeZone
+  clicksForZone := clicks where clicks.timeZone = 'timeZone
+  {timeZone: 'timeZone, clickCount: count(clicksForZone)}
+
+mostClicks := max(countsForTimezone.clickCount)
+
+countsForTimezone where countsForTimezone.clickCount = mostClicks
