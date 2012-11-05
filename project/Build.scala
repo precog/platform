@@ -111,7 +111,7 @@ object PlatformBuild extends Build {
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
 
   lazy val platform = Project(id = "platform", base = file(".")).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, mongo)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*)
@@ -163,4 +163,7 @@ object PlatformBuild extends Build {
 
   lazy val jprofiler = Project(id = "jprofiler", base = file("jprofiler")).
     settings(jprofilerSettings ++ commonNexusSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.jprofiler.Run")): _*).dependsOn(ragnarok)
+
+  lazy val heimdall = Project(id = "heimdall", base = file("heimdall")).
+    settings(commonNexusSettings: _*).dependsOn(common, util)
 }
