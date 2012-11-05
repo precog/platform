@@ -323,10 +323,19 @@ trait YggdrasilQueryExecutor
 
   private def asBytecode(query: String): Validation[EvaluationError, Vector[Instruction]] = {
     try {
-      val tree = compile(query)
-      if (tree.errors.isEmpty) success(emit(tree)) 
-      else failure(
-        UserError(
+      val forest = compile(query)
+      val validForest = forest filter { _.errors.isEmpty }
+      
+      if (validForest.size == 1) {
+        success(emit(validForest.head))
+      } else if (validForest.size > 1) {
+        failure(UserError(
+          JArray(
+            JArray(
+              JObject(
+                JField("message", JString("Ambiguous parse results.")) :: Nil) :: Nil) :: Nil)))
+      } else {
+        val nested = forest map { tree =>
           JArray(
             (tree.errors: Set[Error]) map { err =>
               val loc = err.loc
@@ -338,12 +347,12 @@ trait YggdrasilQueryExecutor
                 :: JField("lineNum", JNum(loc.lineNum))
                 :: JField("colNum", JNum(loc.colNum))
                 :: JField("detail", JString(tp.toString))
-                :: Nil
-              )
-            } toList
-          )
-        )
-      )
+                :: Nil)
+            } toList)
+        }
+        
+        failure(UserError(JArray(nested.toList)))
+      }
     } catch {
       case ex: ParseException => failure(
         UserError(

@@ -26,6 +26,7 @@ import org.specs2.mutable.Specification
 
 object CriticalConditionFinderSpecs extends Specification
     with StubPhases
+    with CompilerUtils
     with Compiler
     with CriticalConditionFinder
     with RandomLibrary {
@@ -35,7 +36,7 @@ object CriticalConditionFinderSpecs extends Specification
   
   "critical condition finding" should {
     "detect solve constraints as a critical condition" in {
-      val tree @ Solve(_, _, _) = compile("solve 'a = 1 2")
+      val tree @ Solve(_, _, _) = compileSingle("solve 'a = 1 2")
       
       tree.criticalConditions must haveSize(1)
       tree.criticalConditions must haveKey("'a")
@@ -47,7 +48,7 @@ object CriticalConditionFinderSpecs extends Specification
     }
     
     "detect critical conditions in a simple where" in {
-      val tree @ Solve(_, _, _) = compile("solve 'b 42 where 'b + 24")
+      val tree @ Solve(_, _, _) = compileSingle("solve 'b 42 where 'b + 24")
       
       tree.criticalConditions must haveSize(1)
       tree.criticalConditions must haveKey("'b")
@@ -59,7 +60,7 @@ object CriticalConditionFinderSpecs extends Specification
     }
     
     "detect critical conditions in a nested where" in {
-      val tree @ Solve(_, _, _) = compile("solve 'b 42 where (12 where 'b + 24)")
+      val tree @ Solve(_, _, _) = compileSingle("solve 'b 42 where (12 where 'b + 24)")
       
       tree.criticalConditions must haveSize(1)
       tree.criticalConditions must haveKey("'b")
@@ -71,7 +72,7 @@ object CriticalConditionFinderSpecs extends Specification
     }
     
     "merge critical conditions in a nested where" in {
-      val tree @ Solve(_, _, _) = compile("solve 'b 42 where (12 + 'b where 'b + 24)")
+      val tree @ Solve(_, _, _) = compileSingle("solve 'b 42 where (12 + 'b where 'b + 24)")
       
       tree.criticalConditions must haveSize(1)
       tree.criticalConditions must haveKey("'b")
@@ -91,7 +92,7 @@ object CriticalConditionFinderSpecs extends Specification
     }
     
     "detect all critical conditions in a chain of wheres" in {
-      val tree @ Solve(_, _, _) = compile("solve 'b (42 where 12 + 'b) where 'b + 24")
+      val tree @ Solve(_, _, _) = compileSingle("solve 'b (42 where 12 + 'b) where 'b + 24")
       
       tree.criticalConditions must haveSize(1)
       tree.criticalConditions must haveKey("'b")
@@ -118,7 +119,7 @@ object CriticalConditionFinderSpecs extends Specification
           |   foo' + bar'
           | """.stripMargin
           
-      val tree @ Solve(_, _, _) = compile(input)
+      val tree @ Solve(_, _, _) = compileSingle(input)
       
       tree.criticalConditions must haveSize(1)
       tree.criticalConditions must haveKey("'a")
@@ -138,7 +139,7 @@ object CriticalConditionFinderSpecs extends Specification
     }
          
     "detect critical conditions in a case when a tic variable is not solvable in all cases" in {
-      val tree @ Solve(_, _, _) = compile("""
+      val tree @ Solve(_, _, _) = compileSingle("""
         | solve 'b
         |   k := //clicks.time where //clicks.time = 'b
         |   j := //views.time where //views.time > 'b
@@ -154,7 +155,7 @@ object CriticalConditionFinderSpecs extends Specification
     }
 
     "detect critical condition hidden by dispatch" in {
-      val tree @ Solve(_, _, _) = compile("solve 'b h := 'b = 5 42 where h")
+      val tree @ Solve(_, _, _) = compileSingle("solve 'b h := 'b = 5 42 where h")
       
       tree.criticalConditions must haveSize(1)
       tree.criticalConditions must haveKey("'b")
@@ -168,7 +169,7 @@ object CriticalConditionFinderSpecs extends Specification
     }
     
     "remove extraneous conjunctions" in {
-      val tree @ Solve(_, _, _) = compile("solve 'b 42 where 'b = 2 & 4 = 5")
+      val tree @ Solve(_, _, _) = compileSingle("solve 'b 42 where 'b = 2 & 4 = 5")
       
       tree.criticalConditions must haveSize(1)
       tree.criticalConditions must haveKey("'b")
@@ -182,7 +183,7 @@ object CriticalConditionFinderSpecs extends Specification
     }
     
     "split conjunctions" in {
-      val tree @ Solve(_, _, _) = compile("solve 'b 42 where 'b = 2 & 4 = 'b")
+      val tree @ Solve(_, _, _) = compileSingle("solve 'b 42 where 'b = 2 & 4 = 'b")
       
       tree.criticalConditions must haveSize(1)
       tree.criticalConditions must haveKey("'b")
@@ -202,7 +203,7 @@ object CriticalConditionFinderSpecs extends Specification
     }
     
     "not split disjunctions" in {
-      val tree @ Solve(_, _, _) = compile("solve 'b 42 where 'b = 2 | 4 = 5")
+      val tree @ Solve(_, _, _) = compileSingle("solve 'b 42 where 'b = 2 | 4 = 5")
       
       tree.criticalConditions must haveSize(1)
       tree.criticalConditions must haveKey("'b")

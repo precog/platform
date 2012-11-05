@@ -25,10 +25,7 @@ libraryDependencies ++= Seq(
   "commons-io"                  %  "commons-io"         % "2.4",
   "com.weiglewilczek.slf4s"     %% "slf4s"              % "1.0.7",
   "ch.qos.logback"              %  "logback-classic"    % "1.0.0",
-  "com.google.guava"            %  "guava"              % "12.0",
-  "org.fusesource.leveldbjni"   %  "leveldbjni"         % "1.2-SNAPSHOT" changing(),
-  "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.2-SNAPSHOT" changing(),
-  "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.2-SNAPSHOT" changing()
+  "com.google.guava"            %  "guava"              % "12.0"
 )
 
 resolvers ++= Seq(//"Local Maven Repository"            at "file://"+Path.userHome.absolutePath+"/.m2/repository",

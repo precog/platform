@@ -156,6 +156,7 @@ trait EvalStackSpecs extends Specification {
       actual must contain(true).only
     }
 
+    //commented out because of timeout issues on jenkins
     /* "accept division inside an object" in {
       val input = """
         | data := //conversions
@@ -193,6 +194,38 @@ trait EvalStackSpecs extends Specification {
         case (ids, SDecimal(num)) =>
           ids must haveSize(0)
           (num.toDouble ~= 7.54568543692) mustEqual true
+      }
+    }
+
+    "call the same function multiple times with different input" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | 
+        | stats(variable) := {max: max(variable), min: min(variable), sum: sum(variable)}
+        | 
+        | weightStats := stats(medals.Weight)
+        | heightStats := stats(medals.HeightIncm)
+        | 
+        | [weightStats, heightStats]
+      """.stripMargin
+
+      val result = evalE(input)
+
+      result must haveSize(1)
+
+      forall(result) {
+        case (ids, SArray(Vector(SObject(map1), SObject(map2)))) =>
+          ids must haveSize(0)
+
+          map1.keySet mustEqual(Set("min", "max", "sum"))
+          map1("min") mustEqual SDecimal(39)
+          map1("max") mustEqual SDecimal(165)
+          map1("sum") mustEqual SDecimal(67509)
+
+          map2.keySet mustEqual(Set("min", "max", "sum"))
+          map2("min") mustEqual SDecimal(140)
+          map2("max") mustEqual SDecimal(208)
+          map2("sum") mustEqual SDecimal(175202)
       }
     }
 
@@ -1121,6 +1154,7 @@ trait EvalStackSpecs extends Specification {
       results must contain(SObject(Map("count" -> SDecimal(BigDecimal("153")), "state" -> SString("72"))))
     }
     
+    //commented out because of timeout issues on jenkins
     /* "evaluate nathan's query, once and for all" in {
       val input = """
         | import std::time::*
