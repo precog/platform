@@ -1,0 +1,5 @@
+campaigns := //campaigns
+nums := distinct(campaigns.cpm where campaigns.cpm < 10)
+solve 'n
+  m := max(nums where nums < 'n)
+  (nums where nums = 'n) + m

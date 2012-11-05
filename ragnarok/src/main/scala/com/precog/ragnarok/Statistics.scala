@@ -40,6 +40,8 @@ case class Statistics private[ragnarok] (
     vn: Double,
     n: Int) {
 
+  //FIXME: keep track of Double error
+
   /**
    * Multiply this statistic by some constant > 0. Using this is equivalent to
    * computing the stats of a scaled (by `x`) version of the original dataset.

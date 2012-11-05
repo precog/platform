@@ -23,6 +23,8 @@ import scalaz.Order
 import scalaz.Monoid
 import java.util.Comparator
 
+import scala.collection.mutable
+
 package object util {
   type RawBitSet = Array[Int]
 
@@ -69,6 +71,33 @@ package object util {
   implicit def any2Kestrel[A](a0: => A): Kestrel[A] = new Kestrel[A] {
     lazy val a = a0
   }
+
+
+  final class LazyMap[A, B, C](source: Map[A, B], f: B => C) extends Map[A, C] {
+    import scala.collection.JavaConverters._
+
+    private val m: mutable.ConcurrentMap[A, C] = new java.util.concurrent.ConcurrentHashMap[A, C]().asScala
+
+    def iterator: Iterator[(A, C)] = source.keysIterator map { a => (a, apply(a)) }
+
+    def get(a: A): Option[C] = {
+      m get a orElse (source get a map { b =>
+        val c = f(b)
+        m.putIfAbsent(a, c)
+        c
+      })
+    }
+
+    def + [C1 >: C](kv: (A, C1)): Map[A, C1] = iterator.toMap + kv
+    def - (a: A): Map[A, C] = iterator.toMap - a
+  }
+
+  sealed trait LazyMapValues[A, B] {
+    protected def source: Map[A, B]
+    def lazyMapValues[C](f: B => C): Map[A, C] = new LazyMap[A, B, C](source, f)
+  }
+
+  implicit def lazyValueMapper[A, B](m: Map[A, B]) = new LazyMapValues[A, B] { val source = m }
 }
 
 // vim: set ts=4 sw=4 et:

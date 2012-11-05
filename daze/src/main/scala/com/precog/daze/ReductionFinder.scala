@@ -160,7 +160,7 @@ trait ReductionFinder[M[+_]] extends TransSpecModule with TransSpecFinder[M] {
       def append(x: List[dag.Reduce], y: => List[dag.Reduce]) = x ::: y
     }
 
-    val reduces = node.foldDown[List[dag.Reduce]] {
+    val reduces = node.foldDown[List[dag.Reduce]](true) {
       case r: dag.Reduce => List(r)
     } distinct
 

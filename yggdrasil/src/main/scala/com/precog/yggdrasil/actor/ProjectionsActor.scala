@@ -92,7 +92,7 @@ trait ProjectionsActorModule extends ProjectionModule {
   /**
    * The responsibilities of
    */
-  class ProjectionsActor extends Actor { self =>
+  class ProjectionsActor(val maxOpenProjections: Int) extends Actor { self =>
     private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionsActor")
 
     case class AcquisitionRequest(requestor: ActorRef, lockForArchive: Boolean) 
@@ -186,7 +186,6 @@ trait ProjectionsActorModule extends ProjectionModule {
     protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JNum(openProjections.size)) :: 
                                                                   JField("outstandingReferences", JNum(acquisitionState.size)) :: Nil)) :: Nil)
 
-    val maxOpenProjections = 1000
     private val openProjections = mutable.Map.empty[ProjectionDescriptor, (Projection, Long)]
                              
     private def evictProjection(descriptor: ProjectionDescriptor, projection: Projection): IO[Unit] = {
