@@ -48,8 +48,8 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] {
 
   def newAccountGrant(accountId: AccountID, name: Option[String] = None, description: Option[String] = None, issuerKey: APIKey, parentIds: Set[GrantID], expiration: Option[DateTime] = None): M[Grant] = {
     val path = "/"+accountId+"/"
-    val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path("/"), some(accountId)) : Permission)
-    val writePerms = Set(WritePermission, DeletePermission).map(_(Path(path), None) : Permission)
+    val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path("/"), Set(accountId)) : Permission)
+    val writePerms = Set(WritePermission, DeletePermission).map(_(Path(path), Set()) : Permission)
     newGrant(name, description, issuerKey, parentIds, readPerms ++ writePerms, expiration)
   }
   

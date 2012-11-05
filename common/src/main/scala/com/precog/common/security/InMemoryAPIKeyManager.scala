@@ -33,7 +33,7 @@ class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManag
   val (rootAPIKeyRecord, grants, apiKeys) = { 
     val rootGrantId = newGrantID()
     val rootGrant = {
-      def mkPerm(p: (Path, Option[AccountID]) => Permission) = p(Path("/"), None)
+      def mkPerm(p: (Path, Set[AccountID]) => Permission) = p(Path("/"), Set())
       
       Grant(
         rootGrantId, some("root-grant"), some("The root grant"), None, Set(),

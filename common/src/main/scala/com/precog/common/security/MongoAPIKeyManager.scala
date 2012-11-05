@@ -94,7 +94,7 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
     findOneMatching[APIKeyRecord]("isRoot", "true", settings.apiKeys).map(_.getOrElse {
       val rootGrantId = newGrantID()
       val rootGrant = {
-        def mkPerm(p: (Path, Option[AccountID]) => Permission) = p(Path("/"), None)
+        def mkPerm(p: (Path, Set[AccountID]) => Permission) = p(Path("/"), Set())
         
         Grant(
           rootGrantId, some("root-grant"), some("The root grant"), None, Set(),
