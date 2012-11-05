@@ -50,7 +50,7 @@ import akka.util.duration._
 import akka.util.Duration
 import akka.util.Timeout
 
-import com.mongodb.Mongo
+import com.mongodb.{Mongo, MongoURI}
 
 import org.streum.configrity.Configuration
 import org.slf4j.{LoggerFactory, MDC}
@@ -72,14 +72,25 @@ class MongoQueryExecutorConfig(val config: Configuration)
   with MongoColumnarTableModuleConfig
   with BlockStoreColumnarTableModuleConfig
   with IdSourceConfig
-  with EvaluatorConfig {
+  with EvaluatorConfig 
+  with ShardConfig {
     
   val maxSliceSize = config[Int]("mongo.max_slice_size", 10000)
+
+  val shardId = "standalone"
+  val logPrefix = "mongo"
+
+  // Ingest for mongo is handled via mongo
+  override val ingestEnabled = false
 
   val idSource = new IdSource {
     private val source = new java.util.concurrent.atomic.AtomicLong
     def nextId() = source.getAndIncrement
   }
+
+  def mongoServer: String = config[String]("mongo.server", "localhost:27017")
+
+  def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
 }
 
 trait MongoQueryExecutorComponent {
@@ -102,8 +113,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig) extends ShardQ
   }
 
   def startup() = Future {
-    //FIXME: actually build this from yggConfig
-    Table.mongo = new Mongo()
+    Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
     true
   }
 

@@ -75,7 +75,7 @@ trait ShardQueryExecutor
 
   def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
     val qid = queryId.getAndIncrement
-    queryLogger.info("Executing query for %s: %s, prefix: %s".format(userUID, query,prefix))
+    queryLogger.info("Executing query %d for %s: %s, prefix: %s".format(qid, userUID, query,prefix))
 
     import EvaluationError._
 

@@ -35,6 +35,7 @@ import com.precog.util.BitSetUtil.Implicits._
 
 import akka.dispatch.Future
 
+import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.mongo.json._
 import BijectionsMongoJson._
@@ -117,16 +118,25 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
     }
 
     def makeSlice(cursor: DBCursor): (Slice, Option[DBCursor]) = {
+      import TransSpecModule.paths._
+
       @tailrec def buildColArrays(from: DBCursor, into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
         if (from.hasNext) {
           // horribly inefficient, but a place to start
-          // FIXME: get objectId in the right place
           val Success(jv) = MongoToJson(from.next())
           val withIdsAndValues = jv.flattenWithPath.foldLeft(into) {
             case (acc, (jpath, JNothing)) => acc
             case (acc, (jpath, v)) =>
               val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
-              val ref = ColumnRef(CPath(jpath), ctype)
+
+              // The objectId becomes identity for the slices, everything else is a value
+              val transformedPath = if (jpath == JPath("._id")) {
+                Key \ "[0]"
+              } else {
+                Value \ CPath(jpath)
+              }
+
+              val ref = ColumnRef(transformedPath, ctype)
 
               val pair: (BitSet, Array[_]) = v match {
                 case JBool(b) => 

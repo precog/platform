@@ -27,6 +27,7 @@ import daze.{ Evaluator, EvaluatorConfig }
 import yggdrasil.{ StorageModule, BaseConfig, IdSource }
 import yggdrasil.{ Identities, SValue, SEvent }
 import yggdrasil.util._
+import yggdrasil.table.ColumnarTableModuleConfig
 import yggdrasil.serialization._
 
 import muspelheim.ParseEvalStack
@@ -41,7 +42,7 @@ import scalaz._
 import scalaz.syntax.monad._
 
 
-trait PerfTestRunnerConfig extends BaseConfig with EvaluatorConfig {
+trait PerfTestRunnerConfig extends BaseConfig with IdSourceConfig with EvaluatorConfig with ColumnarTableModuleConfig {
   def optimize: Boolean
   def userUID: String
 }
