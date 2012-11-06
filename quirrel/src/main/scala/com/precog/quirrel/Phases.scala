@@ -39,7 +39,6 @@ trait Phases {
   def inferBuckets(expr: Expr): Set[Error]
   
   def findCriticalConditions(expr: Expr): Map[TicId, Set[ConditionTree]]
-  def findGroups(expr: Expr): Set[GroupTree]
   
   private[quirrel] def runPhasesInSequence(tree: Expr): Set[Error] =
     Phases.foldLeft(Set[Error]()) { _ ++ _(tree) }
