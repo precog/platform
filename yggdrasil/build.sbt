@@ -59,10 +59,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"           %  "akka-actor"         % "2.0.2",
   "com.typesafe.akka"           %  "akka-testkit"       % "2.0.2" % "test",
   "org.apache"                  %% "kafka-core"         % "0.7.5",
-  "org.fusesource.leveldbjni"   %  "leveldbjni"         % "1.2-SNAPSHOT" changing(),
   "com.github.scopt"            %  "scopt_2.9.1"        % "2.0.1",
-  "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.2-SNAPSHOT" changing(),
-  "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.2-SNAPSHOT" changing(),
   "com.google.guava"            %  "guava"              % "12.0",
   "org.apfloat"                 %  "apfloat"            % "1.6.3",
   "org.spire-math"              %% "spire"              % "0.2.0-M2"

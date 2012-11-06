@@ -17,13 +17,9 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.performance
+package com.precog.yggdrasil
 
-import org.specs2.mutable.Specification
-
-import java.io.File
-import java.nio.ByteBuffer
-
-class PerformanceSuite 
-  with RoutingPerformanceSpec 
-  with YggdrasilPerformanceSpec 
+case class EnormousCartesianException(left: TableSize, right: TableSize) extends RuntimeException {
+  override def getMessage =
+    "cannot evaluate cartesian of sets with size %s and %s".format(left, right)
+}

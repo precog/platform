@@ -97,8 +97,11 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
 object BlockStoreColumnarTableModuleSpec extends BlockStoreColumnarTableModuleSpec[Free.Trampoline] {
   implicit def M = Trampoline.trampolineMonad
 
-  type YggConfig = IdSourceConfig
-  val yggConfig = new IdSourceConfig {
+  type YggConfig = IdSourceConfig with ColumnarTableModuleConfig
+  
+  val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
+    val maxSliceSize = 10
+    
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
       def nextId() = source.getAndIncrement

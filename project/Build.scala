@@ -30,7 +30,7 @@ object PlatformBuild extends Build {
   val archiveDir = SettingKey[String]("archive-dir", "The temporary directory to which deleted projections will be moved")
   val dataDir = SettingKey[String]("data-dir", "The temporary directory into which to extract the test data")
   val profileTask = InputKey[Unit]("profile", "Runs the given project under JProfiler")
-  val extractData = TaskKey[String]("extract-data", "Extracts the LevelDB data files used by the tests and the REPL")
+  val extractData = TaskKey[String]("extract-data", "Extracts the data files used by the tests and the REPL")
   val mainTest = SettingKey[String]("main-test", "The primary test class for the project (just used for pandora)")
 
   val nexusSettings : Seq[Project.Setting[_]] = Seq(
@@ -57,7 +57,7 @@ object PlatformBuild extends Build {
 
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "2.1-SNAPSHOT",
+    version := "2.1.1-SNAPSHOT",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalaVersion := "2.9.2",
@@ -101,7 +101,7 @@ object PlatformBuild extends Build {
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
 
   lazy val platform = Project(id = "platform", base = file(".")).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*)

@@ -63,7 +63,9 @@ object SBTConsole {
       with StandaloneShardSystemActorModule {
 
     trait YggConfig
-        extends BaseConfig 
+        extends BaseConfig
+        with IdSourceConfig
+        with ColumnarTableModuleConfig
         with EvaluatorConfig
         with StandaloneShardSystemConfig
         with JDBMProjectionModuleConfig
@@ -139,20 +141,33 @@ object SBTConsole {
     }
 
     def evalE(str: String) = {
-      val tree = compile(str)
-      if (!tree.errors.isEmpty) {
-        sys.error(tree.errors map showError mkString ("Set(\"", "\", \"", "\")"))
-      }
-      val Right(dag) = decorate(emit(tree))
+      val dag = produceDAG(str)
       withContext { ctx => consumeEval("0", dag, ctx,Path.Root) }
+    }
+    
+    def produceDAG(str: String) = {
+      val forest = compile(str)
+      val validForest = forest filter { _.errors.isEmpty }
+      
+      if (validForest.isEmpty) {
+        val strs = forest map { tree =>
+          tree.errors map showError mkString ("Set(\"", "\", \"", "\")")
+        }
+        
+        sys.error(strs mkString " | ")
+      }
+      
+      if (validForest.size > 1) {
+        sys.error("ambiguous parse (good luck!)")
+      }
+      
+      val tree = validForest.head
+      val Right(dag) = decorate(emit(tree))
+      dag
     }
 
     def printDAG(str: String) = {
-      val tree = compile(str)
-      if (!tree.errors.isEmpty) {
-        sys.error(tree.errors map showError mkString ("Set(\"", "\", \"", "\")"))
-      }
-      val Right(dag) = decorate(emit(tree))
+      val dag = produceDAG(str)
       prettyPrint(dag)
     }
 

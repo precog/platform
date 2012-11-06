@@ -26,6 +26,7 @@ import daze.{ Evaluator, EvaluatorConfig }
 
 import yggdrasil.{ StorageModule, BaseConfig, IdSource }
 import yggdrasil.{ Identities, SValue, SEvent }
+import yggdrasil.table.ColumnarTableModuleConfig
 import yggdrasil.util._
 import yggdrasil.serialization._
 
@@ -41,7 +42,11 @@ import scalaz._
 import scalaz.syntax.monad._
 
 
-trait PerfTestRunnerConfig extends BaseConfig with EvaluatorConfig {
+trait PerfTestRunnerConfig extends BaseConfig
+    with EvaluatorConfig
+    with IdSourceConfig
+    with ColumnarTableModuleConfig {
+    
   def optimize: Boolean
   def userUID: String
 }
@@ -77,11 +82,16 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
   }
 
   def eval(query: String): M[Result] = try {
-    val tree = compile(query)
+    val forest = compile(query)
+    val valid = forest filter { _.errors.isEmpty }
 
-    if (!tree.errors.isEmpty) {
-      sys.error("Error parsing query:\n" + (tree.errors map (_.toString) mkString "\n"))
+    if (valid.isEmpty) {
+      sys.error("Error parsing query:\n" + (forest flatMap { _.errors } map { _.toString } mkString "\n"))
+    } else if (valid.size > 1) {
+      sys.error("Ambiguous parse tree.")
     }
+    
+    val tree = valid.head
 
     decorate(emit(tree)) match {
       case Left(stackError) =>

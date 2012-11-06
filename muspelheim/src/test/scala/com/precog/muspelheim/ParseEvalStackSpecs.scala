@@ -65,7 +65,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
     with StorageModule[M]
     with MemoryDatasetConsumer[M] 
-    with IdSourceScannerModule[M] {
+    with IdSourceScannerModule[M] { self =>
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 
@@ -77,8 +77,6 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
 
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  type YggConfig <: EvaluatorConfig with IdSourceConfig
-  
   class ParseEvalStackSpecConfig extends BaseConfig with IdSourceConfig {
     parseEvalLogger.trace("Init yggConfig")
     val config = Configuration parse {
@@ -94,7 +92,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
     
-    val maxSliceSize = 10
+    val maxSliceSize = self.sliceSize
 
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
@@ -108,8 +106,12 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       
       def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
         parseEvalLogger.debug("Beginning evaluation of query: " + str)
-        val tree = compile(str)
-        tree.errors must beEmpty
+        
+        val forest = compile(str) filter { _.errors.isEmpty }
+        forest must haveSize(1)
+        
+        val tree = forest.head
+        
         val Right(dag) = decorate(emit(tree))
         withContext { ctx => 
           consumeEval("dummyUID", dag, ctx, Path.Root) match {
@@ -129,7 +131,11 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
         import trans._
         
         parseEvalLogger.debug("Beginning evaluation of query: " + str)
-        val tree = compile(str)
+        
+        val forest = compile(str) filter { _.errors.isEmpty }
+        forest must haveSize(1)
+        
+        val tree = forest.head
         tree.errors must beEmpty
         val Right(dag) = decorate(emit(tree))
         withContext { ctx => 

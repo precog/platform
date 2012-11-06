@@ -23,8 +23,6 @@ package emitter
 import com.precog.bytecode.Instructions
 import com.precog.bytecode.RandomLibrary
 
-import org.scalacheck.Prop
-import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
 import java.io.File
@@ -34,8 +32,8 @@ import com.codecommit.gll.LineStream
 import typer._
 
 object GroupSolverSpecs extends Specification
-    with ScalaCheck
     with StubPhases
+    with CompilerUtils
     with Compiler
     with GroupSolver
     with ProvenanceChecker
@@ -44,14 +42,14 @@ object GroupSolverSpecs extends Specification
       
   import ast._
   import buckets._
-      
+  
   "group solver" should {
     "identify and solve group set for trivial solve example" in {
       val input = "clicks := load(//clicks) solve 'day clicks where clicks.day = 'day"
       
       val Let(_, _, _, _,
         tree @ Solve(_, _, 
-          origin @ Where(_, target, Eq(_, solution, _)))) = compile(input)
+          origin @ Where(_, target, Eq(_, solution, _)))) = compileSingle(input)
           
       val btrace = List()
       val expected = Group(Some(origin), target, UnfixedSolution("'day", solution), btrace)
@@ -64,7 +62,7 @@ object GroupSolverSpecs extends Specification
       
       val Let(_, _, _, _,
         tree @ Solve(_, _, 
-          origin @ Where(_, target, And(_, Eq(_, leftSol, _), Eq(_, rightSol, _))))) = compile(input)
+          origin @ Where(_, target, And(_, Eq(_, leftSol, _), Eq(_, rightSol, _))))) = compileSingle(input)
       
       val btrace = List()
       val expected = Group(Some(origin), target,
@@ -87,7 +85,7 @@ object GroupSolverSpecs extends Specification
       """.stripMargin
 
       val Let(_, _, _, _,
-        tree @ Solve(_, _, _)) = compile(input)
+        tree @ Solve(_, _, _)) = compileSingle(input)
 
       tree.errors mustEqual Set(ConstraintsWithinInnerSolve)
     }
@@ -103,7 +101,7 @@ object GroupSolverSpecs extends Specification
         |   { gender: 'gender, num: count(data.gender where data.gender = 'gender) } 
       """.stripMargin
 
-      val let @ Let(_, _, _, _, _) = compile(input)
+      val let @ Let(_, _, _, _, _) = compileSingle(input)
 
       let.errors must beEmpty
     }
@@ -122,7 +120,7 @@ object GroupSolverSpecs extends Specification
       val let @ Let(_, _, _, _,
         tree1 @ Solve(_, _, 
           Let(_, _, _, _, 
-            tree2 @ Solve(_, _, _)))) = compile(input)
+            tree2 @ Solve(_, _, _)))) = compileSingle(input)
 
       let.errors must beEmpty
       tree1.errors must beEmpty
@@ -142,7 +140,7 @@ object GroupSolverSpecs extends Specification
 
       val let @ Let(_, _, _, _,
         Let(_, _, _, _,
-          tree @ Solve(_, _, _))) = compile(input)
+          tree @ Solve(_, _, _))) = compileSingle(input)
 
       let.errors must beEmpty
       tree.errors must beEmpty
@@ -163,7 +161,7 @@ object GroupSolverSpecs extends Specification
 
       val let @ Let(_, _, _, _,
         Let(_, _, _, _,
-          tree @ Solve(_, _, _))) = compile(input)
+          tree @ Solve(_, _, _))) = compileSingle(input)
 
       let.errors must beEmpty
       tree.errors must beEmpty
@@ -181,7 +179,7 @@ object GroupSolverSpecs extends Specification
       """.stripMargin
 
       val let @ Let(_, _, _, _,
-          tree @ Solve(_, _, _)) = compile(input)
+          tree @ Solve(_, _, _)) = compileSingle(input)
 
       let.errors must beEmpty
       tree.errors must beEmpty
@@ -197,7 +195,7 @@ object GroupSolverSpecs extends Specification
       """.stripMargin
 
       val tree @ Let(_, _, _, _,
-        solve @ Solve(_, _, _)) = compile(input)
+        solve @ Solve(_, _, _)) = compileSingle(input)
 
       solve.errors must beEmpty
       tree.errors must beEmpty
@@ -218,7 +216,7 @@ object GroupSolverSpecs extends Specification
       val tree @ Let(_, _, _, _,
         solve1 @ Solve(_, _,
           Let(_, _, _, _,
-            solve2 @ Solve(_, _, _)))) = compile(input)
+            solve2 @ Solve(_, _, _)))) = compileSingle(input)
 
       solve1.errors must beEmpty
       solve2.errors must beEmpty
@@ -240,7 +238,7 @@ object GroupSolverSpecs extends Specification
       """.stripMargin
 
       val Let(_, _, _, _,
-        tree @ Solve(_, _, _)) = compile(input)
+        tree @ Solve(_, _, _)) = compileSingle(input)
 
       tree.errors mustEqual Set(ConstraintsWithinInnerSolve)
     }
@@ -256,7 +254,7 @@ object GroupSolverSpecs extends Specification
       val Let(_, _, _, _,
         Let(_, _, _, _,
           tree @ Solve(_,
-            Vector(Eq(_, _, constrSol)), count @ Dispatch(_, _, Vector(origin @ Where(_, target, Eq(_, bodySol, _))))))) = compile(input)
+            Vector(Eq(_, _, constrSol)), count @ Dispatch(_, _, Vector(origin @ Where(_, target, Eq(_, bodySol, _))))))) = compileSingle(input)
           
       val btrace1 = List()
       val btrace2 = List()
@@ -281,7 +279,7 @@ object GroupSolverSpecs extends Specification
       
       val Let(_, _, _, _,
         tree @ Solve(_,
-          Vector(Eq(_, _, constrSol)), _)) = compile(input)
+          Vector(Eq(_, _, constrSol)), _)) = compileSingle(input)
           
       val expected = Group(None, constrSol, UnfixedSolution("'a", constrSol), List()) 
       
@@ -303,7 +301,7 @@ object GroupSolverSpecs extends Specification
       val Let(_, _, _, _,
         tree @ Solve(_, _,
           Let(_, _, _, originA @ Where(_, targetA, Eq(_, solA, _)),
-            Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), add @ Add(_, descA @ Descent(_, dA, _), descB @ Descent(_, dB, _)))))) = compile(input)
+            Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), add @ Add(_, descA @ Descent(_, dA, _), descB @ Descent(_, dB, _)))))) = compileSingle(input)
       
       val btrace1 = List()
       val btrace2 = List()
@@ -336,7 +334,7 @@ object GroupSolverSpecs extends Specification
         Let(_, _, _, _,
           tree @ Solve(_, _,
             Let(_, _, _, originA @ Where(_, targetA, Eq(_, solA, _)),
-              Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), rel @ Relate(_, _, _, add @ Add(_, decA @ Descent(_, dA: Dispatch, _), decB @ Descent(_, dB: Dispatch, _)))))))) = compile(input)
+              Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), rel @ Relate(_, _, _, add @ Add(_, decA @ Descent(_, dA: Dispatch, _), decB @ Descent(_, dB: Dispatch, _)))))))) = compileSingle(input)
       
       val btraceA = List()
       val btraceB = List()
@@ -366,7 +364,7 @@ object GroupSolverSpecs extends Specification
       val Let(_, _, _, _,
         tree @ Solve(_, _,
           Let(_, _, _, originA @ Where(_, targetA, Eq(_, solA, _)),
-            Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _)))) = compile(input)
+            Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _)))) = compileSingle(input)
       
       tree.errors must not(beEmpty)     // TODO
     }
@@ -378,7 +376,7 @@ object GroupSolverSpecs extends Specification
         | solve 'a foo where foo.a < 'a
         | """.stripMargin
         
-      compile(input).errors must not(beEmpty)
+      compileSingle(input).errors must not(beEmpty)
     }    
 
     "accept a solve when a single tic-variable has a defining set only in the constraints" in {
@@ -389,7 +387,7 @@ object GroupSolverSpecs extends Specification
         |   foo where foo.a < 'a
         | """.stripMargin
         
-      compile(input).errors must beEmpty
+      compileSingle(input).errors must beEmpty
     }
 
     "reject a solve when a single tic-variable has a defining set only in the body" in {
@@ -400,7 +398,7 @@ object GroupSolverSpecs extends Specification
         |   foo where foo.a = 'a
         | """.stripMargin
         
-      compile(input).errors must not(beEmpty)
+      compileSingle(input).errors must not(beEmpty)
     }
 
     "accept a solve when a tic var is constrained in the constraints and the body" in {
@@ -412,7 +410,7 @@ object GroupSolverSpecs extends Specification
         |   count(bar where bar.a = 'a)
         | """.stripMargin
         
-      compile(input).errors must beEmpty
+      compileSingle(input).errors must beEmpty
     }
 
     "accept a solve when a tic var is constrained inside a reduction" in {
@@ -423,7 +421,7 @@ object GroupSolverSpecs extends Specification
         |   {count: count(foo where foo.a < 'a), value: 'a}
         | """.stripMargin
         
-      compile(input).errors must beEmpty
+      compileSingle(input).errors must beEmpty
     }
     
     "produce an error when a single tic-variable lacks a defining set with extras" in {
@@ -433,7 +431,7 @@ object GroupSolverSpecs extends Specification
         | solve 'a foo where foo.a < 'a & foo.b = 42
         | """.stripMargin
         
-      compile(input).errors must not(beEmpty)
+      compileSingle(input).errors must not(beEmpty)
     }
     
     "produce an error when one of several tic-variables lacks a defining set" in {
@@ -446,7 +444,7 @@ object GroupSolverSpecs extends Specification
         |   foo' + foo''
         | """.stripMargin
         
-      compile(input).errors must not(beEmpty)
+      compileSingle(input).errors must not(beEmpty)
     }
     
     "accept a solve when one of two reductions cannot be solved in the absence of an outer definition" in {
@@ -457,7 +455,7 @@ object GroupSolverSpecs extends Specification
         |   count(foo where foo.a = 'a) + count(foo where foo.a = min('a + 1))
         | """.stripMargin
         
-      compile(input).errors must beEmpty
+      compileSingle(input).errors must beEmpty
     }
     
     "accept a function when a reduction cannot be solved in the presence of an outer definition" in {
@@ -468,7 +466,7 @@ object GroupSolverSpecs extends Specification
         |   (foo where foo.a = 'a) + count(foo where foo.a = min('a + 1))
         | """.stripMargin
         
-      compile(input).errors must beEmpty
+      compileSingle(input).errors must beEmpty
     }
     
     "accept a function when an optional defining set cannot be solved for a single tic-variable" in {
@@ -481,7 +479,7 @@ object GroupSolverSpecs extends Specification
         |   foo' + foo''
         | """.stripMargin
         
-      compile(input).errors must beEmpty
+      compileSingle(input).errors must beEmpty
     }
 
     "accept bucketing for indirect failed solution through reduction" in {
@@ -494,7 +492,7 @@ object GroupSolverSpecs extends Specification
         |   count(foo') + count(bar')
         | """.stripMargin
 
-      compile(input).errors must beEmpty
+      compileSingle(input).errors must beEmpty
     }
     
     "reject shared buckets for dependent tic variables on the same set" in {
@@ -508,7 +506,7 @@ object GroupSolverSpecs extends Specification
         |   organizations''
         | """.stripMargin
         
-      val tree = compile(input)
+      val tree = compileSingle(input)
       tree.errors must not(beEmpty)
     }
     
@@ -521,7 +519,7 @@ object GroupSolverSpecs extends Specification
         |   solve 'a
         |     foo where bar.a = 'a""".stripMargin
         
-      val tree = compile(input)
+      val tree = compileSingle(input)
       tree.errors must not(beEmpty)
     }
     
@@ -539,7 +537,7 @@ object GroupSolverSpecs extends Specification
         |     { revenue: 'revenue, num: count(campaigns') }
         | """.stripMargin
         
-      val tree = compile(input)
+      val tree = compileSingle(input)
       tree.errors must beEmpty
     }
     
@@ -553,7 +551,7 @@ object GroupSolverSpecs extends Specification
         tree @ Solve(_, _,
           origin @ Where(_,
             target,
-            boolean @ Eq(_, fooa, Add(_, TicVar(_, "'a"), n @ NumLit(_, "42")))))) = compile(input)
+            boolean @ Eq(_, fooa, Add(_, TicVar(_, "'a"), n @ NumLit(_, "42")))))) = compileSingle(input)
         
       tree.errors must beEmpty
       
@@ -579,7 +577,7 @@ object GroupSolverSpecs extends Specification
         Let(_, _, _, _,
           solve @ Solve(_, _, 
             Relate(_, _, _,
-              Where(_, left, right))))) = compile(input)
+              Where(_, left, right))))) = compileSingle(input)
       
       tree.errors must not(beEmpty)
     }
@@ -593,7 +591,7 @@ object GroupSolverSpecs extends Specification
         |   count(foo where foo.a = 'a)
         | """.stripMargin
 
-      compile(input).errors must beEmpty
+      compileSingle(input).errors must beEmpty
     }
     
     "accept a reduced sessionize" in {
@@ -610,7 +608,7 @@ object GroupSolverSpecs extends Specification
         |     bounds where bounds = 'it1 & bounds.isLower & bounds = 'it2
         | """.stripMargin
         
-      compile(input).errors must beEmpty
+      compileSingle(input).errors must beEmpty
     }
     
     "accept a solve on the results of a relate operation" in {
@@ -625,7 +623,7 @@ object GroupSolverSpecs extends Specification
         |   count(data where data.a = 'a)
         | """.stripMargin
         
-      compile(input).errors must beEmpty
+      compileSingle(input).errors must beEmpty
     }
     
     "accept a solve on the results of a union operation" in {
@@ -639,7 +637,7 @@ object GroupSolverSpecs extends Specification
         |   count(data where data.a = 'a)
         | """.stripMargin
         
-      compile(input).errors must beEmpty
+      compileSingle(input).errors must beEmpty
     }
     
     "accept a solve involving variables as actuals" in {
@@ -653,7 +651,7 @@ object GroupSolverSpecs extends Specification
       val Let(_, _, _, _,
         Let(_, _, _, Eq(_, _, solution),
           solve @ Solve(_, _,
-            where @ Where(_, target, _)))) = compile(input)
+            where @ Where(_, target, _)))) = compileSingle(input)
         
       val btrace = List()
       
@@ -671,7 +669,7 @@ object GroupSolverSpecs extends Specification
         |   foo where f('a)
         | """.stripMargin
         
-      val tree = compile(input)
+      val tree = compileSingle(input)
       tree.errors must not(beEmpty)
     }
     
@@ -686,7 +684,7 @@ object GroupSolverSpecs extends Specification
       val Let(_, _, _, _,
         Let(_, _, _, _,
           solve @ Solve(_, _,
-            d @ Dispatch(_, _, Vector(where @ Where(_, target, Eq(_, solution, _))))))) = compile(input)
+            d @ Dispatch(_, _, Vector(where @ Where(_, target, Eq(_, solution, _))))))) = compileSingle(input)
             
       val btrace = List(d)
       val expected = Group(Some(where), target, UnfixedSolution("'a", solution), btrace)
@@ -704,7 +702,7 @@ object GroupSolverSpecs extends Specification
         |   f(foo where foo'.a = 'a)
         | """.stripMargin
         
-      val tree = compile(input)
+      val tree = compileSingle(input)
       tree.errors must not(beEmpty)
     }
     
@@ -719,7 +717,7 @@ object GroupSolverSpecs extends Specification
       val Let(_, _, _, _,
         Let(_, _, _, _,
           solve @ Solve(_, _,
-            where @ Where(_, target, Dispatch(_, _, Vector(Eq(_, _, solution))))))) = compile(input)
+            where @ Where(_, target, Dispatch(_, _, Vector(Eq(_, _, solution))))))) = compileSingle(input)
       
       val btrace = List()
       
@@ -737,7 +735,7 @@ object GroupSolverSpecs extends Specification
         |   foo where f('a = foo.a)
         | """.stripMargin
         
-      val tree = compile(input)
+      val tree = compileSingle(input)
       tree.errors must not(beEmpty)
     }
     
@@ -754,7 +752,7 @@ object GroupSolverSpecs extends Specification
           solve @ Solve(_, _,
             d @ Dispatch(_, _, Vector(
               target,
-              Eq(_, solution, _)))))) = compile(input)
+              Eq(_, solution, _)))))) = compileSingle(input)
               
       val btrace = List(d)
               
@@ -785,7 +783,7 @@ object GroupSolverSpecs extends Specification
                 d1 @ Dispatch(_, _, Vector(
                   d2 @ Dispatch(_, _, Vector(
                     target,
-                    Eq(_, solution, _)))))))))) = compile(input)
+                    Eq(_, solution, _)))))))))) = compileSingle(input)
 
       val btrace = List(d2)
                     
@@ -804,7 +802,7 @@ object GroupSolverSpecs extends Specification
         |   f(foo, foo'.a = 'a)
         | """.stripMargin
         
-      val tree = compile(input)
+      val tree = compileSingle(input)
       tree.errors must not(beEmpty)
     }
     
@@ -821,7 +819,7 @@ object GroupSolverSpecs extends Specification
         Let(_, _, _,
           solve @ Solve(_, _,
             where @ Where(_, target, Eq(_, solution, _))),
-          d @ Dispatch(_, _, _))) = compile(input)
+          d @ Dispatch(_, _, _))) = compileSingle(input)
           
       val btrace = List(d)
           
@@ -848,7 +846,7 @@ object GroupSolverSpecs extends Specification
             solve @ Solve(_, _,
               where @ Where(_, target, Eq(_, solution, _))),
             d @ Dispatch(_, _, _)),
-          d2: Dispatch)) = compile(input)
+          d2: Dispatch)) = compileSingle(input)
           
       val btrace = List(d, d2)
           
@@ -870,7 +868,7 @@ object GroupSolverSpecs extends Specification
         | g(foo')
         | """.stripMargin
         
-      val tree = compile(input)
+      val tree = compileSingle(input)
       tree.errors must not(beEmpty)
     }
     
@@ -882,7 +880,7 @@ object GroupSolverSpecs extends Specification
         |   foo where f(foo.a, 'a / foo.b)
         | """.stripMargin
         
-      val tree = compile(input)
+      val tree = compileSingle(input)
       tree.errors must beEmpty
     }
   }

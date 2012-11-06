@@ -140,7 +140,7 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
         victim2Source -> Set(ticvars("a"))
       )
 
-      val BorgResultNode(BorgResult(table, keys, groups, size)) = Table.join(victim1, victim2, requiredOrders).copoint
+      val BorgResultNode(BorgResult(table, keys, groups, size, _)) = Table.join(victim1, victim2, requiredOrders).copoint
 
       toJson(table).copoint must_== expected.toStream
     }

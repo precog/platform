@@ -24,8 +24,6 @@ package emitter
 import com.precog.bytecode.Instructions
 import com.precog.bytecode.RandomLibrary
 
-import org.scalacheck.Prop
-import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
 import java.io.File
@@ -41,8 +39,8 @@ import scalaz.Scalaz._
 // import scalaz.syntax.arrow._
 
 object EmitterSpecs extends Specification
-    with ScalaCheck
     with StubPhases
+    with CompilerUtils
     with Compiler
     with Emitter
     with RawErrors 
@@ -51,7 +49,7 @@ object EmitterSpecs extends Specification
   import instructions._
 
   def compileEmit(input: String) = {
-    val tree = compile(input.stripMargin)
+    val tree = compileSingle(input.stripMargin)
     tree.errors must beEmpty
     emit(tree)
   }
@@ -1549,13 +1547,13 @@ object EmitterSpecs extends Specification
       for (file <- exampleDir.listFiles if file.getName endsWith ".qrl") {
         if (pending contains file.getName) {
           file.getName >> {
-            val result = compile(LineStream(Source.fromFile(file)))
+            val result = compileSingle(LineStream(Source.fromFile(file)))
             result.errors must beEmpty
             emit(result) must not(beEmpty)
           }.pendingUntilFixed
         } else {
           file.getName >> {
-            val result = compile(LineStream(Source.fromFile(file)))
+            val result = compileSingle(LineStream(Source.fromFile(file)))
             result.errors must beEmpty
             emit(result) must not(beEmpty)
           }

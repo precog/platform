@@ -63,13 +63,16 @@ import scalaz.syntax.std.either._
 
 import org.streum.configrity.Configuration
 
-trait YggdrasilQueryExecutorConfig extends 
-    BaseConfig with 
-    ProductionShardSystemConfig with
-    SystemActorStorageConfig with
-    JDBMProjectionModuleConfig with
-    BlockStoreColumnarTableModuleConfig with
-    EvaluatorConfig {
+trait YggdrasilQueryExecutorConfig
+    extends BaseConfig
+    with ProductionShardSystemConfig
+    with SystemActorStorageConfig
+    with JDBMProjectionModuleConfig
+    with BlockStoreColumnarTableModuleConfig
+    with IdSourceConfig
+    with ColumnarTableModuleConfig
+    with EvaluatorConfig {
+      
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
@@ -101,7 +104,11 @@ trait YggdrasilQueryExecutorComponent {
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor[Future] = {
     val yConfig = wrapConfig(config)
     
-    new YggdrasilQueryExecutor with BlockStoreColumnarTableModule[Future] with JDBMProjectionModule with ProductionShardSystemActorModule {
+    new YggdrasilQueryExecutor
+        with BlockStoreColumnarTableModule[Future]
+        with JDBMProjectionModule
+        with ProductionShardSystemActorModule {
+          
       implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
       val yggConfig = yConfig
@@ -323,10 +330,19 @@ trait YggdrasilQueryExecutor
 
   private def asBytecode(query: String): Validation[EvaluationError, Vector[Instruction]] = {
     try {
-      val tree = compile(query)
-      if (tree.errors.isEmpty) success(emit(tree)) 
-      else failure(
-        UserError(
+      val forest = compile(query)
+      val validForest = forest filter { _.errors.isEmpty }
+      
+      if (validForest.size == 1) {
+        success(emit(validForest.head))
+      } else if (validForest.size > 1) {
+        failure(UserError(
+          JArray(
+            JArray(
+              JObject(
+                JField("message", JString("Ambiguous parse results.")) :: Nil) :: Nil) :: Nil)))
+      } else {
+        val nested = forest map { tree =>
           JArray(
             (tree.errors: Set[Error]) map { err =>
               val loc = err.loc
@@ -338,12 +354,12 @@ trait YggdrasilQueryExecutor
                 :: JField("lineNum", JNum(loc.lineNum))
                 :: JField("colNum", JNum(loc.colNum))
                 :: JField("detail", JString(tp.toString))
-                :: Nil
-              )
-            } toList
-          )
-        )
-      )
+                :: Nil)
+            } toList)
+        }
+        
+        failure(UserError(JArray(nested.toList)))
+      }
     } catch {
       case ex: ParseException => failure(
         UserError(
