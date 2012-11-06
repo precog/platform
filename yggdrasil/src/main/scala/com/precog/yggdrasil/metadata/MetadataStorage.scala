@@ -258,7 +258,8 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
       IO(PrecogUnit)
     } else {
       for {
-        newRoot <- newRandomDir(baseDir)
+        newRoot <- descriptorDir(baseDir, desc)
+        _       <- IO { newRoot.mkdirs() }
         _       <- writeDescriptor(desc, newRoot) 
       } yield {
         logger.info("Created new projection for " + desc)
@@ -277,7 +278,7 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
   }
 
   def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]] = {
-    metadataLocations.get(desc).map(newArchiveDir(archiveDir, _)).sequence
+    metadataLocations.get(desc).map(_ => descriptorDir(archiveDir, desc).map { d => d.mkdirs(); d }).sequence
   }
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = {
@@ -325,33 +326,17 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
 
   override def toString = "FileMetadataStorage(root = " + baseDir + " archive = " + archiveDir +")"
 
-  private def newRandomDir(parent: File): IO[File] = {
-    def dirUUID: String = {
-      val uuid = java.util.UUID.randomUUID.toString.toLowerCase.replace("-", "")
-      val randomPath = (1 until 3).map { _*2 }.foldLeft(Vector.empty[String]) {
-        case (acc, i) => acc :+ uuid.substring(0, i)
-      }
-      
-      randomPath.mkString("/", "/", "/") + uuid
-    }
+  private final val disallowedPathComponents = Set(".", "..")
+  /**
+   * Computes the stable path for a given descriptor relative to the given base dir
+   */
+  private def descriptorDir(baseDir: File, descriptor: ProjectionDescriptor): IO[File] = IO {
+    // The path component maps directly to the FS, with a hash on the columnrefs as the final dir
+    val prefix = descriptor.commonPrefix.filterNot(disallowedPathComponents.contains)
 
-    val newDir = new File(parent, dirUUID)
-    IO {
-      newDir.mkdirs
-      newDir
-    }
+    new File(baseDir, (prefix :+ descriptor.stableHash).mkString(File.separator))
   }
-
-  private def newArchiveDir(parent: File, source: File): IO[File] = {
-    val dirUUID = Iterator.iterate(source)(_.getParentFile).map(_.getName).take(3).toList.reverse.mkString("/", "/", "")
-
-    val archiveDir = new File(parent, dirUUID)
-    IO {
-      archiveDir.mkdirs
-      archiveDir
-    }
-  }
-
+  
   private def writeDescriptor(desc: ProjectionDescriptor, baseDir: File): IO[PrecogUnit] = {
     val df = new File(baseDir, descriptorName)
     fileOps.exists(df) map {

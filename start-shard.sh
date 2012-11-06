@@ -99,7 +99,7 @@ done
 
 
 if [ -n "$MISSING_ARTIFACTS" ]; then
-    echo "Up-to-date ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run." >&2
+    echo "Up-to-date ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run, or run with the -b flag." >&2
     for ASM in $MISSING_ARTIFACTS; do
         echo "  missing `basename $ASM`" >&2
     done
@@ -118,7 +118,7 @@ service_ports[30070]="Shard"
 for PORT in 9082 9092 $MONGOPORT 30060 30062 30064 30070; do
     if port_is_open $PORT; then
         echo "You appear to already have a conflicting ${service_ports[$PORT]} service running on port $PORT" >&2
-        if [[ $PORT == $MONGPORT ]]; then
+        if [[ $PORT == $MONGOPORT ]]; then
             echo "You can use the -m flag to override the mongo port" >&2
         fi
         exit 1
