@@ -1406,6 +1406,12 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
         }
       }
     }
+    
+    "prefer path literals in case of ambiguity" in {
+      parseSingle("//foo.bar") must beLike {
+        case Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/foo.bar"))) => ok
+      }
+    }
   }
 
   val exampleDir = new File("quirrel/examples")

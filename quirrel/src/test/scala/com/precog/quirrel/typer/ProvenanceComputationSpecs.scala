@@ -290,7 +290,7 @@ object ProvenanceComputationSpecs extends Specification
       }
       
       {
-        val tree = compileSingle("//bar.foo")
+        val tree = compileSingle("(//bar).foo")
         tree.provenance mustEqual StaticProvenance("/bar")
         tree.errors must beEmpty
       }
@@ -312,7 +312,7 @@ object ProvenanceComputationSpecs extends Specification
       }
       
       {
-        val tree = compileSingle("//bar@foo")
+        val tree = compileSingle("(//bar)@foo")
         tree.provenance mustEqual StaticProvenance("/bar")
         tree.errors must beEmpty
       }
@@ -992,7 +992,7 @@ object ProvenanceComputationSpecs extends Specification
 
       "ObjectDef" >> {
         {
-          val tree = compileSingle("{foo: //foobar.a, bar: //foobar.b} union //baz")
+          val tree = compileSingle("{foo: (//foobar).a, bar: (//foobar).b} union //baz")
           tree.provenance must beLike { case DynamicProvenance(_) => ok }
           tree.errors must beEmpty
         }      
@@ -1023,7 +1023,7 @@ object ProvenanceComputationSpecs extends Specification
 
       "Descent" >> {
         {
-          val tree = compileSingle("//foo.a union 6")
+          val tree = compileSingle("(//foo).a union 6")
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(UnionProvenanceDifferentLength)
         }  
@@ -1070,17 +1070,17 @@ object ProvenanceComputationSpecs extends Specification
           tree.errors mustEqual Set(UnionProvenanceDifferentLength)
         }
         {
-          val tree = compileSingle("distinct(//clicks.bar) union //bar")
+          val tree = compileSingle("distinct((//clicks).bar) union //bar")
           tree.provenance must beLike { case DynamicProvenance(_) => ok }
           tree.errors must beEmpty
         }
         {
-          val tree = compileSingle("sum(//clicks.bar) union false")
+          val tree = compileSingle("sum((//clicks).bar) union false")
           tree.provenance mustEqual ValueProvenance
           tree.errors must beEmpty
         }
         {
-          val tree = compileSingle("sum(//clicks.bar, 100) union false")
+          val tree = compileSingle("sum((//clicks).bar, 100) union false")
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(IncorrectArity(1, 2))
         }
@@ -1093,28 +1093,28 @@ object ProvenanceComputationSpecs extends Specification
         }
         {
           forall(lib2) { f =>
-            val tree = compileSingle("%s(//bar.foo, //bar.ack) union //bar".format(f.fqn))
+            val tree = compileSingle("%s((//bar).foo, (//bar).ack) union //bar".format(f.fqn))
             tree.provenance must beLike { case DynamicProvenance(_) => ok }
             tree.errors must beEmpty
           }
         }        
         {
           forall(libReduction) { f =>
-            val tree = compileSingle("%s(//bar.foo) union [1, 9]".format(f.fqn))
+            val tree = compileSingle("%s((//bar).foo) union [1, 9]".format(f.fqn))
             tree.provenance mustEqual ValueProvenance 
             tree.errors must beEmpty
           }
         }          
         {
           forall(libReduction) { f =>
-            val tree = compileSingle("%s(//bar.foo) union //foo".format(f.fqn))
+            val tree = compileSingle("%s((//bar).foo) union //foo".format(f.fqn))
             tree.provenance mustEqual NullProvenance
             tree.errors mustEqual Set(UnionProvenanceDifferentLength)
           }
         }        
         {
           forall(libMorphism1) { f =>
-            val tree = compileSingle("%s(//bar.foo) union //baz".format(f.fqn))
+            val tree = compileSingle("%s((//bar).foo) union //baz".format(f.fqn))
             if (f.retainIds) {
               tree.provenance must beLike { case DynamicProvenance(_) => ok }
               tree.errors must beEmpty
@@ -1126,7 +1126,7 @@ object ProvenanceComputationSpecs extends Specification
         }        
         {
           forall(libMorphism2) { f =>
-            val tree = compileSingle("%s(//bar.foo, //bar.ack) union //baz".format(f.fqn))
+            val tree = compileSingle("%s((//bar).foo, (//bar).ack) union //baz".format(f.fqn))
             if (f.retainIds) {
               tree.provenance must beLike { case DynamicProvenance(_) => ok }
               tree.errors must beEmpty
@@ -1149,17 +1149,17 @@ object ProvenanceComputationSpecs extends Specification
           tree.errors must beEmpty
         }
         {
-          val tree = compileSingle("f(a) := (//foobar.a union //barfoo.a) where //foobar.a = a f(10)")
+          val tree = compileSingle("f(a) := ((//foobar).a union (//barfoo).a) where (//foobar).a = a f(10)")
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(OperationOnUnrelatedSets)
         }
         {
-          val tree = compileSingle("f(a) := //foobar where //foobar.a = a f(10) union 12")
+          val tree = compileSingle("f(a) := //foobar where (//foobar).a = a f(10) union 12")
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(UnionProvenanceDifferentLength)
         }
         {
-          val tree = compileSingle("f := solve 'a //foobar where //foobar.a = 'a f union //baz")
+          val tree = compileSingle("f := solve 'a //foobar where (//foobar).a = 'a f union //baz")
           tree.provenance must beLike { case DynamicProvenance(_) => ok }
           tree.errors must beEmpty
         }
@@ -1178,7 +1178,7 @@ object ProvenanceComputationSpecs extends Specification
 
       "Where" >> {
         {
-          val tree = compileSingle("(//foo where //foo.a = 10) union //baz")
+          val tree = compileSingle("(//foo where (//foo).a = 10) union //baz")
           tree.provenance must beLike { case DynamicProvenance(_) => ok }
           tree.errors must beEmpty
         }
@@ -1190,7 +1190,7 @@ object ProvenanceComputationSpecs extends Specification
           tree.errors must beEmpty
         }
         {
-          val tree = compileSingle("(//ack where //achoo.foo >= 3) union 12") 
+          val tree = compileSingle("(//ack where (//achoo).foo >= 3) union 12") 
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(OperationOnUnrelatedSets)
         }
@@ -1221,7 +1221,7 @@ object ProvenanceComputationSpecs extends Specification
           tree.errors must beEmpty
         }
         {
-          val tree = compileSingle("(//foo.a + //foo.b union //baz) union 12")
+          val tree = compileSingle("((//foo).a + (//foo).b union //baz) union 12")
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(UnionProvenanceDifferentLength)
         }
@@ -1257,12 +1257,12 @@ object ProvenanceComputationSpecs extends Specification
           tree.errors must beEmpty
         }
         {
-          val tree = compileSingle("(//foo.a <= 3) union (//iamasquirrel = 3)")
+          val tree = compileSingle("((//foo).a <= 3) union (//iamasquirrel = 3)")
           tree.provenance must beLike { case DynamicProvenance(_) => ok }
           tree.errors must beEmpty
         }
         {
-          val tree = compileSingle("(4 > 999999) union (//didsomeonesayoink.moooo >= 122)")
+          val tree = compileSingle("(4 > 999999) union ((//didsomeonesayoink).moooo >= 122)")
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(UnionProvenanceDifferentLength)
         }
@@ -1329,7 +1329,7 @@ object ProvenanceComputationSpecs extends Specification
         val tree = compileSingle("""
           foo(a) := 
             bar(b) :=
-              //clicks where //clicks.baz = b
+              //clicks where (//clicks).baz = b
             bar(a)
           foo(2)""")
         tree.provenance must beLike { case StaticProvenance("/clicks") => ok }
@@ -1339,7 +1339,7 @@ object ProvenanceComputationSpecs extends Specification
         val tree = compileSingle("""
           foo(a) := 
             bar := solve 'b
-              //clicks where //clicks.baz = 'b + a
+              //clicks where (//clicks).baz = 'b + a
             bar
           foo(2)""")
         tree.provenance must beLike { case DynamicProvenance(_) => ok }
@@ -1350,7 +1350,7 @@ object ProvenanceComputationSpecs extends Specification
     "check provenance of partially-quantified function" in {
       val tree = compileSingle("""
         foo := solve 'a
-          //clicks where //clicks.a = 'a
+          //clicks where (//clicks).a = 'a
         foo""")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty

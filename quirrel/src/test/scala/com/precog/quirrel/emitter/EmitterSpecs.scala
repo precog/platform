@@ -498,7 +498,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit filter cross for where loads from value provenance" in {
-      testEmit("""//clicks where //clicks.foo = null""")(
+      testEmit("""//clicks where (//clicks).foo = null""")(
         Vector(
           PushString("/clicks"),
           LoadLocal,
@@ -606,7 +606,7 @@ object EmitterSpecs extends Specification
 
     "emit unary non-reduction with object deref" in {
       forall(lib1) { f => 
-        testEmit("""%s(//foobar.baz)""".format(f.fqn))(
+        testEmit("""%s((//foobar).baz)""".format(f.fqn))(
           Vector(
             PushString("/foobar"),
             LoadLocal,
@@ -627,7 +627,7 @@ object EmitterSpecs extends Specification
 
     "emit binary non-reduction" in {
       forall(lib2) { f =>
-        testEmit("""%s(//foo.time, //foo.timeZone)""".format(f.fqn))(
+        testEmit("""%s((//foo).time, (//foo).timeZone)""".format(f.fqn))(
           Vector(
             PushString("/foo"),
             LoadLocal,
@@ -658,7 +658,7 @@ object EmitterSpecs extends Specification
     "emit body of a fully applied characteristic function with two variables" in {
       testEmit("""
         | fun(a, b) := 
-        |   //campaigns where //campaigns.ageRange = a & //campaigns.gender = b
+        |   //campaigns where (//campaigns).ageRange = a & (//campaigns).gender = b
         | fun([25,36],
           "female")""".stripMargin)(
         Vector(

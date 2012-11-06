@@ -145,7 +145,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       }
       
       "render a set of numbers interleaved by delimiters" in {
-        val stream = evalTable("//tutorial/transactions.quantity") renderJson ','
+        val stream = evalTable("(//tutorial/transactions).quantity") renderJson ','
         val strings = stream map { _.toString }
         val str = strings.foldLeft("") { _ + _ } copoint
         
