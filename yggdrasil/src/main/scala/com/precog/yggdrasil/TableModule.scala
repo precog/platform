@@ -76,11 +76,13 @@ trait TableModule[M[+_]] extends TransSpecModule {
     import trans._
 
     def empty: Table
-    
+
     def constString(v: Set[CString]): Table
     def constLong(v: Set[CLong]): Table
     def constDouble(v: Set[CDouble]): Table
     def constDecimal(v: Set[CNum]): Table
+    def constDate(v: Set[CDate]): Table
+    def constArray[A: CValueType](v: Set[CArray[A]]): Table
     def constBoolean(v: Set[CBoolean]): Table
     def constNull: Table
     

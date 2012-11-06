@@ -107,7 +107,8 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging with
   "JDBMProjections" should {
     "properly serialize and deserialize arbitrary columns" in {
       check {
-        pd: ProjectionData => readWriteColumn(pd, Files.createTempDir())
+        pd: ProjectionData =>
+          readWriteColumn(pd, Files.createTempDir())
       }
     }.pendingUntilFixed
 

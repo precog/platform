@@ -98,6 +98,7 @@ object JDBMSlice {
       case CNull        => MutableNullColumn.empty()
       case CEmptyObject => MutableEmptyObjectColumn.empty()
       case CEmptyArray  => MutableEmptyArrayColumn.empty()
+      case CArrayType(elemType) => ArrayHomogeneousArrayColumn.empty(sliceSize)(elemType)
       case CUndefined   => sys.error("CUndefined cannot be serialized")
     }))
 }
