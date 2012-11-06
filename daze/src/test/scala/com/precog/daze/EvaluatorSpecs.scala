@@ -75,24 +75,6 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
                   
               val target = path.path.replaceAll("/$", ".json")
 
-              val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-              val parsed = src.getLines map JParser.parse toStream
-                  
-              currentIndex += parsed.length
-                  
-              parsed zip (Stream from index) map {
-                case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
-              }
-            }
-            case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
-          }
-        }
-      }
-    }
-  }
-  
-  object Table extends TableCompanion
-
   private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
   private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
   private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
@@ -112,9 +94,55 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
     }
   }
 
-  object yggConfig extends YggConfig
-}
+  object yggConfig extends YggConfig 
 
+  override def load(table: Table, uid: UserId, jtpe: JType) = {
+    val result = table.toJson map { events =>
+      fromJson {
+        events.toStream flatMap {
+          case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
+            val path = Path(pathStr)
+
+            val index = initialIndices get path getOrElse {
+              initialIndices += (path -> currentIndex)
+              currentIndex
+            }
+            
+            val prefix = "filesystem"
+            val target = path.path.replaceAll("/$", ".json")
+            
+            val src = {
+              if (pathStr startsWith prefix) {
+                val (_, target1) = target.splitAt(prefix.length + 1)
+                io.Source fromFile (new File(target1))
+            } else {
+                io.Source fromInputStream getClass.getResourceAsStream(target)
+              }
+            }
+
+            //val target = path.path.replaceAll("/$", ".json")
+
+            //val src = io.Source fromInputStream getClass.getResourceAsStream(target)
+
+            val parsed: Stream[JValue] = src.getLines map JParser.parse toStream
+
+            //println("parsed: " + parsed)
+
+            currentIndex += parsed.length
+            
+            parsed zip (Stream from index) map {
+              case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
+            }
+          }
+
+          case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
+        }
+      }
+    }
+    result map { x => println("result from load: " + x) }
+    result
+  }
+}
 
 trait EvaluatorSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
