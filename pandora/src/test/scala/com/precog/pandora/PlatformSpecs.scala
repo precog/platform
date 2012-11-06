@@ -70,8 +70,7 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-object FuturePlatformSpecs 
-    extends ParseEvalStackSpecs[Future] 
+object PlatformSpecs extends ParseEvalStackSpecs[Future] 
     with BlockStoreColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 
