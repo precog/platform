@@ -728,7 +728,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
         @tailrec def storeRow(row: Int, insertCount: Long): Long = {
           if (row < vslice.size) {
-            if (vslice.isDefinedAt(row) || kslice.isDefinedAt(row)) {
+            if (vslice.isDefinedAt(row) && kslice.isDefinedAt(row)) {
               storage.put(kEncoder.encodeFromRow(row), vEncoder.encodeFromRow(row))
 
               if (insertCount % jdbmCommitInterval == 0 && insertCount > 0) jdbmState.commit()
