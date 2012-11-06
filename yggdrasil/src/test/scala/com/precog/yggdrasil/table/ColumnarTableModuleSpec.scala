@@ -86,7 +86,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   }
   
   trait TableCompanion extends ColumnarTableCompanion {
-    def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize) = new Table(slices, size)
+    def apply(slices: StreamT[M, Slice], size: TableSize) = new Table(slices, size)
 
     def singleton(slice: Slice) = new Table(slice :: StreamT.empty[M, Slice], ExactSize(1))
 

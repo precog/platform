@@ -52,7 +52,7 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
   private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
 
   trait TableCompanion extends ColumnarTableCompanion {
-    def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize): Table = new Table(slices, size)
+    def apply(slices: StreamT[M, Slice], size: TableSize): Table = new Table(slices, size)
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = sys.error("todo")
   }
 

@@ -71,6 +71,7 @@ object PlatformBuild extends Build {
 
     libraryDependencies ++= Seq(
       "com.weiglewilczek.slf4s"     % "slf4s_2.9.1"         % "1.0.7",
+      "com.google.guava"            %  "guava"              % "12.0",
       "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",

@@ -17,44 +17,15 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil 
+package com.precog.util
 
-import metadata.StorageMetadata
-import com.precog.common._
-import com.precog.util.PrecogUnit
+/**
+ * This class exists as a replacement for Unit in Unit-returning functions.
+ * The main issue with unit is that the coercion of any return value to
+ * unit means that we were sometimes masking mis-returns of functions. In
+ * particular, functions returning IO[Unit] would happily coerce IO => Unit,
+ * which essentially discarded the inner IO work.
+ */
+sealed trait PrecogUnit
 
-import akka.dispatch.Future 
-import akka.util.Timeout
-
-import scalaz._
-import scalaz.effect._
-import scalaz.syntax.bind._
-import scala.annotation.unchecked._
-
-trait StorageModule[M[+_]] {
-  type Projection <: ProjectionLike
-  type Storage <: StorageLike
-  def storage: Storage
-
-  trait StorageLike extends StorageMetadataSource[M] { self =>
-    def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)]
-    def storeBatch(msgs: Seq[EventMessage]): M[PrecogUnit]
-    def store(msg: EventMessage): M[PrecogUnit] = storeBatch(Vector(msg))
-  }
-}
-
-trait StorageMetadataSource[M[+_]] {
-  def userMetadataView(uid: String): StorageMetadata[M]
-}
-
-class Release(private var _release: IO[PrecogUnit]) { self => 
-  def release: IO[PrecogUnit] = _release
-
-  def += (action: IO[PrecogUnit]): self.type = {
-    synchronized {
-      _release = self.release >> action
-    }
-    self
-  }
-}
-
+object PrecogUnit extends PrecogUnit
