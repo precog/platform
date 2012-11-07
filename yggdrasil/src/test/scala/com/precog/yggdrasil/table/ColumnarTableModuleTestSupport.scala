@@ -127,7 +127,7 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
           }
         }
       },
-      UnknownSize
+      ExactSize(values.length)
     )
   }
 

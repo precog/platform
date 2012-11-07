@@ -86,7 +86,8 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
             ),
             ticvars("ab")),
           ticvars("ab"),
-          v1ByIdentity
+          v1ByIdentity,
+          UnknownSize
         )
       )
 
@@ -110,7 +111,8 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
             ),
             ticvars("a")),
           ticvars("a"),
-          v2ByIdentity
+          v2ByIdentity,
+          UnknownSize
         )
       )
 

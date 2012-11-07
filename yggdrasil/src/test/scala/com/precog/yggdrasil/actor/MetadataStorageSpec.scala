@@ -37,7 +37,7 @@ class MetadataStorageSpec extends Specification {
   val archive = IOUtils.createTmpDir("MetadataStorageSpec-archive").unsafePerformIO
 
   def cleanupBaseDir = Step {
-    IOUtils.recursiveDelete(base)
+    IOUtils.recursiveDelete(base).unsafePerformIO
   }
 
   override def map(fs: => Fragments) = super.map(fs) ^ cleanupBaseDir
@@ -125,9 +125,10 @@ object TestFileOps extends FileOps {
     IO(true)
   }
   
-  def copy(src: File, dest: File): IO[Unit] = IO {
+  def copy(src: File, dest: File): IO[PrecogUnit] = IO {
     messages += "copy %s to %s".format(src, dest)
     backingStore += (dest -> backingStore(src))
+    PrecogUnit
   }
 
   def read(src: File): IO[String] = IO {
@@ -135,9 +136,10 @@ object TestFileOps extends FileOps {
     backingStore(src)
   }
   
-  def write(dest: File, content: String): IO[Unit] = IO {
+  def write(dest: File, content: String): IO[PrecogUnit] = IO {
     messages += "write to %s with %s".format(dest, content) 
     backingStore += (dest -> content)
+    PrecogUnit
   }
 
   def mkdir(dir: File) = IO(true)
