@@ -36,9 +36,6 @@ class ProjectionDescriptorSpec extends Specification {
 
       roundTrip(testDescriptor) must beLike {
         case Success(pd) => 
-          // println("testDescriptor: " + testDescriptor)
-          // println("roundtrip: " + pd)
-
           pd must_== testDescriptor 
       }
     }

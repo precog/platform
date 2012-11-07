@@ -210,7 +210,6 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     )
 
     val jsonResult = toJson(result)
-    //println("jsonResult: %s\n".format(jsonResult.copoint.toList))
     jsonResult.copoint must containAllOf(expected).only
   }
 
@@ -240,7 +239,6 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     )
 
     val jsonResult = toJson(result)
-    //println("jsonResult: %s\n".format(jsonResult.copoint.toList))
     jsonResult.copoint must containAllOf(expected).only
   }
 

@@ -91,8 +91,6 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
                 acc + (ref -> pair)
             }
 
-            //println("Computed " + withIdsAndValues)
-  
             buildColArrays(xs, withIdsAndValues, sliceIndex + 1)
   
           case _ => (into, sliceIndex)
