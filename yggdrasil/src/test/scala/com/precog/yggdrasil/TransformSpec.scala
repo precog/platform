@@ -1403,7 +1403,6 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     )
 
     check { (sample: SampleData) =>
-      println("trying: %s" format sample)
       val table = fromSample(sample)
       val results = toJson(
         table.transform(
@@ -1414,7 +1413,6 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
                 Leaf(Source),
                 CPathField("value")),
               CPathField("field")))))
-      println("succeeded: %s" format sample)
       
       val expected = sample.data flatMap {
         case jv if jv \ "value" \ "field" == JUndefined => None

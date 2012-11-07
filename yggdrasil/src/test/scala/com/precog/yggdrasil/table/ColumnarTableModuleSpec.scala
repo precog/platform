@@ -236,18 +236,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       
       val arrayM = strM map { body =>
         val input = "[%s]".format(body)
-        try {
-          JParser.parse(input)
-        } catch {
-          case t => {
-            println("####%s####".format(input))
-            for (i <- 0 until input.length) {
-              println(input.charAt(i): Int)
-            }
-            println("####")
-            throw t
-          }
-        }
+        JParser.parse(input)
       }
       
       val minimized = minimize(expected) getOrElse JArray(Nil)
