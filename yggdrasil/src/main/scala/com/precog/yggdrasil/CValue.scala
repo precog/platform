@@ -365,7 +365,7 @@ case class CArrayType[@spec(Boolean, Long, Double) A](elemType: CValueType[A]) e
     } find (_ != EQ) getOrElse Ordering.fromInt(as.size - bs.size)
 
   def jValueFor(as: Array[A]) =
-    JArray(as.map(elemType.jValueFor _)(collection.breakOut))
+    JArray(as.map(elemType.jValueFor _)(collection.breakOut):_*)
 }
 
 //
