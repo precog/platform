@@ -103,7 +103,7 @@ object Permission {
     override def validated(obj: JValue) = 
       ((obj \ "accessType").validated(accessTypeExtractor) |@|
        (obj \ "path").validated[Path] |@|
-       (obj \ "ownerAccountIds").validated[Set[AccountID]]).apply((c, p, o) => c(p, o))
+       (obj \? "ownerAccountIds").map(_.validated[Set[AccountID]]).getOrElse(Success(Set.empty[AccountID]))).apply((c, p, o) => c(p, o))
   }
   
   def unapply(perm: Permission): Option[(Path, Set[AccountID])] = Some((perm.path, perm.ownerAccountIds))
