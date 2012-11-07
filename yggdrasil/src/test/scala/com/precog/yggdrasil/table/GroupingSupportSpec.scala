@@ -10,8 +10,6 @@ import com.precog.yggdrasil.util._
 import akka.actor.ActorSystem
 import akka.dispatch._
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
 import com.weiglewilczek.slf4s.Logging
 
 import scala.annotation.tailrec
@@ -132,17 +130,17 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
   def testJoinOnPreSortedVictims[M[+_]](module: ColumnarTableModuleTestSupport[M]) = {
     val test = new RunVictimPairTest[M](module) {
       def generate(v1GroupId: GroupId, v2GroupId: GroupId)(implicit show: Show[GroupId]) = {
-        val JArray(victim1Data) = JsonParser.parse("""[
+        val JArray(victim1Data) = JParser.parse("""[
           {"key": [1], "value": {"a0": 3, "b0": 7}},
-          {"key": [2], "value": {"a0": 5, "b0": 11}},
+          {"key": [2], "value": {"a0": 5, "b0": 11}}
         ]""")
 
-        val JArray(victim2Data) = JsonParser.parse("""[
+        val JArray(victim2Data) = JParser.parse("""[
           {"key": [3], "value": {"a0": 3, "c": 17}},
-          {"key": [4], "value": {"a0": 13, "c": 19}},
+          {"key": [4], "value": {"a0": 13, "c": 19}}
         ]""")
 
-        val JArray(expected) = JsonParser.parse("""[
+        val JArray(expected) = JParser.parse("""[
           {
             "values":{
               "%1$s":{
@@ -182,17 +180,17 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
     val test = new RunVictimPairTest[M](module) {
       def generate(v1GroupId: GroupId, v2GroupId: GroupId)(implicit show: Show[GroupId]) = {
 
-        val JArray(victim1Data) = JsonParser.parse("""[
+        val JArray(victim1Data) = JParser.parse("""[
           {"key": [1], "value": {"a0": 5, "b0": 7}},
-          {"key": [2], "value": {"a0": 3, "b0": 11}},
+          {"key": [2], "value": {"a0": 3, "b0": 11}}
         ]""")
 
-        val JArray(victim2Data) = JsonParser.parse("""[
+        val JArray(victim2Data) = JParser.parse("""[
           {"key": [3], "value": {"a0": 3, "c": 17}},
-          {"key": [4], "value": {"a0": 13, "c": 19}},
+          {"key": [4], "value": {"a0": 13, "c": 19}}
         ]""")
 
-        val JArray(expected) = JsonParser.parse("""[
+        val JArray(expected) = JParser.parse("""[
           {
             "values":{
               "%1$s":{
@@ -232,17 +230,17 @@ trait GroupingSupportSpec[M[+_]] extends BlockStoreTestSupport[M] with Specifica
     val test = new RunVictimPairTest[M](module) {
       def generate(v1GroupId: GroupId, v2GroupId: GroupId)(implicit show: Show[GroupId]) = {
 
-        val JArray(victim1Data) = JsonParser.parse("""[
+        val JArray(victim1Data) = JParser.parse("""[
           {"key": [1], "value": {"a0": 5, "b0": 7}},
-          {"key": [2], "value": {"a0": 3, "b0": 11}},
+          {"key": [2], "value": {"a0": 3, "b0": 11}}
         ]""")
 
-        val JArray(victim2Data) = JsonParser.parse("""[
+        val JArray(victim2Data) = JParser.parse("""[
           {"key": [3], "value": {"a0": 13, "c": 17}},
-          {"key": [4], "value": {"a0": 3, "c": 19}},
+          {"key": [4], "value": {"a0": 3, "c": 19}}
         ]""")
 
-        val JArray(expected) = JsonParser.parse("""[
+        val JArray(expected) = JParser.parse("""[
           {
             "values":{
               "%1$s":{

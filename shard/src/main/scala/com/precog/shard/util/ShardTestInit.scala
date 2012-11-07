@@ -12,10 +12,7 @@ import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 
-import blueeyes.json.JPath
-import blueeyes.json.Printer
-import blueeyes.json.JsonParser
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -78,14 +75,14 @@ object ShardTestInit extends App with JDBMProjectionModule with SystemActorStora
     val path = parts(0)
 
     IOUtils.readFileToString(new File(filename)).map { data =>
-      val json = JsonParser.parse(data)
+      val json = JParser.parse(data)
 
       val emptyMetadata: Map[JPath, Set[UserMetadata]] = Map.empty
 
       json match {
         case JArray(elements) => 
           val fut = storage.storeBatch(elements.map{ value =>
-            println(Printer.compact(Printer.render(value)))
+            println(value.renderCompact)
             EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), "root", value, emptyMetadata))
           })
           //Await.result(fut, Duration(30, "seconds"))

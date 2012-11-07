@@ -5,7 +5,7 @@ import com.precog.common.Path
 
 import blueeyes._
 import blueeyes.bkka._
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import blueeyes.persistence.mongo._
 
 import com.google.common.base.Charsets

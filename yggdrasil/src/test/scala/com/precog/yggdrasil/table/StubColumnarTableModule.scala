@@ -9,9 +9,6 @@ import com.precog.common.VectorCase
 import akka.actor.ActorSystem
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
 
 import scala.annotation.tailrec
 
@@ -70,7 +67,7 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
               
               val target = path.path.replaceAll("/$", ".json")
               val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-              val parsed = src.getLines map JsonParser.parse toStream
+              val parsed = src.getLines map JParser.parse toStream
               
               currentIndex += parsed.length
               

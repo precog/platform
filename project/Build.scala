@@ -36,6 +36,8 @@ object PlatformBuild extends Build {
     }
   )
 
+  val blueeyesVersion = "1.0.0-M4"
+
   val commonSettings = Seq(
     organization := "com.precog",
     version := "2.1.1-SNAPSHOT",
@@ -55,8 +57,12 @@ object PlatformBuild extends Build {
       "com.google.guava"            %  "guava"              % "12.0",
       "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
+      "joda-time"                   %  "joda-time"          % "1.6.2",
+      "com.reportgrid"              %% "blueeyes-core"      % blueeyesVersion changing(),
+      "com.reportgrid"              %% "blueeyes-json"      % blueeyesVersion changing(),
+      "com.reportgrid"              %% "blueeyes-mongo"     % blueeyesVersion changing(),
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
-      "org.specs2"                  %% "specs2"             % "1.12.2" % "test",
+      "org.specs2"                  %% "specs2"             % "1.12.3-SNAPSHOT" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
       "javolution"                  %  "javolution"         % "5.5.1"//,
       //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
