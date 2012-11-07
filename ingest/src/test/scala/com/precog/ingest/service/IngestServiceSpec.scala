@@ -95,7 +95,7 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
           "skipped": 0,
           "errors": [ {
             "line": 0,
-            "reason": "Parsing failed: expected whitespace got # (6)"
+            "reason": "Parsing failed: expected whitespace got # (line 1, column 7)"
           } ]
         }""")
 
