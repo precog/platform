@@ -72,7 +72,8 @@ object PlatformBuild extends Build {
     (unmanagedSourceDirectories in Test) <<= (scalaSource in Test)(Seq(_)),
 
     libraryDependencies ++= Seq(
-      "com.weiglewilczek.slf4s"     % "slf4s_2.9.1"         % "1.0.7",
+      "com.weiglewilczek.slf4s"     %  "slf4s_2.9.1"         % "1.0.7",
+      "com.google.guava"            %  "guava"              % "12.0",
       "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
       "joda-time"                   %  "joda-time"          % "1.6.2",

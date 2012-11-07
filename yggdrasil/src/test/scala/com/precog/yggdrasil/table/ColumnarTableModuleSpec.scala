@@ -84,7 +84,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   }
   
   trait TableCompanion extends ColumnarTableCompanion {
-    def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize) = new Table(slices, size)
+    def apply(slices: StreamT[M, Slice], size: TableSize) = new Table(slices, size)
 
     def singleton(slice: Slice) = new Table(slice :: StreamT.empty[M, Slice], ExactSize(1))
 
@@ -274,6 +274,36 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 
     "in cross" >> {
       "perform a simple cartesian" in testSimpleCross
+      
+      "split a cross that would exceed slice boundaries" in {
+        val sample: List[JValue] = List(
+          JObject(
+            JField("key", JArray(JNum(-1L) :: JNum(0L) :: Nil)) ::
+            JField("value", JNull) :: Nil
+          ), 
+          JObject(
+            JField("key", JArray(JNum(-3090012080927607325l) :: JNum(2875286661755661474l) :: Nil)) ::
+            JField("value", JObject(List(
+              JField("q8b", JArray(List(
+                JNum(6.615224799778253E307d), 
+                JArray(List(JBool(false), JNull, JNum(-8.988465674311579E307d))), JNum(-3.536399224770604E307d)))), 
+              JField("lwu",JNum(-5.121099465699862E307d))))
+            ) :: Nil
+          ), 
+          JObject(
+            JField("key", JArray(JNum(-3918416808128018609l) :: JNum(-1L) :: Nil)) ::
+            JField("value", JNum(-1.0)) :: Nil
+          )
+        )
+        
+        val dataset1 = fromJson(sample.toStream, Some(3))
+        val dataset2 = fromJson(sample.toStream, Some(3))
+        
+        dataset1.cross(dataset1)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight))).slices.uncons.copoint must beLike {
+          case Some((head, _)) => head.size must beLessThanOrEqualTo(3)
+        }
+      }
+      
       "cross across slice boundaries on one side" in testCrossSingles
       "survive scalacheck" in {
         check { cogroupData: (SampleData, SampleData) => testCross(cogroupData._1, cogroupData._2) } 
@@ -759,8 +789,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] {
   implicit def M = Trampoline.trampolineMonad
 
-  type YggConfig = IdSourceConfig
-  val yggConfig = new IdSourceConfig {
+  type YggConfig = IdSourceConfig with ColumnarTableModuleConfig
+  val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
+    val maxSliceSize = 10
+    
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
       def nextId() = source.getAndIncrement

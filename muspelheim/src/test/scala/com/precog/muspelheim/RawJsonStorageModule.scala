@@ -135,7 +135,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
     def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)] = {
       M.point {
         if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
-        (Projection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(())))
+        (Projection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(PrecogUnit)))
       }
     }
   }
@@ -183,7 +183,7 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
 
   class Projection(val descriptor: ProjectionDescriptor, val data: Vector[JValue]) extends ProjectionLike {
     def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("DummyProjection doesn't support insert")
-    def commit(): IO[Unit] = sys.error("DummyProjection doesn't support commit")
+    def commit(): IO[PrecogUnit] = sys.error("DummyProjection doesn't support commit")
   }
 
   object Projection extends ProjectionCompanion {

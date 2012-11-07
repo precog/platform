@@ -66,8 +66,8 @@ trait CrossAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
     val varsLeft = Seq(CPathField("a"))
     val varsRight = Seq(CPathField("b"))
   
-    val leftBorg = BorgResult(fromJson(leftData.toStream), varsLeft, Set(1))
-    val rightBorg = BorgResult(fromJson(rightData.toStream), varsRight, Set(1))
+    val leftBorg = BorgResult(fromJson(leftData.toStream), varsLeft, Set(1), UnknownSize)
+    val rightBorg = BorgResult(fromJson(rightData.toStream), varsRight, Set(1), UnknownSize)
 
     val result = crossAll(Set(leftBorg, rightBorg))
     val jsonResult = result.table.toJson.copoint

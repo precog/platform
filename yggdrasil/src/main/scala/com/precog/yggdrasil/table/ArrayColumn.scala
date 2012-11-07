@@ -23,6 +23,8 @@ package table
 import org.joda.time.DateTime
 
 import com.precog.util.{BitSet, BitSetUtil, Loop}
+
+import scala.{ specialized => spec }
 import scala.collection._
 
 trait DefinedAtIndex {
@@ -30,9 +32,31 @@ trait DefinedAtIndex {
   def isDefinedAt(row: Int) = defined(row)
 }
 
-trait ArrayColumn[@specialized(Boolean, Long, Double) A] extends DefinedAtIndex with ExtensibleColumn { 
+trait ArrayColumn[@spec(Boolean, Long, Double) A] extends DefinedAtIndex with ExtensibleColumn { 
   def update(row: Int, value: A): Unit
 }
+
+class ArrayHomogeneousArrayColumn[@spec(Boolean, Long, Double) A](val defined: BitSet, values: Array[Array[A]])(val tpe: CArrayType[A]) extends HomogeneousArrayColumn[A] with ArrayColumn[Array[A]] {
+  def apply(row: Int) = values(row)
+
+  def update(row: Int, value: Array[A]) {
+    defined.set(row)
+    values(row) = value
+  }
+}
+
+object ArrayHomogeneousArrayColumn {
+  def apply[@spec(Boolean, Long, Double) A: CValueType](values: Array[Array[A]]) =
+    new ArrayHomogeneousArrayColumn(BitSetUtil.range(0, values.length), values)(CArrayType(CValueType[A]))
+  def apply[@spec(Boolean, Long, Double) A: CValueType](defined: BitSet, values: Array[Array[A]]) =
+    new ArrayHomogeneousArrayColumn(defined.copy, values)(CArrayType(CValueType[A]))
+  def empty[@spec(Boolean, Long, Double) A](size: Int)(implicit elemType: CValueType[A]): ArrayHomogeneousArrayColumn[A] = {
+    implicit val m: Manifest[A] = elemType.manifest
+
+    new ArrayHomogeneousArrayColumn(new BitSet, new Array[Array[A]](size))(CArrayType(elemType))
+  }
+}
+
 
 class ArrayBoolColumn(val defined: BitSet, values: BitSet) extends ArrayColumn[Boolean] with BoolColumn {
   def apply(row: Int) = values(row)

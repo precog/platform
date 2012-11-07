@@ -315,7 +315,7 @@ object ChownTools extends Command with YggUtilsCommon {
           println("Replacing %s with\n%s".format(pd, output)) 
         } else {
           IOUtils.safeWriteToFile(output, pd) except {
-            case e => println("Error update: %s - %s".format(pd, e)); IO(())
+            case e => println("Error update: %s - %s".format(pd, e)); IO(PrecogUnit)
           } unsafePerformIO
         }
     }

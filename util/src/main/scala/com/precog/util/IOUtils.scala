@@ -24,6 +24,7 @@ import java.nio.charset._
 import java.nio.channels._
 import java.util.Properties
 
+import com.google.common.io.Files
 import org.apache.commons.io.FileUtils
 
 import scalaz._
@@ -52,8 +53,9 @@ object IOUtils {
     props
   }
 
-  def writeToFile(s: String, f: File): IO[Unit] = IO {
+  def writeToFile(s: String, f: File): IO[PrecogUnit] = IO {
     FileUtils.writeStringToFile(f, s, UTF8)
+    PrecogUnit
   }
   
   /** Performs a safe write to the file. Returns true
@@ -67,20 +69,25 @@ object IOUtils {
     }
   }
 
-  def recursiveDelete(dir: File): IO[Unit] = IO {
+  def recursiveDelete(dir: File): IO[PrecogUnit] = IO {
     FileUtils.deleteDirectory(dir)
+    PrecogUnit
   }
 
-  // FIXME: Not technically safe. Should use Guava instead
   def createTmpDir(prefix: String): IO[File] = IO {
-    val tmp = File.createTempFile(prefix, "tmp")
-    tmp.delete
-    tmp.mkdirs
-    tmp
+    val tmpDir = Files.createTempDir()
+    Option(tmpDir.getParentFile).map { parent =>
+      val newTmpDir = new File(parent, prefix + tmpDir.getName)
+      if (! tmpDir.renameTo(newTmpDir)) {
+        sys.error("Error on tmpdir creation: rename to prefixed failed")
+      }
+      newTmpDir
+    }.getOrElse { sys.error("Error on tmpdir creation: no parent dir found") }
   }
 
-  def copyFile(src: File, dest: File): IO[Unit] = IO {
+  def copyFile(src: File, dest: File): IO[PrecogUnit] = IO {
     FileUtils.copyFile(src, dest)
+    PrecogUnit
   }
 
 }

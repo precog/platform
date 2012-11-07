@@ -27,13 +27,15 @@ import org.apache.commons.io.FileUtils
 import org.joda.time.DateTime
 import org.specs2._
 import org.specs2.execute.Result
-import org.specs2.mutable.Specification
+import org.specs2.mutable.{After, Specification}
 import org.scalacheck.{Arbitrary,Gen}
 
 import blueeyes.json._
 
 import com.precog.common.{Path,VectorCase}
 import com.precog.common.json._
+
+import com.precog.util.IOUtils
 
 import java.io.File
 
@@ -55,6 +57,14 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging with
       data       <- genColumn(size, sequence[Array, CValue](typeGens))
     } yield ProjectionData(descriptor, data)
   )
+
+  trait WithTempDir extends After {
+    val tmpDir = IOUtils.createTmpDir("JDBMSpec").unsafePerformIO
+
+    def after = {
+      IOUtils.recursiveDelete(tmpDir).unsafePerformIO
+    }
+  }
 
   def readWriteColumn(pd: ProjectionData, baseDir: File): Result = {
     sys.error("Refactor")
@@ -86,7 +96,7 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging with
 
       proj2.close()
 
-      FileUtils.deleteDirectory(baseDir)
+      IOUtils.recursiveDelete(baseDir).unsafePerformIO
 
       forall(read.zipWithIndex) {
         case ((ids, v), i) => {
@@ -104,15 +114,15 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging with
 
 /*
   "JDBMProjections" should {
-    "properly serialize and deserialize arbitrary columns" in {
+    "properly serialize and deserialize arbitrary columns" in new WithTempDir {
       check {
-        pd: ProjectionData => readWriteColumn(pd, Files.createTempDir())
+        pd: ProjectionData => readWriteColumn(pd, tmpDir)
       }
     }.pendingUntilFixed
 
     val indexGen = new java.util.Random()
 
-    "properly serialize and deserialize columns with undefined values" in {
+    "properly serialize and deserialize columns with undefined values" in new WithTempDir {
       check {
         pd: ProjectionData => {
           val holeyData = pd.data.map {
@@ -123,7 +133,7 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging with
               newRow.toSeq
             }
           }
-          readWriteColumn(pd.copy(data = holeyData), Files.createTempDir())
+          readWriteColumn(pd.copy(data = holeyData), tmpDir)
         }
       }
     }.pendingUntilFixed

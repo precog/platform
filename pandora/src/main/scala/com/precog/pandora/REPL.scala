@@ -31,6 +31,8 @@ import com.codecommit.gll.{Failure, LineStream, Success}
 import jline.TerminalFactory
 import jline.console.ConsoleReader
 
+import com.precog.util.PrecogUnit
+
 import com.precog.common.Path
 
 import com.precog.common.kafka._
@@ -61,9 +63,9 @@ import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
 trait Lifecycle {
-  def startup: IO[Unit]
-  def run: IO[Unit]
-  def shutdown: IO[Unit]
+  def startup: IO[PrecogUnit]
+  def run: IO[PrecogUnit]
+  def shutdown: IO[PrecogUnit]
 }
 
 trait REPL
@@ -186,6 +188,8 @@ trait REPL
     out.println()
   
     loop()
+
+    PrecogUnit
   }
 
   def readNext(reader: ConsoleReader, color: Color): String = {
@@ -235,9 +239,11 @@ trait REPL
 object Console extends App {
   val controlTimeout = Duration(120, "seconds")
   class REPLConfig(dataDir: Option[String]) extends 
-      BaseConfig with 
+      BaseConfig with
+      IdSourceConfig with
       EvaluatorConfig with
       StandaloneShardSystemConfig with
+      ColumnarTableModuleConfig with
       BlockStoreColumnarTableModuleConfig with
       JDBMProjectionModuleConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
@@ -305,23 +311,24 @@ object Console extends App {
           def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
         }
 
-        def startup = IO { Await.result(storage.start(), controlTimeout) }
+        def startup = IO { Await.result(storage.start(), controlTimeout); PrecogUnit }
 
         def shutdown = IO { 
           Await.result(storage.stop(), controlTimeout) 
           actorSystem.shutdown
+          PrecogUnit
         }
       })
 
   }
 
-  val run = repl.flatMap[Unit] {
+  val run = repl.flatMap[PrecogUnit] {
     case scalaz.Success(lifecycle) => 
       for {
         _ <- lifecycle.startup
         _ <- lifecycle.run
         _ <- lifecycle.shutdown
-      } yield ()
+      } yield PrecogUnit
 
     case scalaz.Failure(error) =>
       IO(sys.error("An error occurred deserializing a database descriptor: " + error))
