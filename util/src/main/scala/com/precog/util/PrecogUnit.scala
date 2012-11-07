@@ -17,17 +17,15 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.common
+package com.precog.util
 
-trait HashFunction extends (Array[Byte] => Array[Byte])
+/**
+ * This class exists as a replacement for Unit in Unit-returning functions.
+ * The main issue with unit is that the coercion of any return value to
+ * unit means that we were sometimes masking mis-returns of functions. In
+ * particular, functions returning IO[Unit] would happily coerce IO => Unit,
+ * which essentially discarded the inner IO work.
+ */
+sealed trait PrecogUnit
 
-object Sha1HashFunction extends HashFunction {
-  override def apply(bytes : Array[Byte]) : Array[Byte] = {
-    val hash = java.security.MessageDigest.getInstance("SHA-1")
-    hash.reset()
-    hash.update(bytes)
-    hash.digest()
-  }
-}
-
-// vim: set ts=4 sw=4 et:
+object PrecogUnit extends PrecogUnit

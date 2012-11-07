@@ -27,6 +27,9 @@ import blueeyes.bkka._
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.mongo._
 
+import com.google.common.base.Charsets
+import com.google.common.hash.Hashing
+
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -40,7 +43,7 @@ import org.bson.types.ObjectId
 import org.I0Itec.zkclient.ZkClient 
 import org.I0Itec.zkclient.DataUpdater
 
-import com.weiglewilczek.slf4s.Logging
+import org.slf4j.LoggerFactory
 
 import org.streum.configrity.Configuration
 
@@ -83,7 +86,9 @@ trait MongoAccountManagerSettings {
 }
 
 
-trait ZkMongoAccountManagerComponent extends Logging {
+trait ZkMongoAccountManagerComponent {
+  private lazy val zkmLogger = LoggerFactory.getLogger("com.precog.accounts.ZkMongoAccountManagerComponent")
+
   implicit def asyncContext: ExecutionContext
   implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
@@ -124,8 +129,11 @@ trait ZkAccountIdSource extends AccountManager[Future] {
   }
 }
 
-abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val execContext: ExecutionContext) extends AccountManager[Future] with Logging {
+abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val execContext: ExecutionContext) extends AccountManager[Future] {
   import Account._
+
+  private lazy val mamLogger = LoggerFactory.getLogger("com.precog.accounts.MongoAccountManager")
+
   private implicit val impTimeout = settings.timeout
   private val randomSource = new java.security.SecureRandom
 
@@ -136,12 +144,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
   }
 
   private def saltAndHash(password: String, salt: String): String = {
-    val md = java.security.MessageDigest.getInstance("SHA-256");
-    val dataBytes = (password + salt).getBytes("UTF-8")
-    md.update(dataBytes, 0, dataBytes.length)
-    val hashBytes = md.digest()
-
-    hashBytes.flatMap(byte => Integer.toHexString(0xFF & byte))(collection.breakOut) : String
+    Hashing.sha1().hashString(password + salt, Charsets.UTF_8).toString
   }
 
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountId, Path) => Future[ApiKey]): Future[Account] = {
