@@ -63,7 +63,7 @@ object MongoShardServer extends BlueEyesServer with ShardService with MongoQuery
                    request: HttpServletRequest,
                    response: HttpServletResponse): Unit = {
           if (target == "/") {
-            response.sendRedirect("http://localhost:%d/index.html?apiKey=%s&analyticsService=http://localhost:%d/".format(serverPort, rootKey, port))
+            response.sendRedirect("http://localhost:%d/index.html?apiKey=%s&analyticsService=http://localhost:%d/&version=false&useJsonp=true".format(serverPort, rootKey, port))
           }
         }
       }
@@ -77,11 +77,8 @@ object MongoShardServer extends BlueEyesServer with ShardService with MongoQuery
       Future(server)
     } -> 
     request { (server: Server) =>
-      // Nothing to do here, really
-      path("/") {
-        get {
-          (req: HttpRequest[ByteChunk]) => Future { HttpResponse[ByteChunk]() }
-        }
+      get {
+        (req: HttpRequest[ByteChunk]) => Future { HttpResponse[ByteChunk]() }
       }
     } ->
     shutdown { (server: Server) =>
