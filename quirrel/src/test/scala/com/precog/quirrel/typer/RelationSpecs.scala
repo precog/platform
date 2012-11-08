@@ -177,36 +177,36 @@ object RelationSpecs extends Specification
     }    
     "accept union on different loads when related" in {
       val tree = compileSingle("//foo ~ //bar //foo union //bar")
-      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
       tree.errors must beEmpty      
     }
     
     "accept union on static and dynamic provenances when related" in {
       val tree = compileSingle("s := new 1 //foo ~ s //foo union s")
-      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept union on differing dynamic provenances when related" in {
       val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 union s2")
-      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.provenance must beLike { case CoproductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }    
     "accept intersect on different loads when related" in {
       val tree = compileSingle("//foo ~ //bar //foo intersect //bar")
-      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
       tree.errors must beEmpty      
     }
     
     "accept intersect on static and dynamic provenances when related" in {
       val tree = compileSingle("s := new 1 //foo ~ s //foo intersect s")
-      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }
     
     "accept intersect on differing dynamic provenances when related" in {
       val tree = compileSingle("s1 := new 1 s2 := new 1 s1 ~ s2 s1 intersect s2")
-      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.provenance must beLike { case CoproductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }    
     

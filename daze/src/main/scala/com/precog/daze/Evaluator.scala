@@ -684,7 +684,7 @@ trait Evaluator[M[+_]] extends DAG
               PendingTable(pendingTableLeft.table, pendingTableLeft.graph, transFromBinOp(op)(pendingTableLeft.trans, pendingTableRight.trans))
             } else {
               val prefixLength = sharedPrefixLength(left, right)
-              
+
               val key = joinSort match {
                 case IdentitySort =>
                   buildJoinKeySpec(prefixLength)
@@ -1080,7 +1080,7 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
-    left.identities zip right.identities takeWhile { case (a, b) => a == b } length
+    left.identities zip right.identities takeWhile { case (a, b) => a =|= b } length
 
   private def buildChains(graph: DepGraph): Set[List[DepGraph]] = {
     val parents = enumerateParents(graph)
@@ -1184,7 +1184,7 @@ trait Evaluator[M[+_]] extends DAG
   private def buildJoinKeySpec(sharedLength: Int): TransSpec1 = {
     val components = for (i <- 0 until sharedLength)
       yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, CPathIndex(i))): TransSpec1
-    
+
     components reduce { trans.ArrayConcat(_, _) }
   }
   
