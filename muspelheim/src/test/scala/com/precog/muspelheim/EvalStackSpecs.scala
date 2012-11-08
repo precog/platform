@@ -836,8 +836,14 @@ trait EvalStackSpecs extends Specification {
 
         results must haveSize(200)
       }
-      "union with operation on part of coproduct" >> {
+      "union with operation on left part of coproduct" >> {
         val input = "(//clicks union //views).time + //clicks.time"
+        val results = evalE(input)
+
+        results must haveSize(100)
+      }
+      "union with operation on right part of coproduct" >> {
+        val input = "(//clicks union //views).time + //views.time"
         val results = evalE(input)
 
         results must haveSize(100)
