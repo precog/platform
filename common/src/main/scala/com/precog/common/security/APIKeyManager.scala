@@ -140,7 +140,7 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] {
     })
   }
   
-  def newAPIKeyWithGrants(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[Grant]): M[Option[APIKey]] = {
+  def newAPIKeyWithGrants(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[NewGrantRequest]): M[Option[APIKey]] = {
     grants.map { grant =>
       hasCapability(issuerKey, grant.permissions, grant.expirationDate)
     }.sequence.map(_.foldLeft(true)(_ && _)).flatMap { mayGrant =>

@@ -108,3 +108,25 @@ object Grant {
     }
   }
 }
+
+case class NewGrantRequest(name: Option[String], description: Option[String], parentIds: Set[GrantID], permissions: Set[Permission], expirationDate: Option[DateTime]) {
+  def isExpired(at: Option[DateTime]) = (expirationDate, at) match {
+    case (None, _) => false
+    case (_, None) => true
+    case (Some(expiry), Some(ref)) => expiry.isBefore(ref) 
+  } 
+}
+
+object NewGrantRequest {
+  implicit val newGrantRequestIso = Iso.hlist(NewGrantRequest.apply _, NewGrantRequest.unapply _)
+  
+  val schema = "name" :: "description" :: "parentIds" :: "permissions" :: "expirationDate" :: HNil
+  
+  implicit val (newGrantRequestDecomposer, newGrantRequestExtractor) = serialization[NewGrantRequest](schema)
+
+  def newAccount(accountId: AccountID, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantID], expiration: Option[DateTime]): NewGrantRequest = {
+    val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path("/"), Set(accountId)) : Permission)
+    val writePerms = Set(WritePermission, DeletePermission).map(_(path, Set()) : Permission)
+    NewGrantRequest(name, description, parentIds, readPerms ++ writePerms, expiration)
+  }
+}

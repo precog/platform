@@ -51,4 +51,14 @@ object APIKeyRecord {
   }
 }
 
+case class NewAPIKeyRequest(name: Option[String], description: Option[String], grants: Set[NewGrantRequest])
+
+object NewAPIKeyRequest {
+  implicit val newAPIKeyRequestIso = Iso.hlist(NewAPIKeyRequest.apply _, NewAPIKeyRequest.unapply _)
+  
+  val schema = "name" :: "description" :: "grants" :: HNil
+  
+  implicit val (newAPIKeyRequestDecomposer, newAPIKeyRequestExtractor) = serialization[NewAPIKeyRequest](schema)
+}
+
 // vim: set ts=4 sw=4 et:

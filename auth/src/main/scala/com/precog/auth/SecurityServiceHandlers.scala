@@ -47,26 +47,6 @@ import com.precog.common.security._
 import APIKeyRecord.SafeSerialization._
 import Grant.SafeSerialization._
 
-case class NewAPIKeyRequest(name: Option[String], description: Option[String], grants: Set[Grant])
-
-object NewAPIKeyRequest {
-  implicit val newAPIKeyRequestIso = Iso.hlist(NewAPIKeyRequest.apply _, NewAPIKeyRequest.unapply _)
-  
-  val schema = "name" :: "description" :: "grants" :: HNil
-  
-  implicit val (newAPIKeyRequestDecomposer, newAPIKeyRequestExtractor) = serialization[NewAPIKeyRequest](schema)
-}
-
-case class NewGrantRequest(name: Option[String], description: Option[String], parentIds: Set[GrantID], permissions: Set[Permission], expirationDate: Option[DateTime])
-
-object NewGrantRequest {
-  implicit val newGrantRequestIso = Iso.hlist(NewGrantRequest.apply _, NewGrantRequest.unapply _)
-  
-  val schema = "name" :: "description" :: "parentIds" :: "permissions" :: "expirationDate" :: HNil
-  
-  implicit val (newGrantRequestDecomposer, newGrantRequestExtractor) = serialization[NewGrantRequest](schema)
-}
-
 case class APIKeyDetails(apiKey: APIKey, name: Option[String], description: Option[String], grants: Set[Grant])
 
 object APIKeyDetails {
