@@ -150,8 +150,6 @@ class AccessControlSpec extends Specification {
     }
 
     "prevent access via a revoked grant" in {
-      val invalidGrantId = "not-there"
-      
       val userAccountId = "user"
       val userAPIKeyRecord = apiKeyManager.newStandardAPIKeyRecord(userAccountId)
       val userAPIKey = userAPIKeyRecord.apiKey
@@ -183,8 +181,6 @@ class AccessControlSpec extends Specification {
     }
 
     "prevent access via an expired grant" in {
-      val invalidGrantId = "not-there"
-      
       val userAccountId = "user"
       val userAPIKeyRecord = apiKeyManager.newStandardAPIKeyRecord(userAccountId)
       val userAPIKey = userAPIKeyRecord.apiKey
@@ -209,8 +205,6 @@ class AccessControlSpec extends Specification {
     }
 
     "prevent access via a grant with a revoked parent" in {
-      val invalidGrantId = "not-there"
-      
       val user1AccountId = "user1"
       val user1APIKeyRecord = apiKeyManager.newStandardAPIKeyRecord(user1AccountId)
       val user1APIKey = user1APIKeyRecord.apiKey
