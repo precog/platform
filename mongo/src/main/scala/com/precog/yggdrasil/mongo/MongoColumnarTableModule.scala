@@ -35,8 +35,7 @@ import com.precog.util.BitSetUtil.Implicits._
 
 import akka.dispatch.Future
 
-import blueeyes.json.JPath
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import blueeyes.persistence.mongo.json._
 import BijectionsMongoJson._
 
@@ -125,7 +124,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
           // horribly inefficient, but a place to start
           val Success(jv) = MongoToJson(from.next())
           val withIdsAndValues = jv.flattenWithPath.foldLeft(into) {
-            case (acc, (jpath, JNothing)) => acc
+            case (acc, (jpath, JUndefined)) => acc
             case (acc, (jpath, v)) =>
               val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
 
@@ -174,7 +173,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
                   val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
                   (defined + sliceIndex, col)
 
-                case JObject(Nil) => 
+                case JObject(values) if values.isEmpty => 
                   val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
                   (defined + sliceIndex, col)
 

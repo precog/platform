@@ -262,6 +262,9 @@ trait Evaluator[M[+_]] extends DAG
             case n @ CNum(_) => Table.constDecimal(Set(n))
             
             case b @ CBoolean(_) => Table.constBoolean(Set(b))
+
+            case d @ CDate(_) => Table.constDate(Set(d))
+            case as @ CArray(_, CArrayType(elemType)) => Table.constArray(Set(as))(elemType)
             
             case CNull => Table.constNull
             

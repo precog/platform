@@ -24,9 +24,10 @@ import com.precog.common.json.CPath.{CPathDecomposer, CPathExtractor}
 import com.precog.common._
 import com.precog.util.IOUtils
 
+import com.google.common.base.Charsets
+import com.google.common.hash.Hashing
+
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.Printer.{pretty,render}
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -175,6 +176,15 @@ case class ProjectionDescriptor(identities: Int, columns: List[ColumnDescriptor]
   def columnAt(path: Path, selector: CPath) = columns.find(col => col.path == path && col.selector == selector)
 
   def satisfies(col: ColumnDescriptor) = columns.contains(col)
+
+  def commonPrefix: List[String] = {
+    val paths = columns.map(_.path.components)
+    paths.tail.foldLeft(paths.head) {
+      case (prefix, nextPath) => (prefix zip nextPath).takeWhile { case(p1, p2) => p1 == p2 }.unzip._1
+    }
+  }
+
+  def stableHash: String = Hashing.sha256().hashString(this.toString, Charsets.UTF_8).toString
 }
 
 trait ProjectionDescriptorSerialization {
@@ -191,7 +201,7 @@ trait ProjectionDescriptorSerialization {
         case JArray(elements) => 
           elements.foldLeft(success[Error, (Vector[ColumnDescriptor], Int)]((Vector.empty[ColumnDescriptor], 0))) {
             case (Success((columns, identities)), obj @ JObject(fields)) =>
-              val idCount = ((obj \ "index") --> classOf[JNum]).value.toInt
+              val idCount = ((obj \ "index") --> classOf[JNum]).toLong.toInt
               (obj \ "descriptor").validated[ColumnDescriptor] map { d =>
                 (columns :+ d, idCount max identities)
               }
@@ -207,12 +217,12 @@ trait ProjectionDescriptorSerialization {
   }
 
   def toFile(descriptor: ProjectionDescriptor, path: File): IO[Boolean] = {
-    IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), path)
+    IOUtils.safeWriteToFile(descriptor.serialize.renderPretty, path)
   }
 
   def fromFile(path: File): IO[Validation[Error,ProjectionDescriptor]] = {
     IOUtils.readFileToString(path).map {
-      JsonParser.parse(_).validated[ProjectionDescriptor]
+      JParser.parse(_).validated[ProjectionDescriptor]
     }
   }
 

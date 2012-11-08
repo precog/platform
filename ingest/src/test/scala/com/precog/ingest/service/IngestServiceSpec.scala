@@ -54,8 +54,7 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 
-import blueeyes.json.JsonParser
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import blueeyes.util.Clock
 
@@ -89,14 +88,14 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
       } }
     }
     "track synchronous event with bad row" in {
-      val msg = JsonParser.parse("""{
+      val msg = JParser.parse("""{
           "total": 2,
           "ingested": 1,
           "failed": 1,
           "skipped": 0,
           "errors": [ {
             "line": 0,
-            "reason": "Parsing failed: unknown token #\nNear: 178234#!!@#$"
+            "reason": "Parsing failed: expected whitespace got # (line 1, column 7)"
           } ]
         }""")
 
@@ -107,7 +106,7 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
         beLike {
           case (HttpResponse(HttpStatus(OK, _), _, Some(msg2), _), event) =>
             msg mustEqual msg2
-            event map (_.data) mustEqual JsonParser.parse("""{ "testing": 321 }""") :: Nil
+            event map (_.data) mustEqual JParser.parse("""{ "testing": 321 }""") :: Nil
         }
       }
     }
@@ -118,9 +117,9 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
       } must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), event) =>
           event map (_.data) must_== List(
-            JsonParser.parse("""{ "a": 1, "b": 2, "c": "3" }"""),
-            JsonParser.parse("""{ "a": 4, "b": null, "c": "a" }"""),
-            JsonParser.parse("""{ "a": 6, "b": 7, "c": "8" }"""))
+            JParser.parse("""{ "a": 1, "b": 2, "c": "3" }"""),
+            JParser.parse("""{ "a": 4, "b": null, "c": "a" }"""),
+            JParser.parse("""{ "a": 6, "b": 7, "c": "8" }"""))
       } }
     }
     "reject track request when API key not found" in {

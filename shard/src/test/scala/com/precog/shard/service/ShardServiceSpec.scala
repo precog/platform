@@ -54,7 +54,7 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import blueeyes.util.Clock
 
@@ -163,10 +163,9 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
  
   "Shard browse service" should {
     "handle browse for API key accessible path" in {
+      val obj = JObject(Map("foo" -> JArray(JString("foo")::JString("bar")::Nil)))
       browse() must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(Left(JObject(
-          JField("children", JArray(JString("foo")::JString("bar")::Nil)):: Nil
-        ))), _) => ok
+        case HttpResponse(HttpStatus(OK, _), _, Some(Left(obj)), _) => ok
       }}
     }
     "reject browse for non-API key accessible path" in {

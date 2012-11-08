@@ -24,7 +24,7 @@ import com.precog.yggdrasil.TableModule
 import com.precog.common._
 import com.precog.common.json._
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import akka.actor.ActorSystem
 import akka.dispatch.{Future, ExecutionContext}

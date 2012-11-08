@@ -23,7 +23,7 @@ package service
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import blueeyes.util.Clock
 
 import akka.dispatch.Future

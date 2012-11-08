@@ -27,7 +27,6 @@ import com.precog.common._
 import com.weiglewilczek.slf4s.Logging
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -61,8 +60,8 @@ trait MetadataStorage {
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] 
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit]
-  def archiveMetadata(desc: ProjectionDescriptor): IO[Unit]
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[PrecogUnit]
+  def archiveMetadata(desc: ProjectionDescriptor): IO[PrecogUnit]
 
   def findChildren(path: Path): Set[Path] =
     findDescriptors(_ => true) flatMap { descriptor => 
@@ -225,16 +224,10 @@ object FileMetadataStorage extends Logging {
 
     def read(baseDir: File): Validation[String, ProjectionDescriptor] = {
       val df = new File(baseDir, descriptorName)
-      if (!df.exists) Failure("Unable to find serialized projection descriptor in " + baseDir)
-      else {
-        val reader = new FileReader(df)
-        try {
-          // TODO: scalaz eludes me... (DCB)
-          //{ (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor]
-          { (_: Extractor.Error).message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor] 
-        } finally {
-          reader.close
-        }
+      if (!df.exists) {
+        Failure("Unable to find serialized projection descriptor in " + baseDir)
+      } else {
+        JParser.parseFromFile(df).bimap(_.getMessage, s => s)
       }
     }
 
@@ -253,16 +246,18 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
     metadataLocations.keySet.filter(f)
   }
 
-  def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[Unit] = {
+  def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[PrecogUnit] = {
     if (metadataLocations.contains(desc)) {
-      IO(())
+      IO(PrecogUnit)
     } else {
       for {
-        newRoot <- newRandomDir(baseDir)
+        newRoot <- descriptorDir(baseDir, desc)
+        _       <- IO { newRoot.mkdirs() }
         _       <- writeDescriptor(desc, newRoot) 
       } yield {
         logger.info("Created new projection for " + desc)
         metadataLocations += (desc -> newRoot) 
+        PrecogUnit
       }
     }
   }
@@ -276,7 +271,7 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
   }
 
   def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]] = {
-    metadataLocations.get(desc).map(newArchiveDir(archiveDir, _)).sequence
+    metadataLocations.get(desc).map(_ => descriptorDir(archiveDir, desc).map { d => d.mkdirs(); d }).sequence
   }
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = {
@@ -287,7 +282,7 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
       case Some(dir) =>
         val file = new File(dir, curFilename)
         fileOps.exists(file) flatMap {
-          case true  => fileOps.read(file) map { json => JsonParser.parse(json).deserialize[MetadataRecord] }
+          case true  => fileOps.read(file) map { json => JParser.parse(json).deserialize[MetadataRecord] }
           case false => IO(defaultMetadata(desc))
         }
 
@@ -296,7 +291,7 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
     }
   }
  
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = {
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[PrecogUnit] = {
     logger.debug("Updating metadata for " + desc)
     metadataLocations.get(desc) map { dir =>
       metadataLocations += (desc -> dir)
@@ -307,50 +302,35 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
         _ <- rotateCurrent(dir)
       } yield {
         logger.debug("Metadata update complete for " + desc)
+        PrecogUnit
       }
     } getOrElse {
       IO.throwIO(new IllegalStateException("Metadata update on missing projection for " + desc))
     }
   }
   
-  def archiveMetadata(desc: ProjectionDescriptor): IO[Unit] = {
+  def archiveMetadata(desc: ProjectionDescriptor): IO[PrecogUnit] = IO {
     // Metadata file should already have been moved as a side-effect of archiving
     // the projection, so here we just remove it from the map.
     logger.debug("Archiving metadata for " + desc)
     metadataLocations -= desc
-    IO(())
+    PrecogUnit
   }
 
   override def toString = "FileMetadataStorage(root = " + baseDir + " archive = " + archiveDir +")"
 
-  private def newRandomDir(parent: File): IO[File] = {
-    def dirUUID: String = {
-      val uuid = java.util.UUID.randomUUID.toString.toLowerCase.replace("-", "")
-      val randomPath = (1 until 3).map { _*2 }.foldLeft(Vector.empty[String]) {
-        case (acc, i) => acc :+ uuid.substring(0, i)
-      }
-      
-      randomPath.mkString("/", "/", "/") + uuid
-    }
+  private final val disallowedPathComponents = Set(".", "..")
+  /**
+   * Computes the stable path for a given descriptor relative to the given base dir
+   */
+  private def descriptorDir(baseDir: File, descriptor: ProjectionDescriptor): IO[File] = IO {
+    // The path component maps directly to the FS, with a hash on the columnrefs as the final dir
+    val prefix = descriptor.commonPrefix.filterNot(disallowedPathComponents.contains)
 
-    val newDir = new File(parent, dirUUID)
-    IO {
-      newDir.mkdirs
-      newDir
-    }
+    new File(baseDir, (prefix :+ descriptor.stableHash).mkString(File.separator))
   }
-
-  private def newArchiveDir(parent: File, source: File): IO[File] = {
-    val dirUUID = Iterator.iterate(source)(_.getParentFile).map(_.getName).take(3).toList.reverse.mkString("/", "/", "")
-
-    val archiveDir = new File(parent, dirUUID)
-    IO {
-      archiveDir.mkdirs
-      archiveDir
-    }
-  }
-
-  private def writeDescriptor(desc: ProjectionDescriptor, baseDir: File): IO[Unit] = {
+  
+  private def writeDescriptor(desc: ProjectionDescriptor, baseDir: File): IO[PrecogUnit] = {
     val df = new File(baseDir, descriptorName)
     fileOps.exists(df) map {
       case true => 
@@ -359,32 +339,33 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
       case false =>
         val writer = new FileWriter(df)
         try {
-          writer.write(Printer.pretty(Printer.render(desc.serialize)))
+          writer.write(desc.serialize.renderPretty)
+          PrecogUnit
         } finally {
           writer.close()
         }
     }
   }
 
-  private def stageNext(dir: File, metadata: MetadataRecord): IO[Unit] = {
-    val json = Printer.pretty(Printer.render(metadata.serialize))
+  private def stageNext(dir: File, metadata: MetadataRecord): IO[PrecogUnit] = {
+    val json = metadata.serialize.renderPretty
     val next = new File(dir, nextFilename)
     fileOps.write(next, json)
   }
   
-  private def stagePrev(dir: File): IO[Unit] = {
+  private def stagePrev(dir: File): IO[PrecogUnit] = {
     val src = new File(dir, curFilename)
     val dest = new File(dir, prevFilename)
-    fileOps.exists(src) flatMap { exists => if (exists) fileOps.copy(src, dest) else IO(()) }
+    fileOps.exists(src) flatMap { exists => if (exists) fileOps.copy(src, dest) else IO(PrecogUnit) }
   }
   
-  private def rotateCurrent(dir: File): IO[Unit] = {
+  private def rotateCurrent(dir: File): IO[PrecogUnit] = {
     val src  = new File(dir, nextFilename)
     val dest = new File(dir, curFilename)
     for {
       _ <- IO { logger.trace("Rotating metadata from %s to %s".format(nextFilename, curFilename)) }
       _ <- fileOps.rename(src, dest)
-    } yield ()
+    } yield PrecogUnit
   }
 }
 

@@ -22,9 +22,9 @@ package security
 
 import blueeyes._
 import blueeyes.bkka._
-import blueeyes.json.JsonAST._
 import blueeyes.persistence.mongo._
 import blueeyes.persistence.cache._
+import blueeyes.json._
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._

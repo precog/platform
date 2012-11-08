@@ -35,9 +35,7 @@ import akka.testkit.TestActorRef
 import akka.util.Timeout
 import akka.util.duration._
 
-import blueeyes.json.JPath
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 
 import scalaz._
 import scalaz.effect._
@@ -76,7 +74,7 @@ trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
 
     def userMetadataView(uid: String) = new UserMetadataView[M](uid, new UnlimitedAccessControl(), metadata)
 
-    def projection(descriptor: ProjectionDescriptor) = M.point(projections(descriptor) -> new Release(IO(())))
+    def projection(descriptor: ProjectionDescriptor) = M.point(projections(descriptor) -> new Release(IO(PrecogUnit)))
   }
 }
 
@@ -91,7 +89,7 @@ trait DistributedSampleStubStorageModule[M[+_]] extends StubStorageModule[M] {
     val chunkSize = 2000
 
     def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("Dummy ProjectionLike doesn't support insert")      
-    def commit(): IO[Unit] = sys.error("Dummy ProjectionLike doesn't support commit")
+    def commit(): IO[PrecogUnit] = sys.error("Dummy ProjectionLike doesn't support commit")
   }
 
   implicit lazy val ordering = IdentitiesOrder.toScalaOrdering

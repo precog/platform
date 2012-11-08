@@ -28,7 +28,7 @@ import com.precog.ingest.service.NullUsageLogging
 import blueeyes.BlueEyesServer
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
-import blueeyes.json.JsonAST.JValue
+import blueeyes.json.JValue
 import blueeyes.util.Clock
 
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}

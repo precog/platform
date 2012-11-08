@@ -19,8 +19,7 @@
  */
 package com.precog.shard
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL
+import blueeyes.json._
 
 import com.precog.common._
 import com.precog.common.json._

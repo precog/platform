@@ -20,8 +20,7 @@
 package com.precog.shard
 package mongo
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL
+import blueeyes.json._
 import blueeyes.json.serialization._
 import DefaultSerialization._
 
@@ -133,7 +132,6 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig) extends ShardQ
           val finalNames = dbs.foldLeft(dbs.toSet) {
             case (acc, dbName) => acc.filterNot { t => t.startsWith(dbName) && t != dbName }
           }.toList.sorted
-          println("Final DB names = " + finalNames)
           Success(finalNames.map {d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
 
         case dbName :: Nil => 

@@ -21,7 +21,7 @@ package com.precog
 package accounts
 
 import com.precog.common.Path
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 //import blueeyes.json.serialization.DefaultSerialization.{DateTimeDecomposer => _, DateTimeExtractor => _, _}

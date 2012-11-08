@@ -30,8 +30,7 @@ import akka.testkit.TestActorRef
 import akka.util.Timeout
 import akka.util.duration._
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 
 import com.precog.common._
 import com.precog.common.security._
@@ -60,11 +59,12 @@ import TableModule._
 trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
   implicit def M: Monad[M]
 
-  trait ProjectionCompanion {
-    def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
-  }
-
-  def rawProjection: ProjectionCompanion
+//  trait ProjectionCompanion {
+//    def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
+//  }
+//
+//  val Projection: ProjectionCompanion
+  def projectionFor(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
 
   abstract class Storage extends StorageLike {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
@@ -76,8 +76,19 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
     private def load(path: Path) = {
       val resourceName = ("/test_data" + path.toString.init + ".json").replaceAll("/+", "/")   
       using(getClass.getResourceAsStream(resourceName)) { in =>
+        // FIXME: Refactor as soon as JParser can parse from InputStreams
         val reader = new InputStreamReader(in)
-        val json = JsonParser.parse(reader) --> classOf[JArray]
+        val buffer = new Array[Char](8192)
+        val builder = new java.lang.StringBuilder
+        var read = 0
+        do {
+          read = reader.read(buffer)
+          if (read >= 0) {
+            builder.append(buffer, 0, read)
+          }
+        } while (read >= 0)
+        
+        val json = JParser.parse(builder.toString) --> classOf[JArray]
 
         projections = json.elements.foldLeft(projections) { 
           case (acc, jobj) => 
@@ -125,7 +136,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
     def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)] = {
       M.point {
         if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
-        (rawProjection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(())))
+        (projectionFor(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(PrecogUnit)))
       }
     }
   }
@@ -138,26 +149,21 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
   trait TableCompanion extends ColumnarTableCompanion {
     def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize) = new Table(slices, size)
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = sys.error("Feature not implemented in test stub.")
-    def singleton(slice: Slice) = sys.error("Feature not implemented in test stub")
+    // FIXME: There should be some way to make SingletonTable work here, too
+    def singleton(slice: Slice) = new Table(slice :: StreamT.empty[M, Slice], ExactSize(1))
   }
   
   class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size) {
     import trans._
-
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false) = sys.error("Feature not implemented in test stub")
     
     def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("Feature not implemented in test stub.")
 
-    private var initialIndices = collection.mutable.Map[Path, Int]()
-    private var currentIndex = 0
-
     def load(uid: UserId, tpe: JType): M[Table] = {
-      val metadataView = storage.userMetadataView(uid.toString)
-
-      val pathsM = reduce {
+      val pathsM = this.reduce {
         new CReducer[Set[Path]] {
-          def reduce(columns: JType => Set[Column], range: Range) = {
-            columns(JTextT) flatMap {
+          def reduce(columns: JType => Set[Column], range: Range): Set[Path] = {
+            columns(JObjectFixedT(Map("value" -> JTextT))) flatMap {
               case s: StrColumn => range.filter(s.isDefinedAt).map(i => Path(s(i)))
               case _ => Set()
             }
@@ -167,7 +173,7 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
 
       for {
         paths <- pathsM
-        data  <- paths.toList.map(metadataView.findProjections).sequence
+        data  <- paths.toList.map(storage.userMetadataView("").findProjections).sequence
         path  = data.flatten.headOption
         table <- path map { 
                    case (descriptor, _) => storage.projection(descriptor) map { projection => fromJson(projection._1.data.toStream) }
@@ -180,11 +186,12 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
 
   class Projection(val descriptor: ProjectionDescriptor, val data: Vector[JValue]) extends ProjectionLike {
     def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("DummyProjection doesn't support insert")
-    def commit(): IO[Unit] = sys.error("DummyProjection doesn't support commit")
+    def commit(): IO[PrecogUnit] = sys.error("DummyProjection doesn't support commit")
   }
 
-  object rawProjection extends ProjectionCompanion {
-    def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = new Projection(descriptor, data)
+  def projectionFor(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = {
+    println("New projection")
+    new Projection(descriptor, data)
   }
 
   object storage extends Storage

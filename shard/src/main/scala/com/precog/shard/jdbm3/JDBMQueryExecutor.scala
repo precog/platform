@@ -20,8 +20,7 @@
 package com.precog.shard
 package jdbm3 
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL
+import blueeyes.json._
 
 import com.precog.common.json._
 import com.precog.common.security._
@@ -164,7 +163,7 @@ trait JDBMQueryExecutor extends ShardQueryExecutor with StorageModule[Future] { 
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
     storage.userMetadataView(userUID).findChildren(path) map {
-      case paths => success(JArray(paths.map( p => JString(p.toString))(collection.breakOut)))
+      case paths => success(JArray(paths.map( p => JString(p.toString)).toSeq: _*))
     }
   }
 

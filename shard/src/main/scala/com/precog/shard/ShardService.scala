@@ -35,7 +35,7 @@ import blueeyes.core.data.{ BijectionsChunkJson, BijectionsChunkFutureJson, Bije
 import blueeyes.core.http.{HttpHeaders, HttpRequest, HttpResponse}
 import blueeyes.core.service.CustomHttpService
 import blueeyes.health.metrics.{eternity}
-import blueeyes.json.JsonAST.JValue
+import blueeyes.json.JValue
 
 import org.streum.configrity.Configuration
 

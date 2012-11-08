@@ -31,8 +31,6 @@ import com.weiglewilczek.slf4s.Logging
 import org.slf4j.MDC
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-
 import blueeyes.json.serialization.Decomposer
 import blueeyes.json.serialization.DefaultSerialization._
 
@@ -147,18 +145,18 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       sender ! kafkaOffset.map(YggCheckpoint(_, messageClock)) 
   }
 
-  private def flush(replyTo: Option[ActorRef]): IO[Unit] = {
+  private def flush(replyTo: Option[ActorRef]): IO[PrecogUnit] = {
     flushRequests += 1
     logger.debug("Flushing metadata (%s, request %d)...".format(if (replyTo.nonEmpty) "scheduled" else "forced", flushRequests))
 
-    val io: IO[List[Unit]] = fullDataFor(dirty) flatMap { 
-      _.toList.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, messageClock)) }).sequence[IO, Unit]
+    val io: IO[List[PrecogUnit]] = fullDataFor(dirty) flatMap { 
+      _.toList.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, messageClock)) }).sequence[IO, PrecogUnit]
     }
 
     // if some metadata fails to be written and we consequently don't write the checkpoint,
     // then the restore process for each projection will need to skip all message ids prior
     // to the checkpoint clock associated with that metadata
-    io.catchLeft map { 
+    io.catchLeft.map { 
       case Left(error) =>
         logger.error("Error saving metadata for flush request %d; checkpoint at offset %s, clock %s ignored.".format(flushRequests, kafkaOffset.toString, messageClock.toString), error)
           
@@ -167,7 +165,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
         logger.debug("Flush " + flushRequests + " complete for projections: \n" + dirty.map(_.shows).mkString("\t", "\t\n", "\n"))
         dirty = Set()
         replyTo foreach { _ ! () }
-    }
+    }.map(_ => PrecogUnit)
   }
 
   def status: JValue = JObject(JField("Metadata", JObject(JField("state", JString("Ice cream!")) :: Nil)) :: Nil) // TODO: no, really...
@@ -180,11 +178,13 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
     fullDataFor(storage.findDescriptors(_.columns.exists(matches(path, selector))))
   } 
 
-  def ensureMetadataCached(descriptor: ProjectionDescriptor): IO[Unit] = {
+  def ensureMetadataCached(descriptor: ProjectionDescriptor): IO[PrecogUnit] = {
     if (projections.contains(descriptor)) {
-      IO(())
+      IO(PrecogUnit)
     } else storage.getMetadata(descriptor) map { 
-      case MetadataRecord(metadata, clock) => projections += (descriptor -> metadata)
+      case MetadataRecord(metadata, clock) => 
+        projections += (descriptor -> metadata)
+        PrecogUnit
     }
   }
 

@@ -39,6 +39,7 @@ import com.precog.daze.{ UserError, QueryOptions }
 import com.precog.muspelheim.RawJsonColumnarTableStorageModule
 import com.precog.yggdrasil.{ IdSource, ProjectionDescriptor }
 import com.precog.yggdrasil.actor.{ StandaloneShardSystemActorModule, StandaloneShardSystemConfig }
+import com.precog.util.PrecogUnit
 
 trait TestJDBMQueryExecutor extends JDBMQueryExecutor
     with RawJsonColumnarTableStorageModule[Future]
@@ -71,9 +72,9 @@ trait TestJDBMQueryExecutor extends JDBMQueryExecutor
   }
 
   object Projection extends ProjectionCompanion {
-    def archive(d: ProjectionDescriptor) = sys error "archive"
-    def close(d: Projection) = sys error "close"
-    def open(d: ProjectionDescriptor) = sys error "open"
+    def open(descriptor: ProjectionDescriptor): IO[Projection] = sys.error("Open not supported")
+    def close(p: Projection): IO[PrecogUnit] = sys.error("Close not supported")
+    def archive(d: ProjectionDescriptor): IO[Boolean] = sys.error("Archive not supported")
   }
 
   object Table extends TableCompanion
@@ -114,7 +115,7 @@ class JDBMQueryExecutorSpec extends Specification
       result must beLike {
         case Success(streamt) => streamt.toStream.copoint.map(_.toString).suml must be equalTo "asdf"
       }
-    }
+    }.pendingUntilFixed
 
     "output valid JSON with enormous crosses/cartesians" in {
       val path = Path("/election/tweets")
@@ -133,7 +134,7 @@ class JDBMQueryExecutorSpec extends Specification
       result must beLike {
         case Success(streamt) => streamt.toStream.copoint.map(_.toString).suml must be equalTo "asdf"
       }
-    }
+    }.pendingUntilFixed
   }
 }
 

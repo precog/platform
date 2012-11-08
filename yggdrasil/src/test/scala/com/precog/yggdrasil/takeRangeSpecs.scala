@@ -23,7 +23,6 @@ package table
 import scala.util.Random
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 
 import scalaz.StreamT
 import scalaz.syntax.copointed._

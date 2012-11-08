@@ -115,7 +115,7 @@ trait JDBMColumnarTableModule[M[+_]] extends BlockStoreColumnarTableModule[M] wi
             } yield {
               mergeProjections(SortAscending, // Projections are always sorted in ascending identity order
                                cellOptions.flatMap(a => a)) { slice => 
-                slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(CPathField("key") :: Nil) }).toList.sorted
+                slice.columns.keys map (_.selector) filter (_.nodes.startsWith(CPathField("key") :: Nil))
               }
             }
           )

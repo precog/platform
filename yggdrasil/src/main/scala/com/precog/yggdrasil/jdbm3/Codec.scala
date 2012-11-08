@@ -537,6 +537,7 @@ object Codec {
 
   implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]) = new IndexedSeqCodec(elemCodec)
 
+  // FIXME: This should have its own codec.
   implicit def ArrayCodec[A: Codec: Manifest]: Codec[Array[A]] = Codec[IndexedSeq[A]].as[Array[A]](_.toIndexedSeq, _.toArray)
 
 
@@ -570,16 +571,6 @@ object Codec {
     type A = AA
     val codec = _codec
   }).init(a, sink)
-
-
-  private def bitSet2Array(bs: BitSet): Array[Long] = {
-    val size = if (bs.isEmpty) 0 else { (bs.max >>> 6) + 1 }
-    val bytes = new Array[Long](size)
-    bs foreach { i =>
-      bytes(i >>> 6) |= 1L << (i & 0x3F)
-    }
-    bytes
-  }
 
   implicit val BitSetCodec = ArrayCodec[Long](LongCodec, implicitly).as[BitSet](_.getBits, BitSetUtil.fromArray)
 

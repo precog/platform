@@ -139,7 +139,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     }
 
     object CellMatrix {
-      def apply(initialCells: Vector[Cell])(keyf: Slice => List[ColumnRef]): CellMatrix = {
+      def apply(initialCells: Vector[Cell])(keyf: Slice => Iterable[CPath]): CellMatrix = {
         val size = if (initialCells.isEmpty) 0 else initialCells.map(_.index).max + 1
         
         type ComparatorMatrix = Array[Array[RowComparator]]
@@ -147,7 +147,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           val comparatorMatrix = Array.ofDim[RowComparator](size, size)
 
           for (Cell(i, _, s) <- initialCells; Cell(i0, _, s0) <- initialCells if i != i0) { 
-            comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf) 
+            comparatorMatrix(i)(i0) = Slice.rowComparatorFor(s, s0)(keyf)
           }
 
           comparatorMatrix
@@ -166,7 +166,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       }
     }
 
-    def mergeProjections(inputSortOrder: DesiredSortOrder, cellStates: Stream[CellState])(keyf: Slice => List[ColumnRef]): StreamT[M, Slice] = {
+    def mergeProjections(inputSortOrder: DesiredSortOrder, cellStates: Stream[CellState])(keyf: Slice => Iterable[CPath]): StreamT[M, Slice] = {
 
       // dequeues all equal elements from the head of the queue
       @inline @tailrec def dequeueEqual(
@@ -345,12 +345,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       // duplicate rows in the write to JDBM
       def buildRowComparator(lkey: Slice, rkey: Slice, rauth: Slice): RowComparator = new RowComparator {
         private val mainComparator = Slice.rowComparatorFor(lkey.deref(CPathIndex(0)), rkey.deref(CPathIndex(0))) {
-          _.columns.keys.toList.sorted 
+          _.columns.keys map (_.selector)
         }
 
         private val auxComparator = if (rauth == null) null else {
           Slice.rowComparatorFor(lkey.deref(CPathIndex(0)), rauth.deref(CPathIndex(0))) {
-            _.columns.keys.toList.sorted 
+            _.columns.keys map (_.selector)
           }
         } 
 
@@ -830,7 +830,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           for (cellOptions <- cellsMs.sequence) yield {
             mergeProjections(sortOrder, cellOptions.flatMap(a => a)) { slice => 
               // only need to compare on the group keys (0th element of resulting table) between projections
-              slice.columns.keys.collect({ case ref @ ColumnRef(CPath(CPathIndex(0), _ @ _*), _) => ref}).toList.sorted
+              slice.columns.keys collect { case ColumnRef(path @ CPath(CPathIndex(0), _ @ _*), _) => path }
             }
           }
         )
@@ -843,6 +843,32 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   }
   
   abstract class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size)
+
+  class SingletonTable(slices0: StreamT[M, Slice]) extends Table(slices0, ExactSize(1)) {
+    import TableModule._
+    
+    // TODO assert that this table only has one row
+    
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = {
+      val xform = transform(valueSpec)
+      M.point(List.fill(groupKeys.size)(xform))
+    }
+    
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = M.point(this)
+    
+    def load(uid: UserId, tpe: JType): M[Table] = Table.load(this, uid, tpe)
+    
+    override def compact(spec: TransSpec1): Table = this
+
+    override def force: M[Table] = M.point(this)
+    
+    override def paged(limit: Int): Table = this
+
+    override def distinct(spec: TransSpec1): Table = this
+
+    override def takeRange(startIndex: Long, numberToTake: Long): Table =
+      if (startIndex <= 0 && startIndex + numberToTake >= 1) this else Table.empty
+  }
 
   class ExternalTable(slices: StreamT[M, Slice], size: TableSize) extends Table(slices, size) {
     import Table._
@@ -899,34 +925,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                   sortOrder)
     }
   }
-  
-  class SingletonTable(slices0: StreamT[M, Slice]) extends Table(slices0, ExactSize(1)) {
-    import TableModule._
-    
-    // TODO assert that this table only has one row
-    
-    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = {
-      val xform = transform(valueSpec)
-      M.point(List.fill(groupKeys.size)(xform))
-    }
-    
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = M.point(this)
-    
-    def load(uid: UserId, tpe: JType): M[Table] = Table.load(this, uid, tpe)
-    
-    override def compact(spec: TransSpec1): Table = this
-
-    override def force: M[Table] = M.point(this)
-    
-    override def paged(limit: Int): Table = this
-
-    override def distinct(spec: TransSpec1): Table = this
-
-    override def takeRange(startIndex: Long, numberToTake: Long): Table =
-      if (startIndex <= 0 && startIndex + numberToTake >= 1) this else Table.empty
-  }
 }
-
-
 
 // vim: set ts=4 sw=4 et:
