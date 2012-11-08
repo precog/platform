@@ -1078,9 +1078,15 @@ trait Evaluator[M[+_]] extends DAG
     
     parts reduceOption { (left, right) => trans.InnerObjectConcat(left, right) } getOrElse ConstLiteral(CEmptyArray, Leaf(Source))
   }
+
+  private def disjunctiveEquals(a: IdentitySpec, b: IdentitySpec): Boolean = (a, b) match {
+    case (CoproductIds(left, right), b) => disjunctiveEquals(b, left) || disjunctiveEquals(b, right)
+    case (a, CoproductIds(left, right)) => disjunctiveEquals(a, left) || disjunctiveEquals(a, right)
+    case (a, b) => a == b
+  }
   
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
-    left.identities zip right.identities takeWhile { case (a, b) => a =|= b } length
+    left.identities zip right.identities takeWhile Function.tupled(disjunctiveEquals _) length
 
   private def buildChains(graph: DepGraph): Set[List[DepGraph]] = {
     val parents = enumerateParents(graph)

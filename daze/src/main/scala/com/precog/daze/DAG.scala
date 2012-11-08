@@ -897,20 +897,12 @@ trait DAG extends Instructions with TransSpecModule {
     case class Extra(expr: DepGraph) extends BucketSpec
     
     
-    sealed trait IdentitySpec {
-      // Special equality for CoproductIds, which represent disjunction
-      def =|=(b: IdentitySpec) = this == b
-    }
-    
+    sealed trait IdentitySpec
+
     case class LoadIds(path: String) extends IdentitySpec
     case class SynthIds(id: Int) extends IdentitySpec
-    case class CoproductIds(left: IdentitySpec, right: IdentitySpec) extends IdentitySpec {
-      override def =|=(b: IdentitySpec) = b match {
-        case CoproductIds(bLeft, bRight) => left =|= bLeft || right =|= bRight
-        case _ => left =|= b || right =|= b
-      }
-    }
-    
+    case class CoproductIds(left: IdentitySpec, right: IdentitySpec) extends IdentitySpec
+
     
     sealed trait JoinSort
     sealed trait TableSort extends JoinSort
