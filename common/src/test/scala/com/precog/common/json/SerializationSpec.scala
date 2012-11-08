@@ -2,7 +2,7 @@ package com.precog.common.json
 
 import org.specs2.mutable.Specification
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import blueeyes.json.serialization.{ Decomposer, Extractor, ValidatedExtraction }
 import blueeyes.json.serialization.DefaultSerialization._
 
@@ -84,7 +84,7 @@ class SerializationSpec extends Specification {
               JField("b", true)
             ))),
           JField("l",
-            JArray(List("foo", "bar", "baz")))
+            JArray(List(JString("foo"), JString("bar"), JString("baz"))))
         ))
     }
     
@@ -103,7 +103,7 @@ class SerializationSpec extends Specification {
               JField("b", true)
             ))),
           JField("l",
-            JArray(List("foo", "bar", "baz")))
+            JArray(List(JString("foo"), JString("bar"), JString("baz"))))
         ))
     }
     
@@ -120,7 +120,7 @@ class SerializationSpec extends Specification {
           JField("i", 23),
           JField("b", true),
           JField("l",
-            JArray(List("foo", "bar", "baz")))
+            JArray(List(JString("foo"), JString("bar"), JString("baz"))))
         ))
     }
 
@@ -204,7 +204,7 @@ class SerializationSpec extends Specification {
               JField("b", true)
             ))),
           JField("l",
-            JArray(List("foo", "bar", "baz")))
+            JArray(List(JString("foo"), JString("bar"), JString("baz"))))
         ))
       )
       
@@ -224,7 +224,7 @@ class SerializationSpec extends Specification {
               JField("b", true)
             ))),
           JField("l",
-            JArray(List("foo", "bar", "baz")))
+            JArray(List(JString("foo"), JString("bar"), JString("baz"))))
         ))
       )
       
@@ -242,7 +242,7 @@ class SerializationSpec extends Specification {
           JField("i", 23),
           JField("b", true),
           JField("l",
-            JArray(List("foo", "bar", "baz")))
+            JArray(List(JString("foo"), JString("bar"), JString("baz"))))
         ))
       )
       

@@ -2,7 +2,6 @@ package com.precog
 package ragnarok
 
 import blueeyes.json._
-import JsonAST._
 
 import scalaz._
 import scalaz.std.option._
