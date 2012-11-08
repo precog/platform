@@ -3,7 +3,6 @@ package com.precog.yggdrasil
 import scala.collection.mutable
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 
 import com.precog.common.json._
 import com.precog.common.VectorCase
@@ -101,11 +100,11 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     case CNull => JNull
     case CEmptyObject => JObject.empty 
     case CEmptyArray => JArray.empty
-    case CUndefined => JNothing
+    case CUndefined => JUndefined
   }
 
   def jvalue(schema: Seq[(JPath, CType)]): Gen[JValue] = {
-    schema.foldLeft(Gen.value[JValue](JNothing)) {
+    schema.foldLeft(Gen.value[JValue](JUndefined)) {
       case (gen, (jpath, ctype)) => 
         for {
           acc <- gen
@@ -135,11 +134,11 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     }
 
   def assemble(parts: Seq[(JPath, JValue)]): JValue = {
-    val result = parts.foldLeft[JValue](JNothing) { 
+    val result = parts.foldLeft[JValue](JUndefined) { 
       case (acc, (selector, jv)) => acc.unsafeInsert(selector, jv) 
     }
 
-    if (result != JNothing || parts.isEmpty) result else sys.error("Cannot build object from " + parts)
+    if (result != JUndefined || parts.isEmpty) result else sys.error("Cannot build object from " + parts)
   }
 }
 
