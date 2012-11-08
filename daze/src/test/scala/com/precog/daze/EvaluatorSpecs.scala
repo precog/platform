@@ -36,7 +36,6 @@ import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
 import blueeyes.json._
-import JsonAST._
 
 import java.io._
 import java.util.concurrent.Executors
@@ -66,7 +65,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
   private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
   private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
   
-  class YggConfig extends EvaluatorConfig with BlockStoreColumnarTableModuleConfig {
+  class YggConfig extends IdSourceConfig with ColumnarTableModuleConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig {
     val sortBufferSize = 1000
     val sortWorkDir: File = IOUtils.createTmpDir("idsoSpec").unsafePerformIO
     val clock = blueeyes.util.Clock.System
@@ -97,7 +96,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
             
             val target = path.path.replaceAll("/$", ".json")
             val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-            val parsed = src.getLines map JsonParser.parse toStream
+            val parsed = src.getLines map JParser.parse toStream
             
             currentIndex += parsed.length
             
@@ -3088,6 +3087,20 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
+    }
+    
+    "produce a preemptive error when crossing enormous sets" in {
+      val line = Line(0, "")
+      
+      val tweets = dag.LoadLocal(line, Root(line, CString("/election/tweets")))
+      
+      val input = dag.Join(line, Add, CrossLeftSort,
+        dag.Join(line, Add, CrossLeftSort,
+          tweets,
+          tweets),
+        tweets)
+        
+      testEval(input) { _ => failure } must throwAn[EnormousCartesianException]
     }
   }
 

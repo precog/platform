@@ -27,5 +27,4 @@ trait StubPhases extends Phases with RawErrors {
   def checkProvenance(expr: Expr): Set[Error] = Set()
   def inferBuckets(expr: Expr): Set[Error] = Set()
   def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = Map()
-  def findGroups(expr: Expr): Set[GroupTree] = Set()
 }

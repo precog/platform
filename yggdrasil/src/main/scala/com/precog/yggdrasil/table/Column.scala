@@ -22,13 +22,17 @@ package table
 
 import cf._
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import org.joda.time.DateTime
 
 import java.math.MathContext
 
+import com.precog.yggdrasil.table._
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
+
+import scala.{ specialized => spec }
+import scala.annotation.tailrec
 
 import scalaz.Semigroup
 import scalaz.std.option._
@@ -51,6 +55,75 @@ sealed trait Column {
 }
 
 private[yggdrasil] trait ExtensibleColumn extends Column // TODO: or should we just unseal Column?
+
+trait HomogeneousArrayColumn[@spec(Boolean, Long, Double) A] extends Column with (Int => Array[A]) { self =>
+  def apply(row: Int): Array[A]
+
+  val tpe: CArrayType[A]
+
+  def leafTpe: CValueType[_] = {
+    @tailrec def loop(a: CValueType[_]): CValueType[_] = a match {
+      case CArrayType(elemType) => loop(elemType)
+      case vType => vType
+    }
+
+    loop(tpe)
+  }
+
+  override def jValue(row: Int) = tpe.jValueFor(this(row))
+  override def cValue(row: Int) = tpe(this(row))
+  override def strValue(row: Int) = this(row) mkString ("[", ",", "]")
+
+  /**
+   * Returns a new Column that selects the `i`-th element from the
+   * underlying arrays.
+   */
+  def select(i: Int) = HomogeneousArrayColumn.select(this, i)
+}
+
+object HomogeneousArrayColumn {
+  def unapply[A](col: HomogeneousArrayColumn[A]): Option[CValueType[A]] = Some(col.tpe.elemType)
+
+  @inline
+  private[table] def select(col: HomogeneousArrayColumn[_], i: Int) = col match {
+    case col @ HomogeneousArrayColumn(CString) => new StrColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): String = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(CBoolean) => new BoolColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): Boolean = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(CLong) => new LongColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): Long = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(CDouble) => new DoubleColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): Double = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(CNum) => new NumColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): BigDecimal = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(CDate) => new DateColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): DateTime = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(cType: CArrayType[a]) => new HomogeneousArrayColumn[a] {
+      val tpe = cType
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): Array[a] = col(row)(i)
+    }
+  }
+}
 
 trait BoolColumn extends Column with (Int => Boolean) {
   def apply(row: Int): Boolean
@@ -175,6 +248,7 @@ object Column {
     case CNum(v)      => const(v)
     case CString(v)   => const(v)
     case CDate(v)     => const(v)
+    case CArray(v, t @ CArrayType(elemType)) => const(v)(elemType)
     case CEmptyObject => new InfiniteColumn with EmptyObjectColumn 
     case CEmptyArray  => new InfiniteColumn with EmptyArrayColumn 
     case CNull        => new InfiniteColumn with NullColumn 
@@ -203,6 +277,45 @@ object Column {
 
   @inline def const(v: DateTime) = new InfiniteColumn with DateColumn {
     def apply(row: Int) = v
+  }
+
+  @inline def const[@spec(Boolean, Long, Double) A: CValueType](v: Array[A]) = new InfiniteColumn with HomogeneousArrayColumn[A] {
+    val tpe = CArrayType(CValueType[A])
+    def apply(row: Int) = v
+  }
+
+  def lift(col: Column): HomogeneousArrayColumn[_] = col match {
+    case col: BoolColumn => new HomogeneousArrayColumn[Boolean] {
+      val tpe = CArrayType(CBoolean)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Array(col(row))
+    }
+    case col: LongColumn => new HomogeneousArrayColumn[Long] {
+      val tpe = CArrayType(CLong)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Array(col(row))
+    }
+    case col: NumColumn => new HomogeneousArrayColumn[BigDecimal] {
+      val tpe = CArrayType(CNum)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Array(col(row))
+    }
+    case col: StrColumn => new HomogeneousArrayColumn[String] {
+      val tpe = CArrayType(CString)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Array(col(row))
+    }
+    case col: DateColumn => new HomogeneousArrayColumn[DateTime] {
+      val tpe = CArrayType(CDate)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Array(col(row))
+    }
+    case col: HomogeneousArrayColumn[a] => new HomogeneousArrayColumn[Array[a]] {
+      val tpe = CArrayType(col.tpe)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int): Array[Array[a]] = Array(col(row))(col.tpe.manifest)
+    }
+    case _ => sys.error("Cannot lift non-value column.")
   }
 
   object unionRightSemigroup extends Semigroup[Column] {

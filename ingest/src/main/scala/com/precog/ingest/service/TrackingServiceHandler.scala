@@ -34,10 +34,7 @@ import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 
-import blueeyes.json.JsonParser
-import blueeyes.json.JsonParser.ParseException
-import blueeyes.json.JsonAST._
-import blueeyes.json.JPath
+import blueeyes.json._
 
 import java.util.concurrent.{ Executor, RejectedExecutionException }
 
@@ -150,7 +147,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
       val rows = toRows(csv)
       val paths = rows.next() map (JPath(_))
       val jVals: Iterator[Either[String, JValue]] = rows map { row =>
-        Right((paths zip types zip row).foldLeft(JNothing: JValue) { case (obj, ((path, tpe), s)) =>
+        Right((paths zip types zip row).foldLeft(JUndefined: JValue) { case (obj, ((path, tpe), s)) =>
           JValue.unsafeInsert(obj, path, tpe(s))
         })
       }
@@ -164,10 +161,9 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
     val lines = Iterator.continually(reader.readLine()).takeWhile(_ != null)
     val inserter = new EventQueueInserter(p, t, lines map { json =>
       try {
-        Right(JsonParser.parse(json))
+        Right(JParser.parse(json))
       } catch {
-        case e: ParseException => Left("Parsing failed: " + e.getMessage())
-        case e => Left("Server error: " + e.getMessage())
+        case e => Left("Parsing failed: " + e.getMessage())
       }
     }, Some(reader))
     inserter

@@ -23,7 +23,6 @@ package table
 import scala.util.Random
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 
 import scalaz.StreamT
 import scalaz.syntax.copointed._
@@ -49,7 +48,7 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
   }
 
   def testDistinctAcrossSlices = {
-    val array: JValue = JsonParser.parse("""
+    val array: JValue = JParser.parse("""
       [{
         "value":{
 
@@ -129,7 +128,7 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
   }
 
   def testDistinctAcrossSlices2 = {
-    val array: JValue = JsonParser.parse("""
+    val array: JValue = JParser.parse("""
       [{
         "value":{
           "elxk7vv":-8.988465674311579E+307
@@ -209,7 +208,7 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
   }
 
   def removeUndefined(jv: JValue): JValue = jv match {
-      case JObject(jfields) => JObject(jfields collect { case JField(s, v) if v != JNothing => JField(s, removeUndefined(v)) })
+      case JObject(jfields) => JObject(jfields collect { case (s, v) if v != JUndefined => JField(s, removeUndefined(v)) })
       case JArray(jvs) => JArray(jvs map { jv => removeUndefined(jv) })
       case v => v
     }

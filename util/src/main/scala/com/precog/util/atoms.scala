@@ -102,7 +102,7 @@ class Atom[A] extends Source[A] with Sink[A] {
     }
   }
   
-  def ++=[E, Coll[_]](c: Coll[E])(implicit cbf: CanBuildFrom[Coll[E], E, A], evidence: A =:= Coll[E], evidence2: Coll[E] <:< TraversableOnce[E]) {
+  def ++=[E](c: A)(implicit unpack: Unpack[A, E], cbf: CanBuildFrom[A, E, A], evidence2: A <:< TraversableOnce[E]) { 
     if (!isForced || setterThread != null) {
       lock.lock()
       try {
@@ -110,9 +110,8 @@ class Atom[A] extends Source[A] with Sink[A] {
           val builder = if (value == null) {        // TODO gross!
             cbf()
           } else {
-            val current = evidence(value)
-            val back = cbf(current)
-            back ++= current
+            val back = cbf(value)
+            back ++= value
             back
           }
           
@@ -129,7 +128,7 @@ class Atom[A] extends Source[A] with Sink[A] {
       }
     }
   }
-
+  
   def appendFrom[E, Coll[_]](a: Atom[Coll[E]])(implicit cbf: CanBuildFrom[Coll[E], E, A], evidence: A =:= Coll[E], evidence2: Coll[E] <:< TraversableOnce[E]) {
     if (!isForced || setterThread != null) {
       lock.lock()
@@ -250,4 +249,11 @@ object Atom {
   }
   
   def atom[A]: Atom[A] = new Atom[A]
+}
+
+class Unpack[C, E]
+
+object Unpack {
+  implicit def unpack1[CC[_], T] = new Unpack[CC[T], T]
+  implicit def unpack2[CC[_, _], T, U] = new Unpack[CC[T, U], (T, U)]
 }

@@ -23,11 +23,9 @@ package ragnarok
 import scalaz._
 
 import blueeyes.json._
-import JsonAST.JValue
 
 
 trait JsonConverters {
-  import JsonAST._
 
   def perfTestToJson[A](result: Tree[(PerfTest, A)])(f: A => List[JField]): JValue = {
     def values(path: List[JString], test: Tree[(PerfTest, A)]): List[JValue] =
@@ -156,7 +154,6 @@ object PerfTestPrettyPrinters extends PrettyPrinters with JsonConverters {
 
 
 final class PerfTestDeltaPrettyPrinter(result: Tree[(PerfTest, PerfDelta)]) extends PrettyPrinters with JsonConverters {
-  import JsonAST._
 
   def toJson: JValue = perfTestDeltaToJson(result)
   def toPrettyString: String = prettyPerfTestDelta(result)

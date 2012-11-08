@@ -28,7 +28,7 @@ import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
 
 import blueeyes.bkka.AkkaDefaults
-import blueeyes.persistence.mongo.mock.MockMongo
+import blueeyes.persistence.mongo.{Mongo, RealMongoSpecSupport}
 
 import scala.collection
 
@@ -36,7 +36,9 @@ import org.joda.time.DateTime
 
 import scalaz._
 
-class AccessControlSpec extends Specification with APIKeyManagerTestValues with AccessControlHelpers {
+class AccessControlSpec extends Specification with RealMongoSpecSupport with APIKeyManagerTestValues with AccessControlHelpers {
+  lazy val state = new APIKeyManagerTestValuesState
+  import state._
 
   implicit lazy val accessControl = new APIKeyManagerAccessControl(apiKeys)
   implicit lazy val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)
@@ -174,8 +176,10 @@ class AccessControlSpec extends Specification with APIKeyManagerTestValues with 
   }
 }
 
-class AccessControlUseCasesSpec extends Specification with UseCasesAPIKeyManagerTestValues with AccessControlHelpers {
- 
+class AccessControlUseCasesSpec extends Specification with RealMongoSpecSupport with UseCasesAPIKeyManagerTestValues with AccessControlHelpers {
+  lazy val state = new UseCasesAPIKeyManagerTestValuesState
+  import state._
+
   implicit lazy val accessControl = new APIKeyManagerAccessControl(apiKeys)
   implicit lazy val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)
 
@@ -226,246 +230,248 @@ trait AccessControlHelpers {
 }
 
 trait APIKeyManagerTestValues extends AkkaDefaults { self : Specification =>
-
   val invalidUID = "invalid"
   val timeout = Duration(30, "seconds")
 
+  def mongo: Mongo
+
   implicit def stringToPath(path: String): Path = Path(path)
   
   val farFuture = new DateTime().plusYears(1000)
   val farPast = new DateTime().minusYears(1000)
 
-  val mongo = new MockMongo
-  val database = mongo.database("test_database")
+  class APIKeyManagerTestValuesState {
+    val database = mongo.database("apikey_test_database")
 
-  val apiKeys = new MongoAPIKeyManager(mongo, database)
+    val apiKeys = new MongoAPIKeyManager(mongo, database)
 
-
-  def newAPIKey(name: String)(f: APIKeyRecord => Set[GrantID]): (APIKeyRecord, Set[GrantID]) = {
-    try {
-      val apiKey = Await.result(apiKeys.newAPIKey(name, "", Set.empty), timeout)
-      val grants = f(apiKey)
-      (Await.result(apiKeys.addGrants(apiKey.tid, grants), timeout).get, grants)
-    } catch {
-      case ex => ex.printStackTrace; throw ex
-    }
-  }
-  
-  val (rootAPIKey, rootGrants) = newAPIKey("root") { t =>
-    try {
-    Await.result(Future.sequence(Permission.permissions("/", t.tid, None, Permission.ALL).map{ apiKeys.newGrant(None, _) }.map{ _.map { _.gid } }), timeout)
-    } catch {
-      case ex => println(ex); throw ex
-    }
-  }
-  
-  val (rootLikeAPIKey, rootLikeGrants) = newAPIKey("rootLike") { t =>
-    Await.result(Future.sequence(Permission.permissions("/child", t.tid, None, Permission.ALL).map{ apiKeys.newGrant(None, _) }.map{ _.map { _.gid }}), timeout)
-  }
- 
-  val (superAPIKey, superGrants) = newAPIKey("super") { t =>
-    Await.result(Future.sequence(rootGrants.map{ g =>
-      apiKeys.findGrant(g).flatMap {
-        case Some(g) => 
-          apiKeys.newGrant(Some(g.gid), g.permission)
-        case _ => failure("Grant not found")
-      }.map { _.gid }
-    }),timeout)
-  }
-
-  val (childAPIKey, childGrants) = newAPIKey("child") { t =>
-    Await.result(Future.sequence(rootGrants.map{ g =>
-      apiKeys.findGrant(g).flatMap { 
-        case Some(g) =>
-          apiKeys.newGrant(Some(g.gid), g match {
-            case Grant(_, _, oi: OwnerIgnorantPermission) => 
-              oi.derive(path = "/child")
-            case Grant(_, _, oa: OwnerAwarePermission) => 
-              oa.derive(path = "/child", owner = t.tid)
-          }).map { _.gid }
-        case _ => failure("Grant not found")
+    def newAPIKey(name: String)(f: APIKeyRecord => Set[GrantID]): (APIKeyRecord, Set[GrantID]) = {
+      try {
+        val apiKey = Await.result(apiKeys.newAPIKey(name, "", Set.empty), timeout)
+        val grants = f(apiKey)
+                      (Await.result(apiKeys.addGrants(apiKey.tid, grants), timeout).get, grants)
+      } catch {
+        case ex => ex.printStackTrace; throw ex
       }
-    }), timeout)
-  }
-
-  val invalidGrantID = "not going to find it"
-
-  val (invalidGrantAPIKey, invalidGrantGrants) = newAPIKey("invalidGrant") { t =>
-    0.until(6).map { invalidGrantID + _ }(collection.breakOut)
-  }
-
-  val (invalidGrantParentAPIKey, invalidGrantParentGrants) = newAPIKey("invalidGrantParent") { t =>
-    Await.result(Future.sequence(Permission.permissions("/", t.tid, None, Permission.ALL).map{ apiKeys.newGrant(Some(invalidGrantID), _) }.map{ _.map { _.gid } }), timeout)
-  }
-
-  val noPermsAPIKey = Await.result(apiKeys.newAPIKey("noPerms", "", Set.empty), timeout)
-
-  val (expiredAPIKey, expiredGrants) = newAPIKey("expiredGrants") { t =>
-    Await.result(Future.sequence(Permission.permissions("/", t.tid, Some(farPast), Permission.ALL).map{ apiKeys.newGrant(None, _) }.map{ _.map { _.gid }}), timeout)
-  }
-
-  val (expiredParentAPIKey, expiredParentAPIKeys) = newAPIKey("expiredParentGrants") { t =>
-    Await.result(Future.sequence(expiredGrants.map { g =>
-      apiKeys.findGrant(g).flatMap { 
-        case Some(g) =>
-          apiKeys.newGrant(Some(g.gid), g match {
-            case Grant(_, _, oi: OwnerIgnorantPermission) => 
-              oi.derive(path = "/child")
-            case Grant(_, _, oa: OwnerAwarePermission) => 
-              oa.derive(path = "/child", owner = t.tid)
-          }).map { _.gid }
-        case _ => failure("Grant not found")
+    }
+    
+    val (rootAPIKey, rootGrants) = newAPIKey("root") { t =>
+      try {
+        Await.result(Future.sequence(Permission.permissions("/", t.tid, None, Permission.ALL).map{ apiKeys.newGrant(None, _) }.map{ _.map { _.gid } }), timeout)
+      } catch {
+        case ex => println(ex); throw ex
       }
-    }), timeout)
-  }
+    }
+    
+    val (rootLikeAPIKey, rootLikeGrants) = newAPIKey("rootLike") { t =>
+      Await.result(Future.sequence(Permission.permissions("/child", t.tid, None, Permission.ALL).map{ apiKeys.newGrant(None, _) }.map{ _.map { _.gid }}), timeout)
+    }
+    
+    val (superAPIKey, superGrants) = newAPIKey("super") { t =>
+      Await.result(Future.sequence(rootGrants.map{ g =>
+        apiKeys.findGrant(g).flatMap {
+          case Some(g) => 
+            apiKeys.newGrant(Some(g.gid), g.permission)
+          case _ => failure("Grant not found")
+        }.map { _.gid }
+      }),timeout)
+    }
 
-}
-
-trait UseCasesAPIKeyManagerTestValues extends AkkaDefaults { self : Specification =>
-
-  val timeout = Duration(30, "seconds")
-  
-  implicit def stringToPath(path: String): Path = Path(path)
-
-  val farFuture = new DateTime().plusYears(1000)
-  val farPast = new DateTime().minusYears(1000)
-
-  val mongo = new MockMongo
-  val database = mongo.database("test_database")
-
-  val apiKeys = new MongoAPIKeyManager(mongo, database)
-
-  def newAPIKey(name: String)(f: APIKeyRecord => Set[GrantID]): (APIKeyRecord, Set[GrantID]) = {
-    Await.result(apiKeys.newAPIKey(name, "", Set.empty).flatMap { t =>
-      val g = f(t)
-      apiKeys.addGrants(t.tid, g).map { t => (t.get, g) } 
-    }, timeout)
-  }
-  
-  def newCustomer(name: String, parentGrants: Set[GrantID]): (APIKeyRecord, Set[GrantID]) = {
-    newAPIKey(name) { t =>
-      Await.result(Future.sequence(parentGrants.map{ g =>
+    val (childAPIKey, childGrants) = newAPIKey("child") { t =>
+      Await.result(Future.sequence(rootGrants.map{ g =>
         apiKeys.findGrant(g).flatMap { 
-          case Some(g) => apiKeys.newGrant(Some(g.gid), g match {
-            case Grant(gid, _, oi: OwnerIgnorantPermission) => 
-              oi.derive(path = "/" + name)
-            case Grant(gid, _, oa: OwnerAwarePermission) => 
-              oa.derive(path = "/" + name, owner = t.tid)
-          }).map { _.gid }
+          case Some(g) =>
+            apiKeys.newGrant(Some(g.gid), g match {
+              case Grant(_, _, oi: OwnerIgnorantPermission) => 
+                oi.derive(path = "/child")
+              case Grant(_, _, oa: OwnerAwarePermission) => 
+                oa.derive(path = "/child", owner = t.tid)
+            }).map { _.gid }
+          case _ => failure("Grant not found")
+        }
+      }), timeout)
+    }
+
+    val invalidGrantID = "not going to find it"
+
+    val (invalidGrantAPIKey, invalidGrantGrants) = newAPIKey("invalidGrant") { t =>
+      0.until(6).map { invalidGrantID + _ }(collection.breakOut)
+    }
+
+    val (invalidGrantParentAPIKey, invalidGrantParentGrants) = newAPIKey("invalidGrantParent") { t =>
+      Await.result(Future.sequence(Permission.permissions("/", t.tid, None, Permission.ALL).map{ apiKeys.newGrant(Some(invalidGrantID), _) }.map{ _.map { _.gid } }), timeout)
+    }
+
+    val noPermsAPIKey = Await.result(apiKeys.newAPIKey("noPerms", "", Set.empty), timeout)
+
+    val (expiredAPIKey, expiredGrants) = newAPIKey("expiredGrants") { t =>
+      Await.result(Future.sequence(Permission.permissions("/", t.tid, Some(farPast), Permission.ALL).map{ apiKeys.newGrant(None, _) }.map{ _.map { _.gid }}), timeout)
+    }
+
+    val (expiredParentAPIKey, expiredParentAPIKeys) = newAPIKey("expiredParentGrants") { t =>
+      Await.result(Future.sequence(expiredGrants.map { g =>
+        apiKeys.findGrant(g).flatMap { 
+          case Some(g) =>
+            apiKeys.newGrant(Some(g.gid), g match {
+              case Grant(_, _, oi: OwnerIgnorantPermission) => 
+                oi.derive(path = "/child")
+              case Grant(_, _, oa: OwnerAwarePermission) => 
+                oa.derive(path = "/child", owner = t.tid)
+            }).map { _.gid }
           case _ => failure("Grant not found")
         }
       }), timeout)
     }
   }
+}
 
-  def addGrants(apiKey: APIKeyRecord, grants: Set[GrantID]): Option[APIKeyRecord] = {
-    Await.result(apiKeys.findAPIKey(apiKey.tid).flatMap { _ match {
-      case None => Future(None)
-      case Some(t) => apiKeys.addGrants(t.tid, grants)
-    }}, timeout)
-  }
+trait UseCasesAPIKeyManagerTestValues extends AkkaDefaults { self : Specification =>
+  val timeout = Duration(30, "seconds")
 
-  val (root, rootGrants) = newAPIKey("root") { t =>
-    Await.result(Future.sequence(Permission.permissions("/", t.tid, None, Permission.ALL).map{ apiKeys.newGrant(None, _) }.map{ _.map { _.gid } }), timeout)
-  }
+  def mongo: Mongo
+  
+  implicit def stringToPath(path: String): Path = Path(path)
 
-  val (customer, customerGrants) = newCustomer("customer", rootGrants)
-  val (friend, friendGrants) = newCustomer("friend", rootGrants)
-  val (stranger, strangerGrants) = newCustomer("stranger", rootGrants)
-  val (addon, addonGrants) = newCustomer("addon", rootGrants)
+  val farFuture = new DateTime().plusYears(1000)
+  val farPast = new DateTime().minusYears(1000)
 
-  val (addonAgent, addonAgentGrants) = newAPIKey("addon_agent") { t =>
-    Await.result(Future.sequence(addonGrants.map { g =>
-      apiKeys.findGrant(g).flatMap { 
-        case Some(g) => apiKeys.newGrant(Some(g.gid), g match {
+  class UseCasesAPIKeyManagerTestValuesState {
+    val database = mongo.database("use_case_test_database")
+
+    val apiKeys = new MongoAPIKeyManager(mongo, database)
+
+    def newAPIKey(name: String)(f: APIKeyRecord => Set[GrantID]): (APIKeyRecord, Set[GrantID]) = {
+      Await.result(apiKeys.newAPIKey(name, "", Set.empty).flatMap { t =>
+        val g = f(t)
+        apiKeys.addGrants(t.tid, g).map { t => (t.get, g) } 
+      }, timeout)
+    }
+    
+    def newCustomer(name: String, parentGrants: Set[GrantID]): (APIKeyRecord, Set[GrantID]) = {
+      newAPIKey(name) { t =>
+        Await.result(Future.sequence(parentGrants.map{ g =>
+          apiKeys.findGrant(g).flatMap { 
+            case Some(g) => apiKeys.newGrant(Some(g.gid), g match {
+              case Grant(gid, _, oi: OwnerIgnorantPermission) => 
+                oi.derive(path = "/" + name)
+              case Grant(gid, _, oa: OwnerAwarePermission) => 
+                oa.derive(path = "/" + name, owner = t.tid)
+            }).map { _.gid }
+            case _ => failure("Grant not found")
+          }
+        }), timeout)
+      }
+    }
+
+    def addGrants(apiKey: APIKeyRecord, grants: Set[GrantID]): Option[APIKeyRecord] = {
+      Await.result(apiKeys.findAPIKey(apiKey.tid).flatMap { _ match {
+        case None => Future(None)
+        case Some(t) => apiKeys.addGrants(t.tid, grants)
+      }}, timeout)
+    }
+
+    val (root, rootGrants) = newAPIKey("root") { t =>
+      Await.result(Future.sequence(Permission.permissions("/", t.tid, None, Permission.ALL).map{ apiKeys.newGrant(None, _) }.map{ _.map { _.gid } }), timeout)
+    }
+
+    val (customer, customerGrants) = newCustomer("customer", rootGrants)
+    val (friend, friendGrants) = newCustomer("friend", rootGrants)
+    val (stranger, strangerGrants) = newCustomer("stranger", rootGrants)
+    val (addon, addonGrants) = newCustomer("addon", rootGrants)
+
+    val (addonAgent, addonAgentGrants) = newAPIKey("addon_agent") { t =>
+      Await.result(Future.sequence(addonGrants.map { g =>
+        apiKeys.findGrant(g).flatMap { 
+          case Some(g) => apiKeys.newGrant(Some(g.gid), g match {
             case Grant(gid, _, oi: OwnerIgnorantPermission) => 
               oi
             case Grant(gid, _, oa: OwnerAwarePermission) => 
               oa.derive(owner = t.tid)
           }).map { _.gid }
-        case _ => failure("Grant not found")
-      }
-    }), timeout)
-  }
+          case _ => failure("Grant not found")
+        }
+      }), timeout)
+    }
 
-  val customerFriendGrants: Set[GrantID] = Await.result(Future.sequence(friendGrants.map { gid =>
-    apiKeys.findGrant(gid).map { _.flatMap {
-      case Grant(_, _, rg @ ReadPermission(_, _, _)) =>
-        Some((Some(gid), rg))
-      case _ => None
-    }}
-  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map{ _.gid } } ) }, timeout)
-  
-  val customerAddonGrants: Set[GrantID] = Await.result(Future.sequence(addonGrants.map { gid =>
-    apiKeys.findGrant(gid).map { _.flatMap { 
-      case Grant(_, _, rg @ ReadPermission(_, _, _)) =>
-        Some(Some(gid), rg.derive(path = "/customer"))
-      case _ => None
-    }}
-  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
-  
-  val customerAddonAgentGrants: Set[GrantID] = Await.result(Future.sequence(addonAgentGrants.map { gid =>
-    apiKeys.findGrant(gid).map { _.map {
-      case Grant(_, _, oi: OwnerIgnorantPermission) => 
-        (Some(gid), oi.derive(path = "/customer"))
-      case Grant(_, _, oa: OwnerAwarePermission) => 
-        (Some(gid), oa.derive(path = "/customer"))
-    }}
-  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
-
-  val customerAddonPublicGrants: Set[GrantID] = Await.result(Future.sequence(addonGrants.map { gid =>
-    apiKeys.findGrant(gid).map { _.flatMap {
-      case Grant(_, _, rg @ ReadPermission(_, _, _)) => 
-        Some((Some(gid), rg.derive(path = "/addon/public")))
-      case _ => None
-    }}
-  }).flatMap { og => Future.sequence[GrantID, Set](og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
-
-  val customerAddonPublicRevokedGrants: Set[GrantID] = Await.result(Future.sequence(addonGrants.map { gid =>
-    apiKeys.findGrant(gid).map { _.flatMap {
-      case Grant(_, _, rg @ ReadPermission(_, _, _)) => 
-        Some((Some(gid), rg.derive(path = "/addon/public_revoked", expiration = Some(farPast))))
-      case _ => None
-    }}
-  }).flatMap { og => Future.sequence[GrantID, Set](og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
-
-  apiKeys.addGrants(customer.tid, 
-    customerFriendGrants ++ 
-    customerAddonGrants ++ 
-    customerAddonAgentGrants ++
-    customerAddonPublicGrants ++
-    customerAddonPublicRevokedGrants)
-
-  val (customersCustomer, customersCustomerGrants) = newAPIKey("customers_customer") { t =>
-    Await.result(apiKeys.findAPIKey(customer.tid).flatMap { ot => Future.sequence(ot.get.grants.map { g =>
-      apiKeys.findGrant(g).flatMap { 
-      case Some(g) => apiKeys.newGrant(Some(g.gid), g match {
+    val customerFriendGrants: Set[GrantID] = Await.result(Future.sequence(friendGrants.map { gid =>
+      apiKeys.findGrant(gid).map { _.flatMap {
+        case Grant(_, _, rg @ ReadPermission(_, _, _)) =>
+          Some((Some(gid), rg))
+        case _ => None
+      }}
+    }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map{ _.gid } } ) }, timeout)
+    
+    val customerAddonGrants: Set[GrantID] = Await.result(Future.sequence(addonGrants.map { gid =>
+      apiKeys.findGrant(gid).map { _.flatMap { 
+        case Grant(_, _, rg @ ReadPermission(_, _, _)) =>
+          Some(Some(gid), rg.derive(path = "/customer"))
+        case _ => None
+      }}
+    }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
+    
+    val customerAddonAgentGrants: Set[GrantID] = Await.result(Future.sequence(addonAgentGrants.map { gid =>
+      apiKeys.findGrant(gid).map { _.map {
         case Grant(_, _, oi: OwnerIgnorantPermission) => 
-          oi.derive(path = "/customer/cust-id")
+          (Some(gid), oi.derive(path = "/customer"))
         case Grant(_, _, oa: OwnerAwarePermission) => 
-          oa.derive(path = "/customer/cust-id", owner = t.tid)
-      }).map { _.gid }
-      case _ => failure("Grant not found")
-    }})}, timeout)
+          (Some(gid), oa.derive(path = "/customer"))
+      }}
+    }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
+
+    val customerAddonPublicGrants: Set[GrantID] = Await.result(Future.sequence(addonGrants.map { gid =>
+      apiKeys.findGrant(gid).map { _.flatMap {
+        case Grant(_, _, rg @ ReadPermission(_, _, _)) => 
+          Some((Some(gid), rg.derive(path = "/addon/public")))
+        case _ => None
+      }}
+    }).flatMap { og => Future.sequence[GrantID, Set](og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
+
+    val customerAddonPublicRevokedGrants: Set[GrantID] = Await.result(Future.sequence(addonGrants.map { gid =>
+      apiKeys.findGrant(gid).map { _.flatMap {
+        case Grant(_, _, rg @ ReadPermission(_, _, _)) => 
+          Some((Some(gid), rg.derive(path = "/addon/public_revoked", expiration = Some(farPast))))
+        case _ => None
+      }}
+    }).flatMap { og => Future.sequence[GrantID, Set](og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
+
+    apiKeys.addGrants(customer.tid, 
+                      customerFriendGrants ++ 
+                      customerAddonGrants ++ 
+                      customerAddonAgentGrants ++
+                      customerAddonPublicGrants ++
+                      customerAddonPublicRevokedGrants)
+
+    val (customersCustomer, customersCustomerGrants) = newAPIKey("customers_customer") { t =>
+      Await.result(apiKeys.findAPIKey(customer.tid).flatMap { ot => Future.sequence(ot.get.grants.map { g =>
+        apiKeys.findGrant(g).flatMap { 
+          case Some(g) => apiKeys.newGrant(Some(g.gid), g match {
+            case Grant(_, _, oi: OwnerIgnorantPermission) => 
+              oi.derive(path = "/customer/cust-id")
+            case Grant(_, _, oa: OwnerAwarePermission) => 
+              oa.derive(path = "/customer/cust-id", owner = t.tid)
+          }).map { _.gid }
+          case _ => failure("Grant not found")
+        }})}, timeout)
+    }
+
+    val customersCustomerAddonsGrants: Set[GrantID] = Await.result(apiKeys.findAPIKey(customer.tid).flatMap { ot => Future.sequence(ot.get.grants.map { gid =>
+      apiKeys.findGrant(gid).map { _.map {
+        case Grant(_, _, oi: OwnerIgnorantPermission) => 
+          (Some(gid), oi.derive(path = "/customer/cust-id"))
+        case Grant(_, _, oa: OwnerAwarePermission) => 
+          (Some(gid), oa.derive(path = "/customer/cust-id"))
+      }}
+    }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }}, timeout)
+    
+    val customersCustomerAddonAgentGrants: Set[GrantID] = Await.result(Future.sequence(addonAgentGrants.map { gid =>
+      apiKeys.findGrant(gid).map { _.map { 
+        case Grant(_, _, oi: OwnerIgnorantPermission) => 
+          (Some(gid), oi.derive(path = "/customer/cust-id"))
+        case Grant(_, _, oa: OwnerAwarePermission) => 
+          (Some(gid), oa.derive(path = "/customer/cust-id"))
+      }}
+    }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
+
+    apiKeys.addGrants(customersCustomer.tid, customersCustomerAddonsGrants ++ customersCustomerAddonAgentGrants)
   }
-
-  val customersCustomerAddonsGrants: Set[GrantID] = Await.result(apiKeys.findAPIKey(customer.tid).flatMap { ot => Future.sequence(ot.get.grants.map { gid =>
-    apiKeys.findGrant(gid).map { _.map {
-      case Grant(_, _, oi: OwnerIgnorantPermission) => 
-        (Some(gid), oi.derive(path = "/customer/cust-id"))
-      case Grant(_, _, oa: OwnerAwarePermission) => 
-        (Some(gid), oa.derive(path = "/customer/cust-id"))
-    }}
-  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }}, timeout)
-  
-  val customersCustomerAddonAgentGrants: Set[GrantID] = Await.result(Future.sequence(addonAgentGrants.map { gid =>
-    apiKeys.findGrant(gid).map { _.map { 
-      case Grant(_, _, oi: OwnerIgnorantPermission) => 
-        (Some(gid), oi.derive(path = "/customer/cust-id"))
-      case Grant(_, _, oa: OwnerAwarePermission) => 
-        (Some(gid), oa.derive(path = "/customer/cust-id"))
-    }}
-  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => apiKeys.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
-
-  apiKeys.addGrants(customersCustomer.tid, customersCustomerAddonsGrants ++ customersCustomerAddonAgentGrants)
 }

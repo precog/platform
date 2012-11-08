@@ -28,9 +28,6 @@ import com.precog.common.VectorCase
 import akka.actor.ActorSystem
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
 
 import scala.annotation.tailrec
 
@@ -52,7 +49,7 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
   private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
 
   trait TableCompanion extends ColumnarTableCompanion {
-    def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize): Table = new Table(slices, size)
+    def apply(slices: StreamT[M, Slice], size: TableSize): Table = new Table(slices, size)
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = sys.error("todo")
   }
 
@@ -89,7 +86,7 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
               
               val target = path.path.replaceAll("/$", ".json")
               val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-              val parsed = src.getLines map JsonParser.parse toStream
+              val parsed = src.getLines map JParser.parse toStream
               
               currentIndex += parsed.length
               

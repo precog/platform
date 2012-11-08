@@ -34,7 +34,7 @@ import akka.pattern.gracefulStop
 
 import _root_.kafka.consumer._
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import com.weiglewilczek.slf4s.Logging
 

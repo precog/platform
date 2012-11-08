@@ -22,12 +22,12 @@ package ragnarok
 
 import com.precog.yggdrasil._
 import com.precog.common._
+import com.precog.util.PrecogUnit
 
 import java.util.zip.{ ZipFile, ZipEntry, ZipException }
-import java.io.{ File, InputStreamReader, FileReader }
+import java.io.{ File, InputStreamReader, FileReader, BufferedReader }
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 
 import akka.dispatch.Await
 
@@ -67,13 +67,20 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
       } map { zipEntry =>
         new InputStreamReader(zippedData.getInputStream(zipEntry))
       } flatMap { reader =>
-        val rows = JsonParser.parse(reader).children.toIterator
+        val sb = new StringBuilder
+        val buf = new BufferedReader(reader)
+        var line = buf.readLine
+        while (line != null) {
+          sb.append(line)
+          line = buf.readLine
+        }
+        val str = sb.toString
+        val rows = JParser.parse(str).children.toIterator
         reader.close()
         rows
       }
     } getOrElse {
-      val reader = new FileReader(data)
-      JsonParser.parse(reader).children.toIterator
+      (JParser.parseFromFile(data) | sys.error("parse failure")).children.toIterator
     }
   }
 
@@ -81,7 +88,7 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
    * Reads in the JSON file (or several zipped JSON files) into the specified
    * DB.
    */
-  def ingest(db: String, data: File, apiKey: String = "root", batchSize: Int = 1000): IO[Unit] = IO {
+  def ingest(db: String, data: File, apiKey: String = "root", batchSize: Int = 1000): IO[PrecogUnit] = IO {
     logger.debug("Ingesting %s to '//%s'." format (data, db))
 
     // Same as used by YggUtil's import command.
@@ -95,6 +102,8 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
     }
 
     logger.debug("Ingested %s." format data)
+
+    PrecogUnit
   }
 }
 

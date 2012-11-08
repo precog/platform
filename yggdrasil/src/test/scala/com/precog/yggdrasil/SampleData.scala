@@ -20,10 +20,8 @@
 package com.precog.yggdrasil
 
 import akka.dispatch.Future
-import blueeyes.json.JPath
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
+
+import blueeyes.json._
 import blueeyes.concurrent.test.FutureMatchers
 
 import scalaz.{Ordering => _, NonEmptyList => NEL, _}
@@ -180,7 +178,7 @@ object SampleData extends CValueGenerators {
         sampleData <- arbitrary(sample)
       } yield {
         val rows = for(row <- sampleData.data)
-          yield if (Random.nextDouble < 0.25) JNothing else row
+          yield if (Random.nextDouble < 0.25) JUndefined else row
         SampleData(rows, sampleData.schema) 
       }
     
@@ -188,14 +186,20 @@ object SampleData extends CValueGenerators {
   }
 
   def undefineRowsForColumn(sample: Arbitrary[SampleData], path: JPath): Arbitrary[SampleData] = {
-    val gen =
-      for {
-        sampleData <- arbitrary(sample)
-      } yield {
-        val rows = for (row <- sampleData.data)
-          yield if (Random.nextDouble < 0.25 && row.get(path) != JNothing) row.set(path, JNothing) else row
-        SampleData(rows, sampleData.schema) 
+    val gen = for {
+      sampleData <- arbitrary(sample)
+    } yield {
+      val rows = for (row <- sampleData.data) yield {
+        if (false && Random.nextDouble >= 0.25) {
+          row
+        } else if (row.get(path) != null && row.get(path) != JUndefined) {
+          row.set(path, JUndefined)
+        } else {
+          row
+        }
       }
+      SampleData(rows, sampleData.schema) 
+    }
     
     Arbitrary(gen)
   }

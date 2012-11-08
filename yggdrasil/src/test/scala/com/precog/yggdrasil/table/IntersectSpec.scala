@@ -20,9 +20,8 @@
 package com.precog.yggdrasil
 package table
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser.parse
-import blueeyes.json.JPathField
+import blueeyes.json._
+import blueeyes.json.JParser.parse
 
 import scalaz._
 import scalaz.syntax.bind._

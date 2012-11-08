@@ -32,8 +32,7 @@ import akka.util.duration._
 import akka.pattern.ask
 import akka.pattern.gracefulStop
 
-import blueeyes.json.JPath
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import com.weiglewilczek.slf4s.Logging
 

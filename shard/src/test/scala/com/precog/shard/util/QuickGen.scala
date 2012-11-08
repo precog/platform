@@ -21,8 +21,7 @@ package com.precog.shard.util
 
 import com.precog.common.util._
 
-import blueeyes.json.Printer
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 object QuickGen extends App {
   
@@ -54,7 +53,7 @@ Usage:
     val sampler = datasets.get(dataset).getOrElse(sys.error("Unknown dataset name: " + dataset))
     val sampleSet = DistributedSampleSet(0, sampler = sampler)
     val sample = 0.until(events).map{ _ => sampleSet.next._1 }.toList
-    println(Printer.pretty(Printer.render(JArray(sample))))
+    println(JArray(sample).renderPretty)
   }
 
   if(args.size < 2) {

@@ -33,7 +33,7 @@ import TransSpecModule._
 
 import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
-import blueeyes.json.JsonAST._
+
 import org.apache.commons.collections.primitives.ArrayIntList
 import org.joda.time.DateTime
 import com.google.common.io.Files
@@ -44,7 +44,7 @@ import org.apache.jdbm.DBMaker
 import java.io.File
 import java.util.SortedMap
 
-import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.{BitSet, BitSetUtil, IOUtils, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
 import scala.collection.mutable
@@ -77,16 +77,30 @@ trait ColumnarTableTypes {
   type RowId = Int
 }
 
-trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes with IdSourceScannerModule[M] with SliceTransforms[M] {
+trait ColumnarTableModuleConfig {
+  def maxSliceSize: Int
+  
+  def maxSaneCrossSize: Long = 2400000000L    // 2.4 billion
+}
+
+trait ColumnarTableModule[M[+_]]
+    extends TableModule[M]
+    with ColumnarTableTypes
+    with IdSourceScannerModule[M]
+    with SliceTransforms[M]
+    with YggConfigComponent {
+      
   import TableModule._
   import trans._
   import trans.constants._
+  
+  type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig
 
   type Table <: ColumnarTable
   type TableCompanion <: ColumnarTableCompanion
   case class TableMetrics(startCount: Int, sliceTraversedCount: Int)
 
-  def newScratchDir(): File = Files.createTempDir()
+  def newScratchDir(): File = IOUtils.createTmpDir("ctmscratch").unsafePerformIO
   def jdbmCommitInterval: Long = 200000l
 
   implicit def liftF1(f: F1) = new F1Like {
@@ -138,6 +152,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     def constDate(v: collection.Set[CDate]): Table =  {
       val column = ArrayDateColumn(v.map(_.value).toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
+    }
+
+    def constArray[A: CValueType](v: collection.Set[CArray[A]]): Table = {
+      val column = ArrayHomogeneousArrayColumn(v.map(_.value).toArray(CValueType[A].manifest.arrayManifest))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CArrayType(CValueType[A])) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
     def constNull: Table = 
@@ -206,10 +225,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
           case class Boundary(prevSlice: Slice, prevStartIdx: Int) extends CollapseState
           case object InitialCollapse extends CollapseState
 
-          def genComparator(sl1: Slice, sl2: Slice) = Slice.rowComparatorFor(sl1, sl2) {
+          def genComparator(sl1: Slice, sl2: Slice) = Slice.rowComparatorFor(sl1, sl2) { slice =>
             // only need to compare identities (field "0" of the sorted table) between projections
             // TODO: Figure out how we might do this directly with the identitySpec
-            slice => slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(CPathField("0") :: Nil) }).toList.sorted
+            slice.columns.keys collect { case ColumnRef(path, _) if path.nodes.startsWith(CPathField("0") :: Nil) => path }
           }
           
           def boundaryCollapse(prevSlice: Slice, prevStart: Int, curSlice: Slice): (BitSet, Int) = {
@@ -919,7 +938,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
     //  }
     //}
 
-    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], sortedByIdentities: Boolean = false, size: TableSize = UnknownSize) {
+    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], sortedByIdentities: Boolean = false, size: TableSize) {
       def sortedOn = groupKeyTrans.alignTo(groupKeyPrefix).prefixTrans(groupKeyPrefix.size)
 
       def groupId = node.binding.groupId
@@ -1403,7 +1422,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         //sjson <- sorted.toJson
         //_ = println("post-sort-victim " + victim.groupId + ": " + sjson.mkString("\n"))
       } yield {
-        BorgResult(sorted, newOrder, Set(victim.node.binding.groupId), sorted = true)
+        BorgResult(sorted, newOrder, Set(victim.node.binding.groupId), sorted.size, sorted = true)
       }
     }
 
@@ -1606,7 +1625,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                 cogrouped,
                 leftJoinable.groupKeys ++ neededRight,
                 leftJoinable.groups union rightJoinable.groups,
-                UnknownSize,
+                cogrouped.size,
                 sorted = false
               )
             )
@@ -1700,10 +1719,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
       def cross2(left: BorgResult, right: BorgResult): BorgResult = {
         val omniverseTrans = crossAllTrans(left.groupKeys.size, right.groupKeys.size)
 
-        BorgResult(left.table.cross(right.table)(omniverseTrans),
+        val crossed = left.table.cross(right.table)(omniverseTrans)
+        BorgResult(crossed,
                    left.groupKeys ++ right.groupKeys,
                    left.groups ++ right.groups,
-                   UnknownSize, sorted = false)
+                   crossed.size, sorted = false)
       }
 
       borgResults.reduceLeft(cross2)
@@ -2024,10 +2044,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
             val SlicePosition(lpos0, lkstate, lkey, lhead, ltail) = leftPosition
             val SlicePosition(rpos0, rkstate, rkey, rhead, rtail) = rightPosition
 
-            val comparator = Slice.rowComparatorFor(lkey, rkey) { slice => 
+            val comparator = Slice.rowComparatorFor(lkey, rkey) {
               // since we've used the key transforms, and since transforms are contracturally
               // forbidden from changing slice size, we can just use all
-              slice.columns.keys.toList.sorted
+              _.columns.keys map (_.selector)
             }
 
             // the inner tight loop; this will recur while we're within the bounds of
@@ -2376,11 +2396,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
                   lempty <- ltail.isEmpty //TODO: Scalaz result here is negated from what it should be!
                   rempty <- rtail.isEmpty
                 } yield {
+                  val frontSize = lhead.size * rhead.size
                   
-                  if (lempty) {
+                  if (lempty && frontSize <= yggConfig.maxSliceSize) {
                     // left side is a small set, so restart it in memory
                     crossLeftSingle(lhead, rhead :: rtail)
-                  } else if (rempty) {
+                  } else if (rempty && frontSize <= yggConfig.maxSliceSize) {
                     // right side is a small set, so restart it in memory
                     crossRightSingle(lhead :: ltail, rhead)
                   } else {
@@ -2403,7 +2424,20 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
         case (ExactSize(l), EstimateSize(rn, rx)) => EstimateSize(l max rn, l * rx)
         case _ => UnknownSize // Bail on anything else for now (see above TODO)
       }
-      Table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }), newSize)
+      
+      val newSizeM = newSize match {
+        case ExactSize(s) => Some(s)
+        case EstimateSize(_, s) => Some(s)
+        case _ => None
+      }
+
+      val sizeCheck = for (resultSize <- newSizeM) yield
+        resultSize < yggConfig.maxSaneCrossSize && resultSize >= 0
+
+      if (sizeCheck getOrElse true)
+        Table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }), newSize)
+      else
+        throw EnormousCartesianException(this.size, that.size)
     }
     
     /**
@@ -2532,8 +2566,10 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with ColumnarTableTypes 
 
       def stepPartition(head: Slice, spanStart: Int, tail: StreamT[M, Slice]): StreamT[M, Slice] = {
         val comparatorGen = (s: Slice) => {
-          val rowComparator = Slice.rowComparatorFor(head, s) {
-            (s0: Slice) => s0.columns.keys.collect({ case ref @ ColumnRef(CPath(CPathField("0"), _ @ _*), _) => ref }).toList.sorted
+          val rowComparator = Slice.rowComparatorFor(head, s) { s0 =>
+            s0.columns.keys collect {
+              case ColumnRef(path @ CPath(CPathField("0"), _ @ _*), _) => path
+            }
           }
 
           (i: Int) => rowComparator.compare(spanStart, i)

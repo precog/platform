@@ -21,8 +21,7 @@ package com.precog
 package shard
 package yggdrasil 
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL
+import blueeyes.json._
 
 import daze._
 
@@ -63,13 +62,16 @@ import scalaz.syntax.std.either._
 
 import org.streum.configrity.Configuration
 
-trait YggdrasilQueryExecutorConfig extends 
-    BaseConfig with 
-    ProductionShardSystemConfig with
-    SystemActorStorageConfig with
-    JDBMProjectionModuleConfig with
-    BlockStoreColumnarTableModuleConfig with
-    EvaluatorConfig {
+trait YggdrasilQueryExecutorConfig
+    extends BaseConfig
+    with ProductionShardSystemConfig
+    with SystemActorStorageConfig
+    with JDBMProjectionModuleConfig
+    with BlockStoreColumnarTableModuleConfig
+    with IdSourceConfig
+    with ColumnarTableModuleConfig
+    with EvaluatorConfig {
+      
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
@@ -101,7 +103,11 @@ trait YggdrasilQueryExecutorComponent {
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor[Future] = {
     val yConfig = wrapConfig(config)
     
-    new YggdrasilQueryExecutor with BlockStoreColumnarTableModule[Future] with JDBMProjectionModule with ProductionShardSystemActorModule {
+    new YggdrasilQueryExecutor
+        with BlockStoreColumnarTableModule[Future]
+        with JDBMProjectionModule
+        with ProductionShardSystemActorModule {
+          
       implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
       val yggConfig = yConfig
@@ -120,33 +126,6 @@ trait YggdrasilQueryExecutorComponent {
         )
       }
 
-      /* def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] = {
-        import JsonDSL._
-        table.slices.uncons map { unconsed =>
-          if (unconsed.isDefined) {
-            val rendered = StreamT.unfoldM[Future, CharBuffer, Option[(Slice, StreamT[Future, Slice])]](unconsed) { 
-              case Some((head, tail)) =>
-                tail.uncons map { next =>
-                  if (next.isDefined) {
-                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",") + ","), next))
-                  } else {            
-                    Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",")), None))
-                  }
-                }
-    
-              case None => 
-                M.point(None)
-            }
-            
-            rendered
-            //(CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
-          } else {
-            StreamT.empty[Future, CharBuffer]
-            //CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
-          }
-        }
-      } */
-      
       def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
         M.point(table renderJson ',')
 
@@ -270,7 +249,7 @@ trait YggdrasilQueryExecutor
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
     storage.userMetadataView(userUID).findChildren(path) map {
-      case paths => success(JArray(paths.map( p => JString(p.toString))(collection.breakOut)))
+      case paths => success(JArray(paths.map( p => JString(p.toString))(collection.breakOut): _*))
     }
   }
 
