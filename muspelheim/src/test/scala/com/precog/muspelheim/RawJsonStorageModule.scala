@@ -171,7 +171,6 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
   }
 
   def projectionFor(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = {
-    println("New projection")
     new Projection(descriptor, data)
   }
 
