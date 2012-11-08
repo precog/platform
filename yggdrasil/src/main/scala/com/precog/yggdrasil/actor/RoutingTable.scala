@@ -25,7 +25,7 @@ import util.CPathUtils
 import com.precog.common.json._
 import com.precog.common._
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import scala.annotation.tailrec
 import scala.collection.mutable

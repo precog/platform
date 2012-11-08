@@ -74,6 +74,7 @@ function finished {
     wait $RUN_LOCAL_PID
     echo "Cleaning"
     rm -rf $WORKDIR
+    rm results.json 2>/dev/null
 }
 
 trap "finished; exit 1" TERM INT
@@ -82,10 +83,10 @@ while ! netstat -an | grep $INGEST_PORT > /dev/null; do
     sleep 1
 done
 
-TOKEN=$(cat $WORKDIR/root_token.txt)
+TOKEN="$(cat $WORKDIR/root_token.txt)"
 
 function query {
-    curl -s -m 60 -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$QUERY_PORT/analytics/fs/"
+    curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$QUERY_PORT/analytics/fs/"
 }
 
 function repl {
@@ -108,7 +109,7 @@ for f in $@; do
     echo "$DATA" | curl -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$TABLE?apiKey=$TOKEN"
 
     COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
-    while [ $COUNT_RESULT -lt $COUNT ]; do
+    while [ -z "$COUNT_RESULT" ] || [ "$COUNT_RESULT" -lt "$COUNT" ]; do
         sleep 2
         COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
     done
@@ -124,12 +125,10 @@ if [ "$QUERYDIR" = "" ]; then
     repl
 else
     for f in $(find $QUERYDIR -type f); do
-        RESULT=$(query "$(cat $f)")
+        query "$(cat $f)" > results.json
+        RESULT="$(cat results.json)"
 
-        echo $RESULT | python -m json.tool 1>/dev/null 2>/dev/null
-        VALID_JSON=$?
-
-        if [ ! $VALID_JSON ] || [ ${RESULT:0:1} != "[" ] || [ "$RESULT" = "[]" ]; then
+        if ! python -m json.tool results.json 1>/dev/null 2>/dev/null || [ "${RESULT:0:1}" != "[" ] || [ "${RESULT:0:2}" = "[]" ]; then
             echo "Query $f returned a bad result" 1>&2
             EXIT_CODE=1
         fi

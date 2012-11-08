@@ -24,16 +24,13 @@ import security._
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import blueeyes.json.JsonAST
-import blueeyes.json.JPath
+import blueeyes.json._
 
 import org.scalacheck._
 import Gen._
 import Arbitrary.arbitrary
 
 trait ArbitraryIngestMessage extends ArbitraryJValue {
-  import JsonAST._
-  
   def genContentJValue: Gen[JValue] = frequency((1, genSimple), (1, wrap(choose(0, 5) flatMap genArray)), (1, wrap(choose(0, 5) flatMap genObject)))
   
   def genPath: Gen[List[String]] = Gen.resize(10, Gen.containerOf[List, String](alphaStr))
@@ -52,8 +49,6 @@ trait ArbitraryIngestMessage extends ArbitraryJValue {
 }
 
 trait RealisticIngestMessage extends ArbitraryIngestMessage {
-  import JsonAST._
-  
   val rootAPIKey: APIKey 
   
   def buildBoundedPaths(depth: Int): List[String] = {

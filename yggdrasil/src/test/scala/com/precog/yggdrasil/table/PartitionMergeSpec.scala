@@ -25,7 +25,6 @@ import com.precog.common.json._
 import scala.util.Random
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 
 import scalaz.StreamT
 import scalaz.syntax.monad._
@@ -40,7 +39,7 @@ trait PartitionMergeSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with S
   import trans._
 
   def testPartitionMerge = {
-    val JArray(elements) = JsonParser.parse("""[
+    val JArray(elements) = JParser.parse("""[
       { "key": [0], "value": { "a": "0a" } },
       { "key": [1], "value": { "a": "1a" } },
       { "key": [1], "value": { "a": "1b" } },
@@ -53,7 +52,7 @@ trait PartitionMergeSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with S
 
     val tbl = fromJson(elements.toStream)
 
-    val JArray(expected) = JsonParser.parse("""[
+    val JArray(expected) = JParser.parse("""[
       "0a",
       "1a;1b;1c",
       "2a",

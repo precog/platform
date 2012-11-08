@@ -50,10 +50,7 @@ import scalaz.syntax.bifunctor
 import scalaz.syntax.show._
 import scalaz.Scalaz._
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
-import blueeyes.json.Printer
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -121,21 +118,23 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     }
   }
 
-  def close(): IO[Unit] = IO {
+  def close(): IO[PrecogUnit] = IO {
     setMDC()
     logger.trace("Closing column index files")
     idIndexFile.commit()
     idIndexFile.close()
     logger.trace("Closed column index files")
+    PrecogUnit
   }.ensuring {
     IO { MDC.clear() }
   }
 
-  def commit(): IO[Unit] = IO {
+  def commit(): IO[PrecogUnit] = IO {
     setMDC()
     logger.trace("Committing column index files")
     idIndexFile.commit()
     logger.trace("Committed column index files")
+    PrecogUnit
   } ensuring {
     IO { MDC.clear() }
   }
@@ -177,7 +176,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
       }
 
       // FIXME: this is brokenness in JDBM somewhere      
-      val iterator = {
+      val iterator: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]] = {
         var initial: Iterator[java.util.Map.Entry[Array[Byte],Array[Byte]]] = null
         var tries = 0
         while (tries < JDBMProjection.MAX_SPINS && initial == null) {

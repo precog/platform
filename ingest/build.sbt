@@ -21,8 +21,6 @@ name := "ingest"
 
 libraryDependencies ++= Seq(
       "org.apache"                %% "kafka-core"         % "0.7.5",
-      "joda-time"                 %  "joda-time"          % "1.6.2",
-      "org.scalaz"                %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
       "ch.qos.logback"            %  "logback-classic"    % "1.0.0"
 )
 

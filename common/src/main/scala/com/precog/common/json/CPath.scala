@@ -19,13 +19,12 @@
  */
 package com.precog.common.json
 
-import blueeyes.json.JsonAST
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 
 import util.matching.Regex
 
-import JsonAST._
 import scalaz.Order
 import scalaz.Ordering
 import scalaz.Ordering._
@@ -107,8 +106,8 @@ sealed trait CPath { self =>
           val R = name.r
           jvalue match {
             case JObject(fields) => 
-              fields flatMap { 
-                case JField(R(name), value) =>
+              fields.toList.flatMap { 
+                case (R(name), value) =>
                   val expandedNode = CPathField(name)
                   expand0(current :+ expandedNode, tail, value)
 
@@ -147,12 +146,18 @@ object CPathNode {
   implicit object CPathNodeOrder extends Order[CPathNode] {
     def order(n1: CPathNode, n2: CPathNode): Ordering = (n1, n2) match {
       case (CPathField(s1), CPathField(s2)) => Ordering.fromInt(s1.compare(s2))
-      case (CPathField(_) , _             ) => GT
-      case (CPathIndex(i1), CPathIndex(i2)) => Ordering.fromInt(i1.compare(i2))
-      case (CPathIndex(_) , CPathField(_) ) => LT
-      case (CPathIndex(_) , CPathMeta(_)  ) => GT
+      case (CPathField(_) , _) => GT
+      case (_, CPathField(_)) => LT
+
+      case (CPathArray, CPathArray) => EQ
+      case (CPathArray, _) => GT
+      case (_, CPathArray) => LT
+
+      case (CPathIndex(i1), CPathIndex(i2)) => if (i1 < i2) LT else if (i1 == i2) EQ else GT
+      case (CPathIndex(_), _) => GT
+      case (_, CPathIndex(_)) => LT
+
       case (CPathMeta(m1) , CPathMeta(m2) ) => Ordering.fromInt(m1.compare(m2))
-      case (CPathMeta(_)  , _             ) => LT
     }
   }
 
@@ -171,6 +176,10 @@ sealed case class CPathIndex(index: Int) extends CPathNode {
   override def toString = "[" + index + "]"
 }
 
+case object CPathArray extends CPathNode {
+  override def toString = "[*]"
+}
+
 trait CPathSerialization {
   implicit val CPathDecomposer : Decomposer[CPath] = new Decomposer[CPath] {
     def decompose(cpath: CPath) : JValue = JString(cpath.toString)
@@ -187,7 +196,7 @@ object CPath extends CPathSerialization {
 
   private[this] case class CompositeCPath(nodes: List[CPathNode]) extends CPath 
 
-  private val PathPattern  = """\.|(?=\[\d+\])""".r
+  private val PathPattern  = """\.|(?=\[\d+\])|(?=\[\*\])""".r
   private val IndexPattern = """^\[(\d+)\]$""".r
 
   val Identity = apply()
@@ -217,6 +226,7 @@ object CPath extends CPathSerialization {
         if (head.trim.length == 0) parse0(tail, acc)
         else parse0(tail,
           (head match {
+            case "[*]" => CPathArray
             case IndexPattern(index) => CPathIndex(index.toInt)
 
             case name => CPathField(name)

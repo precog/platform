@@ -23,8 +23,7 @@ package actor
 import com.precog.common._
 import com.precog.common.json._
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JPath
+import blueeyes.json._
 
 import org.specs2.mutable._
 import org.specs2.matcher.{Matcher, MatchResult, Expectable}
@@ -63,10 +62,10 @@ class RoutingTableSpec extends Specification {
       val rt = new SingleColumnProjectionRoutingTable
 
       val jval = JObject(
-        JField("selector", JString("Test")) ::
-        JField("foo", JObject( JField("bar", JNum(123)) :: Nil )) ::
-        JField("foo", JObject( JField("bat", JNum(456.78)) :: Nil )) ::
-        JField("foo", JObject( JField("baz", JNum(BigDecimal("91011.12E+1314"))) :: Nil )) :: Nil
+        JField("selector", JString("Test")),
+        JField("foo", JObject( JField("bar", JNum(123)),
+                               JField("bat", JNum(456.78)),
+                               JField("baz", JNum(BigDecimal("91011.12E+1314")))))
       )
 
       val metadata = Map[JPath, Set[UserMetadata]]() +

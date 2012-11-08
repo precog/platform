@@ -22,11 +22,7 @@ package com.precog.common
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JPath
-import blueeyes.json.JsonParser
-import blueeyes.json.Printer
-
+import blueeyes.json._
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._

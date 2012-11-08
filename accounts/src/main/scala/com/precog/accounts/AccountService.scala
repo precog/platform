@@ -28,7 +28,7 @@ import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.core.service.engines.HttpClientXLightWeb
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable

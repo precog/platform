@@ -30,8 +30,7 @@ import akka.testkit.TestActorRef
 import akka.util.Timeout
 import akka.util.duration._
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 
 import com.precog.common._
 import com.precog.common.security._
@@ -76,8 +75,19 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
     private def load(path: Path) = {
       val resourceName = ("/test_data" + path.toString.init + ".json").replaceAll("/+", "/")   
       using(getClass.getResourceAsStream(resourceName)) { in =>
+        // FIXME: Refactor as soon as JParser can parse from InputStreams
         val reader = new InputStreamReader(in)
-        val json = JsonParser.parse(reader) --> classOf[JArray]
+        val buffer = new Array[Char](8192)
+        val builder = new java.lang.StringBuilder
+        var read = 0
+        do {
+          read = reader.read(buffer)
+          if (read >= 0) {
+            builder.append(buffer, 0, read)
+          }
+        } while (read >= 0)
+        
+        val json = JParser.parse(builder.toString) --> classOf[JArray]
 
         projections = json.elements.foldLeft(projections) { 
           case (acc, jobj) => 
@@ -125,7 +135,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
     def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)] = {
       M.point {
         if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
-        (Projection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(())))
+        (Projection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(PrecogUnit)))
       }
     }
   }
@@ -173,7 +183,7 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
 
   class Projection(val descriptor: ProjectionDescriptor, val data: Vector[JValue]) extends ProjectionLike {
     def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("DummyProjection doesn't support insert")
-    def commit(): IO[Unit] = sys.error("DummyProjection doesn't support commit")
+    def commit(): IO[PrecogUnit] = sys.error("DummyProjection doesn't support commit")
   }
 
   object Projection extends ProjectionCompanion {

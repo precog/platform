@@ -32,7 +32,7 @@ import akka.util.Timeout
 import akka.util.duration._
 import akka.util.Duration
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import org.slf4j._
 

@@ -26,7 +26,7 @@ import akka.util.Timeout
 import akka.dispatch.{ ExecutionContext, Future }
 
 import blueeyes.bkka._
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import blueeyes.persistence.mongo._
 import blueeyes.json.serialization.Extractor
 import blueeyes.json.serialization.DefaultSerialization._

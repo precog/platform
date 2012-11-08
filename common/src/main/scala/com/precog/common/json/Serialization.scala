@@ -20,7 +20,7 @@
 package com.precog.common.json
 
 import blueeyes.json.JPath
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import blueeyes.json.serialization.{ Decomposer, Extractor, ValidatedExtraction }
 import Extractor._
 

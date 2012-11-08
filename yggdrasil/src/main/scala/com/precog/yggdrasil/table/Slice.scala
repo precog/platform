@@ -25,13 +25,13 @@ import util.CPathUtils
 import com.precog.common.VectorCase
 import com.precog.bytecode._
 import com.precog.util._
+import com.precog.yggdrasil.util._
 
 import com.precog.common.json._
 
 import TransSpecModule._
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 
 import org.joda.time.DateTime
@@ -63,6 +63,11 @@ trait Slice { source =>
   def columns: Map[ColumnRef, Column]
 
   def logicalColumns: JType => Set[Column] = { jtpe =>
+    // TODO Use a flatMap and:
+    // If ColumnRef(_, CArrayType(_)) and jType has a JArrayFixedT of this type,
+    //   then we need to map these to multiple columns.
+    // Else if Schema.includes(...), then return List(col).
+    // Otherwise return Nil.
     columns collect {
       case (ColumnRef(jpath, ctype), col) if Schema.includes(jtpe, jpath, ctype) => col
     } toSet
@@ -137,6 +142,11 @@ trait Slice { source =>
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = d
           })
+          case value: CArray[a] => (ColumnRef(CPath.Identity, value.cType), new HomogeneousArrayColumn[a] {
+            val tpe = value.cType
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = value.value
+          })
           case CNull => (ColumnRef(CPath.Identity, CNull), new NullColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
           })
@@ -152,24 +162,50 @@ trait Slice { source =>
     }
   }
 
-  def deref(node: CPathNode): Slice = {
-    new Slice {
-      val size = source.size
-      val columns = source.columns.collect {
-        case (ColumnRef(CPath(`node`, xs @ _*), ctype), col) => (ColumnRef(CPath(xs: _*), ctype), col)
+  def deref(node: CPathNode): Slice = new Slice {
+    val size = source.size
+    val columns = node match {
+      case CPathIndex(i) => source.columns collect {
+        case (ColumnRef(CPath(CPathArray, xs @ _*), CArrayType(elemType)), col: HomogeneousArrayColumn[_]) =>
+          (ColumnRef(CPath(xs: _*), elemType), col.select(i))
+
+        case (ColumnRef(CPath(CPathIndex(`i`), xs @ _*), ctype), col) =>
+          (ColumnRef(CPath(xs: _*), ctype), col)
+      }
+
+      case _ => source.columns collect {
+        case (ColumnRef(CPath(`node`, xs @ _*), ctype), col) =>
+          (ColumnRef(CPath(xs: _*), ctype), col)
       }
     }
   }
 
-  def wrap(wrapper: CPathNode): Slice = {
-    new Slice {
-      val size = source.size
-      val columns = source.columns.map {
-        case (ColumnRef(CPath(nodes @ _*), ctype), col) => (ColumnRef(CPath(wrapper +: nodes : _*), ctype), col)
+  def wrap(wrapper: CPathNode): Slice = new Slice {
+    val size = source.size
+
+    // This is a little weird; CPathArray actually wraps in CPathIndex(0).
+    // Unfortunately, CArrayType(_) cannot wrap CNullTypes, so we can't just
+    // arbitrarily wrap everything in a CPathArray.
+
+    val columns = wrapper match {
+      case CPathArray => source.columns map {
+        case (ColumnRef(CPath(nodes @ _*), ctype), col) =>
+          (ColumnRef(CPath(CPathIndex(0) +: nodes : _*), ctype), col)
+      }
+      case _ => source.columns map {
+        case (ColumnRef(CPath(nodes @ _*), ctype), col) =>
+          (ColumnRef(CPath(wrapper +: nodes : _*), ctype), col)
       }
     }
   }
 
+  // ARRAYS:
+  // TODO Here, if we delete a JPathIndex/JArrayFixedT, then we need to
+  // construct a new Homo*ArrayColumn that has some indices missing.
+  //
+  // -- I've added a col.without(indicies) method to H*ArrayColumn to support
+  // this operation.
+  //
   def delete(jtype: JType): Slice = new Slice {
     def fixArrays(columns: Map[ColumnRef, Column]): Map[ColumnRef, Column] = {
       columns.toSeq.sortBy(_._1).foldLeft((Map.empty[Vector[CPathNode], Int], Map.empty[ColumnRef, Column])) {
@@ -185,13 +221,62 @@ trait Slice { source =>
           (arrayPaths0, acc + (ColumnRef(CPath(nodes: _*), ctype) -> col))
       }._2
     }
-    
-    val size = source.size
-    val columns = fixArrays(
-      source.columns.filterNot {
-        case (ColumnRef(selector, ctype), _) => Schema.includes(jtype, selector, ctype)
+
+    // Used for homogeneous arrays. Constructs a function, suitable for use in a
+    // flatMap, that will modify the homogeneous array according to `jType`.
+    //
+    def flattenDeleteTree[A](jType: JType, cType: CValueType[A], cPath: CPath): A => Option[A] = {
+      val delete: A => Option[A] = _ => None
+      val retain: A => Option[A] = Some(_)
+
+      (jType, cType, cPath) match {
+        case (JUnionT(aJType, bJType), _, _) =>
+          flattenDeleteTree(aJType, cType, cPath) andThen (_ flatMap flattenDeleteTree(bJType, cType, cPath))
+        case (JTextT, CString, CPath.Identity) =>
+          delete
+        case (JBooleanT, CBoolean, CPath.Identity) =>
+          delete
+        case (JNumberT, CLong | CDouble | CNum, CPath.Identity) =>
+          delete
+        case (JObjectUnfixedT, _, CPath(CPathField(_), _*)) =>
+          delete
+        case (JObjectFixedT(fields), _, CPath(CPathField(name), cPath @ _*)) =>
+          fields get name map (flattenDeleteTree(_, cType, CPath(cPath: _*))) getOrElse(retain)
+        case (JArrayUnfixedT, _, CPath(CPathArray | CPathIndex(_), _*)) =>
+          delete
+        case (JArrayFixedT(elems), cType, CPath(CPathIndex(i), cPath @ _*)) =>
+          elems get i map (flattenDeleteTree(_, cType, CPath(cPath: _*))) getOrElse (retain)
+        case (JArrayFixedT(elems), CArrayType(cElemType), CPath(CPathArray, cPath @ _*)) =>
+          val mappers = elems mapValues (flattenDeleteTree(_, cElemType, CPath(cPath: _*)))
+          xs => Some(xs.zipWithIndex map { case (x, j) =>
+            mappers get j match {
+              case Some(f) => f(x)
+              case None => x
+            }
+          })
+        case (JArrayHomogeneousT(jType), CArrayType(cType), CPath(CPathArray, _*)) if Schema.ctypes(jType)(cType) =>
+          delete
+        case _ =>
+          retain
       }
-    )
+    }
+
+    val size = source.size
+    val columns = fixArrays(source.columns flatMap {
+      case (ColumnRef(cpath, ctype), _) if Schema.includes(jtype, cpath, ctype) =>
+        None
+
+      case (ref @ ColumnRef(cpath, ctype: CArrayType[a]), col: HomogeneousArrayColumn[_]) if ctype == col.tpe =>
+        val trans = flattenDeleteTree(jtype, ctype, cpath)
+        Some((ref, new HomogeneousArrayColumn[a] {
+          val tpe = ctype
+          def isDefinedAt(row: Int) = col.isDefinedAt(row)
+          def apply(row: Int): Array[a] = trans(col(row).asInstanceOf[Array[a]]) getOrElse sys.error("Oh dear, this cannot be happening to me.")
+        }))
+
+      case (ref, col) =>
+        Some((ref, col))
+    })
   }
 
   def deleteFields(prefixes: scala.collection.Set[CPathField]) = {
@@ -204,21 +289,46 @@ trait Slice { source =>
     }
   }
 
-  def typed(jtpe: JType): Slice = {
-    new Slice {  
-      val size = source.size
-      val columns = source.columns.filter { case (ColumnRef(path, ctpe), _) => Schema.includes(jtpe, path, ctpe) } 
-    }
+  def typed(jtpe : JType) : Slice = new Slice {
+    val size = source.size
+    val columns = source.columns filter { case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe) }
   }
 
   def nest(selectorPrefix: CPath) = new Slice {
+    val arraylessPrefix = CPath(selectorPrefix.nodes map {
+      case CPathArray => CPathIndex(0)
+      case n => n
+    }: _*)
+
     val size = source.size
-    val columns = source.columns map { case (ColumnRef(selector, ctype), v) => ColumnRef(selectorPrefix \ selector, ctype) -> v }
+    val columns = source.columns map { case (ColumnRef(selector, ctype), v) => ColumnRef(arraylessPrefix \ selector, ctype) -> v }
   }
 
   def arraySwap(index: Int) = new Slice {
     val size = source.size
     val columns = source.columns.collect {
+      case (ColumnRef(cPath @ CPath(CPathArray, _*), cType), col: HomogeneousArrayColumn[a]) =>
+        (ColumnRef(cPath, cType), new HomogeneousArrayColumn[a] {
+          val tpe = col.tpe
+          def isDefinedAt(row: Int) = col.isDefinedAt(row)
+          def apply(row: Int) = {
+            val xs = col(row)
+            if (index >= xs.length) xs else {
+              val ys = tpe.elemType.manifest.newArray(xs.length)
+
+              var i = 1
+              while (i < ys.length) {
+                ys(i) = xs(i)
+                i += 1
+              }
+
+              ys(0) = xs(index)
+              ys(index) = xs(0)
+              ys
+            }
+          }
+        })
+
       case (ColumnRef(CPath(CPathIndex(0), xs @ _*), ctype), col) => 
         (ColumnRef(CPath(CPathIndex(index) +: xs : _*), ctype), col)
 
@@ -341,7 +451,7 @@ trait Slice { source =>
         val acc = new ArrayIntList
         
         def findSelfDistinct(prevRow: Int, curRow: Int) = {
-          val selfComparator = rowComparatorFor(filter, filter)(_.columns.keys.toList.sorted)
+          val selfComparator = rowComparatorFor(filter, filter)(_.columns.keys map (_.selector))
         
           @tailrec
           def findSelfDistinct0(prevRow: Int, curRow: Int) : ArrayIntList = {
@@ -357,7 +467,7 @@ trait Slice { source =>
         }
 
         def findStraddlingDistinct(prev: Slice, prevRow: Int, curRow: Int) = {
-          val straddleComparator = rowComparatorFor(prev, filter)(_.columns.keys.toList.sorted) 
+          val straddleComparator = rowComparatorFor(prev, filter)(_.columns.keys map (_.selector))
 
           @tailrec
           def findStraddlingDistinct0(prevRow: Int, curRow: Int): ArrayIntList = {
@@ -396,41 +506,21 @@ trait Slice { source =>
     }
   }
 
+  def order: spire.math.Order[Int] = {
+    val cols = columns groupBy (_._1.selector) lazyMapValues (_.values.toSet)
+    val paths = cols.keys.toList
+    val traversal = CPathTraversal(paths)
+    traversal.rowOrder(paths, cols)
+  }
+
   def sortWith(keySlice: Slice, sortOrder: DesiredSortOrder = SortAscending): (Slice, Slice) = {
-
-    val colGroups = keySlice.columns.groupBy(_._1.selector).toArray sortBy (_._1) collect {
-      case (path, cols) => cols.map(_._2).toArray
-    }
-    val comparators: Array[RowComparator] = colGroups map { cols => RowComparator(cols, cols) }
-    val ascRowComparator = new RowComparator {
-      def compare(i: Int, j: Int): Ordering = {
-        var k = 0
-        var cmp: Ordering = EQ
-        while (cmp == EQ && k < comparators.length) {
-          cmp = comparators(k).compare(i, j)
-          k += 1
-        }
-        cmp
-      }
-    }
-
-    // Use the branch outside of the comparison.
-    val rowComparator = if (sortOrder == SortAscending) {
-      ascRowComparator
-    } else {
-      new RowComparator {
-        def compare(i: Int, j: Int) = ascRowComparator.compare(i, j).complement
-      }
-    }
 
     // We filter out rows that are completely undefined.
     val order: Array[Int] = Array.range(0, source.size) filter { row =>
       keySlice.isDefinedAt(row) && source.isDefinedAt(row)
     }
-    spire.math.MergeSort.sort(order)(new spire.math.Order[Int] {
-      def compare(i: Int, j: Int) = rowComparator.compare(i, j).toInt
-      def eqv(i: Int, j: Int) = compare(i, j) == 0
-    }, implicitly)
+    val rowOrder = if (sortOrder == SortAscending) keySlice.order else keySlice.order.reverse
+    spire.math.MergeSort.sort(order)(rowOrder, implicitly)
 
     val remapOrder = new ArrayIntList(order.size)
     var i = 0
@@ -1209,7 +1299,7 @@ trait Slice { source =>
   }
 
   def toJValue(row: Int) = {
-    columns.foldLeft[JValue](JNothing) {
+    columns.foldLeft[JValue](JUndefined) {
       case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
         CPathUtils.cPathToJPaths(selector, col.cValue(row)).foldLeft(jv) {
           case (jv, (path, value)) => jv.unsafeInsert(path, value.toJValue)
@@ -1221,8 +1311,8 @@ trait Slice { source =>
 
   def toJson(row: Int): Option[JValue] = {
     toJValue(row) match {
-      case JNothing => None
-      case jv       => Some(jv)
+      case JUndefined => None
+      case jv         => Some(jv)
     }
   }
 
@@ -1230,7 +1320,7 @@ trait Slice { source =>
     @tailrec def rec(i: Int, acc: Vector[JValue]): Vector[JValue] = {
       if (i < source.size) {
         toJValue(i) match {
-          case JNothing => rec(i + 1, acc)
+          case JUndefined => rec(i + 1, acc)
           case jv => rec(i + 1, acc :+ jv)
         }
       } else acc
@@ -1284,74 +1374,17 @@ object Slice {
     }
   }
 
-  def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): RowComparator = {
-
-    val refs1 = keyf(s1)
-    val refs2 = keyf(s2)
-
-    @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): RowComparator = {
-      RowComparator(l1.map(s1.columns).toArray, l2.map(s2.columns).toArray)
-    }
-
-    @inline @tailrec
-    def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[RowComparator]): List[RowComparator] = {
-      import scalaz.syntax.order._
-
-      (l1, l2) match {
-        case (h1 :: t1, h2 :: t2) if h1.selector == h2.selector => {
-          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
-
-          pairColumns(l1Rest, l2Rest, genComparatorFor(l1Equal, l2Equal) :: comparators)
-        }
-
-        case (h1 :: t1, h2 :: t2) if h1 ?|? h2 == LT => {
-          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-
-          pairColumns(l1Rest, l2, genComparatorFor(l1Equal, Nil) :: comparators)
-        }
-
-        case (h1 :: t1, h2 :: t2) if h1 ?|? h2 == GT => {
-          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
-
-          pairColumns(l1, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
-        }
-
-        case (h1 :: t1, Nil) => {
-          val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
-
-          pairColumns(l1Rest, Nil, genComparatorFor(l1Equal, Nil) :: comparators)
-        }
-
-        case (Nil, h2 :: t2) => {
-          val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
-
-          pairColumns(Nil, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
-        }
-
-        case (Nil, Nil) => comparators.reverse
-
-        case (h1 :: t1, h2 :: t2) => sys.error("selector guard failure in pairColumns")
-      }
-    }
-
-    val comparators: Array[RowComparator] = pairColumns(refs1, refs2, Nil).toArray
-
+  def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => Iterable[CPath]): RowComparator = {
+    val paths = (keyf(s1) ++ keyf(s2)).toList
+    val traversal = CPathTraversal(paths)
+    val lCols = s1.columns groupBy (_._1.selector) map { case (path, m) => path -> m.values.toSet }
+    val rCols = s2.columns groupBy (_._1.selector) map { case (path, m) => path -> m.values.toSet }
+    val allPaths = (lCols.keys ++ rCols.keys).toList
+    val order = traversal.rowOrder(allPaths, lCols, Some(rCols))
     new RowComparator {
-      def compare(i1: Int, i2: Int) = {
-        var i = 0
-        var result: Ordering = EQ
-
-        while (i < comparators.length && result == EQ) {
-          result = comparators(i).compare(i1, i2)
-          i += 1
-        }
-        
-        result
-      }
+      def compare(r1: Int, r2: Int): Ordering = scalaz.Ordering.fromInt(order.compare(r1, r2))
     }
   }
-  
   
   private sealed trait SchemaNode
   

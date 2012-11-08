@@ -45,7 +45,7 @@ import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer 
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import com.precog.common.Path
 import com.precog.common.security._
@@ -228,7 +228,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       createAPIKeyRaw(rootAPIKey, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Invalid new API key request body" => ok
+            Some(JObject(elems)), _) if elems.contains("error") && elems("error").startsWith("Invalid new API key request body") => ok
       }}
     }
 
@@ -237,7 +237,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       createAPIKey(expired.apiKey, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString("Unable to create API key with expired permission"))))), _) => ok
+            Some(JObject(elems)), _) if elems.contains("error") && elems("error") == JString("Unable to create API key with expired permission") => ok
       }}
     }
 
@@ -246,7 +246,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       createAPIKey(user2.apiKey, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new API key: Requestor lacks permissions to assign given grants to API key" => ok
+            Some(JObject(elems)), _) if elems.contains("error") && elems("error").startsWith("Error creating new API key: Requestor lacks permissions to assign given grants to API key") => ok
       }}
     }
 
@@ -290,7 +290,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       createAPIKeyGrant(user1.apiKey, NewGrantRequest(None, None, Set.empty[GrantID], Set(ReadPermission(Path("/user2/secret"), Set("user2"))), None)) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new grant: Requestor lacks permissions to create grant" => ok
+            Some(JObject(elems)), _) if elems.contains("error") && elems("error").startsWith("Error creating new grant: Requestor lacks permissions to create grant") => ok
       }}
     }
 

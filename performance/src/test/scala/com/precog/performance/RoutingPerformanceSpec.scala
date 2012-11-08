@@ -32,7 +32,7 @@ import akka.dispatch._
 import akka.util._
 import akka.util.Duration
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
