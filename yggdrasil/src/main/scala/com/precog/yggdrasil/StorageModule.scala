@@ -2,6 +2,7 @@ package com.precog.yggdrasil
 
 import metadata.StorageMetadata
 import com.precog.common._
+import com.precog.util.PrecogUnit
 
 import akka.dispatch.Future 
 
@@ -17,8 +18,8 @@ trait StorageModule[M[+_]] {
 
   trait StorageLike extends StorageMetadataSource[M] { self =>
     def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)]
-    def storeBatch(msgs: Seq[EventMessage]): M[Unit]
-    def store(msg: EventMessage): M[Unit] = storeBatch(Vector(msg))
+    def storeBatch(msgs: Seq[EventMessage]): M[PrecogUnit]
+    def store(msg: EventMessage): M[PrecogUnit] = storeBatch(Vector(msg))
   }
 }
 
@@ -26,10 +27,10 @@ trait StorageMetadataSource[M[+_]] {
   def userMetadataView(uid: String): StorageMetadata[M]
 }
 
-class Release(private var _release: IO[Unit]) { self => 
-  def release: IO[Unit] = _release
+class Release(private var _release: IO[PrecogUnit]) { self => 
+  def release: IO[PrecogUnit] = _release
 
-  def += (action: IO[Unit]): self.type = {
+  def += (action: IO[PrecogUnit]): self.type = {
     synchronized {
       _release = self.release >> action
     }

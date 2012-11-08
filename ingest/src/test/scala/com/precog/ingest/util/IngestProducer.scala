@@ -24,8 +24,6 @@ import akka.util.duration._
 
 import blueeyes.bkka.AkkaDefaults
 
-import blueeyes.json.JsonParser
-
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 import blueeyes.core.data.BijectionsChunkJson._
@@ -34,7 +32,7 @@ import blueeyes.core.http.HttpStatusCodes.OK
 import blueeyes.core.service.HttpClient
 import blueeyes.core.service.engines.HttpClientXLightWeb
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import scalaz.NonEmptyList
 
@@ -154,7 +152,7 @@ Usage:
 
   def run(url: String, apiKey: String, datafile: String) {
     val data = IOUtils.readFileToString(new File(datafile)).unsafePerformIO
-    val json = JsonParser.parse(data)
+    val json = JParser.parse(data)
     json match {
       case JArray(elements) => elements.foreach { send(url, apiKey, _ ) } 
       case _                =>

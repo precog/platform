@@ -3,11 +3,7 @@ package com.precog.common
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JPath
-import blueeyes.json.JsonParser
-import blueeyes.json.Printer
-
+import blueeyes.json._
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -132,7 +128,7 @@ object IngestMessageSerialization {
   }
 
   def writeMessage(buffer: ByteBuffer, msg: IngestMessage): ByteBuffer = {
-    val msgBuffer = charset.encode(Printer.compact(Printer.render(msg.serialize)))
+    val msgBuffer = charset.encode(msg.serialize.renderCompact)
     buffer.put(msgBuffer)
   }
 
@@ -179,7 +175,7 @@ object IngestMessageSerialization {
   def parseJValue(buffer: ByteBuffer): JValue = {
     val decoder = charset.newDecoder()
     val charBuffer = decoder.decode(buffer)
-    JsonParser.parse(charBuffer.toString())
+    JParser.parse(charBuffer.toString())
   }
 }
 

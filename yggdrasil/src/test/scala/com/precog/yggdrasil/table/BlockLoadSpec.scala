@@ -7,7 +7,6 @@ import com.precog.util._
 import com.precog.yggdrasil.util._
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -70,7 +69,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
             }
           }
           
-          if (back \ "value" == JNothing)
+          if (back \ "value" == JUndefined)
             None
           else
             Some(back)
@@ -96,7 +95,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
         }
       }
       
-      (back \ "value" != JNothing).option(back)
+      (back \ "value" != JUndefined).option(back)
     }
 
     val cschema = module.schema map { case (jpath, ctype) => (CPath(jpath), ctype) }
@@ -111,7 +110,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def testLoadSample1 = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
         {
           "value":{
             "u":false,
@@ -131,7 +130,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def testLoadSample2 = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
         {
           "value":{
             "rzp":{ },
@@ -151,7 +150,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def testLoadSample3 = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
          {
            "value":{
              "f":{
@@ -173,7 +172,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
              "jmy":-2.612503123965922E307
            },
            "key":[2,1,1]
-         ]
+         }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
         (3, List(JPath(".f.bn[0]") -> CNull, 
@@ -191,7 +190,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def testLoadSample4 = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
         {
           "value":{
             "dV":{
@@ -223,7 +222,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def testLoadSample5 = {
     val sampleData = SampleData(
-      (JsonParser.parse("""[
+      (JParser.parse("""[
         {
           "value":{
             "cfnYTg92dg":"gu",
