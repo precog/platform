@@ -112,12 +112,17 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     authService.query("apiKey", authAPIKey).delete("/grants/"+grantId)
 
   def equalGrant(g1: Grant, g2: Grant) = (g1.grantId == g2.grantId) && (g1.permissions == g2.permissions) && (g1.expirationDate == g2.expirationDate)
+  
+  def mkNewGrantRequest(grant: Grant) = grant match {
+    case Grant(_, name, description, _, parentIds, permissions, expirationDate) =>
+      NewGrantRequest(name, description, parentIds, permissions, expirationDate)
+  }
 
   val to = Duration(30, "seconds")
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   val rootGrantId = Await.result(apiKeyManager.rootGrantId, to)
   
-  def standardGrant(accountId: AccountID) = Await.result(apiKeyManager.newStandardAccountGrant(accountId), to)
+  def standardGrant(accountId: AccountID) = mkNewGrantRequest(Await.result(apiKeyManager.newStandardAccountGrant(accountId), to))
   def standardPermissions(accountId: AccountID) = standardGrant(accountId).permissions
   
   val user1 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user1", Some("user1-key"), None), to)
@@ -151,6 +156,8 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     ))
   }
   
+  val rootGrantRequests = rootGrants map mkNewGrantRequest
+  
   "Security service" should {
     "get existing API key" in {
       getAPIKeyDetails(rootAPIKey, rootAPIKey) must whenDelivered { beLike {
@@ -177,7 +184,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "create root-like API key with defaults" in {
-      val request = NewAPIKeyRequest(Some("root-like"), None, rootGrants)
+      val request = NewAPIKeyRequest(Some("root-like"), None, rootGrantRequests)
       createAPIKey(rootAPIKey, request) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
           val id = jid.deserialize[WrappedAPIKey]
@@ -195,7 +202,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "create derived non-root API key" in {
-      val request = NewAPIKeyRequest(Some("non-root-2"), None, Set(user1Grant))
+      val request = NewAPIKeyRequest(Some("non-root-2"), None, Set(mkNewGrantRequest(user1Grant)))
       (for {
         HttpResponse(HttpStatus(OK, _), _, Some(jid), _)    <- createAPIKey(user1.apiKey, request)
         WrappedAPIKey(apiKey, _, _) = jid.deserialize[WrappedAPIKey]
@@ -214,7 +221,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "don't create if API key is expired" in {
-      val request = NewAPIKeyRequest(Some("expired-2"), None, Set(expiredGrant))
+      val request = NewAPIKeyRequest(Some("expired-2"), None, Set(mkNewGrantRequest(expiredGrant)))
       createAPIKey(expired.apiKey, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
@@ -223,7 +230,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "don't create if API key cannot grant permissions" in {
-      val request = NewAPIKeyRequest(Some("unauthorized"), None, Set(user1Grant))
+      val request = NewAPIKeyRequest(Some("unauthorized"), None, Set(mkNewGrantRequest(user1Grant)))
       createAPIKey(user2.apiKey, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
