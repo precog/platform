@@ -120,7 +120,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
       import TransSpecModule.paths._
 
       @tailrec def buildColArrays(from: DBCursor, into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
-        if (from.hasNext) {
+        if (from.hasNext && sliceIndex < yggConfig.maxSliceSize) {
           // horribly inefficient, but a place to start
           val Success(jv) = MongoToJson(from.next())
           val withIdsAndValues = jv.flattenWithPath.foldLeft(into) {
