@@ -224,7 +224,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           // 1. test where.left isTranspecable
           // 2. attempt to solve where.right
           
-          if (isTranspecableFrom(where.left, commonality, sigma)) {
+          if (isTranspecable(where.left, commonality, sigma)) {
             val (group, errors) = solveGroupCondition(solve, where.right, false, sigma)
             (group map { Group(Some(where), resolveExpr(sigma, where.left), _, dtrace) }, errors)
           } else {
@@ -417,8 +417,181 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       (back, errors)
   }
   
-  private def isTranspecableFrom(to: Expr, from: Expr, sigma: Map[Formal, Expr]): Boolean = 
-    true      // TODO blame alissa
+  private def isTranspecable(to: Expr, from: Expr, sigma: Map[Formal, Expr]): Boolean = {
+    println("isTranspecable(%s, %s)".format(to, from))
+    
+    to match {
+      case _ if to equalsIgnoreLoc from => true
+      
+      case Let(_, _, _, _, right) => isTranspecable(right, from, sigma)
+      
+      case Import(_, _, child) => isTranspecable(child, from, sigma)
+      
+      case Relate(_, _, _, in) => isTranspecable(in, from, sigma)
+      
+      case to @ Dispatch(_, id, actuals) => {
+        to.binding match {
+          case FormalBinding(let) => isTranspecable(sigma((id, let)), from, sigma)
+          
+          case LetBinding(let) => {
+            val ids = let.params map { Identifier(Vector(), _) }
+            val sigma2 = sigma ++ (ids zip Stream.continually(let) zip actuals)
+            isTranspecable(let.left, from, sigma2)
+          }
+          
+          case _ => false
+        }
+      }
+      
+      case Eq(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Eq(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case NotEq(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case NotEq(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case ObjectDef(_, props) =>
+        props map { _._2 } forall { isTranspecable(_, from, sigma) }
+      
+      case ArrayDef(_, values) =>
+        values forall { isTranspecable(_, from, sigma) }
+      
+      case Descent(_, child, _) => isTranspecable(child, from, sigma)
+      case MetaDescent(_, child, _) => isTranspecable(child, from, sigma)
+      
+      case Deref(_, left, right) if isPrimitive(right, sigma) =>
+        isTranspecable(left, from, sigma)
+      
+      case Where(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Where(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case With(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case With(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case Add(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Add(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case Sub(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Sub(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case Mul(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Mul(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case Div(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Div(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case Mod(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Mod(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case Lt(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Lt(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case LtEq(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case LtEq(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case Gt(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Gt(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case GtEq(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case GtEq(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case And(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case And(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      case Or(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Or(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+      
+      // non-primitive cases
+      
+      case Deref(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      
+      case Where(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case With(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      
+      case Add(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case Sub(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case Mul(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case Div(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case Mod(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      
+      case Lt(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case LtEq(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case Gt(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case GtEq(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      
+      case Eq(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case NotEq(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      
+      case And(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case Or(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      
+      case Comp(_, child) => isTranspecable(child, from, sigma)
+      case Neg(_, child) => isTranspecable(child, from, sigma)
+      case Paren(_, child) => isTranspecable(child, from, sigma)
+      
+      case _ => false
+    }
+  }
+  
+  private def isPrimitive(expr: Expr, sigma: Map[Formal, Expr]): Boolean = expr match {
+    case _: StrLit | _: BoolLit | _: NumLit | _: NullLit => true
+    
+    case expr @ Dispatch(_, id, actuals) => {
+      expr.binding match {
+        case FormalBinding(let) => isPrimitive(sigma((id, let)), sigma)
+        
+        case LetBinding(let) => {
+          val ids = let.params map { Identifier(Vector(), _) }
+          val sigma2 = sigma ++ (ids zip Stream.continually(let) zip actuals)
+          isPrimitive(let.left, sigma2)
+        }
+        
+        case _ => false
+      }
+    }
+    
+    case Let(_, _, _, _, right) => isPrimitive(right, sigma)
+    
+    case Import(_, _, child) => isPrimitive(child, sigma)
+    
+    case Relate(_, _, _, in) => isPrimitive(in, sigma)
+    
+    case ObjectDef(_, props) =>
+      props map { _._2 } forall { isPrimitive(_, sigma) }
+    
+    case ArrayDef(_, values) =>
+      values forall { isPrimitive(_, sigma) }
+    
+    case Descent(_, child, _) => isPrimitive(child, sigma)
+    case MetaDescent(_, child, _) => isPrimitive(child, sigma)
+    
+    case Deref(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    
+    case Where(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    case With(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    
+    case Add(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    case Sub(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    case Mul(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    case Div(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    case Mod(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    
+    case Lt(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    case LtEq(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    case Gt(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    case GtEq(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    
+    case Eq(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    case NotEq(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    
+    case And(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    case Or(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
+    
+    case Comp(_, child) => isPrimitive(child, sigma)
+    case Neg(_, child) => isPrimitive(child, sigma)
+    case Paren(_, child) => isPrimitive(child, sigma)
+    
+    case _ => false
+  }
   
   //if b is Some: finds all tic vars in the Expr that have the given Solve as their binding
   //if b is None: finds all tic vars in the Expr
