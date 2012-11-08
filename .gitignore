@@ -27,6 +27,5 @@ jprofiler.db
 jprofiler.jnilib
 .cache
 /mongo/proguard.log
-/mongo/precog.jar
-/mongo/precog.zip
+/mongo/precog*.zip
 /mongo/precog/

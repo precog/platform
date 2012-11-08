@@ -35,7 +35,7 @@ java -jar tools/proguard.jar @proguard.conf -injars target/mongo-assembly*.jar -
 mkdir web
 zip -u $TMPDIR/precog.jar web
 rmdir web
-cp precog.sh precog.bat config.cfg $TMPDIR/
+cp precog.sh precog.bat config.cfg README.md $TMPDIR/
 zip -r precog.zip $TMPDIR
 
 
