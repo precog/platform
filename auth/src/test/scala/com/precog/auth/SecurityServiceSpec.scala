@@ -20,25 +20,16 @@
 package com.precog
 package auth
 
-import com.precog.common.Path
-import com.precog.common.security._
+import org.joda.time.DateTime
 
 import org.specs2.mutable._
-import org.scalacheck.Gen._
 
-import akka.actor.ActorSystem
-import akka.dispatch.ExecutionContext
-import akka.dispatch.Future
+import akka.dispatch.{ Await, Future } 
 import akka.util.Duration
 
-import org.joda.time._
-
 import org.streum.configrity.Configuration
-import org.streum.configrity.io.BlockFormat
 
 import scalaz.{Validation, Success, NonEmptyList}
-import scalaz.Scalaz._
-import scalaz.Validation._
 
 import blueeyes.concurrent.test._
 
@@ -56,7 +47,11 @@ import blueeyes.json.serialization.Extractor._
 
 import blueeyes.json.JsonAST._
 
-import blueeyes.util.Clock
+import com.precog.common.Path
+import com.precog.common.security._
+
+import APIKeyRecord.SafeSerialization._
+import Grant.SafeSerialization._
 
 trait TestAPIKeyService extends BlueEyesServiceSpecification with SecurityService with AkkaDefaults with MongoAPIKeyManagerComponent {
 
@@ -76,8 +71,10 @@ trait TestAPIKeyService extends BlueEyesServiceSpecification with SecurityServic
   """
 
   override val configuration = "services { auth { v1 { " + config + " } } }"
+  
+  val apiKeyManager = new InMemoryAPIKeyManager[Future]
 
-  override def apiKeyManagerFactory(config: Configuration) = TestAPIKeyManager.testAPIKeyManager[Future]
+  override def apiKeyManagerFactory(config: Configuration) = apiKeyManager 
 
   lazy val authService = service.contentType[JValue](application/(MimeTypes.json))
 
@@ -87,8 +84,7 @@ trait TestAPIKeyService extends BlueEyesServiceSpecification with SecurityServic
 }
 
 class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tags {
-  import TestAPIKeyManager._
-
+  
   def getAPIKeys(authAPIKey: String) = 
     authService.query("apiKey", authAPIKey).get("/apikeys/")
     
@@ -110,11 +106,11 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   def addAPIKeyGrantRaw(authAPIKey: String, updateKey: String, grantId: JValue) = 
     authService.query("apiKey", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(grantId)
 
-  def createAPIKeyGrant(authAPIKey: String, permission: Permission) = 
-    createAPIKeyGrantRaw(authAPIKey, permission.serialize)
+  def createAPIKeyGrant(authAPIKey: String, request: NewGrantRequest) = 
+    createAPIKeyGrantRaw(authAPIKey, request.serialize)
 
-  def createAPIKeyGrantRaw(authAPIKey: String, permission: JValue) = 
-    authService.query("apiKey", authAPIKey).post("/grants/")(permission)
+  def createAPIKeyGrantRaw(authAPIKey: String, request: JValue) = 
+    authService.query("apiKey", authAPIKey).post("/grants/")(request)
 
   def removeAPIKeyGrant(authAPIKey: String, updateKey: String, grantId: String) = 
     authService.query("apiKey", authAPIKey).delete("/apikeys/"+updateKey+"/grants/"+grantId)
@@ -125,72 +121,111 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   def getGrantChildren(authAPIKey: String, grantId: String) = 
     authService.query("apiKey", authAPIKey).get("/grants/"+grantId+"/children/")
 
-  def addGrantChild(authAPIKey: String, grantId: String, permission: Permission) =
-    addGrantChildRaw(authAPIKey, grantId, permission.serialize)
+  def addGrantChild(authAPIKey: String, grantId: String, request: NewGrantRequest) =
+    addGrantChildRaw(authAPIKey, grantId, request.serialize)
     
-  def addGrantChildRaw(authAPIKey: String, grantId: String, permission: JValue) = 
-    authService.query("apiKey", authAPIKey).post("/grants/"+grantId+"/children/")(permission)
+  def addGrantChildRaw(authAPIKey: String, grantId: String, request: JValue) = 
+    authService.query("apiKey", authAPIKey).post("/grants/"+grantId+"/children/")(request)
     
   def deleteGrant(authAPIKey: String, grantId: String) =
     authService.query("apiKey", authAPIKey).delete("/grants/"+grantId)
 
-  def equalGrant(g1: Grant, g2: Grant) = (g1.gid == g2.gid) && (g1.permission == g2.permission)
+  def equalGrant(g1: Grant, g2: Grant) = (g1.grantId == g2.grantId) && (g1.permissions == g2.permissions) && (g1.expirationDate == g2.expirationDate)
 
+  val to = Duration(30, "seconds")
+  val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
+  val rootGrantId = Await.result(apiKeyManager.rootGrantId, to)
+  
+  def standardGrant(accountId: AccountID) = Await.result(apiKeyManager.newStandardAccountGrant(accountId), to)
+  def standardPermissions(accountId: AccountID) = standardGrant(accountId).permissions
+  
+  val user1 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user1", Some("user1-key"), None), to)
+  val user1Grant = Await.result(apiKeyManager.findGrant(user1.grants.head), to).get
+  
+  val user2 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user2", Some("user2-key"), None), to)
+  val user2Grant = Await.result(apiKeyManager.findGrant(user2.grants.head), to).get
+  
+  val user3 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user3", Some("user3-key"), None), to)
+  val user3Grant = Await.result(apiKeyManager.findGrant(user3.grants.head), to).get
+  
+  val user4 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user4", Some("user4-key"), None), to)
+  val user4Grant = Await.result(apiKeyManager.findGrant(user4.grants.head), to).get
+  val user4DerivedGrant = Await.result(
+    apiKeyManager.newGrant(None, None, user4.apiKey, Set(user4Grant.grantId), standardPermissions("user4"), None), to) 
+  
+  val expiredGrant = Await.result(
+    apiKeyManager.newGrant(None, None, user1.apiKey, Set(user1Grant.grantId), standardPermissions("user1"), Some(new DateTime().minusYears(1000))), to) 
+  val expired = Await.result(apiKeyManager.newAPIKey(None, None, user1.apiKey, Set(expiredGrant.grantId)), to) 
+
+  val allAPIKeys = Await.result(apiKeyManager.listAPIKeys(), to)
+  val allGrants = Await.result(apiKeyManager.listGrants(), to)
+  
+  val rootGrants = {
+    def mkPerm(p: (Path, Set[AccountID]) => Permission) = p(Path("/"), Set())
+    
+    Set(Grant(
+      rootGrantId, Some("root-grant"), Some("The root grant"), None, Set(),
+      Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
+      None
+    ))
+  }
+  
   "Security service" should {
     "get existing API key" in {
-      getAPIKeyDetails(rootUID, rootUID) must whenDelivered { beLike {
+      getAPIKeyDetails(rootAPIKey, rootAPIKey) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jtd), _) =>
           val td = jtd.deserialize[APIKeyDetails]
           td must beLike {
-            case APIKeyDetails(apiKey, grants) if (apiKey.tid == rootUID) && (grants sameElements grantList(0)) => ok
+            case APIKeyDetails(apiKey, _, _, grants) if (apiKey == rootAPIKey) && (grants sameElements rootGrants) => ok
           }
       }}
     }
 
     "return error on get and API key not found" in {
-      getAPIKeyDetails(rootUID, "not-gonna-find-it") must whenDelivered { beLike {
+      getAPIKeyDetails(rootAPIKey, "not-gonna-find-it") must whenDelivered { beLike {
         case HttpResponse(HttpStatus(NotFound, _), _, Some(JString("Unable to find API key not-gonna-find-it")), _) => ok
       }}
     }
     
     "enumerate existing API keys" in {
-      getAPIKeys(rootUID) must whenDelivered { beLike {
+      getAPIKeys(rootAPIKey) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jts), _) =>
-          val ks = jts.deserialize[APIKeySet]
-          ks.apiKeys must containTheSameElementsAs(apiKeys.values.filter(_.cid == rootUID).map(t => WrappedAPIKey(t.name, t.tid)).toSeq)
+          val ks = jts.deserialize[Set[WrappedAPIKey]]
+          ks must containTheSameElementsAs(allAPIKeys.filter(_.issuerKey == rootAPIKey).map(r => WrappedAPIKey(r.apiKey, r.name, r.description)).toSeq)
       }}
     }
 
-    "create root API key with defaults" in {
-      val request = NewAPIKeyRequest("root", grantList(0).map(_.permission))
-      createAPIKey(rootUID, request) must whenDelivered { beLike {
+    "create root-like API key with defaults" in {
+      val request = NewAPIKeyRequest(Some("root-like"), None, rootGrants)
+      createAPIKey(rootAPIKey, request) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
           val id = jid.deserialize[WrappedAPIKey]
           id.apiKey.length must be_>(0)
       }}
     }
 
-    "create non-root API key with overrides" in {
-      val request = NewAPIKeyRequest("non-root", grantList(1).map(_.permission))
+    "create non-root API key with defaults" in {
+      val request = NewAPIKeyRequest(Some("non-root-1"), None, Set(standardGrant("non-root-1")))
+      createAPIKey(rootAPIKey, request) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
+          val id = jid.deserialize[WrappedAPIKey]
+          id.apiKey.length must be_>(0)
+      }}
+    }
+
+    "create derived non-root API key" in {
+      val request = NewAPIKeyRequest(Some("non-root-2"), None, Set(user1Grant))
       (for {
-        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)    <- createAPIKey(testUID, request)
-        WrappedAPIKey("non-root", id) = jid.deserialize[WrappedAPIKey]
-        HttpResponse(HttpStatus(OK, _), _, Some(jtd), _)    <- getAPIKeyDetails(rootUID, id)
-        APIKeyDetails(apiKey, grants) = jtd.deserialize[APIKeyDetails]
-        if (apiKey.tid == id)
-      } yield
-        grantList(1).map(_.permission).forall {
-          case Permission(accessType, path, _, expiration) =>
-            grants.map(_.permission).exists {
-              case Permission(`accessType`, `path`, _, `expiration`) => true
-              case _ => false
-            }
-        }) must whenDelivered { beTrue }
+        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)    <- createAPIKey(user1.apiKey, request)
+        WrappedAPIKey(apiKey, _, _) = jid.deserialize[WrappedAPIKey]
+        HttpResponse(HttpStatus(OK, _), _, Some(jtd), _)    <- getAPIKeyDetails(rootAPIKey, apiKey)
+        APIKeyDetails(`apiKey`, _, _, grants) = jtd.deserialize[APIKeyDetails]
+      } yield grants.flatMap(_.permissions) sameElements user1Grant.permissions) must whenDelivered { beTrue }
     }
 
     "don't create when new API key is invalid" in {
       val request = JObject(List(JField("create", JString("invalid")))) 
-      createAPIKeyRaw(rootUID, request) must whenDelivered { beLike {
+      createAPIKeyRaw(rootAPIKey, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
             Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Invalid new API key request body" => ok
@@ -198,8 +233,8 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "don't create if API key is expired" in {
-      val request = NewAPIKeyRequest("expired", grantList(5).map(_.permission))
-      createAPIKey(expiredUID, request) must whenDelivered { beLike {
+      val request = NewAPIKeyRequest(Some("expired-2"), None, Set(expiredGrant))
+      createAPIKey(expired.apiKey, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
             Some(JObject(List(JField("error", JString("Unable to create API key with expired permission"))))), _) => ok
@@ -207,48 +242,44 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "don't create if API key cannot grant permissions" in {
-      val request = NewAPIKeyRequest("unauthorized", grantList(0).map(_.permission))
-      createAPIKey(cust1UID, request) must whenDelivered { beLike {
+      val request = NewAPIKeyRequest(Some("unauthorized"), None, Set(user1Grant))
+      createAPIKey(user2.apiKey, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new API key: Requestor lacks permissions to give grants to API key" => ok
+            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new API key: Requestor lacks permissions to assign given grants to API key" => ok
       }}
     }
 
     "retrieve the grants associated with a given API key" in {
-      getAPIKeyGrants(rootUID, rootUID) must whenDelivered { beLike {
+      getAPIKeyGrants(rootAPIKey, rootAPIKey) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgs), _) =>
-          val gs = jgs.deserialize[GrantSet]
-          gs must beLike {
-            case GrantSet(grants) if grants sameElements grantList(0) => ok
-          }
+          val gs = jgs.deserialize[Set[WrappedGrantId]]
+          gs.map(_.grantId) must containTheSameElementsAs(Seq(rootGrantId))
       }}
     }
     
     "add a specified grant to an API key" in {
-      addAPIKeyGrant(cust1UID, testUID, WrappedGrantId("user1_read")) must whenDelivered { beLike {
+      addAPIKeyGrant(user1.apiKey, user2.apiKey, WrappedGrantId(user1Grant.grantId, None, None)) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(Created, _), _, None, _) => ok
       }}
     }
 
     "get existing grant" in {
-      getGrantDetails(cust1UID, "user2_read") must whenDelivered { beLike {
+      getGrantDetails(user1.apiKey, user1Grant.grantId) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgd), _) =>
-          val gd = jgd.deserialize[GrantDetails]
-          gd must beLike {
-            case GrantDetails(grant) if (grant.gid == grants("user2_read").gid) && (grant.permission == grants("user2_read").permission) => ok
-          }
+          val g = jgd.deserialize[Grant]
+          g must_== user1Grant.copy(issuerKey = None, parentIds = Set.empty[GrantID])
       }}
     }
 
     "report an error on get and grant not found" in {
-      getGrantDetails(cust1UID, "not-gonna-find-it") must whenDelivered { beLike {
+      getGrantDetails(user1.apiKey, "not-gonna-find-it") must whenDelivered { beLike {
         case HttpResponse(HttpStatus(NotFound, _), _, Some(JString("Unable to find grant not-gonna-find-it")), _) => ok
       }}
     }
 
     "create a new grant derived from the grants of the authorization API key" in {
-      createAPIKeyGrant(cust1UID, ReadPermission(Path("/user1/read-me"), cust1UID, None)) must whenDelivered { beLike {
+      createAPIKeyGrant(user1.apiKey, NewGrantRequest(None, None, Set.empty[GrantID], Set(ReadPermission(Path("/user1/read-me"), Set("user1"))), None)) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) =>
           val id = jid.deserialize[WrappedGrantId]
           id.grantId.length must be_>(0)
@@ -256,50 +287,46 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
     
     "don't create a new grant if it can't be derived from the authorization API keys grants" in {
-      createAPIKeyGrant(cust1UID, ReadPermission(Path("/user2/secret"), cust1UID, None)) must whenDelivered { beLike {
+      createAPIKeyGrant(user1.apiKey, NewGrantRequest(None, None, Set.empty[GrantID], Set(ReadPermission(Path("/user2/secret"), Set("user2"))), None)) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new grant: Requestor lacks permissions to give grants to API key" => ok
+            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new grant: Requestor lacks permissions to create grant" => ok
       }}
     }
-    
+
     "remove a specified grant from an API key" in {
-      removeAPIKeyGrant(cust1UID, cust1UID, "user1_read") must whenDelivered { beLike {
+      removeAPIKeyGrant(user3.apiKey, user3.apiKey, user3Grant.grantId) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(NoContent, _), _, None, _) => ok
       }}
     }
-    
+
     "retrieve the child grants of the given grant" in {
-      getGrantChildren(rootUID, "root_read") must whenDelivered { beLike {
+      getGrantChildren(user4.apiKey, user4Grant.grantId) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgs), _) =>
-          val gs = jgs.deserialize[GrantSet]
-          gs must beLike {
-            case GrantSet(grants) if grants.forall(g => rootReadChildren.exists(equalGrant(g, _))) => ok
-          }
+          val gs = jgs.deserialize[Set[Grant]]
+          gs must_== Set(user4DerivedGrant.copy(issuerKey = None, parentIds = Set.empty[GrantID]))
       }}
     }
 
     "add a child grant to the given grant" in {
-      val permission = WritePermission(Path("/user1"), None)
-      addGrantChild(rootUID, "root_read", permission) must whenDelivered { beLike {
+      addGrantChild(user1.apiKey, user1Grant.grantId, NewGrantRequest(None, None, Set.empty[GrantID], Set(ReadPermission(Path("/user1/secret"), Set("user1"))), None)) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) =>
           val id = jid.deserialize[WrappedGrantId]
           id.grantId.length must be_>(0)
       }}
     }
-    
+
     "delete a grant" in {
-      val permission = WritePermission(Path("/user1"), None)
       (for {
-        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)      <- addGrantChild(rootUID, "root_read", permission)
-        WrappedGrantId(id) = jid.deserialize[WrappedGrantId]
-        HttpResponse(HttpStatus(OK, _), _, Some(jgs), _)      <- getGrantChildren(rootUID, "root_read")
-        GrantSet(beforeDelete) = jgs.deserialize[GrantSet]
-        if beforeDelete.exists(_.gid == id)
-        HttpResponse(HttpStatus(NoContent, _), _, None, _)    <- deleteGrant(rootUID, id)
-        HttpResponse(HttpStatus(OK, _), _, Some(jgs), _)      <- getGrantChildren(rootUID, "root_read")
-        GrantSet(afterDelete) = jgs.deserialize[GrantSet]
-      } yield !afterDelete.exists(_.gid == id)) must whenDelivered { beTrue }
+        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)      <- addGrantChild(user1.apiKey, user1Grant.grantId, NewGrantRequest(None, None, Set.empty[GrantID], Set(ReadPermission(Path("/user1/secret"), Set("user1"))), None))
+        WrappedGrantId(id, _, _) = jid.deserialize[WrappedGrantId]
+        HttpResponse(HttpStatus(OK, _), _, Some(jgs), _)      <- getGrantChildren(user1.apiKey, user1Grant.grantId)
+        beforeDelete = jgs.deserialize[Set[Grant]]
+        if beforeDelete.exists(_.grantId == id)
+        HttpResponse(HttpStatus(NoContent, _), _, None, _)    <- deleteGrant(user1.apiKey, id)
+        HttpResponse(HttpStatus(OK, _), _, Some(jgs), _)      <- getGrantChildren(user1.apiKey, user1Grant.grantId)
+        afterDelete = jgs.deserialize[Set[Grant]]
+      } yield !afterDelete.exists(_.grantId == id)) must whenDelivered { beTrue }
     }
   }
 }

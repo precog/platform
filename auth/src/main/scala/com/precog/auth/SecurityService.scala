@@ -22,15 +22,12 @@ package auth
 
 import common.security._
 
-import blueeyes.BlueEyesServer
-
 import akka.dispatch.Future
 
 import blueeyes.BlueEyesServiceBuilder
-import blueeyes.bkka.AkkaDefaults
-import blueeyes.bkka.Stoppable
+import blueeyes.bkka.{ AkkaDefaults, Stoppable } 
 import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
-import blueeyes.health.metrics.{eternity}
+import blueeyes.health.metrics.eternity
 
 import org.streum.configrity.Configuration
 
