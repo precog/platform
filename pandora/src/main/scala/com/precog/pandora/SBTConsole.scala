@@ -105,7 +105,7 @@ object SBTConsole {
     }
 
     class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
-      val accessControl = new UnlimitedAccessControl[Future]()
+      val accessControl = new UnrestrictedAccessControl[Future]()
     }
 
     val storage = new Storage
