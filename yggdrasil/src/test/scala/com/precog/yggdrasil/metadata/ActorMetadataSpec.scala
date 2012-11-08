@@ -46,6 +46,9 @@ import org.scalacheck.Gen._
 
 
 class ActorMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage with FutureMatchers {
+  
+  val rootAPIKey = "root-key" // FIXME
+  
   trait WithActorSystem extends mutable.Before {
     def before {}
     implicit val actorSystem = ActorSystem("test" + System.nanoTime)

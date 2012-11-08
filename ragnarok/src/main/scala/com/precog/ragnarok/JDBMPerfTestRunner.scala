@@ -27,7 +27,7 @@ import yggdrasil.table.BlockStoreColumnarTableModule
 import yggdrasil.table.BlockStoreColumnarTableModuleConfig
 import yggdrasil.metadata.FileMetadataStorage
 
-import common.security.UnlimitedAccessControl
+import common.security.UnrestrictedAccessControl
 
 import util.{ FileOps, FilesystemFileOps }
 
@@ -55,7 +55,7 @@ trait StandalonePerfTestRunner[T] extends EvaluatingPerfTestRunner[Future, T]
   trait StandalonePerfTestRunnerConfig extends BaseConfig with EvaluatingPerfTestRunnerConfig with StandaloneShardSystemConfig
 
   class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
-    val accessControl = new UnlimitedAccessControl[Future]()
+    val accessControl = new UnrestrictedAccessControl[Future]()
   }
 
   val storage = new Storage

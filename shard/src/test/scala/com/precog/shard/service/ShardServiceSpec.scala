@@ -68,13 +68,12 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def nanoTime = sys.error("nanotime not available in the past")
 }
 
-trait TestAPIKeys {
-  import TestAPIKeyManager._
-  val TestAPIKeyUID = testUID
-  val ExpiredAPIKeyUID = expiredUID
-}
-
-trait TestShardService extends BlueEyesServiceSpecification with ShardService with TestAPIKeys with AkkaDefaults with MongoAPIKeyManagerComponent { self =>
+trait TestShardService extends BlueEyesServiceSpecification with ShardService with AkkaDefaults with MongoAPIKeyManagerComponent { self =>
+  
+  val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  
+  lazy val testAPIKey: APIKey = sys.error("FIXME")
+  lazy val expiredAPIKey: APIKey = sys.error("FIXME")
 
   import BijectionsChunkJson._
   import BijectionsChunkQueryResult._
@@ -98,10 +97,10 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
   def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]) = new TestQueryExecutor {
     val actorSystem = self.actorSystem
     val executionContext = self.asyncContext
-    val allowedUID = TestAPIKeyUID
+    val allowedUID = testAPIKey
   }
 
-  override def apiKeyManagerFactory(config: Configuration) = TestAPIKeyManager.testAPIKeyManager[Future]
+  override def apiKeyManagerFactory(config: Configuration) = apiKeyManager
 
   lazy val queryService = service.contentType[QueryResult](application/(MimeTypes.json))
                                  .path("/analytics/fs/")
@@ -120,7 +119,7 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
 
 class ShardServiceSpec extends TestShardService with FutureMatchers {
 
-  def query(query: String, apiKey: Option[String] = Some(TestAPIKeyUID), path: String = ""): Future[HttpResponse[QueryResult]] = {
+  def query(query: String, apiKey: Option[String] = Some(testAPIKey), path: String = ""): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query).get(path)
   }
 
@@ -151,13 +150,13 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
       }}
     }
     "reject query when grant is expired" in {
-      query(testQuery, Some(ExpiredAPIKeyUID)) must whenDelivered { beLike {
+      query(testQuery, Some(expiredAPIKey)) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(UnprocessableEntity, _), _, Some(Left(JArray(List(JString("No data accessable at the specified path."))))), _) => ok
       }}
     }
   }
   
-  def browse(apiKey: Option[String] = Some(TestAPIKeyUID), path: String = "unittest/"): Future[HttpResponse[QueryResult]] = {
+  def browse(apiKey: Option[String] = Some(testAPIKey), path: String = "unittest/"): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metaService).get(path)
   }
  
@@ -184,7 +183,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
       }}
     }
     "reject browse when grant expired" in {
-      browse(Some(ExpiredAPIKeyUID), path = "/expired") must whenDelivered { beLike {
+      browse(Some(expiredAPIKey), path = "/expired") must whenDelivered { beLike {
         case HttpResponse(HttpStatus(Unauthorized, "The specified API key may not browse this location"), _, None, _) => ok
       }}
     }

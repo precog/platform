@@ -300,7 +300,7 @@ object Console extends App {
         }
 
         class Storage extends SystemActorStorageLike(fileMetadataStorage) {
-          val accessControl = new UnlimitedAccessControl[Future]()
+          val accessControl = new UnrestrictedAccessControl[Future]()
         }
 
         val storage = new Storage

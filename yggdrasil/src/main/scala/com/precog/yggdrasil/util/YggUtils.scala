@@ -157,12 +157,12 @@ object DatabaseTools extends Command with YggUtilsCommon {
     }
   }
 
-  implicit val usord = new Ordering[Seq[UID]] {
+  implicit val usord = new Ordering[Seq[AccountID]] {
     val sord = implicitly[Ordering[String]]
 
-    def compare(a: Seq[UID], b: Seq[UID]) = order(a,b)
+    def compare(a: Seq[AccountID], b: Seq[AccountID]) = order(a,b)
 
-    private def order(a: Seq[UID], b: Seq[UID], i: Int = 0): Int = {
+    private def order(a: Seq[AccountID], b: Seq[AccountID], i: Int = 0): Int = {
       if(a.length < i && b.length < i) {
         val comp = sord.compare(a(i), b(i))
         if(comp != 0) comp else order(a,b,i+1)
@@ -178,12 +178,12 @@ object DatabaseTools extends Command with YggUtilsCommon {
     }
   }
 
-  implicit val t3ord = new Ordering[(CPath, CType, Seq[UID])] {
+  implicit val t3ord = new Ordering[(CPath, CType, Seq[AccountID])] {
     val jord = implicitly[Ordering[CPath]]
     val sord = implicitly[Ordering[String]]
-    val ssord = implicitly[Ordering[Seq[UID]]]
+    val ssord = implicitly[Ordering[Seq[AccountID]]]
 
-    def compare(a: (CPath, CType, Seq[UID]), b: (CPath, CType, Seq[UID])) = {
+    def compare(a: (CPath, CType, Seq[AccountID]), b: (CPath, CType, Seq[AccountID])) = {
       val j = jord.compare(a._1,b._1)
       if(j != 0) {
         j 
@@ -206,13 +206,13 @@ object DatabaseTools extends Command with YggUtilsCommon {
     show(extract(load(config.dataDir).map(_._2)), config.verbose)
   }
 
-  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(CPath, CType, Seq[UID])]] = {
+  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(CPath, CType, Seq[AccountID])]] = {
     implicit val pord = new Ordering[Path] {
       val sord = implicitly[Ordering[String]] 
       def compare(a: Path, b: Path) = sord.compare(a.toString, b.toString)
     }
 
-    descs.foldLeft(SortedMap[Path,SortedSet[(CPath, CType, Seq[UID])]]()) {
+    descs.foldLeft(SortedMap[Path,SortedSet[(CPath, CType, Seq[AccountID])]]()) {
       case (acc, desc) =>
        desc.columns.foldLeft(acc) {
          case (acc, ColumnDescriptor(p, s, t, u)) =>
@@ -222,7 +222,7 @@ object DatabaseTools extends Command with YggUtilsCommon {
     }
   }
 
-  def show(summary: SortedMap[Path, SortedSet[(CPath, CType, Seq[UID])]], verbose: Boolean) {
+  def show(summary: SortedMap[Path, SortedSet[(CPath, CType, Seq[AccountID])]], verbose: Boolean) {
     summary.foreach { 
       case (p, sels) =>
         println(p)
@@ -735,7 +735,7 @@ object ImportTools extends Command with Logging {
         }
 
         class Storage extends SystemActorStorageLike(ms) {
-          val accessControl = new UnlimitedAccessControl()
+          val accessControl = new UnrestrictedAccessControl()
         }
 
         val storage = new Storage
@@ -836,12 +836,12 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
     val parser = new OptionParser("yggutils csv") {
       opt("l","list","List API keys", { config.list = true })
 //      opt("c","children","List children of API key", { s: String => config.listChildren = Some(s) })
-      opt("n","new","New customer account at path", { s: String => config.path = Some(s) })
+      opt("n","new","New customer account at path", { s: String => config.accountId = Some(s) })
       opt("a","name","Human-readable name for new API key", { s: String => config.newAPIKeyName = s })
       opt("x","delete","Delete API key", { s: String => config.delete = Some(s) })
       opt("d","database","APIKey database name (ie: beta_auth_v1)", {s: String => config.database = s })
       opt("t","tokens","APIKeys collection name", {s: String => config.collection = s }) 
-      opt("r","root","root API key for creation", {s: String => config.root = s })
+//      opt("r","root","root API key for creation", {s: String => config.root = s })
       opt("a","archive","Collection for deleted API keys", {s: String => config.deleted = Some(s) })
       opt("s","servers","Mongo server config", {s: String => config.servers = s})
     }
@@ -856,7 +856,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
     val tm = apiKeyManager(config)
     val actions = (config.list).option(list(tm)).toSeq ++
 //                  config.listChildren.map(listChildren(_, tm)) ++
-                  config.path.map(p => create(config.newAPIKeyName, Path(p), config.root, tm)) ++
+                  config.accountId.map(p => create(p, config.newAPIKeyName, tm)) ++
                   config.delete.map(delete(_, tm))
 
     Await.result(Future.sequence(actions) onComplete {
@@ -902,24 +902,8 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
 //  }
   }
 
-  def create(apiKeyName: String, path: Path, root: APIKey, apiKeyManager: APIKeyManager[Future]) = {
-    for {
-      apiKey <- apiKeyManager.newAPIKey(apiKeyName, root, Set())
-      val ownerGrant  = apiKeyManager.newGrant(None, OwnerPermission(path, None))
-      val readGrant   = apiKeyManager.newGrant(None, ReadPermission(path, apiKey.tid, None))
-      val writeGrant  = apiKeyManager.newGrant(None, WritePermission(path, None))
-      val reduceGrant = apiKeyManager.newGrant(None, ReducePermission(path, apiKey.tid, None))
-      grants <- Future.sequence(List(ownerGrant, readGrant, writeGrant, reduceGrant))
-      result <- apiKeyManager.addGrants(apiKey.tid, grants.map(_.gid).toSet)
-    } yield {
-      result match {
-        case Some(apiKey) =>
-          println("Successfully created API key: \n" + apiKey.serialize(APIKeyRecord.apiKeyRecordDecomposer).renderPretty)
-
-        case None =>
-          sys.error("Something went silently wrong in API key or grant creation or update, please investigate.")
-      }
-    }
+  def create(accountId: String, apiKeyName: String, apiKeyManager: APIKeyManager[Future]) = {
+    apiKeyManager.newStandardAPIKeyRecord(accountId, Some(apiKeyName))
   }
 
   def delete(t: String, apiKeyManager: APIKeyManager[Future]) = sys.error("todo")
@@ -931,7 +915,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
   
   class Config {
     var delete: Option[String] = None
-    var path: Option[String] = None
+    var accountId: Option[String] = None
     var newAPIKeyName: String = ""
     var root: APIKey = "root"
     var list: Boolean = false

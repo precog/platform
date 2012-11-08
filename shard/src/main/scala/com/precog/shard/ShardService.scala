@@ -38,7 +38,7 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
 
-case class ShardState(queryExecutor: QueryExecutor[Future], apiKeyManager: APIKeyManager[Future], accessControl: AccessControl[Future])
+case class ShardState(queryExecutor: QueryExecutor[Future], apiKeyManager: APIKeyManager[Future])
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
@@ -72,19 +72,14 @@ trait ShardService extends
 
           logger.trace("apiKeyManager loaded")
 
-          val accessControl = new APIKeyManagerAccessControl(apiKeyManager)
-
-          logger.trace("accessControl loaded")
-          
-          val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), accessControl)
+          val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), apiKeyManager)
 
           logger.trace("queryExecutor loaded")
 
           queryExecutor.startup.map { _ =>
             ShardState(
               queryExecutor,
-              apiKeyManager,
-              accessControl
+              apiKeyManager
             )
           }
         } ->
@@ -101,7 +96,7 @@ trait ShardService extends
                 }
               } ~
               dataPath("meta/fs") {
-                get(new BrowseServiceHandler(state.queryExecutor, state.accessControl))
+                get(new BrowseServiceHandler(state.queryExecutor, state.apiKeyManager))
               }
             } ~ path("actors/status") {
               get(new ActorStatusHandler(state.queryExecutor))

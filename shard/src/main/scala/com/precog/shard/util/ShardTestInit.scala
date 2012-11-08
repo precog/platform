@@ -62,7 +62,7 @@ object ShardTestInit extends App with JDBMProjectionModule with SystemActorStora
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   class Storage extends SystemActorStorageLike(metadataStorage) {
-    val accessControl = new UnlimitedAccessControl[Future]()
+    val accessControl = new UnrestrictedAccessControl[Future]()
   }
 
   val storage = new Storage

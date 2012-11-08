@@ -209,8 +209,9 @@ Usage:
 }
 
 class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
+  lazy val rootAPIKey: APIKey = sys.error("FIXME")
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
-  lazy val apiKey = config.getProperty("token", TestAPIKeyManager.rootUID)
+  lazy val apiKey = config.getProperty("token", TestIngestService.rootAPIKey)
   val client = new HttpClientXLightWeb 
 
   def send(event: Event, timeout: Timeout) {

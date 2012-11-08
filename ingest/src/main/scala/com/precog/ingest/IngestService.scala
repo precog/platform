@@ -46,7 +46,7 @@ import scalaz.syntax.monad._
 
 import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
 
-case class IngestState(apiKeyManager: APIKeyManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: ExecutorService)
+case class IngestState(apiKeyManager: APIKeyManager[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: ExecutorService)
 
 trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 with DecompressCombinators with AkkaDefaults { 
@@ -71,7 +71,6 @@ with DecompressCombinators with AkkaDefaults {
 
           val eventStore = eventStoreFactory(config.detach("eventStore"))
           val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
-          val accessControl = new APIKeyManagerAccessControl(apiKeyManager)
 
           // Set up a thread pool for ingest tasks
           val readPool = new ThreadPoolExecutor(config[Int]("readpool.min_threads", 2),
@@ -84,7 +83,6 @@ with DecompressCombinators with AkkaDefaults {
           eventStore.start map { _ =>
             IngestState(
               apiKeyManager,
-              accessControl,
               eventStore,
               usageLoggingFactory(config.detach("usageLogging")),
               readPool
@@ -97,8 +95,8 @@ with DecompressCombinators with AkkaDefaults {
               apiKey(state.apiKeyManager) {
                 path("/(?<sync>a?sync)") {
                   dataPath("fs") {
-                    post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch)) ~
-                    delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
+                    post(new TrackingServiceHandler(state.apiKeyManager, state.eventStore, state.usageLogging, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch)) ~
+                    delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.apiKeyManager, state.eventStore, deleteTimeout)(defaultFutureDispatch))
                   }
                 }
               }

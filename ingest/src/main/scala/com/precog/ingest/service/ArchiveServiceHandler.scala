@@ -39,14 +39,14 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz.{Validation, Success}
 
-class ArchiveServiceHandler[A](accessControl: AccessControl[Future], eventStore: EventStore, archiveTimeout: Timeout)(implicit dispatcher: MessageDispatcher)
+class ArchiveServiceHandler[A](apiKeyManager: APIKeyManager[Future], eventStore: EventStore, archiveTimeout: Timeout)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[A, (APIKeyRecord, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[A]) => {
-    Success { (t: APIKeyRecord, p: Path) =>
-      accessControl.mayAccess(t.tid, p, Set(), OwnerPermission) flatMap { mayAccess =>
+    Success { (r: APIKeyRecord, p: Path) =>
+      apiKeyManager.hasCapability(r.apiKey, Set(DeletePermission(p, Set())), None) flatMap { mayAccess =>
         if(mayAccess) {
           try { 
-            val archiveInstance = Archive(p, t.tid)
+            val archiveInstance = Archive(p, r.apiKey)
             logger.trace("Archiving path: " + archiveInstance)
             eventStore.save(archiveInstance, archiveTimeout).map {
               _ => HttpResponse[JValue](OK)

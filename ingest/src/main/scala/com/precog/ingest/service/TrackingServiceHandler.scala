@@ -62,9 +62,9 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
     }
   }
 
-  def ingest(p: Path, t: APIKeyRecord, event: JValue): Future[Unit] = {
+  def ingest(p: Path, r: APIKeyRecord, event: JValue): Future[Unit] = {
     
-    val eventInstance = Event.fromJValue(p, event, t.tid)
+    val eventInstance = Event.fromJValue(p, event, r.apiKey)
     logger.trace("Saving event: " + eventInstance)
     eventStore.save(eventInstance, insertTimeout)
   }
@@ -206,14 +206,14 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
   }
 
   val service = (request: HttpRequest[Either[Future[JValue], ByteChunk]]) => {
-    Success { (t: APIKeyRecord, p: Path) =>
-      accessControl.mayAccess(t.tid, p, Set(), WritePermission) flatMap {
+    Success { (r: APIKeyRecord, p: Path) =>
+      accessControl.hasCapability(r.apiKey, Set(WritePermission(p, Set())), None) flatMap {
         case true => try {
           request.content map {
             case Left(futureEvent) =>
               for {
                 event <- futureEvent
-                _ <- ingest(p, t, event)
+                _ <- ingest(p, r, event)
               } yield HttpResponse[JValue](OK)
 
             case Right(byteStream) =>
@@ -222,11 +222,11 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
 
               val async = request.parameters.get('sync) map (_ == "async") getOrElse false
               val parser = if (request.mimeTypes contains (text / csv)) {
-                csvReaderFor(request) map (parseCsv(byteStream, t, p, _))
+                csvReaderFor(request) map (parseCsv(byteStream, r, p, _))
               } else if (async) {
-                success(parseAsyncJson(byteStream, t, p))
+                success(parseAsyncJson(byteStream, r, p))
               } else  {
-                success(parseSyncJson(byteStream, t, p))
+                success(parseSyncJson(byteStream, r, p))
               }
 
               parser match {

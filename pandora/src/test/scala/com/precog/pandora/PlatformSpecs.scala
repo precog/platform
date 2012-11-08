@@ -96,7 +96,7 @@ object PlatformSpecs extends ParseEvalStackSpecs[Future]
   val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
   class Storage extends SystemActorStorageLike(fileMetadataStorage) {
-    val accessControl = new UnlimitedAccessControl[Future]
+    val accessControl = new UnrestrictedAccessControl[Future]
   }
 
   val storage = new Storage

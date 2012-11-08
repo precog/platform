@@ -22,6 +22,7 @@ package table
 
 import com.precog.common.{MetadataStats,Path,VectorCase}
 import com.precog.common.json._
+import com.precog.common.security._
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
@@ -849,9 +850,9 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   }
   
   // because I *can*!
-  def load(table: Table, uid: UserId, tpe: JType): M[Table] = {
+  def load(table: Table, accountId: AccountID, tpe: JType): M[Table] = {
     import Table.loadMergeEngine._
-    val metadataView = storage.userMetadataView(uid)
+    val metadataView = storage.userMetadataView(accountId)
 
     // Reduce this table to obtain the in-memory set of strings representing the vfs paths
     // to be loaded.

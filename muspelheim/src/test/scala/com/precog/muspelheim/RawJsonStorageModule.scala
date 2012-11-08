@@ -130,7 +130,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
       def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
     }
 
-    def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl[M](), metadata)
+    def userMetadataView(uid: String) = new UserMetadataView(uid, new UnrestrictedAccessControl[M](), metadata)
 
     def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)] = {
       M.point {

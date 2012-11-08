@@ -133,7 +133,7 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
       }}
     }
     "reject track request when grant is expired" in {
-      track(JSON, apiKey = Some(ExpiredAPIKey))(testValue) must whenDelivered { beLike {
+      track(JSON, apiKey = Some(expiredAPIKey))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
       }}
     }

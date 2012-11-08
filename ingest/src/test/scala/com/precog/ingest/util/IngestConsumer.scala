@@ -26,6 +26,7 @@ import com.precog.common._
 import com.precog.common.kafka._
 import com.precog.common.security._
 import com.precog.common.util._
+import com.precog.ingest.service._
 
 import java.util.Properties
 import java.io.{File, FileReader}
@@ -86,7 +87,7 @@ object DirectKafkaProducer extends App {
   val topic = "direct_test_topic"
  
   val sample = DistributedSampleSet(0, sampler = AdSamples.adCampaignSample)
-  val event = Event.fromJValue(Path("/test/"), sample.next._1, TestAPIKeyManager.rootUID)
+  val event = Event.fromJValue(Path("/test/"), sample.next._1, TestIngestService.rootAPIKey)
   val msg = EventMessage(0,0,event) 
 
   val total = 1000000

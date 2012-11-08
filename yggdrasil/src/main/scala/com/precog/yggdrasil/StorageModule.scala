@@ -22,6 +22,7 @@ package com.precog.yggdrasil
 import metadata.StorageMetadata
 import com.precog.common._
 import com.precog.util.PrecogUnit
+import com.precog.common.security._
 
 import akka.dispatch.Future 
 import akka.util.Timeout
@@ -44,7 +45,7 @@ trait StorageModule[M[+_]] {
 }
 
 trait StorageMetadataSource[M[+_]] {
-  def userMetadataView(uid: String): StorageMetadata[M]
+  def userMetadataView(accountId: AccountID): StorageMetadata[M]
 }
 
 class Release(private var _release: IO[PrecogUnit]) { self => 

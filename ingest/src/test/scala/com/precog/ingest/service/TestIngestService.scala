@@ -56,14 +56,13 @@ import blueeyes.core.http.MimeTypes._
 
 import blueeyes.json._
 
-trait TestAPIKeys {
-  import TestAPIKeyManager._
-  val TestAPIKey = testUID
-  val TrackingAPIKey = usageUID
-  val ExpiredAPIKey = expiredUID
-}
-
-trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestAPIKeys with AkkaDefaults with MongoAPIKeyManagerComponent {
+trait TestIngestService extends BlueEyesServiceSpecification with IngestService with AkkaDefaults with MongoAPIKeyManagerComponent {
+  val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  
+  lazy val trackingAPIKey: APIKey = sys.error("FIXME")
+  lazy val testAPIKey: APIKey = sys.error("FIXME")
+  lazy val expiredAPIKey: APIKey = sys.error("FIXME")
+  
   val asyncContext = defaultFutureDispatch
 
   val config = """
@@ -79,7 +78,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
 
   override val configuration = "services { ingest { v1 { " + config + " } } }"
 
-  def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(TrackingAPIKey) 
+  def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(trackingAPIKey) 
 
   val messaging = new CollectingMessaging
 
@@ -96,7 +95,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
     new KafkaEventStore(new EventRouter(routeTable, messaging), 0)
   }
 
-  override def apiKeyManagerFactory(config: Configuration) = TestAPIKeyManager.testAPIKeyManager[Future]
+  override def apiKeyManagerFactory(config: Configuration) = apiKeyManager
 
   implicit def jValueToFutureJValue = new Bijection[JValue, Future[JValue]] {
     def apply(x: JValue) = Future(x)
@@ -106,7 +105,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   def track[A](
       contentType: MimeType,
       sync: Boolean = true,
-      apiKey: Option[String] = Some(TestAPIKey),
+      apiKey: Option[String] = Some(testAPIKey),
       path: String = "unittest"
     )(data: A)(implicit
       bi: Bijection[A, Future[JValue]],
@@ -128,4 +127,6 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 }
 
-
+object TestIngestService {
+  lazy val rootAPIKey: APIKey = sys.error("FIXME")
+}

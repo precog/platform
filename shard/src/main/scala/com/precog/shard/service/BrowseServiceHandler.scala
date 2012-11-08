@@ -42,15 +42,16 @@ import com.precog.common.security._
 class BrowseServiceHandler(queryExecutor: QueryExecutor[Future], accessControl: AccessControl[Future])(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (APIKeyRecord, Path) => Future[HttpResponse[QueryResult]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => { 
-    success((t: APIKeyRecord, p: Path) => {
-      accessControl.mayAccess(t.tid, p, Set(t.tid), ReadPermission).flatMap { 
+    success((r: APIKeyRecord, p: Path) => {
+      val accountId = "FIXME"
+      accessControl.hasCapability(r.apiKey, Set(ReadPermission(p, Set(accountId))), None).flatMap { 
         case true =>
           import scalaz.std.string._
           import scalaz.syntax.validation._
           import scalaz.syntax.apply._
 
-          queryExecutor.browse(t.tid, p) flatMap { browseResult =>
-            queryExecutor.structure(t.tid, p) map { structureResult =>
+          queryExecutor.browse(r.apiKey, p) flatMap { browseResult =>
+            queryExecutor.structure(r.apiKey, p) map { structureResult =>
               (browseResult |@| structureResult) { (children, structure) =>
                 JObject(
                   JField("children", children) ::

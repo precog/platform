@@ -22,6 +22,7 @@ package com.precog.yggdrasil
 import com.precog.common.json._
 import com.precog.common.json.CPath.{CPathDecomposer, CPathExtractor}
 import com.precog.common._
+import com.precog.common.security._
 import com.precog.util.IOUtils
 
 import com.google.common.base.Charsets
@@ -82,7 +83,7 @@ trait SortBySerialization {
 
 object SortBy extends SortBySerialization
 
-case class Authorities(uids: Set[String]) {
+case class Authorities(uids: Set[AccountID]) {
 
   @tailrec
   final def hashSeq(l: Seq[String], hash: Int, i: Int = 0): Int = {

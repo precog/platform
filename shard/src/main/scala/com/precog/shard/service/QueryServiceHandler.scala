@@ -47,13 +47,13 @@ with Logging {
   val Command = """:(\w+)\s+(.+)""".r
 
   val service = (request: HttpRequest[Future[JValue]]) => {
-    success((t: APIKeyRecord, p: Path, q: String, opts: QueryOptions) => q.trim match {
-      case Command("ls", arg) => list(t.tid, Path(arg.trim))
-      case Command("list", arg) => list(t.tid, Path(arg.trim))
-      case Command("ds", arg) => describe(t.tid, Path(arg.trim))
-      case Command("describe", arg) => describe(t.tid, Path(arg.trim))
+    success((r: APIKeyRecord, p: Path, q: String, opts: QueryOptions) => q.trim match {
+      case Command("ls", arg) => list(r.apiKey, Path(arg.trim))
+      case Command("list", arg) => list(r.apiKey, Path(arg.trim))
+      case Command("ds", arg) => describe(r.apiKey, Path(arg.trim))
+      case Command("describe", arg) => describe(r.apiKey, Path(arg.trim))
       case qt =>
-        queryExecutor.execute(t.tid, q, p, opts) match {
+        queryExecutor.execute(r.apiKey, q, p, opts) match {
           case Success(stream) =>
             Future(HttpResponse[QueryResult](OK, content = Some(Right(stream))))
           
@@ -81,14 +81,14 @@ Takes a quirrel query and returns the result of evaluating the query.
   ))
 
   
-  def list(u: UID, p: Path) = {
+  def list(u: APIKey, p: Path) = {
     queryExecutor.browse(u, p).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error listing path: " + p))))
     }
   }
 
-  def describe(u: UID, p: Path) = {
+  def describe(u: APIKey, p: Path) = {
     queryExecutor.structure(u, p).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error describing path: " + p))))
