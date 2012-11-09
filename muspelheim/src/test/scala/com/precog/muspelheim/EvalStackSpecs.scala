@@ -181,7 +181,7 @@ trait EvalStackSpecs extends Specification {
           (obj("min") match { case SDecimal(num) => num.toDouble ~= 862.7464285714286 }) mustEqual true
           (obj("max") match { case SDecimal(num) => num.toDouble ~= 941.0645161290323 }) mustEqual true
       }
-    }
+    } */
 
     "accept division of two BigDecimals" in {
       val input = "92233720368547758073 / 12223372036854775807"
@@ -311,7 +311,7 @@ trait EvalStackSpecs extends Specification {
 
       results2 mustEqual(Set(SObject(Map("num" -> SDecimal(1018), "winner" -> SString("YES"))), SObject(Map("num" -> SDecimal(1), "winner" -> SString("YEs")))))
     }
-     */
+    
     "solve the results of a set and a stdlib op1 function" in {
       val input = """
         | clicks := //clicks
