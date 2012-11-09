@@ -27,14 +27,15 @@ import org.slf4j.LoggerFactory
 import scalaz._
 
 class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport with FutureMatchers {
-  sequential
-  val timeout = Duration(30, "seconds")
+  
+  override def mongoStartupPause = Some(0l)
+  val timeout = Duration(10, "seconds")
 
   lazy val logger = LoggerFactory.getLogger("com.precog.common.security.MongoAPIKeyManagerSpec")
 
   "mongo API key manager" should {
     
-    "find API key present" in new apiKeyManager { 
+    "find API key present" in new TestAPIKeyManager { 
       val result = Await.result(apiKeyManager.findAPIKey(rootAPIKey), timeout)
 
       result must beLike {
@@ -42,7 +43,7 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
       }
     }
     
-    "not find missing API key" in new apiKeyManager { 
+    "not find missing API key" in new TestAPIKeyManager { 
 
       val result = Await.result(apiKeyManager.findAPIKey(notFoundAPIKeyID), timeout)
 
@@ -51,7 +52,7 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
       }
     }
     
-    "issue new API key" in new apiKeyManager { 
+    "issue new API key" in new TestAPIKeyManager { 
       val name = "newAPIKey"
       val fResult = apiKeyManager.newAPIKey(Some(name), None, rootAPIKey, Set.empty)
 
@@ -64,7 +65,7 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
       }
     }
     
-    "move API key to deleted pool on deletion" in new apiKeyManager { 
+    "move API key to deleted pool on deletion" in new TestAPIKeyManager { 
 
       type Results = (Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord])
 
@@ -86,7 +87,7 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
       }
     }
     
-    "no failure on deleting API key that is already deleted" in new apiKeyManager { 
+    "no failure on deleting API key that is already deleted" in new TestAPIKeyManager { 
       type Results = (Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord])
 
       val fut: Future[Results] = for { 
@@ -109,11 +110,7 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
     }
   }
 
-  object Counter {
-    val cnt = new java.util.concurrent.atomic.AtomicLong
-  }
-
-  trait apiKeyManager extends After {
+  trait TestAPIKeyManager extends After {
     import MongoAPIKeyManagerSpec.dbId
     val defaultActorSystem = ActorSystem("apiKeyManagerTest")
     implicit val execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
