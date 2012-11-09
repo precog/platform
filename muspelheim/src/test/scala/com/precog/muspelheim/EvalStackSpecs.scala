@@ -292,6 +292,17 @@ trait EvalStackSpecs extends Specification {
 
       results2 mustEqual(Set(SObject(Map("num" -> SDecimal(1018), "winner" -> SString("YES"))), SObject(Map("num" -> SDecimal(1), "winner" -> SString("YEs")))))
     }
+    
+    "solve the results of a set and a stdlib op1 function" in {
+      val input = """
+        | clicks := //clicks
+        | clicks' := clicks with { foo: std::time::getMillis("2012-10-29") }
+        | solve 'a clicks' where clicks'.time = 'a
+        | """.stripMargin
+        
+      val result = evalE(input)
+      result must not(beEmpty)        // TODO
+    }
 
     "perform a simple join by value sorting" in {
       val input = """
