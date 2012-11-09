@@ -35,7 +35,7 @@ trait ArbitraryIngestMessage extends ArbitraryJValue {
   
   def genPath: Gen[List[String]] = Gen.resize(10, Gen.containerOf[List, String](alphaStr))
 
-  def genRandomEvent: Gen[Event] = for(path <- genPath; apiKey <- alphaStr; content <- genContentJValue) yield Event.fromJValue(Path("/" + path.filter(_.length != 0).mkString("/")), content, apiKey)
+  def genRandomEvent: Gen[Event] = for(apiKey <- alphaStr; path <- genPath; ownerAccountId <- alphaStr; content <- genContentJValue) yield Event.fromJValue(apiKey, Path("/" + path.filter(_.length != 0).mkString("/")), Some(ownerAccountId), content)
   
   def genRandomEventMessage: Gen[EventMessage] = for(producerId <- choose(0,1000000); eventId <- choose(0, 1000000); event <- genRandomEvent) 
                                            yield EventMessage(producerId, eventId, event)
@@ -49,7 +49,8 @@ trait ArbitraryIngestMessage extends ArbitraryJValue {
 }
 
 trait RealisticIngestMessage extends ArbitraryIngestMessage {
-  val rootAPIKey: APIKey 
+  val ingestAPIKey: APIKey 
+  val ingestOwnerAccountId: Option[AccountID] 
   
   def buildBoundedPaths(depth: Int): List[String] = {
     buildChildPaths(List.empty, depth).map("/" + _.reverse.mkString("/"))
@@ -74,7 +75,7 @@ trait RealisticIngestMessage extends ArbitraryIngestMessage {
   
   def genEventMessage: Gen[EventMessage] = for(producerId <- choose(0,producers-1); event <- genEvent) yield EventMessage(producerId, eventIds(producerId).getAndIncrement, event) 
   
-  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event.fromJValue(Path(path), event, rootAPIKey)
+  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event.fromJValue(ingestAPIKey, Path(path), ingestOwnerAccountId, event)
   
   def genRawEvent: Gen[JValue] = containerOfN[Set, JPath](10, genStableJPath).map(_.map((_, genSimpleNotNull.sample.get)).foldLeft[JValue](JObject(Nil)){ (acc, t) =>
       acc.set(t._1, t._2)

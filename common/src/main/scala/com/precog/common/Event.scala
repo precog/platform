@@ -19,66 +19,38 @@
  */
 package com.precog.common
 
-import java.nio.ByteBuffer
-import java.nio.charset.Charset
+import security._
+import json._
 
-import blueeyes.json._
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.{ JPath, JValue }
 import blueeyes.json.serialization.DefaultSerialization._
-import blueeyes.json.serialization.Extractor._
 
-import scalaz._
-import scalaz.syntax.apply._
+import shapeless._
 
 sealed trait Action
 
-case class Event(path: Path, apiKey: String, data: JValue, metadata: Map[JPath, Set[UserMetadata]]) extends Action 
+case class Event(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountID], data: JValue, metadata: Map[JPath, Set[UserMetadata]]) extends Action 
 
-class EventSerialization {
+object Event {
+  implicit val eventIso = Iso.hlist(Event.apply _, Event.unapply _)
+  
+  val schema = "apiKey" :: "path" :: "ownerAccountId" :: "data" :: "metadata" :: HNil
+  
+  implicit val (eventDecomposer, eventExtractor) = serialization[Event](schema)
 
-  implicit val EventDecomposer: Decomposer[Event] = new Decomposer[Event] {
-    override def decompose(event: Event): JValue = JObject(
-      List(
-        JField("path", event.path.serialize),
-        JField("tokenId", event.apiKey.serialize),
-        JField("data", event.data),
-        JField("metadata", event.metadata.serialize)))
-  }
-
-  implicit val EventExtractor: Extractor[Event] = new Extractor[Event] with ValidatedExtraction[Event] {
-    override def validated(obj: JValue): Validation[Error, Event] = 
-      ((obj \ "path").validated[Path] |@|
-       (obj \ "tokenId").validated[String] |@|
-       (obj \ "metadata").validated[Map[JPath, Set[UserMetadata]]]).apply(Event(_,_,obj \ "data",_))
-  }  
-
-}
-
-object Event extends EventSerialization {
-  def fromJValue(path: Path, data: JValue, ownerAPIKey: String): Event = {
-    Event(path, ownerAPIKey, data, Map[JPath, Set[UserMetadata]]())
+  def fromJValue(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountID], data: JValue): Event = {
+    Event(apiKey, path, ownerAccountId, data, Map[JPath, Set[UserMetadata]]())
   }
 }
 
 case class Archive(path: Path, apiKey: String) extends Action
 
-class ArchiveSerialization {
+object Archive {
+  implicit val archiveIso = Iso.hlist(Archive.apply _, Archive.unapply _)
 
-  implicit val ArchiveDecomposer: Decomposer[Archive] = new Decomposer[Archive] {
-    override def decompose(archive: Archive): JValue = JObject(
-      List(
-        JField("path", archive.path.serialize),
-        JField("tokenId", archive.apiKey.serialize)))
-  }
-
-  implicit val ArchiveExtractor: Extractor[Archive] = new Extractor[Archive] with ValidatedExtraction[Archive] {
-    override def validated(obj: JValue): Validation[Error, Archive] = 
-      ((obj \ "path").validated[Path] |@|
-       (obj \ "tokenId").validated[String]).apply(Archive(_,_))
-  }  
+  val schema = "apiKey" :: "path" :: HNil
+  
+  implicit val (archiveDecomposer, archiveExtractor) = serialization[Archive](schema)
 }
-
-object Archive extends ArchiveSerialization
-
 
 // vim: set ts=4 sw=4 et:
