@@ -19,7 +19,6 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
   private val basicParser = ISODateTimeFormat.basicDateTime
 
   def parseDateTime(value: String, withOffset: Boolean): DateTime = {
-    println("Parsing: " + value)
     val parser = if (value.contains("-") || value.contains(":")) {
       fullParser
     } else {
@@ -89,7 +88,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
   )
 
   private def isValidISO(str: String): Boolean = {
-    try { new DateTime(str); true
+    try { parseDateTime(str, true); true
     } catch {
       case e:IllegalArgumentException => { false }
     }
@@ -538,7 +537,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
         def apply(row: Int) = {
           val time = c(row)
-
+          
           val newTime = parseDateTime(time, true)
           fmt.print(newTime)
         }
