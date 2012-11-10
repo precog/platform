@@ -4,8 +4,6 @@ package ragnarok
 import scalaz._
 
 import blueeyes.json._
-import JsonAST.JValue
-
 
 sealed trait PerfDelta
 object PerfDelta {
@@ -54,8 +52,7 @@ object PerfDelta {
  * Provides methods to read in a baseline JSON file.
  */
 trait BaselineComparisons {
-  import java.io.Reader
-  import JsonAST._
+  import java.io.{Reader, BufferedReader}
 
   import scalaz.std.option._
   import scalaz.syntax.applicative._
@@ -80,7 +77,16 @@ trait BaselineComparisons {
   }
 
   def readBaseline(reader: Reader): Map[TestPath, Statistics] = {
-    JsonParser.parse(reader) match {
+    val sb = new StringBuilder
+    val buf = new BufferedReader(reader)
+    var line = buf.readLine
+    while (line != null) {
+      sb.append(line)
+      line = buf.readLine
+    }
+    val str = sb.toString
+
+    JParser.parse(str) match {
       case JArray(tests) =>
         tests.foldLeft(Map[(List[String], Option[String]), Statistics]()) { case (acc, obj) =>
           (obj \? "stats") match {
@@ -116,7 +122,6 @@ trait BaselineComparisons {
 
 
   def createBaseline(result: Tree[(PerfTest, Option[Statistics])]): JValue = {
-    import JsonAST._
 
     def statsJson(stats: Statistics): List[JField] = List(
       JField("mean", JNum(stats.mean)),

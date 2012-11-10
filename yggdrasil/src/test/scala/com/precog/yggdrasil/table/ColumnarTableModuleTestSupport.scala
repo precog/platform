@@ -9,9 +9,6 @@ import com.precog.common.json._
 import akka.actor.ActorSystem
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
 
 import scala.annotation.tailrec
 
@@ -41,7 +38,7 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
         from match {
           case jv #:: xs =>
             val withIdsAndValues = jv.flattenWithPath.foldLeft(into) {
-              case (acc, (jpath, JNothing)) => acc
+              case (acc, (jpath, JUndefined)) => acc
               case (acc, (jpath, v)) =>
                 val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
                 val ref = ColumnRef(CPath(jpath), ctype)
@@ -78,11 +75,11 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
                     col(sliceIndex) = s
                     (defined + sliceIndex, col)
                   
-                  case JArray(Nil)  => 
+                  case JArray(Nil) => 
                     val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
                     (defined + sliceIndex, col)
   
-                  case JObject(Nil) => 
+                  case JObject(_) => 
                     val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
                     (defined + sliceIndex, col)
   
@@ -94,8 +91,6 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
                 acc + (ref -> pair)
             }
 
-            //println("Computed " + withIdsAndValues)
-  
             buildColArrays(xs, withIdsAndValues, sliceIndex + 1)
   
           case _ => (into, sliceIndex)
