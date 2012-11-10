@@ -46,9 +46,7 @@ import java.nio.ByteBuffer
 import collection.mutable.{Buffer, ListBuffer}
 import collection.JavaConversions._
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -312,12 +310,12 @@ object ChownTools extends Command with YggUtilsCommon {
     descs.foreach {
       case (f, proj) =>
         val pd = new File(f, projectionDescriptor)
-        val output = pretty(render(proj.serialize))
+        val output = proj.serialize.renderPretty
         if(dryrun) {
           println("Replacing %s with\n%s".format(pd, output)) 
         } else {
           IOUtils.safeWriteToFile(output, pd) except {
-            case e => println("Error update: %s - %s".format(pd, e)); IO(())
+            case e => println("Error update: %s - %s".format(pd, e)); IO(PrecogUnit)
           } unsafePerformIO
         }
     }
@@ -453,7 +451,7 @@ object KafkaTools extends Command {
       codec.toEvent(msg.message) match {
         case EventMessage(EventId(pid, sid), Event(path, apiKey, data, _)) =>
           println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s".format(i+1, pid, sid, path, apiKey))
-          println(pretty(render(data)))
+          println(data.renderPretty)
         case _ =>
       }
     }
@@ -466,7 +464,7 @@ object KafkaTools extends Command {
       codec.toEvent(msg.message) match {
         case EventMessage(EventId(pid, sid), Event(path, apiKey, data, _)) =>
           println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s".format(i+1, pid, sid, path, apiKey))
-          println(pretty(render(data)))
+          println(data.renderPretty)
         case _ =>
       }
     }
@@ -516,7 +514,7 @@ object ZookeeperTools extends Command {
         }
         
         println("Loading initial checkpoint: " + newCheckpoint)
-        JsonParser.parse(newCheckpoint).validated[YggCheckpoint] match {
+        JParser.parse(newCheckpoint).validated[YggCheckpoint] match {
           case Success(_) =>
             if (! client.exists(path)) {
               client.createPersistent(path, true)
@@ -532,7 +530,7 @@ object ZookeeperTools extends Command {
     }
     config.relayAgentUpdate.foreach { 
       case (path, data) =>
-        JsonParser.parse(data).validated[EventRelayState] match {
+        JParser.parse(data).validated[EventRelayState] match {
           case Success(_) =>
             if (! client.exists(path)) {
               client.createPersistent(path, true)
@@ -663,7 +661,7 @@ object IngestTools extends Command {
   def getJsonAt(path: String, client: ZkClient): Option[JValue] = {
     val bytes = client.readData(path).asInstanceOf[Array[Byte]]
     if(bytes != null && bytes.length != 0) {
-      Some(JsonParser.parse(new String(bytes)))
+      Some(JParser.parse(new String(bytes)))
     } else {
       None
     }
@@ -753,8 +751,8 @@ object ImportTools extends Command with Logging {
       config.input.foreach {
         case (db, input) =>
           logger.info("Inserting batch: %s:%s".format(db, input))
-          val reader = new FileReader(new File(input))
-          val events = JsonParser.parse(reader).children.map { child =>
+          val result = JParser.parseFromFile(new File(input))
+          val events = result.valueOr(e => throw e).children.map { child =>
             EventMessage(EventId(pid, sid.getAndIncrement), Event(Path(db), config.apiKey, child, Map.empty))
           }
           
@@ -762,7 +760,7 @@ object ImportTools extends Command with Logging {
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
               logger.info("Saving batch " + id + " of size " + batch.size)
-              Await.result(storage.storeBatch(batch), Duration(300, "seconds"))
+              Await.result(storage.storeBatch(batch.toSeq), Duration(300, "seconds"))
               logger.info("Batch saved")
             }
           }
@@ -817,7 +815,7 @@ object CSVTools extends Command {
 
   def process(config: Config) {
     CSVToJSONConverter.convert(config.input, config.delimeter, config.teaseTimestamps, config.verbose).foreach {
-      case jval => println(compact(render(jval)))
+      case jval => println(jval.renderCompact)
     }
   }
 
@@ -916,7 +914,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
     } yield {
       result match {
         case Some(apiKey) =>
-          println("Successfully created API key: \n" + pretty(render(apiKey.serialize(APIKeyRecord.apiKeyRecordDecomposer))))
+          println("Successfully created API key: \n" + apiKey.serialize(APIKeyRecord.apiKeyRecordDecomposer).renderPretty)
 
         case None =>
           sys.error("Something went silently wrong in API key or grant creation or update, please investigate.")
@@ -985,7 +983,7 @@ object CSVToJSONConverter {
 
   def parse(s: String, ts: Boolean = false, verbose: Boolean = false): JValue = {
     try {
-      JsonParser.parse(s)
+      JParser.parse(s)
     } catch {
       case ex =>
         s match {

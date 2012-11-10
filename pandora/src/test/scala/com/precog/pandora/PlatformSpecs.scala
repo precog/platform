@@ -57,7 +57,6 @@ import akka.util.duration._
 import java.io.File
 
 import blueeyes.json._
-import JsonAST._
 
 import org.slf4j.LoggerFactory
 

@@ -19,10 +19,7 @@
  */
 package com.precog.ingest
 
-import _root_.blueeyes.json.JsonAST._
-import _root_.blueeyes.json.JPath
-import _root_.blueeyes.json.JPathField
-import _root_.blueeyes.json.Printer._
+import _root_.blueeyes.json._
 
 package object service {
   def cleanPath(string: String): String = "/" + string.split("/").map(_.trim).filter(_.length > 0).mkString("/")

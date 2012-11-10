@@ -28,10 +28,10 @@ trait FileOps {
   def exists(src: File): IO[Boolean]
 
   def rename(src: File, dest: File): IO[Boolean]
-  def copy(src: File, dest: File): IO[Unit]
+  def copy(src: File, dest: File): IO[PrecogUnit]
 
   def read(src: File): IO[String]
-  def write(dest: File, content: String): IO[Unit]
+  def write(dest: File, content: String): IO[PrecogUnit]
 
   def mkdir(dir: File): IO[Boolean]
 }

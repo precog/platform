@@ -24,8 +24,7 @@ import blueeyes._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
+import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.persistence.cache._
 

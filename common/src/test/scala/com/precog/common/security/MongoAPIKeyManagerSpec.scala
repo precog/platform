@@ -20,6 +20,8 @@
 package com.precog.common
 package security
 
+import com.mongodb.{Mongo => TGMongo}
+
 import org.specs2.execute.Result
 import org.specs2.mutable.{After, Specification}
 import org.specs2.specification._
@@ -32,25 +34,27 @@ import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
 
 import blueeyes.bkka.AkkaDefaults
+import blueeyes.concurrent.test.FutureMatchers
 import blueeyes.persistence.mongo._
 
-import blueeyes.json.JsonAST
-import blueeyes.json.JsonParser
-import blueeyes.json.Printer
+import blueeyes.json._
 
 import org.streum.configrity._
 
+import org.slf4j.LoggerFactory
+
 import scalaz._
 
-object MongoAPIKeyManagerSpec extends Specification {
- 
-
+class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport with FutureMatchers {
+  sequential
   val timeout = Duration(30, "seconds")
+
+  lazy val logger = LoggerFactory.getLogger("com.precog.common.security.MongoAPIKeyManagerSpec")
 
   "mongo API key manager" should {
     "find API key present" in new apiKeyManager { 
-
-      lazy val result = Await.result(apiKeyManager.findAPIKey(root.tid), timeout)
+      logger.debug("Starting test run")
+      val result = Await.result(apiKeyManager.findAPIKey(root.tid), timeout)
 
       result must beLike {
         case Some(APIKeyRecord(_,tid,_,_)) => tid must_== root.tid
@@ -124,24 +128,54 @@ object MongoAPIKeyManagerSpec extends Specification {
     val cnt = new java.util.concurrent.atomic.AtomicLong
   }
 
-  class apiKeyManager extends After {
+  trait apiKeyManager extends After {
+    import MongoAPIKeyManagerSpec.dbId
     val defaultActorSystem = ActorSystem("apiKeyManagerTest")
     implicit val execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
 
-    val mongo = new MockMongo
-    val apiKeyManager = new MongoAPIKeyManager(mongo, mongo.database("test_v1"), MongoAPIKeyManagerSettings.defaults)
+    val dbName = "test_v1_" + dbId.getAndIncrement()
+    val testDB = try {
+      mongo.database(dbName)
+    } catch {
+      case t => logger.error("Error during DB setup: " + t); throw t
+    }
+    val apiKeyManager = new MongoAPIKeyManager(mongo, testDB, MongoAPIKeyManagerSettings.defaults)
 
     val to = Duration(30, "seconds")
   
     val notFoundAPIKeyID = "NOT-GOING-TO-FIND"
+
+    logger.debug("Starting base setup")
 
     val root = Await.result(apiKeyManager.newAPIKey("root", "", Set.empty), to)
     val child1 = Await.result(apiKeyManager.newAPIKey("child1", root.tid, Set.empty), to)
     val child2 = Await.result(apiKeyManager.newAPIKey("child2", root.tid, Set.empty), to)
     val grantChild1 = Await.result(apiKeyManager.newAPIKey("grandChild1", child1.tid, Set.empty), to)
 
-    def after = { 
+    // wait until the keys appear in the DB (some delay between insert request and actor insert)
+    def waitForAppearance(key: APIKeyRecord) {
+      while (Await.result(apiKeyManager.findAPIKey(key.tid), to) == None) {
+        logger.debug("Waiting for " + key.name)
+        Thread.sleep(100)
+      }
+    }
+
+    waitForAppearance(root)
+    waitForAppearance(child1)
+    waitForAppearance(child2)
+    waitForAppearance(grantChild1)
+
+    logger.debug("Base setup complete")
+
+    def after = {
+      logger.debug("Cleaning up run for " + dbName)
+      // Wipe the DB out
+      realMongo.dropDatabase(dbName)
       defaultActorSystem.shutdown 
     }
   }
+}
+
+object MongoAPIKeyManagerSpec {
+  val dbId = new java.util.concurrent.atomic.AtomicInteger
 }

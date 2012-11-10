@@ -33,7 +33,7 @@ import TransSpecModule._
 
 import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
-import blueeyes.json.JsonAST._
+
 import org.apache.commons.collections.primitives.ArrayIntList
 import org.joda.time.DateTime
 import com.google.common.io.Files
@@ -44,7 +44,7 @@ import org.apache.jdbm.DBMaker
 import java.io.File
 import java.util.SortedMap
 
-import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.{BitSet, BitSetUtil, IOUtils, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
 import scala.collection.mutable
@@ -100,7 +100,7 @@ trait ColumnarTableModule[M[+_]]
   type TableCompanion <: ColumnarTableCompanion
   case class TableMetrics(startCount: Int, sliceTraversedCount: Int)
 
-  def newScratchDir(): File = Files.createTempDir()
+  def newScratchDir(): File = IOUtils.createTmpDir("ctmscratch").unsafePerformIO
   def jdbmCommitInterval: Long = 200000l
 
   implicit def liftF1(f: F1) = new F1Like {
@@ -152,6 +152,11 @@ trait ColumnarTableModule[M[+_]]
     def constDate(v: collection.Set[CDate]): Table =  {
       val column = ArrayDateColumn(v.map(_.value).toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
+    }
+
+    def constArray[A: CValueType](v: collection.Set[CArray[A]]): Table = {
+      val column = ArrayHomogeneousArrayColumn(v.map(_.value).toArray(CValueType[A].manifest.arrayManifest))
+      Table(Slice(Map(ColumnRef(CPath.Identity, CArrayType(CValueType[A])) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
     def constNull: Table = 
@@ -220,10 +225,10 @@ trait ColumnarTableModule[M[+_]]
           case class Boundary(prevSlice: Slice, prevStartIdx: Int) extends CollapseState
           case object InitialCollapse extends CollapseState
 
-          def genComparator(sl1: Slice, sl2: Slice) = Slice.rowComparatorFor(sl1, sl2) {
+          def genComparator(sl1: Slice, sl2: Slice) = Slice.rowComparatorFor(sl1, sl2) { slice =>
             // only need to compare identities (field "0" of the sorted table) between projections
             // TODO: Figure out how we might do this directly with the identitySpec
-            slice => slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(CPathField("0") :: Nil) }).toList.sorted
+            slice.columns.keys collect { case ColumnRef(path, _) if path.nodes.startsWith(CPathField("0") :: Nil) => path }
           }
           
           def boundaryCollapse(prevSlice: Slice, prevStart: Int, curSlice: Slice): (BitSet, Int) = {
@@ -933,7 +938,7 @@ trait ColumnarTableModule[M[+_]]
     //  }
     //}
 
-    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], sortedByIdentities: Boolean = false, size: TableSize = UnknownSize) {
+    case class NodeSubset(node: MergeNode, table: Table, idTrans: TransSpec1, targetTrans: Option[TransSpec1], groupKeyTrans: GroupKeyTrans, groupKeyPrefix: Seq[TicVar], sortedByIdentities: Boolean = false, size: TableSize) {
       def sortedOn = groupKeyTrans.alignTo(groupKeyPrefix).prefixTrans(groupKeyPrefix.size)
 
       def groupId = node.binding.groupId
@@ -1417,7 +1422,7 @@ trait ColumnarTableModule[M[+_]]
         //sjson <- sorted.toJson
         //_ = println("post-sort-victim " + victim.groupId + ": " + sjson.mkString("\n"))
       } yield {
-        BorgResult(sorted, newOrder, Set(victim.node.binding.groupId), sorted = true)
+        BorgResult(sorted, newOrder, Set(victim.node.binding.groupId), sorted.size, sorted = true)
       }
     }
 
@@ -1620,7 +1625,7 @@ trait ColumnarTableModule[M[+_]]
                 cogrouped,
                 leftJoinable.groupKeys ++ neededRight,
                 leftJoinable.groups union rightJoinable.groups,
-                UnknownSize,
+                cogrouped.size,
                 sorted = false
               )
             )
@@ -1714,10 +1719,11 @@ trait ColumnarTableModule[M[+_]]
       def cross2(left: BorgResult, right: BorgResult): BorgResult = {
         val omniverseTrans = crossAllTrans(left.groupKeys.size, right.groupKeys.size)
 
-        BorgResult(left.table.cross(right.table)(omniverseTrans),
+        val crossed = left.table.cross(right.table)(omniverseTrans)
+        BorgResult(crossed,
                    left.groupKeys ++ right.groupKeys,
                    left.groups ++ right.groups,
-                   UnknownSize, sorted = false)
+                   crossed.size, sorted = false)
       }
 
       borgResults.reduceLeft(cross2)
@@ -2038,10 +2044,10 @@ trait ColumnarTableModule[M[+_]]
             val SlicePosition(lpos0, lkstate, lkey, lhead, ltail) = leftPosition
             val SlicePosition(rpos0, rkstate, rkey, rhead, rtail) = rightPosition
 
-            val comparator = Slice.rowComparatorFor(lkey, rkey) { slice => 
+            val comparator = Slice.rowComparatorFor(lkey, rkey) {
               // since we've used the key transforms, and since transforms are contracturally
               // forbidden from changing slice size, we can just use all
-              slice.columns.keys.toList.sorted
+              _.columns.keys map (_.selector)
             }
 
             // the inner tight loop; this will recur while we're within the bounds of
@@ -2560,8 +2566,10 @@ trait ColumnarTableModule[M[+_]]
 
       def stepPartition(head: Slice, spanStart: Int, tail: StreamT[M, Slice]): StreamT[M, Slice] = {
         val comparatorGen = (s: Slice) => {
-          val rowComparator = Slice.rowComparatorFor(head, s) {
-            (s0: Slice) => s0.columns.keys.collect({ case ref @ ColumnRef(CPath(CPathField("0"), _ @ _*), _) => ref }).toList.sorted
+          val rowComparator = Slice.rowComparatorFor(head, s) { s0 =>
+            s0.columns.keys collect {
+              case ColumnRef(path @ CPath(CPathField("0"), _ @ _*), _) => path
+            }
           }
 
           (i: Int) => rowComparator.compare(spanStart, i)

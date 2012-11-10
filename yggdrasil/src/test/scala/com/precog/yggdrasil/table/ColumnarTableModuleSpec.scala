@@ -29,8 +29,6 @@ import com.precog.yggdrasil.util._
 import akka.actor.ActorSystem
 import akka.dispatch._
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
 import org.slf4j.{LoggerFactory, MDC}
 
 import scala.annotation.tailrec
@@ -86,7 +84,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   }
   
   trait TableCompanion extends ColumnarTableCompanion {
-    def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize) = new Table(slices, size)
+    def apply(slices: StreamT[M, Slice], size: TableSize) = new Table(slices, size)
 
     def singleton(slice: Slice) = new Table(slice :: StreamT.empty[M, Slice], ExactSize(1))
 
@@ -102,27 +100,28 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "verify bijection from static JSON" in {
       val sample: List[JValue] = List(
         JObject(
-          JField("key", JArray(JNum(-1L) :: JNum(0L) :: Nil)) ::
-          JField("value", JNull) :: Nil
+          JField("key", JArray(JNum(-1L), JNum(0L))),
+          JField("value", JNull)
         ), 
         JObject(
-          JField("key", JArray(JNum(-3090012080927607325l) :: JNum(2875286661755661474l) :: Nil)) ::
-          JField("value", JObject(List(
-            JField("q8b", JArray(List(
+          JField("key", JArray(JNum(-3090012080927607325l), JNum(2875286661755661474l))),
+          JField("value", JObject(
+            JField("q8b", JArray(
               JNum(6.615224799778253E307d), 
-              JArray(List(JBool(false), JNull, JNum(-8.988465674311579E307d))), JNum(-3.536399224770604E307d)))), 
-            JField("lwu",JNum(-5.121099465699862E307d))))
-          ) :: Nil
+              JArray(JBool(false), JNull, JNum(-8.988465674311579E307d), JNum(-3.536399224770604E307d))
+            )), 
+            JField("lwu",JNum(-5.121099465699862E307d))
+          ))
         ), 
         JObject(
-          JField("key", JArray(JNum(-3918416808128018609l) :: JNum(-1L) :: Nil)) ::
-          JField("value", JNum(-1.0)) :: Nil
+          JField("key", JArray(JNum(-3918416808128018609l), JNum(-1L))),
+          JField("value", JNum(-1.0))
         )
       )
 
       val dataset = fromJson(sample.toStream)
       val results = dataset.toJson
-      results.copoint must containAllOf(sample).only 
+      results.copoint must containAllOf(sample).only
     }
 
     "verify bijection from JSON" in checkMappings(this)
@@ -138,7 +137,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "handle special cases of renderJson" >> {
       "undefined at beginning of array" >> {
         testRenderJson(JArray(
-          JNothing ::
+          JUndefined ::
           JNum(1) ::
           JNum(2) :: Nil) :: Nil)
       }
@@ -146,20 +145,20 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "undefined in middle of array" >> {
         testRenderJson(JArray(
           JNum(1) ::
-          JNothing ::
+          JUndefined ::
           JNum(2) :: Nil) :: Nil)
       }
       
       "fully undefined array" >> {
         testRenderJson(JArray(
-          JNothing ::
-          JNothing ::
-          JNothing :: Nil) :: Nil)
+          JUndefined ::
+          JUndefined ::
+          JUndefined :: Nil) :: Nil)
       }
       
       "undefined at beginning of object" >> {
         testRenderJson(JObject(
-          JField("foo", JNothing) ::
+          JField("foo", JUndefined) ::
           JField("bar", JNum(1)) ::
           JField("baz", JNum(2)) :: Nil) :: Nil)
       }
@@ -167,28 +166,38 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "undefined in middle of object" >> {
         testRenderJson(JObject(
           JField("foo", JNum(1)) ::
-          JField("bar", JNothing) ::
+          JField("bar", JUndefined) ::
           JField("baz", JNum(2)) :: Nil) :: Nil)
       }
       
       "fully undefined object" >> {
-        testRenderJson(JObject(
-          JField("foo", JNothing) ::
-          JField("bar", JNothing) ::
-          JField("baz", JNothing) :: Nil) :: Nil)
+        //testRenderJson(JObject(
+        //  JField("foo", JUndefined) ::
+        //  JField("bar", JUndefined) ::
+        //  JField("baz", JUndefined) :: Nil) :: Nil)
+        testRenderJson(
+          JObject(
+            Map(
+              "foo" -> JUndefined,
+              "bar" -> JUndefined,
+              "baz" -> JUndefined
+            )
+          ) :: Nil
+        )
       }
       
       "undefined row" >> {
         testRenderJson(
           JObject(
-            JField("foo", JNothing) ::
-            JField("bar", JNothing) ::
-            JField("baz", JNothing) :: Nil) ::
+            JField("foo", JUndefined) ::
+            JField("bar", JUndefined) ::
+            JField("baz", JUndefined) :: Nil) ::
           JNum(42) :: Nil)
       }
       
       "check utf-8 encoding" in check { str: String =>
-        testRenderJson(JString(str) :: Nil)
+        val s = str.toList.map((c: Char) => if (c < ' ') ' ' else c).mkString
+        testRenderJson(JString(s) :: Nil)
       }.set(minTestsOk -> 20000, workers -> Runtime.getRuntime.availableProcessors)
       
       "check long encoding" in check { ln: Long =>
@@ -197,30 +206,23 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     }
     
     def testRenderJson(seq: Seq[JValue]) = {
+      def arr(es: List[JValue]) = if (es.isEmpty) None else Some(JArray(es))
+
+      def minimizeItem(t: (String, JValue)) = minimize(t._2).map((t._1, _))
+
       def minimize(value: JValue): Option[JValue] = {
         value match {
-          case JObject(Nil)     => Some(JObject(Nil))
-          
-          case JObject(fields)  => {
-            val object2 = JObject(fields flatMap { case JField(k, v) => minimize(v) map { JField(k, _) } })
-            if (object2 == JObject(Nil))
-              None
-            else
-              Some(object2)
-          }
-          
-          case JArray(Nil)      => Some(JArray(Nil))
-          
-          case JArray(elements) => {
-            val array2 = JArray(elements flatMap minimize)
-            if (array2 == JArray(Nil))
-              None
-            else
-              Some(array2)
-          }
-          
-          case JNothing => None
-          case value => Some(value)
+          case JObject(fields) => Some(JObject(fields.flatMap(minimizeItem)))
+
+          case JArray(Nil) => Some(JArray(Nil))
+
+          case JArray(elements) =>
+            val elements2 = elements.flatMap(minimize)
+            if (elements2.isEmpty) None else Some(JArray(elements2))
+
+          case JUndefined => None
+
+          case v => Some(v)
         }
       }
     
@@ -234,18 +236,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       
       val arrayM = strM map { body =>
         val input = "[%s]".format(body)
-        try {
-          JsonParser.parse(input)
-        } catch {
-          case t => {
-            println("####%s####".format(input))
-            for (i <- 0 until input.length) {
-              println(input.charAt(i): Int)
-            }
-            println("####")
-            throw t
-          }
-        }
+        JParser.parse(input)
       }
       
       val minimized = minimize(expected) getOrElse JArray(Nil)
@@ -508,13 +499,13 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
         GroupKeySpecSource(CPathField("ticc"), DerefObjectStatic(SourceValue.Single, CPathField("c"))))
 
       val transspec = GroupKeyTrans(Table.Universe.sources(keySpec))
-      val JArray(data) = JsonParser.parse("""[
+      val JArray(data) = JParser.parse("""[
         {"key": [1], "value": {"a": 12, "b": 7}},
         {"key": [2], "value": {"a": 42}},
         {"key": [1], "value": {"a": 13, "c": true}}
       ]""")
 
-      val JArray(expected) = JsonParser.parse("""[
+      val JArray(expected) = JParser.parse("""[
         {"000000": 12, "000001": 7},
         {"000000": 42},
         {"000000": 13, "000002": true}
@@ -715,13 +706,13 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
         ticvars("abc")
       )
 
-      val JArray(data) = JsonParser.parse("""[
+      val JArray(data) = JParser.parse("""[
         {"key": [1], "value": {"a": 12, "b": 7}},
         {"key": [2], "value": {"a": 42}},
         {"key": [1], "value": {"a": 13, "c": true}}
       ]""")
 
-      val JArray(expected) = JsonParser.parse("""[
+      val JArray(expected) = JParser.parse("""[
         {"000001": 12, "000002": 7},
         {"000001": 42},
         {"000001": 13, "000000": true}

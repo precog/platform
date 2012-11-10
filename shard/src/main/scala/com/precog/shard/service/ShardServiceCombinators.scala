@@ -26,8 +26,6 @@ import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.json._
-import blueeyes.json.JsonAST.JValue
-import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.DefaultSerialization._
 
 import akka.dispatch.Future
@@ -62,11 +60,9 @@ trait ShardServiceCombinators extends IngestServiceCombinators {
   private val Offset = """(0|[1-9][0-9]*)""".r
 
   private def getSortOn(request: HttpRequest[_]): Validation[String, List[CPath]] = {
-    import JsonAST._
-    import JsonParser.ParseException
     request.parameters.get('sortOn).filter(_ != null) map { paths =>
       try {
-        val jpaths = JsonParser.parse(paths)
+        val jpaths = JParser.parse(paths)
         jpaths match {
           case JArray(elems) =>
             Validation.success(elems collect { case JString(path) => CPath(path) })

@@ -25,6 +25,8 @@ import metadata._
 import com.precog.common._
 import com.precog.common.security._
 
+import com.precog.util.PrecogUnit
+
 import akka.actor.{ActorRef,ActorSystem,Props}
 import akka.dispatch.{Await,Dispatcher,ExecutionContext,Future,Promise, Futures}
 import akka.pattern.ask
@@ -69,13 +71,13 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
 
       (for (ProjectionAcquired(projection) <- (shardSystemActor ? AcquireProjection(descriptor, false))) yield {
         logger.debug("  projection obtained")
-        (projection.asInstanceOf[Projection], new Release(IO(shardSystemActor ! ReleaseProjection(descriptor))))
+        (projection.asInstanceOf[Projection], new Release(IO { shardSystemActor ! ReleaseProjection(descriptor); PrecogUnit }))
       }) onFailure {
         case e => logger.error("Error acquiring projection: " + descriptor, e)
       }
     }
     
-    def storeBatch(msgs: Seq[EventMessage]): Future[Unit] = {
+    def storeBatch(msgs: Seq[EventMessage]): Future[PrecogUnit] = {
       implicit val storageTimeout: Timeout = Timeout(300 seconds)
 
       val result = Promise.apply[BatchComplete]
@@ -90,6 +92,7 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
         _ = logger.debug("Sending metadata updates")
       } yield {
         shardSystemActor ! IngestBatchMetadata(complete.updatedProjections, checkpoint.messageClock, Some(checkpoint.offset))
+        PrecogUnit
       }
     }
   }

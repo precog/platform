@@ -54,7 +54,7 @@ import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer 
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import blueeyes.util.Clock
 
@@ -193,7 +193,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       createAPIKeyRaw(rootUID, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Invalid new API key request body" => ok
+            Some(JObject(elems)), _) if elems.contains("error") && elems("error").startsWith("Invalid new API key request body") => ok
       }}
     }
 
@@ -202,7 +202,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       createAPIKey(expiredUID, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString("Unable to create API key with expired permission"))))), _) => ok
+            Some(JObject(elems)), _) if elems.contains("error") && elems("error") == JString("Unable to create API key with expired permission") => ok
       }}
     }
 
@@ -211,7 +211,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       createAPIKey(cust1UID, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new API key: Requestor lacks permissions to give grants to API key" => ok
+            Some(JObject(elems)), _) if elems.contains("error") && elems("error").startsWith("Error creating new API key: Requestor lacks permissions to give grants to API key") => ok
       }}
     }
 
@@ -259,7 +259,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       createAPIKeyGrant(cust1UID, ReadPermission(Path("/user2/secret"), cust1UID, None)) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(List(JField("error", JString(msg))))), _) if msg startsWith "Error creating new grant: Requestor lacks permissions to give grants to API key" => ok
+            Some(JObject(elems)), _) if elems.contains("error") => ok
       }}
     }
     

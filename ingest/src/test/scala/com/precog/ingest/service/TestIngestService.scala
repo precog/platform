@@ -54,7 +54,7 @@ import blueeyes.core.http.MimeType
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 trait TestAPIKeys {
   import TestAPIKeyManager._

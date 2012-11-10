@@ -43,7 +43,7 @@ import _root_.kafka.api.FetchRequest
 import _root_.kafka.consumer.SimpleConsumer
 import _root_.kafka.message.MessageSet
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 import blueeyes.json.serialization.Decomposer
 import blueeyes.json.serialization.DefaultSerialization._
 

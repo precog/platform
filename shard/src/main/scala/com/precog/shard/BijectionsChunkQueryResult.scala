@@ -27,9 +27,7 @@ import java.nio.charset._
 
 import blueeyes.core.http.{ HttpResponse, HttpFailure }
 import blueeyes.core.data.{ Chunk, ByteChunk, Bijection, BijectionsChunkJson }
-import blueeyes.json.{ JsonAST, JsonParser, Printer }
-import blueeyes.json.JsonAST.{ JValue,  JArray  }
-import blueeyes.json.Printer.{ compact, render }
+import blueeyes.json.{ JArray, JParser, JValue }
 import blueeyes.json.serialization.DefaultSerialization._
 
 import akka.dispatch.{Await, Future}

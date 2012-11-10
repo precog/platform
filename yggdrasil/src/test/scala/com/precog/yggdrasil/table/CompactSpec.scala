@@ -27,7 +27,6 @@ import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 
 import scalaz.StreamT
 import scalaz.syntax.copointed._

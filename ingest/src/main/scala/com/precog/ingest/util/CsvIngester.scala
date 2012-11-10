@@ -19,8 +19,7 @@
  */
 package com.precog.ingest.util
 
-import blueeyes.json.JsonAST._
-
+import blueeyes.json._
 
 sealed trait CsvType {
   def apply(s: String): JValue
