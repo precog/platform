@@ -201,6 +201,9 @@ trait Binder extends parser.AST with Library {
           recursive + Error(d, UndefinedFunction(name))
         }
       }
+
+      case Cond(_, pred, left, right) =>
+        loop(pred, env) ++ loop(left, env) ++ loop(right, env)
       
       case Where(_, left, right) =>
         loop(left, env) ++ loop(right, env)

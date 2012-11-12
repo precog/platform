@@ -184,7 +184,13 @@ trait AST extends Phases {
           indent + "binding: " + d.binding.toString + "\n" +
           indent + "is-reduction: " + d.isReduction
       }
-      
+
+      case Cond(loc, pred, left, right) =>
+        indent + "type: cond\n" +
+          indent + "pred:\n" + prettyPrint(pred, level + 2) + "\n" +
+          indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
+          indent + "right:\n" + prettyPrint(right, level + 2)
+
       case Where(loc, left, right) => {
         indent + "type: where\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
@@ -486,6 +492,9 @@ trait AST extends Phases {
         naming && sizing && contents
       }
 
+      case (Cond(_, pred1, left1, right1), Cond(_, pred2, left2, right2)) =>
+        (pred1 equalsIgnoreLoc pred2) && (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+
       case (Where(_, left1, right1), Where(_, left2, right2)) => 
         (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
       
@@ -594,6 +603,9 @@ trait AST extends Phases {
 
       case Dispatch(_, name, actuals) =>
         name.hashCode + (actuals map { _.hashCodeIgnoreLoc } sum)
+
+      case Cond(_, pred, left, right) =>
+        "if".hashCode + pred.hashCodeIgnoreLoc + "then".hashCode + left.hashCodeIgnoreLoc + "else".hashCode + right.hashCodeIgnoreLoc
 
       case Where(_, left, right) =>
         left.hashCodeIgnoreLoc + "where".hashCode + right.hashCodeIgnoreLoc
@@ -820,6 +832,14 @@ trait AST extends Phases {
       def children = actuals.toList
     }
     
+    final case class Cond(loc: LineStream, pred: Expr, left: Expr, right: Expr) extends Expr {
+      val sym = 'cond
+
+      def form = 'if ~ pred ~ 'then ~ left ~ 'else ~ right
+
+      def children = pred :: left :: right :: Nil
+    }
+
     final case class Where(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val sym = 'where
     }

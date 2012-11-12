@@ -1181,6 +1181,29 @@ object ProvenanceComputationSpecs extends Specification
         }
       }
 
+      "If/Else" >> {
+        {
+          val tree = compileSingle("if (//bar union //baz) then //bar else //baz")
+          tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz")) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compileSingle("if //foo then //bar else //baz")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val tree = compileSingle("if //bar then //bar else //baz")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val tree = compileSingle("if //baz then //bar else //baz")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+      }
+
       "Where" >> {
         {
           val tree = compileSingle("(//foo where //foo.a = 10) union //baz")

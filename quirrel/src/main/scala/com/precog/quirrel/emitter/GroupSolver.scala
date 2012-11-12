@@ -89,6 +89,9 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     case d @ Dispatch(_, _, actuals) =>
       (actuals map inferBuckets).fold(Set[Error]()) { _ ++ _ }
     
+    case Cond(_, pred, left, right) =>
+      inferBuckets(pred) ++ inferBuckets(left) ++ inferBuckets(right)
+
     case Where(_, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
     
