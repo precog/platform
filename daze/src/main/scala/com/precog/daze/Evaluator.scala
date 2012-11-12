@@ -23,6 +23,7 @@ package daze
 import annotation.tailrec
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.table.ColumnarTableModuleConfig
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.util.IdSourceConfig
 import com.precog.util._
@@ -55,9 +56,9 @@ import scalaz.syntax.traverse._
 
 import scala.collection.immutable.Queue
 
-trait EvaluatorConfig extends IdSourceConfig {
+trait EvaluatorConfig /* {
   def maxSliceSize: Int
-}
+} */
 
 trait Evaluator[M[+_]] extends DAG
     with CrossOrdering
@@ -68,7 +69,6 @@ trait Evaluator[M[+_]] extends DAG
     with EvaluatorMethods[M]
     with ReductionFinder[M]
     with TableModule[M]        // TODO specific implementation
-    with ImplLibrary[M]
     with InfixLib[M]
     with UnaryLib[M]
     with BigDecimalOperations
@@ -89,7 +89,7 @@ trait Evaluator[M[+_]] extends DAG
   import constants._
   import TableModule._
 
-  type YggConfig <: EvaluatorConfig
+  type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig with EvaluatorConfig
   
   def withContext[A](f: Context => A): A = {
     f(new Context { })
@@ -262,6 +262,9 @@ trait Evaluator[M[+_]] extends DAG
             case n @ CNum(_) => Table.constDecimal(Set(n))
             
             case b @ CBoolean(_) => Table.constBoolean(Set(b))
+
+            case d @ CDate(_) => Table.constDate(Set(d))
+            case as @ CArray(_, CArrayType(elemType)) => Table.constArray(Set(as))(elemType)
             
             case CNull => Table.constNull
             
@@ -1036,7 +1039,7 @@ trait Evaluator[M[+_]] extends DAG
       listStagingPoints(queue3, addend map { _ :: acc } getOrElse acc)
     }
   }
-
+  
   // Takes a list of Splits, head is the current Split, which must be referenced.
   // The rest of the referenced Splits must be in the the list.
   private def referencesOnlySplit(parentSplits: List[dag.Split])(graph: DepGraph): Boolean = {
@@ -1053,6 +1056,131 @@ trait Evaluator[M[+_]] extends DAG
     val currentIsReferenced = parentSplits.headOption.map(referencedSplits.contains(_)).getOrElse(true)
 
     currentIsReferenced && (referencedSplits -- parentSplits).isEmpty
+  }
+  
+  private def findCommonality(nodes: Set[DepGraph]): Option[DepGraph] = {
+    @tailrec
+    def bfs(nodes: Seq[DepGraph], seen: Set[DepGraph]): Set[DepGraph] = {
+      val (inter, seen2) = nodes.foldLeft((Set[DepGraph](), seen)) {
+        case ((inter, seen), node) => {
+          if (seen contains node)
+            (inter + node, seen)
+          else
+            (inter, seen + node)
+        }
+      }
+      
+      if (!nodes.isEmpty && inter.isEmpty) {
+        val nodes2 = nodes flatMap enumerateParents
+        bfs(nodes2, seen2)
+      } else {
+        inter
+      }
+    }
+    
+    @tailrec
+    def loop(nodes: Set[DepGraph]): Option[DepGraph] = {
+      if (nodes.size <= 1) {
+        nodes.headOption
+      } else {
+        val target = nodes take 2
+        val nodes2 = nodes &~ target
+        
+        loop(bfs(target.toSeq, Set()) ++ nodes2)
+      }
+    }
+    
+    val commonality = if (nodes.size <= 1)
+      nodes.headOption
+    else
+      loop(nodes)
+    
+    val results = for {
+      n <- nodes
+      c <- commonality
+    } yield isTranspecable(n, c)
+    
+    if (results == Set(true))
+      commonality
+    else
+      None
+  }
+  
+  private def enumerateParents(node: DepGraph): Set[DepGraph] = node match {
+    case _: SplitParam | _: SplitGroup | _: Root => Set()
+    
+    case dag.New(_, parent) => Set(parent)
+    
+    case dag.Morph1(_, _, parent) => Set(parent)
+    case dag.Morph2(_, _, left, right) => Set(left, right)
+    
+    case dag.Distinct(_, parent) => Set(parent)
+    
+    case dag.LoadLocal(_, parent, _) => Set(parent)
+    
+    case Operate(_, _, parent) => Set(parent)
+    
+    case dag.Reduce(_, _, parent) => Set(parent)
+    case MegaReduce(_, _, parent) => Set(parent)
+    
+    case dag.Split(_, spec, _) => enumerateSpecParents(spec).toSet
+    
+    case IUI(_, _, left, right) => Set(left, right)
+    case Diff(_, left, right) => Set(left, right)
+    
+    case Join(_, _, _, left, right) => Set(left, right)
+    case dag.Filter(_, _, target, boolean) => Set(target, boolean)
+    
+    case Sort(parent, _) => Set(parent)
+    case SortBy(parent, _, _, _) => Set(parent)
+    case ReSortBy(parent, _) => Set(parent)
+    
+    case Memoize(parent, _) => Set(parent)
+  }
+
+  private def enumerateSpecParents(spec: BucketSpec): Set[DepGraph] = spec match {
+    case UnionBucketSpec(left, right) => enumerateSpecParents(left) ++ enumerateSpecParents(right)
+    case IntersectBucketSpec(left, right) => enumerateSpecParents(left) ++ enumerateSpecParents(right)
+    
+    case dag.Group(_, target, child) => enumerateSpecParents(child) + target
+    
+    case UnfixedSolution(_, target) => Set(target)
+    case dag.Extra(target) => Set(target)
+  }
+  
+  private def isTranspecable(to: DepGraph, from: DepGraph): Boolean = to match {
+    case `from` => true
+    
+    case Join(_, Eq, _, left, _: Root) => isTranspecable(left, from)
+    case Join(_, Eq, _, _: Root, right) => isTranspecable(right, from)
+    
+    case Join(_, NotEq, _, left, _: Root) => isTranspecable(left, from)
+    case Join(_, NotEq, _, _: Root, right) => isTranspecable(right, from)
+    
+    case Join(_, instructions.WrapObject, _, _: Root, right) => isTranspecable(right, from)
+    case Join(_, instructions.DerefObject, _, left, _: Root) => isTranspecable(left, from)
+    case Join(_, instructions.DerefMetadata, _, left, _: Root) => isTranspecable(left, from)
+    case Join(_, instructions.DerefArray, _, left, _: Root) => isTranspecable(left, from)
+    case Join(_, instructions.ArraySwap, _, left, _: Root) => isTranspecable(left, from)
+    
+    case Join(_, instructions.JoinObject, _, left, _: Root) => isTranspecable(left, from)
+    case Join(_, instructions.JoinObject, _, _: Root, right) => isTranspecable(right, from)
+    case Join(_, instructions.JoinArray, _, left, _: Root) => isTranspecable(left, from)
+    case Join(_, instructions.JoinArray, _, _: Root, right) => isTranspecable(right, from)
+    
+    case Join(_, op, _, left, _: Root) => op2ForBinOp(op).isDefined && isTranspecable(left, from)
+    case Join(_, op, _, _: Root, right) => op2ForBinOp(op).isDefined && isTranspecable(right, from)
+    
+    case Join(_, _, IdentitySort | ValueSort(_), left, right) =>
+      isTranspecable(left, from) && isTranspecable(right, from)
+    
+    case dag.Filter(_, IdentitySort | ValueSort(_), left, right) =>
+      isTranspecable(left, from) && isTranspecable(right, from)
+    
+    case Operate(_, _, parent) =>
+      isTranspecable(parent, from)
+    
+    case _ => false
   }
   
   private def findCommonIds(left: BucketSpec, right: BucketSpec): Set[Int] =
@@ -1087,64 +1215,6 @@ trait Evaluator[M[+_]] extends DAG
   
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
     left.identities zip right.identities takeWhile disjunctiveEquals length
-
-  private def buildChains(graph: DepGraph): Set[List[DepGraph]] = {
-    val parents = enumerateParents(graph)
-    
-    val recursive: Set[List[DepGraph]] = graph match {
-      case _: dag.IUI => Set()
-      case _: dag.Diff => Set()
-      case _: dag.Split => Set()
-      case _: dag.Distinct => Set()
-      case _: dag.Morph1 => Set()
-      case _: dag.Morph2 => Set()
-      case _: dag.New => Set()
-      case _: dag.Reduce => Set()
-      case _: dag.MegaReduce => Set()
-      case _: dag.Sort => Set()
-      case _: dag.SortBy => Set()
-      case _: dag.ReSortBy => Set()
-      case _: dag.Memoize => Set()
-      case _ => parents flatMap buildChains map { graph :: _ }
-    }
-    
-    if (!parents.isEmpty && recursive.isEmpty) Set(graph :: Nil) else recursive
-  }
-  
-  private def enumerateParents(graph: DepGraph): Set[DepGraph] = graph match {
-    case dag.SplitParam(_, _) => Set()
-    case dag.SplitGroup(_, _, _) => Set()
-    case dag.Root(_, _) => Set()
-    case dag.New(_, parent) => Set(parent)
-    case dag.Morph1(_, _, parent) => Set(parent)
-    case dag.Morph2(_, _, left, right) => Set(left, right)
-    case dag.Distinct(_, parent) => Set(parent)
-    case dag.LoadLocal(_, parent, _) => Set(parent)
-    case dag.Operate(_, _, parent) => Set(parent)
-    case dag.Reduce(_, _, parent) => Set(parent)
-    case dag.MegaReduce(_, _, parent) => Set(parent)
-    case dag.Split(_, spec, _) => enumerateGraphs(spec)
-    case dag.IUI(_, _, left, right) => Set(left, right)
-    case dag.Diff(_, left, right) => Set(left, right)
-    case dag.Join(_, _, _, left, right) => Set(left, right)
-    case dag.Filter(_, _, target, boolean) => Set(target, boolean)
-    case dag.Sort(parent, _) => Set(parent)
-    case dag.SortBy(parent, _, _, _) => Set(parent)
-    case dag.ReSortBy(parent, _) => Set(parent)
-    case dag.Memoize(parent, _) => Set(parent)
-  }
-  
-  private def findCommonality(forest: Set[DepGraph]): Option[DepGraph] = {
-    if (forest.size == 1) {
-      Some(forest.head)
-    } else {
-      val sharedPrefixReversed = forest flatMap buildChains map { _.reverse } reduceOption { (left, right) =>
-        left zip right takeWhile { case (a, b) => a == b } map { _._1 }
-      }
-
-      sharedPrefixReversed flatMap { _.lastOption }
-    }
-  }
 
   private def enumerateGraphs(forest: BucketSpec): Set[DepGraph] = forest match {
     case UnionBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)

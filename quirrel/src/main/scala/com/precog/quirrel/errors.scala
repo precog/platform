@@ -131,29 +131,33 @@ case class UnusedTicVariable(id: TicId) extends ErrorType {
 
 // intended to be a warning
 case class UnableToSolveCriticalCondition(id: String) extends ErrorType {
-  override def toString = "unable to solve critical condition for function parameter %s".format(id)
+  override def toString = "unable to solve for variable %s".format(id)
 }
 
 case class UnableToDetermineDefiningSet(id: String) extends ErrorType {
-  override def toString = "unable to solve defining set for function parameter %s".format(id)
+  override def toString = "unable to solve defining set for variable %s".format(id)
 }
 
-case object ConstraintsWithinInnerScope extends ErrorType {
+case object ConstraintsWithinInnerSolve extends ErrorType {
   override def toString = "cannot solve group set for constraints within a nested solve"
 }
 
 case object GroupSetInvolvingMultipleParameters extends ErrorType {
-  override def toString = "cannot solve group set involving multiple function parameters"
+  override def toString = "cannot solve group set involving multiple variables"
 }
 
 case class InseparablePairedTicVariables(vars: Set[TicId]) extends ErrorType {
-  override def toString = "cannot separate function parameters %s for group set".format(vars mkString ", ")
+  override def toString = "cannot separate variables %s for group set".format(vars mkString ", ")
 }
 
 case class UnableToSolveTicVariable(tv: TicId) extends ErrorType {
-  override def toString = "cannot solve function parameter %s".format(tv)
+  override def toString = "cannot solve variable %s".format(tv)
 }
 
 case object GroupTargetSetNotIndependent extends ErrorType {
   override def toString = "dependent target set for group conditional"
+}
+
+case object InvalidGroupConstraint extends ErrorType {
+  override def toString = "solve constraint lacking variables"
 }

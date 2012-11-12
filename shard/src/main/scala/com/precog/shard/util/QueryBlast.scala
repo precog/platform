@@ -36,8 +36,7 @@ import blueeyes.core.http.MimeTypes._
 import blueeyes.core.data.BijectionsChunkJson._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 
-import blueeyes.json.Printer
-import blueeyes.json.JsonAST.{JObject, JValue, JString}
+import blueeyes.json.{JObject, JValue, JString}
 
 import java.lang.{Thread, Object}
 

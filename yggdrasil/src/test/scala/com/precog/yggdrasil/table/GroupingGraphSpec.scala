@@ -21,7 +21,6 @@ package com.precog.yggdrasil
 package table
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 import com.precog.common.json._
 
 import org.specs2.mutable._
@@ -314,13 +313,13 @@ trait GroupingGraphSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Sp
           GroupKeySpecSource(CPathField("ticc"), DerefObjectStatic(SourceValue.Single, CPathField("c"))))
 
         val transspec = GroupKeyTrans(Table.Universe.sources(keySpec))
-        val JArray(data) = JsonParser.parse("""[
+        val JArray(data) = JParser.parse("""[
           {"key": [1], "value": {"a": 12, "b": 7}},
           {"key": [2], "value": {"a": 42}},
           {"key": [1], "value": {"a": 13, "c": true}}
         ]""")
 
-        val JArray(expected) = JsonParser.parse("""[
+        val JArray(expected) = JParser.parse("""[
           {"000000": 12, "000001": 7},
           {"000000": 42},
           {"000000": 13, "000002": true}
@@ -340,13 +339,13 @@ trait GroupingGraphSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Sp
           ticvars("abc")
         )
 
-        val JArray(data) = JsonParser.parse("""[
+        val JArray(data) = JParser.parse("""[
           {"key": [1], "value": {"a": 12, "b": 7}},
           {"key": [2], "value": {"a": 42}},
           {"key": [1], "value": {"a": 13, "c": true}}
         ]""")
 
-        val JArray(expected) = JsonParser.parse("""[
+        val JArray(expected) = JParser.parse("""[
           {"000001": 12, "000002": 7},
           {"000001": 42},
           {"000001": 13, "000000": true}

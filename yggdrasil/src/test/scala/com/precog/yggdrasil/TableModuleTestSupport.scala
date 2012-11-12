@@ -23,10 +23,7 @@ import table._
 import com.precog.common.VectorCase
 
 import akka.dispatch.Future
-import blueeyes.json.JPath
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 import blueeyes.concurrent.test.FutureMatchers
 
 import scalaz.{Ordering => _, NonEmptyList => NEL, _}

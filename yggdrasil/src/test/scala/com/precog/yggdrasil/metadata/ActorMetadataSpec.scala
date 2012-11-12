@@ -27,10 +27,7 @@ import com.precog.common.json._
 import com.precog.util._
 
 import blueeyes.concurrent.test._
-import blueeyes.json.JPath
-import blueeyes.json.JPathField
-import blueeyes.json.JPathIndex
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import akka.actor._
 import akka.pattern.ask

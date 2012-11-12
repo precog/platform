@@ -35,7 +35,7 @@ import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, Bijec
 import blueeyes.health.metrics.{eternity}
 
 import blueeyes.core.http._
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 

@@ -26,7 +26,7 @@ import akka.util.Duration
 
 import java.io.File
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 
 object IngestTest {

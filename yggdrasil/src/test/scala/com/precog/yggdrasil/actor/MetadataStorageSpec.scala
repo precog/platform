@@ -47,7 +47,7 @@ class MetadataStorageSpec extends Specification {
 
   val inputMetadata = """{
   "metadata":[],
-  "checkpoint":[[1,1]]
+  "checkpoint":[[1, 1]]
 }"""
 
   val output = inputMetadata
@@ -56,7 +56,7 @@ class MetadataStorageSpec extends Specification {
   val archive = IOUtils.createTmpDir("MetadataStorageSpec-archive").unsafePerformIO
 
   def cleanupBaseDir = Step {
-    IOUtils.recursiveDelete(base)
+    IOUtils.recursiveDelete(base).unsafePerformIO
   }
 
   override def map(fs: => Fragments) = super.map(fs) ^ cleanupBaseDir
@@ -121,7 +121,7 @@ class MetadataStorageSpec extends Specification {
         _ <- ms.updateMetadata(desc, testRecord)
         result <- ms.getMetadata(desc)
       } yield {
-        result.serialize must_== JsonParser.parse(inputMetadata)
+        result.serialize must_== JParser.parse(inputMetadata)
       }
 
       io.unsafePerformIO
@@ -144,9 +144,10 @@ object TestFileOps extends FileOps {
     IO(true)
   }
   
-  def copy(src: File, dest: File): IO[Unit] = IO {
+  def copy(src: File, dest: File): IO[PrecogUnit] = IO {
     messages += "copy %s to %s".format(src, dest)
     backingStore += (dest -> backingStore(src))
+    PrecogUnit
   }
 
   def read(src: File): IO[String] = IO {
@@ -154,20 +155,22 @@ object TestFileOps extends FileOps {
     backingStore(src)
   }
   
-  def write(dest: File, content: String): IO[Unit] = IO {
+  def write(dest: File, content: String): IO[PrecogUnit] = IO {
     messages += "write to %s with %s".format(dest, content) 
     backingStore += (dest -> content)
+    PrecogUnit
   }
 
   def mkdir(dir: File) = IO(true)
 
   def checkMessage(i: Int, exp: String) =
     messages.get(i).map { act =>
-      val result = act == exp
+      // Comparisons need to be made ignoring whitespace altogether to avoid formatting differences
+      val result = act.replaceAll("\\s*","") == exp.replaceAll("\\s*","")
       if(!result) {
-        println("Expected[" + exp.replace(" ", ".") + "] vs Actual[" + act.replace(" ", ".") + "]")
+        println("Expected[" + exp.replaceAll("\\s*", "") + "] vs Actual[" + act.replaceAll("\\s*", "") + "]")
       }
-      act == exp 
+      result
     } getOrElse { false }
 
   def confirmRename(i: Int, src: File, dest: File) = 

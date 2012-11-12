@@ -81,7 +81,7 @@ object ProvenanceCheckingSpecs extends Specification
     }
     
     "reject deref on static and dynamic provenances" in {
-      val tree = compileSingle("//foo[new 1]")
+      val tree = compileSingle("(//foo)[new 1]")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }

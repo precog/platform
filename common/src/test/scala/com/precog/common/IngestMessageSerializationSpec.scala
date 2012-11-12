@@ -29,7 +29,7 @@ import org.scalacheck.Gen._
 
 import com.precog.common.util.ArbitraryIngestMessage
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 object EventMessageSerializationSpec extends Specification with ScalaCheck with ArbitraryIngestMessage {
   
@@ -48,7 +48,7 @@ object EventMessageSerializationSpec extends Specification with ScalaCheck with 
       val out = ser.readMessage(buf)
 
       out.toOption must beSome like {
-        case Some(o) => o.sort must_== in.sort
+        case Some(o) => o.renderCanonical must_== in.renderCanonical
       }
     }}
   }
