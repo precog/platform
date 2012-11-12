@@ -1,15 +1,15 @@
 package com.precog.ingest
 package kafka
 
-import blueeyes.bkka.AkkaDefaults
+import blueeyes.bkka.{ AkkaDefaults, AkkaTypeClasses }
 import blueeyes.BlueEyesServer
 import blueeyes.util.Clock
 
 import akka.util.Timeout
-import akka.dispatch.MessageDispatcher
+import akka.dispatch.{ ExecutionContext, Future, MessageDispatcher }
 
+import com.precog.accounts._
 import com.precog.common._
-import com.precog.common.security._
 import com.precog.ingest.service._
 import com.precog.common.security._
 
@@ -21,9 +21,12 @@ import com.weiglewilczek.slf4s.Logging
 
 import org.streum.configrity.Configuration
 
+import scalaz._
+
 object KafkaIngestServer extends 
     BlueEyesServer with 
     IngestService with 
+    AccountManagerClientComponent with
     MongoAPIKeyManagerComponent with
     KafkaEventStoreComponent {
 
@@ -32,6 +35,7 @@ object KafkaIngestServer extends
   def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
 
   implicit val asyncContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 }
 
 

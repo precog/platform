@@ -44,5 +44,5 @@ class APIKeyRequiredService[A, B](apiKeyManager: APIKeyManager[Future], val dele
   val metadata =
     Some(AboutMetadata(
       ParameterMetadata('apiKey, None),
-      DescriptionMetadata("A Precog account API key is required for the use of this service.")))
+      DescriptionMetadata("A Precog API key is required for the use of this service.")))
 }
