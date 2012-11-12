@@ -3,7 +3,7 @@ package daze
 
 import bytecode._
 
-import blueeyes.json.JsonAST.JNum
+import blueeyes.json.JNum
 
 import com.precog.util.IdGen
 import com.precog.yggdrasil._

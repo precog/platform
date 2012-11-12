@@ -1,7 +1,6 @@
 package com.precog.yggdrasil
 package table
 
-import blueeyes.json.JsonAST._
 import com.precog.common.VectorCase
 
 import org.specs2.mutable._

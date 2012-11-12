@@ -4,8 +4,7 @@ package table
 import org.specs2.mutable.Specification
 
 import com.precog.common.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 
 import scalaz._
 import scalaz.syntax.copointed._
@@ -16,7 +15,7 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
   override type GroupId = Int
 
   object unionAllData {
-    val JArray(leftData) = JsonParser.parse("""[
+    val JArray(leftData) = JParser.parse("""[
       {
         "groupKeys":  { "%1$s": "foo", "%2$s": false },
         "identities": { "1": [1,2] },
@@ -29,7 +28,7 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
       }
     ]""".format(GroupKeyTrans.keyName(0), GroupKeyTrans.keyName(1)))
   
-    val JArray(rightData) = JsonParser.parse("""[
+    val JArray(rightData) = JParser.parse("""[
       {
         "groupKeys":  { "%1$s": "bar", "%2$s": true },
         "identities": { "1": [5,1] },
@@ -42,7 +41,7 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
       }
     ]""".format(GroupKeyTrans.keyName(0), GroupKeyTrans.keyName(1)))
   
-    val JArray(rightDataReversed) = JsonParser.parse("""[
+    val JArray(rightDataReversed) = JParser.parse("""[
       {
         "groupKeys":  { "%2$s": "bar", "%1$s": true },
         "identities": { "1": [5,1] },
@@ -60,8 +59,8 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
     import unionAllData._
     val vars = Seq(CPathField("a"), CPathField("b"))
   
-    val leftBorg = BorgResult(fromJson(leftData.toStream), vars, Set(1))
-    val rightBorg = BorgResult(fromJson(rightData.toStream), vars, Set(1))
+    val leftBorg = BorgResult(fromJson(leftData.toStream), vars, Set(1), UnknownSize)
+    val rightBorg = BorgResult(fromJson(rightData.toStream), vars, Set(1), UnknownSize)
 
     val expected = leftData.toStream ++ rightData.toStream
 
@@ -78,8 +77,8 @@ trait UnionAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
     val varsLeft = Seq(CPathField("a"), CPathField("b"))
     val varsRight = Seq(CPathField("b"), CPathField("a"))
   
-    val leftBorg = BorgResult(fromJson(leftData.toStream), varsLeft, Set(1))
-    val rightBorg = BorgResult(fromJson(rightDataReversed.toStream), varsRight, Set(1))
+    val leftBorg = BorgResult(fromJson(leftData.toStream), varsLeft, Set(1), UnknownSize)
+    val rightBorg = BorgResult(fromJson(rightDataReversed.toStream), varsRight, Set(1), UnknownSize)
 
     val expected = leftData.toStream ++ rightData.toStream
 
