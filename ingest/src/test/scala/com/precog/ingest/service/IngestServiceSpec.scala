@@ -76,7 +76,7 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
     "track event with valid API key" in {
       track(JSON)(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(_), _),
-          Event(_, _, `testValue`, _) :: Nil) => ok
+          Event(_, _, _, `testValue`, _) :: Nil) => ok
       } }
     }
     "track asynchronous event with valid API key" in {

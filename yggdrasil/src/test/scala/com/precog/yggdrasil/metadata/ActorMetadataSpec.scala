@@ -47,7 +47,8 @@ import org.scalacheck.Gen._
 
 class ActorMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage with FutureMatchers {
   
-  val rootAPIKey = "root-key" // FIXME
+  val ingestAPIKey         = "root"       // FIXME
+  val ingestOwnerAccountId = Some("root") // FIXME
   
   trait WithActorSystem extends mutable.Before {
     def before {}
@@ -83,7 +84,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
  
   def extractSelectorsFor(path: Path)(events: List[Event]): Set[JPath] = {
     events.flatMap {
-      case Event(epath, apiKey, data, metadata) if epath == path => data.flattenWithPath.map(_._1) 
+      case Event(apiKey, epath, None, data, metadata) if epath == path => data.flattenWithPath.map(_._1) 
       case _                                                    => List.empty
     }.toSet
   }
@@ -92,14 +93,14 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
   
   def extractPathsFor(ref: Path)(events: List[Event]): Set[Path] = {
     events.collect {
-      case Event(test, _, _, _) if test.isChildOf(ref) => Path(test.elements(ref.length))
+      case Event(_, test, _, _, _) if test.isChildOf(ref) => Path(test.elements(ref.length))
     }.toSet
   }
 
   def extractMetadataFor(path: Path, selector: JPath)(events: List[Event]): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
     def convertColDesc(cd: ColumnDescriptor) = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (cd -> Map[MetadataType, Metadata]())
     Map(events.flatMap {
-      case e @ Event(epath, apiKey, data, metadata) if epath == path => 
+      case e @ Event(apiKey, epath, _, data, metadata) if epath == path => 
         data.flattenWithPath.collect {
           case (k, v) if isEqualOrChild(selector, k) => k
         }.map( toProjectionDescriptor(e, _) )
@@ -159,7 +160,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
 
   def extractPathMetadataFor(path: Path, selector: JPath)(events: List[Event]): PathRoot = {
     val col: Set[(JPath, CType, String)] = events.collect {
-      case Event(`path`, apiKey, data, _) =>
+      case Event(apiKey, `path`, _, data, _) =>
         data.flattenWithPath.collect {
           case (s, v) if isEqualOrChild(selector, s) => 
              val ns = s.nodes.slice(selector.length, s.length-1)

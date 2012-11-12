@@ -22,6 +22,7 @@ package ingest
 
 import service._
 import ingest.service._
+import accounts._
 import common.security._
 import daze._
 
@@ -46,7 +47,7 @@ import scalaz.syntax.monad._
 
 import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
 
-case class IngestState(apiKeyManager: APIKeyManager[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: ExecutorService)
+case class IngestState(apiKeyManager: APIKeyManager[Future], accountManager: AccountManager[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: ExecutorService)
 
 trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 with DecompressCombinators with AkkaDefaults { 
@@ -60,6 +61,7 @@ with DecompressCombinators with AkkaDefaults {
   implicit def M: Monad[Future]
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
+  def accountManagerFactory(config: Configuration): AccountManager[Future]
   def eventStoreFactory(config: Configuration): EventStore
   def usageLoggingFactory(config: Configuration): UsageLogging 
 
@@ -71,6 +73,7 @@ with DecompressCombinators with AkkaDefaults {
 
           val eventStore = eventStoreFactory(config.detach("eventStore"))
           val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
+          val accountManager = accountManagerFactory(config.detach("accounts"))
 
           // Set up a thread pool for ingest tasks
           val readPool = new ThreadPoolExecutor(config[Int]("readpool.min_threads", 2),
@@ -83,6 +86,7 @@ with DecompressCombinators with AkkaDefaults {
           eventStore.start map { _ =>
             IngestState(
               apiKeyManager,
+              accountManager,
               eventStore,
               usageLoggingFactory(config.detach("usageLogging")),
               readPool
@@ -95,7 +99,9 @@ with DecompressCombinators with AkkaDefaults {
               apiKey(state.apiKeyManager) {
                 path("/(?<sync>a?sync)") {
                   dataPath("fs") {
-                    post(new TrackingServiceHandler(state.apiKeyManager, state.eventStore, state.usageLogging, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch)) ~
+                    accountId(state.accountManager) {
+                      post(new TrackingServiceHandler(state.apiKeyManager, state.eventStore, state.usageLogging, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch))
+                    } ~
                     delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.apiKeyManager, state.eventStore, deleteTimeout)(defaultFutureDispatch))
                   }
                 }

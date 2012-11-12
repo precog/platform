@@ -66,7 +66,7 @@ case class SecurityService(protocol: String, host: String, port: Int, path: Stri
 case class AccountServiceState(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService)
 
 
-trait AccountServiceCombinators extends HttpRequestHandlerCombinators {
+trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
   def auth[A](accountManager: AccountManager[Future])(service: HttpService[A, Account => Future[HttpResponse[JValue]]])(implicit ctx: ExecutionContext) = {
     new AuthenticationService[A, HttpResponse[JValue]](accountManager, service)({
       case NotProvided => HttpResponse(Unauthorized, headers = HttpHeaders(List(("WWW-Authenticate","Basic"))))
@@ -76,7 +76,7 @@ trait AccountServiceCombinators extends HttpRequestHandlerCombinators {
 }
 
 
-trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with AccountServiceCombinators {
+trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with AuthenticationCombinators {
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._

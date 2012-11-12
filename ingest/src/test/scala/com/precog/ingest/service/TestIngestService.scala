@@ -22,6 +22,7 @@ package service
 
 import kafka._
 
+import com.precog.accounts._
 import com.precog.daze._
 import com.precog.common.{ Path, Event, EventMessage }
 import com.precog.common.security._
@@ -39,13 +40,13 @@ import org.joda.time._
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-import scalaz.{Success, NonEmptyList}
+import scalaz._
 import scalaz.Scalaz._
 
 import blueeyes.concurrent.test._
 
 import blueeyes.core.data._
-import blueeyes.bkka.AkkaDefaults
+import blueeyes.bkka.{ AkkaDefaults, AkkaTypeClasses }
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http.HttpResponse
 import blueeyes.core.http.HttpStatus
@@ -56,7 +57,12 @@ import blueeyes.core.http.MimeTypes._
 
 import blueeyes.json._
 
-trait TestIngestService extends BlueEyesServiceSpecification with IngestService with AkkaDefaults with MongoAPIKeyManagerComponent {
+trait TestIngestService extends
+  BlueEyesServiceSpecification with
+  IngestService with
+  AkkaDefaults with
+  AccountManagerClientComponent with
+  MongoAPIKeyManagerComponent {
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
   
   lazy val trackingAPIKey: APIKey = sys.error("FIXME")
@@ -64,6 +70,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   lazy val expiredAPIKey: APIKey = sys.error("FIXME")
   
   val asyncContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
   val config = """
     security {

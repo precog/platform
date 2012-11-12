@@ -102,12 +102,12 @@ object ShardTestInit extends App with JDBMProjectionModule with SystemActorStora
         case JArray(elements) => 
           val fut = storage.storeBatch(elements.map{ value =>
             println(value.renderCompact)
-            EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), "root", value, emptyMetadata))
+            EventMessage(EventId(0, seqId.getAndIncrement), Event("root", Path(path), Some("root"), value, emptyMetadata))
           })
           //Await.result(fut, Duration(30, "seconds"))
           Await.result(fut, timeout.duration) // FIXME: is correct, or the line above?
         case single           =>
-          val fut = storage.store(EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), "root", single, emptyMetadata)))
+          val fut = storage.store(EventMessage(EventId(0, seqId.getAndIncrement), Event("root", Path(path), Some("root"), single, emptyMetadata)))
           //Await.result(fut, Duration(30, "seconds"))
           Await.result(fut, timeout.duration) // FIXME: is correct, or the line above?
       }

@@ -51,7 +51,7 @@ object MongoAPIKeyManagerSettings {
 
 trait MongoAPIKeyManagerComponent extends Logging {
   implicit def asyncContext: ExecutionContext
-  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+  implicit val M: Monad[Future]
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future] = {
     val mongo = RealMongo(config.detach("mongo"))

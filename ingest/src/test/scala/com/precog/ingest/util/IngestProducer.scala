@@ -102,7 +102,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
       override def run() {
         samples.foreach {
           case (path, sample) =>
-            def event = Event.fromJValue(Path(path), sample.next._1, "bogus")
+            def event = Event.fromJValue("bogus", Path(path), None, sample.next._1)
             0.until(messages).foreach { i =>
               if(i % 10 == 0 && verbose) println("Sending to [%s]: %d".format(path, i))
               try {
@@ -209,7 +209,9 @@ Usage:
 }
 
 class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
-  lazy val rootAPIKey: APIKey = sys.error("FIXME")
+  val ingestAPIKey: APIKey = sys.error("FIXME")
+  val ingestOwnerAccountId: Option[AccountID] = None
+  
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
   lazy val apiKey = config.getProperty("token", TestIngestService.rootAPIKey)
   val client = new HttpClientXLightWeb 

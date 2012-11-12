@@ -58,7 +58,7 @@ import blueeyes.json._
 
 import blueeyes.util.Clock
 
-import scalaz.StreamT
+import scalaz._
 
 import java.nio.CharBuffer
 
@@ -93,7 +93,9 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
 
   val actorSystem = ActorSystem("ingestServiceSpec")
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-
+  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+  
+  
   def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]) = new TestQueryExecutor {
     val actorSystem = self.actorSystem
     val executionContext = self.asyncContext

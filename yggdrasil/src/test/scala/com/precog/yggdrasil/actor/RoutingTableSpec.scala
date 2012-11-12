@@ -47,7 +47,7 @@ class RoutingTableSpec extends Specification {
       val metadata = Map[JPath, Set[UserMetadata]]() +
                      (JPath(".selector") -> Set.empty[UserMetadata])
       
-      val msg = EventMessage(EventId(0,0), Event(Path("/a/b"), "apiKey", jval, metadata))
+      val msg = EventMessage(EventId(0,0), Event("apiKey", Path("/a/b"), None, jval, metadata))
       
       val colDesc = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("apiKey")))
 
@@ -75,7 +75,7 @@ class RoutingTableSpec extends Specification {
                      (JPath(".foo.baz") -> Set.empty[UserMetadata])
 
 
-      val msg = EventMessage(EventId(0,0), Event(Path("/a/b"), "apiKey", jval, metadata))
+      val msg = EventMessage(EventId(0,0), Event("apiKey", Path("/a/b"), None, jval, metadata))
 
       val colDesc1 = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("apiKey")))
       val colDesc2 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bar"), CLong, Authorities(Set("apiKey")))

@@ -34,7 +34,7 @@ import scalaz.{Validation, Success, NonEmptyList}
 import blueeyes.concurrent.test._
 
 import blueeyes.core.data._
-import blueeyes.bkka.AkkaDefaults
+import blueeyes.bkka.{ AkkaDefaults, AkkaTypeClasses }
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
@@ -47,6 +47,8 @@ import blueeyes.json.serialization.Extractor._
 
 import blueeyes.json._
 
+import scalaz._
+
 import com.precog.common.Path
 import com.precog.common.security._
 
@@ -55,7 +57,8 @@ import Grant.SafeSerialization._
 
 trait TestAPIKeyService extends BlueEyesServiceSpecification with SecurityService with AkkaDefaults with MongoAPIKeyManagerComponent {
 
-  val asyncContext = defaultFutureDispatch
+  implicit val asyncContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
   import BijectionsChunkJson._
 

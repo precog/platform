@@ -17,32 +17,21 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package accounts
+package com.precog.accounts
+
+import akka.dispatch.{ Future, MessageDispatcher }
+
+import blueeyes.core.http._
+import blueeyes.core.service._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import com.precog.common.Path
 import com.precog.common.security._
 
-import org.joda.time.DateTime
-import org.bson.types.ObjectId
+trait AccountServiceCombinators extends HttpRequestHandlerCombinators {
 
-trait AccountManager[M[+_]] {
-  def newAccountId: M[AccountID]
-  
-  def newTempPassword(): String = new ObjectId().toString
-
-  def updateAccount(account: Account): M[Boolean]
-  def updateAccountPassword(account: Account, newPassword: String): M[Boolean]
- 
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountID, Path) => M[APIKey]): M[Account]
-
-  def listAccountIds(apiKey: APIKey) : M[Set[Account]]
-  
-  def findAccountById(accountId: AccountID): M[Option[Account]]
-  def findAccountByEmail(email: String) : M[Option[Account]]
-  def authAccount(email: String, password: String) : M[Option[Account]]
-  
-  def deleteAccount(accountId: AccountID): M[Option[Account]]
-
-  def close(): M[Unit]
-} 
+  def accountId[A, B](accountManager: AccountManager[Future])(service: HttpService[A, (APIKeyRecord, Path, Account) => Future[B]])
+    (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) = {
+    new AccountRequiredService[A, B](accountManager, service)
+  }
+}

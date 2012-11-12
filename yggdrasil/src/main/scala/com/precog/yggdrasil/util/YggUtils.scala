@@ -449,8 +449,8 @@ object KafkaTools extends Command {
 
     def dump(i: Int, msg: MessageAndOffset) {
       codec.toEvent(msg.message) match {
-        case EventMessage(EventId(pid, sid), Event(path, apiKey, data, _)) =>
-          println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s".format(i+1, pid, sid, path, apiKey))
+        case EventMessage(EventId(pid, sid), Event(apiKey, path, ownerAccountId, data, _)) =>
+          println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s Owner: %s".format(i+1, pid, sid, path, apiKey, ownerAccountId))
           println(data.renderPretty)
         case _ =>
       }
@@ -462,8 +462,8 @@ object KafkaTools extends Command {
 
     def dump(i: Int, msg: MessageAndOffset) {
       codec.toEvent(msg.message) match {
-        case EventMessage(EventId(pid, sid), Event(path, apiKey, data, _)) =>
-          println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s".format(i+1, pid, sid, path, apiKey))
+        case EventMessage(EventId(pid, sid), Event(apiKey, path, ownerAccountId, data, _)) =>
+          println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s Owner: %s".format(i+1, pid, sid, path, apiKey, ownerAccountId))
           println(data.renderPretty)
         case _ =>
       }
@@ -683,11 +683,11 @@ object ImportTools extends Command with Logging {
   val name = "import"
   val description = "Bulk import of json/csv data directly to data columns"
   
-
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
-      opt("t", "token", "<aki key>", "API key to insert data under", { s: String => config.apiKey = s })
+      opt("t", "token", "<api key>", "authorizing API key", { s: String => config.apiKey = s })
+      opt("o", "owner", "<account id>", "Owner account ID to insert data under", { s: String => config.accountId = Some(s) })
       opt("s", "storage", "<storage root>", "directory containing data files", { s: String => config.storageRoot = new File(s) })
       opt("a", "archive", "<archive root>", "directory containing archived data files", { s: String => config.archiveRoot = new File(s) })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
@@ -753,7 +753,7 @@ object ImportTools extends Command with Logging {
           logger.info("Inserting batch: %s:%s".format(db, input))
           val result = JParser.parseFromFile(new File(input))
           val events = result.valueOr(e => throw e).children.map { child =>
-            EventMessage(EventId(pid, sid.getAndIncrement), Event(Path(db), config.apiKey, child, Map.empty))
+            EventMessage(EventId(pid, sid.getAndIncrement), Event(config.apiKey, Path(db), config.accountId, child, Map.empty))
           }
           
           logger.info(events.size + " total inserts")
@@ -781,7 +781,8 @@ object ImportTools extends Command with Logging {
   class Config(
     var input: Vector[(String, String)] = Vector.empty, 
     val batchSize: Int = 10000,
-    var apiKey: APIKey = "root",
+    var apiKey: APIKey = "root",     // FIXME
+    var accountId: Option[AccountID] = None,
     var verbose: Boolean = false ,
     var storageRoot: File = new File("./data"),
     var archiveRoot: File = new File("./archive")

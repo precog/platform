@@ -92,7 +92,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
         projections = json.elements.foldLeft(projections) { 
           case (acc, jobj) => 
             val evID = EventId(0, identity.getAndIncrement)
-            routingTable.routeEvent(EventMessage(evID, Event(path, "", jobj, Map()))).foldLeft(acc) {
+            routingTable.routeEvent(EventMessage(evID, Event("", path, None, jobj, Map()))).foldLeft(acc) {
               case (acc, data) =>
                 acc + (data.descriptor -> (acc.getOrElse(data.descriptor, Vector.empty[JValue]) :+ data.toJValue))
           }
