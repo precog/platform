@@ -64,6 +64,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with UnionAllSpec[M]
     with CrossAllSpec[M]
     with DistinctSpec[M] 
+    with SampleSpec[M]
     with GroupingGraphSpec[M]
     with SchemasSpec[M]
     { spec => 
@@ -405,6 +406,12 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 
   "crossAll" should {
     "cross a simple borg result set" in simpleCrossAllTest
+  }
+
+  "sample" should {
+    "sample from a dataset" in testSample
+    "return full set when sample size larger than dataset" in testLargeSampleSize
+    "resurn empty table when sample size is 0" in test0SampleSize
   }
 
   "logging" should {

@@ -28,7 +28,8 @@ import scala.{ specialized => spec }
 import scala.collection._
 
 trait DefinedAtIndex {
-  protected[this] val defined: BitSet
+  // protected[this] val defined: BitSet
+  private[table] val defined: BitSet
   def isDefinedAt(row: Int) = defined(row)
 }
 

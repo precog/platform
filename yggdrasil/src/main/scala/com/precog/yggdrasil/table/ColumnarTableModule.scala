@@ -88,6 +88,7 @@ trait ColumnarTableModule[M[+_]]
     with ColumnarTableTypes
     with IdSourceScannerModule[M]
     with SliceTransforms[M]
+    with SamplableColumnarTableModule[M]
     with YggConfigComponent {
       
   import TableModule._
@@ -1901,7 +1902,7 @@ trait ColumnarTableModule[M[+_]]
     }
   }
 
-  abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: TableSize) extends TableLike { self: Table =>
+  abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: TableSize) extends TableLike with SamplableColumnarTable { self: Table =>
     import SliceTransform._
 
     private final val readStarts = new java.util.concurrent.atomic.AtomicInteger
