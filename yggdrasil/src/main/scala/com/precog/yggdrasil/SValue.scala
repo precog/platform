@@ -3,8 +3,6 @@ package com.precog.yggdrasil
 import com.precog.util._
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -111,7 +109,7 @@ sealed trait SValue {
 
   lazy val toJValue: JValue = this match {
     case SObject(obj) => JObject(obj.map({ case (k, v) => JField(k, v.toJValue) })(collection.breakOut))
-    case SArray(arr)  => JArray(arr.map(_.toJValue)(collection.breakOut))
+    case SArray(arr)  => JArray(arr.map(_.toJValue)(collection.breakOut): _*)
     case SString(s)   => JString(s)
     case STrue        => JBool(true)
     case SFalse       => JBool(false)
@@ -224,6 +222,8 @@ object SValue extends SValueInstances {
     case CDouble(n) => SDecimal(BigDecimal(n))
     case CNum(n) => SDecimal(n)
     case CDate(d) => sys.error("todo") // Should this be SString(d.toString)?
+    case CArray(as, CArrayType(aType)) =>
+      SArray(as.map(a => fromCValue(aType(a)))(collection.breakOut))
     case CNull => SNull
     case CEmptyArray => SArray(Vector())
     case CEmptyObject => SObject(Map())
@@ -256,7 +256,7 @@ object SValue extends SValueInstances {
     case sv if (sv \ selector).isDefined => (sv \ selector).get
   }
 
-  def asJSON(sv: SValue): String = pretty(render(sv.toJValue))
+  def asJSON(sv: SValue): String = sv.toJValue.renderPretty
 }
 
 
@@ -272,6 +272,7 @@ object SType {
     case (_: CNumericType[_]) => SDecimal
     case CDate => sys.error("todo")
     case CNull => SNull
+    case CArrayType(_) => SArray
     case CEmptyObject => SObject
     case CEmptyArray => SArray
     case CUndefined => SUndefined

@@ -4,8 +4,7 @@ package table
 import org.specs2.mutable.Specification
 
 import com.precog.common.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 
 import scalaz._
 import scalaz.syntax.copointed._
@@ -17,7 +16,7 @@ trait CrossAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
 
   object crossAllData {
     // These are used in all tests
-    val JArray(leftData) = JsonParser.parse("""[
+    val JArray(leftData) = JParser.parse("""[
       {
         "groupKeys":  { "%1$s": "foo" },
         "identities": { "1": [1,2] },
@@ -25,7 +24,7 @@ trait CrossAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
       }
     ]""".format(GroupKeyTrans.keyName(0)))
   
-    val JArray(rightData) = JsonParser.parse("""[
+    val JArray(rightData) = JParser.parse("""[
       {
         "groupKeys":  { "%1$s": true },
         "identities": { "2": [5,1] },
@@ -33,7 +32,7 @@ trait CrossAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
       }
     ]""".format(GroupKeyTrans.keyName(0)))
 
-    val JArray(crossedData) = JsonParser.parse("""[
+    val JArray(crossedData) = JParser.parse("""[
       {
         "groupKeys":  { "%1$s": "foo", "%2$s" : true },
         "identities": { "1": [1,2], "2": [5,1] },
@@ -48,8 +47,8 @@ trait CrossAllSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
     val varsLeft = Seq(CPathField("a"))
     val varsRight = Seq(CPathField("b"))
   
-    val leftBorg = BorgResult(fromJson(leftData.toStream), varsLeft, Set(1))
-    val rightBorg = BorgResult(fromJson(rightData.toStream), varsRight, Set(1))
+    val leftBorg = BorgResult(fromJson(leftData.toStream), varsLeft, Set(1), UnknownSize)
+    val rightBorg = BorgResult(fromJson(rightData.toStream), varsRight, Set(1), UnknownSize)
 
     val result = crossAll(Set(leftBorg, rightBorg))
     val jsonResult = result.table.toJson.copoint

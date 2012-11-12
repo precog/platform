@@ -20,6 +20,7 @@ import yggdrasil.jdbm3._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
+import yggdrasil.util._
 import yggdrasil.test.YId
 import muspelheim._
 
@@ -37,7 +38,6 @@ import akka.util.duration._
 import java.io.File
 
 import blueeyes.json._
-import JsonAST._
 
 import org.slf4j.LoggerFactory
 
@@ -50,8 +50,7 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-object FuturePlatformSpecs 
-    extends ParseEvalStackSpecs[Future] 
+object PlatformSpecs extends ParseEvalStackSpecs[Future] 
     with BlockStoreColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 
@@ -59,7 +58,14 @@ object FuturePlatformSpecs
       
   lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
-  class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig with JDBMProjectionModuleConfig
+  class YggConfig extends ParseEvalStackSpecConfig
+      with StandaloneShardSystemConfig
+      with IdSourceConfig
+      with ColumnarTableModuleConfig
+      with EvaluatorConfig
+      with BlockStoreColumnarTableModuleConfig
+      with JDBMProjectionModuleConfig
+      
   object yggConfig  extends YggConfig
   
   override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
