@@ -20,7 +20,6 @@
 package com.precog.heimdall
 
 import blueeyes.json._
-import JsonAST._
 
 import com.precog.common.security._
 
@@ -31,8 +30,6 @@ import scalaz._
 
 trait JobManager[M[+_]] {
   import Message._
-
-  implicit def M: Monad[M]
 
   /**
    * Create a new Job with the given API key, name, type and possibly an
@@ -57,7 +54,7 @@ trait JobManager[M[+_]] {
    * this must match the current status in order for the update to succeed,
    * otherwise the update fails and the actual current status is returned.
    */
-  def updateStatus(job: JobId, prevStatus: Option[StatusId], msg: String, progress: Double, unit: String, extra: Option[JValue]): M[Either[String, Status]]
+  def updateStatus(job: JobId, prevStatus: Option[StatusId], msg: String, progress: BigDecimal, unit: String, extra: Option[JValue]): M[Either[String, Status]]
 
   /**
    * Returns just the latest status message.
@@ -66,7 +63,8 @@ trait JobManager[M[+_]] {
 
   /**
    * Lists all channels that have had messages posted to them. Note that
-   * channels are created on a demand by `addMessage`, so 
+   * channels are created on a demand by `addMessage`, so this is not a
+   * definitive list of channels, just what existed at the time.
    */
   def listChannels(job: JobId): M[Seq[String]]
 
@@ -87,7 +85,7 @@ trait JobManager[M[+_]] {
    * Starts a job if it is in the `NotStarted` state, otherwise an error string
    * is returned.
    */
-  def start(job: JobId, startTime: DateTime): M[Either[String, Job]]
+  def start(job: JobId, startedAt: DateTime = new DateTime): M[Either[String, Job]]
 
   /**
    * Cancels a job. This doesn't necessarily mean the job has actually stopped,
@@ -97,19 +95,19 @@ trait JobManager[M[+_]] {
    * should give a useful string about why the cancellation was requested (eg.
    * "User action." or "Server restart.").
    */
-  def cancel(job: JobId, reason: String): M[Either[String, Job]]
+  def cancel(job: JobId, reason: String, cancelledAt: DateTime = new DateTime): M[Either[String, Job]]
 
   /**
    * Aborts a job by putting it into the `Aborted` state. This is a terminal
    * state.
    */
-  def abort(job: JobId, reason: String): M[Either[String, Job]]
+  def abort(job: JobId, reason: String, abortedAt: DateTime = new DateTime): M[Either[String, Job]]
 
   /**
    * Moves the job to the `Finished` terminal state, with the given value as
    * the result.
    */
-  def finish[A](job: JobId, result: A): M[Either[String, Job]]
+  def finish(job: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): M[Either[String, Job]]
 }
 
 
@@ -127,21 +125,21 @@ trait JobStateManager[M[+_]] { self: JobManager[M] =>
     case badState => Left("Cannot start job. %s" format JobState.describe(badState))
   }
 
-  def cancel(id: JobId, reason: String): M[Either[String, Job]] = transition(id) {
-    case prev @ (NotStarted | Started(_, _)) => Right(Cancelled(reason, prev))
+  def cancel(id: JobId, reason: String, cancelledAt: DateTime = new DateTime): M[Either[String, Job]] = transition(id) {
+    case prev @ (NotStarted | Started(_, _)) => Right(Cancelled(reason, cancelledAt, prev))
     case badState => Left(JobState.describe(badState))
   }
 
-  def abort(id: JobId, reason: String): M[Either[String, Job]] = transition(id) {
-    case prev @ (NotStarted | Started(_, _) | Cancelled(_, _)) =>
-      Right(Aborted(reason, prev))
+  def abort(id: JobId, reason: String, abortedAt: DateTime = new DateTime): M[Either[String, Job]] = transition(id) {
+    case prev @ (NotStarted | Started(_, _) | Cancelled(_, _, _)) =>
+      Right(Aborted(reason, abortedAt, prev))
     case badState =>
       Left("Job already in terminal state. %s" format JobState.describe(badState))
   }
 
-  def finish[A](id: JobId, result: A): M[Either[String, Job]] = transition(id) {
-    case prev @ (NotStarted | Started(_, _) | Cancelled(_, _)) =>
-      Right(Finished(result, prev))
+  def finish(id: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): M[Either[String, Job]] = transition(id) {
+    case prev @ (NotStarted | Started(_, _) | Cancelled(_, _, _)) =>
+      Right(Finished(result, finishedAt, prev))
     case badState =>
       Left("Job already in terminal state. %s" format JobState.describe(badState))
   }

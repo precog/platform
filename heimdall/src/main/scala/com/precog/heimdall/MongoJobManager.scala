@@ -33,7 +33,6 @@ import akka.dispatch.{ ExecutionContext, Future }
 
 import blueeyes.bkka._
 import blueeyes.json._
-import blueeyes.json.JsonAST._
 import blueeyes.persistence.mongo._
 import blueeyes.json.serialization.Extractor
 import blueeyes.json.serialization.DefaultSerialization._
@@ -47,17 +46,15 @@ import scalaz.std.option._
 
 
 trait MongoJobManagerModule {
-  implicit def executionContext: ExecutionContext
+  implicit def asyncContext: ExecutionContext
+  def mongo: Mongo
 
-  def createMongoJobManager(globalConfig: Configuration): JobManager[Future] = {
-    val config = globalConfig.detach("mongo")
-    val mongo = RealMongo(config)
-    
-    val database = config[String]("database", "auth_v1")
-    val timeout = config[Int]("timeout", 5000)
+  def jobManager(config: Configuration): JobManager[Future] = {
+    val database = config[String]("mongo.jobs.database", "jobs_v1")
+    val timeout = config[Int]("mongo.timeout", 5000)
 
-    val jobs = config[String]("jobs.jobs", "jobs")
-    val messages = config[String]("jobs.messages", "job_messages")
+    val jobs = config[String]("mongo.jobs.jobsCollection", "jobs")
+    val messages = config[String]("mongo.jobs.messagesCollection", "job_messages")
 
     val settings = MongoJobManagerSettings(timeout, jobs, messages)
 
@@ -99,7 +96,7 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
   }
 
   def updateStatus(jobId: JobId, prevStatusId: Option[StatusId],
-    msg: String, progress: Double, unit: String, extra: Option[JValue]): Future[Either[String, Status]] = {
+    msg: String, progress: BigDecimal, unit: String, extra: Option[JValue]): Future[Either[String, Status]] = {
 
     nextMessageId(jobId) flatMap { statusId =>
       prevStatusId match {
@@ -115,7 +112,7 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
               }
 
             case None => // Failed
-              Future { Left("Expected current status ID didn't match expected: " + prevId) }
+              Future { Left("Current status ID didn't match that given: " + prevId) }
           }
 
         case None =>
@@ -133,6 +130,10 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
   }
 
   def getStatus(jobId: JobId): Future[Option[Status]] = {
+
+    // TODO: Get Job object, find current status ID, then use that as since.
+    // It'll include at least the last status, but rarely much more.
+
     listMessages(jobId, Message.channels.Status, None) map (_.lastOption flatMap (Status.fromMessage(_)))
   }
 

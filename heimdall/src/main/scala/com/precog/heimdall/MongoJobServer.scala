@@ -17,6 +17,19 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "heimdall"
+package com.precog.heimdall
 
-libraryDependencies += "org.specs2" %% "specs2" % "1.12.3-SNAPSHOT" % "test"
+import blueeyes.persistence.mongo._
+
+import blueeyes.BlueEyesServer
+
+object MongoJobServer extends BlueEyesServer with JobService with MongoJobManagerModule {
+  implicit val asyncContext = defaultFutureDispatch
+
+  val clock = blueeyes.util.Clock.System
+
+  lazy val mongo = RealMongo(config.detach("mongo"))
+
+  def close() = mongo.close
+}
+
