@@ -38,7 +38,6 @@ import com.precog.util.BitSet
 import com.precog.util.BitSetUtil
 import com.precog.util.BitSetUtil.Implicits._
 
-
 import scala.annotation.tailrec
 import scala.{ specialized => spec }
 
@@ -311,6 +310,7 @@ trait ValueRowFormat extends RowFormat with RowFormatSupport { self: StdCodecs =
   def pool: ByteBufferPool
 
   def encode(cValues: List[CValue]) = getBytesFrom(RowCodec.writeAll(cValues)(pool.acquire _).reverse)
+
   def decode(bytes: Array[Byte], offset: Int): List[CValue] =
     RowCodec.read(ByteBuffer.wrap(bytes, offset, bytes.length - offset))
 
@@ -426,6 +426,7 @@ trait ValueRowFormat extends RowFormat with RowFormatSupport { self: StdCodecs =
         case CLong(x) => wrappedWriteInit[Long](x, sink)
         case CDouble(x) => wrappedWriteInit[Double](x, sink)
         case CNum(x) => wrappedWriteInit[BigDecimal](x, sink)
+        case CArray(x, cType) => wrappedWriteInit(x, sink)(codecForCValueType(cType))
         case _: CNullType => None
       }) match {
         case None => writeCValues(xs, sink)
@@ -591,7 +592,7 @@ trait SortingRowFormat extends RowFormat with StdCodecs with RowFormatSupport {
 
       case v: CWrappedValue[_] =>
         for {
-          _ <-writeFlagFor(v.cType)
+          _ <- writeFlagFor(v.cType)
           _ <- codecForCValueType(v.cType).write(v.value)
         } yield ()
     }.sequence

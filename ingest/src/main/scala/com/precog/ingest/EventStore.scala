@@ -23,7 +23,7 @@ import util.FutureUtils
 
 import com.precog.common.{ Action, IngestMessage }
 
-import blueeyes.json.JsonAST._
+import blueeyes.json._
 
 import akka.util.Timeout
 import akka.actor.ActorSystem

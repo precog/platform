@@ -335,6 +335,51 @@ object EmitterSpecs extends Specification
           Map2Cross(JoinArray)))
     }
 
+    "solve with a generic where inside a function" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | athletes := //summer_games/athletes
+        | 
+        | data := athletes union (medals with { winner: medals."Medal winner" })
+        | 
+        | f(x, y) := x where y
+        | 
+        | solve 'winner 
+        |   count(f(data.winner, data.winner = 'winner))
+      """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("/summer_games/athletes"),
+          LoadLocal,
+          PushString("/summer_games/london_medals"),
+          LoadLocal,
+          Dup,
+          Swap(2),
+          Swap(1),
+          PushString("winner"),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("Medal winner"),
+          Map2Cross(DerefObject),
+          Map2Cross(WrapObject),
+          Map2Match(JoinObject),
+          IUnion,
+          Dup,
+          PushString("winner"),
+          Map2Cross(DerefObject),
+          KeyPart(1),
+          Swap(1),
+          PushString("winner"),
+          Map2Cross(DerefObject),
+          Group(0),
+          Split,
+          PushGroup(0),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
+          Merge))
+    }
+
     "emit two distinct callsites of the same function version 2" in {
       val input = """
         | medals := //summer_games/london_medals 
@@ -498,7 +543,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit filter cross for where loads from value provenance" in {
-      testEmit("""//clicks where //clicks.foo = null""")(
+      testEmit("""//clicks where (//clicks).foo = null""")(
         Vector(
           PushString("/clicks"),
           LoadLocal,
@@ -606,7 +651,7 @@ object EmitterSpecs extends Specification
 
     "emit unary non-reduction with object deref" in {
       forall(lib1) { f => 
-        testEmit("""%s(//foobar.baz)""".format(f.fqn))(
+        testEmit("""%s((//foobar).baz)""".format(f.fqn))(
           Vector(
             PushString("/foobar"),
             LoadLocal,
@@ -627,7 +672,7 @@ object EmitterSpecs extends Specification
 
     "emit binary non-reduction" in {
       forall(lib2) { f =>
-        testEmit("""%s(//foo.time, //foo.timeZone)""".format(f.fqn))(
+        testEmit("""%s((//foo).time, (//foo).timeZone)""".format(f.fqn))(
           Vector(
             PushString("/foo"),
             LoadLocal,
@@ -658,7 +703,7 @@ object EmitterSpecs extends Specification
     "emit body of a fully applied characteristic function with two variables" in {
       testEmit("""
         | fun(a, b) := 
-        |   //campaigns where //campaigns.ageRange = a & //campaigns.gender = b
+        |   //campaigns where (//campaigns).ageRange = a & (//campaigns).gender = b
         | fun([25,36],
           "female")""".stripMargin)(
         Vector(
@@ -786,19 +831,17 @@ object EmitterSpecs extends Specification
         | solve 'a = bar.a
         |   count(foo where foo.a = 'a)
         | """)(Vector(
-          PushString("/bar"),
-          LoadLocal,
-          Dup,
-          PushString("a"),
-          Map2Cross(DerefObject),
-          KeyPart(1),
-          Swap(1),
-          PushString("a"),
-          Map2Cross(DerefObject),
-          Group(0),
           PushString("/foo"),
           LoadLocal,
           Dup,
+          PushString("a"),
+          Map2Cross(DerefObject),
+          KeyPart(1),
+          Swap(1),
+          Group(0),
+          PushString("/bar"),
+          LoadLocal,
+          Dup,
           Swap(2),
           Swap(1),
           PushString("a"),
@@ -806,10 +849,12 @@ object EmitterSpecs extends Specification
           KeyPart(1),
           Swap(1),
           Swap(2),
+          PushString("a"),
+          Map2Cross(DerefObject),
           Group(2),
           MergeBuckets(true),
           Split,
-          PushGroup(2),
+          PushGroup(0),
           Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
           Merge))
     }
@@ -1175,47 +1220,53 @@ object EmitterSpecs extends Specification
         |   { revenue: 'revenue, num: count(campaigns') }
         | """.stripMargin)(
         Vector(
-          PushString("/organizations"),
-          LoadLocal,
-          Dup,
-          Dup,
-          Dup,
-          PushString("revenue"),
-          Map2Cross(DerefObject),
-          KeyPart(1),
-          Swap(1),
-          PushString("revenue"),
-          Map2Cross(DerefObject),
-          Group(0),
-          Swap(1),
-          PushString("campaign"),
-          Map2Cross(DerefObject),
-          KeyPart(3),
-          Swap(1),
-          Swap(2),
-          PushString("campaign"),
-          Map2Cross(DerefObject),
-          Group(2),
-          MergeBuckets(true),
           PushString("/campaigns"),
           LoadLocal,
           Dup,
+          PushString("campaign"),
+          Map2Cross(DerefObject),
+          KeyPart(1),
+          Swap(1),
+          Group(0),
+          PushString("/organizations"),
+          LoadLocal,
+          Dup,
           Swap(2),
           Swap(1),
-          PushString("campaign"),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Dup,
+          Swap(2),
+          Swap(1),
+          PushString("revenue"),
           Map2Cross(DerefObject),
           KeyPart(3),
           Swap(1),
           Swap(2),
+          PushString("revenue"),
+          Map2Cross(DerefObject),
+          Group(2),
+          Swap(1),
+          Swap(2),
+          PushString("campaign"),
+          Map2Cross(DerefObject),
+          KeyPart(1),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("campaign"),
+          Map2Cross(DerefObject),
           Group(4),
+          MergeBuckets(true),
           MergeBuckets(true),
           Split,
           PushString("revenue"),
-          PushKey(1),
+          PushKey(3),
           Map2Cross(WrapObject),
           PushString("num"),
-          PushGroup(4),
-          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x002000))),
+          PushGroup(0),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
           Map2Cross(WrapObject),
           Map2Cross(JoinObject),
           Merge))
@@ -1491,7 +1542,7 @@ object EmitterSpecs extends Specification
   
   if (exampleDir.exists) {
     "specification examples" >> {
-      val pending = Set("interaction-totals.qrl", "relative-durations.qrl")
+      val pending = Set("relative-durations.qrl")
       
       for (file <- exampleDir.listFiles if file.getName endsWith ".qrl") {
         if (pending contains file.getName) {

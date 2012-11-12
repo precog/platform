@@ -20,17 +20,16 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.bytecode.JType
 import com.precog.common.Path
 import com.precog.common.json._
 import com.precog.common.VectorCase
-import com.precog.bytecode.JType
+import com.precog.util.PrecogUnit
 import com.precog.yggdrasil.util._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
 import com.weiglewilczek.slf4s.Logging
 
 import scala.annotation.tailrec
@@ -60,7 +59,7 @@ trait BlockStoreTestModule[M[+_]] extends BaseBlockStoreTestModule[M] {
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = "groupId(" + groupId.getAndIncrement + ")"
 
-  class YggConfig extends IdSourceConfig with BlockStoreColumnarTableModuleConfig {
+  class YggConfig extends IdSourceConfig with BlockStoreColumnarTableModuleConfig with ColumnarTableModuleConfig {
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
       def nextId() = source.getAndIncrement
@@ -90,7 +89,7 @@ trait BaseBlockStoreTestModule[M[+_]] extends
       val slices = fromJson(data).slices.toStream.copoint
 
       def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("Insert not supported.")
-      def commit(): IO[Unit] = sys.error("Commit not supported.")
+      def commit(): IO[PrecogUnit] = sys.error("Commit not supported.")
 
       implicit val keyOrder: Order[JArray] = Order[List[JValue]].contramap((_: JArray).elements)
 
@@ -98,7 +97,7 @@ trait BaseBlockStoreTestModule[M[+_]] extends
         @tailrec def findBlockAfter(id: JArray, blocks: Stream[Slice]): Option[Slice] = {
           blocks.filterNot(_.isEmpty) match {
             case x #:: xs =>
-              if ((x.toJson(x.size - 1).getOrElse(JNothing) \ "key") > id) Some(x) else findBlockAfter(id, xs)
+              if ((x.toJson(x.size - 1).getOrElse(JUndefined) \ "key") > id) Some(x) else findBlockAfter(id, xs)
 
             case _ => None
           }
@@ -121,7 +120,7 @@ trait BaseBlockStoreTestModule[M[+_]] extends
             }
           }
 
-          BlockProjectionData[JArray, Slice](s0.toJson(0).getOrElse(JNothing) \ "key" --> classOf[JArray], s0.toJson(s0.size - 1).getOrElse(JNothing) \ "key" --> classOf[JArray], s0)
+          BlockProjectionData[JArray, Slice](s0.toJson(0).getOrElse(JUndefined) \ "key" --> classOf[JArray], s0.toJson(s0.size - 1).getOrElse(JUndefined) \ "key" --> classOf[JArray], s0)
         }
       }
     }
@@ -134,11 +133,11 @@ trait BaseBlockStoreTestModule[M[+_]] extends
 
     def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
       case (_: JNum, CNum | CLong | CDouble) => true
-      case (JNothing, CUndefined) => true
+      case (JUndefined, CUndefined) => true
       case (JNull, CNull) => true
       case (_: JBool, CBoolean) => true
       case (_: JString, CString) => true
-      case (JObject(Nil), CEmptyObject) => true
+      case (JObject(fields), CEmptyObject) if fields.isEmpty => true
       case (JArray(Nil), CEmptyArray) => true
       case _ => false
     }

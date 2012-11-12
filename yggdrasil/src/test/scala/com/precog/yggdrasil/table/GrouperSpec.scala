@@ -25,8 +25,6 @@ import com.precog.yggdrasil.util.IdSourceConfig
 import com.precog.yggdrasil.test._
 
 import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
 
 import java.util.concurrent.Executors
 
@@ -84,7 +82,9 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyIter must haveSize(1)
         keyIter.head must beLike {
-          case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
+          case jo: JObject => (jo \ "tic_a") match {
+            case JNum(i) => set must contain(i)
+          }
         }
 
         val histoKey = keyIter.head(tic_aj)
@@ -145,7 +145,9 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyIter must haveSize(1)
         keyIter.head must beLike {
-          case JObject(JField("tic_a", JNum(i)) :: Nil) => set must contain(i)
+          case jo: JObject => (jo \ "tic_a") match {
+            case JNum(i) => set must contain(i)
+          }
         }
         
         val histoKey = keyIter.head(tic_aj)
@@ -201,7 +203,9 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       } yield {
         keyIter must haveSize(1)
         keyIter.head must beLike {
-          case JObject(JField("tic_a", JNum(i)) :: Nil) => set.map(_ % 2) must contain(i)
+          case jo: JObject => (jo \ "tic_a") match {
+            case JNum(i) => set.map(_ % 2) must contain(i)
+          }
         }
 
         val histoKey = keyIter.head(tic_aj)
@@ -229,7 +233,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
 
   def simpleMultiKeyData = {
-    val JArray(elements) = JsonParser.parse("""[
+    val JArray(elements) = JParser.parse("""[
       { "key": [0], "value": {"a": 12, "b": 7} },
       { "key": [1], "value": {"a": 42} },
       { "key": [2], "value": {"a": 11, "c": true} },
@@ -237,7 +241,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       { "key": [4], "value": {"b": 15} },
       { "key": [5], "value": {"b": -1, "c": false} },
       { "key": [6], "value": {"b": 7} },
-      { "key": [7], "value": {"a": -7, "b": 3, "d": "testing"} },
+      { "key": [7], "value": {"a": -7, "b": 3, "d": "testing"} }
     ]""")
 
     elements.toStream
@@ -335,14 +339,14 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
             val a = obj(tic_aj)
             val b = obj(tic_bj)
         
-            if (a == JNothing) {
+            if (a == JUndefined) {
               b must beLike {
                 case JNum(i) if i == 7 => gs1Json must haveSize(2)
                 case JNum(i) if i == 15 => gs1Json must haveSize(1)
                 case JNum(i) if i == -1 => gs1Json must haveSize(1)
                 case JNum(i) if i == 3 => gs1Json must haveSize(1)
               }
-            } else if (b == JNothing) {
+            } else if (b == JUndefined) {
               a must beLike {
                 case JNum(i) if i == 12 => gs1Json must haveSize(2)
                 case JNum(i) if i == 42 => gs1Json must haveSize(1)
@@ -457,7 +461,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         keyJson must haveSize(1)
 
         (keyJson.head(tic_bj)) must beLike {
-          case JNothing =>
+          case JUndefined =>
             (gs1Json.head \ "a") must beLike {
               case JNum(i) if i == 12 => ok
             }
@@ -476,7 +480,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     
     resultJson must haveSize(5)
     
-    val JArray(expected) = JsonParser.parse("""[
+    val JArray(expected) = JParser.parse("""[
       [{"tic_b": 7}, 2], 
       [{"tic_b": 15}, 1], 
       [{"tic_b": -1}, 1], 
@@ -775,7 +779,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     import trans._
     import constants._
 
-    val JArray(foo0) = JsonParser.parse("""[
+    val JArray(foo0) = JParser.parse("""[
       { "a":42.0, "b":12.0 }, 
       { "a":42.0 },
       { "a":77.0 },
@@ -792,7 +796,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       { "a":42.0, "b":12.0 }
     ]""")
 
-    val JArray(bar0) = JsonParser.parse("""[
+    val JArray(bar0) = JParser.parse("""[
       { "a":42.0 },
       { "a":42.0 },
       { "a":77.0 },
@@ -809,7 +813,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       { "a":42.0 }
     ]""")
 
-    val JArray(baz0) = JsonParser.parse("""[
+    val JArray(baz0) = JParser.parse("""[
       { "b":12.0 },
       { "b":6.0 },
       { "a":42.0 },
@@ -863,8 +867,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       val a = keyJson.head(tic_aj)
       val b = keyJson.head(tic_bj)
       
-      a mustNotEqual JNothing
-      b mustNotEqual JNothing
+      a mustNotEqual JUndefined
+      b mustNotEqual JUndefined
       
       for {
         fooP <- map(fooGroup)

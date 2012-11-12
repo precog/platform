@@ -32,7 +32,7 @@ import java.nio.ByteBuffer
 
 import org.specs2._
 import org.specs2.mutable.Specification
-import org.scalacheck.{Shrink, Arbitrary, Gen}
+import org.scalacheck.{ Shrink, Arbitrary, Gen, Pretty }
 
 import scala.annotation.tailrec
 
@@ -40,6 +40,8 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
   import Arbitrary._
   import ByteBufferPool._
 
+  // Get ScalaCheck to print out the full stacktrace.
+  override val defaultPrettyParams = Pretty.Params(2)
 
   // This should generate some jpath ids, then generate CTypes for these.
   def genColumnRefs: Gen[List[ColumnRef]] = Gen.listOf(Gen.alphaStr filter (_.size > 0)) flatMap { paths =>
@@ -89,6 +91,8 @@ class RowFormatSpec extends Specification with ScalaCheck with CValueGenerators 
         case (CNull, col: NullColumn) => ok
         case (CEmptyObject, col: EmptyObjectColumn) => ok
         case (CEmptyArray, col: EmptyArrayColumn) => ok
+        case (CArray(xs, cType), col: HomogeneousArrayColumn[_]) if cType == col.tpe =>
+          col(row) must_== xs
       })
     }
   }

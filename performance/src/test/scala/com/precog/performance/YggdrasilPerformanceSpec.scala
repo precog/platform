@@ -40,8 +40,7 @@ import akka.util.Timeout
 import akka.util.Duration
 import akka.util.duration._
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser
+import blueeyes.json._
 
 import java.io.File
 
@@ -371,7 +370,7 @@ histogram
  }
 }]
       """
-      val jvals = JsonParser.parse(nullReal)
+      val jvals = JParser.parse(nullReal)
       val msgs = jvals match {
         case JArray(jvals) =>
           jvals.zipWithIndex.map {

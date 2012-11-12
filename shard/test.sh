@@ -17,6 +17,6 @@
 ## program. If not, see <http://www.gnu.org/licenses/>.
 ## 
 ## 
-#!/bin/sh
+#!/bin/bash
 cd $(dirname $0)/..
-exec ./run.sh $* -q shard/src/test/resources/queries/ muspelheim/src/test/resources/test_data/*.json
+exec ./run.sh $* -q shard/src/test/resources/queries/ muspelheim/src/test/resources/test_data/{campaigns,clicks,organizations,election/tweets}.json

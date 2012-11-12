@@ -65,7 +65,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
     with StorageModule[M]
     with MemoryDatasetConsumer[M] 
-    with IdSourceScannerModule[M] {
+    with IdSourceScannerModule[M] { self =>
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 
@@ -77,8 +77,6 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
 
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  type YggConfig <: EvaluatorConfig with IdSourceConfig
-  
   class ParseEvalStackSpecConfig extends BaseConfig with IdSourceConfig {
     parseEvalLogger.trace("Init yggConfig")
     val config = Configuration parse {
@@ -94,7 +92,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
     
-    val maxSliceSize = 10
+    val maxSliceSize = self.sliceSize
 
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
@@ -147,7 +145,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       }
       
       "render a set of numbers interleaved by delimiters" in {
-        val stream = evalTable("//tutorial/transactions.quantity") renderJson ','
+        val stream = evalTable("(//tutorial/transactions).quantity") renderJson ','
         val strings = stream map { _.toString }
         val str = strings.foldLeft("") { _ + _ } copoint
         
