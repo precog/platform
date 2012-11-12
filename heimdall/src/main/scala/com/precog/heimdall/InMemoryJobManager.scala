@@ -1,7 +1,6 @@
 package com.precog.heimdall
 
 import blueeyes.json._
-import JsonAST._
 
 import com.precog.common.security._
 
@@ -45,7 +44,7 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
   }
 
   def updateStatus(jobId: JobId, prevStatus: Option[StatusId], 
-      msg: String, progress: Double, unit: String, extra: Option[JValue]): M[Either[String, Status]] = {
+      msg: String, progress: BigDecimal, unit: String, extra: Option[JValue]): M[Either[String, Status]] = {
     M.point {
       statuses get jobId match {
         case Some(prev @ (curStatus :: _)) if curStatus.id == prevStatus.getOrElse(curStatus.id) =>
