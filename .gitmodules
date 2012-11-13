@@ -1,0 +1,3 @@
+[submodule "mongo/quirrelide"]
+	path = mongo/quirrelide
+	url = git@github.com:reportgrid/quirrelide.git
