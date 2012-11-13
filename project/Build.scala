@@ -165,5 +165,5 @@ object PlatformBuild extends Build {
     settings(jprofilerSettings ++ commonNexusSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.jprofiler.Run")): _*).dependsOn(ragnarok)
 
   lazy val heimdall = Project(id = "heimdall", base = file("heimdall")).
-    settings(commonNexusSettings: _*).dependsOn(common % "compile->compile;test->test", util)
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", util)
 }

@@ -50,11 +50,11 @@ trait MongoJobManagerModule {
   def mongo: Mongo
 
   def jobManager(config: Configuration): JobManager[Future] = {
-    val database = config[String]("mongo.jobs.database", "jobs_v1")
+    val database = config[String]("mongo.database", "jobs_v1")
     val timeout = config[Int]("mongo.timeout", 5000)
 
-    val jobs = config[String]("mongo.jobs.jobsCollection", "jobs")
-    val messages = config[String]("mongo.jobs.messagesCollection", "job_messages")
+    val jobs = config[String]("mongo.jobsCollection", "jobs")
+    val messages = config[String]("mongo.messagesCollection", "job_messages")
 
     val settings = MongoJobManagerSettings(timeout, jobs, messages)
 

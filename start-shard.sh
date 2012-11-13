@@ -71,6 +71,7 @@ VERSION=`git describe`
 INGEST_ASSEMBLY=$BASEDIR/ingest/target/ingest-assembly-$VERSION.jar
 AUTH_ASSEMBLY=$BASEDIR/auth/target/auth-assembly-$VERSION.jar
 ACCOUNTS_ASSEMBLY=$BASEDIR/accounts/target/accounts-assembly-$VERSION.jar
+JOBS_ASSEMBLY=$BASEDIR/accounts/target/heimdall-assembly-$VERSION.jar
 SHARD_ASSEMBLY=$BASEDIR/shard/target/shard-assembly-$VERSION.jar
 YGGDRASIL_ASSEMBLY=$BASEDIR/yggdrasil/target/yggdrasil-assembly-$VERSION.jar
 
@@ -80,7 +81,7 @@ JAVA="java $GC_OPTS"
 
 # pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
 MISSING_ARTIFACTS=""
-for ASM in $INGEST_ASSEMBLY $SHARD_ASSEMBLY $YGGDRASIL_ASSEMBLY $AUTH_ASSEMBLY $ACCOUNTS_ASSEMBLY; do
+for ASM in $INGEST_ASSEMBLY $SHARD_ASSEMBLY $YGGDRASIL_ASSEMBLY $AUTH_ASSEMBLY $ACCOUNTS_ASSEMBLY $JOBS_ASSEMBLY; do
     if [ ! -f $ASM ]; then
         if [ -n "$BUILDMISSING" ]; then
             # Darn you, bash! zsh can do this in one go, a la ${$(basename $ASM)%%-*}
@@ -113,9 +114,10 @@ service_ports[$MONGOPORT]="MongoDB"
 service_ports[30060]="Ingest"
 service_ports[30062]="Auth"
 service_ports[30064]="Accounts"
+service_ports[30066]="Jobs"
 service_ports[30070]="Shard"
 
-for PORT in 9082 9092 $MONGOPORT 30060 30062 30064 30070; do
+for PORT in 9082 9092 $MONGOPORT 30060 30062 30064 30066 30070; do
     if port_is_open $PORT; then
         echo "You appear to already have a conflicting ${service_ports[$PORT]} service running on port $PORT" >&2
         if [[ $PORT == $MONGOPORT ]]; then
@@ -237,6 +239,12 @@ function on_exit() {
         echo "Stopping accounts..."
         kill $ACCOUNTSPID
         wait $ACCOUNTSPID
+    fi
+
+    if is_running $JOBSPID; then
+        echo "Stopping accounts..."
+        kill $JOBSPID
+        wait $JOBSPID
     fi
 
     if is_running $AUTHPID; then
@@ -374,8 +382,13 @@ echo "Starting accounts service"
 $JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/accounts-v1.logging.xml -jar $ACCOUNTS_ASSEMBLY --configFile $WORKDIR/configs/accounts-v1.conf &
 ACCOUNTSPID=$!
 
+echo "Starting jobs service"
+$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/jobs-v1.logging.xml -jar $JOBS_ASSEMBLY --configFile $WORKDIR/configs/jobs-v1.conf &
+JOBSPID=$!
+
 wait_until_port_open 30062
 wait_until_port_open 30064
+wait_until_port_open 30066
 
 # Now we need an actual account to use for testing
 if [ ! -e $WORKDIR/account_token.txt ]; then
