@@ -191,7 +191,7 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     def extract(res: Result): Table = {
       res map { 
         case cost => {
-          //TODO when the shiftTheta uses stochastic gradient descent, 
+          //TODO when the shiftTheta function uses stochastic gradient descent, 
           //this function will no longer need the counter
           //because we'll have a resonalbe way to determine convergence
           def loop(theta: Theta, alpha: Double, minAlpha: Double, counter: Int): Theta = {
@@ -229,6 +229,9 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
       } getOrElse Table.empty
     }
 
-    def apply(table: Table) = table.reduce(reducer) map extract
+    def apply(table: Table) = {
+      val sampleTable = table.sample(10000, 1)
+      sampleTable.flatMap(_.head.reduce(reducer).map(extract))
+    }
   }
 }

@@ -85,6 +85,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       var thetas: List[List[Double]] = List.empty[List[Double]]
       var i = 0
 
+       //runs the logistic regression function on 50 sets of data generated from the same distribution
       while (i < 50) {
         val testSeqX = Seq.fill(1000)(Random.nextDouble) map { 
           x => (x * 2 * range) - 1 - (range / 2) + center
