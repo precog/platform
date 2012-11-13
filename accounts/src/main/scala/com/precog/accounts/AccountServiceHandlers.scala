@@ -99,7 +99,7 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
 //returns accountId of account if exists, else creates account, 
 //we are working on path accountId.. do we use this to get the account the user wants to create?
 //because we also need auth at this stage.. auth will give us the root key for permmissions
-class PostAccountHandler(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService)(implicit ctx: ExecutionContext) 
+class PostAccountHandler(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService, rootAccountId: String)(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
    
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
@@ -117,7 +117,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                     logger.debug("Found existing account: " + account.accountId)
                     Future(HttpResponse[JValue](OK, content = Some(JObject(List(JField("accountId", account.accountId))))))
                   } getOrElse {
-                    accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free) { (accountId, path) =>
+                    accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free, Some(rootAccountId)) { (accountId, path) =>
                       val permissions = Permission.permissions(path, accountId, None, Permission.ALL)
                       val createBody = JObject(JField("grants", permissions.serialize) :: Nil) 
 
