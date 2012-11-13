@@ -904,7 +904,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
   }
 
   def create(accountId: String, apiKeyName: String, apiKeyManager: APIKeyManager[Future]) = {
-    apiKeyManager.newStandardAPIKeyRecord(accountId, Some(apiKeyName))
+    apiKeyManager.newStandardAPIKeyRecord(accountId, Path(accountId), Some(apiKeyName))
   }
 
   def delete(t: String, apiKeyManager: APIKeyManager[Future]) = sys.error("todo")

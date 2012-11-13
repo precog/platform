@@ -152,10 +152,6 @@ repeats - number of of times to repeat test (default: 1)
   def close(): Unit = ()
 }
 
-object WebappIngestProducer {
-  def main(args: Array[String]) =  new WebappIngestProducer(args).run()
-}
-
 object JsonLoader extends App {
   def usage() {
     println(
@@ -208,18 +204,20 @@ Usage:
   AkkaDefaults.actorSystem.shutdown
 }
 
+object WebappIngestProducer {
+  def main(args: Array[String]) =  new WebappIngestProducer(args).run()
+}
+
 class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
-  val ingestAPIKey: APIKey = sys.error("FIXME")
-  val ingestOwnerAccountId: Option[AccountID] = None
-  
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
-  lazy val apiKey = config.getProperty("token", TestIngestService.rootAPIKey)
+  lazy val ingestAPIKey = config.getProperty("apiKey", "dummy")
+  val ingestOwnerAccountId: Option[AccountID] = None
   val client = new HttpClientXLightWeb 
 
   def send(event: Event, timeout: Timeout) {
     
     val f: Future[HttpResponse[JValue]] = client.path(base)
-                                                .query("apiKey", apiKey)
+                                                .query("apiKey", ingestAPIKey)
                                                 .contentType(application/MimeTypes.json)
                                                 .post[JValue](event.path.toString)(event.data)
     Await.ready(f, 10 seconds) 

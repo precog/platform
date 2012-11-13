@@ -44,7 +44,7 @@ import scalaz.ValidationNEL
 import scalaz.Validation._
 import scalaz.Monad
 
-trait ShardServiceCombinators extends IngestServiceCombinators {
+trait ShardServiceCombinators extends EventServiceCombinators {
 
   type Query = String
 

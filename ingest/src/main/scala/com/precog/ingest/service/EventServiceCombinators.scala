@@ -35,7 +35,7 @@ import com.precog.accounts.AccountServiceCombinators
 import com.precog.common.Path
 import com.precog.common.security._
 
-trait IngestServiceCombinators extends APIKeyServiceCombinators with AccountServiceCombinators {
+trait EventServiceCombinators extends APIKeyServiceCombinators with AccountServiceCombinators {
 
   import BijectionsChunkJson._
   import BijectionsChunkString._

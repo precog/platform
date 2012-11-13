@@ -51,7 +51,7 @@ import scala.collection.mutable.ListBuffer
 
 import scalaz._
 
-class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout, threadPool: Executor, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
+class IngestServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, insertTimeout: Timeout, threadPool: Executor, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path, Account) => Future[HttpResponse[JValue]]] with Logging {
 
   def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[Unit] = {

@@ -57,21 +57,11 @@ import blueeyes.core.http.MimeTypes._
 
 import blueeyes.json._
 
-trait TestIngestService extends
+trait TestEventService extends
   BlueEyesServiceSpecification with
-  IngestService with
-  AkkaDefaults with
-  AccountManagerClientComponent with
-  MongoAPIKeyManagerComponent {
-  val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  EventService with
+  AkkaDefaults {
   
-  lazy val trackingAPIKey: APIKey = sys.error("FIXME")
-  lazy val testAPIKey: APIKey = sys.error("FIXME")
-  lazy val expiredAPIKey: APIKey = sys.error("FIXME")
-  
-  val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-
   val config = """
     security {
       test = true
@@ -85,8 +75,48 @@ trait TestIngestService extends
 
   override val configuration = "services { ingest { v1 { " + config + " } } }"
 
-  def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(trackingAPIKey) 
+  val asyncContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
+  val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  def apiKeyManagerFactory(config: Configuration) = apiKeyManager
+  
+  val accountManager = new InMemoryAccountManager[Future]
+  def accountManagerFactory(config: Configuration) = accountManager
+
+  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(0, Duration(1, "second"))
+
+  val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
+
+  val to = Duration(1, "seconds")
+  val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
+  
+  val testAccount = Await.result(accountManager.newAccount("test@example.com", "open sesame", new DateTime, AccountPlan.Free) {
+    case (accountId, path) => apiKeyManager.newStandardAPIKeyRecord(accountId, path).map(_.apiKey)
+  }, to)
+  
+  val testAccountId = testAccount.accountId
+  val testPath = testAccount.rootPath
+  val testAPIKey = testAccount.apiKey
+  
+  val accessTest = Set[Permission](
+    ReadPermission(testPath, Set("test")),
+    ReducePermission(testPath, Set("test")),
+    WritePermission(testPath, Set()),
+    DeletePermission(testPath, Set())
+  )
+  
+  val expiredAccount = Await.result(accountManager.newAccount("expired@example.com", "open sesame", new DateTime, AccountPlan.Free) {
+    case (accountId, path) =>
+      apiKeyManager.newStandardAPIKeyRecord(accountId, path).map(_.apiKey).flatMap { expiredAPIKey => 
+        apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, accessTest, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
+      }
+  }, to)
+  
+  val expiredAccountId = expiredAccount.accountId
+  val expiredPath = expiredAccount.rootPath
+  val expiredAPIKey = expiredAccount.apiKey
+  
   val messaging = new CollectingMessaging
 
   def queryExecutorFactory(config: Configuration) = new NullQueryExecutor {
@@ -102,8 +132,6 @@ trait TestIngestService extends
     new KafkaEventStore(new EventRouter(routeTable, messaging), 0)
   }
 
-  override def apiKeyManagerFactory(config: Configuration) = apiKeyManager
-
   implicit def jValueToFutureJValue = new Bijection[JValue, Future[JValue]] {
     def apply(x: JValue) = Future(x)
     def unapply(f: Future[JValue]) = Await.result(f, Duration(500, "millis"))
@@ -111,29 +139,26 @@ trait TestIngestService extends
 
   def track[A](
       contentType: MimeType,
-      sync: Boolean = true,
-      apiKey: Option[String] = Some(testAPIKey),
-      path: String = "unittest"
+      apiKey: Option[APIKey],
+      path: Path,
+      ownerAccountId: Option[AccountID],
+      sync: Boolean = true
     )(data: A)(implicit
       bi: Bijection[A, Future[JValue]],
       bi2: Bijection[A, ByteChunk]): Future[(HttpResponse[JValue], List[Event])] = {
     val svc = service.contentType[A](contentType).path(if (sync) "/sync/fs/" else "/async/fs/")
+    val queries = List(apiKey.map(("apiKey", _)), ownerAccountId.map(("ownerAccountId", _))).sequence
+    val svcWithQueries = queries.map(svc.queries(_ :_*)).getOrElse(svc)
+
     messaging.messages.clear()
+    
     for {
-      response <- apiKey.map(svc.query("apiKey", _)).getOrElse(svc).post[A](path)(data)
+      response <- svcWithQueries.post[A](path.toString)(data)
       content <- response.content map (a => bi(a) map (Some(_))) getOrElse Future(None)
     } yield {
       (response.copy(content = content), messaging.messages.toList collect {
         case EventMessage(_, event) => event
       })
     }
-
   }
-
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
-  val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
-}
-
-object TestIngestService {
-  lazy val rootAPIKey: APIKey = sys.error("FIXME")
 }

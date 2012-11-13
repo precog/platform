@@ -28,9 +28,6 @@ import blueeyes.bkka._
 import blueeyes.json._
 import blueeyes.persistence.mongo._
 
-import com.google.common.base.Charsets
-import com.google.common.hash.Hashing
-
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -81,7 +78,7 @@ trait ZkMongoAccountManagerComponent {
       val timeout = new Timeout(config[Int]("mongo.timeout", 30000))
     }
 
-    new MongoAccountManager(mongo, mongo.database(database), settings0) with ZkAccountIdSource {
+    new MongoAccountManager(mongo, mongo.database(database), settings0) {
       val settings = settings0
       val zkc = new ZkClient(zkHosts)
     }
@@ -105,24 +102,16 @@ trait ZkAccountIdSource extends AccountManager[Future] {
   }
 }
 
-abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val execContext: ExecutionContext) extends AccountManager[Future] {
+abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val execContext: ExecutionContext)
+  extends AccountManager[Future] with ZkAccountIdSource {
   import Account._
 
+  implicit val M = AkkaTypeClasses.futureApplicative(execContext)
+  
   private lazy val mamLogger = LoggerFactory.getLogger("com.precog.accounts.MongoAccountManager")
 
   private implicit val impTimeout = settings.timeout
-  private val randomSource = new java.security.SecureRandom
-
-  def randomSalt() = {
-    val saltBytes = new Array[Byte](256)
-    randomSource.nextBytes(saltBytes)
-    saltBytes.flatMap(byte => Integer.toHexString(0xFF & byte))(collection.breakOut) : String
-  }
-
-  private def saltAndHash(password: String, salt: String): String = {
-    Hashing.sha1().hashString(password + salt, Charsets.UTF_8).toString
-  }
-
+  
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountID, Path) => Future[APIKey]): Future[Account] = {
     for {
       accountId <- newAccountId
@@ -169,16 +158,6 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
 
   def findAccountByEmail(email: String) = findOneMatching[Account]("email", email, settings.accounts)
   
-  def authAccount(email: String, password: String) = {
-    for {
-      accountOpt <- findAccountByEmail(email)
-    } yield {
-      accountOpt filter { account =>
-        account.passwordHash == saltAndHash(password, account.passwordSalt)
-      }
-    }
-  }
-
   def updateAccount(account: Account): Future[Boolean] = {
     findAccountById(account.accountId).flatMap {
       case Some(existingAccount) =>
@@ -192,11 +171,6 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
       case None => 
         Future(false)
     }
-  }
-
-  def updateAccountPassword(account: Account, newPassword: String): Future[Boolean] = {
-    val salt = randomSalt()
-    updateAccount(account.copy(passwordHash = saltAndHash(newPassword, salt), passwordSalt = salt))
   }
 
   def deleteAccount(accountId: String): Future[Option[Account]] = {

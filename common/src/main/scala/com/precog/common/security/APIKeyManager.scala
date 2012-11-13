@@ -53,17 +53,17 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] {
     newGrant(name, description, issuerKey, parentIds, readPerms ++ writePerms, expiration)
   }
   
-  def newStandardAccountGrant(accountId: String, name: Option[String] = None, description: Option[String] = None): M[Grant] =
+  def newStandardAccountGrant(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None): M[Grant] =
     for {
       rk <- rootAPIKey
       rg <- rootGrantId
       ng <- newAccountGrant(accountId, name, description, rk, Set(rg), None)
     } yield ng
 
-  def newStandardAPIKeyRecord(accountId: String, name: Option[String] = None, description: Option[String] = None): M[APIKeyRecord] = {
+  def newStandardAPIKeyRecord(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None): M[APIKeyRecord] = {
     val grantName = name.map(_+"-grant")
     val grantDescription = name.map(_+" account grant")
-    val grant = newStandardAccountGrant(accountId, grantName, grantDescription)
+    val grant = newStandardAccountGrant(accountId, path: Path, grantName, grantDescription)
     for {
       rk <- rootAPIKey
       ng <- grant

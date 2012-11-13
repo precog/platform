@@ -144,19 +144,19 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   val rootGrantId = Await.result(apiKeyManager.rootGrantId, to)
   
-  def standardGrant(accountId: AccountID) = mkNewGrantRequest(Await.result(apiKeyManager.newStandardAccountGrant(accountId), to))
+  def standardGrant(accountId: AccountID) = mkNewGrantRequest(Await.result(apiKeyManager.newStandardAccountGrant(accountId, Path(accountId)), to))
   def standardPermissions(accountId: AccountID) = standardGrant(accountId).permissions
   
-  val user1 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user1", Some("user1-key"), None), to)
+  val user1 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user1", Path("user1"), Some("user1-key"), None), to)
   val user1Grant = Await.result(apiKeyManager.findGrant(user1.grants.head), to).get
   
-  val user2 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user2", Some("user2-key"), None), to)
+  val user2 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user2", Path("user2"), Some("user2-key"), None), to)
   val user2Grant = Await.result(apiKeyManager.findGrant(user2.grants.head), to).get
   
-  val user3 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user3", Some("user3-key"), None), to)
+  val user3 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user3", Path("user3"), Some("user3-key"), None), to)
   val user3Grant = Await.result(apiKeyManager.findGrant(user3.grants.head), to).get
   
-  val user4 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user4", Some("user4-key"), None), to)
+  val user4 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user4", Path("user4"), Some("user4-key"), None), to)
   val user4Grant = Await.result(apiKeyManager.findGrant(user4.grants.head), to).get
   val user4DerivedGrant = Await.result(
     apiKeyManager.newGrant(None, None, user4.apiKey, Set(user4Grant.grantId), standardPermissions("user4"), None), to) 

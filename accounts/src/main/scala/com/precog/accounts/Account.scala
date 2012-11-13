@@ -37,6 +37,7 @@ import scalaz.syntax.apply._
 
 case class AccountPlan(planType: String) 
 object AccountPlan {
+  val Root = AccountPlan("Root")
   val Free = AccountPlan("Free")
 }
 

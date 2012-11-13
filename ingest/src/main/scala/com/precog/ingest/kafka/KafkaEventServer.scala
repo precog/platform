@@ -42,16 +42,14 @@ import org.streum.configrity.Configuration
 
 import scalaz._
 
-object KafkaIngestServer extends 
+object KafkaEventServer extends 
     BlueEyesServer with 
-    IngestService with 
+    EventService with 
     AccountManagerClientComponent with
     MongoAPIKeyManagerComponent with
     KafkaEventStoreComponent {
 
   val clock = Clock.System
-
-  def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
 
   implicit val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)

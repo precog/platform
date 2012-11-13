@@ -60,25 +60,25 @@ trait AccountManagerClientComponent {
   }
 }
 
-class AccountManagerClient(settings: AccountManagerClientSettings) extends AccountManager[Future] {
+class AccountManagerClient(settings: AccountManagerClientSettings) extends AccountManager[Future] with AkkaDefaults {
   import settings._
+
+  val asyncContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
-  def newAccountId: Future[AccountID] = sys.error("TODO")
-  
-  def updateAccount(account: Account): Future[Boolean] = sys.error("TODO")
-  def updateAccountPassword(account: Account, newPassword: String): Future[Boolean] = sys.error("TODO")
+  def updateAccount(account: Account): Future[Boolean] = sys.error("TODO 1")
  
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountID, Path) => Future[APIKey]): Future[Account] = sys.error("TODO")
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountID, Path) => Future[APIKey]): Future[Account] = sys.error("TODO 3")
 
-  def listAccountIds(apiKey: APIKey) : Future[Set[Account]] = sys.error("TODO")
+  def listAccountIds(apiKey: APIKey) : Future[Set[Account]] = sys.error("TODO 4")
   
-  def findAccountById(accountId: AccountID): Future[Option[Account]] = sys.error("TODO")
-  def findAccountByEmail(email: String) : Future[Option[Account]] = sys.error("TODO")
-  def authAccount(email: String, password: String) : Future[Option[Account]] = sys.error("TODO")
-  
-  def deleteAccount(accountId: AccountID): Future[Option[Account]] = sys.error("TODO")
+  def findAccountById(accountId: AccountID): Future[Option[Account]] = sys.error("TODO 5")
 
-  def close(): Future[Unit] = sys.error("TODO")
+  def findAccountByEmail(email: String) : Future[Option[Account]] = sys.error("TODO 6")
+  
+  def deleteAccount(accountId: AccountID): Future[Option[Account]] = sys.error("TODO 8")
+
+  def close(): Future[Unit] = sys.error("TODO 9")
   
   def withClient[A](f: HttpClient[ByteChunk] => A): A = {
     val client = new HttpClientXLightWeb 

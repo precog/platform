@@ -47,9 +47,9 @@ import scalaz.syntax.monad._
 
 import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
 
-case class IngestState(apiKeyManager: APIKeyManager[Future], accountManager: AccountManager[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: ExecutorService)
+case class EventServiceState(apiKeyManager: APIKeyManager[Future], accountManager: AccountManager[Future], eventStore: EventStore, ingestPool: ExecutorService)
 
-trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
+trait EventService extends BlueEyesServiceBuilder with EventServiceCombinators
 with DecompressCombinators with AkkaDefaults { 
   import BijectionsChunkJson._
   import BijectionsChunkString._
@@ -63,9 +63,8 @@ with DecompressCombinators with AkkaDefaults {
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
   def accountManagerFactory(config: Configuration): AccountManager[Future]
   def eventStoreFactory(config: Configuration): EventStore
-  def usageLoggingFactory(config: Configuration): UsageLogging 
 
-  val analyticsService = this.service("ingest", "1.0") {
+  val eventService = this.service("ingest", "1.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
@@ -84,23 +83,22 @@ with DecompressCombinators with AkkaDefaults {
                                                 new ThreadFactoryBuilder().setNameFormat("ingestpool-%d").build())
 
           eventStore.start map { _ =>
-            IngestState(
+            EventServiceState(
               apiKeyManager,
               accountManager,
               eventStore,
-              usageLoggingFactory(config.detach("usageLogging")),
               readPool
             )
           }
         } ->
-        request { (state: IngestState) =>
+        request { (state: EventServiceState) =>
           decompress {
             jsonpOrChunk {
               apiKey(state.apiKeyManager) {
                 path("/(?<sync>a?sync)") {
                   dataPath("fs") {
                     accountId(state.accountManager) {
-                      post(new TrackingServiceHandler(state.apiKeyManager, state.eventStore, state.usageLogging, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch))
+                      post(new IngestServiceHandler(state.apiKeyManager, state.eventStore, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch))
                     } ~
                     delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.apiKeyManager, state.eventStore, deleteTimeout)(defaultFutureDispatch))
                   }

@@ -59,7 +59,7 @@ import blueeyes.json._
 import blueeyes.util.Clock
 
 
-class IngestServiceSpec extends TestIngestService with FutureMatchers {
+class EventServiceSpec extends TestEventService with FutureMatchers {
 
   import BijectionsChunkJson._
   import BijectionsChunkString._
@@ -74,13 +74,13 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
 
   "Ingest service" should {
     "track event with valid API key" in {
-      track(JSON)(testValue) must whenDelivered { beLike {
+      track(JSON, Some(testAPIKey), testPath, Some(testAccountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(_), _),
           Event(_, _, _, `testValue`, _) :: Nil) => ok
       } }
     }
     "track asynchronous event with valid API key" in {
-      track(JSON, sync = false) {
+      track(JSON, Some(testAPIKey), testPath, Some(testAccountId), sync = false) {
         Chunk("""{ "testing": 123 }\n""".getBytes("UTF-8"),
           Some(Future { Chunk("""{ "testing": 321 }""".getBytes("UTF-8"), None) }))
       } must whenDelivered { beLike {
@@ -99,7 +99,7 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
           } ]
         }""")
 
-      track(JSON, sync = true) {
+      track(JSON, Some(testAPIKey), testPath, Some(testAccountId), sync = true) {
         Chunk("178234#!!@#$\n".getBytes("UTF-8"),
           Some(Future { Chunk("""{ "testing": 321 }""".getBytes("UTF-8"), None) }))
       } must whenDelivered {
@@ -111,7 +111,7 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
       }
     }
     "track CSV batch ingest with valid API key" in {
-      track(CSV, sync = true) {
+      track(CSV, Some(testAPIKey), testPath, Some(testAccountId), sync = true) {
         Chunk("a,b,c\n1,2,3\n4, ,a".getBytes("UTF-8"),
           Some(Future { Chunk("\n6,7,8".getBytes("UTF-8"), None) }))
       } must whenDelivered { beLike {
@@ -123,28 +123,28 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
       } }
     }
     "reject track request when API key not found" in {
-      track(JSON, apiKey = Some("not gonna find it"))(testValue) must whenDelivered { beLike {
+      track(JSON, Some("not gonna find it"), testPath, Some(testAccountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified API key does not exist")), _), _) => ok 
       } }
     }
     "reject track request when no API key provided" in {
-      track(JSON, apiKey = None)(testValue) must whenDelivered { beLike {
+      track(JSON, None, testPath, Some(testAccountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, _, _), _) => ok 
       }}
     }
     "reject track request when grant is expired" in {
-      track(JSON, apiKey = Some(expiredAPIKey))(testValue) must whenDelivered { beLike {
+      track(JSON, Some(expiredAPIKey), testPath, Some(testAccountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
       }}
     }
     "reject track request when path is not accessible by API key" in {
-      track(JSON, path = "")(testValue) must whenDelivered { beLike {
+      track(JSON, Some(testAPIKey), Path("/"), Some(testAccountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
       }}
     }
     "cap errors at 100" in {
       val data = Chunk((List.fill(500)("!@#$") mkString "\n").getBytes("UTF-8"), None)
-      track(JSON)(data) must whenDelivered { beLike {
+      track(JSON, Some(testAPIKey), testPath, Some(testAccountId))(data) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), _) =>
           msg \ "total" must_== JNum(500)
           msg \ "ingested" must_== JNum(0)
