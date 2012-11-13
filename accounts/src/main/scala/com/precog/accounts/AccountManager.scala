@@ -42,7 +42,7 @@ trait AccountManager[M[+_]] {
   def updateAccount(account: Account): M[Boolean]
   def updateAccountPassword(account: Account, newPassword: String): M[Boolean]
  
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountId, Path) => M[ApiKey]): M[Account]
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None)(f: (AccountId, Path) => M[ApiKey]): M[Account]
 
   def listAccountIds(apiKey: ApiKey) : M[Set[Account]]
   
@@ -129,7 +129,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
     Hashing.sha1().hashString(password + salt, Charsets.UTF_8).toString
   }
 
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountId, Path) => Future[ApiKey]): Future[Account] = {
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId] = None)(f: (AccountId, Path) => Future[ApiKey]): Future[Account] = {
     for {
       accountId <- newAccountId
       path = Path(accountId)
@@ -140,7 +140,8 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
           accountId, email, 
           saltAndHash(password, salt), salt,
           creationDate,
-          apiKey, path, plan)
+          apiKey, path, plan,
+          parent)
         
         database(insert(account0.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]).into(settings.accounts)) map {
           _ => account0
