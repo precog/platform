@@ -19,9 +19,6 @@
  */
 package com.precog.shard
 
-import annotation.tailrec
-import collection.immutable.Stack
-
 import java.nio._
 import java.nio.charset._
 
@@ -30,11 +27,10 @@ import blueeyes.core.data.{ Chunk, ByteChunk, Bijection, BijectionsChunkJson }
 import blueeyes.json.{ JArray, JParser, JValue }
 import blueeyes.json.serialization.DefaultSerialization._
 
-import akka.dispatch.{Await, Future}
+import akka.dispatch.{ Await, Future }
 import akka.util.Duration
 
 import scalaz._
-
 
 object BijectionsChunkQueryResult {
 
@@ -87,143 +83,6 @@ object BijectionsChunkQueryResult {
       Await.result(backM, Duration(1, "seconds"))
     }
 
-    sealed trait Balanced
-    case object Brace extends Balanced
-    case object Bracket extends Balanced
-    case class Colon(v: Balanced) extends Balanced
-    case object Quote extends Balanced
-    case object NullValue extends Balanced
-
-    @tailrec private def findEndString(buffers: Vector[CharBuffer], bufferIndex: Int, offset: Int): Option[(Int, Int)] = {
-      if (bufferIndex >= buffers.length)
-        None
-      else if (offset >= buffers(bufferIndex).limit)
-        findEndString(buffers, bufferIndex + 1, offset % buffers(bufferIndex).limit)
-      else {
-        val char = buffers(bufferIndex).get(offset)
-
-        if (char == '"')
-          Some((bufferIndex, offset))
-        else if (char == '\\')
-          findEndString(buffers, bufferIndex, offset + 2)
-        else
-          findEndString(buffers, bufferIndex, offset + 1)
-      }
-    }
-
-    private case class BalancedStackState(bufferIndex: Int, offset: Int, stack: Stack[Balanced]) {
-      def increment(balanced: Balanced) = BalancedStackState(
-        bufferIndex,
-        offset + 1,
-        stack push balanced
-      )
-      def decrement = BalancedStackState(
-        bufferIndex,
-        offset + 1,
-        stack pop
-      )
-      def skip = BalancedStackState(
-        bufferIndex,
-        offset + 1,
-        stack
-      )
-    }
-
-    // TODO: Really needs unit tests
-    // TODO: Consider trailing commas
-    private def balancedStack(buffers: Vector[CharBuffer]) = {
-      @tailrec @inline def buildState(accum: BalancedStackState): BalancedStackState =
-        if (accum.bufferIndex >= buffers.length)
-          accum
-        else if (accum.offset >= buffers(accum.bufferIndex).limit)
-          buildState(BalancedStackState(
-            accum.bufferIndex + 1,
-            accum.offset % buffers(accum.bufferIndex).limit,
-            accum.stack
-          ))
-        else {
-          val buffer = buffers(accum.bufferIndex)
-          var char = buffer.get(accum.offset)
-          char match {
-            case '{' =>
-              val next = accum increment Brace
-              buildState(next.copy(stack = next.stack push Colon(NullValue)))
-            case '[' =>
-              buildState(accum increment Bracket)
-
-            case '}' =>
-              // Assumption: will never output valid {}
-              buildState(accum decrement)
-            case ']' =>
-              buildState(accum decrement)
-
-            case ',' if accum.stack.nonEmpty && accum.stack.head == Brace =>
-              buildState(accum increment Colon(NullValue))
-            case ':' =>
-              // TODO: Consider {"abc":
-              buildState(accum decrement)
-
-            case '"' =>
-              buildState(findEndString(buffers, accum.bufferIndex, accum.offset + 1) map { case (bufferIndex, offset) =>
-                // Jump over the string
-                BalancedStackState(
-                  bufferIndex,
-                  offset + 1,
-                  accum.stack
-                )
-              } getOrElse {
-                // String didn't end
-                // TODO: Consider if the last character the escape character (\)
-                BalancedStackState(
-                  buffers.length,
-                  buffer.limit,
-                  accum.stack push Quote
-                )
-              })
-
-            case _ => buildState(accum.skip)
-          }
-        }
-
-      buildState(BalancedStackState(0, 0, new Stack())).stack
-    }
-
-    // Count braces, quotes and parens in every chunk's CharBuffer.
-    // Creates a new buffer which can correctly close the chunk.
-    private def getJsonCloserBuffer(buffers: Vector[CharBuffer]) = {
-      val BlankElement = "null"
-
-      def balancedToString(b: Balanced): String = b match {
-        case Brace => "}"
-        case Bracket => "]"
-        case Colon(v) => ":" + balancedToString(v)
-        case Quote => "\""
-        case NullValue => "null"
-      }
-
-      val stringStack = balancedStack(buffers).map(balancedToString)
-      // "}] <- stringStack
-      // ,null <- 5
-      val closerBuffer = CharBuffer.allocate(stringStack.map(_.length).sum + 5)
-
-      @tailrec def addToCloserBuffer(s: Stack[String]) {
-        if (s.length == 1) {
-          // Last element should always be a Bracket (']')
-          // Put the blank element before end of array
-          closerBuffer.put(',')
-          closerBuffer.put(BlankElement)
-        }
-        if (!s.isEmpty) {
-          closerBuffer.put(s.head)
-          addToCloserBuffer(s.pop)
-        }
-      }
-
-      addToCloserBuffer(stringStack)
-      closerBuffer.flip()
-      closerBuffer
-    }
-
     def apply(queryResult: Either[JValue, StreamT[Future, CharBuffer]]): Future[ByteChunk] = {
       val encoder = Charset.forName("UTF-8").newEncoder
       
@@ -234,7 +93,7 @@ object BijectionsChunkQueryResult {
           case Some((chunk, tail)) => {
 
             if (size > Threshold) {
-              val buffer = getJsonCloserBuffer(acc)
+              val buffer = RecoverJson.getJsonCloserBuffer(acc)
               M.point((acc :+ buffer, size + buffer.remaining()))
             } else {
               val acc2 = acc :+ chunk
