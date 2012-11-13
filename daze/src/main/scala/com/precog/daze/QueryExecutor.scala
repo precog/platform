@@ -51,10 +51,13 @@ case class QueryOptions(
   sortOn: List[CPath] = Nil,
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending)
 
-trait QueryExecutor[M[+_]] {
-  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, CharBuffer]]
+trait MetadataClient[M[+_]] {
   def browse(userUID: String, path: Path): M[Validation[String, JArray]]
   def structure(userUID: String, path: Path): M[Validation[String, JObject]]
+}
+
+trait QueryExecutor[M[+_]] extends MetadataClient[M] {
+  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, CharBuffer]]
   def status(): M[Validation[String, JValue]]
   def startup(): M[Boolean]
   def shutdown(): M[Boolean]

@@ -26,3 +26,6 @@ yggdrasil/data
 jprofiler.db
 jprofiler.jnilib
 .cache
+/mongo/proguard.log
+/mongo/precog*.zip
+/mongo/precog/

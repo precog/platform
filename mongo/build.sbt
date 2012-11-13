@@ -17,18 +17,15 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard.yggdrasil
+name := "mongo"
 
-import org.specs2.mutable._
+libraryDependencies ++= Seq(
+  "org.eclipse.jetty" % "jetty-server"      % "8.1.7.v20120910"
+)
 
-class YggdrasilQueryExecutorSpec extends Specification {
-  "the executor" should {
-    "trap syntax errors in queries" in todo
-    "trap compilaiton errors in queries" in todo
-    "trap runtime errors in queries" in todo
-    "trap timeout errors in queries" in todo
-  }
-}
+ivyXML := 
+<dependency org="org.eclipse.jetty.orbit" name="javax.servlet" rev="3.0.0.v201112011016">
+<artifact name="javax.servlet" type="orbit" ext="jar"/>
+</dependency>
 
-
-// vim: set ts=4 sw=4 et:
+mainClass := Some("com.precog.shard.mongo.MongoShardServer")
