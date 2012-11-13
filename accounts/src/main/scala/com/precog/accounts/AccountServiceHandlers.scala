@@ -215,15 +215,15 @@ extends CustomHttpService[Future[JValue],Account => Future[HttpResponse[JValue]]
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) => 
       request.parameters.get('accountId).map { accountId =>
-         accountManagement.findAccountById(accountId).map { 
-          case Some(account) if account.accountId == auth.accountId => 
-            HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
-            
-          case Some(_) => 
-            HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId)))
+         accountManagement.findAccountById(accountId) flatMap { 
+          case Some(account) =>
+            accountManagement.hasAncestor(account, auth) map {
+              case true  => HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
+              case false => HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId)))
+            }
 
           case None => 
-            HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId)))
+            Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId))))
         }
       } getOrElse {
         Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))

@@ -68,7 +68,8 @@ trait AccountManager[M[+_]] {
   def findAccountById(accountId: AccountId): M[Option[Account]]
   def findAccountByEmail(email: String) : M[Option[Account]]
   def authAccount(email: String, password: String) : M[Option[Account]]
-  
+  def hasAncestor(child: Account, ancestor: Account) : M[Boolean]
+
   def deleteAccount(accountId: AccountId): M[Option[Account]]
 
   def close(): M[Unit]
@@ -192,6 +193,21 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
   def findAccountById(accountId: String) = findOneMatching[Account]("accountId", accountId, settings.accounts)
 
   def findAccountByEmail(email: String) = findOneMatching[Account]("email", email, settings.accounts)
+
+  def hasAncestor(child: Account, ancestor: Account) = {
+    if (child == ancestor) {
+      Future(true)
+    } else {
+      child.parentId map { id =>
+        findAccountById(id) flatMap {
+          case None => Future(false)
+          case Some(parent) => hasAncestor(parent, ancestor)
+        }
+      } getOrElse {
+        Future(false)
+      }
+    }
+  }
   
   def authAccount(email: String, password: String) = {
     for {
