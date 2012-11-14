@@ -33,6 +33,23 @@ import org.joda.time.format._
 
 trait TimeLib[M[+_]] extends GenOpcode[M] {
   val TimeNamespace = Vector("std", "time")
+  
+  private val fullParser = ISODateTimeFormat.dateTimeParser
+  private val basicParser = ISODateTimeFormat.basicDateTime
+
+  def parseDateTime(value: String, withOffset: Boolean): DateTime = {
+    val parser = if (value.contains("-") || value.contains(":")) {
+      fullParser
+    } else {
+      basicParser
+    }
+
+    (if (withOffset) {
+      parser.withOffsetParsed
+     } else {
+       parser
+     }).parseDateTime(value)
+  }
 
   override def _lib1 = super._lib1 ++ Set(
     GetMillis,
@@ -90,7 +107,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
   )
 
   private def isValidISO(str: String): Boolean = {
-    try { new DateTime(str); true
+    try { parseDateTime(str, true); true
     } catch {
       case e:IllegalArgumentException => { false }
     }
@@ -148,7 +165,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           val time = c1(row)
           val tz = c2(row)
 
-          val newTime = ISODateTimeFormat.dateTimeParser().parseDateTime(time)
+          val newTime = parseDateTime(time, false)
           val timeZone = DateTimeZone.forID(tz)
           val dateTime = new DateTime(newTime, timeZone)
 
@@ -177,7 +194,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           val time = c1(row)
           val incr = c2(row)
 
-          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          val newTime = parseDateTime(time, true)
 
           plus(newTime, incr.toInt)
         }
@@ -189,7 +206,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           val time = c1(row)
           val incr = c2(row)
 
-          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          val newTime = parseDateTime(time, true)
 
           plus(newTime, incr.toInt)
         }
@@ -201,7 +218,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           val time = c1(row)
           val incr = c2(row)
 
-          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          val newTime = parseDateTime(time, true)
 
           plus(newTime, incr.toInt)
         }
@@ -212,7 +229,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
     //val operation: PartialFunction[(SValue, SValue), SValue] = {
     //  case (SString(time), SDecimal(incr)) if isValidISO(time) => 
-    //    val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+    //    val newTime = parseDateTime(time, true)
     //    SString(plus(newTime, incr.toInt))
     //}
 
@@ -262,8 +279,8 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           val time1 = c1(row)
           val time2 = c2(row)
 
-          val newTime1 = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time1)
-          val newTime2 = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time2)
+          val newTime1 = parseDateTime(time1, true)
+          val newTime2 = parseDateTime(time2, true)
 
           between(newTime1, newTime2)
         }
@@ -378,7 +395,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         def apply(row: Int) = {
           val time = c(row)
 
-          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          val newTime = parseDateTime(time, true)
           newTime.getMillis()
         }
       }
@@ -402,7 +419,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           val time = c(row)
 
           val format = DateTimeFormat.forPattern("ZZ")
-          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          val newTime = parseDateTime(time, true)
           format.print(newTime)
         }
       }
@@ -426,7 +443,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         def apply(row: Int) = {
           val time = c(row)
 
-          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          val newTime = parseDateTime(time, true)
           val day = newTime.dayOfYear.get
           
           if (day >= 79 & day < 171) "spring"
@@ -460,7 +477,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         def apply(row: Int) = {
           val time = c(row)
 
-          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          val newTime = parseDateTime(time, true)
           fraction(newTime)
         }
       }
@@ -539,8 +556,8 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
         def apply(row: Int) = {
           val time = c(row)
-
-          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          
+          val newTime = parseDateTime(time, true)
           fmt.print(newTime)
         }
       }

@@ -167,6 +167,14 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       
       (Dispatch(loc, name, actuals2), names + (name -> d.binding), vars, errors)
     }
+
+    case Cond(loc, pred, left, right) => {
+      val (pred2, predNames, predVars, predErrors) = performShake(pred)
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
+
+      (Cond(loc, pred2, left2, right2), predNames ++ leftNames ++ rightNames, predVars ++ leftVars ++ rightVars, predErrors ++ leftErrors ++ rightErrors)
+    }
     
     case Where(loc, left, right) => {
       val (left2, leftNames, leftVars, leftErrors) = performShake(left)

@@ -687,7 +687,7 @@ trait Evaluator[M[+_]] extends DAG
               PendingTable(pendingTableLeft.table, pendingTableLeft.graph, transFromBinOp(op)(pendingTableLeft.trans, pendingTableRight.trans))
             } else {
               val prefixLength = sharedPrefixLength(left, right)
-              
+
               val key = joinSort match {
                 case IdentitySort =>
                   buildJoinKeySpec(prefixLength)
@@ -1206,9 +1206,15 @@ trait Evaluator[M[+_]] extends DAG
     
     parts reduceOption { (left, right) => trans.InnerObjectConcat(left, right) } getOrElse ConstLiteral(CEmptyArray, Leaf(Source))
   }
+
+  private def disjunctiveEquals(specs: (IdentitySpec, IdentitySpec)): Boolean = specs match {
+    case (CoproductIds(left, right), b) => disjunctiveEquals(b, left) || disjunctiveEquals(b, right)
+    case (a, CoproductIds(left, right)) => disjunctiveEquals(a, left) || disjunctiveEquals(a, right)
+    case (a, b) => a == b
+  }
   
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
-    left.identities zip right.identities takeWhile { case (a, b) => a == b } length
+    left.identities zip right.identities takeWhile disjunctiveEquals length
 
   private def enumerateGraphs(forest: BucketSpec): Set[DepGraph] = forest match {
     case UnionBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)
@@ -1254,7 +1260,7 @@ trait Evaluator[M[+_]] extends DAG
   private def buildJoinKeySpec(sharedLength: Int): TransSpec1 = {
     val components = for (i <- 0 until sharedLength)
       yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, CPathIndex(i))): TransSpec1
-    
+
     components reduce { trans.ArrayConcat(_, _) }
   }
   

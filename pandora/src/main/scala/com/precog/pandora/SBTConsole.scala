@@ -40,6 +40,7 @@ import yggdrasil.jdbm3._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
+import yggdrasil.table.jdbm3._
 import yggdrasil.util._
 
 import com.precog.util.FilesystemFileOps
@@ -57,7 +58,7 @@ object SBTConsole {
       with IdSourceScannerModule[Future] 
       with PrettyPrinter
       with MemoryDatasetConsumer[Future]
-      with BlockStoreColumnarTableModule[Future]
+      with JDBMColumnarTableModule[Future]
       with JDBMProjectionModule
       with SystemActorStorageModule
       with StandaloneShardSystemActorModule {
@@ -71,7 +72,7 @@ object SBTConsole {
         with JDBMProjectionModuleConfig
         with BlockStoreColumnarTableModuleConfig
 
-    trait TableCompanion extends BlockStoreColumnarTableCompanion {
+    trait TableCompanion extends JDBMColumnarTableCompanion {
       import scalaz.std.anyVal._
       implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
     }

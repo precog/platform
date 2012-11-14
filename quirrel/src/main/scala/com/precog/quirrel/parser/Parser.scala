@@ -102,6 +102,8 @@ trait Parser extends RegexParsers with Filters with AST {
     
     | namespacedId ~ "(" ~ actuals ~ ")" ^# { (loc, id, _, as, _) => Dispatch(loc, id, as) }  
 
+    | """if\b""".r ~ expr ~ """then\b""".r ~ expr ~ """else\b""".r ~ expr ^# { (loc, _, e1, _, e2, _, e3) => Cond(loc, e1, e2, e3) }
+
     | expr ~ """where\b""".r ~ expr      ^# { (loc, e1, _, e2) => Where(loc, e1, e2) }
     | expr ~ """with\b""".r ~ expr       ^# { (loc, e1, _, e2) => With(loc, e1, e2) }
     | expr ~ """union\b""".r ~ expr      ^# { (loc, e1, _, e2) => Union(loc, e1, e2) }
@@ -214,6 +216,7 @@ trait Parser extends RegexParsers with Filters with AST {
       (Eq, NotEq),
       (And, Or),
       (Union, Intersect, Difference),
+      Cond,
       With,
       New,
       Where,

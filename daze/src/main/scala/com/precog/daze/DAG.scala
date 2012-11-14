@@ -763,8 +763,8 @@ trait DAG extends Instructions with TransSpecModule {
     }
     
     case class IUI(loc: Line, union: Boolean, left: DepGraph, right: DepGraph) extends DepGraph with StagingPoint {
-      lazy val identities = Vector(Stream continually SynthIds(IdGen.nextInt()) take left.identities.length: _*)
-      
+      lazy val identities = (left.identities, right.identities).zipped map CoproductIds
+
       val sorting = IdentitySort
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
@@ -898,10 +898,11 @@ trait DAG extends Instructions with TransSpecModule {
     
     
     sealed trait IdentitySpec
-    
+
     case class LoadIds(path: String) extends IdentitySpec
     case class SynthIds(id: Int) extends IdentitySpec
-    
+    case class CoproductIds(left: IdentitySpec, right: IdentitySpec) extends IdentitySpec
+
     
     sealed trait JoinSort
     sealed trait TableSort extends JoinSort

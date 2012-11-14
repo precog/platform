@@ -156,6 +156,38 @@ trait EvalStackSpecs extends Specification {
       actual must contain(true).only
     }
 
+    "return the left size of a true if/else operation" in {
+      val input1 = """
+        | if true then //clicks else //campaigns
+      """.stripMargin
+
+      val result1 = evalE(input1)
+
+      val input2 = """
+        | //clicks
+      """.stripMargin
+
+      val result2 = evalE(input2)
+
+      result1 mustEqual result2
+    }
+
+    "return the right size of a false if/else operation" in {
+      val input1 = """
+        | if false then //clicks else //campaigns
+      """.stripMargin
+
+      val result1 = evalE(input1)
+
+      val input2 = """
+        | //campaigns
+      """.stripMargin
+
+      val result2 = evalE(input2)
+
+      result1 mustEqual result2
+    }
+
     //commented out because of timeout issues on jenkins
     /* "accept division inside an object" in {
       val input = """
@@ -981,6 +1013,24 @@ trait EvalStackSpecs extends Specification {
         val results = evalE(input)
 
         results must haveSize(200)
+      }
+      "union with operation against same coproduct" >> {
+        val input = "(//clicks union //views).time + (//clicks union //views).time"
+        val results = evalE(input)
+
+        results must haveSize(200)
+      }
+      "union with operation on left part of coproduct" >> {
+        val input = "(//clicks union //views).time + (//clicks).time"
+        val results = evalE(input)
+
+        results must haveSize(100)
+      }
+      "union with operation on right part of coproduct" >> {
+        val input = "(//clicks union //views).time + (//views).time"
+        val results = evalE(input)
+
+        results must haveSize(100)
       }
     }
 
@@ -2035,7 +2085,7 @@ trait EvalStackSpecs extends Specification {
           result must contain(SNull)
         }
       }
-      
+
       "numbers" >> {
         "addition" >> {
           val result = eval("5 + 2")

@@ -24,7 +24,6 @@ import com.precog.common._
 import com.precog.util.PrecogUnit
 
 import akka.dispatch.Future 
-import akka.util.Timeout
 
 import scalaz._
 import scalaz.effect._

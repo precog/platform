@@ -299,5 +299,46 @@ object CachingAPIKeyManager {
   )
 }
 
+trait StaticAPIKeyManagerComponent {
+  implicit def asyncContext: ExecutionContext
+  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
+  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future] = {
+    new StaticAPIKeyManager(config[String]("masterAccount.apiKey"))
+  }
+}
+
+class StaticAPIKeyManager(rootKey: String)(implicit val execContext: ExecutionContext) extends APIKeyManager[Future] with Logging {
+  logger.info("Starting API Key Manager with root api key: " + rootKey)
+
+  private val grants = Seq(Grant(java.util.UUID.randomUUID.toString, None, ReadPermission(Path("/"), rootKey, None)),
+                           Grant(java.util.UUID.randomUUID.toString, None, OwnerPermission(Path("/"), None)))
+
+  private val apiKeyRecord = APIKeyRecord("Static api key", rootKey, rootKey, grants.map(_.gid).toSet)
+
+  def close() = Future(())
+
+  def newAPIKey(name: String, creator: APIKey, grants: Set[GrantID]) = sys.error("Static API Key Manager doesn't support modification")
+  def newGrant(issuer: Option[GrantID], permission: Permission) = sys.error("Static API Key Manager doesn't support modification") 
+
+  def listAPIKeys() = Future(Seq(apiKeyRecord))
+  def listGrants() = Future(grants)
+  
+  def findAPIKey(tid: APIKey) = Future(if (tid == rootKey) Some(apiKeyRecord) else None)
+  def findGrant(gid: GrantID) = Future(grants.find(_.gid == gid))
+  def findGrantChildren(gid: GrantID) = Future(Set.empty)
+
+  def listDeletedAPIKeys() = Future(Seq())
+  def listDeletedGrants() = Future(Seq()) 
+
+  def findDeletedAPIKey(tid: APIKey) = Future(None)
+  def findDeletedGrant(gid: GrantID) = Future(None)
+  def findDeletedGrantChildren(gid: GrantID) = Future(Set())
+
+  def addGrants(tid: APIKey, grants: Set[GrantID]) = sys.error("Static API Key Manager doesn't support modification")
+  def removeGrants(tid: APIKey, grants: Set[GrantID]) = sys.error("Static API Key Manager doesn't support modification")
+
+  def deleteGrant(gid: GrantID) = sys.error("Static API Key Manager doesn't support modification")
+  def deleteAPIKey(tid: APIKey) = sys.error("Static API Key Manager doesn't support modification")
+}
 

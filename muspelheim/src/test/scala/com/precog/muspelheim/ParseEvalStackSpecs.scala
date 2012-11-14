@@ -155,15 +155,4 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
   )
 }
 
-/*
-object RawJsonStackSpecs extends ParseEvalStackSpecs[Free.Trampoline] with RawJsonColumnarTableStorageModule[Free.Trampoline] {
-  implicit val M = Trampoline.trampolineMonad
-  type YggConfig = ParseEvalStackSpecConfig
-  object yggConfig extends ParseEvalStackSpecConfig
-
-  object Table extends TableCompanion {
-    implicit val geq: scalaz.Equal[Int] = intInstance
-  }
-}
-*/
 // vim: set ts=4 sw=4 et:

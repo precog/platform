@@ -636,6 +636,12 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parseSingle("blah 1") must throwA[ParseException]
     }
     
+    "accept an if/else operation" in {
+      parseSingle("if true then 2 else 3") must beLike {
+        case Cond(_, BoolLit(_, true), NumLit(_, "2"), NumLit(_, "3")) => ok
+      }
+    }
+
     "accept an addition operation" in {
       parseSingle("1 + 2") must beLike { case Add(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
