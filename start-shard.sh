@@ -268,7 +268,7 @@ function on_exit() {
     cd $ZKBASE/bin
     ./zkServer.sh stop
 
-    if [ -n "$DONTCLEAN" ]; then
+    if [ -z "$DONTCLEAN" ]; then
         echo "Cleaning up temp work dir"
         rm -rf $WORKDIR
     fi
