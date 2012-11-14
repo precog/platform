@@ -30,6 +30,10 @@ import TableModule._
 
 import math.{exp, log, pow}
 
+import scala.util.Random
+
+import scala.annotation.tailrec
+
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.std.option._
@@ -60,41 +64,95 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
 
     def sigmoid(z: Double): Double = 1 / (1 + exp(z))
 
-    type Result = Option[Theta => Double]
     type Theta = Array[Double]
+    type Result = Option[Seq[(Double, Double)]]
 
-    //TODO will need this monoid when we also return the gradient function from the reduction
-    //implicit def monoidCompose = new Monoid[Theta => Theta] {
-    //  def zero = identity _
-    //  def append(t1: Theta => Theta, t2: => Theta => Theta) = {
-    //    t1 compose t2
-    //  }
-    //}
+    implicit def monoid = new Monoid[Result] {
+      def zero = None
+      def append(t1: Option[Seq[(Double, Double)]], t2: => Option[Seq[(Double, Double)]]) = {
+        t1 match {
+          case None => t2
+          case Some(c1) => t2 match {
+            case None => Some(c1)
+            case Some(c2) => Some(c1 ++ c2)
+          }
+        }
+      }
+    }
 
-    implicit def monoid = implicitly[Monoid[Result]]
-
+    def cost(seq: Seq[(Double, Double)], theta: Theta): Double = {
+      val result = seq.foldLeft(0D) {
+        case (sum, (x, y)) => {
+          if (y == 1) {
+            val result = log(sigmoid(theta(0) + theta(1) * x))
+    
+            if (result isPosInfinity)
+              sum + Double.MaxValue
+            else if (result isNegInfinity)
+              sum + Double.MinValue
+            else if (result isNaN)
+              sys.error("explosion")
+            else
+              sum + result
+          }
+          else if (y == 0) {
+            val result = log(1 - sigmoid(theta(0) + theta(1) * x))
+    
+            if (result isPosInfinity)
+              sum + Double.MaxValue
+            else if (result isNegInfinity)
+              sum + Double.MinValue
+            else if (result isNaN)
+              sys.error("explosion")
+            else
+              sum + result
+          }
+          else
+            sum
+        }
+      }
+    
+      -result
+    }
+    
+    def gradient(seq: Seq[(Double, Double)], theta: Theta, alpha: Double): Theta = { 
+      seq.foldLeft(theta) { 
+        case (theta, (x, y)) => {
+          val theta0 = theta(0) - alpha * (y - sigmoid(theta(0) + theta(1) * x)) * 1
+          val theta1 = theta(1) - alpha * (y - sigmoid(theta(0) + theta(1) * x)) * x
+    
+          val newtheta0 = {
+            if (theta0 isPosInfinity) 
+              Double.MaxValue
+            else if (theta0 isNegInfinity)
+              Double.MinValue
+            else if (theta0 isNaN)
+              sys.error("explosion")
+            else
+              theta0
+          }
+    
+          val newtheta1 = {
+            if (theta1 isPosInfinity) 
+              Double.MaxValue
+            else if (theta1 isNegInfinity)
+              Double.MinValue
+            else if (theta1 isNaN)
+              sys.error("explosion")
+            else
+              theta1
+          }
+    
+          Array(newtheta0, newtheta1)
+        }
+      }
+    }
+    
     def reduceDouble(seq: Seq[(Double, Double)]): Result = {
       if (seq.isEmpty) {
         None
       } else {
-        def cost(theta: Theta): Double = {
-          val result = seq.foldLeft(0D) {
-            case (sum, (x, y)) => {
-              if (y == 1) {
-                sum + log(sigmoid(theta(0) + theta(1) * x))
-              }
-              else if (y == 0) {
-                sum + log(1 - sigmoid(theta(0) + theta(1) * x))
-              }
-              else
-                sum //in quirrel-like fashion, this ignores dependent variable values not equal to 0 or 1
-            }
-          }
-
-          -result
-        }
-
-        Some(cost _)
+        Some(seq)
       }
     }
 
@@ -153,66 +211,52 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
       }
     }
 
-    //TODO generalize this using the calculated partials!!!!
-    //that way we'll be taking a step *exactly* in the direction of the gradient
-    //and we'll take a step every time
-    def shiftTheta(theta: Theta, cost: Theta => Double, alpha: Double): Theta = {
-      val cost_center = cost(theta)
+    @tailrec
+    def gradloop(seq: Seq[(Double, Double)], theta0: Theta, alpha: Double): Theta = {
+      val theta = gradient(seq, theta0, alpha)
 
-      val cost_up = cost(Array(theta(0) + alpha, theta(1)))
-      val cost_down = cost(Array(theta(0) - alpha, theta(1)))
-      val cost_right = cost(Array(theta(0), theta(1) + alpha))
-      val cost_left = cost(Array(theta(0), theta(1) - alpha))
+      val diffs = theta0.zip(theta) map { case (t0, t) => math.abs(t0 - t) }
+      val sum = diffs.sum
 
-      val t0 = {
-        if (cost_up < cost_center) 
-          theta(0) + alpha
-        else if (cost_down < cost_center)
-          theta(0) - alpha
-        else
-          theta(0)  
-      }
-
-      val t1 = {
-        if (cost_right < cost_center)
-          theta(1) + alpha
-        else if (cost_left < cost_center)
-          theta(1) - alpha
-        else
-          theta(1)  
-      }
-
-      if (cost(Array(t0, t1)) < cost_center)
-        Array(t0, t1)
-      else
+      if (sum / theta.length < 0.0001) {
         theta
+      } else if (cost(seq, theta) > cost(seq, theta0)) {
+        if (alpha > Double.MinValue * 2)
+          gradloop(seq, theta0, alpha / 2.0)
+        else 
+          theta0
+      } else { 
+        gradloop(seq, theta, alpha)
+      }
     }
 
     def extract(res: Result): Table = {
       res map { 
-        case cost => {
-          //TODO when the shiftTheta function uses stochastic gradient descent, 
-          //this function will no longer need the counter
-          //because we'll have a resonalbe way to determine convergence
-          def loop(theta: Theta, alpha: Double, minAlpha: Double, counter: Int): Theta = {
-            if (counter > 500) {
-              theta
-            } else { 
-              val result = shiftTheta(theta, cost, alpha)
+        case seq => {
+          val initialTheta: Theta = {
+            val theta1s = Seq.fill(1000)(Random.nextGaussian * 10)
+            val theta2s = Seq.fill(1000)(Random.nextGaussian * 10)
+            val thetas = theta1s zip theta2s
 
-              if (alpha < minAlpha) {
-                result
-              } else {
-                if (theta(0) == result(0) && theta(1) == result(1))
-                  loop(result, alpha / 2, minAlpha, counter + 1)
-                else
-                  loop(result, alpha, minAlpha, counter + 1)
-              }
+            //todo instead of putting them into map, just keep track of lowest cost
+            val costs = thetas.foldLeft(Map.empty[Double, Theta]) {
+              case (costs, (t1, t2)) => costs + (cost(seq, Array(t1, t2)) -> Array(t1, t2))
             }
+
+            val minCost = costs.keys min
+
+            costs(minCost)
           }
 
-          //TODO big question: what can we learn from the data that will help us better determine these starting values?
-          val finalTheta: Theta = loop(Array(0, 0), 5, 0.000001, 0)
+          val initialAlpha = 1.0
+
+          //println("initial theta0: " + initialTheta(0))
+          //println("initial theta1: " + initialTheta(1))
+
+          val finalTheta: Theta = gradloop(seq, initialTheta, initialAlpha)
+
+          //println("final theta1: " + finalTheta(0))
+          //println("final theta2: " + finalTheta(1))
 
           val theta1 = Table.constDecimal(Set(CNum(finalTheta(0))))
           val theta2 = Table.constDecimal(Set(CNum(finalTheta(1))))
