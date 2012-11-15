@@ -24,7 +24,7 @@ trait SystemActorStorageModule extends ActorStorageModule with ShardSystemActorM
   type YggConfig <: SystemActorStorageConfig
 
   abstract class SystemActorStorageLike(metadataStorage: MetadataStorage) extends ActorStorageLike {
-    private var shardSystemActor0: ActorRef = _
+    private var shardSystemActor0: ActorRef = null
     def shardSystemActor = shardSystemActor0
     
     def start() = Future {

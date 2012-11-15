@@ -11,5 +11,7 @@ check process shard-v1-beta with pidfile /var/run/precog/shard-v1-beta.pid
 # Watch server log for issues
 check file shard-v1-beta.server.log with path /var/log/precog/shard-v1-beta.server.log
   if match "Exception" for 3 cycles then alert
+  if match "Halting" then alert
+  alert derek-cell@chen-becker.org on { content }
   depends on shard-v1-beta
   group shard-v1-beta
