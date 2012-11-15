@@ -81,6 +81,8 @@ trait Tracer extends parser.AST with typer.Binder {
       }
     }
     
+    case Cond(_, pred, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(pred) #:: buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
+
     case Where(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
     case With(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
     case Union(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)

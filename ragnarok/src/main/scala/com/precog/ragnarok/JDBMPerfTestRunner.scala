@@ -23,7 +23,7 @@ package ragnarok
 import yggdrasil.{ ProjectionDescriptor, BaseConfig }
 import yggdrasil.jdbm3._
 import yggdrasil.actor._
-import yggdrasil.table.BlockStoreColumnarTableModule
+import yggdrasil.table.jdbm3.JDBMColumnarTableModule
 import yggdrasil.table.BlockStoreColumnarTableModuleConfig
 import yggdrasil.metadata.FileMetadataStorage
 
@@ -72,7 +72,7 @@ trait StandalonePerfTestRunner[T] extends EvaluatingPerfTestRunner[Future, T]
 final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val optimize: Boolean,
       val actorSystem: ActorSystem, _rootDir: Option[File])(implicit val M: Monad[Future], val coM: Copointed[Future])
     extends StandalonePerfTestRunner[T]
-    with BlockStoreColumnarTableModule[Future]
+    with JDBMColumnarTableModule[Future]
     with SystemActorStorageModule
     with JDBMProjectionModule
     with StandaloneShardSystemActorModule { self =>
@@ -89,8 +89,8 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
       Option(System.getProperty("precog.storage.root")) map ("precog.storage.root = " + _) getOrElse "" }) ++ commandLineConfig
   }
 
-  type TableCompanion = BlockStoreColumnarTableCompanion
-  object Table extends BlockStoreColumnarTableCompanion {
+  trait TableCompanion extends JDBMColumnarTableCompanion
+  object Table extends TableCompanion {
     implicit val geq: scalaz.Equal[Int] = intInstance
   }
 

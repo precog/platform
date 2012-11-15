@@ -22,6 +22,7 @@ package shard
 
 import service._
 import ingest.service._
+import common.Path
 import common.security._
 import daze._
 
@@ -31,7 +32,10 @@ import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.BlueEyesServiceBuilder
 import blueeyes.core.data.{ BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk }
+import blueeyes.core.http.{HttpHeaders, HttpRequest, HttpResponse}
+import blueeyes.core.service.CustomHttpService
 import blueeyes.health.metrics.{eternity}
+import blueeyes.json.JValue
 
 import org.streum.configrity.Configuration
 
@@ -86,17 +90,39 @@ trait ShardService extends
         request { (state: ShardState) =>
           jvalue {
             path("/actors/status") {
-                get(new ActorStatusHandler(state.queryExecutor))
+              get(new ActorStatusHandler(state.queryExecutor))
             }
           } ~ jsonpcb[QueryResult] {
             apiKey(state.apiKeyManager) {
               dataPath("analytics/fs") {
                 query {
-                  get(new QueryServiceHandler(state.queryExecutor))
+                  get(new QueryServiceHandler(state.queryExecutor)) ~
+                  // Handle OPTIONS requests internally to simplify the standalone service
+                  options {
+                    (request: HttpRequest[ByteChunk]) => {
+                      (a: APIKeyRecord, p: Path, s: String, o: QueryOptions) => Future {
+                        HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS", 
+                                                                            "Access-Control-Allow-Origin" -> "*",
+                                                                            "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
+                                                                            "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
+                      }
+                    }
+                  }
                 }
               } ~
               dataPath("meta/fs") {
-                get(new BrowseServiceHandler(state.queryExecutor, state.apiKeyManager))
+                get(new BrowseServiceHandler(state.queryExecutor, state.apiKeyManager)) ~
+                // Handle OPTIONS requests internally to simplify the standalone service
+                options {
+                  (request: HttpRequest[ByteChunk]) => {
+                    (a: APIKeyRecord, p: Path) => Future {
+                      HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS", 
+                                                                          "Access-Control-Allow-Origin" -> "*",
+                                                                          "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
+                                                                          "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
+                    }
+                  }
+                }
               }
             } ~ path("actors/status") {
               get(new ActorStatusHandler(state.queryExecutor))

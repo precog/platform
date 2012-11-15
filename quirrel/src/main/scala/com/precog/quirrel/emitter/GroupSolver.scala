@@ -131,6 +131,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         
         actualErrors ++ originErrors
       }
+
+      case Cond(_, pred, left, right) =>
+        loop(dispatches)(pred) ++ loop(dispatches)(left) ++ loop(dispatches)(right)
       
       case Where(_, left, right) =>
         loop(dispatches)(left) ++ loop(dispatches)(right)
@@ -470,7 +473,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       }
       (actuals map { listTicVars(b, _, sigma) }).fold(leftSet) { _ ++ _ }
     }
-    
+
+    case Cond(_, pred, left, right) => listTicVars(b, pred, sigma) ++ listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
     case Where(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
     case With(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
     case Union(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
@@ -565,6 +569,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       
       dispatchChains map { expr :: _ }
     }
+    
+    case Cond(_, pred, left, right) => 
+      (buildChains(env)(pred) ++ buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
     
     case Where(_, left, right) => 
       (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }

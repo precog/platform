@@ -145,7 +145,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       }
       
       "render a set of numbers interleaved by delimiters" in {
-        val stream = evalTable("//tutorial/transactions.quantity") renderJson ','
+        val stream = evalTable("(//tutorial/transactions).quantity") renderJson ','
         val strings = stream map { _.toString }
         val str = strings.foldLeft("") { _ + _ } copoint
         
@@ -155,15 +155,4 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
   )
 }
 
-/*
-object RawJsonStackSpecs extends ParseEvalStackSpecs[Free.Trampoline] with RawJsonColumnarTableStorageModule[Free.Trampoline] {
-  implicit val M = Trampoline.trampolineMonad
-  type YggConfig = ParseEvalStackSpecConfig
-  object yggConfig extends ParseEvalStackSpecConfig
-
-  object Table extends TableCompanion {
-    implicit val geq: scalaz.Equal[Int] = intInstance
-  }
-}
-*/
 // vim: set ts=4 sw=4 et:

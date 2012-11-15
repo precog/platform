@@ -17,27 +17,15 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package shard
+name := "mongo"
 
-import common.security._
-import shard.yggdrasil.YggdrasilQueryExecutorComponent
+libraryDependencies ++= Seq(
+  "org.eclipse.jetty" % "jetty-server"      % "8.1.7.v20120910"
+)
 
-import akka.dispatch.{ ExecutionContext, Future }
+ivyXML := 
+<dependency org="org.eclipse.jetty.orbit" name="javax.servlet" rev="3.0.0.v201112011016">
+<artifact name="javax.servlet" type="orbit" ext="jar"/>
+</dependency>
 
-import blueeyes.bkka._
-
-import blueeyes.BlueEyesServer
-import blueeyes.util.Clock
-
-import org.streum.configrity.Configuration
-
-import scalaz._
-
-object KafkaShardServer extends BlueEyesServer with ShardService with YggdrasilQueryExecutorComponent with MongoAPIKeyManagerComponent {
-  
-  val clock = Clock.System
-
-  val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-}
+mainClass := Some("com.precog.shard.mongo.MongoShardServer")

@@ -46,7 +46,7 @@ function run_sbt() {
     fi
 }
 
-while getopts ":m:s" opt; do
+while getopts ":m:sa" opt; do
     case $opt in
         m)
             echo "Overriding default mongo port with $OPTARG"
@@ -55,8 +55,12 @@ while getopts ":m:s" opt; do
         s)
             SKIPSETUP=1
             ;;
+        a)
+            SKIPTEST=1
+            ;;
         \?)
-            echo "Usage: `basename $0` [-s] [-m <mongo port>]"
+            echo "Usage: `basename $0` [-a] [-s] [-m <mongo port>]"
+            echo "  -a: Build assemdblies only"
             echo "  -s: Skip clean/compile setup steps"
             echo "  -m: Use the specified port for mongo"
             exit 1
@@ -65,6 +69,7 @@ while getopts ":m:s" opt; do
 done
 
 if [ -z "$SKIPSETUP" ]; then
+    echo "Running clean/compile"
     (cd quirrel && ln -fs ../../research/quirrel/examples)
 
     run_sbt clean
@@ -80,19 +85,24 @@ fi
 
 # For the runs, we don't want to terminate early if a particular project fails
 set +e
-for PROJECT in util common daze auth accounts ragnarok ingest bytecode quirrel muspelheim yggdrasil shard pandora; do
-  run_sbt "$PROJECT/test"
-done
 
-if [ $SUCCESS -eq 0 ]; then
-  run_sbt accounts/assembly auth/assembly ingest/assembly yggdrasil/assembly shard/assembly
+if [ -z "$SKIPTEST" ]; then
+    for PROJECT in util common daze auth accounts ragnarok ingest bytecode quirrel muspelheim yggdrasil shard pandora; do
+        run_sbt "$PROJECT/test"
+    done
 fi
 
 if [ $SUCCESS -eq 0 ]; then
-	wait_until_port_open $MONGOPORT
+    echo "Building assemblies"
+    run_sbt accounts/assembly auth/assembly ingest/assembly yggdrasil/assembly shard/assembly
+fi
+
+if [ $SUCCESS -eq 0 -a -z "$SKIPTEST" ]; then
+    echo "Running full shard test"
+    wait_until_port_open $MONGOPORT
 	
-	shard/test.sh -m $MONGOPORT
-	SUCCESS=$(($SUCCESS || $?))
+    shard/test.sh -m $MONGOPORT
+    SUCCESS=$(($SUCCESS || $?))
 fi
 
 # re-enable errexit

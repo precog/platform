@@ -60,7 +60,38 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
 
   val projections = Map.empty[ProjectionDescriptor, Projection]
 
-  //object Table extends TableCompanion
+  trait TableCompanion extends BaseBlockStoreTestTableCompanion {
+    override def load(table: Table, apiKey: APIKey, jtpe: JType) = {
+      table.toJson map { events =>
+        fromJson {
+          events.toStream flatMap {
+            case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
+              val path = Path(pathStr)
+                  
+              val index = initialIndices get path getOrElse {
+                initialIndices += (path -> currentIndex)
+                currentIndex
+              }
+                  
+              val target = path.path.replaceAll("/$", ".json")
+
+              val src = io.Source fromInputStream getClass.getResourceAsStream(target)
+              val parsed = src.getLines map JParser.parse toStream
+                  
+              currentIndex += parsed.length
+                  
+              parsed zip (Stream from index) map {
+                case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
+              }
+            }
+            case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
+          }
+        }
+      }
+    }
+  }
+  
+  object Table extends TableCompanion
 
   private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
   private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
@@ -81,37 +112,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
     }
   }
 
-  object yggConfig extends YggConfig 
-
-  override def load(table: Table, apiKey: APIKey, jtpe: JType) = {
-    table.toJson map { events =>
-      fromJson {
-        events.toStream flatMap {
-          case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
-            val path = Path(pathStr)
-      
-            val index = initialIndices get path getOrElse {
-              initialIndices += (path -> currentIndex)
-              currentIndex
-            }
-            
-            val target = path.path.replaceAll("/$", ".json")
-            val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-            val parsed = src.getLines map JParser.parse toStream
-            
-            currentIndex += parsed.length
-            
-            parsed zip (Stream from index) map {
-              case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
-            }
-          }
-
-          case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
-        }
-      }
-    }
-  }
-  
+  object yggConfig extends YggConfig
 }
 
 
@@ -2611,10 +2612,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       // 
       // nums := dataset(//hom/numbers)
-      // sums('n) :=
+      // solve 'n
       //   m := max(nums where nums < 'n)
       //   (nums where nums = 'n) + m     -- actually, we used split root, but close enough
-      // sums
       // 
        
       val nums = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
@@ -2640,7 +2640,73 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(55, 13, 119, 25)
       }
     }
-
+    
+    "split where commonalities are determined through object deref" in {
+      // clicks := //clicks
+      // 
+      // solve 'userId
+      //   clicks.time where clicks.userId = 'userId
+      
+      val line = Line(0, "")
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      
+      lazy val input: dag.Split = dag.Split(line,
+        dag.Group(1,
+          Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("time"))),
+          UnfixedSolution(0, Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("user"))))),
+        SplitGroup(line, 1, clicks.identities)(input))
+        
+      testEval(input) { result =>
+        result must haveSize(100)
+      }
+    }
+    
+    "split where commonalities are determined through object deref across extras" in {
+        // clicks := //clicks
+        // 
+        // solve 'time
+        //   count(clicks.page where clicks.page = "/sign-up.html" & clicks.time = 'time)
+        
+      val line = Line(0, "")
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      
+      lazy val input: dag.Split = dag.Split(line,
+        dag.Group(1,
+          Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("page"))),
+          IntersectBucketSpec(
+            dag.Extra(
+              Join(line, Eq, CrossLeftSort,
+                Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("page"))),
+                Root(line, CString("/sign-up.html")))),
+            UnfixedSolution(0, 
+              Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("time")))))),
+        MegaReduce(line, List((trans.TransSpec1.Id, List(Count))), SplitGroup(line, 1, clicks.identities)(input)))
+        
+      testEval(input) { results =>
+        results must not(beEmpty)
+      }
+    }
+    
+    "split where the commonality is a union" in {
+      // clicks := //clicks 
+      // data := clicks union clicks
+      // 
+      // solve 'page 
+      //   data where data.page = 'page
+        
+      val line = Line(0, "")
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      val data = dag.IUI(line, true, clicks, clicks)
+      
+      lazy val input: dag.Split = dag.Split(line,
+        dag.Group(1, data, UnfixedSolution(0, Join(line, DerefObject, CrossLeftSort, data, Root(line, CString("page"))))),
+        SplitGroup(line, 1, data.identities)(input))
+        
+      testEval(input) { results =>
+        results must not(beEmpty)
+      }
+    }
+    
     "memoize properly in a load" in {
       val line = Line(0, "")
 

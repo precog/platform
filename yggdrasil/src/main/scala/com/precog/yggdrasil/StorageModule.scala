@@ -25,7 +25,6 @@ import com.precog.util.PrecogUnit
 import com.precog.common.security._
 
 import akka.dispatch.Future 
-import akka.util.Timeout
 
 import scalaz._
 import scalaz.effect._

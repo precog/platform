@@ -17,18 +17,23 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard.yggdrasil
+package com.precog.shard
+package jdbm3
 
-import org.specs2.mutable._
+import com.precog.common.security._
 
-class YggdrasilQueryExecutorSpec extends Specification {
-  "the executor" should {
-    "trap syntax errors in queries" in todo
-    "trap compilaiton errors in queries" in todo
-    "trap runtime errors in queries" in todo
-    "trap timeout errors in queries" in todo
-  }
+import akka.dispatch.Future
+
+import blueeyes.BlueEyesServer
+import blueeyes.bkka._
+import blueeyes.util.Clock
+
+import scalaz._
+
+object JDBMShardServer extends BlueEyesServer with ShardService with JDBMQueryExecutorComponent with MongoAPIKeyManagerComponent {
+  
+  val clock = Clock.System
+
+  val asyncContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 }
-
-
-// vim: set ts=4 sw=4 et:
