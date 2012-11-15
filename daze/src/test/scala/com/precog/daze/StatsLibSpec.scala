@@ -71,7 +71,7 @@ trait StatsLibSpec[M[+_]] extends Specification
 
       var j = 0
 
-      while (j < 10) {
+      while (j < 5) {
         val t1 = Random.nextGaussian * 10
 
         def makeT2: Double = {
@@ -82,14 +82,7 @@ trait StatsLibSpec[M[+_]] extends Specification
 
         val t2 = makeT2 * 10
 
-        println("t1: " + t1)
-        println("t2: " + t2)
-
         val center = -t1 / t2
-
-        //TODO this isn't actually correct - see t1=2 and t2=16 in ipython
-        //goal is to spread out the points if the distribution has large variance
-        val range = math.abs(center - math.abs((math.log(200) - t1) / t2))
 
         var thetas: List[List[Double]] = List.empty[List[Double]]
         var i = 0
@@ -97,8 +90,7 @@ trait StatsLibSpec[M[+_]] extends Specification
          //runs the logistic regression function on 50 sets of data generated from the same distribution
         while (i < 50) {
           val testSeqX = Seq.fill(1000)(Random.nextDouble) map { 
-            //x => (x * 2 * range) - 1 - (range / 2) + center
-            x => (x * 2) - 1 + center
+            x => x * 2.0 - 1.0 + center
           }
           
           val deciders = Seq.fill(1000)(Random.nextDouble)
@@ -157,14 +149,14 @@ trait StatsLibSpec[M[+_]] extends Specification
           (stdDev, mean)
         }
 
-        //more robust way to deal with outliers
+        //more robust way to deal with outliers than stdDev
         //the `constant` is the conversion constant to the units of standard deviation
-        def madMedian(values: List[Double]): (Double, Double) = {  //todo can get index out of bounds!?
+        def madMedian(values: List[Double]): (Double, Double) = {
           val constant = 0.6745
 
           val sorted = values.sorted
           val length = sorted.length
-          val median = sorted(length / 2) //make more correct?
+          val median = sorted(length / 2)
 
           val diffs = values map { v => math.abs(v - median) }
           val sortedDiffs = diffs.sorted
@@ -178,16 +170,13 @@ trait StatsLibSpec[M[+_]] extends Specification
           val diff = math.abs(median - actual)
 
           val (dev, mean) = stdDevMean(computed)
-
-          println("median: " + median)
-          println("mad: " + mad)
-          println("stdDev: " + dev)
-          println("mean: " + mean)
-
+        
           diff < mad * 3D
         }
+
          
         j += 1
+
 
         isOk(t1, theta1s) mustEqual(true)
         isOk(t2, theta2s) mustEqual(true)

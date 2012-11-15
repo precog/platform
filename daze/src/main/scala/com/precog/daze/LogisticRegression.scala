@@ -45,9 +45,9 @@ import scalaz.syntax.monad._
 
 trait ReductionHelper {
   type Result
-  def reduceDouble(seq: Seq[(Double, Double)]): Result
+  type ColumnValues
+  def reduceDouble(seq: Seq[ColumnValues]): Result
 }
-
 
 trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
   import trans._
@@ -55,7 +55,6 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
   val Stats2Namespace = Vector("std", "stats")
 
   override def _libMorphism2 = super._libMorphism2 ++ Set(LogisticRegression)
-
 
   object LogisticRegression extends Morphism2(Stats2Namespace, "logisticRegression") with ReductionHelper {
     val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
@@ -65,11 +64,12 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     def sigmoid(z: Double): Double = 1 / (1 + exp(z))
 
     type Theta = Array[Double]
-    type Result = Option[Seq[(Double, Double)]]
+    type ColumnValues = Array[Double]
+    type Result = Option[Seq[ColumnValues]]
 
     implicit def monoid = new Monoid[Result] {
       def zero = None
-      def append(t1: Option[Seq[(Double, Double)]], t2: => Option[Seq[(Double, Double)]]) = {
+      def append(t1: Option[Seq[ColumnValues]], t2: => Option[Seq[ColumnValues]]) = {
         t1 match {
           case None => t2
           case Some(c1) => t2 match {
@@ -80,75 +80,73 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
       }
     }
 
-    def cost(seq: Seq[(Double, Double)], theta: Theta): Double = {
+    def checkValue(value: Double): Double = {
+      if (value isPosInfinity)
+        Double.MaxValue
+      else if (value isNegInfinity)
+        Double.MinValue
+      else if (value isNaN)
+        sys.error("Inconceivable! Value is NaN.")
+      else
+        value
+    }
+
+    def dotProduct(xs: Array[Double], ys: Array[Double]): Double = {
+      assert(xs.length == ys.length)
+      var i = 0
+      var result = 0.0
+      while (i < xs.length) {
+        result += xs(i) * ys(i)
+        i += 1
+      }
+      result
+    }    
+
+    def cost(seq: Seq[ColumnValues], theta: Theta): Double = {
       val result = seq.foldLeft(0D) {
-        case (sum, (x, y)) => {
+        case (sum, colVal) => {
+          //TODO deal with taking and last from empty seq
+          val xs = colVal.take(colVal.length - 1)
+          val y = colVal.last
+
+          assert(xs.length == theta.length)
+
           if (y == 1) {
-            val result = log(sigmoid(theta(0) + theta(1) * x))
-    
-            if (result isPosInfinity)
-              sum + Double.MaxValue
-            else if (result isNegInfinity)
-              sum + Double.MinValue
-            else if (result isNaN)
-              sys.error("explosion")
-            else
-              sum + result
-          }
-          else if (y == 0) {
-            val result = log(1 - sigmoid(theta(0) + theta(1) * x))
-    
-            if (result isPosInfinity)
-              sum + Double.MaxValue
-            else if (result isNegInfinity)
-              sum + Double.MinValue
-            else if (result isNaN)
-              sys.error("explosion")
-            else
-              sum + result
-          }
-          else
+            val result = log(sigmoid(dotProduct(theta, xs)))
+
+            sum + checkValue(result)
+          } else if (y == 0) {
+            val result = log(1 - sigmoid(dotProduct(theta, xs)))
+
+            sum + checkValue(result)
+          } else {
             sum
+          }
         }
       }
     
       -result
     }
     
-    def gradient(seq: Seq[(Double, Double)], theta: Theta, alpha: Double): Theta = { 
+    def gradient(seq: Seq[ColumnValues], theta: Theta, alpha: Double): Theta = { 
       seq.foldLeft(theta) { 
-        case (theta, (x, y)) => {
-          val theta0 = theta(0) - alpha * (y - sigmoid(theta(0) + theta(1) * x)) * 1
-          val theta1 = theta(1) - alpha * (y - sigmoid(theta(0) + theta(1) * x)) * x
-    
-          val newtheta0 = {
-            if (theta0 isPosInfinity) 
-              Double.MaxValue
-            else if (theta0 isNegInfinity)
-              Double.MinValue
-            else if (theta0 isNaN)
-              sys.error("explosion")
-            else
-              theta0
-          }
-    
-          val newtheta1 = {
-            if (theta1 isPosInfinity) 
-              Double.MaxValue
-            else if (theta1 isNegInfinity)
-              Double.MinValue
-            else if (theta1 isNaN)
-              sys.error("explosion")
-            else
-              theta1
-          }
-    
-          Array(newtheta0, newtheta1)
+        case (theta, colVal) => {
+          //TODO deal with taking and last from empty seq
+          val xs = colVal.take(colVal.length - 1)
+          val y = colVal.last
+
+          assert(xs.length == theta.length)
+
+          val result = (0 until xs.length).map { i =>
+            theta(i) - alpha * (y - sigmoid(dotProduct(theta, xs)))
+          }.map(checkValue)
+
+          result.toArray
         }
       }
     }
     
-    def reduceDouble(seq: Seq[(Double, Double)]): Result = {
+    def reduceDouble(seq: Seq[ColumnValues]): Result = {
       if (seq.isEmpty) {
         None
       } else {
@@ -165,39 +163,39 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
 
         val result: Set[Result] = cross map {
           case (c1: LongColumn, c2: LongColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => (c1(i).toDouble, c2(i).toDouble) }
+            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i).toDouble) }
             reduceDouble(mapped)
 
           case (c1: LongColumn, c2: DoubleColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => (c1(i).toDouble, c2(i)) }
+            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i)) }
             reduceDouble(mapped)
 
           case (c1: LongColumn, c2: NumColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => (c1(i).toDouble, c2(i).toDouble) }
+            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i).toDouble) }
             reduceDouble(mapped)
 
           case (c1: DoubleColumn, c2: LongColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => (c1(i), c2(i).toDouble) }
+            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i), c2(i).toDouble) }
             reduceDouble(mapped)
 
           case (c1: DoubleColumn, c2: DoubleColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => (c1(i), c2(i)) }
+            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i), c2(i)) }
             reduceDouble(mapped)
 
           case (c1: DoubleColumn, c2: NumColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => (c1(i), c2(i).toDouble) }
+            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i), c2(i).toDouble) }
             reduceDouble(mapped)
 
           case (c1: NumColumn, c2: LongColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => (c1(i).toDouble, c2(i).toDouble) }
+            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i).toDouble) }
             reduceDouble(mapped)
 
           case (c1: NumColumn, c2: DoubleColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => (c1(i).toDouble, c2(i)) }
+            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i)) }
             reduceDouble(mapped)
 
           case (c1: NumColumn, c2: NumColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => (c1(i).toDouble, c2(i).toDouble) }
+            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i).toDouble) }
             reduceDouble(mapped)
 
           case _ => None
@@ -212,7 +210,7 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     }
 
     @tailrec
-    def gradloop(seq: Seq[(Double, Double)], theta0: Theta, alpha: Double): Theta = {
+    def gradloop(seq: Seq[ColumnValues], theta0: Theta, alpha: Double): Theta = {
       val theta = gradient(seq, theta0, alpha)
 
       val diffs = theta0.zip(theta) map { case (t0, t) => math.abs(t0 - t) }
@@ -234,29 +232,26 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
       res map { 
         case seq => {
           val initialTheta: Theta = {
-            val theta1s = Seq.fill(1000)(Random.nextGaussian * 10)
-            val theta2s = Seq.fill(1000)(Random.nextGaussian * 10)
-            val thetas = theta1s zip theta2s
+            val thetaLength = seq(0).length
+            val thetas = Seq.fill(1000)(Array.fill(thetaLength - 1)(Random.nextGaussian * 10))
 
-            //todo instead of putting them into map, just keep track of lowest cost
-            val costs = thetas.foldLeft(Map.empty[Double, Theta]) {
-              case (costs, (t1, t2)) => costs + (cost(seq, Array(t1, t2)) -> Array(t1, t2))
+            val (result, _) = (thetas.tail).foldLeft((thetas.head, cost(seq, thetas.head))) {
+              case ((theta0, cost0), theta) => {
+                val costnew = cost(seq, theta)
+
+                if (costnew < cost0)
+                  (theta, costnew)
+                else
+                  (theta0, cost0)
+              }
             }
 
-            val minCost = costs.keys min
-
-            costs(minCost)
+            result
           }
 
           val initialAlpha = 1.0
 
-          //println("initial theta0: " + initialTheta(0))
-          //println("initial theta1: " + initialTheta(1))
-
           val finalTheta: Theta = gradloop(seq, initialTheta, initialAlpha)
-
-          //println("final theta1: " + finalTheta(0))
-          //println("final theta2: " + finalTheta(1))
 
           val theta1 = Table.constDecimal(Set(CNum(finalTheta(0))))
           val theta2 = Table.constDecimal(Set(CNum(finalTheta(1))))
