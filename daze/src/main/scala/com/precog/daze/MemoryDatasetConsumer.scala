@@ -20,15 +20,14 @@
 package com.precog
 package daze
 
-import common.VectorCase
+import common.{ Path, VectorCase }
+import common.security._
 
 import yggdrasil._
 import yggdrasil.table._
 
 import akka.dispatch.Await
 import akka.util.Duration
-
-import com.precog.common.Path
 
 import scalaz._
 import scalaz.Validation
@@ -47,9 +46,9 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] {
 
   implicit def M: Monad[M] with Copointed[M]
   
-  def consumeEval(userUID: String, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
+  def consumeEval(apiKey: APIKey, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
     Validation.fromTryCatch {
-      val result = eval(userUID, graph, ctx, prefix, optimize)
+      val result = eval(apiKey, graph, ctx, prefix, optimize)
       val json = result.flatMap(_.toJson).copoint filterNot { jvalue => {
         (jvalue \ "value") == JUndefined
       }}

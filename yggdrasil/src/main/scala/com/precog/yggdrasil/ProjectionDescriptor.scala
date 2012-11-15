@@ -83,7 +83,7 @@ trait SortBySerialization {
 
 object SortBy extends SortBySerialization
 
-case class Authorities(uids: Set[AccountID]) {
+case class Authorities(ownerAccountIds: Set[AccountID]) {
 
   @tailrec
   final def hashSeq(l: Seq[String], hash: Int, i: Int = 0): Int = {
@@ -95,9 +95,9 @@ case class Authorities(uids: Set[AccountID]) {
   }    
 
   lazy val hash = {
-    if(uids.size == 0) 1 
-    else if(uids.size == 1) uids.head.hashCode 
-    else hashSeq(uids.toSeq, 1) 
+    if(ownerAccountIds.size == 0) 1 
+    else if(ownerAccountIds.size == 1) ownerAccountIds.head.hashCode 
+    else hashSeq(ownerAccountIds.toSeq, 1) 
   }
 
   override def hashCode(): Int = hash
@@ -106,7 +106,7 @@ case class Authorities(uids: Set[AccountID]) {
 trait AuthoritiesSerialization {
   implicit val AuthoritiesDecomposer: Decomposer[Authorities] = new Decomposer[Authorities] {
     override def decompose(authorities: Authorities): JValue = {
-      JObject(JField("uids", JArray(authorities.uids.map(JString(_)).toList)) :: Nil)
+      JObject(JField("uids", JArray(authorities.ownerAccountIds.map(JString(_)).toList)) :: Nil)
     }
   }
 

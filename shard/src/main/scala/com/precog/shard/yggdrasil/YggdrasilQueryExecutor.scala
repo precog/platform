@@ -216,9 +216,9 @@ trait YggdrasilQueryExecutor
 
   private val queryId = new java.util.concurrent.atomic.AtomicLong
 
-  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
+  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
     val qid = queryId.getAndIncrement
-    queryLogger.info("Executing query for %s: %s, prefix: %s".format(userUID, query,prefix))
+    queryLogger.info("Executing query for %s: %s, prefix: %s".format(apiKey, query,prefix))
 
     import EvaluationError._
 
@@ -230,13 +230,13 @@ trait YggdrasilQueryExecutor
           Validation.success(jsonChunks(withContext { ctx =>
             applyQueryOptions(opts) {
               if (queryLogger.isDebugEnabled) {
-                eval(userUID, dag, ctx, prefix, true) map {
+                eval(apiKey, dag, ctx, prefix, true) map {
                   _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
                     slice => "size: " + slice.size
                   }
                 }
               } else {
-                eval(userUID, dag, ctx, prefix, true)
+                eval(apiKey, dag, ctx, prefix, true)
               }
             }
           }))
@@ -247,14 +247,14 @@ trait YggdrasilQueryExecutor
     ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[Future, CharBuffer]]])
   }
 
-  def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
-    storage.userMetadataView(userUID).findChildren(path) map {
+  def browse(apiKey: APIKey, path: Path): Future[Validation[String, JArray]] = {
+    storage.userMetadataView(apiKey).findChildren(path) map {
       case paths => success(JArray(paths.map( p => JString(p.toString))(collection.breakOut): _*))
     }
   }
 
-  def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = {
-    val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, CPath(""))
+  def structure(apiKey: APIKey, path: Path): Future[Validation[String, JObject]] = {
+    val futRoot = storage.userMetadataView(apiKey).findPathMetadata(path, CPath(""))
 
     def transform(children: Set[PathMetadata]): JObject = {
       // Rewrite with collect or fold?
@@ -289,10 +289,10 @@ trait YggdrasilQueryExecutor
     Future(Failure("Status not supported yet"))
   }
 
-  // private def evaluateDag(userUID: String, dag: DepGraph,prefix: Path): Validation[Throwable, JArray] = {
+  // private def evaluateDag(apiKey: String, dag: DepGraph,prefix: Path): Validation[Throwable, JArray] = {
   //   withContext { ctx =>
-  //     queryLogger.debug("Evaluating DAG for " + userUID)
-  //     val result = consumeEval(userUID, dag, ctx, prefix) map { events => queryLogger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+  //     queryLogger.debug("Evaluating DAG for " + apiKey)
+  //     val result = consumeEval(apiKey, dag, ctx, prefix) map { events => queryLogger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
   //     // FIXME: The next line should really handle resource cleanup. Not quite there with current MemoizationContext
   //     //ctx.memoizationContext.release.unsafePerformIO
   //     queryLogger.debug("DAG evaluated to " + result)

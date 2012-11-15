@@ -86,20 +86,9 @@ case class PathValue(valueType: CType, authorities: Authorities, descriptors: Ma
     PathValue(valueType, authorities, descriptors + (desc -> meta))
 }
 
-class UserMetadataView[M[+_]](userAccountId: AccountID, accessControl: AccessControl[M], metadata: StorageMetadata[M])(implicit val M: Monad[M]) extends StorageMetadata[M] {
-  
-  val accountAPIKey : APIKey = sys.error("TODO")
-  
+class UserMetadataView[M[+_]](apiKey: APIKey, accessControl: AccessControl[M], metadata: StorageMetadata[M])(implicit val M: Monad[M]) extends StorageMetadata[M] {
   def findChildren(path: Path): M[Set[Path]] = {
-    metadata.findChildren(path) flatMap { paths =>
-      paths traverse { p =>
-        val tPath = path / p
-        accessControl.hasCapability(accountAPIKey, Set(ReadPermission(tPath, Set(userAccountId))), some(new DateTime)) map {
-          case true => Set(p)
-          case false => Set.empty
-        }
-      } map { _.flatten }
-    }
+    metadata.findChildren(path)
   }
 
   def findSelectors(path: Path): M[Set[CPath]] = {
@@ -118,8 +107,8 @@ class UserMetadataView[M[+_]](userAccountId: AccountID, accessControl: AccessCon
         case (key, value) =>
           traverseForall(value) {
             case (colDesc, _) => 
-              val uids = colDesc.authorities.uids
-              accessControl.hasCapability(accountAPIKey, Set(ReducePermission(path, uids)), some(new DateTime))
+              val ownerAccountIds = colDesc.authorities.ownerAccountIds
+              accessControl.hasCapability(apiKey, Set(ReducePermission(path, ownerAccountIds)), some(new DateTime))
           }
       }
     }
@@ -136,7 +125,7 @@ class UserMetadataView[M[+_]](userAccountId: AccountID, accessControl: AccessCon
           restrictAccess(children).map(c => Some(PathIndex(index, c)))
 
         case p @ PathValue(_, authorities, _) =>
-          (accessControl.hasCapability(accountAPIKey, Set(ReducePermission(path, authorities.uids)), some(new DateTime)) map { _ option p })
+          (accessControl.hasCapability(apiKey, Set(ReducePermission(path, authorities.ownerAccountIds)), some(new DateTime)) map { _ option p })
       }
 
       mapped.sequence map { _.flatten }

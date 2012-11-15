@@ -39,36 +39,32 @@ import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
 
+import scalaz.std.string._
+import scalaz.syntax.validation._
+import scalaz.syntax.apply._
+
 class BrowseServiceHandler(queryExecutor: QueryExecutor[Future], accessControl: AccessControl[Future])(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (APIKeyRecord, Path) => Future[HttpResponse[QueryResult]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => { 
     success((r: APIKeyRecord, p: Path) => {
-      val accountId = "FIXME"
-      accessControl.hasCapability(r.apiKey, Set(ReadPermission(p, Set(accountId))), None).flatMap { 
-        case true =>
-          import scalaz.std.string._
-          import scalaz.syntax.validation._
-          import scalaz.syntax.apply._
-
-          queryExecutor.browse(r.apiKey, p) flatMap { browseResult =>
-            queryExecutor.structure(r.apiKey, p) map { structureResult =>
-              (browseResult |@| structureResult) { (children, structure) =>
-                JObject(
-                  JField("children", children) ::
-                  // JField("structure", structure) ::
-                  Nil
-                )
-              } match {
-                case Success(response) =>
-                  HttpResponse[QueryResult](OK, content = Some(Left(response)))
-                 case Failure(error) =>
-                  HttpResponse[QueryResult](HttpStatus(BadRequest, error))
-              }
+      queryExecutor.browse(r.apiKey, p) flatMap { browseResult => browseResult match {
+        case Success(_) =>
+          queryExecutor.structure(r.apiKey, p) map { structureResult =>
+            (browseResult |@| structureResult) { (children, structure) =>
+              JObject(
+                JField("children", children) ::
+                Nil
+              )
+            } match {
+              case Success(response) =>
+                HttpResponse[QueryResult](OK, content = Some(Left(response)))
+               case Failure(error) =>
+                HttpResponse[QueryResult](HttpStatus(BadRequest, error))
             }
           }
-        case false =>
-          Future(HttpResponse[QueryResult](HttpStatus(Unauthorized, "The specified API key may not browse this location")))
-      }
+        case Failure(error) =>
+          Future(HttpResponse[QueryResult](HttpStatus(BadRequest, error)))
+      }}
     })
   }
 

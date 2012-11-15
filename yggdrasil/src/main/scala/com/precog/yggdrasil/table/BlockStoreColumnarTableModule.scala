@@ -75,7 +75,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   import BlockStoreColumnarTableModule._
     
   type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig with BlockStoreColumnarTableModuleConfig
-  override type UserId = String
   type Key
   type Projection <: BlockProjectionLike[Key, Slice]
   type TableCompanion <: BlockStoreColumnarTableCompanion
@@ -850,9 +849,9 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
   }
   
   // because I *can*!
-  def load(table: Table, accountId: AccountID, tpe: JType): M[Table] = {
+  def load(table: Table, apiKey: APIKey, tpe: JType): M[Table] = {
     import Table.loadMergeEngine._
-    val metadataView = storage.userMetadataView(accountId)
+    val metadataView = storage.userMetadataView(apiKey)
 
     // Reduce this table to obtain the in-memory set of strings representing the vfs paths
     // to be loaded.
@@ -923,7 +922,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     import SliceTransform._
     import trans._
     
-    def load(uid: UserId, tpe: JType): M[Table] = self.load(this, uid, tpe)
+    def load(apiKey: APIKey, tpe: JType): M[Table] = self.load(this, apiKey, tpe)
 
     /**
      * Sorts the KV table by ascending or descending order of a transformation
@@ -986,7 +985,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = M.point(this)
     
-    def load(uid: UserId, tpe: JType): M[Table] = self.load(this, uid, tpe)
+    def load(apiKey: APIKey, tpe: JType): M[Table] = self.load(this, apiKey, tpe)
     
     override def compact(spec: TransSpec1): Table = this
 

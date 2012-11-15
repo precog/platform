@@ -72,7 +72,7 @@ trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
       def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
     }
 
-    def userMetadataView(uid: String) = new UserMetadataView[M](uid, new UnrestrictedAccessControl(), metadata)
+    def userMetadataView(apiKey: APIKey) = new UserMetadataView[M](apiKey, new UnrestrictedAccessControl(), metadata)
 
     def projection(descriptor: ProjectionDescriptor) = M.point(projections(descriptor) -> new Release(IO(PrecogUnit)))
   }

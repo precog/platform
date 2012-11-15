@@ -73,7 +73,7 @@ trait REPL
     with IdSourceScannerModule[Future]
     with MemoryDatasetConsumer[Future] {
 
-  val dummyUID = "dummyUID"
+  val dummyAPIKey = "dummyAPIKey"
 
   val Prompt = "quirrel> "
   val Follow = "       | "
@@ -116,7 +116,7 @@ trait REPL
           
           for (graph <- eitherGraph.right) {
             val result = withContext { ctx =>
-              consumeEval(dummyUID, graph, ctx,Path.Root) fold (
+              consumeEval(dummyAPIKey, graph, ctx,Path.Root) fold (
                 error   => "An error occurred processing your query: " + error.getMessage,
                 results => JArray(results.toList.map(_._2.toJValue)).renderPretty
               )

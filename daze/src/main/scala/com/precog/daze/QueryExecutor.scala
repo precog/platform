@@ -23,6 +23,7 @@ package daze
 import com.precog.yggdrasil.TableModule
 import com.precog.common._
 import com.precog.common.json._
+import com.precog.common.security._
 
 import blueeyes.json._
 
@@ -52,9 +53,9 @@ case class QueryOptions(
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending)
 
 trait QueryExecutor[M[+_]] {
-  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, CharBuffer]]
-  def browse(userUID: String, path: Path): M[Validation[String, JArray]]
-  def structure(userUID: String, path: Path): M[Validation[String, JObject]]
+  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, CharBuffer]]
+  def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]]
+  def structure(apiKey: APIKey, path: Path): M[Validation[String, JObject]]
   def status(): M[Validation[String, JValue]]
   def startup(): M[Boolean]
   def shutdown(): M[Boolean]
@@ -64,12 +65,12 @@ trait NullQueryExecutor extends QueryExecutor[Id.Id] {
   def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
 
-  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions) = {
+  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
     failure(SystemError(new UnsupportedOperationException("Query service not avaialble")))
   }
   
-  def browse(userUID: String, path: Path) = sys.error("feature not available") 
-  def structure(userUID: String, path: Path) = sys.error("feature not available")
+  def browse(apiKey: APIKey, path: Path) = sys.error("feature not available") 
+  def structure(apiKey: APIKey, path: Path) = sys.error("feature not available")
   def status() = sys.error("feature not available")
 
   def startup = true

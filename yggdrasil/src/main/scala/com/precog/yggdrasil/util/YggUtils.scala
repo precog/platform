@@ -216,7 +216,7 @@ object DatabaseTools extends Command with YggUtilsCommon {
       case (acc, desc) =>
        desc.columns.foldLeft(acc) {
          case (acc, ColumnDescriptor(p, s, t, u)) =>
-           val update = acc.get(p) map { _ + Tuple3(s, t, u.uids.toSeq) } getOrElse { SortedSet(Tuple3(s, t, u.uids.toSeq)) } 
+           val update = acc.get(p) map { _ + Tuple3(s, t, u.ownerAccountIds.toSeq) } getOrElse { SortedSet(Tuple3(s, t, u.ownerAccountIds.toSeq)) } 
            acc + (p -> update) 
        }
     }

@@ -20,9 +20,9 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.common.Path
+import com.precog.common.{ Path, VectorCase } 
 import com.precog.common.json._
-import com.precog.common.VectorCase
+import com.precog.common.security._
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.util._
 
@@ -78,7 +78,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 
   class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size) {
     import trans._
-    def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
+    def load(apiKey: APIKey, jtpe: JType): M[Table] = sys.error("todo")
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false) = sys.error("todo")
     def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("todo")
   }

@@ -60,8 +60,8 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
 
     private lazy val metadata: StorageMetadata[Future] = new ActorStorageMetadata(shardSystemActor, yggConfig.metadataTimeout)
     
-    def userMetadataView(accountId: AccountID): StorageMetadata[Future] = {
-      new UserMetadataView(accountId, accessControl, metadata)
+    def userMetadataView(apiKey: APIKey): StorageMetadata[Future] = {
+      new UserMetadataView(apiKey, accessControl, metadata)
     }
     
     def projection(descriptor: ProjectionDescriptor): Future[(Projection, Release)] = {

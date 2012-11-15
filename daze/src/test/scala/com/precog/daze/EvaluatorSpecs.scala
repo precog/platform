@@ -28,6 +28,7 @@ import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.test._
 import com.precog.yggdrasil.util._
 import com.precog.common.json._
+import com.precog.common.security._
 import com.precog.util.IOUtils
 import com.precog.util.IdGen
 import com.precog.bytecode._
@@ -82,7 +83,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
 
   object yggConfig extends YggConfig 
 
-  override def load(table: Table, uid: UserId, jtpe: JType) = {
+  override def load(table: Table, apiKey: APIKey, jtpe: JType) = {
     table.toJson map { events =>
       fromJson {
         events.toStream flatMap {
@@ -124,14 +125,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
   import dag._
   import instructions._
 
-  val testUID = "testUID"
+  val testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph, path: Path = Path.Root)(test: Set[SEvent] => Result): Result = withContext { ctx =>
-    (consumeEval(testUID, graph, ctx, path, true) match {
+    (consumeEval(testAPIKey, graph, ctx, path, true) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     })/* and 
-    (consumeEval(testUID, graph, ctx, path, false) match {
+    (consumeEval(testAPIKey, graph, ctx, path, false) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     })*/

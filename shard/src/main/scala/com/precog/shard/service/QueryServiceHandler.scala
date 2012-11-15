@@ -81,15 +81,15 @@ Takes a quirrel query and returns the result of evaluating the query.
   ))
 
   
-  def list(u: APIKey, p: Path) = {
-    queryExecutor.browse(u, p).map {
+  def list(apiKey: APIKey, p: Path) = {
+    queryExecutor.browse(apiKey, p).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error listing path: " + p))))
     }
   }
 
-  def describe(u: APIKey, p: Path) = {
-    queryExecutor.structure(u, p).map {
+  def describe(apiKey: APIKey, p: Path) = {
+    queryExecutor.structure(apiKey, p).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error describing path: " + p))))
     }

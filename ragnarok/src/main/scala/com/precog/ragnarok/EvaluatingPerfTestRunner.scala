@@ -21,6 +21,7 @@ package com.precog
 package ragnarok
 
 import common.Path
+import common.security._
 
 import daze.{ Evaluator, EvaluatorConfig }
 
@@ -48,7 +49,7 @@ trait PerfTestRunnerConfig extends BaseConfig
     with ColumnarTableModuleConfig {
     
   def optimize: Boolean
-  def userUID: String
+  def apiKey: APIKey
 }
 
 trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
@@ -100,7 +101,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
       case Right(dag) =>
         withContext { ctx =>
           for {
-            table <- eval(yggConfig.userUID, dag, ctx, Path.Root, yggConfig.optimize)
+            table <- eval(yggConfig.apiKey, dag, ctx, Path.Root, yggConfig.optimize)
             size <- countStream(table.renderJson(','))
           } yield size
         }

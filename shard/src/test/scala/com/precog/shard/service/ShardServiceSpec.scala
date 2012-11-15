@@ -68,13 +68,11 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def nanoTime = sys.error("nanotime not available in the past")
 }
 
-trait TestShardService extends BlueEyesServiceSpecification with ShardService with AkkaDefaults with MongoAPIKeyManagerComponent { self =>
+trait TestShardService extends
+  BlueEyesServiceSpecification with
+  ShardService with
+  AkkaDefaults { self =>
   
-  val apiKeyManager = new InMemoryAPIKeyManager[Future]
-  
-  lazy val testAPIKey: APIKey = sys.error("FIXME")
-  lazy val expiredAPIKey: APIKey = sys.error("FIXME")
-
   import BijectionsChunkJson._
   import BijectionsChunkQueryResult._
   import AkkaTypeClasses._
@@ -95,14 +93,40 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
-  
   def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]) = new TestQueryExecutor {
     val actorSystem = self.actorSystem
     val executionContext = self.asyncContext
-    val allowedUID = testAPIKey
+    
+    val accessControl = apiKeyManager
+    val ownerMap = Map(
+      Path("/")     ->             Set("root"),
+      Path("/test") ->             Set("test"),
+      Path("/test/foo") ->         Set("test"),
+      Path("/expired") ->          Set("expired"),
+      Path("/inaccessible") ->     Set("other"),
+      Path("/inaccessible/foo") -> Set("other")
+    )
   }
 
-  override def apiKeyManagerFactory(config: Configuration) = apiKeyManager
+  val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  val to = Duration(1, "seconds")
+  val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
+  
+  val testPath = Path("/test")
+  val testAPIKey = Await.result(apiKeyManager.newStandardAPIKeyRecord("test", testPath).map(_.apiKey), to)
+  
+  val accessTest = Set[Permission](
+    ReadPermission(testPath, Set("test")),
+    ReducePermission(testPath, Set("test")),
+    WritePermission(testPath, Set()),
+    DeletePermission(testPath, Set())
+  )
+  val expiredPath = Path("expired")
+  val expiredAPIKey = Await.result(apiKeyManager.newStandardAPIKeyRecord("expired", expiredPath).map(_.apiKey).flatMap { expiredAPIKey => 
+    apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, accessTest, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
+  }, to)
+  
+  def apiKeyManagerFactory(config: Configuration) = apiKeyManager
 
   lazy val queryService = service.contentType[QueryResult](application/(MimeTypes.json))
                                  .path("/analytics/fs/")
@@ -110,8 +134,8 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
   lazy val metaService = service.contentType[QueryResult](application/(MimeTypes.json))
                                 .path("/meta/fs/")
 
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
-  val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
+  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(1, Duration(1, "second"))
+  val shortFutureTimeouts = FutureTimeouts(1, Duration(50, "millis"))
   
   implicit def AwaitBijection(implicit bi: Bijection[QueryResult, Future[ByteChunk]]): Bijection[QueryResult, ByteChunk] = new Bijection[QueryResult, ByteChunk] {
     def unapply(chunk: ByteChunk): QueryResult = bi.unapply(Future(chunk))
@@ -125,40 +149,50 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query).get(path)
   }
 
-  val testQuery = "1 + 1"
+  val simpleQuery = "1 + 1"
+  val relativeQuery = "//foo"
+  val accessibleAbsoluteQuery = "//test/foo"
+  val inaccessibleAbsoluteQuery = "//inaccessible/foo"
 
   "Shard query service" should {
-    "handle query from root path" in {
-      query(testQuery) must whenDelivered { beLike {
+    "handle absolute accessible query from root path" in {
+      query(accessibleAbsoluteQuery) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(Left(_)), _) => ok
       }}
     }
-    "handle query from non-root path" in {
-      pending
-      //query("//numbers", path = "/hom") must whenDelivered { 
-      //  beLike {
-      //    case HttpResponse(HttpStatus(OK, _), _, Some(data), _) => data must be_==(JString("fixme"))
-      //  }
-      //}
+    "reject absolute inaccessible query from root path" in {
+      query(inaccessibleAbsoluteQuery) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
+      }}
+    }
+    "handle relative query from accessible non-root path" in {
+      query(relativeQuery, path = "/test") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(Left(_)), _) => ok
+      }}
+    }
+    "reject relative query from inaccessible non-root path" in {
+      query(relativeQuery, path = "/inaccessible") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
+      }}
     }
     "reject query when no API key provided" in {
-      query(testQuery, None) must whenDelivered { beLike {
+      query(simpleQuery, None) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
       }}
     }
     "reject query when API key not found" in {
-      query(testQuery, Some("not-gonna-find-it")) must whenDelivered { beLike {
+      query(simpleQuery, Some("not-gonna-find-it")) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified API key does not exist"))), _) => ok
       }}
     }
     "reject query when grant is expired" in {
-      query(testQuery, Some(expiredAPIKey)) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(UnprocessableEntity, _), _, Some(Left(JArray(List(JString("No data accessable at the specified path."))))), _) => ok
+      query(accessibleAbsoluteQuery, Some(expiredAPIKey)) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
       }}
     }
   }
   
-  def browse(apiKey: Option[String] = Some(testAPIKey), path: String = "unittest/"): Future[HttpResponse[QueryResult]] = {
+  def browse(apiKey: Option[String] = Some(testAPIKey), path: String = "/test"): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metaService).get(path)
   }
  
@@ -171,7 +205,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     }
     "reject browse for non-API key accessible path" in {
       browse(path = "") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, "The specified API key may not browse this location"), _, None, _) => ok
+        case HttpResponse(HttpStatus(BadRequest, "The specified API key may not browse this location"), _, None, _) => ok
       }}
     }
     "reject browse when no API key provided" in {
@@ -185,21 +219,25 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
       }}
     }
     "reject browse when grant expired" in {
-      browse(Some(expiredAPIKey), path = "/expired") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, "The specified API key may not browse this location"), _, None, _) => ok
+      browse(Some(expiredAPIKey), path = "/test") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(BadRequest, "The specified API key may not browse this location"), _, None, _) => ok
       }}
     }
   }
 }
 
 trait TestQueryExecutor extends QueryExecutor[Future] {
-  def actorSystem: ActorSystem  
-  implicit def executionContext: ExecutionContext
-  def allowedUID: String
-
   import scalaz.syntax.monad._
+  import scalaz.syntax.traverse._
   import AkkaTypeClasses._
   
+  def actorSystem: ActorSystem  
+  implicit def executionContext: ExecutionContext
+  val to = Duration(1, "seconds")
+  
+  val accessControl: AccessControl[Future]
+  val ownerMap: Map[Path, Set[AccountID]]
+
   private def wrap(a: JArray): StreamT[Future, CharBuffer] = {
     val str = a.toString
     val buffer = CharBuffer.allocate(str.length)
@@ -209,25 +247,41 @@ trait TestQueryExecutor extends QueryExecutor[Future] {
     StreamT.fromStream(Stream(buffer).point[Future])
   }
 
-  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions) = {
-    if(userUID != allowedUID) {
-      failure(UserError(JArray(List(JString("No data accessable at the specified path.")))))
-    } else {
+  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+    val requiredPaths = if(query startsWith "//") Set(prefix / Path(query.substring(1))) else Set.empty[Path]
+    val allowed = Await.result(Future.sequence(requiredPaths.map {
+      path => accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime))
+    }).map(_.forall(identity)), to)
+    
+    if(allowed)
       success(wrap(JArray(List(JNum(2)))))
-    } 
+    else
+      failure(AccessDenied("No data accessable at the specified path"))
+  }
+
+  def browse(apiKey: APIKey, path: Path) = {
+    accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
+      if(allowed) {
+        success(JArray(List(JString("foo"), JString("bar"))))
+      } else {
+        failure("The specified API key may not browse this location")
+      }
+    }
   }
   
-  def browse(userUID: String, path: Path) = {
-    Future(success(JArray(List(JString("foo"), JString("bar")))))
+  def structure(apiKey: APIKey, path: Path) = {
+    accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
+      if(allowed) {
+        success(JObject(List(
+          JField("test1", JString("foo")),
+          JField("test2", JString("bar"))
+        )))
+      } else {
+        failure("The specified API key may not browse this location")
+      }
+    }
   }
-  
-  def structure(userUID: String, path: Path) = {
-    Future(success(JObject(List(
-      JField("test1", JString("foo")),
-      JField("test2", JString("bar"))
-    ))))
-  }
- 
+
   def status() = Future(Success(JArray(List(JString("status")))))
 
   def startup = Future(true)
