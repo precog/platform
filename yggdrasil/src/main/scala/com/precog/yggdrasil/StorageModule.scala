@@ -26,7 +26,7 @@ trait StorageModule[M[+_]] {
 }
 
 trait StorageMetadataSource[M[+_]] {
-  def userMetadataView(accountId: AccountID): StorageMetadata[M]
+  def userMetadataView(apiKey: APIKey): StorageMetadata[M]
 }
 
 class Release(private var _release: IO[PrecogUnit]) { self => 

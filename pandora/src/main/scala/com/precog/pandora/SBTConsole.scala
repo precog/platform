@@ -123,7 +123,7 @@ object SBTConsole {
 
     def evalE(str: String) = {
       val dag = produceDAG(str)
-      withContext { ctx => consumeEval("0", dag, ctx,Path.Root) }
+      withContext { ctx => consumeEval("dummyAPIKey", dag, ctx,Path.Root) }
     }
     
     def produceDAG(str: String) = {
