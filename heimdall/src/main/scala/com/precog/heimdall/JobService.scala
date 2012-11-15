@@ -48,6 +48,7 @@ trait JobService
         request { case JobServiceState(jobs, clock) =>
           jsonp[ByteChunk] {
             path("/jobs") {
+              get(new ListJobsHandler(jobs)) ~
               //checkAPIKey {
                 post(new CreateJobHandler(jobs, clock)) ~
               //} ~
@@ -57,9 +58,16 @@ trait JobService
                   get(new GetJobStatusHandler(jobs)) ~
                   put(new UpdateJobStatusHandler(jobs))
                 } ~
-                path("/messages/'channel") {
-                  post(new AddMessageHandler(jobs)) ~
-                  get(new ListMessagesHandler(jobs))
+                path("/state") {
+                  get(new GetJobStateHandler(jobs)) ~
+                  put(new PutJobStateHandler(jobs))
+                } ~
+                path("/messages") {
+                  get(new ListChannelsHandler(jobs)) ~
+                  path("/'channel") {
+                    post(new AddMessageHandler(jobs)) ~
+                    get(new ListMessagesHandler(jobs))
+                  }
                 }
               }
             }
