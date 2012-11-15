@@ -65,16 +65,17 @@ case class Account(accountId: String,
 
 trait AccountSerialization extends AccountPlanSerialization {
   val UnsafeAccountDecomposer: Decomposer[Account] = new Decomposer[Account] {
-    override def decompose(t: Account): JValue = JObject(List(
-      JField("accountId", t.accountId),
-      JField("email", t.email),
-      JField("passwordHash", t.passwordHash),
-      JField("passwordSalt", t.passwordSalt),
-      JField("accountCreationDate", t.accountCreationDate.serialize),
-      JField("apiKey", t.apiKey),
-      JField("rootPath", t.rootPath),
-      JField("plan", t.plan.serialize)
-      )) 
+    override def decompose(t: Account): JValue = JObject(
+      JField("accountId", t.accountId) ::
+      JField("email", t.email) ::
+      JField("passwordHash", t.passwordHash) ::
+      JField("passwordSalt", t.passwordSalt) ::
+      JField("accountCreationDate", t.accountCreationDate.serialize) ::
+      JField("apiKey", t.apiKey) ::
+      JField("rootPath", t.rootPath) ::
+      JField("plan", t.plan.serialize) ::
+      t.parentId.map(i => JField("parentId", i) :: Nil).getOrElse(Nil)
+    ) 
   }
 
   implicit val AccountDecomposer: Decomposer[Account] = new Decomposer[Account] {
