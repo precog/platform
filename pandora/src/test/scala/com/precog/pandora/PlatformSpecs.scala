@@ -39,6 +39,7 @@ import yggdrasil.jdbm3._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
+import yggdrasil.table.jdbm3._
 import yggdrasil.util._
 import yggdrasil.test.YId
 import muspelheim._
@@ -70,7 +71,7 @@ import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
 object PlatformSpecs extends ParseEvalStackSpecs[Future] 
-    with BlockStoreColumnarTableModule[Future] 
+    with JDBMColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 
     with JDBMProjectionModule {
@@ -109,8 +110,8 @@ object PlatformSpecs extends ParseEvalStackSpecs[Future]
       fileMetadataStorage.findArchiveRoot(descriptor)
   }
 
-  type TableCompanion = BlockStoreColumnarTableCompanion
-  object Table extends BlockStoreColumnarTableCompanion {
+  trait TableCompanion extends JDBMColumnarTableCompanion
+  object Table extends TableCompanion {
     //override def apply(slices: StreamT[M, Slice]) = super.apply(slices map { s => if (s.size != 96) s else sys.error("Slice size seen as 96 for the first time.") })
     implicit val geq: scalaz.Equal[Int] = intInstance
   }

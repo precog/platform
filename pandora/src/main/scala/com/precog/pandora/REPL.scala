@@ -43,6 +43,7 @@ import yggdrasil.jdbm3._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
+import yggdrasil.table.jdbm3._
 import yggdrasil.util._
 
 import daze._
@@ -277,12 +278,12 @@ object Console extends App {
   } yield {
       scalaz.Success[blueeyes.json.serialization.Extractor.Error, Lifecycle](new REPL 
           with Lifecycle 
-          with BlockStoreColumnarTableModule[Future]
+          with JDBMColumnarTableModule[Future]
           with JDBMProjectionModule
           with SystemActorStorageModule
           with StandaloneShardSystemActorModule { self =>
 
-        trait TableCompanion extends BlockStoreColumnarTableCompanion {
+        trait TableCompanion extends JDBMColumnarTableCompanion {
           import scalaz.std.anyVal._
           implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
         }

@@ -59,11 +59,12 @@ import TableModule._
 trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
   implicit def M: Monad[M]
 
-  trait ProjectionCompanion {
-    def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
-  }
-
-  val Projection: ProjectionCompanion
+//  trait ProjectionCompanion {
+//    def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
+//  }
+//
+//  val Projection: ProjectionCompanion
+  def projectionFor(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
 
   abstract class Storage extends StorageLike {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
@@ -108,7 +109,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
       import scala.collection.JavaConverters._
       import java.util.regex.Pattern
 
-      val reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forPackage("test_data")).setScanners(new ResourcesScanner()));
+      val reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forPackage("test_data")).setScanners(new ResourcesScanner()))
       val jsonFiles = reflections.getResources(Pattern.compile(".*\\.json"))
       for (resource <- jsonFiles.asScala) load(Path(resource.replaceAll("test_data/", "").replaceAll("\\.json", "")))
 
@@ -135,7 +136,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
     def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)] = {
       M.point {
         if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
-        (Projection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(PrecogUnit)))
+        (projectionFor(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(PrecogUnit)))
       }
     }
   }
@@ -148,6 +149,8 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
   trait TableCompanion extends ColumnarTableCompanion {
     def apply(slices: StreamT[M, Slice], size: TableSize = UnknownSize) = new Table(slices, size)
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)] = sys.error("Feature not implemented in test stub.")
+    // FIXME: There should be some way to make SingletonTable work here, too
+    def singleton(slice: Slice) = new Table(slice :: StreamT.empty[M, Slice], ExactSize(1))
   }
   
   class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size) {
@@ -186,8 +189,8 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
     def commit(): IO[PrecogUnit] = sys.error("DummyProjection doesn't support commit")
   }
 
-  object Projection extends ProjectionCompanion {
-    def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = new Projection(descriptor, data)
+  def projectionFor(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = {
+    new Projection(descriptor, data)
   }
 
   object storage extends Storage

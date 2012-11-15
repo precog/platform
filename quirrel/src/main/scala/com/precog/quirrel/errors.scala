@@ -80,7 +80,7 @@ case object OperationOnUnrelatedSets extends ErrorType {
   override def toString = "cannot perform operation on unrelated sets"
 }
 
-case object UnionProvenanceDifferentLength extends ErrorType {
+case object ProductProvenanceDifferentLength extends ErrorType {
   override def toString = "cannot perform union on two sets with different numbers of identities"
 }
 

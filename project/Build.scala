@@ -59,7 +59,7 @@ object PlatformBuild extends Build {
 
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "2.1.1-SNAPSHOT",
+    version := "2.1.2-SNAPSHOT",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalaVersion := "2.9.2",
@@ -128,6 +128,9 @@ object PlatformBuild extends Build {
   lazy val yggdrasilProf = Project(id = "yggdrasilProf", base = file("yggdrasilProf")).
     settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test")
 
+  lazy val mongo = Project(id = "mongo", base = file("mongo")).
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard)
+
   lazy val daze = Project(id = "daze", base = file("daze")).
     settings(commonNexusSettings: _*).dependsOn (common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util)
 
@@ -141,7 +144,7 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", quirrel, daze, yggdrasil)
 
   lazy val shard = Project(id = "shard", base = file("shard")).
-    settings(commonAssemblySettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, pandora)
+    settings(commonAssemblySettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, pandora, muspelheim % "test->test")
 
   lazy val auth = Project(id = "auth", base = file("auth")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test")

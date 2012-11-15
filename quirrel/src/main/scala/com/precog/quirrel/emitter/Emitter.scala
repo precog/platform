@@ -563,6 +563,11 @@ trait Emitter extends AST
             case NullBinding => 
               notImpl(expr)
           }
+
+        case ast.Cond(loc, pred, left, right) =>
+           // if a then b else c
+           // (b where a) union (c where !a)
+           emitFilter(left, pred, dispatches) >> emitFilterState(emitExpr(right, dispatches), right.provenance, emitExpr(pred, dispatches) >> emitInstr(Map1(Comp)), pred.provenance) >> emitInstr(IUnion)
         
         case where @ ast.Where(_, _, _) =>
           emitWhere(where, dispatches)
