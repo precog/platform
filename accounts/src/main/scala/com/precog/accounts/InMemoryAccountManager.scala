@@ -43,7 +43,7 @@ class InMemoryAccountManager[M[+_]](implicit val M: Monad[M]) extends AccountMan
 
   def newAccountId() = java.util.UUID.randomUUID.toString.toUpperCase
   
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountID, Path) => M[APIKey]): M[Account] = {
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountID])(f: (AccountID, Path) => M[APIKey]): M[Account] = {
     for {
       accountId <- newAccountId().point[M]
       path = Path(accountId)

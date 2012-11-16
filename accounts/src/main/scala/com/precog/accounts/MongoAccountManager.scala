@@ -112,7 +112,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
 
   private implicit val impTimeout = settings.timeout
   
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountID, Path) => Future[APIKey]): Future[Account] = {
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountID] = None)(f: (AccountID, Path) => Future[APIKey]): Future[Account] = {
     for {
       accountId <- newAccountId
       path = Path(accountId)
@@ -123,7 +123,8 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
           accountId, email, 
           saltAndHash(password, salt), salt,
           creationDate,
-          apiKey, path, plan)
+          apiKey, path, plan,
+          parent)
         
         database(insert(account0.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]).into(settings.accounts)) map {
           _ => account0

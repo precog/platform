@@ -68,7 +68,7 @@ class AccountManagerClient(settings: AccountManagerClientSettings) extends Accou
   
   def updateAccount(account: Account): Future[Boolean] = sys.error("TODO 1")
  
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountID, Path) => Future[APIKey]): Future[Account] = sys.error("TODO 3")
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountID])(f: (AccountID, Path) => Future[APIKey]): Future[Account] = sys.error("TODO 3")
 
   def listAccountIds(apiKey: APIKey) : Future[Set[Account]] = sys.error("TODO 4")
   

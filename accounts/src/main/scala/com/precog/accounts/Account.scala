@@ -61,22 +61,22 @@ case class Account(accountId: String,
                    accountCreationDate: DateTime, 
                    apiKey: String, 
                    rootPath: Path, 
-                   plan: AccountPlan) {
-}
-
+                   plan: AccountPlan, 
+                   parentId: Option[String] = None) 
 
 trait AccountSerialization extends AccountPlanSerialization {
   val UnsafeAccountDecomposer: Decomposer[Account] = new Decomposer[Account] {
-    override def decompose(t: Account): JValue = JObject(List(
-      JField("accountId", t.accountId),
-      JField("email", t.email),
-      JField("passwordHash", t.passwordHash),
-      JField("passwordSalt", t.passwordSalt),
-      JField("accountCreationDate", t.accountCreationDate.serialize),
-      JField("apiKey", t.apiKey),
-      JField("rootPath", t.rootPath),
-      JField("plan", t.plan.serialize)
-      )) 
+    override def decompose(t: Account): JValue = JObject(
+      JField("accountId", t.accountId) ::
+      JField("email", t.email) ::
+      JField("passwordHash", t.passwordHash) ::
+      JField("passwordSalt", t.passwordSalt) ::
+      JField("accountCreationDate", t.accountCreationDate.serialize) ::
+      JField("apiKey", t.apiKey) ::
+      JField("rootPath", t.rootPath) ::
+      JField("plan", t.plan.serialize) ::
+      t.parentId.map(i => JField("parentId", i) :: Nil).getOrElse(Nil)
+    ) 
   }
 
   implicit val AccountDecomposer: Decomposer[Account] = new Decomposer[Account] {
@@ -99,7 +99,8 @@ trait AccountSerialization extends AccountPlanSerialization {
        (obj \ "accountCreationDate").validated[DateTime] |@|
        (obj \ "apiKey").validated[String] |@|
        (obj \ "rootPath").validated[Path] |@|
-       (obj \ "plan").validated[AccountPlan]) {
+       (obj \ "plan").validated[AccountPlan] |@| 
+       (obj \ "parentId").validated[Option[String]]) {
          Account.apply _
        }
   }

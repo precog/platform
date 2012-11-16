@@ -124,7 +124,7 @@ if [ "$QUERYDIR" = "" ]; then
     echo "WORKDIR=$WORKDIR"
     repl
 else
-    for f in $(find $QUERYDIR -type f); do
+    for f in $(find $QUERYDIR -type f ! -name '*.pending'); do
         query "$(cat $f)" > results.json
         RESULT="$(cat results.json)"
 

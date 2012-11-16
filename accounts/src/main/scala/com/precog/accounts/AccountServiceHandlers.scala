@@ -50,6 +50,16 @@ import scalaz.{ Applicative, Validation, Success, Failure }
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 
+object Responses {
+  def failure(error: HttpStatusCode, message: String) = 
+    HttpResponse[JValue](HttpStatus(error), content = Some(JString(message))) 
+
+  def failure(error: HttpStatusCode, statMessage: String, message: String) = 
+    HttpResponse[JValue](HttpStatus(error, statMessage), content = Some(JString(message)))
+  
+  def failure(error: HttpStatus, message: String) = 
+    HttpResponse[JValue](error, content = Some(JString(message)))
+}
 
 sealed trait AuthenticationFailure
 case object NotProvided extends AuthenticationFailure
@@ -76,6 +86,31 @@ extends DelegatingService[A, Future[B], A, Account => Future[B]] with Logging {
   val metadata = Some(AboutMetadata(ParameterMetadata('accountId, None), DescriptionMetadata("A accountId is required for the use of this service.")))
 }
 
+trait AccountAuthorization {
+  def accountManagement: AccountManager[Future]
+
+  def withAccountAdmin[A](accountId: String, auth: Account)(f: Account => Future[HttpResponse[JValue]])(implicit executor: ExecutionContext): Future[HttpResponse[JValue]] = {
+    accountManagement.findAccountById(accountId) flatMap { 
+      case Some(account) =>
+        accountManagement.hasAncestor(account, auth) flatMap {
+          case true  => f(account)
+          case false => Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId))))
+        }
+
+      case None => 
+        Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId))))
+    }
+  }
+
+  def withAccountAdmin[A](request: HttpRequest[_], auth: Account)(f: Account => Future[HttpResponse[JValue]])(implicit executor: ExecutionContext): Future[HttpResponse[JValue]] = {
+    request.parameters.get('accountId).map { accountId =>
+      withAccountAdmin(accountId, auth) { f }
+    } getOrElse {
+      Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))
+    }
+  }
+}
+
 
 class ListAccountsHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] with Logging {
@@ -99,7 +134,7 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
 //returns accountId of account if exists, else creates account, 
 //we are working on path accountId.. do we use this to get the account the user wants to create?
 //because we also need auth at this stage.. auth will give us the root key for permmissions
-class PostAccountHandler(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService)(implicit ctx: ExecutionContext) 
+class PostAccountHandler(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService, rootAccountId: String)(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
    
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
@@ -169,14 +204,13 @@ class CreateAccountGrantHandler(accountManagement: AccountManager[Future], secur
 extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
-      (for {
-        accountId <- request.parameters.get('accountId)
-      } yield {
+      // cannot use withAccountAdmin here because of the ability to add grants to others' accounts.
+      request.parameters.get('accountId) map { accountId =>
         accountManagement.findAccountById(accountId) flatMap {
           case Some(account) => 
             request.content map { futureContent => 
               futureContent flatMap { jvalue =>
-                //todo: validate the jvalue?
+                //todo: validate the jvalue, and place behind a trait for mocking?
                 securityService.withClient { client =>
                   client.query("apiKey", auth.apiKey)
                         .contentType(application/MimeTypes.json)
@@ -198,7 +232,7 @@ extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue
           case _  => 
             Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find account "+ accountId))))
         }
-      }) getOrElse {
+      } getOrElse {
         Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing account id."), 
                                     content = Some(JString("Missing account id."))))
       }
@@ -210,23 +244,15 @@ extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue
 
 
 //returns plan for account
-class GetAccountPlanHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
-extends CustomHttpService[Future[JValue],Account => Future[HttpResponse[JValue]]] with Logging {
+class GetAccountPlanHandler(val accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
+    extends CustomHttpService[Future[JValue],Account => Future[HttpResponse[JValue]]] 
+    with AccountAuthorization
+    with Logging {
+
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) => 
-      request.parameters.get('accountId).map { accountId =>
-         accountManagement.findAccountById(accountId).map { 
-          case Some(account) if account.accountId == auth.accountId => 
-            HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
-            
-          case Some(_) => 
-            HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId)))
-
-          case None => 
-            HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId)))
-        }
-      } getOrElse {
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))
+      withAccountAdmin(request, auth) { account =>
+        Future(HttpResponse[JValue](OK, content = Some(JObject(List(JField("type", account.plan.planType))))))
       }
     }
   }
@@ -236,29 +262,30 @@ extends CustomHttpService[Future[JValue],Account => Future[HttpResponse[JValue]]
 
 
 //update account password
-class PutAccountPasswordHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
-extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]] with Logging {
+class PutAccountPasswordHandler(val accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
+    extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]] 
+    with AccountAuthorization
+    with Logging {
+
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
-      request.content map { futureContent =>
-        futureContent flatMap { jvalue =>
-          (jvalue \ "password").validated[String] match {
-            case Success(newPassword) => 
-              accountManagement.updateAccountPassword(auth, newPassword) map { 
-                case true =>
-                  HttpResponse[JValue](OK, content = None)
+      withAccountAdmin(request, auth) { account =>
+        request.content map { futureContent =>
+          futureContent flatMap { jvalue =>
+            (jvalue \ "password").validated[String] match {
+              case Success(newPassword) => 
+                accountManagement.updateAccountPassword(account, newPassword) map { 
+                  case true => HttpResponse[JValue](OK, content = None)
+                  case _ => Responses.failure(InternalServerError, "Account update failed, please contact support.")
+                } 
 
-                case _ =>
-                  HttpResponse[JValue](HttpStatus(InternalServerError, "Failed to update Account"), 
-                                       content = Some(JString("Failed to Update Account")))
-              } 
-
-            case Failure(error) => 
-              Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body."), content = Some(JString("Could not determine replacement password from request body."))))
+              case Failure(error) => 
+                Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body."), content = Some(JString("Could not determine replacement password from request body."))))
+            }
           }
+        } getOrElse {
+          Future(HttpResponse[JValue](HttpStatus(BadRequest, "Request body missing."), content = Some(JString("You must provide a JSON object containing a password field."))))
         }
-      } getOrElse {
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Request body missing."), content = Some(JString("You must provide a JSON object containing a password field."))))
       }
     }
   }
@@ -268,45 +295,30 @@ extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]
 
 
 //update account Plan
-class PutAccountPlanHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
-extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]] with Logging {
+class PutAccountPlanHandler(val accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
+    extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]] 
+    with AccountAuthorization
+    with Logging {
+
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
-      request.parameters.get('accountId) match {
-        case Some(accountId) =>
-          accountManagement.findAccountById(accountId) flatMap {
-            case Some(account) if account.accountId == auth.accountId => 
-              request.content.map { futureContent =>
-                futureContent flatMap { jvalue =>
-                  (jvalue \ "type").validated[String] match {
-                    case Success(planType) => 
-                      accountManagement.updateAccount(account.copy(plan = new AccountPlan(planType))) map { 
-                        case true =>
-                          HttpResponse[JValue](OK, content = None)
-
-                        case _ =>
-                          HttpResponse[JValue](HttpStatus(InternalServerError, "Failed to update Account"), 
-                                               content = Some(JString("Failed to Update Account")))
-                      }
-
-                    case Failure(error) => 
-                      Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body."), content = Some(JString("Could not determine new account type from request body."))))
-                  }
+      withAccountAdmin(request, auth) { account =>
+        request.content.map { futureContent =>
+          futureContent flatMap { jvalue =>
+            (jvalue \ "type").validated[String] match {
+              case Success(planType) => 
+                accountManagement.updateAccount(account.copy(plan = new AccountPlan(planType))) map { 
+                  case true => HttpResponse[JValue](OK, content = None)
+                  case _ => Responses.failure(InternalServerError, "Account update failed, please contact support.")
                 }
-              } getOrElse {
-                Future(HttpResponse[JValue](HttpStatus(BadRequest, "Request body missing."), content = Some(JString("You must provide a JSON object containing a \"type\" field."))))
-              }
-              
-            case Some(_) => 
-              Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId))))
 
-            case None =>
-              Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find account "+ accountId))))
+              case Failure(error) => 
+                Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body."), content = Some(JString("Could not determine new account type from request body."))))
+            }
           }
-
-        case None =>
-          val errmsg = "Missing accountId from request path."
-          Future(HttpResponse[JValue](HttpStatus(BadRequest, errmsg), content = Some(JString(errmsg))))
+        } getOrElse {
+          Future(HttpResponse[JValue](HttpStatus(BadRequest, "Request body missing."), content = Some(JString("You must provide a JSON object containing a \"type\" field."))))
+        }
       }
     }
   }
@@ -316,25 +328,18 @@ extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]
 
 
 //sets plan to "free"
-class DeleteAccountPlanHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
-extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] with Logging {
+class DeleteAccountPlanHandler(val accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
+    extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] 
+    with AccountAuthorization
+    with Logging {
+
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
-      request.parameters.get('accountId).map { accountId =>
-        accountManagement.findAccountById(accountId).map { 
-          case Some(account) if account.accountId == auth.accountId => 
-            accountManagement.updateAccount(account.copy(plan = AccountPlan.Free))
-            HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
-          
-          case Some(_) => 
-            HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId)))
-
-          case None => 
-            HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId)))
+      withAccountAdmin(request, auth) { account =>
+        accountManagement.updateAccount(account.copy(plan = AccountPlan.Free)) map {
+          case true => HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
+          case _ => Responses.failure(InternalServerError, "Account update failed, please contact support.")
         }
-      } getOrElse {
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), 
-                                    content = Some(JString("Missing accountId in request URI."))))
       }
     }
   }
@@ -343,23 +348,15 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
 }
 
 
-class GetAccountDetailsHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
-extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] with Logging {
+class GetAccountDetailsHandler(val accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
+    extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] 
+    with AccountAuthorization
+    with Logging {
+
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
-      request.parameters.get('accountId) map { accountId =>
-        accountManagement.findAccountById(accountId).map { 
-          case Some(account) if auth.accountId == account.accountId => 
-            HttpResponse[JValue](OK, content = Some(account.serialize))
-
-          case Some(_) => 
-            HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId)))
-
-          case None  => 
-            HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId)))
-        }
-      } getOrElse {
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))
+      withAccountAdmin(request, auth) { account =>
+        Future(HttpResponse[JValue](OK, content = Some(account.serialize)))
       }
     }
   }
@@ -368,21 +365,18 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
 }
 
 
-class DeleteAccountHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
-extends CustomHttpService[Future[JValue],  Account => Future[HttpResponse[JValue]]] with Logging {
+class DeleteAccountHandler(val accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
+    extends CustomHttpService[Future[JValue],  Account => Future[HttpResponse[JValue]]] 
+    with AccountAuthorization
+    with Logging {
+
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
-      request.parameters.get('accountId).map { accountId =>
-        if (accountId == auth.accountId) {
-          accountManagement.deleteAccount(accountId).map { 
-            case Some(_) => HttpResponse[JValue](HttpStatus(NoContent))
-            case None    => HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+accountId)))
-          }
-        } else {
-          Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId))))
+      withAccountAdmin(request, auth) { account =>
+        accountManagement.deleteAccount(account.accountId).map { 
+          case Some(_) => HttpResponse[JValue](HttpStatus(NoContent))
+          case None    => HttpResponse[JValue](HttpStatus(InternalServerError), content = Some(JString("Account deletion failed, please contact support.")))
         }
-      } getOrElse {
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))
       }
     }
   }

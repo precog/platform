@@ -53,12 +53,27 @@ trait AccountManager[M[+_]] {
     updateAccount(account.copy(passwordHash = saltAndHash(newPassword, salt), passwordSalt = salt))
   }
  
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountID, Path) => M[APIKey]): M[Account]
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountID] = None)(f: (AccountID, Path) => M[APIKey]): M[Account]
 
   def listAccountIds(apiKey: APIKey) : M[Set[Account]]
   
   def findAccountById(accountId: AccountID): M[Option[Account]]
   def findAccountByEmail(email: String) : M[Option[Account]]
+
+  def hasAncestor(child: Account, ancestor: Account): M[Boolean] = {
+    if (child == ancestor) {
+      true.point[M]
+    } else {
+      child.parentId map { id =>
+        findAccountById(id) flatMap {
+          case None => false.point[M]
+          case Some(parent) => hasAncestor(parent, ancestor)
+        }
+      } getOrElse {
+        false.point[M]
+      }
+    }
+  }
 
   def authAccount(email: String, password: String) = {
     for {
@@ -70,7 +85,6 @@ trait AccountManager[M[+_]] {
     }
   }
 
-  
   def deleteAccount(accountId: AccountID): M[Option[Account]]
 
   def close(): M[Unit]

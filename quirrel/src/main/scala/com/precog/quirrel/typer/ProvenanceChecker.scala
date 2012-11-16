@@ -52,7 +52,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val provenance = UnifiedProvenance(left.provenance, right.provenance)
         
         if (unified.isDefined)
-          (provenance, Set(), Set())
+          (unified.get, Set(), Set())
         else
           (provenance, Set(), Set(Related(left.provenance, right.provenance)))
       } else {
