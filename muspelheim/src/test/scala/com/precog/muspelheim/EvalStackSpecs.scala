@@ -1739,7 +1739,7 @@ trait EvalStackSpecs extends Specification {
       }
     }
  
-    "set critical conditions given an empty set in" in {
+    "set critical conditions given an empty set" in {
       val input = """
         | solve 'a
         |   //campaigns where (//campaigns).foo = 'a""".stripMargin

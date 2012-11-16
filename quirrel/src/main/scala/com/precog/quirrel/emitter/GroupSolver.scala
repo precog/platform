@@ -20,6 +20,8 @@
 package com.precog.quirrel
 package emitter
 
+import scala.annotation.tailrec
+
 import scala.collection.GenTraversableOnce
 import scala.collection.generic.CanBuildFrom
 import scala.collection.mutable.Builder
@@ -215,22 +217,26 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           case (prov, formal @ (id, let)) => substituteParam(id, let, prov, sigma(formal).provenance)
         }
         
-        val commonalityM = findCommonality(Set(where.left, where.right), sigma, orderedSigma)
-        
         val fullyResolvedLeftProv = resolveUnifications(where.left.relations)(resolvedLeftProv.makeCanonical)
         val fullyResolvedRightProv = resolveUnifications(where.right.relations)(resolvedRightProv.makeCanonical)
         
-        commonalityM filter const(fullyResolvedLeftProv == fullyResolvedRightProv) map { commonality =>
-          // 1. test where.left isTranspecable
+        if (fullyResolvedLeftProv == fullyResolvedRightProv) {
+          // 1. make coffee
           // 2. attempt to solve where.right
           
-          if (isTranspecable(where.left, commonality, sigma)) {
-            val (group, errors) = solveGroupCondition(solve, where.right, false, sigma)
-            (group map { Group(Some(where), resolveExpr(sigma, where.left), _, dtrace) }, errors)
-          } else {
-            (None, Set[Error]())      // TODO when we implement isTranspecable
-          }
-        } getOrElse (None, Set[Error]())
+          val (groupM, errors) = solveGroupCondition(solve, where.right, false, sigma)
+          
+          groupM map { group =>
+            val commonalityM = findCommonality(group.exprs + where.left, sigma)
+            
+            if (commonalityM.isDefined)
+              (Some(Group(Some(where), resolveExpr(sigma, where.left), group, dtrace)), errors)
+            else
+              (None, errors)      // TODO emit a new error
+          } getOrElse (None, errors)
+        } else {
+          (None, Set[Error]())
+        }
       }
     }
     
@@ -252,7 +258,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     val (result, errors) = solveGroupCondition(b, constraint, true, sigma)
     
     val orderedSigma = orderTopologically(sigma)
-    val commonality = result map listSolutionExprs flatMap { findCommonality(_, sigma, orderedSigma) }
+    val commonality = result map listSolutionExprs flatMap { findCommonality(_, sigma) }
     
     val back = for (r <- result; c <- commonality)
       yield Group(None, c, r, List())
@@ -418,8 +424,6 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
   }
   
   private def isTranspecable(to: Expr, from: Expr, sigma: Map[Formal, Expr]): Boolean = {
-    println("isTranspecable(%s, %s)".format(to, from))
-    
     to match {
       case _ if to equalsIgnoreLoc from => true
       
@@ -431,13 +435,27 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       
       case to @ Dispatch(_, id, actuals) => {
         to.binding match {
-          case FormalBinding(let) => isTranspecable(sigma((id, let)), from, sigma)
+          case FormalBinding(let) => {
+            val exactResult = sigma get ((id, let)) map { isTranspecable(_, from, sigma) }
+            
+            exactResult getOrElse {
+              // if we can't get the exact actual from our sigma, we have to over-
+              // approximate by taking the full set of all possible dispatches and
+              // ensuring that they *all* satisfy the requisite property
+              let.dispatches forall { d =>
+                val subSigma = Map(let.params zip d.actuals: _*)
+                isTranspecable(subSigma(id.id), from, sigma)
+              }
+            }
+          }
           
           case LetBinding(let) => {
             val ids = let.params map { Identifier(Vector(), _) }
             val sigma2 = sigma ++ (ids zip Stream.continually(let) zip actuals)
             isTranspecable(let.left, from, sigma2)
           }
+          
+          case Op1Binding(_) | Op2Binding(_) => true
           
           case _ => false
         }
@@ -537,7 +555,19 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case expr @ Dispatch(_, id, actuals) => {
       expr.binding match {
-        case FormalBinding(let) => isPrimitive(sigma((id, let)), sigma)
+        case FormalBinding(let) => {
+          val exactResult = sigma get ((id, let)) map { isPrimitive(_, sigma) }
+          
+          exactResult getOrElse {
+            // if we can't get the exact actual from our sigma, we have to over-
+            // approximate by taking the full set of all possible dispatches and
+            // ensuring that they *all* satisfy the requisite property
+            let.dispatches forall { d =>
+              val subSigma = Map(let.params zip d.actuals: _*)
+              isPrimitive(subSigma(id.id), sigma)
+            }
+          }
+        }
         
         case LetBinding(let) => {
           val ids = let.params map { Identifier(Vector(), _) }
@@ -688,116 +718,121 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case Extra(expr) => Set(expr)
   }
   
-  
-  private def findCommonality(exprs: Set[Expr], sigma: Map[Formal, Expr], order: List[Formal]): Option[Expr] = {
-    if (exprs.size <= 1) {
-      exprs.headOption
-    } else {
-      val env: Map[Formal, Set[List[Expr]]] = order.reverse.foldLeft(Map[Formal, Set[List[Expr]]]()) { (env, formal) =>
-        val results = buildChains(env)(sigma(formal))
-        env + (formal -> results)
-      }
-          
-      val sharedPrefixReversed = exprs flatMap buildChains(env) map { _.reverse } reduceOption { (left, right) =>
-        left zip right takeWhile { case (a, b) => a equalsIgnoreLoc b } map { _._1 }
+  private def findCommonality(nodes: Set[Expr], sigma: Map[Formal, Expr]): Option[Expr] = {
+    @tailrec
+    def bfs(nodes: Seq[ExprWrapper], seen: Set[ExprWrapper], sigma: Map[Formal, Expr]): Set[ExprWrapper] = {
+      val (inter, seen2) = nodes.foldLeft((Set[ExprWrapper](), seen)) {
+        case ((inter, seen), node) => {
+          if (seen contains node)
+            (inter + node, seen)
+          else
+            (inter, seen + node)
+        }
       }
       
-      sharedPrefixReversed flatMap { _.lastOption }
+      if (!nodes.isEmpty && inter.isEmpty) {
+        val (nodes2Unflatten, sigma2Unflatten) = nodes map { _.expr } map enumerateParents(sigma) unzip
+        
+        val nodes2 = nodes2Unflatten.flatten map ExprWrapper
+        val sigma2 = Map(sigma2Unflatten.flatten: _*)
+        
+        bfs(nodes2, seen2, sigma2)
+      } else {
+        inter
+      }
     }
+    
+    @tailrec
+    def loop(nodes: Set[ExprWrapper]): Option[ExprWrapper] = {
+      if (nodes.size <= 1) {
+        nodes.headOption
+      } else {
+        val target = nodes take 2
+        val nodes2 = nodes &~ target
+        
+        loop(bfs(target.toSeq, Set(), sigma) ++ nodes2)
+      }
+    }
+    
+    val commonalityM = if (nodes.size <= 1)
+      nodes.headOption
+    else
+      loop(nodes map ExprWrapper) map { _.expr }
+    
+    val results = for {
+      n <- nodes
+      c <- commonalityM
+    } yield isTranspecable(n, c, sigma)
+    
+    if (results == Set(true))
+      commonalityM
+    else
+      None
   }
+  
+  private def enumerateParents(sigma: Map[Formal, Expr])(expr: Expr): (Set[Expr], Map[Formal, Expr]) = expr match {
+    case Let(_, _, _, _, right) => (Set(right), sigma)
     
-  private def buildChains(env: Map[(Identifier, Let), Set[List[Expr]]])(expr: Expr): Set[List[Expr]] = expr match {
-    case Let(_, _, _, _, right) => buildChains(env)(right) map { expr :: _ }
+    case _: Solve => (Set(), sigma)      // TODO will this do the right thing?
     
-    case expr @ Solve(_, _, _) => Set(expr :: Nil)
+    case Import(_, _, child) => (Set(child), sigma)
+    case New(_, child) => (Set(child), sigma)
     
-    case Import(_, _, child) => buildChains(env)(child) map { expr :: _ }
-    case New(_, child) => buildChains(env)(child) map { expr :: _ }
-    case expr @ Relate(_, _, _, _) => Set(expr :: Nil)
+    case Relate(_, _, _, in) => (Set(in), sigma)
     
-    case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => Set()
+    case _: TicVar | _: StrLit | _: NumLit | _: BoolLit | _: NullLit => (Set(), sigma)
     
-    case ObjectDef(_, props) =>
-      props map { _._2 } map buildChains(env) reduceOption { _ ++ _ } getOrElse Set[List[Expr]]() map { expr :: _ }
+    case ObjectDef(_, props) => (Set(props map { _._2 }: _*), sigma)
+    case ArrayDef(_, values) => (Set(values: _*), sigma)
     
-    case ArrayDef(_, values) =>
-      values map buildChains(env) reduceOption { _ ++ _ } getOrElse Set[List[Expr]]() map { expr :: _ }
+    case Descent(_, child, _) => (Set(child), sigma)
+    case MetaDescent(_, child, _) => (Set(child), sigma)
     
-    case Descent(_, left, _) =>
-      buildChains(env)(left) map { expr :: _ }
+    case Deref(_, left, right) => (Set(left, right), sigma)
     
     case expr @ Dispatch(_, id, actuals) => {
-      val actualChains = actuals map buildChains(env)
-      
-      val dispatchChains = expr.binding match {
-        case FormalBinding(let) => env.getOrElse((id, let), Set[List[Expr]]())
-        
+      expr.binding match {
         case LetBinding(let) => {
-          val env2 = env ++ (let.params map { Identifier(Vector(), _) } zip (Stream continually let) zip actualChains)
-          buildChains(env2)(let.left)
+          val ids = let.params map { Identifier(Vector(), _) }
+          val sigma2 = sigma ++ (ids zip Stream.continually(let) zip actuals)
+          
+          (Set(let.left), sigma2)
         }
         
-        case ReductionBinding(_) => Set[List[Expr]]()
+        case FormalBinding(let) => (Set(sigma((id, let))), sigma)
         
-        case Op1Binding(_) | Op2Binding(_) => actualChains reduce { _ ++ _ }
-        
-        case _ => Set[List[Expr]](Nil)
+        case _ => (Set(actuals: _*), sigma)
       }
-      
-      dispatchChains map { expr :: _ }
     }
     
-    case Cond(_, pred, left, right) => 
-      (buildChains(env)(pred) ++ buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
+    case Cond(_, pred, left, right) => (Set(pred, left, right), sigma)
+    case Where(_, left, right) => (Set(left, right), sigma)
+    case With(_, left, right) => (Set(left, right), sigma)
     
-    case Where(_, left, right) => 
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
+    case Union(_, left, right) => (Set(left, right), sigma)
+    case Intersect(_, left, right) => (Set(left, right), sigma)
+    case Difference(_, left, right) => (Set(left, right), sigma)
     
-    case With(_, left, right) => 
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
+    case Add(_, left, right) => (Set(left, right), sigma)
+    case Sub(_, left, right) => (Set(left, right), sigma)
+    case Mul(_, left, right) => (Set(left, right), sigma)
+    case Div(_, left, right) => (Set(left, right), sigma)
+    case Mod(_, left, right) => (Set(left, right), sigma)
     
-    case expr @ (Union(_, _, _) | Intersect(_, _, _) | Difference(_, _, _)) =>
-      Set(expr :: Nil)
+    case Lt(_, left, right) => (Set(left, right), sigma)
+    case LtEq(_, left, right) => (Set(left, right), sigma)
+    case Gt(_, left, right) => (Set(left, right), sigma)
+    case GtEq(_, left, right) => (Set(left, right), sigma)
     
-    case Add(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
+    case Eq(_, left, right) => (Set(left, right), sigma)
+    case NotEq(_, left, right) => (Set(left, right), sigma)
     
-    case Sub(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
+    case And(_, left, right) => (Set(left, right), sigma)
+    case Or(_, left, right) => (Set(left, right), sigma)
     
-    case Mul(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-    
-    case Div(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-    
-    case Lt(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-    
-    case LtEq(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-    
-    case Gt(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-    
-    case GtEq(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-    
-    case Eq(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-    
-    case NotEq(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-    
-    case And(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-    
-    case Or(_, left, right) =>
-      (buildChains(env)(left) ++ buildChains(env)(right)) map { expr :: _ }
-    
-    case Comp(_, child) => buildChains(env)(child) map { expr :: _ }
-    case Neg(_, child) => buildChains(env)(child) map { expr :: _ }
-    case Paren(_, child) => buildChains(env)(child) map { expr :: _ }
+    case Comp(_, child) => (Set(child), sigma)
+    case Neg(_, child) => (Set(child), sigma)
+    case Paren(_, child) => (Set(child), sigma)
   }
   
 

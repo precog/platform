@@ -43,7 +43,7 @@ object GroupSolverSpecs extends Specification
   import buckets._
   
   "group solver" should {
-    /* "identify and solve group set for trivial solve example" in {
+    "identify and solve group set for trivial solve example" in {
       val input = "clicks := load(//clicks) solve 'day clicks where clicks.day = 'day"
       
       val Let(_, _, _, _,
@@ -104,7 +104,7 @@ object GroupSolverSpecs extends Specification
 
       let.errors must beEmpty
     }
-  */
+    
     "accept acceptable case of nested solves" in {
       val input = """
         | medals := //summer_games/london_medals
@@ -125,7 +125,7 @@ object GroupSolverSpecs extends Specification
       tree1.errors must beEmpty
       tree2.errors must beEmpty
     }
-    /* 
+     
     "accept acceptable case when one solve contains a dispatch which contains tic variable from another solve" in {
       val input = """
        |  medals := //summer_games/london_medals
@@ -959,6 +959,46 @@ object GroupSolverSpecs extends Specification
         | """.stripMargin
           
       compileSingle(input).errors must not(beEmpty)
-    } */
+    }
+    
+    "accept interaction-totals.qrl" in {
+      val input = """
+        | interactions := //interactions
+        | 
+        | hourOfDay(time) := time / 3600000           -- timezones, anyone?
+        | dayOfWeek(time) := time / 604800000         -- not even slightly correct
+        | 
+        | solve 'hour, 'day
+        |   dayAndHour := dayOfWeek(interactions.time) = 'day & hourOfDay(interactions.time) = 'hour
+        |   sum(interactions where dayAndHour)
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
+    
+    "accept a solve grouping on the results of an object concat with a stdlib op1" in {
+      val input = """
+        | import std::time::*
+        | 
+        | agents := //clicks
+        | data := { agentId: agents.userId, millis: getMillis(agents.timeString) }
+        | 
+        | upperBound := getMillis("2012-04-03T23:59:59")
+        | 
+        | solve 'agent
+        |   data where data.millis < upperBound & data.agentId = 'agent
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
+    
+    "accept a solve where the commonality is only equal ignoring location" in {
+      val input = """
+        | solve 'a
+        |   //campaigns where (//campaigns).foo = 'a
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
   }
 }
