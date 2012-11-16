@@ -22,12 +22,39 @@ package daze
 
 import com.precog.yggdrasil._
 
-trait StaticInliner[M[+_]] extends DAG with InfixLib[M] {
+trait StaticInliner[M[+_]] extends DAG with EvaluatorMethods[M] {
   import dag._
   import instructions._
   
   def inlineStatics(graph: DepGraph): DepGraph = {
     graph mapDown { recurse => {
+      case Operate(loc, op, child) => {
+        val child2 = recurse(child)
+        
+        
+        child2 match {
+          case Root(_, CUndefined) => Root(loc, CUndefined)
+          
+          case Root(_, value) => {
+            op match {
+              case instructions.WrapArray =>    // TODO currently can't be a cvalue
+                Operate(loc, op, child2)
+              
+              case _ => {
+                val result = for {
+                  col <- op1(op).f1(value)
+                  if col isDefinedAt 0
+                } yield col cValue 0
+                
+                Root(loc, result getOrElse CUndefined)
+              }
+            }
+          }
+          
+          case _ => Operate(loc, op, child2)
+        }
+      }
+      
       case Join(loc, op, sort @ (CrossLeftSort | CrossRightSort), left, right) => {
         val left2 = recurse(left)
         val right2 = recurse(right)

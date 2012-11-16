@@ -354,6 +354,23 @@ trait EvalStackSpecs extends Specification {
       val result = evalE(input)
       result must not(beEmpty)        // TODO
     }
+    
+    "solve involving extras with a stdlib op1 function" in {
+      val input = """
+        | import std::time::*
+        | 
+        | agents := //clicks
+        | data := { agentId: agents.userId, millis: getMillis(agents.timeString) }
+        | 
+        | upperBound := getMillis("2012-04-03T23:59:59")
+        | 
+        | solve 'agent
+        |   data where data.millis < upperBound & data.agentId = 'agent
+        | """.stripMargin
+      
+      val results = evalE(input)
+      results must not(beEmpty)     // TODO
+    }
 
     "perform a simple join by value sorting" in {
       val input = """
