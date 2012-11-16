@@ -61,14 +61,15 @@ trait AccountManager[M[+_]] {
   def updateAccount(account: Account): M[Boolean]
   def updateAccountPassword(account: Account, newPassword: String): M[Boolean]
  
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountId, Path) => M[ApiKey]): M[Account]
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None)(f: (AccountId, Path) => M[ApiKey]): M[Account]
 
   def listAccountIds(apiKey: ApiKey) : M[Set[Account]]
   
   def findAccountById(accountId: AccountId): M[Option[Account]]
   def findAccountByEmail(email: String) : M[Option[Account]]
   def authAccount(email: String, password: String) : M[Option[Account]]
-  
+  def hasAncestor(child: Account, ancestor: Account) : M[Boolean]
+
   def deleteAccount(accountId: AccountId): M[Option[Account]]
 
   def close(): M[Unit]
@@ -147,7 +148,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
     Hashing.sha1().hashString(password + salt, Charsets.UTF_8).toString
   }
 
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan)(f: (AccountId, Path) => Future[ApiKey]): Future[Account] = {
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId] = None)(f: (AccountId, Path) => Future[ApiKey]): Future[Account] = {
     for {
       accountId <- newAccountId
       path = Path(accountId)
@@ -158,7 +159,8 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
           accountId, email, 
           saltAndHash(password, salt), salt,
           creationDate,
-          apiKey, path, plan)
+          apiKey, path, plan,
+          parent)
         
         database(insert(account0.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]).into(settings.accounts)) map {
           _ => account0
@@ -192,6 +194,21 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
   def findAccountById(accountId: String) = findOneMatching[Account]("accountId", accountId, settings.accounts)
 
   def findAccountByEmail(email: String) = findOneMatching[Account]("email", email, settings.accounts)
+
+  def hasAncestor(child: Account, ancestor: Account) = {
+    if (child == ancestor) {
+      Future(true)
+    } else {
+      child.parentId map { id =>
+        findAccountById(id) flatMap {
+          case None => Future(false)
+          case Some(parent) => hasAncestor(parent, ancestor)
+        }
+      } getOrElse {
+        Future(false)
+      }
+    }
+  }
   
   def authAccount(email: String, password: String) = {
     for {

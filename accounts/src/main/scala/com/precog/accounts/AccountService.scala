@@ -63,7 +63,7 @@ case class SecurityService(protocol: String, host: String, port: Int, path: Stri
   }
 }
 
-case class AccountServiceState(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService)
+case class AccountServiceState(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService, rootAccountId: String)
 
 
 trait AccountServiceCombinators extends HttpRequestHandlerCombinators {
@@ -104,13 +104,15 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Accou
                config[String]("security.rootKey")
              )
 
-            AccountServiceState(accountManagement, clock, securityService)
+            val rootAccountId = config[String]("accounts.rootAccountId", "INVALID")
+
+            AccountServiceState(accountManagement, clock, securityService, rootAccountId)
           }
         } ->
         request { (state: AccountServiceState) =>
           jsonp[ByteChunk] {
             path("/accounts/") {
-              post(new PostAccountHandler(state.accountManagement, state.clock, state.securityService)) ~
+              post(new PostAccountHandler(state.accountManagement, state.clock, state.securityService, state.rootAccountId)) ~
               auth(state.accountManagement) {
                 get(new ListAccountsHandler(state.accountManagement)) ~ 
                 path("'accountId") {
