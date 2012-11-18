@@ -182,7 +182,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     }
     "reject query when API key not found" in {
       query(simpleQuery, Some("not-gonna-find-it")) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified API key does not exist"))), _) => ok
+        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
       }}
     }
     "reject query when grant is expired" in {
@@ -215,7 +215,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     }
     "reject browse when API key not found" in {
       browse(Some("not-gonna-find-it")) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified API key does not exist"))), _) => ok
+        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
       }}
     }
     "reject browse when grant expired" in {

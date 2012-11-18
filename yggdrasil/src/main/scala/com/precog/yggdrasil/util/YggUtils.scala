@@ -838,11 +838,11 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
       opt("l","list","List API keys", { config.list = true })
 //      opt("c","children","List children of API key", { s: String => config.listChildren = Some(s) })
       opt("n","new","New customer account at path", { s: String => config.accountId = Some(s) })
+      opt("r","root","Show root API key", { config.showRoot = true })
       opt("a","name","Human-readable name for new API key", { s: String => config.newAPIKeyName = s })
       opt("x","delete","Delete API key", { s: String => config.delete = Some(s) })
       opt("d","database","APIKey database name (ie: beta_auth_v1)", {s: String => config.database = s })
       opt("t","tokens","APIKeys collection name", {s: String => config.collection = s }) 
-//      opt("r","root","root API key for creation", {s: String => config.root = s })
       opt("a","archive","Collection for deleted API keys", {s: String => config.deleted = Some(s) })
       opt("s","servers","Mongo server config", {s: String => config.servers = s})
     }
@@ -856,6 +856,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
   def process(config: Config) {
     val tm = apiKeyManager(config)
     val actions = (config.list).option(list(tm)).toSeq ++
+                  (config.showRoot).option(showRoot(tm)).toSeq ++
 //                  config.listChildren.map(listChildren(_, tm)) ++
                   config.accountId.map(p => create(p, config.newAPIKeyName, tm)) ++
                   config.delete.map(delete(_, tm))
@@ -875,6 +876,12 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
   def list(apiKeyManager: APIKeyManager[Future]) = {
     for (apiKeys <- apiKeyManager.listAPIKeys) yield {
       apiKeys.foreach(printAPIKey)
+    }
+  }
+
+  def showRoot(apiKeyManager: APIKeyManager[Future]) = {
+    for (rootAPIKey <- apiKeyManager.rootAPIKey) yield {
+      println(rootAPIKey)
     }
   }
 
@@ -918,7 +925,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
     var delete: Option[String] = None
     var accountId: Option[String] = None
     var newAPIKeyName: String = ""
-    var root: APIKey = "root"
+    var showRoot: Boolean = false
     var list: Boolean = false
     var listChildren: Option[String] = None
     var database: String = "auth_v1"

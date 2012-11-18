@@ -32,7 +32,7 @@ import scalaz.syntax.std.option._
 import com.precog.common.Path
 import com.precog.common.security._
 
-class AccountRequiredService[A, B](accountManager: AccountManager[Future], val delegate: HttpService[A, (APIKeyRecord, Path, Account) => Future[B]])
+class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], val delegate: HttpService[A, (APIKeyRecord, Path, Account) => Future[B]])
   (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
   extends DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, Account) => Future[B]] {
   val service = (request: HttpRequest[A]) => {

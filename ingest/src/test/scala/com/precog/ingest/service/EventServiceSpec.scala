@@ -124,7 +124,7 @@ class EventServiceSpec extends TestEventService with FutureMatchers {
     }
     "reject track request when API key not found" in {
       track(JSON, Some("not gonna find it"), testPath, Some(testAccountId))(testValue) must whenDelivered { beLike {
-        case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified API key does not exist")), _), _) => ok 
+        case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified API key does not exist: not gonna find it")), _), _) => ok 
       } }
     }
     "reject track request when no API key provided" in {

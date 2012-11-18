@@ -31,9 +31,17 @@ import com.google.common.hash.Hashing
 import scalaz._
 import scalaz.syntax.monad._
 
-trait AccountManager[M[+_]] {
+trait BasicAccountManager[M[+_]] {
   implicit val M: Monad[M]
+
+  def listAccountIds(apiKey: APIKey) : M[Set[Account]]
   
+  def findAccountById(accountId: AccountID): M[Option[Account]]
+
+  def close(): M[Unit]
+}
+
+trait AccountManager[M[+_]] extends BasicAccountManager[M] {
   private val randomSource = new java.security.SecureRandom
 
   def randomSalt() = {
@@ -55,9 +63,6 @@ trait AccountManager[M[+_]] {
  
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountID] = None)(f: (AccountID, Path) => M[APIKey]): M[Account]
 
-  def listAccountIds(apiKey: APIKey) : M[Set[Account]]
-  
-  def findAccountById(accountId: AccountID): M[Option[Account]]
   def findAccountByEmail(email: String) : M[Option[Account]]
 
   def hasAncestor(child: Account, ancestor: Account): M[Boolean] = {
@@ -86,6 +91,4 @@ trait AccountManager[M[+_]] {
   }
 
   def deleteAccount(accountId: AccountID): M[Option[Account]]
-
-  def close(): M[Unit]
 } 

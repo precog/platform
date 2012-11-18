@@ -47,7 +47,7 @@ import scalaz.syntax.monad._
 
 import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
 
-case class EventServiceState(apiKeyManager: APIKeyManager[Future], accountManager: AccountManager[Future], eventStore: EventStore, ingestPool: ExecutorService)
+case class EventServiceState(apiKeyManager: APIKeyManager[Future], accountManager: BasicAccountManager[Future], eventStore: EventStore, ingestPool: ExecutorService)
 
 trait EventService extends BlueEyesServiceBuilder with EventServiceCombinators
 with DecompressCombinators with AkkaDefaults { 
@@ -61,7 +61,7 @@ with DecompressCombinators with AkkaDefaults {
   implicit def M: Monad[Future]
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
-  def accountManagerFactory(config: Configuration): AccountManager[Future]
+  def accountManagerFactory(config: Configuration): BasicAccountManager[Future]
   def eventStoreFactory(config: Configuration): EventStore
 
   val eventService = this.service("ingest", "1.0") {

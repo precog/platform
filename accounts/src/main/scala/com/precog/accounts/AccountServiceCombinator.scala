@@ -30,7 +30,7 @@ import com.precog.common.security._
 
 trait AccountServiceCombinators extends HttpRequestHandlerCombinators {
 
-  def accountId[A, B](accountManager: AccountManager[Future])(service: HttpService[A, (APIKeyRecord, Path, Account) => Future[B]])
+  def accountId[A, B](accountManager: BasicAccountManager[Future])(service: HttpService[A, (APIKeyRecord, Path, Account) => Future[B]])
     (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) = {
     new AccountRequiredService[A, B](accountManager, service)
   }
