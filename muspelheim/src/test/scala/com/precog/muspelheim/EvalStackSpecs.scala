@@ -354,6 +354,23 @@ trait EvalStackSpecs extends Specification {
       val result = evalE(input)
       result must not(beEmpty)        // TODO
     }
+    
+    "solve involving extras with a stdlib op1 function" in {
+      val input = """
+        | import std::time::*
+        | 
+        | agents := //clicks
+        | data := { agentId: agents.userId, millis: getMillis(agents.timeString) }
+        | 
+        | upperBound := getMillis("2012-04-03T23:59:59")
+        | 
+        | solve 'agent
+        |   data where data.millis < upperBound & data.agentId = 'agent
+        | """.stripMargin
+      
+      val results = evalE(input)
+      results must not(beEmpty)     // TODO
+    }
 
     "perform a simple join by value sorting" in {
       val input = """
@@ -487,7 +504,37 @@ trait EvalStackSpecs extends Specification {
           ids must haveSize(0)
           obj mustEqual(Map("min" -> SDecimal(50), "max" -> SDecimal(2768)))
       }
-    }.pendingUntilFixed
+    }
+
+    // Regression test for #39652091
+    "call union on two dispatches of the same function" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        |
+        | f(x) :=
+        |   medals' := medals where medals.Country = x
+        |   medals'' := new medals'
+        |
+        |   medals'' ~ medals'
+        |     {a: medals'.Country, b: medals''.Country} where medals'.Total = medals''.Total
+        |
+        | f("India") union f("Canada")
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(16 + 570)
+
+      val maps = results.toSeq collect {
+        case (ids, SObject(obj)) => obj
+      }
+
+      val india = maps filter { _.values forall { _ == SString("India") } }
+      india.size mustEqual(16)
+
+      val canada = maps filter { _.values forall { _ == SString("Canada") } }
+      canada.size mustEqual(570)
+    }
 
     "accept a solve involving formals of formals" in {
       val input = """
