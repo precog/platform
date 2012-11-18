@@ -3,6 +3,7 @@ package service
 
 import kafka._
 
+import com.precog.accounts._
 import com.precog.daze._
 import com.precog.common.{ Path, Event, EventMessage }
 import com.precog.common.security._
@@ -20,13 +21,13 @@ import org.joda.time._
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-import scalaz.{Success, NonEmptyList}
+import scalaz._
 import scalaz.Scalaz._
 
 import blueeyes.concurrent.test._
 
 import blueeyes.core.data._
-import blueeyes.bkka.AkkaDefaults
+import blueeyes.bkka.{ AkkaDefaults, AkkaTypeClasses }
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http.HttpResponse
 import blueeyes.core.http.HttpStatus
@@ -37,16 +38,11 @@ import blueeyes.core.http.MimeTypes._
 
 import blueeyes.json._
 
-trait TestAPIKeys {
-  import TestAPIKeyManager._
-  val TestAPIKey = testUID
-  val TrackingAPIKey = usageUID
-  val ExpiredAPIKey = expiredUID
-}
-
-trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestAPIKeys with AkkaDefaults with MongoAPIKeyManagerComponent {
-  val asyncContext = defaultFutureDispatch
-
+trait TestEventService extends
+  BlueEyesServiceSpecification with
+  EventService with
+  AkkaDefaults {
+  
   val config = """
     security {
       test = true
@@ -60,8 +56,48 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
 
   override val configuration = "services { ingest { v1 { " + config + " } } }"
 
-  def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(TrackingAPIKey) 
+  val asyncContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
+  val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  def apiKeyManagerFactory(config: Configuration) = apiKeyManager
+  
+  val accountManager = new InMemoryAccountManager[Future]
+  def accountManagerFactory(config: Configuration) = accountManager
+
+  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(0, Duration(1, "second"))
+
+  val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
+
+  val to = Duration(1, "seconds")
+  val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
+  
+  val testAccount = Await.result(accountManager.newAccount("test@example.com", "open sesame", new DateTime, AccountPlan.Free) {
+    case (accountId, path) => apiKeyManager.newStandardAPIKeyRecord(accountId, path).map(_.apiKey)
+  }, to)
+  
+  val testAccountId = testAccount.accountId
+  val testPath = testAccount.rootPath
+  val testAPIKey = testAccount.apiKey
+  
+  val accessTest = Set[Permission](
+    ReadPermission(testPath, Set("test")),
+    ReducePermission(testPath, Set("test")),
+    WritePermission(testPath, Set()),
+    DeletePermission(testPath, Set())
+  )
+  
+  val expiredAccount = Await.result(accountManager.newAccount("expired@example.com", "open sesame", new DateTime, AccountPlan.Free) {
+    case (accountId, path) =>
+      apiKeyManager.newStandardAPIKeyRecord(accountId, path).map(_.apiKey).flatMap { expiredAPIKey => 
+        apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, accessTest, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
+      }
+  }, to)
+  
+  val expiredAccountId = expiredAccount.accountId
+  val expiredPath = expiredAccount.rootPath
+  val expiredAPIKey = expiredAccount.apiKey
+  
   val messaging = new CollectingMessaging
 
   def queryExecutorFactory(config: Configuration) = new NullQueryExecutor {
@@ -77,8 +113,6 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
     new KafkaEventStore(new EventRouter(routeTable, messaging), 0)
   }
 
-  override def apiKeyManagerFactory(config: Configuration) = TestAPIKeyManager.testAPIKeyManager[Future]
-
   implicit def jValueToFutureJValue = new Bijection[JValue, Future[JValue]] {
     def apply(x: JValue) = Future(x)
     def unapply(f: Future[JValue]) = Await.result(f, Duration(500, "millis"))
@@ -86,27 +120,26 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
 
   def track[A](
       contentType: MimeType,
-      sync: Boolean = true,
-      apiKey: Option[String] = Some(TestAPIKey),
-      path: String = "unittest"
+      apiKey: Option[APIKey],
+      path: Path,
+      ownerAccountId: Option[AccountID],
+      sync: Boolean = true
     )(data: A)(implicit
       bi: Bijection[A, Future[JValue]],
       bi2: Bijection[A, ByteChunk]): Future[(HttpResponse[JValue], List[Event])] = {
     val svc = service.contentType[A](contentType).path(if (sync) "/sync/fs/" else "/async/fs/")
+    val queries = List(apiKey.map(("apiKey", _)), ownerAccountId.map(("ownerAccountId", _))).sequence
+    val svcWithQueries = queries.map(svc.queries(_ :_*)).getOrElse(svc)
+
     messaging.messages.clear()
+    
     for {
-      response <- apiKey.map(svc.query("apiKey", _)).getOrElse(svc).post[A](path)(data)
+      response <- svcWithQueries.post[A](path.toString)(data)
       content <- response.content map (a => bi(a) map (Some(_))) getOrElse Future(None)
     } yield {
       (response.copy(content = content), messaging.messages.toList collect {
         case EventMessage(_, event) => event
       })
     }
-
   }
-
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
-  val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 }
-
-

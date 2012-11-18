@@ -106,7 +106,7 @@ object SBTConsole {
     }
 
     class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
-      val accessControl = new UnlimitedAccessControl[Future]()
+      val accessControl = new UnrestrictedAccessControl[Future]()
     }
 
     val storage = new Storage
@@ -124,7 +124,7 @@ object SBTConsole {
 
     def evalE(str: String) = {
       val dag = produceDAG(str)
-      withContext { ctx => consumeEval("0", dag, ctx,Path.Root) }
+      withContext { ctx => consumeEval("dummyAPIKey", dag, ctx,Path.Root) }
     }
     
     def produceDAG(str: String) = {

@@ -5,24 +5,25 @@ import com.precog.common.Path
 import com.precog.auth.WrappedAPIKey
 import com.precog.common.security._
 
+import akka.dispatch.{ ExecutionContext, Future, Await }
+import akka.util.Timeout
+import akka.util.duration._
+
 import blueeyes.bkka.AkkaTypeClasses._
+import blueeyes.core.data.ByteChunk
+import blueeyes.core.data.BijectionsChunkJson._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
+import blueeyes.core.http.MimeTypes._
 import blueeyes.core.service._
+import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.json._
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 import blueeyes.json.serialization.Extractor._
-import blueeyes.core.http.MimeTypes._
-import blueeyes.core.data.BijectionsChunkJson._
-import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.util.Clock
 
 import HttpHeaders.Authorization
-
-import akka.dispatch.{ ExecutionContext, Future, Await }
-import akka.util.Timeout
-import akka.util.duration._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -30,6 +31,18 @@ import scalaz.{ Applicative, Validation, Success, Failure }
 
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
+
+case class SecurityService(protocol: String, host: String, port: Int, path: String, rootKey: String) {
+  def withClient[A](f: HttpClient[ByteChunk] => A): A = {
+    val client = new HttpClientXLightWeb 
+    f(client.protocol(protocol).host(host).port(port).path(path))
+  }
+  
+  def withRootClient[A](f: HttpClient[ByteChunk] => A): A = {
+    val client = new HttpClientXLightWeb 
+    f(client.protocol(protocol).host(host).port(port).path(path).query("apiKey", rootKey))
+  }
+}
 
 object Responses {
   def failure(error: HttpStatusCode, message: String) = 
@@ -133,9 +146,9 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                     logger.debug("Found existing account: " + account.accountId)
                     Future(HttpResponse[JValue](OK, content = Some(JObject(List(JField("accountId", account.accountId))))))
                   } getOrElse {
-                    accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free, Some(rootAccountId)) { (accountId, path) =>
-                      val permissions = Permission.permissions(path, accountId, None, Permission.ALL)
-                      val createBody = JObject(JField("grants", permissions.serialize) :: Nil) 
+                    accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free) { (accountId, path) =>
+                      val request = NewGrantRequest.newAccount(accountId, path, None, None, Set(), None)
+                      val createBody = request.serialize 
 
                       logger.debug("Creating new account with id " + accountId + " and request body " + createBody)
 
@@ -143,7 +156,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                         client.contentType(application/MimeTypes.json).path("apikeys/").post[JValue]("")(createBody) map {
                           case HttpResponse(HttpStatus(OK, _), _, Some(wrappedKey), _) =>
                            wrappedKey.validated[WrappedAPIKey] match {
-                             case Success(WrappedAPIKey(_, apiKey)) => apiKey
+                             case Success(WrappedAPIKey(apiKey, _, _)) => apiKey
                              case Failure(err) =>
                               logger.error("Unexpected response to API key creation request: " + err)
                               throw HttpException(BadGateway, "Unexpected response to API key creation request: " + err)

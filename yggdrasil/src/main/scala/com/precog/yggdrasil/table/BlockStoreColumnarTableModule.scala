@@ -3,6 +3,7 @@ package table
 
 import com.precog.common.{MetadataStats,Path,VectorCase}
 import com.precog.common.json._
+import com.precog.common.security._
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
@@ -820,7 +821,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
       Table(StreamT(M.point(head)), ExactSize(totalCount)).transform(TransSpec1.DerefArray1)
     }
 
-    def load(table: Table, uid: UserId, tpe: JType): M[Table] 
+    def load(table: Table, apiKey: APIKey, tpe: JType): M[Table] 
   }
   
   abstract class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size)
@@ -837,7 +838,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = M.point(this)
     
-    def load(uid: UserId, tpe: JType): M[Table] = Table.load(this, uid, tpe)
+    def load(apiKey: APIKey, tpe: JType): M[Table] = Table.load(this, apiKey, tpe)
     
     override def compact(spec: TransSpec1): Table = this
 
@@ -856,7 +857,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     import SliceTransform._
     import trans._
     
-    def load(uid: UserId, tpe: JType): M[Table] = Table.load(this, uid, tpe)
+    def load(apiKey: APIKey, tpe: JType): M[Table] = Table.load(this, apiKey, tpe)
 
     /**
      * Sorts the KV table by ascending or descending order of a transformation

@@ -3,6 +3,7 @@ package ingest
 
 import service._
 import ingest.service._
+import accounts._
 import common.security._
 import daze._
 
@@ -27,9 +28,9 @@ import scalaz.syntax.monad._
 
 import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
 
-case class IngestState(apiKeyManager: APIKeyManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, ingestPool: ExecutorService)
+case class EventServiceState(apiKeyManager: APIKeyManager[Future], accountManager: BasicAccountManager[Future], eventStore: EventStore, ingestPool: ExecutorService)
 
-trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
+trait EventService extends BlueEyesServiceBuilder with EventServiceCombinators
 with DecompressCombinators with AkkaDefaults { 
   import BijectionsChunkJson._
   import BijectionsChunkString._
@@ -41,10 +42,10 @@ with DecompressCombinators with AkkaDefaults {
   implicit def M: Monad[Future]
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
+  def accountManagerFactory(config: Configuration): BasicAccountManager[Future]
   def eventStoreFactory(config: Configuration): EventStore
-  def usageLoggingFactory(config: Configuration): UsageLogging 
 
-  val analyticsService = this.service("ingest", "1.0") {
+  val eventService = this.service("ingest", "1.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
@@ -52,7 +53,7 @@ with DecompressCombinators with AkkaDefaults {
 
           val eventStore = eventStoreFactory(config.detach("eventStore"))
           val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
-          val accessControl = new APIKeyManagerAccessControl(apiKeyManager)
+          val accountManager = accountManagerFactory(config.detach("accounts"))
 
           // Set up a thread pool for ingest tasks
           val readPool = new ThreadPoolExecutor(config[Int]("readpool.min_threads", 2),
@@ -63,23 +64,24 @@ with DecompressCombinators with AkkaDefaults {
                                                 new ThreadFactoryBuilder().setNameFormat("ingestpool-%d").build())
 
           eventStore.start map { _ =>
-            IngestState(
+            EventServiceState(
               apiKeyManager,
-              accessControl,
+              accountManager,
               eventStore,
-              usageLoggingFactory(config.detach("usageLogging")),
               readPool
             )
           }
         } ->
-        request { (state: IngestState) =>
+        request { (state: EventServiceState) =>
           decompress {
             jsonpOrChunk {
               apiKey(state.apiKeyManager) {
                 path("/(?<sync>a?sync)") {
                   dataPath("fs") {
-                    post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch)) ~
-                    delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.accessControl, state.eventStore, deleteTimeout)(defaultFutureDispatch))
+                    accountId(state.accountManager) {
+                      post(new IngestServiceHandler(state.apiKeyManager, state.eventStore, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch))
+                    } ~
+                    delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.apiKeyManager, state.eventStore, deleteTimeout)(defaultFutureDispatch))
                   }
                 }
               }

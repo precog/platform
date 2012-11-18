@@ -61,7 +61,7 @@ object IngestTest {
 
       val runner = new JDBMPerfTestRunner(SimpleTimer,
         optimize = config.optimize,
-        userUID = "dummy",
+        apiKey = "dummyAPIKey",
         actorSystem = actorSystem,
         _rootDir = config.rootDir)
 

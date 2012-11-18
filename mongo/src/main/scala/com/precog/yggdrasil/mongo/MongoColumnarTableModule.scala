@@ -63,7 +63,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
   trait MongoColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
     def mongo: Mongo
 
-    def load(table: Table, uid: UserId, tpe: JType): Future[Table] = {
+    def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
       for {
         paths <- pathsM(table)
       } yield {

@@ -12,10 +12,11 @@ import blueeyes.json.serialization.DefaultSerialization._
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
 
+import com.precog.accounts.AccountServiceCombinators
 import com.precog.common.Path
 import com.precog.common.security._
 
-trait IngestServiceCombinators extends APIKeyServiceCombinators {
+trait EventServiceCombinators extends APIKeyServiceCombinators with AccountServiceCombinators {
 
   import BijectionsChunkJson._
   import BijectionsChunkString._

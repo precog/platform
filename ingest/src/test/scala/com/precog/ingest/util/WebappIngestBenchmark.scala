@@ -83,7 +83,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
       override def run() {
         samples.foreach {
           case (path, sample) =>
-            def event = Event.fromJValue(Path(path), sample.next._1, "bogus")
+            def event = Event.fromJValue("bogus", Path(path), None, sample.next._1)
             0.until(messages).foreach { i =>
               if(i % 10 == 0 && verbose) println("Sending to [%s]: %d".format(path, i))
               try {
@@ -131,10 +131,6 @@ repeats - number of of times to repeat test (default: 1)
   
   def send(event: Event, timeout: Timeout): Unit
   def close(): Unit = ()
-}
-
-object WebappIngestProducer {
-  def main(args: Array[String]) =  new WebappIngestProducer(args).run()
 }
 
 object JsonLoader extends App {
@@ -189,15 +185,20 @@ Usage:
   AkkaDefaults.actorSystem.shutdown
 }
 
+object WebappIngestProducer {
+  def main(args: Array[String]) =  new WebappIngestProducer(args).run()
+}
+
 class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
-  lazy val apiKey = config.getProperty("token", TestAPIKeyManager.rootUID)
+  lazy val ingestAPIKey = config.getProperty("apiKey", "dummy")
+  val ingestOwnerAccountId: Option[AccountID] = None
   val client = new HttpClientXLightWeb 
 
   def send(event: Event, timeout: Timeout) {
     
     val f: Future[HttpResponse[JValue]] = client.path(base)
-                                                .query("apiKey", apiKey)
+                                                .query("apiKey", ingestAPIKey)
                                                 .contentType(application/MimeTypes.json)
                                                 .post[JValue](event.path.toString)(event.data)
     Await.ready(f, 10 seconds) 
