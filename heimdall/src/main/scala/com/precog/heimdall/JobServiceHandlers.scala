@@ -209,7 +209,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     } yield {
       Success(contentM flatMap { message =>
         jobs.addMessage(jobId, channel, message) map { message =>
-          HttpResponse[JValue](OK, content = Some(message.serialize))
+          HttpResponse[JValue](Created, content = Some(message.serialize))
         }
       })
     }) getOrElse {
