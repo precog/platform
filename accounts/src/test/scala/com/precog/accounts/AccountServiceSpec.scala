@@ -41,7 +41,7 @@ import scalaz.{Validation, Success, NonEmptyList}
 import scalaz.Scalaz._
 import scalaz.Validation._
 
-import blueeyes.concurrent.test._
+import blueeyes.akka_testing._
 
 import blueeyes.core.data._
 import blueeyes.bkka.AkkaDefaults

@@ -44,15 +44,17 @@ import scalaz.{Success, NonEmptyList}
 import scalaz.Scalaz._
 import scalaz.Validation._
 
-import blueeyes.concurrent.test._
+import blueeyes.akka_testing._
 
 import blueeyes.core.data._
 import blueeyes.bkka.{ AkkaDefaults, AkkaTypeClasses }
+import blueeyes.core.data._
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
+import blueeyes.core.service._
 
 import blueeyes.json._
 
@@ -73,8 +75,7 @@ trait TestShardService extends
   ShardService with
   AkkaDefaults { self =>
   
-  import BijectionsChunkJson._
-  import BijectionsChunkQueryResult._
+  import DefaultBijections._
   import AkkaTypeClasses._
 
   val config = """ 
@@ -128,10 +129,33 @@ trait TestShardService extends
   
   def apiKeyManagerFactory(config: Configuration) = apiKeyManager
 
-  lazy val queryService = service.contentType[QueryResult](application/(MimeTypes.json))
+  import java.nio.ByteBuffer
+
+  implicit val queryResultByteChunkTranscoder =
+   new AsyncHttpTranscoder[QueryResult, ByteChunk] {
+     def apply(req: HttpRequest[QueryResult]): HttpRequest[ByteChunk] =
+       req.copy(content = req.content.map {
+         case Left(jv) =>
+           Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
+         case Right(stream) =>
+           Right(stream.map(utf8.encode))
+       })
+     def unapply(res: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[QueryResult]] =
+       res.map { r =>
+         val q: Option[QueryResult] = r.content.map {
+           case Left(bb) =>
+             Left(JParser.parseFromByteBuffer(bb).valueOr(throw _))
+           case Right(stream) =>
+             Right(stream.map(utf8.decode))
+         }
+         r.copy(content = q)
+       }
+   }
+
+  lazy val queryService = client.contentType[QueryResult](application/(MimeTypes.json))
                                  .path("/analytics/fs/")
 
-  lazy val metaService = service.contentType[QueryResult](application/(MimeTypes.json))
+  lazy val metaService = client.contentType[QueryResult](application/(MimeTypes.json))
                                 .path("/meta/fs/")
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(1, Duration(1, "second"))
@@ -145,6 +169,8 @@ trait TestShardService extends
 
 class ShardServiceSpec extends TestShardService with FutureMatchers {
 
+  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
   def query(query: String, apiKey: Option[String] = Some(testAPIKey), path: String = ""): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query).get(path)
   }
@@ -157,7 +183,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   "Shard query service" should {
     "handle absolute accessible query from root path" in {
       query(accessibleAbsoluteQuery) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(Left(_)), _) => ok
+        case HttpResponse(HttpStatus(OK, _), _, Some(_), _) => ok
       }}
     }
     "reject absolute inaccessible query from root path" in {
@@ -167,7 +193,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     }
     "handle relative query from accessible non-root path" in {
       query(relativeQuery, path = "/test") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(Left(_)), _) => ok
+        case HttpResponse(HttpStatus(OK, _), _, Some(_), _) => ok
       }}
     }
     "reject relative query from inaccessible non-root path" in {

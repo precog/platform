@@ -26,7 +26,7 @@ import akka.dispatch.Future
 
 import blueeyes.BlueEyesServiceBuilder
 import blueeyes.bkka.{ AkkaDefaults, Stoppable } 
-import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
+import blueeyes.core.data.{DefaultBijections, ByteChunk}
 import blueeyes.health.metrics.eternity
 
 import org.streum.configrity.Configuration
@@ -34,9 +34,7 @@ import org.streum.configrity.Configuration
 case class SecurityServiceState(apiKeyManagement: APIKeyManagement)
 
 trait SecurityService extends BlueEyesServiceBuilder with AkkaDefaults with APIKeyServiceCombinators {
-  import BijectionsChunkJson._
-  import BijectionsChunkString._
-  import BijectionsChunkFutureJson._
+  import DefaultBijections._
 
   val insertTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now

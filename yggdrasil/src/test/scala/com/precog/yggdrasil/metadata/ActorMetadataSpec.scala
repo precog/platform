@@ -26,7 +26,7 @@ import com.precog.common.util._
 import com.precog.common.json._
 import com.precog.util._
 
-import blueeyes.concurrent.test._
+import blueeyes.akka_testing._
 import blueeyes.json._
 
 import akka.actor._

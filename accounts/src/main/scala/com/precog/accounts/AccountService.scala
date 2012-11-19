@@ -23,7 +23,8 @@ import com.precog.util._
 import blueeyes.BlueEyesServer
 
 import blueeyes._
-import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
+import blueeyes.core.data._
+import DefaultBijections._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
@@ -50,6 +51,19 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.std.option._
 
+case class SecurityService(protocol: String, host: String, port: Int, path: String, rootKey: String)(
+  implicit asyncContext: ExecutionContext
+) {
+  def withClient[A](f: HttpClient[ByteChunk] => A): A = {
+    val client = new HttpClientXLightWeb 
+    f(client.protocol(protocol).host(host).port(port).path(path))
+  }
+  
+  def withRootClient[A](f: HttpClient[ByteChunk] => A): A = {
+    val client = new HttpClientXLightWeb 
+    f(client.protocol(protocol).host(host).port(port).path(path).query("apiKey", rootKey))
+  }
+}
 
 case class AccountServiceState(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService, rootAccountId: String)
 
@@ -65,9 +79,6 @@ trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
 
 
 trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with AuthenticationCombinators {
-  import BijectionsChunkJson._
-  import BijectionsChunkString._
-  import BijectionsChunkFutureJson._
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 

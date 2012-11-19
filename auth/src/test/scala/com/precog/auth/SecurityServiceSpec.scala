@@ -24,28 +24,28 @@ import org.joda.time.DateTime
 
 import org.specs2.mutable._
 
-import akka.dispatch.{ Await, Future } 
+import akka.dispatch.{ Await, ExecutionContext, Future } 
 import akka.util.Duration
 
 import org.streum.configrity.Configuration
 
 import scalaz.{Validation, Success, NonEmptyList}
 
-import blueeyes.concurrent.test._
+import blueeyes.akka_testing._
 
 import blueeyes.core.data._
-import blueeyes.bkka.{ AkkaDefaults, AkkaTypeClasses }
+import blueeyes.bkka._
+import blueeyes.core.service._
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 
+import blueeyes.json._
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
-
-import blueeyes.json._
 
 import scalaz._
 
@@ -55,12 +55,17 @@ import com.precog.common.security._
 import APIKeyRecord.SafeSerialization._
 import Grant.SafeSerialization._
 
-trait TestAPIKeyService extends BlueEyesServiceSpecification with SecurityService with AkkaDefaults with MongoAPIKeyManagerComponent {
 
-  implicit val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+trait TestAPIKeyService extends BlueEyesServiceSpecification
+  with SecurityService
+  with AkkaDefaults
+  with MongoAPIKeyManagerComponent { self =>
 
-  import BijectionsChunkJson._
+  import DefaultBijections._
+
+  val asyncContext = defaultFutureDispatch
+  implicit val executionContext = defaultFutureDispatch
+  implicit val M = new FutureMonad(defaultFutureDispatch)
 
   val config = """ 
     security {
@@ -79,7 +84,10 @@ trait TestAPIKeyService extends BlueEyesServiceSpecification with SecurityServic
 
   override def apiKeyManagerFactory(config: Configuration) = apiKeyManager 
 
-  lazy val authService = service.contentType[JValue](application/(MimeTypes.json))
+  val mimeType = application/(MimeTypes.json)
+
+  lazy val authService: HttpClient[JValue] =
+    client.contentType[JValue](application/(MimeTypes.json))
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(0, Duration(1, "second"))
 
@@ -87,6 +95,13 @@ trait TestAPIKeyService extends BlueEyesServiceSpecification with SecurityServic
 }
 
 class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tags {
+
+  val f: JValue => JValue = v => v
+  
+  val tc = new AsyncHttpTranscoder[JValue, JValue] {
+    def apply(a: HttpRequest[JValue]): HttpRequest[JValue] = a
+    def unapply(fb: Future[HttpResponse[JValue]]): Future[HttpResponse[JValue]] = fb
+  }
   
   def getAPIKeys(authAPIKey: String) = 
     authService.query("apiKey", authAPIKey).get("/apikeys/")
@@ -95,7 +110,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     createAPIKeyRaw(authAPIKey, request.serialize)
 
   def createAPIKeyRaw(authAPIKey: String, request: JValue) = 
-    authService.query("apiKey", authAPIKey).post("/apikeys/")(request)
+    authService.query("apiKey", authAPIKey).post("/apikeys/")(request)(f, tc)
 
   def getAPIKeyDetails(authAPIKey: String, queryKey: String) = 
     authService.query("apiKey", authAPIKey).get("/apikeys/"+queryKey)
@@ -107,13 +122,15 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     addAPIKeyGrantRaw(authAPIKey, updateKey, grantId.serialize)
 
   def addAPIKeyGrantRaw(authAPIKey: String, updateKey: String, grantId: JValue) = 
-    authService.query("apiKey", authAPIKey).post("/apikeys/"+updateKey+"/grants/")(grantId)
+    authService.query("apiKey", authAPIKey).
+      post("/apikeys/"+updateKey+"/grants/")(grantId)(f, tc)
 
   def createAPIKeyGrant(authAPIKey: String, request: NewGrantRequest) = 
     createAPIKeyGrantRaw(authAPIKey, request.serialize)
 
   def createAPIKeyGrantRaw(authAPIKey: String, request: JValue) = 
-    authService.query("apiKey", authAPIKey).post("/grants/")(request)
+    authService.query("apiKey", authAPIKey).
+      post("/grants/")(request)(f, tc)
 
   def removeAPIKeyGrant(authAPIKey: String, updateKey: String, grantId: String) = 
     authService.query("apiKey", authAPIKey).delete("/apikeys/"+updateKey+"/grants/"+grantId)
@@ -128,7 +145,8 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     addGrantChildRaw(authAPIKey, grantId, request.serialize)
     
   def addGrantChildRaw(authAPIKey: String, grantId: String, request: JValue) = 
-    authService.query("apiKey", authAPIKey).post("/grants/"+grantId+"/children/")(request)
+    authService.query("apiKey", authAPIKey).
+      post("/grants/"+grantId+"/children/")(request)(f, tc)
     
   def deleteGrant(authAPIKey: String, grantId: String) =
     authService.query("apiKey", authAPIKey).delete("/grants/"+grantId)

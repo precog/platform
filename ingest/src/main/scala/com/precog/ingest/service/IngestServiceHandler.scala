@@ -26,7 +26,8 @@ import accounts._
 import common._
 import common.security._
 
-import akka.dispatch.{ Future, Promise }
+import blueeyes.bkka._
+import akka.dispatch.{ExecutionContext, Future, Promise}
 import akka.dispatch.MessageDispatcher
 import akka.util.Timeout
 
@@ -54,17 +55,23 @@ import scalaz._
 class IngestServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, insertTimeout: Timeout, threadPool: Executor, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path, Account) => Future[HttpResponse[JValue]]] with Logging {
 
+  protected implicit val M = new FutureMonad(ExecutionContext.fromExecutor(threadPool))
+
   def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[Unit] = {
-    Future { chan.write(ByteBuffer.wrap(chunk.data)) } flatMap { _ =>
-      chunk.next match {
-        case Some(future) => future flatMap (writeChunkStream(chan, _))
+    def writeChannel(stream: StreamT[Future, ByteBuffer]): Future[Unit] = {
+      stream.uncons flatMap {
+        case Some((bb, tail)) => { chan.write(bb); writeChannel(tail) }
         case None => Future(chan.close())
       }
+    }
+
+    chunk match {
+      case Left(bb) => Future { chan.write(bb); chan.close() }
+      case Right(stream) => writeChannel(stream)
     }
   }
 
   def ingest(r: APIKeyRecord, p: Path, account: Account, event: JValue): Future[Unit] = {
-    
     val eventInstance = Event.fromJValue(r.apiKey, p, Some(account.accountId), event)
     logger.trace("Saving event: " + eventInstance)
     eventStore.save(eventInstance, insertTimeout)
@@ -160,20 +167,20 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
   def parseJson(channel: ReadableByteChannel, t: APIKeyRecord, p: Path, o: Account): EventQueueInserter = {
     val reader = new BufferedReader(Channels.newReader(channel, "UTF-8"))
     val lines = Iterator.continually(reader.readLine()).takeWhile(_ != null)
-    val inserter = new EventQueueInserter(t, p, o, lines map { json =>
+    new EventQueueInserter(t, p, o, lines map { json =>
       try {
         Right(JParser.parse(json))
       } catch {
         case e => Left("Parsing failed: " + e.getMessage())
       }
     }, Some(reader))
-    inserter
   }
 
   def parseSyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path, o: Account): Future[EventQueueInserter] = {
     val pipe = Pipe.open()
-    writeChunkStream(pipe.sink(), byteStream)
-    Future { parseJson(pipe.source(), t, p, o) }
+    for {
+      _ <- writeChunkStream(pipe.sink(), byteStream)
+    } yield parseJson(pipe.source(), t, p, o)
   }
 
   def parseAsyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path, o: Account): Future[EventQueueInserter] = {

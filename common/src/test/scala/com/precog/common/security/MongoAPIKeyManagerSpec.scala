@@ -34,7 +34,7 @@ import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
 
 import blueeyes.bkka.AkkaDefaults
-import blueeyes.concurrent.test.FutureMatchers
+import blueeyes.akka_testing.FutureMatchers
 import blueeyes.persistence.mongo._
 
 import blueeyes.json._

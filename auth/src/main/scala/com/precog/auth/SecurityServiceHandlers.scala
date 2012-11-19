@@ -144,7 +144,7 @@ class GetAPIKeyDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit dispa
 
 class GetAPIKeyGrantsHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) => 
+    Success { (authAPIKey: APIKeyRecord) =>
       request.parameters.get('apikey).map { apiKey =>
         apiKeyManagement.apiKeyGrants(apiKey).map {
           case Some(grants) =>

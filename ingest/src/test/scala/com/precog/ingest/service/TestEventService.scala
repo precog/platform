@@ -43,18 +43,14 @@ import org.streum.configrity.io.BlockFormat
 import scalaz._
 import scalaz.Scalaz._
 
-import blueeyes.concurrent.test._
-
+import blueeyes.akka_testing._
+import blueeyes.bkka._
 import blueeyes.core.data._
-import blueeyes.bkka.{ AkkaDefaults, AkkaTypeClasses }
-import blueeyes.core.service.test.BlueEyesServiceSpecification
-import blueeyes.core.http.HttpResponse
-import blueeyes.core.http.HttpStatus
 import blueeyes.core.http.HttpStatusCodes._
-import blueeyes.core.http.MimeType
-import blueeyes.core.http.MimeTypes
+import blueeyes.core.http._
 import blueeyes.core.http.MimeTypes._
-
+import blueeyes.core.service._
+import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.json._
 
 trait TestEventService extends
@@ -132,22 +128,22 @@ trait TestEventService extends
     new KafkaEventStore(new EventRouter(routeTable, messaging), 0)
   }
 
-  implicit def jValueToFutureJValue = new Bijection[JValue, Future[JValue]] {
-    def apply(x: JValue) = Future(x)
-    def unapply(f: Future[JValue]) = Await.result(f, Duration(500, "millis"))
-  }
+  implicit def jValueToFutureJValue(j: JValue) = Future(j)
 
   def track[A](
-      contentType: MimeType,
-      apiKey: Option[APIKey],
-      path: Path,
-      ownerAccountId: Option[AccountID],
-      sync: Boolean = true
-    )(data: A)(implicit
-      bi: Bijection[A, Future[JValue]],
-      bi2: Bijection[A, ByteChunk]): Future[(HttpResponse[JValue], List[Event])] = {
-    val svc = service.contentType[A](contentType).path(if (sync) "/sync/fs/" else "/async/fs/")
-    val queries = List(apiKey.map(("apiKey", _)), ownerAccountId.map(("ownerAccountId", _))).sequence
+    contentType: MimeType,
+    apiKey: Option[APIKey],
+    path: Path,
+    ownerAccountId: Option[AccountID],
+    sync: Boolean = true
+  )(data: A)(implicit
+    bi: A => Future[JValue],
+    t: AsyncHttpTranscoder[A, ByteChunk]
+  ): Future[(HttpResponse[JValue], List[Event])] = {
+    val svc = client.contentType[A](contentType).
+      path(if (sync) "/sync/fs/" else "/async/fs/")
+    val queries = List(apiKey.map(("apiKey", _)), ownerAccountId.
+      map(("ownerAccountId", _))).sequence
     val svcWithQueries = queries.map(svc.queries(_ :_*)).getOrElse(svc)
 
     messaging.messages.clear()

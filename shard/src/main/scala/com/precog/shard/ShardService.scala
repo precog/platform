@@ -28,14 +28,21 @@ import daze._
 
 import akka.dispatch.Future
 
-import blueeyes.bkka.AkkaDefaults
-import blueeyes.bkka.Stoppable
+import blueeyes.json._
+import blueeyes.bkka.{AkkaDefaults, Stoppable}
+import blueeyes.core.data._
+import blueeyes.core.http._
+import blueeyes.core.service._
 import blueeyes.BlueEyesServiceBuilder
-import blueeyes.core.data.{ BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk }
+
+import blueeyes.core.data.{ DefaultBijections, ByteChunk }
 import blueeyes.core.http.{HttpHeaders, HttpRequest, HttpResponse}
 import blueeyes.core.service.CustomHttpService
+
 import blueeyes.health.metrics.{eternity}
 import blueeyes.json.JValue
+
+import DefaultBijections._
 
 import org.streum.configrity.Configuration
 
@@ -49,10 +56,6 @@ trait ShardService extends
     ShardServiceCombinators with 
     AkkaDefaults with 
     Logging {
-  import BijectionsChunkJson._
-  import BijectionsChunkString._
-  import BijectionsChunkFutureJson._
-  import BijectionsChunkQueryResult._
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
@@ -61,6 +64,30 @@ trait ShardService extends
   def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]): QueryExecutor[Future]
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
+
+  // TODO: maybe some of these implicits should be moved, but for now i
+  // don't have the patience to figure out where.
+
+  implicit val failureToQueryResult:
+      (HttpFailure, String) => HttpResponse[QueryResult] =
+    (fail: HttpFailure, msg: String) =>
+  HttpResponse[QueryResult](status = fail, content = Some(Left(JString(msg))))
+
+  implicit val futureJValueToFutureQueryResult:
+      Future[HttpResponse[JValue]] => Future[HttpResponse[QueryResult]] =
+    (fr: Future[HttpResponse[JValue]]) => fr.map { r => 
+      r.copy(content = r.content.map(Left(_)))
+    }
+
+  import java.nio.ByteBuffer
+  import java.nio.charset.Charset
+  val utf8 = Charset.forName("UTF-8")
+  implicit val queryResultToFutureByteChunk:
+      QueryResult => Future[ByteChunk] =
+    (qr: QueryResult) => qr match {
+      case Left(jv) => Future(Left(ByteBuffer.wrap(jv.renderCompact.getBytes)))
+      case Right(stream) => Future(Right(stream.map(cb => utf8.encode(cb))))
+    }
 
   val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {
@@ -88,7 +115,7 @@ trait ShardService extends
           }
         } ->
         request { (state: ShardState) =>
-          jvalue {
+          jvalue[ByteChunk] {
             path("/actors/status") {
               get(new ActorStatusHandler(state.queryExecutor))
             }

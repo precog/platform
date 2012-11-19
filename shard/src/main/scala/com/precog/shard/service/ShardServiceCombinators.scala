@@ -43,15 +43,14 @@ import scalaz.{ Validation, Success, Failure }
 import scalaz.ValidationNEL
 import scalaz.Validation._
 import scalaz.Monad
+import scalaz.syntax.traverse._
+import scalaz.std.option._
 
 trait ShardServiceCombinators extends EventServiceCombinators {
 
   type Query = String
 
-  import BijectionsByteArray._
-  import BijectionsChunkJson._
-  import BijectionsChunkString._
-  import BijectionsChunkFutureJson._
+  import DefaultBijections._
 
   import scalaz.syntax.apply._
   import scalaz.syntax.validation._
@@ -133,14 +132,21 @@ trait ShardServiceCombinators extends EventServiceCombinators {
     }
   }
 
-  def jsonpcb[A](delegate: HttpService[Future[JValue], Future[HttpResponse[A]]])(implicit bi: Bijection[A, Future[ByteChunk]], M: Monad[Future]) =
-    jsonpc[Array[Byte], Array[Byte]](delegate map (_ flatMap { response =>
-      val contentM = response.content map { c =>
-        bi(c) map { Some(_) }
-      } getOrElse M.point(None)
-      
-      contentM map { content =>
-        response.copy(content = content)
-      }
+  import java.nio.ByteBuffer
+
+  implicit def bbToString(bb: ByteBuffer): String = {
+    val arr = new Array[Byte](bb.remaining)
+    bb.get(arr)
+    new String(arr, "UTF-8")
+  }
+
+  implicit def stringToBB(s: String): ByteBuffer = ByteBuffer.wrap(s.getBytes("UTF-8"))
+
+  def jsonpcb[A](cdelegate: HttpService[Future[JValue], Future[HttpResponse[A]]])
+    (implicit bi: A => Future[ByteChunk], M: Monad[Future]) = {
+
+    jsonpc[ByteBuffer, ByteBuffer](delegate map (_ flatMap { response =>
+      response.content.map(bi).sequence.map(c0 => response.copy(content = c0))
     }))
+  }
 }

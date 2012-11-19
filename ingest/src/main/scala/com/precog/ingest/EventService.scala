@@ -32,7 +32,7 @@ import akka.dispatch.MessageDispatcher
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.BlueEyesServiceBuilder
-import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
+import blueeyes.core.data.{DefaultBijections, ByteChunk}
 import blueeyes.health.metrics.{eternity}
 
 import blueeyes.core.http._
@@ -51,9 +51,7 @@ case class EventServiceState(apiKeyManager: APIKeyManager[Future], accountManage
 
 trait EventService extends BlueEyesServiceBuilder with EventServiceCombinators
 with DecompressCombinators with AkkaDefaults { 
-  import BijectionsChunkJson._
-  import BijectionsChunkString._
-  import BijectionsChunkFutureJson._
+  import DefaultBijections._
 
   val insertTimeout = akka.util.Timeout(10000)
   val deleteTimeout = akka.util.Timeout(10000)

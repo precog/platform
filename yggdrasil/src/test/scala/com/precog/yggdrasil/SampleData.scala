@@ -22,7 +22,7 @@ package com.precog.yggdrasil
 import akka.dispatch.Future
 
 import blueeyes.json._
-import blueeyes.concurrent.test.FutureMatchers
+import blueeyes.akka_testing.FutureMatchers
 
 import scalaz.{Ordering => _, NonEmptyList => NEL, _}
 import scalaz.std.tuple._

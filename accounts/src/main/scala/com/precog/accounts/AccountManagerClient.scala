@@ -26,7 +26,7 @@ import com.precog.common.security._
 import akka.dispatch.{ ExecutionContext, Future }
 
 import blueeyes.bkka._
-import blueeyes.core.data.BijectionsChunkJson._
+import blueeyes.core.data.DefaultBijections._
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
 import blueeyes.core.http.MimeTypes._
