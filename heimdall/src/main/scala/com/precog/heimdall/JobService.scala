@@ -3,7 +3,7 @@ package com.precog.heimdall
 import akka.dispatch.Future
 
 import blueeyes._
-import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
+import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
@@ -15,6 +15,8 @@ import blueeyes.bkka.Stoppable
 import blueeyes.health.metrics.{eternity}
 import blueeyes.util.Clock
 
+import akka.util.Timeout
+
 import org.streum.configrity.Configuration
 
 case class JobServiceState(jobManager: JobManager[Future], clock: Clock)
@@ -22,8 +24,11 @@ case class JobServiceState(jobManager: JobManager[Future], clock: Clock)
 trait JobService
     extends BlueEyesServiceBuilder
     with AkkaDefaults
+    with BijectionsChunkFutureByteArray
     with HttpRequestHandlerCombinators {
 
+  import BijectionsChunkFutureString._
+  import BijectionsChunkFutureByteArray._
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
@@ -33,7 +38,10 @@ trait JobService
 
   def jobManager(config: Configuration): JobManager[Future]
 
-  implicit val timeout = akka.util.Timeout(30000)
+  implicit val timeout: Timeout = Timeout(30000)
+
+  // Ugh. Why do I need this?
+  implicit def byteArray2chunk(r: Future[HttpResponse[Array[Byte]]]): Future[HttpResponse[ByteChunk]] = r map { resp => resp.copy(content = resp.content map (Chunk(_))) }
 
   val jobService = this.service("jobs", "1.0") {
     requestLogging(timeout) {
@@ -71,11 +79,9 @@ trait JobService
                 }
               }
             }
-          }
-          //path("/jobs/'jobId/result") {
-          //  put() ~
-          //  get()
-          //}
+          } ~
+          path("/jobs/'jodId/result")(put(new CreateResultHandler(jobs, clock))) ~
+          path("/jobs/'jobId/result")(get(new GetResultHandler(jobs)))
         } ->
         shutdown { state =>
           close()
