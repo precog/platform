@@ -42,6 +42,8 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
 
   val statuses: mutable.Map[JobId, List[Status]] = mutable.Map.empty
 
+  val status: mutable.Map[JobId, Status] = mutable.Map.empty
+
   private def newJobId: JobId = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
   def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): M[Job] = {
@@ -56,41 +58,45 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
 
   def findJob(id: JobId): M[Option[Job]] = M.point { jobs get id }
 
-  def listJobs(show: JobState => Boolean): M[Seq[Job]] = M.point {
-    jobs.values.toList filter { job =>
-      show(job.state)
-    }
+  def listJobs(apiKey: APIKey): M[Seq[Job]] = M.point {
+    jobs.values.toList filter (_.apiKey == apiKey)
   }
 
   def updateStatus(jobId: JobId, prevStatus: Option[StatusId], 
       msg: String, progress: BigDecimal, unit: String, extra: Option[JValue]): M[Either[String, Status]] = {
-    M.point {
-      statuses get jobId match {
-        case Some(prev @ (curStatus :: _)) if curStatus.id == prevStatus.getOrElse(curStatus.id) =>
-          val s = Status(jobId, statuses.size, msg, progress, unit, extra)
-          statuses(jobId) = s :: prev
+
+    val jval = JObject(List(
+      JField("message", JString(msg)),
+      JField("progress", JNum(progress)),
+      JField("unit", JString(unit)),
+      JField("info", extra getOrElse JUndefined)))
+
+    status get jobId match {
+      case Some(curStatus) if curStatus.id == prevStatus.getOrElse(curStatus.id) =>
+        for (m <- addMessage(jobId, Message.channels.Status, jval)) yield {
+          val Some(s) = Status.fromMessage(m)
+          status.put(jobId, s)
           Right(s)
+        }
 
-        case Some(curStatus :: _) =>
-          Left("Current status did not match expected status.")
+      case Some(_) =>
+        M.point(Left("Current status did not match expected status."))
 
-        case Some(Nil) if prevStatus.isDefined =>
-          Left("Job has not yet started, yet a status was expected.")
+      case None if prevStatus.isDefined =>
+        M.point(Left("Job has not yet started, yet a status was expected."))
 
-        case Some(Nil) =>
-          val s = Status(jobId, 0, msg, progress, unit, extra)
-          statuses(jobId) = s :: Nil
+      case None =>
+        for (m <- addMessage(jobId, Message.channels.Status, jval)) yield {
+          val Some(s) = Status.fromMessage(m)
+          status.put(jobId, s)
           Right(s)
-
-        case None =>
-          Left("Cannot find job with ID '%s'." format jobId)
-      }
+        }
     }
   }
 
   def getStatus(jobId: JobId): M[Option[Status]] = M.point {
-    statuses get jobId match {
-      case Some(status :: _) => Some(status)
+    status get jobId match {
+      case Some(status) => Some(status)
       case _ => None
     }
   }
@@ -103,9 +109,7 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
 
   def addMessage(jobId: JobId, channel: String, value: JValue): M[Message] = {
     M.point {
-      val posts = channels get (jobId, channel) getOrElse {
-        Nil
-      }
+      val posts = channels get (jobId, channel) getOrElse Nil
       val message = Message(jobId, posts.size, channel, value)
 
       channels((jobId, channel)) = message :: posts
@@ -116,7 +120,7 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
   def listMessages(jobId: JobId, channel: String, since: Option[MessageId]): M[Seq[Message]] = {
     M.point {
       val posts = channels get ((jobId, channel)) getOrElse Nil
-      since map { mId => posts takeWhile (_ != mId) } getOrElse posts
+      since map { mId => posts.takeWhile(_.id != mId).reverse } getOrElse posts.reverse
     }
   }
 

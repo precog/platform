@@ -36,6 +36,15 @@ import akka.actor.ActorSystem
 import org.streum.configrity.Configuration
 
 import scalaz._
+import scalaz.Id.Id
+
+class InMemoryJobManagerSpec extends Specification {
+  include(new JobManagerSpec[Id] {
+    val jobs = new InMemoryJobManager[Id]
+    val M: Monad[Id] = implicitly
+    val coM: Copointed[Id] = implicitly
+  })
+}
 
 class MongoJobManagerSpec extends Specification with RealMongoSpecSupport with MongoJobManagerModule { self =>
   val config = Configuration.parse("")
@@ -268,7 +277,7 @@ trait JobManagerSpec[M[+_]] extends Specification {
 
       val job = jobs.createJob("a", "b", "c", None, None).copoint
       jobs.start(job.id).copoint
-      val result = JobResult(MimeTypes.text / plain, "Hello, world!".getBytes())
+      val result = JobResult(List(MimeTypes.text / plain), "Hello, world!".getBytes())
       jobs.finish(job.id, Some(result)).copoint must beLike {
         case Right(Job(_, _, _, _, Finished(Some(`result`), _, _), _)) => ok
       }

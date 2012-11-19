@@ -29,13 +29,13 @@ import org.apache.commons.codec.binary.Base64
 
 import scalaz._
 
-case class JobResult(mimeType: MimeType, content: Array[Byte]) {
-  override def hashCode: Int = mimeType.## * 23 + content.toList.##
+case class JobResult(mimeTypes: List[MimeType], content: Array[Byte]) {
+  override def hashCode: Int = mimeTypes.## * 23 + content.toList.##
 
   override def equals(that: Any): Boolean = that match {
-    case JobResult(thatMimeType, thatContent) =>
+    case JobResult(thoseMimeTypes, thatContent) =>
       val len = content.length
-      (mimeType == thatMimeType) && (len == thatContent.length) && {
+      (mimeTypes.toSet == thoseMimeTypes.toSet) && (len == thatContent.length) && {
         var i = 0
         var result = true
         while (result && i < len) {
@@ -60,7 +60,9 @@ trait JobResultSerialization {
   implicit object JobResultDecomposer extends Decomposer[JobResult] {
     override def decompose(result: JobResult): JValue = JObject(List(
       JField("content", JString(Base64.encodeBase64String(result.content))),
-      JField("mimeType", result.mimeType.value)
+      JField("mimeTypes", JArray(result.mimeTypes map { mimeType =>
+        JString(mimeType.value)
+      }))
     ))
   }
 
@@ -68,14 +70,11 @@ trait JobResultSerialization {
     import Extractor._
 
     override def validated(obj: JValue): Validation[Error, JobResult] = {
-      val mimeType = (obj \ "mimeType").validated[String] flatMap { rawType =>
-        MimeTypes.parseMimeTypes(rawType).headOption match {
-          case Some(mimeType) => success(mimeType)
-          case None => failure(Invalid("Cannot parse mime-type: " + rawType))
-        }
+      val mimeTypes = (obj \ "mimeTypes").validated[List[String]] flatMap { rawTypes =>
+        success[Error, List[MimeType]]((rawTypes flatMap (MimeTypes.parseMimeTypes(_))).toList)
       }
-      (mimeType |@| (obj \ "content").validated[String]) { (mimeType, content) =>
-        JobResult(mimeType, Base64.decodeBase64(content))
+      (mimeTypes |@| (obj \ "content").validated[String]) { (mimeTypes, content) =>
+        JobResult(mimeTypes, Base64.decodeBase64(content))
       }
     }
   }

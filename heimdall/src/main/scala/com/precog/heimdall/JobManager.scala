@@ -47,7 +47,7 @@ trait JobManager[M[+_]] {
   /**
    * Returns a list of all currently running jobs
    */
-  def listJobs(show: JobState => Boolean = (_ => true)): M[Seq[Job]]
+  def listJobs(apiKey: APIKey): M[Seq[Job]]
 
   /**
    * Updates a job's status to `value`. If a `prevStatus` is provided, then

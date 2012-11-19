@@ -89,9 +89,9 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
     }
   }
 
-  def listJobs(show: JobState => Boolean = (_ => true)): Future[Seq[Job]] = {
-    database(selectAll.from(settings.jobs)) map {
-      _.map(_.deserialize[Job]).filter { job => show(job.state) }.toList
+  def listJobs(apiKey: APIKey): Future[Seq[Job]] = {
+    database(selectAll.from(settings.jobs).where("apiKey" === apiKey)) map {
+      _.map(_.deserialize[Job]).toList
     }
   }
 
