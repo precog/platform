@@ -178,6 +178,8 @@ trait TableModule[M[+_]] extends TransSpecModule {
     def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table]
     
     def takeRange(startIndex: Long, numberToTake: Long): Table
+
+    def schemas: M[Set[JType]]
     
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer]
     

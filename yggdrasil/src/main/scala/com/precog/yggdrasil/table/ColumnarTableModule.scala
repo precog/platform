@@ -2615,6 +2615,122 @@ trait ColumnarTableModule[M[+_]]
     }
 
     def normalize: Table = Table(slices.filter(!_.isEmpty), size)
+
+    def schemas: M[Set[JType]] = {
+
+      // Returns true iff masks contains an array equivalent to mask.
+      def contains(masks: List[Array[Int]], mask: Array[Int]): Boolean = {
+
+        @tailrec
+        def equal(x: Array[Int], y: Array[Int], i: Int): Boolean = if (i >= x.length) {
+          true
+        } else if (x(i) != y(i)) {
+          false
+        } else {
+          equal(x, y, i + 1)
+        }
+
+        @tailrec
+        def loop(xs: List[Array[Int]], y: Array[Int]): Boolean = xs match {
+          case x :: xs if x.length == y.length  && equal(x, y, 0) => true
+          case _ :: xs => loop(xs, y)
+          case Nil => false
+        }
+
+        loop(masks, mask)
+      }
+
+      def isZero(x: Array[Int]): Boolean = {
+        @tailrec def loop(i: Int): Boolean = if (i < 0) {
+          true
+        } else if (x(i) != 0) {
+          false
+        } else {
+          loop(i - 1)
+        }
+
+        loop(x.length - 1)
+      }
+
+      // Constructs a schema from a set of defined ColumnRefs. Metadata is
+      // ignored and there can be no unions. The set of ColumnRefs must all be
+      // defined and hence must create a valid JSON object.
+      def mkSchema(cols: List[ColumnRef]): Option[JType] = {
+        def leafType(ctype: CType): JType = ctype match {
+          case CBoolean => JBooleanT
+          case CLong | CDouble | CNum => JNumberT
+          case CString => JTextT
+          case CDate => JTextT
+          case CArrayType(elemType) => JArrayHomogeneousT(leafType(elemType))
+          case CEmptyObject => JObjectFixedT(Map.empty)
+          case CEmptyArray => JArrayFixedT(Map.empty)
+          case CNull => JNullT
+        }
+
+        def fresh(paths: List[CPathNode], leaf: JType): Option[JType] = paths match {
+          case CPathField(field) :: paths => fresh(paths, leaf) map { tpe => JObjectFixedT(Map(field -> tpe)) }
+          case CPathIndex(i) :: paths => fresh(paths, leaf) map { tpe => JArrayFixedT(Map(i -> tpe)) }
+          case CPathArray :: paths => fresh(paths, leaf) map (JArrayHomogeneousT(_))
+          case CPathMeta(field) :: _ => None
+          case Nil => Some(leaf)
+        }
+
+        def merge(schema: Option[JType], paths: List[CPathNode], leaf: JType): Option[JType] = (schema, paths) match {
+          case (Some(JObjectFixedT(fields)), CPathField(field) :: paths) =>
+            merge(fields get field, paths, leaf) map { tpe =>
+              JObjectFixedT(fields + (field -> tpe))
+            } orElse schema
+          case (Some(JArrayFixedT(indices)), CPathIndex(idx) :: paths) =>
+            merge(indices get idx, paths, leaf) map { tpe =>
+              JArrayFixedT(indices + (idx -> tpe))
+            } orElse schema
+          case (None, paths) =>
+            fresh(paths, leaf)
+          case (jtype, paths) =>
+            sys.error("Invalid schema.") // This shouldn't happen for any real data.
+        }
+
+        cols.foldLeft(None: Option[JType]) { case (schema, ColumnRef(cpath, ctype)) =>
+          merge(schema, cpath.nodes, leafType(ctype))
+        }
+      }
+
+      // Collects all possible schemas from some slices.
+      def collectSchemas(schemas: Set[JType], slices: StreamT[M, Slice]): M[Set[JType]] = slices.uncons flatMap {
+        case Some((slice, slices)) =>
+          import java.util.Arrays.copyOf
+
+          val (refs0, cols0) = slice.columns.unzip
+          val cols: Array[Column] = cols0.toArray
+          val refs: List[(ColumnRef, Int)] = refs0.zipWithIndex.toList
+
+          var masks: List[Array[Int]] = Nil
+          val mask: Array[Int] = RawBitSet.create(cols.length)
+          Loop.range(0, slice.size) { row =>
+            RawBitSet.clear(mask)
+
+            var i = 0
+            while (i < cols.length) {
+              if (cols(i) isDefinedAt row)
+                RawBitSet.set(mask, i)
+              i += 1
+            }
+
+            if (!contains(masks, mask) && !isZero(mask)) {
+              masks = copyOf(mask, mask.length) :: masks
+            }
+          }
+
+          collectSchemas(schemas ++ (masks flatMap { schemaMask =>
+            mkSchema(refs collect { case (ref, i) if RawBitSet.get(schemaMask, i) => ref })
+          }), slices)
+
+        case None =>
+          M.point(schemas)
+      }
+
+      collectSchemas(Set.empty, slices)
+    }
     
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
       val delimiterBuffer = {
