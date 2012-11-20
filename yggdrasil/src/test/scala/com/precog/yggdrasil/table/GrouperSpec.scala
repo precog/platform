@@ -36,6 +36,38 @@ import scalaz.std.anyVal._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 
+/*
+Here are a number of motivating examples that are not reflected in the tests below, but are representative of solves that need to be 
+evaluated by the merge algorithm.
+
+solve 'a = foo.a, 'b = foo.b
+  bar' := bar where bar.b = 'b
+
+  ['a, 'b, count(bar')]
+
+
+solve 'a, 'b, 'c
+  foo' := foo where foo.a = 'a & foo.b = 'b
+  bar' := bar where bar.b = 'b & bar.c = 'c
+  baz' := baz where baz.a = 'a & baz.c = 'c
+
+  ['a, 'b, 'c, count(foo'), sum(bar'.d), stddev(baz'.d)]
+
+
+solve 'a, 'b, 'c
+  foo' := foo where foo.a = 'a & foo.b = 'b | foo.a = 'a & foo.c = 'c
+  bar' := bar where bar.a = 'a | bar.b = 'b | bar.c = 'c
+
+  [foo', bar', 'a, 'b, 'c]
+
+
+solve 'a, 'b
+  foo' := foo where foo.a = 'a | foo.b = 'b | foo.a = 'a & foo.b = 'b
+  bar' := bar wehre bar.a = 'a & bar.b = 'b
+  
+  ...
+*/
+
 trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
   def tic_a = CPathField("tic_a")
   def tic_b = CPathField("tic_b")

@@ -55,7 +55,6 @@ object BijectionsChunkQueryResult {
     }
 
     def unapply(chunkM: Future[ByteChunk]): Either[JValue, StreamT[Future, CharBuffer]] = {
-      import com.precog.util.JsonUtil
       val utf8 = java.nio.charset.Charset.forName("UTF-8")
 
       val backM = chunkM.map {
