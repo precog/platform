@@ -201,7 +201,7 @@ trait Parser extends RegexParsers with Filters with AST {
   
   private lazy val keywords = "new|true|false|where|with|union|intersect|difference|neg|null|import|solve".r
   
-  override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-\))+""".r
+  override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-+\))+""".r
   override val skipWhitespace = true
   
   private val precedence =
