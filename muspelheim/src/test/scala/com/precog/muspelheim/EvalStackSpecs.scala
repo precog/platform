@@ -2278,6 +2278,18 @@ trait EvalStackSpecs extends Specification {
 //        result must haveSize(4)
 //      } 
     }
+
+    // Regression test for #39590007
+    "give empty results when relation body uses non-existant field" in {
+      var input = """
+        | clicks := //clicks
+        | newClicks := new clicks
+        |
+        | clicks ~ newClicks
+        |   {timeString: clicks.timeString, nonexistant: clicks.nonexistant}""".stripMargin
+
+      eval(input) must beEmpty
+    }
   }
 }
 
