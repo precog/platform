@@ -23,7 +23,9 @@ import org.specs2.mutable._
 
 import org.joda.time.DateTime
 
-import blueeyes.core.http.{ MimeTypes }
+import blueeyes.core.http._
+import blueeyes.core.service._
+import blueeyes.core.data._
 
 import blueeyes.bkka._
 import blueeyes.json._
@@ -45,6 +47,26 @@ class InMemoryJobManagerSpec extends Specification {
     val coM: Copointed[Id] = implicitly
   })
 }
+
+class TestWebJobManager extends TestJobService with WebJobManager {
+  val asynContext: ExecutionContext = implicitly
+
+  protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
+    f(service) //.path("/jobs"))
+  }
+}
+
+//class WebJobManagerSpec extends Specification {
+//  include(new JobManagerSpec[Future] {
+//    val jobs = new TestWebJobManager
+//    implicit val asyncContext = jobs.asyncContext
+//    lazy val M = AkkaTypeClasses.futureApplicative(asyncContext)
+//    lazy val coM = new Copointed[Future] {
+//      def map[A, B](m: Future[A])(f: A => B) = m map f
+//      def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
+//    }
+//  })
+//}
 
 //class MongoJobManagerSpec extends Specification with RealMongoSpecSupport with MongoJobManagerModule { self =>
 //  val config = Configuration.parse("")

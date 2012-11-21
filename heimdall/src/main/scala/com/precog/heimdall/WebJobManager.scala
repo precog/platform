@@ -22,8 +22,7 @@ package com.precog.heimdall
 import com.precog.common.security._
 
 import blueeyes._
-import blueeyes.core.data.{ BijectionsChunkFutureByteArray, BijectionsChunkJson,
-  BijectionsChunkByteArray, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk }
+import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.MimeTypes._
 import blueeyes.core.http.HttpStatusCodes._
@@ -45,8 +44,14 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 
-case class WebJobManager(protocol: String, host: String, port: Int, path: String)(implicit ec: ExecutionContext)
-    extends JobManager[Future] with JobStateManager[Future] with BijectionsChunkFutureByteArray with Logging {
+case class RealWebJobManager(protocol: String, host: String, port: Int, path: String)(implicit val asynContext: ExecutionContext) extends WebJobManager {
+  protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
+    val client = new HttpClientXLightWeb
+    f(client.protocol(protocol).host(host).port(port).path(path))
+  }
+}
+
+trait WebJobManager extends JobManager[Future] with JobStateManager[Future] with BijectionsChunkFutureByteArray with Logging {
 
   import BijectionsChunkByteArray._
   import BijectionsChunkFutureByteArray._
@@ -54,24 +59,37 @@ case class WebJobManager(protocol: String, host: String, port: Int, path: String
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
 
-  private def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
-    val client = new HttpClientXLightWeb
-    f(client.protocol(protocol).host(host).port(port).path(path))
-  }
+  implicit def asynContext: ExecutionContext
 
-  private def withClient[A](f: HttpClient[ByteChunk] => A): A = withRawClient { client =>
-    f(client.contentType(application/MimeTypes.json))
+  protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A
+
+  private def withClient[A](f: HttpClient[JValue] => A): A = withRawClient { client =>
+    f(client.contentType[JValue](application/MimeTypes.json))
   }
 
   def createJob(apiKey: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): Future[Job] = {
-    val content = JObject(List(
+    val content: JValue = JObject(List(
       JField("name", name),
       JField("type", jobType)
     ))
 
+    withRawClient { client =>
+      val body: JValue = JObject(List(
+        JField("name", JString("abc")),
+        JField("type", JString("abc"))
+      ))
+
+      client.contentType[JValue](MimeTypes.application / MimeTypes.json)
+             .query("apiKey", "xxx")
+             .post("/jobs")(body) map {
+        case HttpResponse(HttpStatus(Created, _), _, _, _) => println("!!!!!")
+        case x => println(" =( " + x)
+      }
+    }
+
     withClient { client =>
       client.query("apiKey", apiKey)
-            .post[JValue]("jobs/")(content) flatMap {
+            .post("/jobs")(content) flatMap {
         case HttpResponse(HttpStatus(Created, _), _, Some(obj), _) =>
           val job = obj.validated[Job] getOrElse sys.error("TODO: Handle this case.")
           started map { timestamp =>
@@ -82,9 +100,8 @@ case class WebJobManager(protocol: String, host: String, port: Int, path: String
                 Future(job)
             }
           } getOrElse Future(job)
-        case _ =>
-          // TODO: createJob should really return Validation[String, Job].
-          sys.error("Failure creating job.")
+        case x =>
+          sys.error("Failure creating job. " + x)
       }
     }
   }
@@ -204,7 +221,7 @@ case class WebJobManager(protocol: String, host: String, port: Int, path: String
   private val isoFormat = org.joda.time.format.ISODateTimeFormat.dateTime()
 
   override def finish(jobId: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): Future[Either[String, Job]] = {
-    withClient { client0 =>
+    withRawClient { client0 =>
       val client1 = client0.query("timestamp", isoFormat.print(finishedAt))
 
       val response = result map { case JobResult(mimeTypes, content) =>
@@ -229,7 +246,7 @@ case class WebJobManager(protocol: String, host: String, port: Int, path: String
 
 object WebJobManager {
   def apply(config: Configuration)(implicit ec: ExecutionContext): JobManager[Future] = {
-    WebJobManager(
+    RealWebJobManager(
       config[String]("service.protocol", "http"),
       config[String]("service.host", "localhost"),
       config[Int]("service.port", 80),
