@@ -380,7 +380,7 @@ wait_until_port_open 30064
 # Now we need an actual account to use for testing
 if [ ! -e $WORKDIR/account_token.json ]; then
     echo "Creating test account"
-    ACCOUNTID=$(set -e; curl -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password","1234"}' http://localhost:30064/accounts/ | sed 's/.*\([0-9]\{10\}\).*/\1/')
+    ACCOUNTID=$(set -e; curl -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password":"1234"}' http://localhost:30064/accounts/ | sed 's/.*\([0-9]\{10\}\).*/\1/')
     echo "Created account: $ACCOUNTID"
     echo $ACCOUNTID > $WORKDIR/account_id.json
     ACCOUNTTOKEN=$(set -e; curl -u 'operations@precog.com:1234' -H 'Content-Type: application/json' -G "http://localhost:30064/accounts/$ACCOUNTID" | sed 's/.*apiKey"[^"]*"\([^"]*\)".*/\1/')
