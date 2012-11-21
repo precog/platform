@@ -232,10 +232,10 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors must beEmpty
     }
     
-    "accept intersect on different loads" in {
+    "reject intersect on different loads" in {
       val tree = compileSingle("//foo intersect //bar")
-      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
-      tree.errors must beEmpty
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
     }
     
     "accept intersect on static and dynamic provenances" in {
@@ -328,7 +328,7 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance must beLike {
-        case CoproductProvenance(ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")), ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz"))) => ok
+        case StaticProvenance("/bar") => ok
       }
       
       tree.errors must beEmpty

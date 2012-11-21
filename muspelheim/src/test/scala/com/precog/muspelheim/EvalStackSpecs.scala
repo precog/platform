@@ -961,7 +961,7 @@ trait EvalStackSpecs extends Specification {
         }
       }
       "empty intersection" >> {
-        val input = "//clicks intersect //views"
+        val input = "4 intersect 5"
         val results = evalE(input)
 
         results must beEmpty
