@@ -37,6 +37,12 @@ sealed trait TableSize {
   def lessThan (other: TableSize): Boolean = maxSize < other.maxSize
 }
 
+object TableSize {
+  def apply(size: Long) = ExactSize(size)
+  def apply(minSize: Long, maxSize: Long) =
+    if (minSize != maxSize) EstimateSize(minSize, maxSize) else ExactSize(minSize)
+}
+
 case class ExactSize(minSize: Long) extends TableSize {
   val maxSize = minSize
 }
