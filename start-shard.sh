@@ -366,6 +366,28 @@ if [ ! -e $WORKDIR/initial_checkpoint.json ]; then
     touch $WORKDIR/initial_checkpoint.json
 fi
 
+echo "Starting auth service"
+$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/auth-v1.logging.xml -jar $AUTH_ASSEMBLY --configFile $WORKDIR/configs/auth-v1.conf &
+AUTHPID=$!
+
+echo "Starting accounts service"
+$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/accounts-v1.logging.xml -jar $ACCOUNTS_ASSEMBLY --configFile $WORKDIR/configs/accounts-v1.conf &
+ACCOUNTSPID=$!
+
+wait_until_port_open 30062
+wait_until_port_open 30064
+
+# Now we need an actual account to use for testing
+if [ ! -e $WORKDIR/account_token.json ]; then
+    echo "Creating test account"
+    ACCOUNTID=$(set -e; curl -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password","1234"}' http://localhost:30064/accounts/ | sed 's/.*\([0-9]\{10\}\).*/\1/')
+    echo "Created account: $ACCOUNTID"
+    echo $ACCOUNTID > $WORKDIR/account_id.json
+    ACCOUNTTOKEN=$(set -e; curl -u 'operations@precog.com:1234' -H 'Content-Type: application/json' -G "http://localhost:30064/accounts/$ACCOUNTID" | sed 's/.*apiKey"[^"]*"\([^"]*\)".*/\1/')
+    echo "Account token is $ACCOUNTTOKEN"
+    echo $ACCOUNTTOKEN > $WORKDIR/account_token.json
+fi
+
 echo "Starting ingest service"
 $JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/ingest-v1.logging.xml -jar $INGEST_ASSEMBLY --configFile $WORKDIR/configs/ingest-v1.conf &
 INGESTPID=$!
@@ -375,24 +397,16 @@ echo $JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.log
 $JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf &
 SHARDPID=$!
 
-echo "Starting accounts service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/accounts-v1.logging.xml -jar $ACCOUNTS_ASSEMBLY --configFile $WORKDIR/configs/accounts-v1.conf &
-ACCOUNTSPID=$!
-
-echo "Starting auth service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/auth-v1.logging.xml -jar $AUTH_ASSEMBLY --configFile $WORKDIR/configs/auth-v1.conf &
-AUTHPID=$!
-
-# Let the ingest//auth/accounts/shard services startup in parallel
+# Let the ingest/shard services startup in parallel
 wait_until_port_open 30060
-wait_until_port_open 30062
-wait_until_port_open 30064
 wait_until_port_open 30070
 
 echo "Startup complete, running in $WORKDIR"
 
 echo "============================================================"
 echo "Root token: $TOKENID"
+echo "Test account ID: $ACCOUNTID"
+echo "Test account token: $ACCOUNTTOKEN"
 echo "Base path: $WORKDIR"
 echo "============================================================"
 
