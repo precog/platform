@@ -194,6 +194,12 @@ trait SamplableColumnarTableModule[M[+_]]
             def unsafeInsert(srcRow: Int, destRow: Int) = dest.update(destRow, true)
             def unsafeMove(from: Int, to: Int) = dest.update(to, true)
           }
+        case (src: HomogeneousArrayColumn[a], dest0: ArrayHomogeneousArrayColumn[_]) if src.tpe == dest0.tpe =>
+          val dest = dest0.asInstanceOf[ArrayHomogeneousArrayColumn[a]]
+          new ColumnOps(src, dest) {
+            def unsafeInsert(srcRow: Int, destRow: Int) = dest.update(destRow, src(srcRow))
+            def unsafeMove(from: Int, to: Int) = dest.update(to, dest(from))
+          }
         case (src, dest) =>
           sys.error("Slice lied about column type. Expected %s, but found %s." format (ref.ctype, src.tpe))
       }

@@ -50,5 +50,14 @@ trait UnaryLib[M[+_]] extends GenOpcode[M] {
         case c: NumColumn => new NumFrom.N(c, n => true, -_)
       })
     }
+
+    object CoerceToDouble extends Op1(UnaryNamespace, "coerceToDouble") {
+      val tpe = UnaryOperationType(JNumberT, JNumberT)
+      val f1: F1 = new CF1P({
+        case c: DoubleColumn => c
+        case c: LongColumn => new DoubleFrom.L(c, n => true, _.toDouble)
+        case c: NumColumn => new DoubleFrom.N(c, n => true, _.toDouble)
+      })
+    }
   }
 }

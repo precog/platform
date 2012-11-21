@@ -60,6 +60,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with TransformSpec[M]
     with CompactSpec[M] 
     with TakeRangeSpec[M]
+    with ToArraySpec[M]
     with PartitionMergeSpec[M]
     with UnionAllSpec[M]
     with CrossAllSpec[M]
@@ -384,6 +385,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "select nothing with a negative starting index" in testTakeRangeNegStart
       "select nothing with a negative number to take" in testTakeRangeNegNumber
       "select the correct rows using scalacheck" in checkTakeRange
+    }
+
+    "in toArray" >> {
+      "create a single column given two single columns" in testToArrayHomogeneous
+      "create empty column given heterogeneous data" in testToArrayHeterogeneous
     }
 
     "in schemas" >> {

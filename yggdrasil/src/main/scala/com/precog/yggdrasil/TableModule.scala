@@ -168,6 +168,8 @@ trait TableModule[M[+_]] extends TransSpecModule {
     
     def distinct(spec: TransSpec1): Table
 
+    def toArray[A](implicit tpe: CValueType[A]): Table
+
     /**
      * Sorts the KV table by ascending or descending order based on a seq of transformations
      * applied to the rows.

@@ -87,6 +87,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
             _ mapRoot f 
           }
 
+        case DeepMap1(source, f) => 
+          composeSliceTransform2(source) map {
+            _ mapColumns f 
+          }
+
         case Map2(left, right, f) =>
           val l0 = composeSliceTransform2(left)
           val r0 = composeSliceTransform2(right)

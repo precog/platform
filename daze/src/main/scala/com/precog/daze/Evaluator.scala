@@ -341,9 +341,16 @@ trait Evaluator[M[+_]] extends DAG
                   }
                 }
               }
-              leftSpec = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(0)), paths.Value)
-              rightSpec = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
-              transformed = aligned.transform(ArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
+              leftSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(0)), paths.Value)
+              rightSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
+
+              leftSpec = trans.DeepMap1(leftSpec0, Unary.CoerceToDouble.f1)
+              rightSpec = trans.DeepMap1(rightSpec0, Unary.CoerceToDouble.f1)
+
+              transformed = {
+                if (mor.multivariate) aligned.transform(ArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec))).toArray[Double]
+                else aligned.transform(ArrayConcat(trans.WrapArray(leftSpec0), trans.WrapArray(rightSpec0)))
+              }
 
               result <- mor(transformed)
             } yield result

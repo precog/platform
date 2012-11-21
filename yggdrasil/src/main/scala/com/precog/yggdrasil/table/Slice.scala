@@ -43,6 +43,7 @@ import scala.annotation.{switch, tailrec}
 
 import scala.collection.{breakOut, mutable}
 import scalaz._
+import scala.{ specialized => spec }
 import scalaz.Ordering._
 import scalaz.Validation._
 import scalaz.syntax.foldable._
@@ -69,7 +70,7 @@ trait Slice { source =>
     // Else if Schema.includes(...), then return List(col).
     // Otherwise return Nil.
     columns collect {
-      case (ColumnRef(jpath, ctype), col) if Schema.includes(jtpe, jpath, ctype) => col
+      case (ColumnRef(cpath, ctype), col) if Schema.includes(jtpe, cpath, ctype) => col
     } toSet
   }
 
@@ -106,6 +107,78 @@ trait Slice { source =>
       }
     }
   }
+
+  def toArray[A](implicit tpe0: CValueType[A]) = new Slice {
+    //TODO need to hang on to the cpaths so we can order the original columns in the homarraycolumn
+    val size = source.size
+
+    val cols0 = (source.columns).toList sortBy { case (ref, _) => ref.selector }
+    val cols = cols0 map { case (_, col) => col }
+
+    def inflate[@spec A: Manifest](cols: Array[Int => A], row: Int) = {
+      val as = new Array[A](cols.length)
+      var i = 0
+      while (i < cols.length) {
+        as(i) = cols(i)(row)
+        i += 1
+      }
+      as
+    }
+
+    val columns: Map[ColumnRef, Column] = {
+      Map(
+        (ColumnRef(CPath(CPathArray), CArrayType(tpe0)),
+          tpe0 match {
+            case CLong =>
+              val longcols = cols.collect { case (col: LongColumn) => col }.toArray
+              new HomogeneousArrayColumn[Long] {
+                private val cols: Array[Int => Long] = longcols map { x => x(_) }
+
+                val tpe = CArrayType(CLong)
+                def isDefinedAt(row: Int) = Loop.forall(longcols)(_ isDefinedAt row)
+                def apply(row: Int): Array[Long] = inflate(cols, row)
+              }
+            case CDouble =>
+              val doublecols = cols.collect { case (col: DoubleColumn) => col }.toArray
+              new HomogeneousArrayColumn[Double] {
+                private val cols: Array[Int => Double] = doublecols map { x => x(_) }
+
+                val tpe = CArrayType(CDouble)
+                def isDefinedAt(row: Int) = Loop.forall(doublecols)(_ isDefinedAt row)
+                def apply(row: Int): Array[Double] = inflate(cols, row)
+              }
+            case CNum =>
+              val numcols = cols.collect { case (col: NumColumn) => col }.toArray
+              new HomogeneousArrayColumn[BigDecimal] {
+                private val cols: Array[Int => BigDecimal] = numcols map { x => x(_) }
+
+                val tpe = CArrayType(CNum)
+                def isDefinedAt(row: Int) = Loop.forall(numcols)(_ isDefinedAt row)
+                def apply(row: Int): Array[BigDecimal] = inflate(cols, row)
+              }
+            case CBoolean =>
+              val boolcols = cols.collect { case (col: BoolColumn) => col }.toArray
+              new HomogeneousArrayColumn[Boolean] {
+                private val cols: Array[Int => Boolean] = boolcols map { x => x(_) }
+
+                val tpe = CArrayType(CBoolean)
+                def isDefinedAt(row: Int) = Loop.forall(boolcols)(_ isDefinedAt row)
+                def apply(row: Int): Array[Boolean] = inflate(cols, row)
+              }
+            case CString =>
+              val strcols = cols.collect { case (col: StrColumn) => col }.toArray
+              new HomogeneousArrayColumn[String] {
+                private val cols: Array[Int => String] = strcols map { x => x(_) }
+
+                val tpe = CArrayType(CString)
+                def isDefinedAt(row: Int) = Loop.forall(strcols)(_ isDefinedAt row)
+                def apply(row: Int): Array[String] = inflate(cols, row)
+              }
+            case _ => sys.error("unsupported type")
+          }))
+    }
+  }
+
 
   /**
    * Transform this slice such that its columns are only defined for row indices
@@ -289,7 +362,7 @@ trait Slice { source =>
     }
   }
 
-  def typed(jtpe : JType) : Slice = new Slice {
+  def typed(jtpe: JType) : Slice = new Slice {
     val size = source.size
     val columns = source.columns filter { case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe) }
   }
@@ -584,7 +657,7 @@ trait Slice { source =>
     val take2 = math.min(this.size, startIndex + numberToTake) - startIndex
     new Slice {
       val size = take2
-      val columns = source.columns lazyMapValues { 
+      val columns = source.columns lazyMapValues {
         col => (col |> cf.util.RemapFilter(_ < take2, startIndex)).get
       }
     }
@@ -1301,7 +1374,8 @@ trait Slice { source =>
   def toJValue(row: Int) = {
     columns.foldLeft[JValue](JUndefined) {
       case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
-        CPathUtils.cPathToJPaths(selector, col.cValue(row)).foldLeft(jv) {
+        val x = col.cValue(row)
+        CPathUtils.cPathToJPaths(selector, x).foldLeft(jv) {
           case (jv, (path, value)) => jv.unsafeInsert(path, value.toJValue)
         }
 

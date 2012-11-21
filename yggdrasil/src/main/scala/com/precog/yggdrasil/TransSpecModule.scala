@@ -70,7 +70,9 @@ trait TransSpecModule extends FNModule {
     case class Scan[+A <: SourceType](source: TransSpec[A], scanner: Scanner) extends TransSpec[A] //done
     
     case class Map1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A] //done
-    
+
+    case class DeepMap1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A] //done
+
     // apply a function to the cartesian product of the transformed left and right subsets of columns
     case class Map2[+A <: SourceType](left: TransSpec[A], right: TransSpec[A], f: F2) extends TransSpec[A] //done
     
@@ -134,6 +136,7 @@ trait TransSpecModule extends FNModule {
           case Scan(source, scanner) => Scan(mapSources(source)(f), scanner)
           
           case trans.Map1(source, f1) => trans.Map1(mapSources(source)(f), f1)
+          case trans.DeepMap1(source, f1) => trans.DeepMap1(mapSources(source)(f), f1)
           case trans.Map2(left, right, f2) => trans.Map2(mapSources(left)(f), mapSources(right)(f), f2)
           
           case trans.OuterObjectConcat(objects @ _*) => trans.OuterObjectConcat(objects.map(mapSources(_)(f)): _*)
@@ -174,6 +177,7 @@ trait TransSpecModule extends FNModule {
         case Scan(source, scanner) => Scan(deepMap(source)(f), scanner)
         
         case trans.Map1(source, f1) => trans.Map1(deepMap(source)(f), f1)
+        case trans.DeepMap1(source, f1) => trans.DeepMap1(deepMap(source)(f), f1)
         case trans.Map2(left, right, f2) => trans.Map2(deepMap(left)(f), deepMap(right)(f), f2)
         
         case trans.OuterObjectConcat(objects @ _*) => trans.OuterObjectConcat(objects.map(deepMap(_)(f)): _*)

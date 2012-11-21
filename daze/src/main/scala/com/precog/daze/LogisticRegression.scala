@@ -59,6 +59,7 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
   object LogisticRegression extends Morphism2(Stats2Namespace, "logisticRegression") with ReductionHelper {
     val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
 
+    override val multivariate = true
     lazy val alignment = MorphismAlignment.Match
 
     def sigmoid(z: Double): Double = 1 / (1 + exp(z))
@@ -138,7 +139,7 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
           assert(xs.length == theta.length)
 
           val result = (0 until xs.length).map { i =>
-            theta(i) - alpha * (y - sigmoid(dotProduct(theta, xs)))
+            theta(i) - alpha * (y - sigmoid(dotProduct(theta, xs))) * xs(i)
           }.map(checkValue)
 
           result.toArray
@@ -156,70 +157,31 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
 
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val left = cols(JArrayFixedT(Map(0 -> JNumberT)))
-        val right = cols(JArrayFixedT(Map(1 -> JNumberT)))
+        val features = cols(JArrayHomogeneousT(JNumberT))
 
-        val cross = for (l <- left; r <- right) yield (l, r)
-
-        val result: Set[Result] = cross map {
-          case (c1: LongColumn, c2: LongColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i).toDouble) }
+        val result: Set[Result] = features map {
+          case c: HomogeneousArrayColumn[Double] => 
+            val mapped = range filter { r => c.isDefinedAt(r) } map { i => 1.0 +: c(i) }
             reduceDouble(mapped)
-
-          case (c1: LongColumn, c2: DoubleColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i)) }
-            reduceDouble(mapped)
-
-          case (c1: LongColumn, c2: NumColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i).toDouble) }
-            reduceDouble(mapped)
-
-          case (c1: DoubleColumn, c2: LongColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i), c2(i).toDouble) }
-            reduceDouble(mapped)
-
-          case (c1: DoubleColumn, c2: DoubleColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i), c2(i)) }
-            reduceDouble(mapped)
-
-          case (c1: DoubleColumn, c2: NumColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i), c2(i).toDouble) }
-            reduceDouble(mapped)
-
-          case (c1: NumColumn, c2: LongColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i).toDouble) }
-            reduceDouble(mapped)
-
-          case (c1: NumColumn, c2: DoubleColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i)) }
-            reduceDouble(mapped)
-
-          case (c1: NumColumn, c2: NumColumn) => 
-            val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => Array(1.0, c1(i).toDouble, c2(i).toDouble) }
-            reduceDouble(mapped)
-
           case _ => None
         }
-        
-        if (result.isEmpty) {
-          None
-        } else {
-          result.suml(monoid)
-        }
+
+        if (result.isEmpty) None
+        else result.suml(monoid)
       }
     }
 
     @tailrec
     def gradloop(seq: Seq[ColumnValues], theta0: Theta, alpha: Double): Theta = {
       val theta = gradient(seq, theta0, alpha)
-
+      
       val diffs = theta0.zip(theta) map { case (t0, t) => math.abs(t0 - t) }
       val sum = diffs.sum
 
       if (sum / theta.length < 0.0001) {
         theta
       } else if (cost(seq, theta) > cost(seq, theta0)) {
-        if (alpha > Double.MinValue * 2)
+        if (alpha > Double.MinValue * 2.0)
           gradloop(seq, theta0, alpha / 2.0)
         else 
           theta0
@@ -253,14 +215,9 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
 
           val finalTheta: Theta = gradloop(seq, initialTheta, initialAlpha)
 
-          val theta1 = Table.constDecimal(Set(CNum(finalTheta(0))))
-          val theta2 = Table.constDecimal(Set(CNum(finalTheta(1))))
+          val theta = Table.constArray(Set(CArray[Double](finalTheta)))
 
-          val theta1Spec = trans.WrapObject(Leaf(SourceLeft), "theta1")
-          val theta2Spec = trans.WrapObject(Leaf(SourceRight), "theta2")
-          val concatSpec = trans.InnerObjectConcat(theta1Spec, theta2Spec)
-
-          val valueTable = theta1.cross(theta2)(trans.WrapObject(concatSpec, paths.Value.name))
+          val valueTable = theta.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
           val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
@@ -274,3 +231,20 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     }
   }
 }
+
+
+// type Result = Option[(Seq[ColumnValues], JType)]
+//
+// 
+//
+// val schemas: M[Set[JType]] = table.schemas
+// val sampleTables: M[Set[Table]] = schemas flatMap { jtypes => table.sample(10000, 1, jtypes) }
+// val results: M[Set[Table]] = for {
+//    tables <- sampleTables
+//    table <- tables
+// } yield table.reduce(reducer).map(extract)
+// results flatMap { set => set reduce { (t1, t2) => concatTables(t2, t2) } }
+// 
+
+
+

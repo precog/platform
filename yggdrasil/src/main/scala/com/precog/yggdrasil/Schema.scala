@@ -106,7 +106,7 @@ object Schema {
    *
    * This is strict, so a JArrayFixedT(_) cannot include a CPathArray/CArrayType(_).
    */
-  def includes(jtpe: JType, path: CPath, ctpe: CType): Boolean = (jtpe, (path, ctpe)) match {
+  def includes(jtpe: JType, path: CPath, ctpe: CType): Boolean = { /*println("(jtpe: %s\n, (path: %s\n, ctpe: %s\n))".format(jtpe, path, ctpe));*/ (jtpe, (path, ctpe)) match {
     case (JNumberT, (CPath.Identity, CLong | CDouble | CNum)) => true
 
     case (JTextT, (CPath.Identity, CString)) => true
@@ -131,7 +131,7 @@ object Schema {
     case (JArrayFixedT(elements), (CPath(CPathIndex(i), tail @ _*), ctpe)) =>
       elements.get(i).map(includes(_, CPath(tail: _*), ctpe)).getOrElse(false)
     case (JArrayHomogeneousT(jElemType), (CPath(CPathArray, _*), CArrayType(cElemType))) =>
-      fromCValueType(cElemType) == jElemType
+      fromCValueType(cElemType) == Some(jElemType)
 
     // TODO This is a bit contentious, as this situation will need to be dealt
     // with at a higher level if we let parts of a heterogeneous array fall
@@ -143,7 +143,7 @@ object Schema {
     case (JUnionT(ljtpe, rjtpe), (path, ctpe)) => includes(ljtpe, path, ctpe) || includes(rjtpe, path, ctpe)
 
     case _ => false
-  }
+  }}
 
   /**
    * Tests whether the supplied sequence contains all the (CPath, CType) pairs that are

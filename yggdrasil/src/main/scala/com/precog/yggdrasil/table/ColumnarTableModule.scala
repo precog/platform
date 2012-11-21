@@ -1962,6 +1962,11 @@ trait ColumnarTableModule[M[+_]]
       Table(slices2, size)
     }
 
+    def toArray[A](implicit tpe: CValueType[A]): Table = {
+      val slices2 = slices map { _.toArray[A] }
+      Table(slices2, size)
+    }
+
     /**
      * Cogroups this table with another table, using equality on the specified
      * transformation on rows of the table.

@@ -81,6 +81,7 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   
   trait Morphism2Impl extends Morphism2Like {
     def alignment: MorphismAlignment
+    val multivariate: Boolean = false
     def apply(input: Table): M[Table]
   }
  

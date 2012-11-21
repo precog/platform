@@ -30,10 +30,6 @@ import scalaz.std.list._
 import com.precog.util.IdGen
 import com.precog.util.IOUtils
 
-import java.io.File
-
-import scala.util.Random
-
 case class Precision(p: Double)
 class AlmostEqual(d: Double) {
   def ~=(d2: Double)(implicit p: Precision) = (d - d2).abs <= p.p
@@ -42,7 +38,6 @@ class AlmostEqual(d: Double) {
 trait StatsLibSpec[M[+_]] extends Specification
     with EvaluatorTestSupport[M] 
     with StatsLib[M]
-    with RegressionLib[M]
     with InfixLib[M]
     with MemoryDatasetConsumer[M]{ self =>
       
@@ -63,127 +58,6 @@ trait StatsLibSpec[M[+_]] extends Specification
   implicit def add_~=(d: Double) = new AlmostEqual(d)
   implicit val precision = Precision(0.000000001)
 
-  "logistic regression" should {
-    "pass randomly generated test" in {
-      val line = Line(0, "")
-
-      def sigmoid(t1: Double, t2: Double, x: Double): Double = 1 / (1 + math.exp(t1 + t2 * x))
-
-      var j = 0
-
-      while (j < 5) {
-        val t1 = Random.nextGaussian * 10
-
-        def makeT2: Double = {
-          val t2 = Random.nextGaussian
-          if (t2 == 0) makeT2
-          else t2
-        }
-
-        val t2 = makeT2 * 10
-
-        val center = -t1 / t2
-
-        var thetas: List[List[Double]] = List.empty[List[Double]]
-        var i = 0
-
-         //runs the logistic regression function on 50 sets of data generated from the same distribution
-        while (i < 50) {
-          val testSeqX = Seq.fill(1000)(Random.nextDouble) map { 
-            x => x * 2.0 - 1.0 + center
-          }
-          
-          val deciders = Seq.fill(1000)(Random.nextDouble)
-
-          val testSeqY = {
-            (testSeqX zip deciders) map { 
-              case (x, p) => {
-                if (sigmoid(t1, t2, x) > p) 1
-                else 0
-              }
-            }
-          }
-
-          val points = (testSeqX zip testSeqY) map { case (x, y) => "[" + x + "," + y + "]" }
-
-          val tmpFile = File.createTempFile("values", ".json")
-          IOUtils.writeSeqToFile(points, tmpFile).unsafePerformIO
-
-          val pointsString0 = "filesystem" + tmpFile.toString
-          val pointsString = pointsString0.take(pointsString0.length - 5)
-          
-          val input = dag.Morph2(line, LogisticRegression,
-            dag.Join(line, DerefArray, CrossLeftSort,
-              dag.LoadLocal(line, Root(line, CString(pointsString))),
-              dag.Root(line, CLong(0))),
-            dag.Join(line, DerefArray, CrossLeftSort,
-              dag.LoadLocal(line, Root(line, CString(pointsString))),
-              dag.Root(line, CLong(1))))
-
-          val result = testEval(input)
-          tmpFile.delete()
-
-          val theta = result collect {
-            case (ids, SObject(fields)) if ids.length == 0 => {
-              val SDecimal(theta1) = fields("theta1")
-              val SDecimal(theta2) = fields("theta2")
-              List(theta1.toDouble, theta2.toDouble)
-            }
-          }
-
-          thetas = thetas ++ theta.toList
-          i += 1
-        }
-
-        val theta1s = thetas map { l => l(0) }
-        val theta2s = thetas map { l => l(1) }
-
-        def stdDevMean(values: List[Double]): (Double, Double) = {
-          val count = values.size
-          val sum = values.sum
-          val sumsq = values map { x => math.pow(x, 2) } sum
-
-          val stdDev = math.sqrt(count * sumsq - sum * sum) / count
-          val mean = sum / count
-
-          (stdDev, mean)
-        }
-
-        //more robust way to deal with outliers than stdDev
-        //the `constant` is the conversion constant to the units of standard deviation
-        def madMedian(values: List[Double]): (Double, Double) = {
-          val constant = 0.6745
-
-          val sorted = values.sorted
-          val length = sorted.length
-          val median = sorted(length / 2)
-
-          val diffs = values map { v => math.abs(v - median) }
-          val sortedDiffs = diffs.sorted
-          val mad = sortedDiffs(length / 2) / constant
-
-          (mad, median) 
-        }
-
-        def isOk(actual: Double, computed: List[Double]): Boolean = {  
-          val (mad, median) = madMedian(computed)
-          val diff = math.abs(median - actual)
-
-          val (dev, mean) = stdDevMean(computed)
-        
-          diff < mad * 3D
-        }
-
-         
-        j += 1
-
-
-        isOk(t1, theta1s) mustEqual(true)
-        isOk(t2, theta2s) mustEqual(true)
-      }
-    }  
-  }
-/*
   "homogenous sets" should {
     "median with odd number of elements" >> {
       val line = Line(0, "")
@@ -1888,7 +1762,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       
       result2 must contain(Vector(true, true)).only
     }
-  }*/
+  }
 }
 
 object StatsLibSpec extends StatsLibSpec[test.YId] with test.YIdInstances
