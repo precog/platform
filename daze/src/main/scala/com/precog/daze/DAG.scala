@@ -29,11 +29,14 @@ import com.precog.yggdrasil._
 
 import scala.collection.mutable
 
-import scalaz.Monoid
-import scalaz.Scalaz._
+import scalaz.{NonEmptyList => NEL, _}
+import scalaz.Free.Trampoline
+import scalaz.std.either._
 import scalaz.std.option._
 import scalaz.std.list._
-import scalaz.{NonEmptyList => NEL, _}
+import scalaz.syntax.monad._
+import scalaz.syntax.semigroup._
+import scalaz.syntax.traverse._
 
 import java.math.MathContext
 
@@ -44,8 +47,9 @@ trait DAG extends Instructions with TransSpecModule {
     import dag._
     
     val adjustMemotable = mutable.Map[(Int, DepGraph), DepGraph]()
+    implicit val M: Traverse[({ type λ[α] = Either[StackError, α] })#λ] with Monad[({ type λ[α] = Either[StackError, α] })#λ] = eitherMonad[StackError]
     
-    def loop(loc: Line, roots: List[Either[BucketSpec, DepGraph]], splits: List[OpenSplit], stream: Vector[Instruction]): Either[StackError, DepGraph] = {
+    def loop(loc: Line, roots: List[Either[BucketSpec, DepGraph]], splits: List[OpenSplit], stream: Vector[Instruction]): Trampoline[Either[StackError, DepGraph]] = {
       def processJoinInstr(instr: JoinInstr) = {
         val maybeOpSort = Some(instr) collect {
           case instructions.Map2Match(op) => (op, IdentitySort)
@@ -82,21 +86,21 @@ trait DAG extends Instructions with TransSpecModule {
           }
         }
         
-        val eitherRoots = eitherRootsOp orElse eitherRootsAbom get      // assertion
-        
-        eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+        val eitherRoots: Either[StackError, List[Either[BucketSpec, DepGraph]]] = eitherRootsOp orElse eitherRootsAbom get      // assertion
+        val loopResult = (eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) })
+        M.sequence(loopResult).map(_.joinRight)
       }
       
-      def processFilter(instr: Instruction, joinSort: JoinSort) = {
+      def processFilter(instr: Instruction, joinSort: JoinSort): Trampoline[Either[StackError, DepGraph]] = {
         val (args, roots2) = roots splitAt 2
         
         if (args.lengthCompare(2) < 0) {
-          Left(StackUnderflow(instr))
+          Left(StackUnderflow(instr)).point[Trampoline]
         } else {
           val rightArgs = args flatMap { _.right.toOption }
           
           if (rightArgs.lengthCompare(2) < 0) {
-            Left(OperationOnBucket(instr))
+            Left(OperationOnBucket(instr)).point[Trampoline]
           } else {
             val (boolean :: target :: predRoots) = rightArgs
             loop(loc, Right(Filter(loc, joinSort, target, boolean)) :: roots2, splits, stream.tail)
@@ -104,7 +108,7 @@ trait DAG extends Instructions with TransSpecModule {
         }
       }
       
-      val tail = stream.headOption map {
+      val tail: Option[Trampoline[Either[StackError, DepGraph]]] = stream.headOption map {
         case instr @ Map1(instructions.New) => {
           val eitherRoots = roots match {
             case Right(hd) :: tl => Right(Right(New(loc, hd)) :: tl)
@@ -112,7 +116,9 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instr))
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
         
         case instr @ Map1(op) => {
@@ -122,7 +128,9 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instr))
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
         
         case instr: JoinInstr => processJoinInstr(instr)
@@ -134,7 +142,9 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instr))
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
 
         case instr @ instructions.Morph2(BuiltInMorphism2(m2)) => {
@@ -145,7 +155,9 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instr))
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
         
         case instr @ instructions.Reduce(BuiltInReduction(red)) => {
@@ -155,7 +167,9 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instr))
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
         
         case instructions.Distinct => {
@@ -165,7 +179,9 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instructions.Distinct))
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
         
         case instr @ instructions.Group(id) => {
@@ -176,7 +192,9 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instr))
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
         
         case instr @ MergeBuckets(and) => {
@@ -189,7 +207,9 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instr))
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
         
         case instr @ KeyPart(id) => {
@@ -199,7 +219,9 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instr))
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
         
         case instructions.Extra => {
@@ -209,7 +231,9 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instructions.Extra))
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
         
         case instructions.Split => {
@@ -217,8 +241,8 @@ trait DAG extends Instructions with TransSpecModule {
             case Left(spec) :: tl =>
               loop(loc, tl, OpenSplit(loc, spec, tl) :: splits, stream.tail)
             
-            case Right(_) :: _ => Left(OperationOnBucket(instructions.Split))
-            case _ => Left(StackUnderflow(instructions.Split))
+            case Right(_) :: _ => Left(OperationOnBucket(instructions.Split)).point[Trampoline]
+            case _ => Left(StackUnderflow(instructions.Split)).point[Trampoline]
           }
         }
         
@@ -247,7 +271,9 @@ trait DAG extends Instructions with TransSpecModule {
             case Nil => (Left(UnmatchedMerge), Nil)
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits2, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits2, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
         
         case instr @ FilterMatch => processFilter(instr, IdentitySort)
@@ -258,14 +284,14 @@ trait DAG extends Instructions with TransSpecModule {
         case Dup => {
           roots match {
             case hd :: tl => loop(loc, hd :: hd :: tl, splits, stream.tail)
-            case _ => Left(StackUnderflow(Dup))
+            case _ => Left(StackUnderflow(Dup)).point[Trampoline]
           }
         }
         
         case instr @ Swap(depth) => {
           if (depth > 0) {
             if (roots.lengthCompare(depth + 1) < 0) {
-              Left(StackUnderflow(instr))
+              Left(StackUnderflow(instr)).point[Trampoline]
             } else {
               val (span, rest) = roots splitAt (depth + 1)
               val (spanInit, spanTail) = span splitAt depth
@@ -273,14 +299,14 @@ trait DAG extends Instructions with TransSpecModule {
               loop(loc, roots2, splits, stream.tail)
             }
           } else {
-            Left(NonPositiveSwapDepth(instr))
+            Left(NonPositiveSwapDepth(instr)).point[Trampoline]
           }
         }
         
         case Drop => {
           roots match {
             case hd :: tl => loop(loc, tl, splits, stream.tail)
-            case _ => Left(StackUnderflow(Drop))
+            case _ => Left(StackUnderflow(Drop)).point[Trampoline]
           }
         }
         
@@ -294,14 +320,16 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instr))
           }
           
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+          //eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) } sequence
+          val loopResult = eitherRoots.right map { roots2 => loop(loc, roots2, splits, stream.tail) }
+          M.sequence(loopResult).map(_.joinRight)
         }
         
         case PushKey(id) => {
           val openPoss = splits find { open => findGraphWithId(id)(open.spec).isDefined }
           openPoss map { open =>
             loop(loc, Right(SplitParam(loc, id)(open.result)) :: roots, splits, stream.tail)
-          } getOrElse Left(UnableToLocateSplitDescribingId(id))
+          } getOrElse Left(UnableToLocateSplitDescribingId(id)).point[Trampoline]
         }
         
         case PushGroup(id) => {
@@ -309,7 +337,7 @@ trait DAG extends Instructions with TransSpecModule {
           openPoss map { open =>
             val graph = findGraphWithId(id)(open.spec).get
             loop(loc, Right(SplitGroup(loc, id, graph.identities)(open.result)) :: roots, splits, stream.tail)
-          } getOrElse Left(UnableToLocateSplitDescribingId(id))
+          } getOrElse Left(UnableToLocateSplitDescribingId(id)).point[Trampoline]
         }
         
         case instr: RootInstr => {
@@ -332,16 +360,18 @@ trait DAG extends Instructions with TransSpecModule {
       }
       
       tail getOrElse {
-        if (!splits.isEmpty) {
-          Left(UnmatchedSplit)
-        } else {
-          roots match {
-            case Right(hd) :: Nil => Right(hd)
-            case Left(_) :: Nil => Left(BucketAtEnd)
-            case _ :: _ :: _ => Left(MultipleStackValuesAtEnd)
-            case Nil => Left(EmptyStackAtEnd)
+        {
+          if (!splits.isEmpty) {
+            Left(UnmatchedSplit)
+          } else {
+            roots match {
+              case Right(hd) :: Nil => Right(hd)
+              case Left(_) :: Nil => Left(BucketAtEnd)
+              case _ :: _ :: _ => Left(MultipleStackValuesAtEnd)
+              case Nil => Left(EmptyStackAtEnd)
+            }
           }
-        }
+        }.point[Trampoline]
       }
     }
     
@@ -381,13 +411,12 @@ trait DAG extends Instructions with TransSpecModule {
       back getOrElse Left(EmptyStream)
     }
     
-    if (stream.isEmpty) {
-      Left(EmptyStream)
+    (if (stream.isEmpty) {
+      Left(EmptyStream).point[Trampoline]
     } else {
-      findFirstRoot(None, stream).right flatMap {
-        case (root, tail) => loop(root.loc, Right(root) :: Nil, Nil, tail)
-      }
-    }
+      val loopResult = findFirstRoot(None, stream).right map { case (root, tail) => loop(root.loc, Right(root) :: Nil, Nil, tail) }
+      M.sequence(loopResult).map(_.joinRight)
+    }).run
   }
   
   private def findGraphWithId(id: Int)(spec: dag.BucketSpec): Option[DepGraph] = spec match {
