@@ -142,7 +142,7 @@ trait ShardServiceCombinators extends EventServiceCombinators {
 
   implicit def stringToBB(s: String): ByteBuffer = ByteBuffer.wrap(s.getBytes("UTF-8"))
 
-  def jsonpcb[A](cdelegate: HttpService[Future[JValue], Future[HttpResponse[A]]])
+  def jsonpcb[A](delegate: HttpService[Future[JValue], Future[HttpResponse[A]]])
     (implicit bi: A => Future[ByteChunk], M: Monad[Future]) = {
 
     jsonpc[ByteBuffer, ByteBuffer](delegate map (_ flatMap { response =>
