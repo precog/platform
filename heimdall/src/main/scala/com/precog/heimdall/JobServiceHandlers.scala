@@ -29,7 +29,7 @@ import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 import blueeyes.json.serialization.Extractor._
 import blueeyes.core.http.MimeTypes._
-import blueeyes.core.data.BijectionsChunkJson._
+import blueeyes.core.data.DefaultBijections._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.util.Clock
 

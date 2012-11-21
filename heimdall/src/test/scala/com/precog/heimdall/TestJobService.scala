@@ -19,12 +19,15 @@
  */
 package com.precog.heimdall
 
+import com.precog.common.JValueByteChunkTranscoders._
+
 import akka.util.Duration
 import akka.dispatch._
 
 import blueeyes.bkka._
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.data._
+import blueeyes.core.service._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.http.MimeTypes._
@@ -35,28 +38,27 @@ import org.streum.configrity.Configuration
 import scalaz._
 
 trait TestJobService extends BlueEyesServiceSpecification with JobService with AkkaDefaults {
-  val asyncContext = defaultFutureDispatch
+  val executionContext = defaultFutureDispatch
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
 
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 
-  implicit val M = AkkaTypeClasses.futureApplicative(asyncContext)
+  implicit val M = AkkaTypeClasses.futureApplicative(executionContext)
 
   val clock = blueeyes.util.Clock.System
 
-  def jobManager(config: Configuration): JobManager[Future] = new InMemoryJobManager[Future]
+  type Resource = Unit
 
-  def close(): Future[Unit] = Future { () }
+  def jobManager(config: Configuration): (Unit, JobManager[Future]) = ((), new InMemoryJobManager[Future])
+
+  def close(u: Unit): Future[Unit] = Future { u }
 }
 
 class JobServiceSpec extends TestJobService {
 
-  import BijectionsChunkJson._
-  import BijectionsChunkString._
-  import BijectionsByteArray._
-  import BijectionsChunkByteArray._
-  import BijectionsChunkFutureJson._
+  import DefaultBijections._
+  import blueeyes.json.serialization.DefaultSerialization._
 
   val validAPIKey = "xxx"
 
@@ -68,9 +70,9 @@ class JobServiceSpec extends TestJobService {
         JField("name", JString("abc")),
         JField("type", JString("abc"))
       ))
-      service.contentType[JValue](JSON)
+      client.contentType[ByteChunk](JSON)
              .query("apiKey", validAPIKey)
-             .post("/jobs")(body) must whenDelivered { beLike {
+             .post[JValue]("/jobs")(body) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(Created, _), _, _, _) => ok
       } }
     }

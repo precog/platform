@@ -49,38 +49,34 @@ class InMemoryJobManagerSpec extends Specification {
 }
 
 class TestWebJobManager extends TestJobService with WebJobManager {
-  val asynContext: ExecutionContext = implicitly
-
   protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
-    f(service) //.path("/jobs"))
+    f(client) //.path("/jobs"))
   }
 }
 
-//class WebJobManagerSpec extends Specification {
-//  include(new JobManagerSpec[Future] {
-//    val jobs = new TestWebJobManager
-//    implicit val asyncContext = jobs.asyncContext
-//    lazy val M = AkkaTypeClasses.futureApplicative(asyncContext)
-//    lazy val coM = new Copointed[Future] {
-//      def map[A, B](m: Future[A])(f: A => B) = m map f
-//      def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
-//    }
-//  })
-//}
+class WebJobManagerSpec extends Specification {
+  include(new JobManagerSpec[Future] {
+    val jobs = new TestWebJobManager
+    implicit val executionContext = jobs.executionContext
+    lazy val M = AkkaTypeClasses.futureApplicative(executionContext)
+    lazy val coM = new Copointed[Future] {
+      def map[A, B](m: Future[A])(f: A => B) = m map f
+      def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
+    }
+  })
+}
 
-//class MongoJobManagerSpec extends Specification with RealMongoSpecSupport with MongoJobManagerModule { self =>
-//  val config = Configuration.parse("")
+//class MongoJobManagerSpec extends Specification with RealMongoSpecSupport { self =>
 //  var actorSystem: ActorSystem = _
-//  implicit def asyncContext = actorSystem.dispatcher
-//
+//  implicit def executionContext = actorSystem.dispatcher
 //
 //  step {
-//    actorSystem = ActorSystem("mongo-jog-manager-spec")
+//    actorSystem = ActorSystem("mongo-job-manager-spec")
 //  }
 //
 //  include(new JobManagerSpec[Future] {
-//    lazy val jobs = jobManager(config)
-//    lazy val M = AkkaTypeClasses.futureApplicative(asyncContext)
+//    lazy val jobs = new MongoJobManager(mongo.database("jobs"), MongoJobManagerSettings.default)
+//    lazy val M = AkkaTypeClasses.futureApplicative(executionContext)
 //    lazy val coM = new Copointed[Future] {
 //      def map[A, B](m: Future[A])(f: A => B) = m map f
 //      def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))

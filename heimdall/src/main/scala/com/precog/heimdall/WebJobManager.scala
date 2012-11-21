@@ -20,8 +20,10 @@
 package com.precog.heimdall
 
 import com.precog.common.security._
+import com.precog.common.JValueByteChunkTranscoders._
 
 import blueeyes._
+import blueeyes.bkka._
 import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.MimeTypes._
@@ -44,27 +46,25 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 
-case class RealWebJobManager(protocol: String, host: String, port: Int, path: String)(implicit val asynContext: ExecutionContext) extends WebJobManager {
+case class RealWebJobManager(protocol: String, host: String, port: Int, path: String)(implicit val executionContext: ExecutionContext) extends WebJobManager {
   protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
     val client = new HttpClientXLightWeb
     f(client.protocol(protocol).host(host).port(port).path(path))
   }
 }
 
-trait WebJobManager extends JobManager[Future] with JobStateManager[Future] with BijectionsChunkFutureByteArray with Logging {
+trait WebJobManager extends JobManager[Future] with JobStateManager[Future] with Logging {
+  import AkkaTypeClasses._
+  import DefaultBijections._
+  import blueeyes.json.serialization.DefaultSerialization._
 
-  import BijectionsChunkByteArray._
-  import BijectionsChunkFutureByteArray._
-  import BijectionsChunkJson._
-  import BijectionsChunkString._
-  import BijectionsChunkFutureJson._
-
-  implicit def asynContext: ExecutionContext
+  implicit def executionContext: ExecutionContext
 
   protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A
 
-  private def withClient[A](f: HttpClient[JValue] => A): A = withRawClient { client =>
-    f(client.contentType[JValue](application/MimeTypes.json))
+  // This could be JValue, but too many problems arise w/ ambiguous implicits.
+  private def withClient[A](f: HttpClient[ByteChunk] => A): A = withRawClient { client =>
+    f(client.contentType[ByteChunk](application/MimeTypes.json))
   }
 
   def createJob(apiKey: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): Future[Job] = {
@@ -79,9 +79,9 @@ trait WebJobManager extends JobManager[Future] with JobStateManager[Future] with
         JField("type", JString("abc"))
       ))
 
-      client.contentType[JValue](MimeTypes.application / MimeTypes.json)
+      client.contentType[ByteChunk](MimeTypes.application / MimeTypes.json)
              .query("apiKey", "xxx")
-             .post("/jobs")(body) map {
+             .post[JValue]("/jobs")(body) map {
         case HttpResponse(HttpStatus(Created, _), _, _, _) => println("!!!!!")
         case x => println(" =( " + x)
       }

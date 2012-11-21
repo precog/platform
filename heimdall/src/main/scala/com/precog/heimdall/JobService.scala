@@ -38,29 +38,35 @@ import akka.util.Timeout
 
 import org.streum.configrity.Configuration
 
-case class JobServiceState(jobManager: JobManager[Future], clock: Clock)
+
+// Mongo-backed job manager that doesn't manage its mongo client.
+// Mongo-backed job manager that does manage its mongo client.
+// In-memory job manager that doesn't do anything.
+// REST-backed job manager that doesn't do anything.
+
+// Job service needs to shutdown whatever at the end.
 
 trait JobService
     extends BlueEyesServiceBuilder
     with AkkaDefaults
-    with BijectionsChunkFutureByteArray
     with HttpRequestHandlerCombinators {
 
-  import BijectionsChunkFutureString._
-  import BijectionsChunkFutureByteArray._
-  import BijectionsChunkJson._
-  import BijectionsChunkString._
-  import BijectionsChunkFutureJson._
+  import DefaultBijections._
 
-  def close(): Future[Unit]
   def clock: Clock
 
-  def jobManager(config: Configuration): JobManager[Future]
+  type Resource
+
+  def close(res: Resource): Future[Unit]
+
+  case class JobServiceState(resource: Resource, jobManager: JobManager[Future], clock: Clock)
+
+  def jobManager(config: Configuration): (Resource, JobManager[Future])
 
   implicit val timeout: Timeout = Timeout(30000)
 
   // Ugh. Why do I need this?
-  implicit def byteArray2chunk(r: Future[HttpResponse[Array[Byte]]]): Future[HttpResponse[ByteChunk]] = r map { resp => resp.copy(content = resp.content map (Chunk(_))) }
+  implicit def byteArray2chunk(r: Future[HttpResponse[Array[Byte]]]): Future[HttpResponse[ByteChunk]] = r map { resp => resp.copy(content = resp.content map (ByteChunk(_))) }
 
   val jobService = this.service("jobs", "1.0") {
     requestLogging(timeout) {
@@ -68,11 +74,11 @@ trait JobService
         startup {
           import context._
           Future {
-            val jobs = jobManager(config)
-            JobServiceState(jobs, clock)
+            val (resource, jobs) = jobManager(config)
+            JobServiceState(resource, jobs, clock)
           }
         } ->
-        request { case JobServiceState(jobs, clock) =>
+        request { case JobServiceState(_, jobs, clock) =>
           jsonp[ByteChunk] {
             path("/jobs") {
               get(new ListJobsHandler(jobs)) ~
@@ -103,7 +109,7 @@ trait JobService
           path("/jobs/'jobId/result")(get(new GetResultHandler(jobs)))
         } ->
         shutdown { state =>
-          close()
+          close(state.resource)
         }
       }
     }

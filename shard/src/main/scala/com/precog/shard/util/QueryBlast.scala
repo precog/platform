@@ -30,6 +30,7 @@ import akka.util.duration._
 import scalaz._
 
 import com.precog.common.Path
+import com.precog.common.JValueByteChunkTranscoders._
 import com.precog.util.JsonUtil
 
 import blueeyes.bkka._
@@ -152,30 +153,6 @@ verboseErrors - whether to print verbose error messages (default: false)
 
     val workQueue = new ArrayBlockingQueue[(Int, String)](1000)
 
-    implicit val transcoder = new AsyncHttpTranscoder[JValue, ByteChunk] {
-      def apply(req: HttpRequest[JValue]): HttpRequest[ByteChunk] =
-        req.copy(content = req.content.map { (j: JValue) =>
-          Left(ByteBuffer.wrap(j.renderCompact.getBytes("UTF-8")))
-        })
-
-      def unapply(fres: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[JValue]] = {
-        implicit val seqJValueMonoid = new Monoid[Seq[JValue]] {
-          def zero = Seq.empty[JValue]
-          def append(xs: Seq[JValue], ys: => Seq[JValue]) = xs ++ ys
-        }
-        fres.flatMap { res =>
-          res.content match {
-            case Some(bc) =>
-              val fv: Future[Validation[Seq[Throwable], JValue]] =
-                JsonUtil.parseSingleFromByteChunk(bc)
-              fv.map(v => res.copy(content = v.toOption))
-            case None =>
-              Future(res.copy(content = None))
-          }
-        }
-      }
-    }
-    
     (1 to threads).foreach { id =>
       new Thread {
         val path = "/benchmark/" + id

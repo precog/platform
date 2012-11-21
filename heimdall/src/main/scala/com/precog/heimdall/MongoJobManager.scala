@@ -45,24 +45,30 @@ import scalaz._
 import scalaz.std.option._
 
 
-trait MongoJobManagerModule {
+trait ManagedMongoJobManagerModule {
   implicit def asyncContext: ExecutionContext
-  def mongo: Mongo
 
-  def jobManager(config: Configuration): JobManager[Future] = {
+  def jobManager(config: Configuration): (Mongo, JobManager[Future]) = {
+    import MongoJobManagerSettings.default
+
+    val mongo = RealMongo(config.detach("mongo"))
+
     val database = config[String]("mongo.database", "jobs_v1")
-    val timeout = config[Int]("mongo.timeout", 5000)
 
-    val jobs = config[String]("mongo.jobsCollection", "jobs")
-    val messages = config[String]("mongo.messagesCollection", "job_messages")
+    val timeout = config[Long]("mongo.timeout", default.queryTimeout.duration.toMillis)
+    val jobs = config[String]("mongo.jobsCollection", default.jobs)
+    val messages = config[String]("mongo.messagesCollection", default.messages)
 
     val settings = MongoJobManagerSettings(timeout, jobs, messages)
 
-    new MongoJobManager(mongo.database(database), settings)
+    (mongo, new MongoJobManager(mongo.database(database), settings))
   }
 }
 
 case class MongoJobManagerSettings(queryTimeout: Timeout, jobs: String, messages: String)
+object MongoJobManagerSettings {
+  val default: MongoJobManagerSettings = MongoJobManagerSettings(5000, "jobs", "jog_messages")
+}
 
 final class MongoJobManager(database: Database, settings: MongoJobManagerSettings)
     (implicit executionContext: ExecutionContext) extends JobManager[Future] with JobStateManager[Future] {
