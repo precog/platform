@@ -31,7 +31,8 @@ trait TestJobService extends BlueEyesServiceSpecification with JobService with A
 
   type Resource = Unit
 
-  def jobManager(config: Configuration): (Unit, JobManager[Future]) = ((), new InMemoryJobManager[Future])
+  val jobs = new InMemoryJobManager[Future]
+  def jobManager(config: Configuration): (Unit, JobManager[Future]) = ((), jobs)
 
   def close(u: Unit): Future[Unit] = Future { u }
 }
@@ -53,7 +54,7 @@ class JobServiceSpec extends TestJobService {
       ))
       client.contentType[ByteChunk](JSON)
              .query("apiKey", validAPIKey)
-             .post[JValue]("/jobs")(body) must whenDelivered { beLike {
+             .post[JValue]("/jobs/")(body) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(Created, _), _, _, _) => ok
       } }
     }
