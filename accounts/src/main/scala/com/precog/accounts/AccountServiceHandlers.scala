@@ -160,7 +160,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                     Future(HttpResponse[JValue](OK, content = Some(JObject(List(JField("accountId", account.accountId))))))
                   } getOrElse {
                     accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free) { (accountId, path) =>
-                      val request = NewGrantRequest.newAccount(accountId, path, None, None, Set(), None)
+                      val request = NewAPIKeyRequest.newAccount(accountId, path, None, None)
                       val createBody = request.serialize 
 
                       logger.debug("Creating new account with id " + accountId + " and request body " + createBody)
