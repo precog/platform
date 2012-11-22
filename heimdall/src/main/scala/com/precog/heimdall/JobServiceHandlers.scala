@@ -69,7 +69,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
               // TODO: Check API Key and make sure it is valid before proceeding.
               // TODO: Remove apiKey from JValue output.
 
-              jobs.createJob(apiKey, name, tpe, Some(clock.now()), None) map { job =>
+              jobs.createJob(apiKey, name, tpe, None, None) map { job =>
                 HttpResponse[JValue](Created, content = Some(job.serialize))
               }
 
@@ -316,12 +316,12 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     } yield {
       contentM flatMap { obj =>
         (obj \ "state") match {
-          case JString("start") =>
+          case JString("started") =>
             transition(obj) { (timestamp, _) =>
               jobs.start(jobId, timestamp) map (Validation.fromEither(_)) map (_ map (_.state))
             }
 
-          case JString("cancel") =>
+          case JString("cancelled") =>
             transition(obj) {
               case (timestamp, Some(reason)) =>
                 jobs.cancel(jobId, reason, timestamp) map (Validation.fromEither(_)) map (_ map (_.state))
@@ -329,7 +329,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                 Future(Failure("Missing required field 'reason' in request body."))
             }
 
-          case JString("abort") =>
+          case JString("aborted") =>
             transition(obj) {
               case (timestamp, Some(reason)) =>
                 jobs.abort(jobId, reason, timestamp) map (Validation.fromEither(_)) map (_ map (_.state))
@@ -365,7 +365,9 @@ extends CustomHttpService[Future[Array[Byte]], Future[HttpResponse[Array[Byte]]]
         val timestamp = request.parameters get 'timestamp flatMap { ts =>
           JString(ts).validated[DateTime].toOption
         } getOrElse clock.now()
+        bytes map { b => println(b.toList) }
         val result = bytes map (JobResult(request.mimeTypes, _))
+        println("Result: " + result)
         jobs.finish(jobId, result, timestamp) map {
           case Right(job) =>
             HttpResponse[Array[Byte]](OK)

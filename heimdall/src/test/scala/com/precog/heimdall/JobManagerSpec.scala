@@ -48,16 +48,15 @@ class InMemoryJobManagerSpec extends Specification {
   })
 }
 
-class TestWebJobManager extends TestJobService with WebJobManager {
-  protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
-    f(client) //.path("/jobs"))
-  }
-}
-
-class WebJobManagerSpec extends Specification {
+class WebJobManagerSpec extends TestJobService { self =>
   include(new JobManagerSpec[Future] {
-    val jobs = new TestWebJobManager
-    implicit val executionContext = jobs.executionContext
+    lazy val jobs = new WebJobManager {
+      val executionContext = self.executionContext
+      protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
+        f(client) //.path("/jobs"))
+      }
+    }
+    implicit val executionContext = self.executionContext
     lazy val M = AkkaTypeClasses.futureApplicative(executionContext)
     lazy val coM = new Copointed[Future] {
       def map[A, B](m: Future[A])(f: A => B) = m map f
@@ -297,7 +296,9 @@ trait JobManagerSpec[M[+_]] extends Specification {
       jobs.start(job.id).copoint
       val result = JobResult(List(MimeTypes.text / plain), "Hello, world!".getBytes())
       jobs.finish(job.id, Some(result)).copoint must beLike {
-        case Right(Job(_, _, _, _, Finished(Some(`result`), _, _), _)) => ok
+        case Right(Job(_, _, _, _, Finished(Some(stored), _, _), _)) =>
+          println(stored.content.toList)
+          stored must_== result
       }
       jobs.findJob(job.id).copoint must beLike {
         case Some(Job(_, _, _, _, Finished(Some(`result`), _, _), _)) => ok

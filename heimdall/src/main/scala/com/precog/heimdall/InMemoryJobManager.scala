@@ -65,11 +65,12 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
   def updateStatus(jobId: JobId, prevStatus: Option[StatusId], 
       msg: String, progress: BigDecimal, unit: String, extra: Option[JValue]): M[Either[String, Status]] = {
 
-    val jval = JObject(List(
-      JField("message", JString(msg)),
-      JField("progress", JNum(progress)),
-      JField("unit", JString(unit)),
-      JField("info", extra getOrElse JUndefined)))
+    val jval = JObject(
+      JField("message", JString(msg)) ::
+      JField("progress", JNum(progress)) ::
+      JField("unit", JString(unit)) ::
+      (extra map (JField("info", _) :: Nil) getOrElse Nil)
+    )
 
     status get jobId match {
       case Some(curStatus) if curStatus.id == prevStatus.getOrElse(curStatus.id) =>

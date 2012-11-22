@@ -52,12 +52,12 @@ object Status {
   }
 
   def toMessage(status: Status): Message = {
-    Message(status.job, status.id, Message.channels.Status, JObject(List(
-      JField("message", status.message),
-      JField("progress", status.progress),
-      JField("unit", status.unit),
-      JField("info", status.info getOrElse JUndefined)
-    )))
+    Message(status.job, status.id, Message.channels.Status, JObject(
+      JField("message", status.message) ::
+      JField("progress", status.progress) ::
+      JField("unit", status.unit) ::
+      (status.info map (JField("info", _) :: Nil) getOrElse Nil)
+    ))
   }
 }
 

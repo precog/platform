@@ -80,7 +80,7 @@ trait JobService
         } ->
         request { case JobServiceState(_, jobs, clock) =>
           jsonp[ByteChunk] {
-            path("/jobs") {
+            path("/jobs/") {
               get(new ListJobsHandler(jobs)) ~
               //checkAPIKey {
                 post(new CreateJobHandler(jobs, clock)) ~
@@ -95,9 +95,9 @@ trait JobService
                   get(new GetJobStateHandler(jobs)) ~
                   put(new PutJobStateHandler(jobs))
                 } ~
-                path("/messages") {
+                path("/messages/") {
                   get(new ListChannelsHandler(jobs)) ~
-                  path("/'channel") {
+                  path("'channel") {
                     post(new AddMessageHandler(jobs)) ~
                     get(new ListMessagesHandler(jobs))
                   }
@@ -105,8 +105,14 @@ trait JobService
               }
             }
           } ~
-          path("/jobs/'jodId/result")(put(new CreateResultHandler(jobs, clock))) ~
-          path("/jobs/'jobId/result")(get(new GetResultHandler(jobs)))
+          path("/jobs/") {
+            path("'jobId") {
+              path("/result") {
+                put(new CreateResultHandler(jobs, clock)) ~
+                get(new GetResultHandler(jobs))
+              }
+            }
+          }
         } ->
         shutdown { state =>
           close(state.resource)
