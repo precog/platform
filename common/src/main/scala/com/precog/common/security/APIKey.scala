@@ -59,6 +59,11 @@ object NewAPIKeyRequest {
   val schema = "name" :: "description" :: "grants" :: HNil
   
   implicit val (newAPIKeyRequestDecomposer, newAPIKeyRequestExtractor) = serialization[NewAPIKeyRequest](schema)
+  
+  def newAccount(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None) = {
+    val grants = NewGrantRequest.newAccount(accountId, path, name.map(_+"-grant"), description.map(_+" standard account grant"), Set.empty[GrantID], None)
+    NewAPIKeyRequest(name, description, Set(grants))
+  }
 }
 
 // vim: set ts=4 sw=4 et:

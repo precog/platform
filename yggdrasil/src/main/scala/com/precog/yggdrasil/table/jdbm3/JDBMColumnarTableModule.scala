@@ -103,7 +103,7 @@ trait JDBMColumnarTableModule[M[+_]] extends BlockStoreColumnarTableModule[M] wi
           if (coveringProjections.size == 1) {
             ExactSize(minSize)
           } else {
-            EstimateSize(minSize, maxSize)
+            TableSize(minSize, maxSize)
           }
         }}}.getOrElse(UnknownSize)
       } yield {
