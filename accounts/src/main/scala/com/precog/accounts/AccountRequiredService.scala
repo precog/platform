@@ -39,21 +39,33 @@ class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], 
   extends DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, Account) => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
     delegate.service(request) map { f => (apiKey: APIKeyRecord, path: Path) =>
-      logger.debug("Locating account for request")
+      logger.debug("Locating account for request with apiKey " + apiKey.apiKey)
       request.parameters.get('ownerAccountId).map { accountId =>
+        logger.debug("Using provided ownerAccountId: " + accountId)
         accountManager.findAccountById(accountId).flatMap {
           case Some(account) => f(apiKey, path, account)
           case None => Future(err(BadRequest, "Unknown account Id: "+accountId))
         }
       }.getOrElse {
-        accountManager.listAccountIds(apiKey.apiKey).flatMap { accts =>
-          if(accts.size == 1) {
-            f(apiKey, path, accts.head)
-          } else {
-            logger.warn("Unable to determine account ID from api key: " + apiKey.apiKey)
+        logger.debug("Looking up accounts based on apiKey")
+        try {
+          accountManager.listAccountIds(apiKey.apiKey).flatMap { accts =>
+            logger.debug("Found accounts: " + accts)
+            if(accts.size == 1) {
+              f(apiKey, path, accts.head)
+            } else {
+              logger.warn("Unable to determine account ID from api key: " + apiKey.apiKey)
+              Future(err(BadRequest, "Unable to identify target account from apiKey"))
+            }
+          }
+        } catch {
+          case e => {
+            logger.error("Error locating account from apiKey " + apiKey, e);
             Future(err(BadRequest, "Unable to identify target account from apiKey"))
           }
-        }        
+        } finally {
+          logger.debug("Exiting AccountRequiredService handling")
+        }
       }
     }
   }

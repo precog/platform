@@ -327,7 +327,7 @@ echo "Kafka Local = $KFLOCALPID"
 # Start up mongo and set test token
 cd $MONGOBASE
 tar --strip-components=1 -xvzf $ARTIFACTDIR/mongo* &> /dev/null
-$MONGOBASE/bin/mongod --port $MONGOPORT --dbpath $MONGODATA &
+$MONGOBASE/bin/mongod --port $MONGOPORT --dbpath $MONGODATA --nojournal --nounixsocket --noauth --noprealloc &
 MONGOPID=$!
 
 wait_until_port_open $MONGOPORT
@@ -343,16 +343,16 @@ fi
 TOKENID=`cat $WORKDIR/root_token.txt`
 
 # Set up ingest and shard services
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.conf > $WORKDIR/configs/ingest-v1.conf || echo "Failed to update ingest config"
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/accounts/v1/#/#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.conf > $WORKDIR/configs/ingest-v1.conf || echo "Failed to update ingest config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.logging.xml > $WORKDIR/configs/ingest-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#/opt/precog/shard#$WORKDIR/shard-data#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < $BASEDIR/shard/configs/dev/shard-v1.conf > $WORKDIR/configs/shard-v1.conf || echo "Failed to update shard config"
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/opt/precog/shard#$WORKDIR/shard-data#" < $BASEDIR/shard/configs/dev/shard-v1.conf > $WORKDIR/configs/shard-v1.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/shard/configs/dev/shard-v1.logging.xml > $WORKDIR/configs/shard-v1.logging.xml
 
 sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < $BASEDIR/auth/configs/dev/dev-auth-v1.conf > $WORKDIR/configs/auth-v1.conf || echo "Failed to update auth config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/auth/configs/dev/dev-auth-v1.logging.xml > $WORKDIR/configs/auth-v1.logging.xml
 
-sed -e "s!/var/log!$WORKDIR/logs!; s/port = 80/port = 30062/; s!/security/v1/!/!; s/rootKey = .*/rootKey = \"$TOKENID\"/" < $BASEDIR/accounts/configs/dev/accounts-v1.conf > $WORKDIR/configs/accounts-v1.conf || echo "Failed to update accounts config"
+sed -e "s!/var/log!$WORKDIR/logs!; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s/port = 80/port = 30062/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < $BASEDIR/accounts/configs/dev/accounts-v1.conf > $WORKDIR/configs/accounts-v1.conf || echo "Failed to update accounts config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/accounts/configs/dev/accounts-v1.logging.xml > $WORKDIR/configs/accounts-v1.logging.xml
 
 cd $BASEDIR
@@ -378,14 +378,14 @@ wait_until_port_open 30062
 wait_until_port_open 30064
 
 # Now we need an actual account to use for testing
-if [ ! -e $WORKDIR/account_token.json ]; then
+if [ ! -e $WORKDIR/account_token.txt ]; then
     echo "Creating test account"
     ACCOUNTID=$(set -e; curl -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password":"1234"}' http://localhost:30064/accounts/ | sed 's/.*\([0-9]\{10\}\).*/\1/')
     echo "Created account: $ACCOUNTID"
-    echo $ACCOUNTID > $WORKDIR/account_id.json
-    ACCOUNTTOKEN=$(set -e; curl -u 'operations@precog.com:1234' -H 'Content-Type: application/json' -G "http://localhost:30064/accounts/$ACCOUNTID" | sed 's/.*apiKey"[^"]*"\([^"]*\)".*/\1/')
+    echo $ACCOUNTID > $WORKDIR/account_id.txt
+    ACCOUNTTOKEN=$(set -e; curl -u 'operations@precog.com:1234' -H 'Content-Type: application/json' -G "http://localhost:30064/accounts/$ACCOUNTID" | grep apiKey | sed 's/.*apiKey"[^"]*"\([^"]*\)".*/\1/')
     echo "Account token is $ACCOUNTTOKEN"
-    echo $ACCOUNTTOKEN > $WORKDIR/account_token.json
+    echo $ACCOUNTTOKEN > $WORKDIR/account_token.txt
 fi
 
 echo "Starting ingest service"
