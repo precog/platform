@@ -83,9 +83,13 @@ while ! netstat -an | grep $INGEST_PORT > /dev/null; do
     sleep 1
 done
 
-TOKEN="$(cat $WORKDIR/root_token.txt)"
-echo "Work dir:     $WORKDIR"
-echo "Root API key: $TOKEN"
+ROOTTOKEN="$(cat $WORKDIR/root_token.txt)"
+ACCOUNTID="$(cat $WORKDIR/account_id.txt)"
+TOKEN="$(cat $WORKDIR/account_token.txt)"
+echo "Work dir:      $WORKDIR"
+echo "Root API key:  $ROOTTOKEN"
+echo "Account ID:    $ACCOUNTID"
+echo "Account token: $TOKEN"
 
 function query {
     curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$QUERY_PORT/analytics/fs/"
