@@ -819,5 +819,21 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
+
+    // Regression test for #39656435
+    "accept SnapEngage query" in {
+      val input = """
+        | agents := //snapEngage/agents
+        |
+        | getEvents(agent) :=
+        |   firstData := agents where agents.agentId = agent
+        |   previousEvents := firstData where firstData.millis < 100
+        |   {a: firstData, b: previousEvents}
+        |
+        | getEvents("agent1") """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.errors must beEmpty
+    }
   }
 }

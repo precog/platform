@@ -27,7 +27,7 @@ import yggdrasil.table.jdbm3.JDBMColumnarTableModule
 import yggdrasil.table.BlockStoreColumnarTableModuleConfig
 import yggdrasil.metadata.FileMetadataStorage
 
-import common.security.UnlimitedAccessControl
+import common.security._
 
 import util.{ FileOps, FilesystemFileOps }
 
@@ -55,7 +55,7 @@ trait StandalonePerfTestRunner[T] extends EvaluatingPerfTestRunner[Future, T]
   trait StandalonePerfTestRunnerConfig extends BaseConfig with EvaluatingPerfTestRunnerConfig with StandaloneShardSystemConfig
 
   class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
-    val accessControl = new UnlimitedAccessControl[Future]()
+    val accessControl = new UnrestrictedAccessControl[Future]()
   }
 
   val storage = new Storage
@@ -69,7 +69,7 @@ trait StandalonePerfTestRunner[T] extends EvaluatingPerfTestRunner[Future, T]
   }
 }
 
-final class JDBMPerfTestRunner[T](val timer: Timer[T], val userUID: String, val optimize: Boolean,
+final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val optimize: Boolean,
       val actorSystem: ActorSystem, _rootDir: Option[File])(implicit val M: Monad[Future], val coM: Copointed[Future])
     extends StandalonePerfTestRunner[T]
     with JDBMColumnarTableModule[Future]
@@ -82,7 +82,7 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val userUID: String, val 
 
   type YggConfig = JDBMPerfTestRunnerConfig
   object yggConfig extends YggConfig {
-    val userUID = self.userUID
+    val apiKey = self.apiKey
     val optimize = self.optimize
     val commandLineConfig = Configuration.parse(_rootDir map ("precog.storage.root = " + _) getOrElse "")
     override val config = (Configuration parse {

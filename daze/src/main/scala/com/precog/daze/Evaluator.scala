@@ -30,6 +30,7 @@ import com.precog.util._
 import com.precog.common.json._
 import com.precog.common.{Path, VectorCase}
 import com.precog.common.json.{CPath, CPathField, CPathIndex}
+import com.precog.common.security._
 import com.precog.bytecode._
 
 import org.joda.time._
@@ -76,8 +77,6 @@ trait Evaluator[M[+_]] extends DAG
 
   protected lazy val evalLogger = LoggerFactory.getLogger("com.precog.daze.Evaluator")
 
-  type UserId = String
-  
   type MemoId = Int
   type GroupId = Int
   
@@ -118,8 +117,8 @@ trait Evaluator[M[+_]] extends DAG
    * is comprised by the inner functions, `fullEval` (the main evaluator function)
    * and `prepareEval` (which has the primary eval loop).
    */
-  def eval(userUID: UserId, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean): M[Table] = {
-    evalLogger.debug("Eval for %s = %s".format(userUID.toString, graph))
+  def eval(apiKey: APIKey, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean): M[Table] = {
+    evalLogger.debug("Eval for %s = %s".format(apiKey.toString, graph))
   
     val rewrittenDAG = rewriteDAG(optimize)(graph)
     val stagingPoints = listStagingPoints(Queue(rewrittenDAG))
@@ -299,7 +298,7 @@ trait Evaluator[M[+_]] extends DAG
             Path(prefixStr) = prefix
             f1 = Infix.concatString.f2.partialLeft(CString(prefixStr.replaceAll("/$", "")))
             trans2 = trans.Map1(trans.DerefObjectStatic(pendingTable.trans, paths.Value), f1)
-            val back = pendingTable.table flatMap { _.transform(trans2).load(userUID, jtpe) }
+            val back = pendingTable.table flatMap { _.transform(trans2).load(apiKey, jtpe) }
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         

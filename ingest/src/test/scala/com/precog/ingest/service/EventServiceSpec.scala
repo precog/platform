@@ -40,13 +40,16 @@ import org.joda.time._
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-import scalaz.{Success, NonEmptyList}
+import java.nio.ByteBuffer
+
+import scalaz._
 import scalaz.Scalaz._
 
-import blueeyes.concurrent.test._
+import blueeyes.akka_testing._
+import blueeyes.bkka.AkkaDefaults
 
 import blueeyes.core.data._
-import blueeyes.bkka.AkkaDefaults
+import blueeyes.core.service._
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http.HttpResponse
 import blueeyes.core.http.HttpStatus
@@ -58,31 +61,34 @@ import blueeyes.json._
 
 import blueeyes.util.Clock
 
+class EventServiceSpec extends TestEventService with FutureMatchers {
 
-class IngestServiceSpec extends TestIngestService with FutureMatchers {
+  implicit def executionContext = defaultFutureDispatch
 
-  import BijectionsChunkJson._
-  import BijectionsChunkString._
-  import BijectionsByteArray._
-  import BijectionsChunkByteArray._
-  import BijectionsChunkFutureJson._
+  import DefaultBijections._
 
   val testValue: JValue = JObject(List(JField("testing", JNum(123))))
 
   val JSON = MimeTypes.application/MimeTypes.json
   val CSV = MimeTypes.text/MimeTypes.csv
 
+  def bb(s: String) = ByteBuffer.wrap(s.getBytes("UTF-8"))
+
+  def chunk(strs: String*): ByteChunk =
+    Right(strs.map(bb).foldRight(StreamT.empty[Future, ByteBuffer])(_ :: _))
+
   "Ingest service" should {
     "track event with valid API key" in {
-      track(JSON)(testValue) must whenDelivered { beLike {
+      val res = track[JValue](JSON, Some(testAPIKey), testPath, Some(testAccountId))(testValue)
+
+      res must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(_), _),
-          Event(_, _, `testValue`, _) :: Nil) => ok
+          Event(_, _, _, `testValue`, _) :: Nil) => ok
       } }
     }
     "track asynchronous event with valid API key" in {
-      track(JSON, sync = false) {
-        Chunk("""{ "testing": 123 }\n""".getBytes("UTF-8"),
-          Some(Future { Chunk("""{ "testing": 321 }""".getBytes("UTF-8"), None) }))
+      track(JSON, Some(testAPIKey), testPath, Some(testAccountId), sync = false) {
+        chunk("""{ "testing": 123 }\n""", """{ "testing": 321 }""")
       } must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(Accepted, _), _, None, _), _) => ok
       } }
@@ -99,9 +105,8 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
           } ]
         }""")
 
-      track(JSON, sync = true) {
-        Chunk("178234#!!@#$\n".getBytes("UTF-8"),
-          Some(Future { Chunk("""{ "testing": 321 }""".getBytes("UTF-8"), None) }))
+      track(JSON, Some(testAPIKey), testPath, Some(testAccountId), sync = true) {
+        chunk("178234#!!@#$\n", """{ "testing": 321 }""")
       } must whenDelivered {
         beLike {
           case (HttpResponse(HttpStatus(OK, _), _, Some(msg2), _), event) =>
@@ -111,9 +116,8 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
       }
     }
     "track CSV batch ingest with valid API key" in {
-      track(CSV, sync = true) {
-        Chunk("a,b,c\n1,2,3\n4, ,a".getBytes("UTF-8"),
-          Some(Future { Chunk("\n6,7,8".getBytes("UTF-8"), None) }))
+      track(CSV, Some(testAPIKey), testPath, Some(testAccountId), sync = true) {
+        chunk("a,b,c\n1,2,3\n4, ,a", "\n6,7,8")
       } must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), event) =>
           event map (_.data) must_== List(
@@ -123,28 +127,28 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
       } }
     }
     "reject track request when API key not found" in {
-      track(JSON, apiKey = Some("not gonna find it"))(testValue) must whenDelivered { beLike {
-        case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified API key does not exist")), _), _) => ok 
+      track(JSON, Some("not gonna find it"), testPath, Some(testAccountId))(testValue) must whenDelivered { beLike {
+        case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified API key does not exist: not gonna find it")), _), _) => ok 
       } }
     }
     "reject track request when no API key provided" in {
-      track(JSON, apiKey = None)(testValue) must whenDelivered { beLike {
+      track(JSON, None, testPath, Some(testAccountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, _, _), _) => ok 
       }}
     }
     "reject track request when grant is expired" in {
-      track(JSON, apiKey = Some(ExpiredAPIKey))(testValue) must whenDelivered { beLike {
+      track(JSON, Some(expiredAPIKey), testPath, Some(testAccountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
       }}
     }
     "reject track request when path is not accessible by API key" in {
-      track(JSON, path = "")(testValue) must whenDelivered { beLike {
+      track(JSON, Some(testAPIKey), Path("/"), Some(testAccountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
       }}
     }
     "cap errors at 100" in {
-      val data = Chunk((List.fill(500)("!@#$") mkString "\n").getBytes("UTF-8"), None)
-      track(JSON)(data) must whenDelivered { beLike {
+      val data = chunk(List.fill(500)("!@#$") mkString "\n")
+      track(JSON, Some(testAPIKey), testPath, Some(testAccountId))(data) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), _) =>
           msg \ "total" must_== JNum(500)
           msg \ "ingested" must_== JNum(0)

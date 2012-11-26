@@ -63,13 +63,13 @@ class PathSpec extends Specification with ScalaCheck {
       val notChild1 = Path("/other/fancy/path")
       val notChild2 = Path("/my/fancy/")
 
-      parent.equalOrChild(parent) must beTrue
-      parent.equalOrChild(identical) must beTrue
-      parent.equalOrChild(child1) must beTrue
-      parent.equalOrChild(child2) must beTrue
+      parent.isEqualOrParent(parent) must beTrue
+      parent.isEqualOrParent(identical) must beTrue
+      parent.isEqualOrParent(child1) must beTrue
+      parent.isEqualOrParent(child2) must beTrue
 
-      parent.equalOrChild(notChild1) must beFalse
-      parent.equalOrChild(notChild2) must beFalse
+      parent.isEqualOrParent(notChild1) must beFalse
+      parent.isEqualOrParent(notChild2) must beFalse
       
     }
   }

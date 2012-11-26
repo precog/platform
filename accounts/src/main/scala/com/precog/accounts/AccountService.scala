@@ -23,7 +23,8 @@ import com.precog.util._
 import blueeyes.BlueEyesServer
 
 import blueeyes._
-import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
+import blueeyes.core.data._
+import DefaultBijections._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
@@ -50,8 +51,9 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.std.option._
 
-
-case class SecurityService(protocol: String, host: String, port: Int, path: String, rootKey: String) {
+case class SecurityService(protocol: String, host: String, port: Int, path: String, rootKey: String)(
+  implicit asyncContext: ExecutionContext
+) {
   def withClient[A](f: HttpClient[ByteChunk] => A): A = {
     val client = new HttpClientXLightWeb 
     f(client.protocol(protocol).host(host).port(port).path(path))
@@ -63,10 +65,10 @@ case class SecurityService(protocol: String, host: String, port: Int, path: Stri
   }
 }
 
-case class AccountServiceState(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService)
+case class AccountServiceState(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService, rootAccountId: String)
 
 
-trait AccountServiceCombinators extends HttpRequestHandlerCombinators {
+trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
   def auth[A](accountManager: AccountManager[Future])(service: HttpService[A, Account => Future[HttpResponse[JValue]]])(implicit ctx: ExecutionContext) = {
     new AuthenticationService[A, HttpResponse[JValue]](accountManager, service)({
       case NotProvided => HttpResponse(Unauthorized, headers = HttpHeaders(List(("WWW-Authenticate","Basic"))))
@@ -76,10 +78,7 @@ trait AccountServiceCombinators extends HttpRequestHandlerCombinators {
 }
 
 
-trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with AccountServiceCombinators {
-  import BijectionsChunkJson._
-  import BijectionsChunkString._
-  import BijectionsChunkFutureJson._
+trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with AuthenticationCombinators {
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
@@ -104,13 +103,15 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Accou
                config[String]("security.rootKey")
              )
 
-            AccountServiceState(accountManagement, clock, securityService)
+            val rootAccountId = config[String]("accounts.rootAccountId", "INVALID")
+
+            AccountServiceState(accountManagement, clock, securityService, rootAccountId)
           }
         } ->
         request { (state: AccountServiceState) =>
           jsonp[ByteChunk] {
             path("/accounts/") {
-              post(new PostAccountHandler(state.accountManagement, state.clock, state.securityService)) ~
+              post(new PostAccountHandler(state.accountManagement, state.clock, state.securityService, state.rootAccountId)) ~
               auth(state.accountManagement) {
                 get(new ListAccountsHandler(state.accountManagement)) ~ 
                 path("'accountId") {

@@ -34,7 +34,7 @@ import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
 
 import blueeyes.bkka.AkkaDefaults
-import blueeyes.concurrent.test.FutureMatchers
+import blueeyes.akka_testing.FutureMatchers
 import blueeyes.persistence.mongo._
 
 import blueeyes.json._
@@ -46,21 +46,23 @@ import org.slf4j.LoggerFactory
 import scalaz._
 
 class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport with FutureMatchers {
-  sequential
-  val timeout = Duration(30, "seconds")
+  
+  override def mongoStartupPause = Some(0l)
+  val timeout = Duration(10, "seconds")
 
   lazy val logger = LoggerFactory.getLogger("com.precog.common.security.MongoAPIKeyManagerSpec")
 
   "mongo API key manager" should {
-    "find API key present" in new apiKeyManager { 
-      logger.debug("Starting test run")
-      val result = Await.result(apiKeyManager.findAPIKey(root.tid), timeout)
+    
+    "find API key present" in new TestAPIKeyManager { 
+      val result = Await.result(apiKeyManager.findAPIKey(rootAPIKey), timeout)
 
       result must beLike {
-        case Some(APIKeyRecord(_,tid,_,_)) => tid must_== root.tid
+        case Some(APIKeyRecord(apiKey, _, _, _, _, _)) => apiKey must_== rootAPIKey
       }
     }
-    "not find missing API key" in new apiKeyManager { 
+    
+    "not find missing API key" in new TestAPIKeyManager { 
 
       val result = Await.result(apiKeyManager.findAPIKey(notFoundAPIKeyID), timeout)
 
@@ -68,27 +70,29 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
         case None => ok 
       }
     }
-    "issue new API key" in new apiKeyManager { 
+    
+    "issue new API key" in new TestAPIKeyManager { 
       val name = "newAPIKey"
-      val fResult = apiKeyManager.newAPIKey(name, "", Set.empty)
+      val fResult = apiKeyManager.newAPIKey(Some(name), None, rootAPIKey, Set.empty)
 
       val result = Await.result(fResult, timeout)
 
       result must beLike {
-        case APIKeyRecord(n,_,_,g) => 
-          name must_== n 
+        case APIKeyRecord(_, n, _, _, g, _) => 
+          Some(name) must_== n
           Set.empty must_== g
       }
     }
-    "move API key to deleted pool on deletion" in new apiKeyManager { 
+    
+    "move API key to deleted pool on deletion" in new TestAPIKeyManager { 
 
       type Results = (Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord])
 
       val fut: Future[Results] = for { 
-        before <- apiKeyManager.findAPIKey(root.tid)
-        deleted <- apiKeyManager.deleteAPIKey(before.get.tid)
-        after <- apiKeyManager.findAPIKey(root.tid)
-        deleteCol <- apiKeyManager.findDeletedAPIKey(root.tid)
+        before <- apiKeyManager.findAPIKey(child2.apiKey)
+        deleted <- apiKeyManager.deleteAPIKey(before.get.apiKey)
+        after <- apiKeyManager.findAPIKey(child2.apiKey)
+        deleteCol <- apiKeyManager.findDeletedAPIKey(child2.apiKey)
       } yield {
         (before, deleted, after, deleteCol)
       }
@@ -101,15 +105,16 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
           t1 must_== t3
       }
     }
-    "no failure on deleting API key that is already deleted" in new apiKeyManager { 
+    
+    "no failure on deleting API key that is already deleted" in new TestAPIKeyManager { 
       type Results = (Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord])
 
       val fut: Future[Results] = for { 
-        before <- apiKeyManager.findAPIKey(root.tid)
-        deleted1 <- apiKeyManager.deleteAPIKey(before.get.tid)
-        deleted2 <- apiKeyManager.deleteAPIKey(before.get.tid)
-        after <- apiKeyManager.findAPIKey(root.tid)
-        deleteCol <- apiKeyManager.findDeletedAPIKey(root.tid)
+        before <- apiKeyManager.findAPIKey(child2.apiKey)
+        deleted1 <- apiKeyManager.deleteAPIKey(before.get.apiKey)
+        deleted2 <- apiKeyManager.deleteAPIKey(before.get.apiKey)
+        after <- apiKeyManager.findAPIKey(child2.apiKey)
+        deleteCol <- apiKeyManager.findDeletedAPIKey(child2.apiKey)
       } yield {
         (before, deleted1, deleted2, after, deleteCol)
       }
@@ -124,11 +129,7 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
     }
   }
 
-  object Counter {
-    val cnt = new java.util.concurrent.atomic.AtomicLong
-  }
-
-  trait apiKeyManager extends After {
+  trait TestAPIKeyManager extends After {
     import MongoAPIKeyManagerSpec.dbId
     val defaultActorSystem = ActorSystem("apiKeyManagerTest")
     implicit val execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
@@ -145,25 +146,25 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
   
     val notFoundAPIKeyID = "NOT-GOING-TO-FIND"
 
-    logger.debug("Starting base setup")
-
-    val root = Await.result(apiKeyManager.newAPIKey("root", "", Set.empty), to)
-    val child1 = Await.result(apiKeyManager.newAPIKey("child1", root.tid, Set.empty), to)
-    val child2 = Await.result(apiKeyManager.newAPIKey("child2", root.tid, Set.empty), to)
-    val grantChild1 = Await.result(apiKeyManager.newAPIKey("grandChild1", child1.tid, Set.empty), to)
+    val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
+    val child1 = Await.result(apiKeyManager.newAPIKey(Some("child1"), None, rootAPIKey, Set.empty), to)
+    val child2 = Await.result(apiKeyManager.newAPIKey(Some("child2"), None, rootAPIKey, Set.empty), to)
+    val grantChild1 = Await.result(apiKeyManager.newAPIKey(Some("grantChild1"), None, child1.apiKey, Set.empty), to)
 
     // wait until the keys appear in the DB (some delay between insert request and actor insert)
-    def waitForAppearance(key: APIKeyRecord) {
-      while (Await.result(apiKeyManager.findAPIKey(key.tid), to) == None) {
-        logger.debug("Waiting for " + key.name)
+    def waitForAppearance(apiKey: APIKey, name: String) {
+      while (Await.result(apiKeyManager.findAPIKey(apiKey), to) == None) {
+        logger.debug("Waiting for " + name)
         Thread.sleep(100)
       }
     }
 
-    waitForAppearance(root)
-    waitForAppearance(child1)
-    waitForAppearance(child2)
-    waitForAppearance(grantChild1)
+    logger.debug("Starting base setup")
+
+    waitForAppearance(rootAPIKey, "root")
+    waitForAppearance(child1.apiKey, "child1")
+    waitForAppearance(child2.apiKey, "child2")
+    waitForAppearance(grantChild1.apiKey, "grantChild1")
 
     logger.debug("Base setup complete")
 

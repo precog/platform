@@ -35,27 +35,21 @@ import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
 
-import scalaz.Success
-import scalaz.Failure
-import scalaz.Validation._
+import scalaz._
 import scalaz.std.string._
-import scalaz.syntax.apply._
 import scalaz.syntax.validation._
+import scalaz.syntax.apply._
 
 class BrowseServiceHandler(metadataClient: MetadataClient[Future], accessControl: AccessControl[Future])(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (APIKeyRecord, Path) => Future[HttpResponse[QueryResult]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => { 
-    success((t: APIKeyRecord, p: Path) => {
-      accessControl.mayAccess(t.tid, p, Set(t.tid), ReadPermission).flatMap { 
-        case true =>
-          for {
-            browseResult <- metadataClient.browse(t.tid, p) 
-            structureResult <- metadataClient.structure(t.tid, p) 
-          } yield {
+    Success((r: APIKeyRecord, p: Path) => {
+      metadataClient.browse(r.apiKey, p) flatMap { browseResult => browseResult match {
+        case Success(_) =>
+          metadataClient.structure(r.apiKey, p) map { structureResult =>
             (browseResult |@| structureResult) { (children, structure) =>
               JObject(
                 JField("children", children) ::
-                // JField("structure", structure) ::
                 Nil
               )
             } match {
@@ -65,10 +59,9 @@ extends CustomHttpService[Future[JValue], (APIKeyRecord, Path) => Future[HttpRes
                 HttpResponse[QueryResult](HttpStatus(BadRequest, error))
             }
           }
-
-        case false =>
-          Future(HttpResponse[QueryResult](HttpStatus(Unauthorized, "The specified API key may not browse this location")))
-      }
+        case Failure(error) =>
+          Future(HttpResponse[QueryResult](HttpStatus(BadRequest, error)))
+      }}
     })
   }
 

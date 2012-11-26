@@ -27,18 +27,18 @@ import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.bkka.AkkaDefaults
 
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
 
+import com.precog.accounts.AccountServiceCombinators
 import com.precog.common.Path
 import com.precog.common.security._
 
-trait IngestServiceCombinators extends APIKeyServiceCombinators {
+trait EventServiceCombinators extends APIKeyServiceCombinators with AccountServiceCombinators with AkkaDefaults {
 
-  import BijectionsChunkJson._
-  import BijectionsChunkString._
-  import BijectionsChunkFutureJson._
+  import DefaultBijections._
 
   def left[A, B, C](h: HttpService[Either[A, B], C]): HttpService[A, C] = {
     new CustomHttpService[A, C] {
@@ -64,12 +64,14 @@ trait IngestServiceCombinators extends APIKeyServiceCombinators {
    * `Future[JValue]`. Otherwise, the content is streamed in as a `ByteChunk`.
    */
   def jsonpOrChunk(h: HttpService[Either[Future[JValue], ByteChunk], Future[HttpResponse[JValue]]]) = {
+    import scalaz.Validation
+    import MimeTypes.{application, json}
     new CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
       val service = (request: HttpRequest[ByteChunk]) => {
         (if (request.content.isEmpty) {
           jsonp[ByteChunk](left(h))
         } else {
-          produce(MimeTypes.application/MimeTypes.json)(right(h))
+          produce[ByteChunk, JValue, ByteChunk](application/json)(right(h))
         }).service(request)
       }
 

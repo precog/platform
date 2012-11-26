@@ -72,8 +72,11 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     // values
     val sorted = original.zipWithIndex.map {
       case (jv, i) => JValue.unsafeInsert(jv, globalIdPath, JNum(i))
-    }.sortBy({ v => { JArray(sortKeys.map(_.extract(v \ "value")).toList ::: List(v \ "globalId")).asInstanceOf[JValue] }       
-    })(desiredJValueOrder).map(_.delete(globalIdPath).get).toList
+    }.sortBy { v =>
+      val arr = JArray(sortKeys.map(_.extract(v \ "value")).toList ::: List(v \ "globalId")).asInstanceOf[JValue]
+      //println("JArray for %s sorted by %s was %s" format (v \ "key", sortKeys, arr))
+      arr
+    }(desiredJValueOrder).map(_.delete(globalIdPath).get).toList
 
     def xyz(v: JValue): JValue = {
       JArray(sortKeys.map(_.extract(v \ "value")).toList ::: List(v \ "globalId"))

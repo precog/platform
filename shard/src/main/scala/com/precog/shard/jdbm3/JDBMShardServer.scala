@@ -21,18 +21,19 @@ package com.precog.shard
 package jdbm3
 
 import com.precog.common.security._
-import com.precog.ingest.service.NullUsageLogging
+
+import akka.dispatch.Future
 
 import blueeyes.BlueEyesServer
+import blueeyes.bkka._
 import blueeyes.util.Clock
 
-import org.streum.configrity.Configuration
+import scalaz._
 
 object JDBMShardServer extends BlueEyesServer with ShardService with JDBMQueryExecutorComponent with MongoAPIKeyManagerComponent {
   
   val clock = Clock.System
 
-  def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
-
   val asyncContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 }

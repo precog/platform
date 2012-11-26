@@ -1145,6 +1145,13 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       }
     }
     
+    // Regression test for #39825209
+    "ambiguous comment syntax" in {
+      parseSingle("(-- Test\n--) 1") must beLike {
+        case NumLit(_, "1") => ok
+      }
+    }
+
     "greedily terminate comment blocks" in {
       parseSingle("(-a--)-)42") must throwA[ParseException]
     }

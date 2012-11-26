@@ -45,17 +45,21 @@ import blueeyes.bkka.AkkaDefaults
 
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
-import blueeyes.core.data.BijectionsChunkJson._
+import blueeyes.core.data.ByteChunk
+import blueeyes.core.data.DefaultBijections._
+import blueeyes.core.http.HttpRequest
 import blueeyes.core.http.HttpResponse
 import blueeyes.core.http.HttpStatusCodes.OK
+import blueeyes.core.service._
 import blueeyes.core.service.HttpClient
 import blueeyes.core.service.engines.HttpClientXLightWeb
+import blueeyes.core.service.AsyncHttpTranscoder
 
 import blueeyes.json._
 
 import scalaz.NonEmptyList
 
-abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessage {
+abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessage with AkkaDefaults {
 
   lazy val config = loadConfig(args)
 
@@ -102,7 +106,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
       override def run() {
         samples.foreach {
           case (path, sample) =>
-            def event = Event.fromJValue(Path(path), sample.next._1, "bogus")
+            def event = Event.fromJValue("bogus", Path(path), None, sample.next._1)
             0.until(messages).foreach { i =>
               if(i % 10 == 0 && verbose) println("Sending to [%s]: %d".format(path, i))
               try {
@@ -152,11 +156,9 @@ repeats - number of of times to repeat test (default: 1)
   def close(): Unit = ()
 }
 
-object WebappIngestProducer {
-  def main(args: Array[String]) =  new WebappIngestProducer(args).run()
-}
+object JsonLoader extends App with AkkaDefaults {
+  implicit val M: scalaz.Monad[Future] = new blueeyes.bkka.FutureMonad(defaultFutureDispatch)
 
-object JsonLoader extends App {
   def usage() {
     println(
 """
@@ -208,15 +210,23 @@ Usage:
   AkkaDefaults.actorSystem.shutdown
 }
 
+object WebappIngestProducer {
+  def main(args: Array[String]) =  new WebappIngestProducer(args).run()
+}
+
 class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
+
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
-  lazy val apiKey = config.getProperty("token", TestAPIKeyManager.rootUID)
+  lazy val ingestAPIKey = config.getProperty("apiKey", "dummy")
+  val ingestOwnerAccountId: Option[AccountID] = None
   val client = new HttpClientXLightWeb 
+
+  implicit val M: scalaz.Monad[Future] = new blueeyes.bkka.FutureMonad(defaultFutureDispatch)
 
   def send(event: Event, timeout: Timeout) {
     
     val f: Future[HttpResponse[JValue]] = client.path(base)
-                                                .query("apiKey", apiKey)
+                                                .query("apiKey", ingestAPIKey)
                                                 .contentType(application/MimeTypes.json)
                                                 .post[JValue](event.path.toString)(event.data)
     Await.ready(f, 10 seconds) 

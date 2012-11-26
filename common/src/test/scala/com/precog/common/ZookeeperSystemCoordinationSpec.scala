@@ -34,7 +34,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
   sequential
 
   "zookeeper system coordination " should {
-    "register relay agent" in zookeeperClient() { factory: ClientFactory =>
+    "register relay agent" in TestZookeeperClient() { factory: ClientFactory =>
       val client = factory()
       val sc = newSystemCoordination(client)
 
@@ -45,7 +45,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       }
     }
 
-    "renew relay agent" in zookeeperClient() { factory: ClientFactory =>
+    "renew relay agent" in TestZookeeperClient() { factory: ClientFactory =>
       val client = factory()
       val sc = newSystemCoordination(client)
 
@@ -57,7 +57,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       }
     } 
 
-    "save and restore relay agent state" in zookeeperClient() { factory: ClientFactory =>
+    "save and restore relay agent state" in TestZookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
 
@@ -83,7 +83,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       }
     } 
 
-    "restore relay agent state" in zookeeperClient() { factory: ClientFactory =>
+    "restore relay agent state" in TestZookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
 
@@ -103,7 +103,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       }
     } 
 
-    "relay agent registration retries in case of stale registration" in zookeeperClient() { factory: ClientFactory =>
+    "relay agent registration retries in case of stale registration" in TestZookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
 
@@ -125,7 +125,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       }
     } 
 
-    "relay agent registration fails after reasonable attempt to detect stale registration" in zookeeperClient() { factory: ClientFactory =>
+    "relay agent registration fails after reasonable attempt to detect stale registration" in TestZookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
 
@@ -151,7 +151,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       todo
     }
 
-    "not load a missing checkpoint (checkpoints for new shards should be inserted manually via YggUtils)" in zookeeperClient() { factory: ClientFactory =>
+    "not load a missing checkpoint (checkpoints for new shards should be inserted manually via YggUtils)" in TestZookeeperClient() { factory: ClientFactory =>
       val client = factory()
       val sc = newSystemCoordination(client)
       
@@ -162,7 +162,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       }
     }
 
-    "persist checkpoints between sessions" in zookeeperClient() { factory: ClientFactory =>
+    "persist checkpoints between sessions" in TestZookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
       
@@ -195,11 +195,11 @@ class ZookeeperSystemCoordinationSpec extends Specification {
     
   type ClientFactory = () => ZkClient
 
-  case class zookeeperClient(zkHosts: String = "127.0.0.1:2181") extends AroundOutside[ClientFactory] {
+  case class TestZookeeperClient(zkHosts: String = "127.0.0.1:2181") extends AroundOutside[ClientFactory] {
 
     private val clients = ListBuffer[ZkClient]()
     private val factory = () => {
-      val client = new ZkClient(zkHosts, 10000)
+      val client = new ZkClient(zkHosts, 1000)
       clients += client
       client
     }

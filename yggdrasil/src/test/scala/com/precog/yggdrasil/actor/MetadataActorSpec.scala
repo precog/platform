@@ -26,7 +26,7 @@ import com.precog.common.json._
 import com.precog.util._
 
 import blueeyes.json.JPath
-import blueeyes.concurrent.test._
+import blueeyes.akka_testing._
 import blueeyes.json.serialization.Extractor._
 
 import java.io.File

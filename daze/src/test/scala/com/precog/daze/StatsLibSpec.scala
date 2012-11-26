@@ -45,10 +45,10 @@ trait StatsLibSpec[M[+_]] extends Specification
   import dag._
   import instructions._
 
-  val testUID = "testUID"
+  val testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph): Set[SEvent] = withContext { ctx =>
-    consumeEval(testUID, graph, ctx, Path.Root) match {
+    consumeEval(testAPIKey, graph, ctx, Path.Root) match {
       case Success(results) => results
       case Failure(error) => throw error
     }

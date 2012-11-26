@@ -42,10 +42,12 @@ extends DelegatingService[ByteChunk, B, ByteChunk, B] with Logging {
       request.headers.header[`Content-Encoding`] match {
         case Some(contentEncoding) =>
           contentEncoding.encodings match {
+            case Seq(`x-zip`) =>
+              success(UnzipByteChunk().apply(_))
             case Seq(`gzip`) =>
-              success(GunzipByteChunk(_))
+              success(GunzipByteChunk().apply(_))
             case Seq(`deflate`) =>
-              success(InflateByteChunk(_))
+              success(InflateByteChunk().apply(_))
             case Seq(Encodings.`identity`) =>
               success(identity)
             case _ =>

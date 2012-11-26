@@ -20,10 +20,10 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.common.json._
 import com.precog.bytecode.JType
-import com.precog.common.Path
-import com.precog.common.VectorCase
+import com.precog.common.{ Path, VectorCase } 
+import com.precog.common.json._
+import com.precog.common.security._
 
 import akka.actor.ActorSystem
 
@@ -72,7 +72,7 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
       }.map(_.transform(DerefObjectStatic(Leaf(Source), CPathField("1"))))
     }
     
-    override def load(uid: UserId, jtpe: JType) = {
+    override def load(apiKey: APIKey, jtpe: JType) = {
       self.toJson map { events =>
         fromJson {
           events.toStream flatMap {

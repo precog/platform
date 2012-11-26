@@ -24,17 +24,23 @@
  */
 package com.precog.shard.util 
 
-import akka.dispatch.{Future, Await}
+import akka.dispatch.{Future, Await, ExecutionContext}
 import akka.util.duration._
 
-import com.precog.common.Path
+import scalaz._
 
-import blueeyes.core.http.HttpResponse
+import com.precog.common.Path
+import com.precog.util.JsonUtil
+
+import blueeyes.bkka._
+import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes.OK
-import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
-import blueeyes.core.data.BijectionsChunkJson._
+import blueeyes.core.data._
+import blueeyes.core.service._
 import blueeyes.core.service.engines.HttpClientXLightWeb
+
+import DefaultBijections._
 
 import blueeyes.json.{JObject, JValue, JString}
 
@@ -46,11 +52,14 @@ import java.util.Properties
 
 import java.io.File
 import java.io.FileReader
+import java.nio.ByteBuffer
 
-object QueryBlast {
+object QueryBlast extends AkkaDefaults {
   var count = 0
   var errors = 0
   var startTime = 0L
+
+  protected implicit val M = new FutureMonad(defaultFutureDispatch)
 
   var stats = Map[Int, Stats]()
   
@@ -141,10 +150,31 @@ verboseErrors - whether to print verbose error messages (default: false)
     intervalDouble = interval.toDouble
     val verboseErrors = properties.getProperty("verboseErrors", "false").toBoolean
 
-
     val workQueue = new ArrayBlockingQueue[(Int, String)](1000)
 
-//    println("Starting workers")
+    implicit val transcoder = new AsyncHttpTranscoder[JValue, ByteChunk] {
+      def apply(req: HttpRequest[JValue]): HttpRequest[ByteChunk] =
+        req.copy(content = req.content.map { (j: JValue) =>
+          Left(ByteBuffer.wrap(j.renderCompact.getBytes("UTF-8")))
+        })
+
+      def unapply(fres: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[JValue]] = {
+        implicit val seqJValueMonoid = new Monoid[Seq[JValue]] {
+          def zero = Seq.empty[JValue]
+          def append(xs: Seq[JValue], ys: => Seq[JValue]) = xs ++ ys
+        }
+        fres.flatMap { res =>
+          res.content match {
+            case Some(bc) =>
+              val fv: Future[Validation[Seq[Throwable], JValue]] =
+                JsonUtil.parseSingleFromByteChunk(bc)
+              fv.map(v => res.copy(content = v.toOption))
+            case None =>
+              Future(res.copy(content = None))
+          }
+        }
+      }
+    }
     
     (1 to threads).foreach { id =>
       new Thread {
@@ -158,10 +188,10 @@ verboseErrors - whether to print verbose error messages (default: false)
               val started = System.nanoTime()
              
               val f: Future[HttpResponse[JValue]] = client.path(apiUrl)
-                                                          .query("apiKey", apiKey)
-                                                          .query("q", query)
-                                                          .contentType(application/MimeTypes.json)
-                                                          .get[JValue]("")
+                .query("apiKey", apiKey)
+                .query("q", query)
+                .contentType(application/MimeTypes.json)
+                .get[JValue]("")
 
               Await.ready(f, 120 seconds)
               f.value match {

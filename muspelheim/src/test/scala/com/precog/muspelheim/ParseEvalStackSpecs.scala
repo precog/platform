@@ -114,7 +114,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
         
         val Right(dag) = decorate(emit(tree))
         withContext { ctx => 
-          consumeEval("dummyUID", dag, ctx, Path.Root) match {
+          consumeEval("dummyAPIKey", dag, ctx, Path.Root) match {
             case Success(result) => 
               parseEvalLogger.debug("Evaluation complete for query: " + str)
               result
@@ -139,7 +139,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
         tree.errors must beEmpty
         val Right(dag) = decorate(emit(tree))
         withContext { ctx => 
-          val tableM = eval("dummyUID", dag, ctx, Path.Root, true)
+          val tableM = eval("dummyAPIKey", dag, ctx, Path.Root, true)
           tableM map { _ transform DerefObjectStatic(Leaf(Source), CPathField("value")) } copoint
         }
       }

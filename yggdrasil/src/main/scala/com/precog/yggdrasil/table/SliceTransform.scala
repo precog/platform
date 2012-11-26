@@ -305,7 +305,9 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
               l0.zip(r0) { (sl, sr) =>
                 new Slice {
                   val size = sl.size
-                  val columns = {
+                  val columns = if (sl.columns.isEmpty || sr.columns.isEmpty) {
+                    Map.empty[ColumnRef, Column]
+                  } else {
                     val logicalFilters = sr.columns.groupBy(_._1.selector) mapValues { cols => new BoolColumn {
                       def isDefinedAt(row: Int) = cols.exists(_._2.isDefinedAt(row))
                       def apply(row: Int) = !isDefinedAt(row)

@@ -354,6 +354,23 @@ trait EvalStackSpecs extends Specification {
       val result = evalE(input)
       result must not(beEmpty)        // TODO
     }
+    
+    "solve involving extras with a stdlib op1 function" in {
+      val input = """
+        | import std::time::*
+        | 
+        | agents := //clicks
+        | data := { agentId: agents.userId, millis: getMillis(agents.timeString) }
+        | 
+        | upperBound := getMillis("2012-04-03T23:59:59")
+        | 
+        | solve 'agent
+        |   data where data.millis < upperBound & data.agentId = 'agent
+        | """.stripMargin
+      
+      val results = evalE(input)
+      results must not(beEmpty)     // TODO
+    }
 
     "perform a simple join by value sorting" in {
       val input = """
@@ -487,7 +504,37 @@ trait EvalStackSpecs extends Specification {
           ids must haveSize(0)
           obj mustEqual(Map("min" -> SDecimal(50), "max" -> SDecimal(2768)))
       }
-    }.pendingUntilFixed
+    }
+
+    // Regression test for #39652091
+    "call union on two dispatches of the same function" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        |
+        | f(x) :=
+        |   medals' := medals where medals.Country = x
+        |   medals'' := new medals'
+        |
+        |   medals'' ~ medals'
+        |     {a: medals'.Country, b: medals''.Country} where medals'.Total = medals''.Total
+        |
+        | f("India") union f("Canada")
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(16 + 570)
+
+      val maps = results.toSeq collect {
+        case (ids, SObject(obj)) => obj
+      }
+
+      val india = maps filter { _.values forall { _ == SString("India") } }
+      india.size mustEqual(16)
+
+      val canada = maps filter { _.values forall { _ == SString("Canada") } }
+      canada.size mustEqual(570)
+    }
 
     "accept a solve involving formals of formals" in {
       val input = """
@@ -2230,6 +2277,62 @@ trait EvalStackSpecs extends Specification {
 //        val result = eval(input)
 //        result must haveSize(4)
 //      } 
+    }
+
+    // Regression test for #39590007
+    "give empty results when relation body uses non-existant field" in {
+      val input = """
+        | clicks := //clicks
+        | newClicks := new clicks
+        |
+        | clicks ~ newClicks
+        |   {timeString: clicks.timeString, nonexistant: clicks.nonexistant}""".stripMargin
+
+      eval(input) must beEmpty
+    }
+    
+    "not explode on a large query" in {
+      val input = """
+        | import std::stats::*
+        | import std::time::*
+        | 
+        | agents := //se/status
+        | bin5 := //bins/5
+        | allBins := bin5.bin -5
+        | 
+        | minuteOfDay(time) := (hourOfDay(millisToISO(time, "+00:00")) * 60) + minuteOfHour(millisToISO(time, "+00:00"))
+        | 
+        | data' := agents with { minuteOfDay: minuteOfDay(agents.timestamp)}
+        | 
+        | upperBound := getMillis("2012-11-19T23:59:59")
+        | lowerBound := getMillis("2012-11-19T00:00:00")
+        | extraLB := lowerBound - (60*24*60000)
+        | 
+        | results := solve 'agent
+        |   data'' := data' where data'.timestamp <= upperBound & data'.timestamp >= extraLB & data'.agentId = 'agent
+        | 
+        |   order := denseRank(data''.timestamp)
+        |   data''' := data'' with {rank: order}
+        | 
+        |   newData := new data'''
+        |   newData' := newData with {rank: newData.rank -1}
+        | 
+        |   result := newData' ~ data''
+        | 
+        |   {first: data''', second: newData'} where newData'.rank = data'''.rank
+        |  
+        |   {end: result.second.timestamp, 
+        |   status: result.first.status, 
+        |   startMinute: result.first.minuteOfDay, 
+        |   endMinute: result.second.minuteOfDay}  
+        | 
+        | results' := results where results.end > lowerBound & results.status = "online"
+        | 
+        | solve 'bin = allBins.bin
+        |   {bin: 'bin, count: count(results'.startMinute where results'.startMinute <= 'bin & results'.endMinute >= 'bin)}
+        | """.stripMargin
+        
+      eval(input) must not(throwAn[Exception])
     }
   }
 }

@@ -549,15 +549,20 @@ trait Emitter extends AST
               emitMap(actuals(0), actuals(1), BuiltInFunction2Op(op), dispatches)
 
             case LetBinding(let @ ast.Let(loc, id, params, left, right)) =>
-              params.length match {
-                case 0 =>
-                  emitOrDup(MarkExpr(left))(emitExpr(left, dispatches + d))
-
-                case n => emitOrDup(MarkDispatch(let, actuals)) {
-                  emitDispatch(d, let, dispatches) { dispatches =>
-                    emitExpr(left, dispatches)
+              if (params.length > 0) {
+                emitOrDup(MarkDispatch(let, actuals)) {
+                  // Don't let dispatch add marks inside the function - could mark expressions that include formals
+                  // Run the StateT and preserve its marks
+                  StateT.apply[Id, Emission, Unit] { e =>
+                    val state = emitDispatch(d, let, dispatches) { dispatches =>
+                      emitExpr(left, dispatches)
+                    }
+                    val (e2, ()) = state(e)
+                    (e2.copy(marks = e.marks), ())
                   }
                 }
+              } else {
+                emitOrDup(MarkExpr(left))(emitExpr(left, dispatches + d))
               }
 
             case NullBinding => 

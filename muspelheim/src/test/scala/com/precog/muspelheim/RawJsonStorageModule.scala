@@ -93,7 +93,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
         projections = json.elements.foldLeft(projections) { 
           case (acc, jobj) => 
             val evID = EventId(0, identity.getAndIncrement)
-            routingTable.routeEvent(EventMessage(evID, Event(path, "", jobj, Map()))).foldLeft(acc) {
+            routingTable.routeEvent(EventMessage(evID, Event("", path, None, jobj, Map()))).foldLeft(acc) {
               case (acc, data) =>
                 acc + (data.descriptor -> (acc.getOrElse(data.descriptor, Vector.empty[JValue]) :+ data.toJValue))
           }
@@ -131,7 +131,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
       def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
     }
 
-    def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl[M](), metadata)
+    def userMetadataView(apiKey: APIKey) = new UserMetadataView(apiKey, new UnrestrictedAccessControl[M](), metadata)
 
     def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)] = {
       M.point {
@@ -159,7 +159,7 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
     
     def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("Feature not implemented in test stub.")
 
-    def load(uid: UserId, tpe: JType): M[Table] = {
+    def load(apiKey: APIKey, tpe: JType): M[Table] = {
       val pathsM = this.reduce {
         new CReducer[Set[Path]] {
           def reduce(columns: JType => Set[Column], range: Range): Set[Path] = {
@@ -173,7 +173,7 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
 
       for {
         paths <- pathsM
-        data  <- paths.toList.map(storage.userMetadataView("").findProjections).sequence
+        data  <- paths.toList.map(storage.userMetadataView(apiKey).findProjections).sequence
         path  = data.flatten.headOption
         table <- path map { 
                    case (descriptor, _) => storage.projection(descriptor) map { projection => fromJson(projection._1.data.toStream) }

@@ -23,6 +23,7 @@ package jdbm3
 
 import com.precog.common.{MetadataStats,Path,VectorCase}
 import com.precog.common.json._
+import com.precog.common.security._
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
@@ -60,8 +61,6 @@ import TableModule._
 trait JDBMColumnarTableModule[M[+_]] extends BlockStoreColumnarTableModule[M] with StorageModule[M] {
   import JDBMColumnarTableModule._
 
-  override type UserId = String
-
   type Key
   type Projection <: BlockProjectionLike[Key, Slice]
   type TableCompanion <: JDBMColumnarTableCompanion
@@ -71,10 +70,10 @@ trait JDBMColumnarTableModule[M[+_]] extends BlockStoreColumnarTableModule[M] wi
   
     private object loadMergeEngine extends MergeEngine[Key, BD]
 
-    def load(table: Table, uid: UserId, tpe: JType): M[Table] = {
+    def load(table: Table, apiKey: APIKey, tpe: JType): M[Table] = {
       import loadMergeEngine._
 
-      val metadataView = storage.userMetadataView(uid)
+      val metadataView = storage.userMetadataView(apiKey)
 
       def cellsM(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Stream[M[Option[CellState]]] = {
         for (((desc, cols), i) <- projections.toStream.zipWithIndex) yield {
@@ -104,7 +103,7 @@ trait JDBMColumnarTableModule[M[+_]] extends BlockStoreColumnarTableModule[M] wi
           if (coveringProjections.size == 1) {
             ExactSize(minSize)
           } else {
-            EstimateSize(minSize, maxSize)
+            TableSize(minSize, maxSize)
           }
         }}}.getOrElse(UnknownSize)
       } yield {

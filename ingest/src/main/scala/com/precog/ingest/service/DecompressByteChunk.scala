@@ -19,214 +19,121 @@
  */
 package com.precog.ingest.service
 
-import akka.dispatch.{ Future, ExecutionContext }
+import blueeyes.bkka._
+import akka.dispatch.{ExecutionContext, Future, Promise}
 
 import blueeyes.core.data.{ Chunk, ByteChunk }
 
-import java.io.{ InputStream, ByteArrayOutputStream, IOException, EOFException }
-import java.util.zip.Inflater
+import java.io._
+import java.nio._
+import java.nio.channels._
+import java.util.zip._
 
 import com.weiglewilczek.slf4s.Logging
 
-trait DecompressByteChunk extends Logging {
+import java.nio.ByteBuffer
+import scalaz._
 
-  def nowrap: Boolean
+abstract class DecompressByteChunk(implicit executor: ExecutionContext) extends Logging {
+  protected implicit val M = new FutureMonad(executor)
 
-  def apply(byteStream: ByteChunk)(implicit ctx: ExecutionContext): ByteChunk
+  protected def inChannel(in: InputStream): ReadableByteChannel
 
-  sealed trait InflateResult
-  case class More(bytes: Array[Byte], next: Option[Future[ByteChunk]]) extends InflateResult
-  case class Done(bytes: Array[Byte], remaining: ByteChunk) extends InflateResult
+  def decompress(dataChunk: ByteChunk, chunkSize: Int = 8192): ByteChunk = {
+    val stream: StreamT[Future, ByteBuffer] = dataChunk match {
+      case Left(bb) => StreamT(Future(StreamT.Yield(bb, StreamT(Future(StreamT.Done)))))
+      case Right(stream) => stream
+    }
 
-  def createInflater(): ByteChunk => InflateResult = {
-    val inflater: Inflater = new Inflater(nowrap)
-    val bytes = new Array[Byte](1024)
-    val out = new ByteArrayOutputStream()
+    val inPipe = new PipedInputStream()
+    val outStream = new BufferedOutputStream(new PipedOutputStream(inPipe))
+    val inc = inChannel(new BufferedInputStream(inPipe))
+    val fu = writeDecompressed(stream, outStream)
 
-    { (chunk: ByteChunk) => 
+    val sfu = fu :: StreamT.empty[Future, Unit]
 
-      val data = if (chunk.data.length > 0) {
-
-        logger.debug("Proposing %d bytes for inflation." format chunk.data.length)
-
-        inflater.setInput(chunk.data)
-
-        out.reset()
-        var len = inflater.inflate(bytes)
-        while (len > 0) {
-          out.write(bytes, 0, len)
-          len = inflater.inflate(bytes)
+    val result: StreamT[Future, ByteBuffer] = sfu flatMap { unit =>
+      StreamT.unfoldM[Future, ByteBuffer, Option[ReadableByteChannel]](Some(inc)) {
+        case Some(in) => Future {
+          val buffer = ByteBuffer.allocate(chunkSize)
+          val read = in.read(buffer)
+          buffer.flip()
+          if (read == -1) {
+            in.close()
+            Some((buffer, None))
+          } else {
+            Some((buffer, Some(in)))
+          }
         }
-        out.toByteArray()
-
-      } else {
-        new Array[Byte](0)
-      }
-
-      logger.debug("Inflated bytes" format data.length)
-
-      if (inflater.needsInput()) {
-        More(data, chunk.next)
-
-      } else {
-        val remaining = inflater.getRemaining()
-        val leftover = new Array[Byte](remaining)
-        System.arraycopy(chunk.data, chunk.data.length - remaining, leftover, 0, remaining)
-        Done(data, Chunk(leftover, chunk.next))
-      }
-    }
-  }
-}
-
-case object InflateByteChunk extends DecompressByteChunk {
-  val nowrap = false
-
-  def apply(byteStream: ByteChunk)(implicit ctx: ExecutionContext): ByteChunk = {
-    val inflateStream = createInflater()
-
-    def inflate(chunk: ByteChunk): ByteChunk = {
-      inflateStream(chunk) match {
-        case More(bytes, next) =>
-          Chunk(bytes, next map (_ map (inflate(_))))
-        case Done(bytes, remaining) =>
-          Chunk(bytes, Some(Future(apply(remaining))))
-      }
-    }
-
-    inflate(byteStream)
-  }
-}
-
-case object GunzipByteChunk extends DecompressByteChunk {
-  val nowrap = true
-
-  private val TextFlag = 0x01
-  private val CrcFlag = 0x02
-  private val ExtraFlag = 0x04
-  private val NameFlag = 0x08
-  private val CommentFlag = 0x10
-
-  def apply(byteStream: ByteChunk)(implicit ctx: ExecutionContext): ByteChunk = {
-    val inflateStream = createInflater()
-
-    def inflate(chunk: ByteChunk): ByteChunk = {
-      inflateStream(chunk) match {
-        case More(bytes, next) =>
-          Chunk(bytes, next map (_ map (inflate(_))))
-        case Done(bytes, remaining) =>
-          Chunk(bytes, Some(Future(finish(remaining))))
-      }
-    }
-
-    inflate(init(byteStream))
-  }
-
-  /** Reads a fixed amount of data from a `ByteChunk`. */
-  private def read(len: Int, chunk: ByteChunk)(implicit
-      ctx: ExecutionContext): Future[(Array[Byte], ByteChunk)] = {
-
-    def rec(out: ByteArrayOutputStream, len: Int, chunk: ByteChunk): Future[(Array[Byte], ByteChunk)] = {
-      if (chunk.data.length >= len) {
-        out.write(chunk.data, 0, len)
-        val bytes = out.toByteArray()
-        val leftover = new Array[Byte](chunk.data.length - len)
-        System.arraycopy(chunk.data, len, leftover, 0, chunk.data.length - len)
-        Future((bytes, Chunk(leftover, chunk.next)))
-
-      } else {
-        out.write(chunk.data)
-
-        chunk.next map {
-          _ flatMap (rec(out, len - chunk.data.length, _))
-        } getOrElse {
-          throw new EOFException("Unexpected end of file while reading GZIP header.")
+          
+        case None => {
+          Promise.successful(None)
         }
       }
     }
 
-    val out = new ByteArrayOutputStream()
-    rec(out, len, chunk)
+    Right(result)
   }
 
-  /** Returns a `ByteChunk` with `len` bytes removed. */
-  private def skip(len: Int, chunk: ByteChunk): ByteChunk = {
-    if (chunk.data.length < len) {
-      Chunk(new Array[Byte](0), chunk.next map (_ map (skip(len - chunk.data.length, _))))
-    } else {
-      val leftover = new Array[Byte](chunk.data.length - len)
-      System.arraycopy(chunk.data, len, leftover, 0, leftover.length)
-      Chunk(leftover, chunk.next)
+  protected def writeDecompressed(stream: StreamT[Future, ByteBuffer], out: OutputStream): Future[Unit] = {
+    val c = Channels.newChannel(out)
+
+    def writeChannel(stream: StreamT[Future, ByteBuffer]): Future[Unit] = {
+      stream.uncons map {
+        case Some((buffer, tail)) =>
+          c.write(buffer)
+          writeChannel(tail)
+        case None =>
+          Future(c.close())
+      }
     }
+
+    writeChannel(stream)
   }
 
-  /** Returns a `ByteChunk` with all bytes up and including the frist 0 byte removed. */
-  private def skipString(chunk: ByteChunk): ByteChunk = {
-    var i = 0
-    while (i < chunk.data.length && chunk.data(i) != 0) {
-      i += 1
+  def apply(byteStream: ByteChunk): ByteChunk = decompress(byteStream)
+}
+
+case class InflateByteChunk(implicit ctx: ExecutionContext)
+  extends DecompressByteChunk()(ctx) {
+  protected def inChannel(in: InputStream): ReadableByteChannel =
+    Channels.newChannel(new InflaterInputStream(in))
+}
+
+case class GunzipByteChunk(implicit ctx: ExecutionContext)
+  extends DecompressByteChunk()(ctx) {
+  protected def inChannel(in: InputStream): ReadableByteChannel = {
+    // work-around because GZIPInputStream needs to read the header
+    // during the constructor.
+    val gzis = new InputStream {
+      lazy val gz = new GZIPInputStream(in)
+      def read() = gz.read()
+      override def read(b: Array[Byte]) = gz.read(b)
+      override def read(b: Array[Byte], off: Int, len: Int) = gz.read(b, off, len)
     }
-
-    if (i == chunk.data.length) {
-      Chunk(new Array[Byte](0), chunk.next map (_ map (skipString(_))))
-    } else {
-      val leftover = new Array[Byte](chunk.data.length - i - 1)
-      System.arraycopy(chunk.data, i + 1, leftover, 0, leftover.length)
-      Chunk(leftover, chunk.next)
-    }
-  }
-
-  def skipExtra(chunk: ByteChunk)(implicit ctx: ExecutionContext): ByteChunk = {
-    Chunk(new Array[Byte](0), Some(read(2, chunk) map {
-      case (bytes, chunk) =>
-        val len = ushort(bytes, 0)
-        skip(len, chunk)
-    }))
-  }
-
-  private def ushort(bytes: Array[Byte], offset: Int): Int =
-    ((bytes(offset + 1) & 255) << 8) | (bytes(offset) & 255)
-
-  def finish(chunk: ByteChunk)(implicit ctx: ExecutionContext): ByteChunk = {
-    def restartOrFinish(chunk: ByteChunk): ByteChunk = if (chunk.data.length > 0) {
-      apply(chunk)
-    } else {
-      Chunk(chunk.data, chunk.next map (_ map (restartOrFinish(_))))
-    }
-
-    restartOrFinish(skip(8, chunk))
-  }
-
-  def init(chunk: ByteChunk)(implicit ctx: ExecutionContext): ByteChunk = {
-
-    def maybeSkipExtra(flags: Int): ByteChunk => ByteChunk =
-      if ((flags & ExtraFlag) != 0) skipExtra(_) else identity
-
-    def maybeSkipName(flags: Int): ByteChunk => ByteChunk =
-      if ((flags & NameFlag) != 0) skipString(_) else identity
-
-    def maybeSkipComment(flags: Int): ByteChunk => ByteChunk =
-      if ((flags & CommentFlag) != 0) skipString(_) else identity
-
-    def maybeSkipCrc(flags: Int): ByteChunk => Future[ByteChunk] = {
-      chunk => if ((flags & CrcFlag) != 0) {
-        read(2, chunk) map (_._2)
-      } else Future(chunk)
-    }
-
-    Chunk(new Array[Byte](0), Some(read(10, chunk) flatMap {
-      case (h0, chunk) =>
-        if (h0(0) != 31 || (h0(1) & 255) != 139) {
-          throw new IOException("Expected a GZIP file, but magic # is wrong.")
-        } else if (h0(2) != 8) {
-          throw new IOException("Unsupported GZIP compression format used.")
-        }
-        val flags = h0(3) & 0xFF
-
-        (maybeSkipExtra(flags) andThen
-          maybeSkipName(flags) andThen
-          maybeSkipComment(flags) andThen
-          maybeSkipCrc(flags))(chunk)
-    }))
+    Channels.newChannel(gzis)
   }
 }
 
+case class UnzipByteChunk(implicit ctx: ExecutionContext)
+  extends DecompressByteChunk()(ctx) {
+  protected def inChannel(in: InputStream): ReadableByteChannel = {
+    val zis = new InputStream {
+      val z = new ZipInputStream(in)
+      lazy val entry = z.getNextEntry()
+      def read() = {
+        if (entry == null) sys.error("no files found")
+        z.read()
+      }
+      override def read(b: Array[Byte]) = {
+        if (entry == null) sys.error("no files found")
+        z.read(b)
+      }
+      override def read(b: Array[Byte], off: Int, len: Int) = {
+        if (entry == null) sys.error("no files found")
+        z.read(b, off, len)
+      }
+    }
+    Channels.newChannel(zis)
+  }
+}

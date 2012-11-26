@@ -19,10 +19,13 @@
  */
 name := "common"
 
+scalacOptions += "-Ydependent-method-types"
+
 libraryDependencies ++= Seq(
   "ch.qos.logback" %  "logback-classic"    % "1.0.0",
   "org.streum"     %  "configrity_2.9.1" % "0.9.0",
-  "org.apache"     %% "kafka-core" % "0.7.5"
+  "org.apache"     %% "kafka-core" % "0.7.5",
+  "com.chuusai"    %% "shapeless" % "1.2.3-SNAPSHOT" changing()
 )
 
 ivyXML :=

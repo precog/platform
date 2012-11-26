@@ -320,18 +320,18 @@ object EmitterSpecs extends Specification
 
       testEmit(input)(
         Vector(
-          PushString("/summer_games/london_medals"), 
-          instructions.LoadLocal, 
-          Dup, 
-          PushString("Weight"), 
-          Map2Cross(DerefObject), 
-          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
-          Map1(WrapArray), 
-          Swap(1), 
-          PushString("HeightIncm"), 
-          Map2Cross(DerefObject), 
-          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
-          Map1(WrapArray), 
+          PushString("/summer_games/london_medals"),
+          LoadLocal,
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Map1(WrapArray),
+          PushString("/summer_games/london_medals"),
+          LoadLocal,
+          PushString("HeightIncm"),
+          Map2Cross(DerefObject),
+          Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Map1(WrapArray),
           Map2Cross(JoinArray)))
     }
 
@@ -388,26 +388,27 @@ object EmitterSpecs extends Specification
         """.stripMargin
 
       testEmit(input)(
-        Vector(PushString("/summer_games/london_medals"),
-          instructions.LoadLocal,
-          Dup,
+        Vector(
+          PushString("/summer_games/london_medals"),
+          LoadLocal,
           PushString("Weight"),
           Map2Cross(DerefObject),
           Dup,
-          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
           Swap(1),
-          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
+          Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
           Map2Cross(Add),
-          Swap(1),
+          PushString("/summer_games/london_medals"),
+          LoadLocal,
           PushString("HeightIncm"),
           Map2Cross(DerefObject),
           Dup,
           Swap(2),
           Swap(1),
-          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+          Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
           Swap(1),
           Swap(2),
-          instructions.Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
+          Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
           Map2Cross(Add),
           Map2Cross(Sub)))
     }
@@ -1535,6 +1536,27 @@ object EmitterSpecs extends Specification
             Map2Cross(JoinObject),
             Merge))
       }
+    }
+
+    // Regression test for #39652091
+    "not emit dups inside functions (might have let bindings with formals)" in {
+      val input = """
+        |
+        | f(x) :=
+        |   medals := //summer_games/london_medals
+        |   medals' := medals where medals.Country = x
+        |   medals'' := new medals'
+        |
+        |   medals'' ~ medals'
+        |     {a: medals'.Country, b: medals''.Country} where medals'.Total = medals''.Total
+        |
+        | f("India") union f("Canada")
+        """.stripMargin
+
+      val result = compileEmit(input)
+
+      result must contain(PushString("India"))
+      result must contain(PushString("Canada"))
     }
   }
   

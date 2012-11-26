@@ -50,7 +50,7 @@ class APIKeyRequiredService[A, B](apiKeyManager: APIKeyManager[Future], val dele
         apiKeyManager.findAPIKey(apiKey) flatMap {  
           case None =>
             logger.warn("Could not locate API key " + apiKey)
-            Future(err(BadRequest, "The specified API key does not exist"))
+            Future(err(BadRequest, "The specified API key does not exist: "+apiKey))
             
           case Some(apiKey) =>
             logger.debug("Found API key " + apiKey)
@@ -63,5 +63,5 @@ class APIKeyRequiredService[A, B](apiKeyManager: APIKeyManager[Future], val dele
   val metadata =
     Some(AboutMetadata(
       ParameterMetadata('apiKey, None),
-      DescriptionMetadata("A Precog account API key is required for the use of this service.")))
+      DescriptionMetadata("A Precog API key is required for the use of this service.")))
 }

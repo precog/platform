@@ -17,16 +17,21 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest.service
+package com.precog.accounts
 
-import org.specs2.mutable._
+import akka.dispatch.{ Future, MessageDispatcher }
 
-class TrackingServiceHandlerSpec extends Specification {
-  "the tracking service" should {
-    "check consistent path semantics" in todo // what I want here is a way to check that if path semantics change, we're notified by a breaking test
-    "save events" in todo
+import blueeyes.core.http._
+import blueeyes.core.service._
+import blueeyes.json.serialization.DefaultSerialization._
+
+import com.precog.common.Path
+import com.precog.common.security._
+
+trait AccountServiceCombinators extends HttpRequestHandlerCombinators {
+
+  def accountId[A, B](accountManager: BasicAccountManager[Future])(service: HttpService[A, (APIKeyRecord, Path, Account) => Future[B]])
+    (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) = {
+    new AccountRequiredService[A, B](accountManager, service)
   }
 }
-
-
-// vim: set ts=4 sw=4 et:

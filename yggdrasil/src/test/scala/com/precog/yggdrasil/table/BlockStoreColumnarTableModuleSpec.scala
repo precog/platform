@@ -63,7 +63,6 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
   type MemoId = Int
 
   "a block store columnar table" should {
-  /*
     "load" >> {
       "a problem sample" in testLoadSample1
       "a problem sample" in testLoadSample2
@@ -72,9 +71,7 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
       //"a problem sample" in testLoadSample5 //pathological sample in the case of duplicated ids.
       "a dense dataset" in checkLoadDense
     }                           
-*/
     "sort" >> {
-/*
       "fully homogeneous data"        in homogeneousSortSample
       "data with undefined sort keys" in partiallyUndefinedSortSample
       "heterogeneous sort keys"       in heterogeneousSortSample
@@ -83,17 +80,15 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
       "merges over three cells"       in threeCellMerge
       "empty input"                   in emptySort
       "with uniqueness for keys"      in uniqueSort
-*/
+
       "arbitrary datasets"            in checkSortDense(SortAscending)
-      //"arbitrary datasets descending" in checkSortDense(SortDescending)      
+      "arbitrary datasets descending" in checkSortDense(SortDescending)      
     }
 
-/*
     "intersect by identity" >> {
       "simple data" in testSimpleIntersect
       "survive a trivial scalacheck" in checkIntersect
     }
-*/
   }
 }
 

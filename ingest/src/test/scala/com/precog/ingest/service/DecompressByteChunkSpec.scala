@@ -19,6 +19,7 @@
  */
 package com.precog.ingest.service
 
+import blueeyes.bkka._
 import akka.actor.ActorSystem
 import akka.dispatch.{ Future, ExecutionContext, Await }
 import akka.util.Duration
@@ -29,12 +30,14 @@ import org.specs2._
 import org.specs2.mutable.Specification
 import org.scalacheck.{ Shrink, Arbitrary, Gen }
 
+import scalaz._
+
 import java.io._
+import java.nio.ByteBuffer
 import java.util.zip._
 
 
 class DecompressByteChunkSpec extends Specification with ScalaCheck {
-  // implicit def ctx = ExecuteContext(actorSystem)
   implicit val actorSystem = ActorSystem("testDecompressByteChunk")
 
   override def is = args(sequential = true) ^ super.is
@@ -70,6 +73,16 @@ class DecompressByteChunkSpec extends Specification with ScalaCheck {
     baos.toByteArray()
   }
 
+  def xzip(data: String): Array[Byte] = {
+    val baos = new ByteArrayOutputStream()
+    val out = new ZipOutputStream(baos)
+    out.putNextEntry(new ZipEntry("foo"))
+    out.write(data.getBytes("UTF-8"))
+    out.closeEntry()
+    out.finish()
+    baos.toByteArray()
+  }
+
   def gunzip(data: Array[Byte]): String = {
     val bais = new ByteArrayInputStream(data)
     val in = new GZIPInputStream(bais)
@@ -85,88 +98,133 @@ class DecompressByteChunkSpec extends Specification with ScalaCheck {
     new String(out.toByteArray(), "UTF-8")
   }
 
+  
+  protected implicit val M = new FutureMonad(ExecutionContext.defaultExecutionContext)
+
+  private def mash(prefix: Array[Byte], stream: StreamT[Future, ByteBuffer]):
+      Future[Array[Byte]] = {
+
+    def concat(store: Array[Byte], bb: ByteBuffer): Array[Byte] = {
+      val arr = new Array[Byte](store.length + bb.remaining)
+      System.arraycopy(store, 0, arr, 0, store.length)
+      bb.get(arr, store.length, bb.remaining)
+      arr
+    }
+
+    stream.uncons.flatMap {
+      case Some((buf, tail)) => mash(concat(prefix, buf), tail)
+      case None => Future(prefix)
+    }
+  }
+
+  def bbToArray(bb: ByteBuffer): Array[Byte] = {
+    val arr = new Array[Byte](bb.remaining)
+    bb.get(arr)
+    arr
+  }
+
   def reassemble(chunk: ByteChunk): Array[Byte] = {
-    val out = new ByteArrayOutputStream()
-
-    def assemble(chunk: ByteChunk): Future[Array[Byte]] = {
-      out.write(chunk.data)
-      chunk.next map { _ flatMap (assemble(_)) } getOrElse {
-        Future(out.toByteArray())
-      }
+    def assemble(chunk: ByteChunk): Future[Array[Byte]] = chunk match {
+      case Left(bb) => Future(bbToArray(bb))
+      case Right(stream) => mash(new Array[Byte](0), stream)
     }
-
-    Await.result(assemble(chunk), Duration(1, "seconds"))
+    val fba = assemble(chunk)
+    Await.result(fba, Duration(1, "seconds"))
   }
 
-  val EmptyByteChunk = Chunk(new Array[Byte](0), None)
+  def emptybb = ByteBuffer.wrap(new Array[Byte](0))
 
+  val EmptyByteChunk: ByteChunk = Left(emptybb)
+
+  import scalaz.StreamT
   def split(bytes: Array[Byte], n: Int = 1): ByteChunk = {
-    (bytes grouped n).foldRight(EmptyByteChunk) {
-      case (bytes, chunk) => Chunk(bytes, Some(Future(chunk)))
-    }
+    val stream = bytes.grouped(n).map(ByteBuffer.wrap).
+      foldRight(StreamT(Future(StreamT.Done)):StreamT[Future, ByteBuffer]) {
+        (bytes, chunk) => StreamT(Future(StreamT.Yield(bytes, chunk)))
+      }
+    Right(stream)
   }
 
-  def spaceout(chunk: ByteChunk): ByteChunk = {
-    val nextChunk = Chunk(chunk.data, chunk.next map (_ map (spaceout(_))))
-    Chunk(new Array[Byte](0), Some(Future(nextChunk)))
-  }
+  def emptystream = StreamT.empty[Future, ByteBuffer]
+
+  def pad(bb: ByteBuffer) = bb :: emptybb :: emptystream
+
+  def spaceout(bc: ByteChunk): ByteChunk = Right(bc.fold(pad, _.flatMap(pad)))
 
   "InflateByteChunk" should {
     "reinflate trivial ByteChunk" in {
-      val inflated = reassemble(InflateByteChunk(Chunk(deflate("Hello, world!"), None)))
+      val chunk: ByteChunk = Left(ByteBuffer.wrap(deflate("Hello, world!")))
+      val inflated = reassemble(InflateByteChunk().apply(chunk))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate chunked bytes" in {
-      val inflated = reassemble(InflateByteChunk(split(deflate("Hello, world!"))))
+      val chunk: ByteChunk = split(deflate("Hello, world!"))
+      val inflated = reassemble(InflateByteChunk().apply(chunk))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate chunked bytes with empty parts" in {
-      val inflated = reassemble(InflateByteChunk(spaceout(split(deflate("Hello, world!")))))
+      val chunk: ByteChunk = spaceout(split(deflate("Hello, world!")))
+      val inflated = reassemble(InflateByteChunk().apply(chunk))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
-    "reinflate concatenated bytes produces concatenated string" in {
-      val bytes = deflate("Hello, ") ++ deflate("world!")
-      val inflated = reassemble(InflateByteChunk(split(bytes, 2)))
-      new String(inflated, "UTF-8") must_== "Hello, world!"
+    "reinflate arbitrary strings" in {
+      check { (s: String) =>
+        val inflated = reassemble(InflateByteChunk().apply(split(deflate(s))))
+        new String(inflated, "UTF-8") must_== s
+      }
     }
-
-    "reinflate arbitrary strings" in { check { (s: String) =>
-      val inflated = reassemble(InflateByteChunk(split(deflate(s))))
-      new String(inflated, "UTF-8") must_== s
-    } }
   }
 
   "GunzipByteChunk" should {
     "unzip trivial ByteChunk" in {
-      val inflated = reassemble(GunzipByteChunk(Chunk(gzip("Hello, world!"), None)))
+      val chunk: ByteChunk = Left(ByteBuffer.wrap(gzip("Hello, world!")))
+      val fbc = GunzipByteChunk().apply(chunk)
+      val inflated = reassemble(fbc)
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate chunked bytes" in {
-      val inflated = reassemble(GunzipByteChunk(split(gzip("Hello, world!"))))
+      val inflated = reassemble(GunzipByteChunk().apply(split(gzip("Hello, world!"))))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate chunked bytes with empty parts" in {
-      val inflated = reassemble(GunzipByteChunk(spaceout(split(gzip("Hello, world!")))))
-      new String(inflated, "UTF-8") must_== "Hello, world!"
-    }
-
-    "reinflate concatenated bytes produces concatenated string" in {
-      val bytes = gzip("Hello, ") ++ gzip("world!")
-      val inflated = reassemble(GunzipByteChunk(split(bytes, 2)))
+      val inflated = reassemble(GunzipByteChunk().apply(spaceout(split(gzip("Hello, world!")))))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate arbitrary strings" in { check { (s: String) =>
-      val inflated = reassemble(GunzipByteChunk(split(gzip(s))))
+      val inflated = reassemble(GunzipByteChunk().apply(split(gzip(s))))
+      new String(inflated, "UTF-8") must_== s
+    } }
+  }
+
+  "UnzipByteChunk" should {
+    "unzip trivial ByteChunk" in {
+      val chunk: ByteChunk = Left(ByteBuffer.wrap(xzip("Hello, world!")))
+      val fbc = UnzipByteChunk().apply(chunk)
+      val inflated = reassemble(fbc)
+      new String(inflated, "UTF-8") must_== "Hello, world!"
+    }
+
+    "reinflate chunked bytes" in {
+      val inflated = reassemble(UnzipByteChunk().apply(split(xzip("Hello, world!"))))
+      new String(inflated, "UTF-8") must_== "Hello, world!"
+    }
+
+    "reinflate chunked bytes with empty parts" in {
+      val inflated = reassemble(UnzipByteChunk().apply(spaceout(split(xzip("Hello, world!")))))
+      new String(inflated, "UTF-8") must_== "Hello, world!"
+    }
+
+    "reinflate arbitrary strings" in { check { (s: String) =>
+      val inflated = reassemble(UnzipByteChunk().apply(split(xzip(s))))
       new String(inflated, "UTF-8") must_== s
     } }
   }
 
   step { actorSystem.shutdown() }
 }
-

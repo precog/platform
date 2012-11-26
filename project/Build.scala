@@ -55,11 +55,11 @@ object PlatformBuild extends Build {
     }
   )
 
-  val blueeyesVersion = "1.0.0-M4"
+  val blueeyesVersion = "1.0.0-M5"
 
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "2.1.2-SNAPSHOT",
+    version := "2.1.4",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalaVersion := "2.9.2",
@@ -77,9 +77,12 @@ object PlatformBuild extends Build {
       "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
       "joda-time"                   %  "joda-time"          % "1.6.2",
-      "com.reportgrid"              %% "blueeyes-core"      % blueeyesVersion changing(),
       "com.reportgrid"              %% "blueeyes-json"      % blueeyesVersion changing(),
+      "com.reportgrid"              %% "blueeyes-util"      % blueeyesVersion changing(),
+      "com.reportgrid"              %% "blueeyes-core"      % blueeyesVersion changing(),
       "com.reportgrid"              %% "blueeyes-mongo"     % blueeyesVersion changing(),
+      "com.reportgrid"              %% "bkka"               % blueeyesVersion changing(),
+      "com.reportgrid"              %% "akka_testing"       % blueeyesVersion changing(),
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
       "org.specs2"                  %% "specs2"             % "1.12.3-SNAPSHOT" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
@@ -141,7 +144,7 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*) dependsOn (quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test")
 
   lazy val ingest = Project(id = "ingest", base = file("ingest")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", quirrel, daze, yggdrasil)
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", accounts, quirrel, daze, yggdrasil)
 
   lazy val shard = Project(id = "shard", base = file("shard")).
     settings(commonAssemblySettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, pandora, muspelheim % "test->test")

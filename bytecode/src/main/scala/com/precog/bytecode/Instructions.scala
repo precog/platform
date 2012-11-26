@@ -117,7 +117,9 @@ trait Instructions extends Library {
     case object Drop extends Instruction
     case class Swap(depth: Int) extends Instruction with DataInstr
     
-    case class Line(num: Int, text: String) extends Instruction with DataInstr
+    case class Line(num: Int, text: String) extends Instruction with DataInstr {
+      override def toString = "<%d>".format(num)
+    }
     
     case object LoadLocal extends Instruction
     case object Distinct extends Instruction

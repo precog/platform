@@ -88,13 +88,13 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
    * Reads in the JSON file (or several zipped JSON files) into the specified
    * DB.
    */
-  def ingest(db: String, data: File, apiKey: String = "root", batchSize: Int = 1000): IO[PrecogUnit] = IO {
+  def ingest(db: String, data: File, apiKey: String = "root", accountId: String = "root", batchSize: Int = 1000): IO[PrecogUnit] = IO {
     logger.debug("Ingesting %s to '//%s'." format (data, db))
 
     // Same as used by YggUtil's import command.
     val events = readRows(data) map { jval =>
       EventMessage(EventId(pid, sid.getAndIncrement),
-        Event(Path(db), apiKey, jval, Map.empty))
+        Event(apiKey, Path(db), Some(accountId), jval, Map.empty))
     }
 
     events.grouped(batchSize).zipWithIndex foreach { case (batch, id) =>

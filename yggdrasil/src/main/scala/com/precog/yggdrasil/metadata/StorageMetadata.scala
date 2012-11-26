@@ -20,6 +20,8 @@
 package com.precog.yggdrasil
 package metadata 
 
+import org.joda.time.DateTime
+
 import com.precog.common.json._
 import actor._
 
@@ -39,6 +41,7 @@ import akka.util.duration._
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
+import scalaz.std.option._
 import scalaz.std.set._
 import scalaz.std.stream._
 import scalaz.syntax.monad._
@@ -83,17 +86,9 @@ case class PathValue(valueType: CType, authorities: Authorities, descriptors: Ma
     PathValue(valueType, authorities, descriptors + (desc -> meta))
 }
 
-class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], metadata: StorageMetadata[M])(implicit val M: Monad[M]) extends StorageMetadata[M] {
+class UserMetadataView[M[+_]](apiKey: APIKey, accessControl: AccessControl[M], metadata: StorageMetadata[M])(implicit val M: Monad[M]) extends StorageMetadata[M] {
   def findChildren(path: Path): M[Set[Path]] = {
-    metadata.findChildren(path) flatMap { paths =>
-      paths traverse { p =>
-        val tPath = path / p
-        accessControl.mayAccess(uid, tPath, Set(uid), ReadPermission) map {
-          case true => Set(p)
-          case false => Set.empty
-        }
-      } map { _.flatten }
-    }
+    metadata.findChildren(path)
   }
 
   def findSelectors(path: Path): M[Set[CPath]] = {
@@ -112,8 +107,8 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
         case (key, value) =>
           traverseForall(value) {
             case (colDesc, _) => 
-              val uids = colDesc.authorities.uids
-              accessControl.mayAccess(uid, path, uids, ReducePermission)
+              val ownerAccountIds = colDesc.authorities.ownerAccountIds
+              accessControl.hasCapability(apiKey, Set(ReducePermission(path, ownerAccountIds)), some(new DateTime))
           }
       }
     }
@@ -130,7 +125,7 @@ class UserMetadataView[M[+_]](uid: String, accessControl: AccessControl[M], meta
           restrictAccess(children).map(c => Some(PathIndex(index, c)))
 
         case p @ PathValue(_, authorities, _) =>
-          (accessControl.mayAccess(uid, path, authorities.uids, ReducePermission) map { _ option p })
+          (accessControl.hasCapability(apiKey, Set(ReducePermission(path, authorities.ownerAccountIds)), some(new DateTime)) map { _ option p })
       }
 
       mapped.sequence map { _.flatten }

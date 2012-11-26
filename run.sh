@@ -84,6 +84,8 @@ while ! netstat -an | grep $INGEST_PORT > /dev/null; do
 done
 
 TOKEN="$(cat $WORKDIR/root_token.txt)"
+echo "Work dir:     $WORKDIR"
+echo "Root API key: $TOKEN"
 
 function query {
     curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$QUERY_PORT/analytics/fs/"
@@ -124,7 +126,7 @@ if [ "$QUERYDIR" = "" ]; then
     echo "WORKDIR=$WORKDIR"
     repl
 else
-    for f in $(find $QUERYDIR -type f); do
+    for f in $(find $QUERYDIR -type f ! -name '*.pending'); do
         query "$(cat $f)" > results.json
         RESULT="$(cat results.json)"
 

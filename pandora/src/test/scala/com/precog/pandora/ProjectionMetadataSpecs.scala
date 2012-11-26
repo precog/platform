@@ -41,7 +41,7 @@ trait ProjectionMetadataSpecs[M[+_]]
   include(
     "projection metadata" should {
       "provide exact counts for single-projection tables" in {
-        val metadata = storage.userMetadataView("fred")
+        val metadata = storage.userMetadataView("fred-key")
         
         val usersAgeMetadata = metadata.findProjections(Path("/users"), CPath(".age")).copoint
 
@@ -53,17 +53,17 @@ trait ProjectionMetadataSpecs[M[+_]]
         columnMetadata.head._2(LongValueStats).asInstanceOf[MetadataStats].count mustEqual 100
 
         // Now, load a table from the projection and verify size
-        val usersAgeTable = Table.load(Table.constString(Set(CString("/users"))), "fred", JObjectFixedT(Map("age" -> JNumberT))).copoint
+        val usersAgeTable = Table.load(Table.constString(Set(CString("/users"))), "fred-key", JObjectFixedT(Map("age" -> JNumberT))).copoint
 
         usersAgeTable.size mustEqual ExactSize(100)
       }
 
       "provide estimate counts for multi-projection tables" in {
-        val usersFullTable = Table.load(Table.constString(Set(CString("/users"))), "fred", JType.JUniverseT).copoint
+        val usersFullTable = Table.load(Table.constString(Set(CString("/users"))), "fred-key", JType.JUniverseT).copoint
 
         usersFullTable.size mustEqual EstimateSize(100, 100)
 
-        val tweetsTable = Table.load(Table.constString(Set(CString("/election/tweets"))), "fred", JType.JUniverseT).copoint
+        val tweetsTable = Table.load(Table.constString(Set(CString("/election/tweets"))), "fred-key", JType.JUniverseT).copoint
 
         tweetsTable.size mustEqual EstimateSize(36, 11714) // 36 is Long "score" projection
       }
