@@ -22,6 +22,7 @@ package com.precog.heimdall
 import com.precog.common.security._
 
 import blueeyes.bkka.AkkaTypeClasses._
+import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
@@ -355,29 +356,30 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
 }
 
 class CreateResultHandler(jobs: JobManager[Future], clock: Clock)(implicit ctx: ExecutionContext)
-extends CustomHttpService[Future[Array[Byte]], Future[HttpResponse[Array[Byte]]]] {
+extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
   import scalaz.std.option._
   import scalaz.syntax.traverse._
 
-  val service: HttpRequest[Future[Array[Byte]]] => Validation[NotServed, Future[HttpResponse[Array[Byte]]]] = (request: HttpRequest[Future[Array[Byte]]]) => {
+  val service: HttpRequest[ByteChunk] => Validation[NotServed, Future[HttpResponse[ByteChunk]]] = (request: HttpRequest[ByteChunk]) => {
     Success(request.parameters get 'jobId map { jobId =>
-      request.content.sequence[Future, Array[Byte]] flatMap { bytes =>
+      request.content.map(ByteChunk.forceByteArray(_)).sequence[Future, Array[Byte]] flatMap { bytes =>
         val timestamp = request.parameters get 'timestamp flatMap { ts =>
           JString(ts).validated[DateTime].toOption
         } getOrElse clock.now()
-        bytes map { b => println(b.toList) }
+
+        println(" << " + bytes.map(_.toList).getOrElse(Nil))
         val result = bytes map (JobResult(request.mimeTypes, _))
-        println("Result: " + result)
+
         jobs.finish(jobId, result, timestamp) map {
           case Right(job) =>
-            HttpResponse[Array[Byte]](OK)
+            HttpResponse[ByteChunk](OK)
           case Left(error) =>
-            HttpResponse[Array[Byte]](PreconditionFailed, content = Some(error.getBytes("UTF-8")))
+            HttpResponse[ByteChunk](PreconditionFailed, content = Some(ByteChunk(error.getBytes("UTF-8"))))
         }
       }
     } getOrElse {
-      Future(HttpResponse[Array[Byte]](BadRequest,
-        content = Some("Missing required 'jobId parameter.".getBytes("UTF-8"))))
+      Future(HttpResponse[ByteChunk](BadRequest,
+        content = Some(ByteChunk("Missing required 'jobId parameter.".getBytes("UTF-8")))))
     })
   }
 
@@ -386,6 +388,39 @@ extends CustomHttpService[Future[Array[Byte]], Future[HttpResponse[Array[Byte]]]
     DescriptionMetadata("Put the final result of a finished job.")
   ))
 }
+
+//class CreateResultHandler(jobs: JobManager[Future], clock: Clock)(implicit ctx: ExecutionContext)
+//extends CustomHttpService[Future[Array[Byte]], Future[HttpResponse[Array[Byte]]]] {
+//  import scalaz.std.option._
+//  import scalaz.syntax.traverse._
+//
+//  val service: HttpRequest[Future[Array[Byte]]] => Validation[NotServed, Future[HttpResponse[Array[Byte]]]] = (request: HttpRequest[Future[Array[Byte]]]) => {
+//    Success(request.parameters get 'jobId map { jobId =>
+//      request.content.sequence[Future, Array[Byte]] flatMap { bytes =>
+//        val timestamp = request.parameters get 'timestamp flatMap { ts =>
+//          JString(ts).validated[DateTime].toOption
+//        } getOrElse clock.now()
+//        bytes map { b => println(b.toList) }
+//        val result = bytes map (JobResult(request.mimeTypes, _))
+//        println("Result: " + result)
+//        jobs.finish(jobId, result, timestamp) map {
+//          case Right(job) =>
+//            HttpResponse[Array[Byte]](OK)
+//          case Left(error) =>
+//            HttpResponse[Array[Byte]](PreconditionFailed, content = Some(error.getBytes("UTF-8")))
+//        }
+//      }
+//    } getOrElse {
+//      Future(HttpResponse[Array[Byte]](BadRequest,
+//        content = Some("Missing required 'jobId parameter.".getBytes("UTF-8"))))
+//    })
+//  }
+//
+//  val metadata = Some(AboutMetadata(
+//    ParameterMetadata('jobId, None),
+//    DescriptionMetadata("Put the final result of a finished job.")
+//  ))
+//}
 
 class GetResultHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
 extends CustomHttpService[Future[Array[Byte]], Future[HttpResponse[Array[Byte]]]] {

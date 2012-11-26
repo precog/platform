@@ -297,7 +297,6 @@ trait JobManagerSpec[M[+_]] extends Specification {
       val result = JobResult(List(MimeTypes.text / plain), "Hello, world!".getBytes())
       jobs.finish(job.id, Some(result)).copoint must beLike {
         case Right(Job(_, _, _, _, Finished(Some(stored), _, _), _)) =>
-          println(stored.content.toList)
           stored must_== result
       }
       jobs.findJob(job.id).copoint must beLike {
