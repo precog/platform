@@ -2281,7 +2281,7 @@ trait EvalStackSpecs extends Specification {
 
     // Regression test for #39590007
     "give empty results when relation body uses non-existant field" in {
-      var input = """
+      val input = """
         | clicks := //clicks
         | newClicks := new clicks
         |
@@ -2289,6 +2289,50 @@ trait EvalStackSpecs extends Specification {
         |   {timeString: clicks.timeString, nonexistant: clicks.nonexistant}""".stripMargin
 
       eval(input) must beEmpty
+    }
+    
+    "not explode on a large query" in {
+      val input = """
+        | import std::stats::*
+        | import std::time::*
+        | 
+        | agents := //se/status
+        | bin5 := //bins/5
+        | allBins := bin5.bin -5
+        | 
+        | minuteOfDay(time) := (hourOfDay(millisToISO(time, "+00:00")) * 60) + minuteOfHour(millisToISO(time, "+00:00"))
+        | 
+        | data' := agents with { minuteOfDay: minuteOfDay(agents.timestamp)}
+        | 
+        | upperBound := getMillis("2012-11-19T23:59:59")
+        | lowerBound := getMillis("2012-11-19T00:00:00")
+        | extraLB := lowerBound - (60*24*60000)
+        | 
+        | results := solve 'agent
+        |   data'' := data' where data'.timestamp <= upperBound & data'.timestamp >= extraLB & data'.agentId = 'agent
+        | 
+        |   order := denseRank(data''.timestamp)
+        |   data''' := data'' with {rank: order}
+        | 
+        |   newData := new data'''
+        |   newData' := newData with {rank: newData.rank -1}
+        | 
+        |   result := newData' ~ data''
+        | 
+        |   {first: data''', second: newData'} where newData'.rank = data'''.rank
+        |  
+        |   {end: result.second.timestamp, 
+        |   status: result.first.status, 
+        |   startMinute: result.first.minuteOfDay, 
+        |   endMinute: result.second.minuteOfDay}  
+        | 
+        | results' := results where results.end > lowerBound & results.status = "online"
+        | 
+        | solve 'bin = allBins.bin
+        |   {bin: 'bin, count: count(results'.startMinute where results'.startMinute <= 'bin & results'.endMinute >= 'bin)}
+        | """.stripMargin
+        
+      eval(input) must not(throwAn[Exception])
     }
   }
 }

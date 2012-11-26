@@ -2438,9 +2438,9 @@ trait ColumnarTableModule[M[+_]]
       
       // TODO: We should be able to fully compute the size of the result above.
       val newSize = (size, that.size) match {
-        case (ExactSize(l), ExactSize(r))         => EstimateSize(l max r, l * r)
-        case (EstimateSize(ln, lx), ExactSize(r)) => EstimateSize(ln max r, lx * r)
-        case (ExactSize(l), EstimateSize(rn, rx)) => EstimateSize(l max rn, l * rx)
+        case (ExactSize(l), ExactSize(r))         => TableSize(l max r, l * r)
+        case (EstimateSize(ln, lx), ExactSize(r)) => TableSize(ln max r, lx * r)
+        case (ExactSize(l), EstimateSize(rn, rx)) => TableSize(l max rn, l * rx)
         case _ => UnknownSize // Bail on anything else for now (see above TODO)
       }
       
@@ -2508,7 +2508,7 @@ trait ColumnarTableModule[M[+_]]
 
       val newSize = size match {
         case ExactSize(sz) => ExactSize(calcNewSize(sz))
-        case EstimateSize(sMin, sMax) => EstimateSize(calcNewSize(sMin), calcNewSize(sMax))
+        case EstimateSize(sMin, sMax) => TableSize(calcNewSize(sMin), calcNewSize(sMax))
         case UnknownSize => UnknownSize
       }
 
