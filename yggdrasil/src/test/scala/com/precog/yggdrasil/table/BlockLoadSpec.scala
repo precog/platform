@@ -35,7 +35,6 @@ import CValueGenerators._
 
 trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
   class BlockStoreLoadTestModule(sampleData: SampleData) extends BlockStoreTestModule[M] {
-    override type UserId = String
 
     val M = self.M
     val Some((idCount, schema)) = sampleData.schema
@@ -100,7 +99,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
     val cschema = module.schema map { case (jpath, ctype) => (CPath(jpath), ctype) }
 
-    module.Table.constString(Set(CString("/test"))).load("", Schema.mkType(cschema).get).flatMap(_.toJson).copoint.toStream must_== expected
+    module.Table.constString(Set(CString("/test"))).load("dummyAPIKey", Schema.mkType(cschema).get).flatMap(_.toJson).copoint.toStream must_== expected
   }
 
   def checkLoadDense = {

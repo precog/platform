@@ -33,7 +33,7 @@ class PerfTestUtil(rootDir: File, runs: Int = 30) {
 
       val runner = new JDBMPerfTestRunner(SimpleTimer,
         optimize = config.optimize,
-        userUID = "dummy",
+        apiKey = "dummyAPIKey",
         actorSystem = actorSystem,
         _rootDir = config.rootDir)
 
