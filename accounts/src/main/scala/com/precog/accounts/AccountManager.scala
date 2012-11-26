@@ -34,7 +34,7 @@ import scalaz.syntax.monad._
 trait BasicAccountManager[M[+_]] {
   implicit val M: Monad[M]
 
-  def listAccountIds(apiKey: APIKey) : M[Set[Account]]
+  def listAccountIds(apiKey: APIKey) : M[Set[AccountID]]
   
   def findAccountById(accountId: AccountID): M[Option[Account]]
 

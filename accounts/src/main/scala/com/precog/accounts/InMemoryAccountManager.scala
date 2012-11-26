@@ -60,7 +60,7 @@ class InMemoryAccountManager[M[+_]](implicit val M: Monad[M]) extends AccountMan
     }
   }
 
-  def listAccountIds(apiKey: APIKey) : M[Set[Account]] = accounts.values.filter(_.apiKey == apiKey).toSet.point[M]
+  def listAccountIds(apiKey: APIKey) : M[Set[AccountID]] = accounts.values.filter(_.apiKey == apiKey).map(_.accountId).toSet.point[M]
   
   def findAccountById(accountId: AccountID): M[Option[Account]] = accounts.get(accountId).point[M]
   

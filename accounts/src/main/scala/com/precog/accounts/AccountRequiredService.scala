@@ -34,16 +34,16 @@ import scalaz.syntax.std.option._
 import com.precog.common.Path
 import com.precog.common.security._
 
-class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], val delegate: HttpService[A, (APIKeyRecord, Path, Account) => Future[B]])
+class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], val delegate: HttpService[A, (APIKeyRecord, Path, AccountID) => Future[B]])
   (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
-  extends DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, Account) => Future[B]] with Logging {
+  extends DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, AccountID) => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
     delegate.service(request) map { f => (apiKey: APIKeyRecord, path: Path) =>
       logger.debug("Locating account for request with apiKey " + apiKey.apiKey)
       request.parameters.get('ownerAccountId).map { accountId =>
         logger.debug("Using provided ownerAccountId: " + accountId)
         accountManager.findAccountById(accountId).flatMap {
-          case Some(account) => f(apiKey, path, account)
+          case Some(account) => f(apiKey, path, account.accountId)
           case None => Future(err(BadRequest, "Unknown account Id: "+accountId))
         }
       }.getOrElse {

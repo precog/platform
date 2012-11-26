@@ -153,7 +153,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
     database { selectAll.from(collection) }.map { _.map(_.deserialize(extract)).toSeq }
 
   
-  def listAccountIds(apiKey: String) = findAllMatching[Account]("apiKey", apiKey, settings.accounts)
+  def listAccountIds(apiKey: String) = findAllMatching[Account]("apiKey", apiKey, settings.accounts).map(_.map(_.accountId))
   
   def findAccountById(accountId: String) = findOneMatching[Account]("accountId", accountId, settings.accounts)
 

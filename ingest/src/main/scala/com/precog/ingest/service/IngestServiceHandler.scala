@@ -53,7 +53,7 @@ import scala.collection.mutable.ListBuffer
 import scalaz._
 
 class IngestServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, insertTimeout: Timeout, threadPool: Executor, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
-extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path, Account) => Future[HttpResponse[JValue]]] with Logging {
+extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path, AccountID) => Future[HttpResponse[JValue]]] with Logging {
 
   protected implicit val M = new FutureMonad(ExecutionContext.fromExecutor(threadPool))
 
@@ -71,15 +71,15 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
     }
   }
 
-  def ingest(r: APIKeyRecord, p: Path, account: Account, event: JValue): Future[Unit] = {
-    val eventInstance = Event.fromJValue(r.apiKey, p, Some(account.accountId), event)
+  def ingest(r: APIKeyRecord, p: Path, accountId: AccountID, event: JValue): Future[Unit] = {
+    val eventInstance = Event.fromJValue(r.apiKey, p, Some(accountId), event)
     logger.trace("Saving event: " + eventInstance)
     eventStore.save(eventInstance, insertTimeout)
   }
 
   case class SyncResult(total: Int, ingested: Int, errors: List[(Int, String)])
 
-  class EventQueueInserter(t: APIKeyRecord, p: Path, o: Account, events: Iterator[Either[String, JValue]], close: Option[Closeable]) extends Runnable {
+  class EventQueueInserter(t: APIKeyRecord, p: Path, o: AccountID, events: Iterator[Either[String, JValue]], close: Option[Closeable]) extends Runnable {
     private[service] val result: Promise[SyncResult] = Promise()
 
     def run() {
@@ -143,7 +143,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
     }
   }
 
-  def parseCsv(byteStream: ByteChunk, t: APIKeyRecord, p: Path, o: Account, readCsv: File => CSVReader): Future[EventQueueInserter] = {
+  def parseCsv(byteStream: ByteChunk, t: APIKeyRecord, p: Path, o: AccountID, readCsv: File => CSVReader): Future[EventQueueInserter] = {
     for {
       file <- writeToFile(byteStream)
     } yield {
@@ -164,7 +164,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
     }
   }
 
-  def parseJson(channel: ReadableByteChannel, t: APIKeyRecord, p: Path, o: Account): EventQueueInserter = {
+  def parseJson(channel: ReadableByteChannel, t: APIKeyRecord, p: Path, o: AccountID): EventQueueInserter = {
     val reader = new BufferedReader(Channels.newReader(channel, "UTF-8"))
     val lines = Iterator.continually(reader.readLine()).takeWhile(_ != null)
     new EventQueueInserter(t, p, o, lines map { json =>
@@ -176,14 +176,14 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
     }, Some(reader))
   }
 
-  def parseSyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path, o: Account): Future[EventQueueInserter] = {
+  def parseSyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path, o: AccountID): Future[EventQueueInserter] = {
     val pipe = Pipe.open()
     for {
       _ <- writeChunkStream(pipe.sink(), byteStream)
     } yield parseJson(pipe.source(), t, p, o)
   }
 
-  def parseAsyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path, o: Account): Future[EventQueueInserter] = {
+  def parseAsyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path, o: AccountID): Future[EventQueueInserter] = {
     for {
       file <- writeToFile(byteStream)
     } yield {
@@ -214,9 +214,10 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
   }
 
   val service = (request: HttpRequest[Either[Future[JValue], ByteChunk]]) => {
-    Success { (r: APIKeyRecord, p: Path, o: Account) =>
+    Success { (r: APIKeyRecord, p: Path, o: AccountID) =>
       accessControl.hasCapability(r.apiKey, Set(WritePermission(p, Set())), None) flatMap {
         case true => try {
+          logger.debug("Ingesting events as: APIKey: "+r.apiKey+" path: "+p+" account id: "+o)
           request.content map {
             case Left(futureEvent) =>
               for {
