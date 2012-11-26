@@ -177,6 +177,12 @@ object ProvenanceComputationSpecs extends Specification
       }
     }
     
+    "identify undefined as undefined" in {
+      val tree = compileSingle("undefined")
+      tree.provenance mustEqual UndefinedProvenance
+      tree.errors must beEmpty
+    }
+
     "identify tic-var as value" in {
       val tree @ Let(_, _, _, body, _) = compileSingle("a(foo) := foo a(42)")
       body.provenance mustEqual ParamProvenance(Identifier(Vector(), "foo"), tree)
@@ -233,6 +239,11 @@ object ProvenanceComputationSpecs extends Specification
         }
         tree.errors must beEmpty
       }
+      {
+        val tree = compileSingle("{a: undefined, b: 2, c: 3}")
+        tree.provenance mustEqual UndefinedProvenance
+        tree.errors must beEmpty
+      }
     }
     
     "identify empty array definitions as value" in {
@@ -259,6 +270,11 @@ object ProvenanceComputationSpecs extends Specification
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }
+        tree.errors must beEmpty
+      }
+      {
+        val tree = compileSingle("[4,5,undefined]")
+        tree.provenance mustEqual UndefinedProvenance
         tree.errors must beEmpty
       }
     }
@@ -1225,6 +1241,16 @@ object ProvenanceComputationSpecs extends Specification
           tree.errors mustEqual Set(ProductProvenanceDifferentLength)
         }
         {
+          val tree = compileSingle("undefined union //baz")
+          tree.provenance mustEqual StaticProvenance("/baz")
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compileSingle("undefined intersect {}")
+          tree.provenance mustEqual UndefinedProvenance
+          tree.errors must beEmpty
+        }
+        {
           val tree = compileSingle("(null intersect {}) union 10")
           tree.provenance mustEqual ValueProvenance
           tree.errors must beEmpty
@@ -1408,6 +1434,14 @@ object ProvenanceComputationSpecs extends Specification
         tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
       }
     }  
+
+    "identify undefined in operations" in {
+      {
+        val tree = compileSingle("1 * undefined")
+        tree.provenance mustEqual UndefinedProvenance
+        tree.errors must beEmpty
+      }
+    }
 
     "identify addition according to its children" in {
       {

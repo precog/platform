@@ -285,6 +285,7 @@ trait DAG extends Instructions with TransSpecModule {
             case PushTrue => CBoolean(true)
             case PushFalse => CBoolean(false)
             case PushNull => CNull
+            case PushUndefined => CUndefined
             case PushObject => CEmptyObject
             case PushArray => CEmptyArray
           }
@@ -321,6 +322,7 @@ trait DAG extends Instructions with TransSpecModule {
           case PushTrue => CBoolean(true)
           case PushFalse => CBoolean(false)
           case PushNull => CNull
+          case PushUndefined => CUndefined
           case PushObject => CEmptyObject
           case PushArray => CEmptyArray
         }
@@ -336,6 +338,7 @@ trait DAG extends Instructions with TransSpecModule {
         case PushTrue => buildRoot(PushTrue)
         case PushFalse => buildRoot(PushFalse)
         case PushNull => buildRoot(PushNull)
+        case PushUndefined => buildRoot(PushUndefined)
         case PushObject => buildRoot(PushObject)
         case PushArray => buildRoot(PushArray)
         

@@ -2095,6 +2095,11 @@ trait EvalStackSpecs extends Specification {
           result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SNull)))
         }
         
+        "object with undefined" >> {
+          val result = eval("""{ name: "John", age: 29, gender: undefined }""")
+          result must haveSize(0)
+        }
+
         "boolean" >> {
           val result = eval("true")
           result must haveSize(1)
@@ -2111,6 +2116,11 @@ trait EvalStackSpecs extends Specification {
           val result = eval("null")
           result must haveSize(1)
           result must contain(SNull)
+        }
+
+        "undefined" >> {
+          val result = eval("undefined")
+          result must haveSize(0)
         }
       }
 
@@ -2180,6 +2190,29 @@ trait EvalStackSpecs extends Specification {
           val result = eval(input)
           result must haveSize(1)
           result must contain(SDecimal(15))
+        }
+      }
+
+      "undefineds" >> {
+        "addition" >> {
+          val result = eval("5 + undefined")
+          result must haveSize(0)
+        }
+
+        "greater-than" >> {
+          val result = eval("5 > undefined")
+          result must haveSize(0)
+        }
+
+        "union" >> {
+          val result = eval("5 union undefined")
+          result must haveSize(1)
+          result must contain(SDecimal(5))
+        }
+
+        "intersect" >> {
+          val result = eval("5 intersect undefined")
+          result must haveSize(0)
         }
       }
 
