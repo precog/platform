@@ -57,6 +57,10 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
       "push_array" >> {
         decorate(Vector(Line(0, ""), PushArray)) mustEqual Right(Root(Line(0, ""), CEmptyArray))
       }
+
+      "push_undefined" >> {
+        decorate(Vector(Line(0, ""), PushUndefined)) mustEqual Right(Root(Line(0, ""), CUndefined))
+      }
     }
     
     "recognize a new instruction" in {

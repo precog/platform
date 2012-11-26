@@ -432,6 +432,9 @@ trait Emitter extends AST
         case ast.NullLit(loc) =>
           emitInstr(PushNull)
         
+        case ast.UndefinedLit(loc) =>
+          emitInstr(PushUndefined)
+
         case ast.ObjectDef(loc, Vector()) => emitInstr(PushObject)
         
         case ast.ObjectDef(loc, props) => 
