@@ -50,18 +50,16 @@ class InMemoryJobManagerSpec extends Specification {
 
 class WebJobManagerSpec extends TestJobService { self =>
   include(new JobManagerSpec[Future] {
-    lazy val jobs = new WebJobManager {
-      val executionContext = self.executionContext
-      protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
-        f(client) //.path("/jobs"))
-      }
-    }
     implicit val executionContext = self.executionContext
     lazy val M = AkkaTypeClasses.futureApplicative(executionContext)
     lazy val coM = new Copointed[Future] {
       def map[A, B](m: Future[A])(f: A => B) = m map f
       def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
     }
+    lazy val jobs = (new WebJobManager {
+      val executionContext = self.executionContext
+      protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = f(client)
+    }).withM[Future](WebJobManager.ResponseAsFuture(M))
   })
 }
 

@@ -161,7 +161,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                 val msg = Status.toMessage(status)
                 HttpResponse[JValue](OK, content = Some(msg.serialize))
               case Left(error) =>
-                HttpResponse[JValue](BadRequest, content = Some(JString(error)))
+                HttpResponse[JValue](Conflict, content = Some(JString(error)))
             }
 
           case (_, _, _) =>

@@ -27,8 +27,7 @@ import org.joda.time.DateTime
 
 import scalaz._
 
-
-trait JobManager[M[+_]] {
+trait JobManager[M[+_]] { self =>
   import Message._
 
   /**
@@ -108,6 +107,23 @@ trait JobManager[M[+_]] {
    * the result.
    */
   def finish(job: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): M[Either[String, Job]]
+
+  def withM[N[+_]](implicit t: NaturalTransformation[M, N]) = new JobManager[N] {
+    def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): N[Job] =
+      t(self.createJob(auth, name, jobType, started, expires))
+    def findJob(job: JobId): N[Option[Job]] = t(self.findJob(job))
+    def listJobs(apiKey: APIKey): N[Seq[Job]] = t(self.listJobs(apiKey))
+    def updateStatus(job: JobId, prevStatus: Option[StatusId], msg: String, progress: BigDecimal, unit: String, extra: Option[JValue]): N[Either[String, Status]] =
+      t(self.updateStatus(job, prevStatus, msg, progress, unit, extra))
+    def getStatus(job: JobId): N[Option[Status]] = t(self.getStatus(job))
+    def listChannels(job: JobId): N[Seq[String]] = t(self.listChannels(job))
+    def addMessage(job: JobId, channel: String, value: JValue): N[Message] = t(self.addMessage(job, channel, value))
+    def listMessages(job: JobId, channel: String, since: Option[MessageId]): N[Seq[Message]] = t(self.listMessages(job, channel, since))
+    def start(job: JobId, startedAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.start(job, startedAt))
+    def cancel(job: JobId, reason: String, cancelledAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.cancel(job, reason, cancelledAt))
+    def abort(job: JobId, reason: String, abortedAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.abort(job, reason, abortedAt))
+    def finish(job: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.finish(job, result, finishedAt))
+  }
 }
 
 

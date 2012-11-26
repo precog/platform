@@ -22,12 +22,14 @@ package com.precog.heimdall
 import com.precog.common.security._
 import com.precog.common.JValueByteChunkTranscoders._
 
+import java.nio.ByteBuffer
+
 import blueeyes._
 import blueeyes.bkka._
 import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.MimeTypes._
-import blueeyes.core.http.HttpStatusCodes._
+import blueeyes.core.http.HttpStatusCodes.{ Response => _, _ }
 import blueeyes.core.service._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.json._
@@ -46,6 +48,40 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 
+object WebJobManager {
+  def apply(config: Configuration)(implicit ec: ExecutionContext): JobManager[Response] = {
+    RealWebJobManager(
+      config[String]("service.protocol", "http"),
+      config[String]("service.host", "localhost"),
+      config[Int]("service.port", 80),
+      config[String]("service.path", "/jobs/v1/")
+    )
+  }
+
+  /**
+   * A WebJobManager's monad is, essentially, a future. However, there is a
+   * chance that the server could be doing wonky things, so we create a side
+   * channel, the left side of the EitherT, for reporting errors related
+   * strictly to unexpected communication issues with the server.
+   */
+  type Response[+A] = EitherT[Future, String, A]
+
+  def Response[A](a: Future[A])(implicit F: Functor[Future]): Response[A] = EitherT.right(a)
+  def BadResponse(msg: String)(implicit F: Pointed[Future]): Response[Nothing] = EitherT.left(F.point(msg))
+
+  case class WebJobManagerException(message: String) extends Exception(message)
+
+  /**
+   * A natural transformation from Response to Future that maps the left side
+   * to exceptions thrown inside the future.
+   */
+  implicit def ResponseAsFuture(implicit F: Functor[Future]) = new NaturalTransformation[Response, Future] {
+    def apply[A](res: Response[A]): Future[A] = res.fold({ error =>
+      throw WebJobManagerException(error)
+    }, identity)
+  }
+}
+
 case class RealWebJobManager(protocol: String, host: String, port: Int, path: String)(implicit val executionContext: ExecutionContext) extends WebJobManager {
   protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
     val client = new HttpClientXLightWeb
@@ -53,7 +89,12 @@ case class RealWebJobManager(protocol: String, host: String, port: Int, path: St
   }
 }
 
-trait WebJobManager extends JobManager[Future] with JobStateManager[Future] with Logging {
+import WebJobManager._
+
+trait WebJobManager extends JobManager[Response] with JobStateManager[Response] with Logging {
+  import scalaz.syntax.monad._
+  import EitherT.{ left => leftT, right => rightT, _ }
+  import \/.{ left, right }
   import AkkaTypeClasses._
   import DefaultBijections._
   import blueeyes.json.serialization.DefaultSerialization._
@@ -67,57 +108,57 @@ trait WebJobManager extends JobManager[Future] with JobStateManager[Future] with
     f(client.contentType[ByteChunk](application/MimeTypes.json))
   }
 
-  def createJob(apiKey: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): Future[Job] = {
+  private def unexpected[A](resp: HttpResponse[A]): String = "Unexpected response from server:\n" + resp
+
+  def createJob(apiKey: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): Response[Job] = {
     val content: JValue = JObject(List(
       JField("name", name),
       JField("type", jobType)
     ))
 
     withClient { client =>
-      client.query("apiKey", apiKey)
-            .post("/jobs/")(content) flatMap {
+      val job0: Response[Job] = eitherT(client.query("apiKey", apiKey).post("/jobs/")(content) map {
         case HttpResponse(HttpStatus(Created, _), _, Some(obj), _) =>
-          val job0 = obj.validated[Job] getOrElse sys.error("TODO: Handle this case.")
-          started map { timestamp =>
-            start(job0.id, timestamp) flatMap {
-              case Left(error) =>
-                sys.error("Exepcted to find job but couldn't." + error)
-              case Right(job) =>
-                Future(job)
-            }
-          } getOrElse Future(job0)
-        case x =>
-          sys.error("Failure creating job. " + x)
-      }
+          obj.validated[Job] map (right(_)) getOrElse left("Invalid job returned by server:\n" + obj)
+        case res =>
+          left(unexpected(res))
+      })
+
+      started map { timestamp =>
+        for {
+          initJob <- job0
+          result <- start(initJob.id, timestamp)
+          job <- result.fold({ error: String => BadResponse("Server failed to return job that had been created: " + error) }, _.point[Response])
+        } yield job
+      } getOrElse job0
     }
   }
 
-  def findJob(jobId: JobId): Future[Option[Job]] = {
+  def findJob(jobId: JobId): Response[Option[Job]] = {
     withClient { client =>
-      client.get[JValue]("/jobs/" + jobId) map {
+      eitherT(client.get[JValue]("/jobs/" + jobId) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
-          obj.validated[Job].toOption
+          obj.validated[Job] map { job => right(Some(job)) } getOrElse left("Invalid job returned from server:\n" + obj)
         case HttpResponse(HttpStatus(NotFound, _), _, _, _) =>
-          None
-        case HttpResponse(HttpStatus(_, _), _, _, _) =>
-          logger.warn("Failed to communicate with jobs service.")
-          None
-      }
+          right(None)
+        case res =>
+          left(unexpected(res))
+      })
     }
   }
 
-  def listJobs(apiKey: APIKey): Future[Seq[Job]] = {
+  def listJobs(apiKey: APIKey): Response[Seq[Job]] = {
     withClient { client =>
-      client.query("apiKey", apiKey).get[JValue]("/jobs/") map {
+      eitherT(client.query("apiKey", apiKey).get[JValue]("/jobs/") map {
         case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
-          obj.validated[Vector[Job]] getOrElse Vector.empty[Job]
-        case _ =>
-          Vector.empty[Job]
-      }
+          obj.validated[Vector[Job]] map (right(_)) getOrElse left("Invalid list of jobs returned from server:\n" + obj)
+        case res =>
+          left(unexpected(res))
+      })
     }
   }
 
-  def updateStatus(jobId: JobId, prevStatus: Option[StatusId], msg: String, progress: BigDecimal, unit: String, info: Option[JValue]): Future[Either[String, Status]] = {
+  def updateStatus(jobId: JobId, prevStatus: Option[StatusId], msg: String, progress: BigDecimal, unit: String, info: Option[JValue]): Response[Either[String, Status]] = {
     withClient { client0 =>
       val update = JObject(
         JField("message", JString(msg)) ::
@@ -127,120 +168,115 @@ trait WebJobManager extends JobManager[Future] with JobStateManager[Future] with
       )
 
       val client = prevStatus map { id => client0.query("prevStatusId", id.toString) } getOrElse client0
-      client.put[JValue]("/jobs/" + jobId + "/status")(update) map {
+      eitherT(client.put[JValue]("/jobs/" + jobId + "/status")(update) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
           obj.validated[Message] map (Status.fromMessage(_)) match {
-            case Success(Some(status)) => Right(status)
-            case Success(None) => Left("Invalid status message returned from server.")
-            case Failure(error) => Left("Invalid content returned from server.")
+            case Success(Some(status)) => right(Right(status))
+            case Success(None) => left("Invalid status message returned from server.")
+            case Failure(error) => left("Invalid content returned from server.")
           }
+        case HttpResponse(HttpStatus(Conflict, _), _, Some(JString(msg)), _) =>
+          right(Left(msg))
         case HttpResponse(HttpStatus(NotFound, _), _, _, _) =>
-          Left("Not job exists with the given job ID: " + jobId)
-        case _ =>
-          Left("Unexpected response from server.")
-      }
+          right(Left("No job exists with the given job ID: " + jobId))
+        case res =>
+          left(unexpected(res))
+      })
     }
   }
 
-  def getStatus(jobId: JobId): Future[Option[Status]] = withClient { client =>
-    client.get[JValue]("/jobs/" + jobId + "/status") map {
+  def getStatus(jobId: JobId): Response[Option[Status]] = withClient { client =>
+    eitherT(client.get[JValue]("/jobs/" + jobId + "/status") map {
       case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
-        obj.validated[Message].toOption flatMap (Status.fromMessage(_))
-      case _ =>
-        None
-    }
+        obj.validated[Message] map (Status.fromMessage(_)) match {
+          case Success(Some(status)) => right(Some(status))
+          case _ => left("Invalid status returned from upstream server:\n" + obj)
+        }
+      case HttpResponse(HttpStatus(NotFound, _), _, _, _) =>
+        right(None)
+      case res =>
+        left(unexpected(res))
+    })
   }
 
-  def listChannels(jobId: JobId): Future[Seq[String]] = withClient { client =>
-    client.get[JValue]("/jobs/" + jobId + "/messages/") map {
+  def listChannels(jobId: JobId): Response[Seq[String]] = withClient { client =>
+    eitherT(client.get[JValue]("/jobs/" + jobId + "/messages/") map {
       case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
-        obj.validated[Vector[String]] getOrElse Nil
-      case _ =>
-        Seq.empty[String]
-    }
+        obj.validated[Vector[String]] map (right(_)) getOrElse left("Invalid list of channels returned from server:\n" + obj)
+      case res =>
+        left(unexpected(res))
+    })
   }
 
-  def addMessage(jobId: JobId, channel: String, value: JValue): Future[Message] = withClient { client =>
-    client.post[JValue]("/jobs/" + jobId + "/messages/" + channel)(value) map {
+  def addMessage(jobId: JobId, channel: String, value: JValue): Response[Message] = withClient { client =>
+    eitherT(client.post[JValue]("/jobs/" + jobId + "/messages/" + channel)(value) map {
       case HttpResponse(HttpStatus(Created, _), _, Some(obj), _) =>
-        obj.validated[Message] getOrElse sys.error("Invalid message.")
-      case _ =>
-        sys.error("Unexpected response from server.")
-    }
+        obj.validated[Message] map (right(_)) getOrElse left("Invalid message returned from server:\n" + obj)
+      case res =>
+        left(unexpected(res))
+    })
   }
 
-  def listMessages(jobId: JobId, channel: String, since: Option[MessageId]): Future[Seq[Message]] = withClient { client0 =>
+  def listMessages(jobId: JobId, channel: String, since: Option[MessageId]): Response[Seq[Message]] = withClient { client0 =>
     val client = since map { id => client0.query("after", id.toString) } getOrElse client0
-    client.get[JValue]("/jobs/" + jobId + "/messages/" + channel) map {
+    eitherT(client.get[JValue]("/jobs/" + jobId + "/messages/" + channel) map {
       case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
-        obj.validated[Vector[Message]] getOrElse sys.error("Invalid messages returned from server.")
-      case response =>
-        sys.error("Unexpected response from server.")
-    }
+        obj.validated[Vector[Message]] map (right(_)) getOrElse left("Invalid list of messages returned from server:\n" + obj)
+      case res =>
+        left(unexpected(res))
+    })
   }
 
-  protected def transition(jobId: JobId)(t: JobState => Either[String, JobState]): Future[Either[String, Job]] = withClient { client =>
+  protected def transition(jobId: JobId)(t: JobState => Either[String, JobState]): Response[Either[String, Job]] = withClient { client =>
     findJob(jobId) flatMap {
       case Some(job) =>
         t(job.state) match {
           case Right(state) =>
-            client.put[JValue]("/jobs/" + jobId + "/state")(state.serialize) flatMap {
+            Response(client.put[JValue]("/jobs/" + jobId + "/state")(state.serialize)) flatMap {
               case HttpResponse(HttpStatus(OK, _), _, _, _) =>
                 findJob(jobId) map {
                   case Some(job) => Right(job)
                   case None => Left("Could not find job with ID: " + jobId)
                 }
               case HttpResponse(HttpStatus(BadRequest, _), _, Some(JString(msg)), _) =>
-                Future(Left(msg))
-              case response =>
-                Future(Left("Unexpected response from server."))
+                BadResponse(msg)
+              case res =>
+                BadResponse(unexpected(res))
             }
+
           case Left(msg) =>
-            Future(Left(msg))
+            rightT(Left(msg).point[Future])
         }
 
       case None =>
-        Future(Left("Could not find job with ID: " + jobId))
+        BadResponse("Could not find job with ID: " + jobId)
     }
   }
 
   private val isoFormat = org.joda.time.format.ISODateTimeFormat.dateTime()
 
-  override def finish(jobId: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): Future[Either[String, Job]] = {
+  override def finish(jobId: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): Response[Either[String, Job]] = {
     withRawClient { client0 =>
       val client1 = client0.query("timestamp", isoFormat.print(finishedAt))
 
-      val response = result map { case JobResult(mimeTypes, content) =>
+      val response = Response(result map { case JobResult(mimeTypes, content) =>
         println(" >> " + content.toList)
         mimeTypes.foldLeft(client1)(_ contentType _)
-                 .put[Array[Byte]]("/jobs/" + jobId + "/result")(content)
+                 .put[ByteChunk]("/jobs/" + jobId + "/result")(Left(ByteBuffer.wrap(content)))
       } getOrElse {
-        client1.put[Array[Byte]]("/jobs/" + jobId + "/result")(new Array[Byte](0))
-      }
+        client1.put[ByteChunk]("/jobs/" + jobId + "/result")(Right(StreamT.empty))
+      })
       response flatMap {
         case HttpResponse(HttpStatus(OK, _), _, _, _) =>
           findJob(jobId) map (_ map (Right(_)) getOrElse {
             Left("Could not find job with ID " + jobId)
           })
         case HttpResponse(HttpStatus(PreconditionFailed, _), _, Some(error), _) =>
-          Future(Left(new String(error, "UTF-8")))
-        case _ =>
-          Future(Left("Unexpected response from server."))
+          leftT(ByteChunk.forceByteArray(error) map (new String(_, "UTF-8")))
+        case res =>
+          BadResponse(unexpected(res))
       }
     }
   }
-}
-
-object WebJobManager {
-  def apply(config: Configuration)(implicit ec: ExecutionContext): JobManager[Future] = {
-    RealWebJobManager(
-      config[String]("service.protocol", "http"),
-      config[String]("service.host", "localhost"),
-      config[Int]("service.port", 80),
-      config[String]("service.path", "/jobs/v1/")
-    )
-  }
-
-  type Response[+A] = EitherT[Future, String, A]
 }
 
