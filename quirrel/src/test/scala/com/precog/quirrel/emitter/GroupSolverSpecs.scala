@@ -20,8 +20,7 @@
 package com.precog.quirrel
 package emitter
 
-import com.precog.bytecode.Instructions
-import com.precog.bytecode.RandomLibrary
+import com.precog.bytecode.{Instructions, StaticLibrary}
 
 import org.specs2.mutable._
 
@@ -38,7 +37,7 @@ object GroupSolverSpecs extends Specification
     with GroupSolver
     with ProvenanceChecker
     with RawErrors 
-    with RandomLibrary {
+    with StaticLibrary {
       
   import ast._
   import buckets._
@@ -882,6 +881,54 @@ object GroupSolverSpecs extends Specification
         
       val tree = compileSingle(input)
       tree.errors must beEmpty
+    }
+    
+    "accept a solve defined by a constraint clause and inequalities in the body" in {
+      val input = """
+        | import std::time::*
+        | import std::stats::*
+        | import std::math::*
+        | 
+        | agents := //snapEngage/customer/widget
+        | 
+        | upperBound := getMillis("2012-10-05T23:59:59")
+        | lowerBound := getMillis("2012-10-05T00:00:00")
+        | 
+        | minuteOfDay(time) := minuteOfHour(time) + hourOfDay(time)*60
+        | 
+        | data := {agentId: agents.agentId, action: agents.action, minuteOfDay: minuteOfDay(agents.timeStamp) , millis: getMillis(agents.timeStamp)}
+        | 
+        | 
+        | data' := data where data.millis > lowerBound & data.millis < upperBound
+        | 
+        | bin(time, sizeOfBin) := floor((time)/sizeOfBin)
+        | 
+        | bins := bin(data'.minuteOfDay, 5)
+        | 
+        | --result := data' with {bins: bins}
+        | 
+        | 
+        | result2 := solve 'agent
+        |     data' := data where data.millis <= upperBound & data.millis >= lowerBound & data.agentId = 'agent
+        |     
+        |     order := denseRank(data'.millis)
+        |     data'' := data' with {rank: order}
+        |     
+        |     newData := new data''
+        |     newData' := newData with {rank: newData.rank -1}
+        |     
+        |     result := newData' ~ data''
+        |      {first: data'', second: newData'}
+        |     where newData'.rank = data''.rank
+        |     
+        |     {start: result.first.millis, end: result.second.millis, agent: result.first.agentId, action: result.first.action, startBin: bin(minuteOfDay(millisToISO(result.first.millis, "+00:00")),5) , endBin:bin(minuteOfDay(millisToISO(result.second.millis, "+00:00")),5) }
+        | 
+        | 
+        | solve 'bins = bins
+        |   {bin: 'bins, count: count(result2.action where result2.action = "Online"  & 'bins >= result2.startBin & 'bins <=result2.endBin)}
+        | """.stripMargin
+      
+      compileSingle(input).errors must beEmpty
     }
   }
 }
