@@ -329,6 +329,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "test inner object concat with a single boolean" in testObjectConcatSingletonNonObject
       "test inner object concat with a boolean and an empty object" in testObjectConcatTrivial
       "concatenate dissimilar objects" in checkObjectConcat
+      "test inner object concat join semantics" in testInnerObjectConcatJoinSemantics
       "concatenate dissimilar arrays" in checkArrayConcat
       "delete elements according to a JType" in checkObjectDelete //.set(minTestsOk -> 5000) TODO: saw an error here once
       "perform a trivial type-based filter" in checkTypedTrivial
