@@ -43,7 +43,7 @@ object GroupSolverSpecs extends Specification
   import buckets._
   
   "group solver" should {
-    "identify and solve group set for trivial solve example" in {
+    /* "identify and solve group set for trivial solve example" in {
       val input = "clicks := load(//clicks) solve 'day clicks where clicks.day = 'day"
       
       val Let(_, _, _, _,
@@ -929,6 +929,25 @@ object GroupSolverSpecs extends Specification
         | """.stripMargin
       
       compileSingle(input).errors must beEmpty
+    }
+     */
+    "correctly identify commonality for constraint clause deriving from object def on non-constant fields" in {
+      val input = """
+        | clicks := //clicks
+        | data := { user: clicks.user, page: clicks.page }
+        | 
+        | solve 'bins = data
+        |   'bins
+        | """.stripMargin
+        
+      val tree @ Let(_, _, _, _,
+        Let(_, _, _, _,
+          solve @ Solve(_, Vector(Eq(_, _, target)), _))) = compileSingle(input)
+          
+      val expected = Group(None, target, UnfixedSolution("'bins", target), Nil)
+      
+      tree.errors must beEmpty
+      solve.buckets mustEqual Map(Set() -> expected)
     }
   }
 }
