@@ -30,7 +30,7 @@ if [ $# -eq 0 ]; then
     usage
 fi
 
-while getopts ":q:m:b" opt; do
+while getopts ":q:m:bl" opt; do
     case $opt in
         q)
             QUERYDIR=$OPTARG
@@ -40,7 +40,10 @@ while getopts ":q:m:b" opt; do
             MONGOPORT="-m $OPTARG"
             ;;
         b)
-            BUILDFLAG="-b"
+            EXTRAFLAGS="$EXTRAFLAGS -b"
+            ;;
+        l)
+            EXTRAFLAGS="$EXTRAFLAGS -l"
             ;;
         \?)
             echo "Unknown option $OPTARG!"
@@ -56,7 +59,7 @@ QUERY_PORT=30070
 
 WORKDIR=$(mktemp -d -t standaloneShard.XXXXXX 2>&1)
 echo "Starting..."
-./start-shard.sh -d $WORKDIR $BUILDFLAG $MONGOPORT 1>/dev/null &
+./start-shard.sh -d $WORKDIR $EXTRAFLAGS $MONGOPORT 1>/dev/null &
 RUN_LOCAL_PID=$!
 
 # Wait to make sure things haven't died
@@ -92,7 +95,7 @@ echo "Account ID:    $ACCOUNTID"
 echo "Account token: $TOKEN"
 
 function query {
-    curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$QUERY_PORT/analytics/fs/"
+    curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$QUERY_PORT/analytics/fs/$ACCOUNTID"
 }
 
 function repl {
@@ -112,7 +115,8 @@ for f in $@; do
     TABLE=$(basename "$f" ".json")
     DATA=$(./muspelheim/src/test/python/newlinejson.py $f)
     COUNT=$(echo "$DATA" | wc -l)
-    echo "$DATA" | curl -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$TABLE?apiKey=$TOKEN"
+    echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
+    echo "$DATA" | curl -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN"
 
     COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
     while [ -z "$COUNT_RESULT" ] || [ "$COUNT_RESULT" -lt "$COUNT" ]; do
