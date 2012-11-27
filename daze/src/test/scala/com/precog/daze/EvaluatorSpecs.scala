@@ -2828,6 +2828,47 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
     
+    "evaluate `with` with inner join semantics" in {
+      /* 
+       * clicks := //clicks
+       * a := {dummy: if clicks.time < 1000 then 1 else 0}
+       * clicks with {a:a}
+       */
+       
+      val line = Line(0, "")
+      
+      val clicks = 
+        Join(line, WrapObject, CrossLeftSort,
+          Root(line, CString("time")),
+          Root(line, CLong(42)))
+      
+      val predicate = Join(line, Lt, CrossLeftSort,
+        Join(line, DerefObject, CrossLeftSort,
+          clicks,
+          Root(line, CString("time"))),
+        Root(line, CLong(1000)))
+      
+      val a = dag.IUI(line, true,
+        dag.Filter(line, CrossLeftSort,
+          Root(line, CLong(1)),
+          predicate),
+        dag.Filter(line, CrossLeftSort,
+          Root(line, CLong(0)),
+          Operate(line, Comp, predicate)))
+      
+      val input = Join(line, JoinObject, CrossLeftSort,    // TODO CrossLeftSort breaks even more creatively!
+        clicks,
+        Join(line, WrapObject, CrossLeftSort,
+          Root(line, CString("a")),
+          a))
+          
+      testEval(input) { result =>
+        forall(result) {
+          case (ids, SObject(fields)) => fields must haveKey("a")
+        }
+      }
+    }
+    
     "evaluate filter with null" in {
       val line = Line(0, "")
       val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))

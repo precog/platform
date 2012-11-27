@@ -138,6 +138,18 @@ trait EvalStackSpecs extends Specification {
         eval("true with []") mustEqual Set()
       }
     }
+    
+    "ensure that with operation uses inner-join semantics" in {
+      val input = """
+        | clicks := //clicks
+        | a := {dummy: if clicks.time < 1329326691939 then 1 else 0}
+        | clicks with {a:a}
+        | """.stripMargin
+        
+      forall(evalE(input)) {
+        case (ids, SObject(fields)) => fields must haveKey("a")
+      }
+    }
 
     "reduce sets" in {
       val input = """
