@@ -60,6 +60,13 @@ trait ShardService extends
       r.copy(content = r.content.map(Left(_)))
     }
 
+  def optionsResponse = Future {
+    HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
+      "Access-Control-Allow-Origin" -> "*",
+      "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
+      "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
+  }
+
   import java.nio.ByteBuffer
   import java.nio.charset.Charset
   val utf8 = Charset.forName("UTF-8")
@@ -108,12 +115,7 @@ trait ShardService extends
                   // Handle OPTIONS requests internally to simplify the standalone service
                   options {
                     (request: HttpRequest[ByteChunk]) => {
-                      (a: APIKeyRecord, p: Path, s: String, o: QueryOptions) => Future {
-                        HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS", 
-                                                                            "Access-Control-Allow-Origin" -> "*",
-                                                                            "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
-                                                                            "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
-                      }
+                      (a: APIKeyRecord, p: Path, s: String, o: QueryOptions) => optionsResponse
                     }
                   }
                 }
@@ -123,12 +125,7 @@ trait ShardService extends
                 // Handle OPTIONS requests internally to simplify the standalone service
                 options {
                   (request: HttpRequest[ByteChunk]) => {
-                    (a: APIKeyRecord, p: Path) => Future {
-                      HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS", 
-                                                                          "Access-Control-Allow-Origin" -> "*",
-                                                                          "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
-                                                                          "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
-                    }
+                    (a: APIKeyRecord, p: Path) => optionsResponse
                   }
                 }
               }
