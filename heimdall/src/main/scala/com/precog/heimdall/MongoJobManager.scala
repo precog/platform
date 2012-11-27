@@ -46,7 +46,7 @@ import scalaz.std.option._
 
 
 trait ManagedMongoJobManagerModule {
-  implicit def asyncContext: ExecutionContext
+  implicit def executionContext: ExecutionContext
 
   def jobManager(config: Configuration): (Mongo, JobManager[Future]) = {
     import MongoJobManagerSettings.default

@@ -266,7 +266,6 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
       val client1 = client0.query("timestamp", isoFormat.print(finishedAt))
 
       val response = Response(result map { case JobResult(mimeTypes, content) =>
-        println(" >> " + content.toList)
         mimeTypes.foldLeft(client1)(_ contentType _)
                  .put[ByteChunk]("/jobs/" + jobId + "/result")(Left(ByteBuffer.wrap(content)))
       } getOrElse {

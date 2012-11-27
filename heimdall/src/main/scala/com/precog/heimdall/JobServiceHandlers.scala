@@ -58,7 +58,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
   val metadata = Some(AboutMetadata(ParameterMetadata('apiKey, None), DescriptionMetadata("Job creation requires an 'apiKey.")))
 }
 
-class CreateJobHandler(jobs: JobManager[Future], clock: Clock)(implicit ctx: ExecutionContext)
+class CreateJobHandler(jobs: JobManager[Future], auth: AuthService[Future], clock: Clock)(implicit ctx: ExecutionContext)
 extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     request.content map { contentM =>
@@ -67,11 +67,13 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
           case (JString(name), JString(tpe)) =>
             request.parameters.get('apiKey) map { apiKey =>
 
-              // TODO: Check API Key and make sure it is valid before proceeding.
-              // TODO: Remove apiKey from JValue output.
-
-              jobs.createJob(apiKey, name, tpe, None, None) map { job =>
-                HttpResponse[JValue](Created, content = Some(job.serialize))
+              auth.isValid(apiKey) flatMap {
+                case true =>
+                  jobs.createJob(apiKey, name, tpe, None, None) map { job =>
+                    HttpResponse[JValue](Created, content = Some(job.serialize))
+                  }
+                case false =>
+                  Future(HttpResponse[JValue](Forbidden))
               }
 
             } getOrElse {
@@ -367,7 +369,6 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
           JString(ts).validated[DateTime].toOption
         } getOrElse clock.now()
 
-        println(" << " + bytes.map(_.toList).getOrElse(Nil))
         val result = bytes map (JobResult(request.mimeTypes, _))
 
         jobs.finish(jobId, result, timestamp) map {
@@ -388,39 +389,6 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
     DescriptionMetadata("Put the final result of a finished job.")
   ))
 }
-
-//class CreateResultHandler(jobs: JobManager[Future], clock: Clock)(implicit ctx: ExecutionContext)
-//extends CustomHttpService[Future[Array[Byte]], Future[HttpResponse[Array[Byte]]]] {
-//  import scalaz.std.option._
-//  import scalaz.syntax.traverse._
-//
-//  val service: HttpRequest[Future[Array[Byte]]] => Validation[NotServed, Future[HttpResponse[Array[Byte]]]] = (request: HttpRequest[Future[Array[Byte]]]) => {
-//    Success(request.parameters get 'jobId map { jobId =>
-//      request.content.sequence[Future, Array[Byte]] flatMap { bytes =>
-//        val timestamp = request.parameters get 'timestamp flatMap { ts =>
-//          JString(ts).validated[DateTime].toOption
-//        } getOrElse clock.now()
-//        bytes map { b => println(b.toList) }
-//        val result = bytes map (JobResult(request.mimeTypes, _))
-//        println("Result: " + result)
-//        jobs.finish(jobId, result, timestamp) map {
-//          case Right(job) =>
-//            HttpResponse[Array[Byte]](OK)
-//          case Left(error) =>
-//            HttpResponse[Array[Byte]](PreconditionFailed, content = Some(error.getBytes("UTF-8")))
-//        }
-//      }
-//    } getOrElse {
-//      Future(HttpResponse[Array[Byte]](BadRequest,
-//        content = Some("Missing required 'jobId parameter.".getBytes("UTF-8"))))
-//    })
-//  }
-//
-//  val metadata = Some(AboutMetadata(
-//    ParameterMetadata('jobId, None),
-//    DescriptionMetadata("Put the final result of a finished job.")
-//  ))
-//}
 
 class GetResultHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
 extends CustomHttpService[Future[Array[Byte]], Future[HttpResponse[Array[Byte]]]] {

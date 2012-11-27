@@ -59,7 +59,9 @@ trait JobService
 
   def close(res: Resource): Future[Unit]
 
-  case class JobServiceState(resource: Resource, jobManager: JobManager[Future], clock: Clock)
+  case class JobServiceState(resource: Resource, jobManager: JobManager[Future], authService: AuthService[Future], clock: Clock)
+
+  def authService(config: Configuration): AuthService[Future]
 
   def jobManager(config: Configuration): (Resource, JobManager[Future])
 
@@ -75,16 +77,22 @@ trait JobService
           import context._
           Future {
             val (resource, jobs) = jobManager(config)
-            JobServiceState(resource, jobs, clock)
+            JobServiceState(resource, jobs, authService(config), clock)
           }
         } ->
-        request { case JobServiceState(_, jobs, clock) =>
+        request { case JobServiceState(_, jobs, auth, clock) =>
+          path("/jobs/") {
+            path("'jobId") {
+              path("/result") {
+                put(new CreateResultHandler(jobs, clock)) ~
+                get(new GetResultHandler(jobs))
+              }
+            }
+          } ~
           jsonp[ByteChunk] {
             path("/jobs/") {
               get(new ListJobsHandler(jobs)) ~
-              //checkAPIKey {
-                post(new CreateJobHandler(jobs, clock)) ~
-              //} ~
+              post(new CreateJobHandler(jobs, auth, clock)) ~
               path("'jobId") {
                 get(new GetJobHandler(jobs)) ~
                 path("/status") {
@@ -102,14 +110,6 @@ trait JobService
                     get(new ListMessagesHandler(jobs))
                   }
                 }
-              }
-            }
-          } ~
-          path("/jobs/") {
-            path("'jobId") {
-              path("/result") {
-                put(new CreateResultHandler(jobs, clock)) ~
-                get(new GetResultHandler(jobs))
               }
             }
           }

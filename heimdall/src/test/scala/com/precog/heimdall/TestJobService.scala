@@ -56,6 +56,10 @@ trait TestJobService extends BlueEyesServiceSpecification with JobService with A
   val jobs = new InMemoryJobManager[Future]
   def jobManager(config: Configuration): (Unit, JobManager[Future]) = ((), jobs)
 
+  val validAPIKey = "secret"
+
+  def authService(config: Configuration): AuthService[Future] = TestAuthService[Future](Set(validAPIKey))
+
   def close(u: Unit): Future[Unit] = Future { u }
 }
 
@@ -69,9 +73,6 @@ class JobServiceSpec extends TestJobService {
     def map[A, B](m: Future[A])(f: A => B) = m map f
     def copoint[A](f: Future[A]) = Await.result(f, Duration(1, "seconds"))
   }
-
-  val validAPIKey = "xxx"
-  val invalidAPIKey = "xxx"
 
   val JSON = MimeTypes.application / MimeTypes.json
 
@@ -148,7 +149,7 @@ class JobServiceSpec extends TestJobService {
     }
 
     "forbid job creation if provided an invalid API key" in {
-      postJob(simpleJob, invalidAPIKey).copoint must beLike {
+      postJob(simpleJob, "Completely wrong API key").copoint must beLike {
         case HttpResponse(HttpStatus(Forbidden, _), _, _, _) => ok
       }
     }
