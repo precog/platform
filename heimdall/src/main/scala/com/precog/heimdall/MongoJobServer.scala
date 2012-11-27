@@ -21,7 +21,7 @@ package com.precog.heimdall
 
 import akka.dispatch.Future
 
-import blueeyes.bkka._
+import blueeyes.bkka.AkkaTypeClasses._
 import blueeyes.persistence.mongo._
 import blueeyes.BlueEyesServer
 
@@ -45,7 +45,7 @@ object MongoJobServer extends BlueEyesServer with JobService with ManagedMongoJo
     val port = config[Int]("port", 30062)
     val path = config[String]("path", "auth")
 
-    WebAuthService(protocol, host, port, path).withM[Future](ResponseAsFuture(AkkaTypeClasses.futureApplicative(executionContext)))
+    WebAuthService(protocol, host, port, path).withM[Future]
   }
 }
 

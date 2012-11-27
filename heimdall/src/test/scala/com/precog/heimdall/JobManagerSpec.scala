@@ -71,28 +71,28 @@ class WebJobManagerSpec extends TestJobService { self =>
   })
 }
 
-//class MongoJobManagerSpec extends Specification with RealMongoSpecSupport { self =>
-//  var actorSystem: ActorSystem = _
-//  implicit def executionContext = actorSystem.dispatcher
-//
-//  step {
-//    actorSystem = ActorSystem("mongo-job-manager-spec")
-//  }
-//
-//  include(new JobManagerSpec[Future] {
-//    val validAPIKey = "Anything should work!"
-//    lazy val jobs = new MongoJobManager(mongo.database("jobs"), MongoJobManagerSettings.default)
-//    lazy val M = AkkaTypeClasses.futureApplicative(executionContext)
-//    lazy val coM = new Copointed[Future] {
-//      def map[A, B](m: Future[A])(f: A => B) = m map f
-//      def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
-//    }
-//  })
-//
-//  step {
-//    actorSystem.shutdown()
-//  }
-//}
+class MongoJobManagerSpec extends Specification with RealMongoSpecSupport { self =>
+  var actorSystem: ActorSystem = _
+  implicit def executionContext = actorSystem.dispatcher
+
+  step {
+    actorSystem = ActorSystem("mongo-job-manager-spec")
+  }
+
+  include(new JobManagerSpec[Future] {
+    val validAPIKey = "Anything should work!"
+    lazy val jobs = new MongoJobManager(mongo.database("jobs"), MongoJobManagerSettings.default)
+    lazy val M = AkkaTypeClasses.futureApplicative(executionContext)
+    lazy val coM = new Copointed[Future] {
+      def map[A, B](m: Future[A])(f: A => B) = m map f
+      def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
+    }
+  })
+
+  step {
+    actorSystem.shutdown()
+  }
+}
 
 trait JobManagerSpec[M[+_]] extends Specification {
   import JobState._
