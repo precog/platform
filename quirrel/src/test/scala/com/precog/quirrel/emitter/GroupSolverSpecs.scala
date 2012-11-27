@@ -24,7 +24,7 @@ object GroupSolverSpecs extends Specification
   import buckets._
   
   "group solver" should {
-    /* "identify and solve group set for trivial solve example" in {
+    "identify and solve group set for trivial solve example" in {
       val input = "clicks := load(//clicks) solve 'day clicks where clicks.day = 'day"
       
       val Let(_, _, _, _,
@@ -911,7 +911,7 @@ object GroupSolverSpecs extends Specification
       
       compileSingle(input).errors must beEmpty
     }
-     */
+    
     "correctly identify commonality for constraint clause deriving from object def on non-constant fields" in {
       val input = """
         | clicks := //clicks
