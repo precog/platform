@@ -80,6 +80,12 @@ object WebJobManager {
       throw WebJobManagerException(error)
     }, identity)
   }
+
+  implicit def FutureAsResponse(implicit F: Pointed[Future]) = new NaturalTransformation[Future, Response] {
+    def apply[A](fa: Future[A]): Response[A] = EitherT.eitherT(fa.map(\/.right).recoverWith {
+      case WebJobManagerException(msg) => F.point(\/.left[String, A](msg))
+    })
+  }
 }
 
 case class RealWebJobManager(protocol: String, host: String, port: Int, path: String)(implicit val executionContext: ExecutionContext) extends WebJobManager {
