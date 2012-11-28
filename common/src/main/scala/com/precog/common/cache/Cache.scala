@@ -17,29 +17,19 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
-package jdbm3
+package com.precog.common.cache
 
-import com.precog.accounts.AccountManagerClientComponent
-import com.precog.common.security._
+import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache, Cache => GCache}
+import java.util.concurrent.ExecutionException
 
-import akka.dispatch.Future
+class Cache[K,V] (private val backing: GCache[K,V]) {
+  def getIfPresent(key: K): Option[V] = Option(backing.getIfPresent(key))
+  def put(key: K, value: V): Unit = backing.put(key, value)
+}
 
-import blueeyes.BlueEyesServer
-import blueeyes.bkka._
-import blueeyes.util.Clock
-
-import scalaz._
-
-object JDBMShardServer extends BlueEyesServer 
-    with ShardService 
-    with JDBMQueryExecutorComponent 
-    with MongoAPIKeyManagerComponent 
-    with AccountManagerClientComponent
-{
-  
-  val clock = Clock.System
-
-  val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+object Cache {
+ def apply[K, V] (size: Int): Cache[K, V] = {
+   val builder: CacheBuilder[K, V] = CacheBuilder.newBuilder.asInstanceOf[CacheBuilder[K, V]]
+   new Cache[K, V](builder.maximumSize(size).build())
+  }
 }

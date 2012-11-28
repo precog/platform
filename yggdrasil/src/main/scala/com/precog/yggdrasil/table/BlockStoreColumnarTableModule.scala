@@ -318,7 +318,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     }
 
     def apply(slices: StreamT[M, Slice], size: TableSize) = {
-      // println("Table("+size+")")
       size match {
         case ExactSize(1) => new SingletonTable(slices)
         case _            => new ExternalTable(slices, size)

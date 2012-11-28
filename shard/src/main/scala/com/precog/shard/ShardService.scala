@@ -20,6 +20,8 @@
 package com.precog
 package shard
 
+import com.precog.accounts.BasicAccountManager
+
 import service._
 import ingest.service._
 import common.Path
@@ -61,9 +63,11 @@ trait ShardService extends
 
   implicit def M: Monad[Future]
 
-  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]): QueryExecutor[Future]
+  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future], accountManager: BasicAccountManager[Future]): QueryExecutor[Future]
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
+
+  def accountManagerFactory(config: Configuration): BasicAccountManager[Future]
 
   // TODO: maybe some of these implicits should be moved, but for now i
   // don't have the patience to figure out where.
@@ -110,7 +114,11 @@ trait ShardService extends
 
           logger.trace("apiKeyManager loaded")
 
-          val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), apiKeyManager)
+          val accountManager = accountManagerFactory(config.detach("accounts"))
+
+          logger.trace("accountManager loaded")
+
+          val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), apiKeyManager, accountManager)
 
           logger.trace("queryExecutor loaded")
 

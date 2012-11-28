@@ -155,6 +155,11 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
   
   def listAccountIds(apiKey: String) = findAllMatching[Account]("apiKey", apiKey, settings.accounts).map(_.map(_.accountId))
   
+  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountID]]] =
+    apiKeys.foldLeft(Future(Map.empty[APIKey, Set[AccountID]])) {
+      case (fmap, key) => fmap.flatMap { m => listAccountIds(key).map { ids => m + (key -> ids) } }
+    }
+  
   def findAccountById(accountId: String) = findOneMatching[Account]("accountId", accountId, settings.accounts)
 
   def findAccountByEmail(email: String) = findOneMatching[Account]("email", email, settings.accounts)

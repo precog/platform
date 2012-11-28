@@ -21,6 +21,7 @@ package com.precog
 package accounts
 
 import com.precog.common.Path
+import com.precog.common.cache.Cache
 import com.precog.common.security._
 
 import akka.dispatch.{ ExecutionContext, Future }
@@ -65,33 +66,46 @@ trait AccountManagerClientComponent {
   }
 }
 
-class AccountManagerClient(settings: AccountManagerClientSettings) extends BasicAccountManager[Future] with AkkaDefaults with Logging {
+class AccountManagerClient(settings: AccountManagerClientSettings, cacheSize: Int = 1000) extends BasicAccountManager[Future] with AkkaDefaults with Logging {
   import settings._
+
+  private[this] val apiKeyToAccountCache = Cache[APIKey, Set[AccountID]](cacheSize)
 
   val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
   def listAccountIds(apiKey: APIKey) : Future[Set[AccountID]] = {
-    invoke { client =>
-      client.query("apiKey", apiKey).contentType(application/MimeTypes.json).get[JValue]("") map {
-        case HttpResponse(HttpStatus(OK, _), _, Some(jaccounts), _) =>
-         jaccounts.validated[Set[WrappedAccountID]] match {
-           case Success(accountIds) => accountIds.map(_.accountId)
-           case Failure(err) =>
-            logger.error("Unexpected response to account list request: " + err)
-            throw HttpException(BadGateway, "Unexpected response to account list request: " + err)
-         }
+    apiKeyToAccountCache.getIfPresent(apiKey).map(Future(_)).getOrElse {
+      invoke { client =>
+        client.query("apiKey", apiKey).contentType(application/MimeTypes.json).get[JValue]("") map {
+          case HttpResponse(HttpStatus(OK, _), _, Some(jaccounts), _) =>
+            jaccounts.validated[Set[WrappedAccountID]] match {
+              case Success(accountIds) => {
+                val ids = accountIds.map(_.accountId)
+                apiKeyToAccountCache.put(apiKey, ids)
+                ids
+              }
+              case Failure(err) =>
+                logger.error("Unexpected response to account list request: " + err)
+                throw HttpException(BadGateway, "Unexpected response to account list request: " + err)
+            }
 
-        case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) => 
-          logger.error("Fatal error attempting to list accounts: " + failure + ": " + content)
-          throw HttpException(failure, reason)
+          case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) =>
+            logger.error("Fatal error attempting to list accounts: " + failure + ": " + content)
+            throw HttpException(failure, reason)
 
-        case other => 
-          logger.error("Unexpected response from accounts service: " + other)
-          throw HttpException(BadGateway, "Unexpected response from accounts service: " + other)
+          case other =>
+            logger.error("Unexpected response from accounts service: " + other)
+            throw HttpException(BadGateway, "Unexpected response from accounts service: " + other)
+        }
       }
     }
   }
+
+  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountID]]] =
+    apiKeys.foldLeft(Future(Map.empty[APIKey, Set[AccountID]])) {
+      case (fmap, key) => fmap.flatMap { m => listAccountIds(key).map { ids => m + (key -> ids) } }
+    }
   
   def findAccountById(accountId: AccountID): Future[Option[Account]] = {
     invoke { client =>

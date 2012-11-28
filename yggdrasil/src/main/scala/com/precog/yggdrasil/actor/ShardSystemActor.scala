@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package actor
 
+import com.precog.accounts.BasicAccountManager
 import com.precog.common.{ Archive, ArchiveMessage, CheckpointCoordination, IngestMessage, YggCheckpoint }
 import com.precog.common.json._
 import com.precog.util.FilesystemFileOps
@@ -62,11 +63,11 @@ trait ShardConfig extends BaseConfig {
 trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigComponent {
   type YggConfig <: ShardConfig
 
-  protected def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef): Option[() => Actor]
+  protected def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]): Option[() => Actor]
 
   protected def checkpointCoordination: CheckpointCoordination
 
-  class ShardSystemActor(storage: MetadataStorage) extends Actor with Logging {
+  class ShardSystemActor(storage: MetadataStorage, accountManager: BasicAccountManager[Future]) extends Actor with Logging {
 
     // The ingest system consists of the ingest supervisor and ingest actor(s)
     private[this] var ingestSystem: ActorRef            = _
@@ -98,7 +99,7 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
       projectionsActor = context.actorOf(Props(new ProjectionsActor(yggConfig.maxOpenProjections)), "projections")
 
       val ingestActorInit: Option[() => Actor] = initialCheckpoint flatMap {
-        checkpoint: YggCheckpoint => initIngestActor(checkpoint, metadataActor)
+        checkpoint: YggCheckpoint => initIngestActor(checkpoint, metadataActor, accountManager)
       }
  
       ingestSystem     = { 

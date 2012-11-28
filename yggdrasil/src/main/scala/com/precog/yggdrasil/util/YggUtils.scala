@@ -25,6 +25,7 @@ import actor._
 import jdbm3._
 import metadata.MetadataStorage
 import metadata.FileMetadataStorage
+import com.precog.accounts.InMemoryAccountManager
 import com.precog.common._
 import com.precog.util._
 import com.precog.common.kafka._
@@ -736,6 +737,7 @@ object ImportTools extends Command with Logging {
 
         class Storage extends SystemActorStorageLike(ms) {
           val accessControl = new UnrestrictedAccessControl()
+          val accountManager = new InMemoryAccountManager()
         }
 
         val storage = new Storage

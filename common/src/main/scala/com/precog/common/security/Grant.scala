@@ -24,6 +24,8 @@ import json._
 
 import org.joda.time.DateTime
 
+import com.weiglewilczek.slf4s.Logging
+
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
 import scalaz.Scalaz._
@@ -58,7 +60,7 @@ case class Grant(
   }
 }
 
-object Grant {
+object Grant extends Logging {
   implicit val grantIso = Iso.hlist(Grant.apply _, Grant.unapply _)
 
   val schema =     "grantId" :: "name" :: "description" :: "issuerKey" :: "parentIds" :: "permissions" :: "expirationDate" :: HNil
@@ -72,8 +74,10 @@ object Grant {
     implicit val (safeGrantDecomposer, safeGrantExtractor) = serialization[Grant](safeSchema)
   }
 
-  def implies(grants: Set[Grant], perms: Set[Permission], at: Option[DateTime] = None) =
+  def implies(grants: Set[Grant], perms: Set[Permission], at: Option[DateTime] = None) = {
+    logger.trace("Checking implication of %s to %s".format(grants, perms))
     perms.forall(perm => grants.exists(_.implies(perm, at)))
+  }
   
   /*
    * Computes the weakest subset of the supplied set of grants which is sufficient to support the supplied set
@@ -125,6 +129,7 @@ object NewGrantRequest {
   implicit val (newGrantRequestDecomposer, newGrantRequestExtractor) = serialization[NewGrantRequest](schema)
 
   def newAccount(accountId: AccountID, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantID], expiration: Option[DateTime]): NewGrantRequest = {
+    // Path is "/" so that an account may read data it owns no matter what path it exists under. See AccessControlSpec, APIKeyManager.newAccountGrant
     val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path("/"), Set(accountId)) : Permission)
     val writePerms = Set(WritePermission, DeletePermission).map(_(path, Set()) : Permission)
     NewGrantRequest(name, description, parentIds, readPerms ++ writePerms, expiration)

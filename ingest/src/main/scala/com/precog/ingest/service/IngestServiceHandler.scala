@@ -38,6 +38,8 @@ import blueeyes.core.service._
 
 import blueeyes.json._
 
+import com.google.common.base.Charsets
+
 import java.util.concurrent.{ Executor, RejectedExecutionException }
 
 import java.io.{ File, FileReader, BufferedReader, FileInputStream, FileOutputStream, Closeable }
@@ -53,33 +55,33 @@ import scala.collection.mutable.ListBuffer
 import scalaz._
 
 class IngestServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, insertTimeout: Timeout, threadPool: Executor, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
-extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path, AccountID) => Future[HttpResponse[JValue]]] with Logging {
+extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path) => Future[HttpResponse[JValue]]] with Logging {
 
   protected implicit val M = new FutureMonad(ExecutionContext.fromExecutor(threadPool))
 
   def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[Unit] = {
     def writeChannel(stream: StreamT[Future, ByteBuffer]): Future[Unit] = {
       stream.uncons flatMap {
-        case Some((bb, tail)) => { chan.write(bb); writeChannel(tail) }
-        case None => Future(chan.close())
+        case Some((bb, tail)) => M.point({ logger.debug("Uncons write of Some(bb) to " + chan); chan.write(bb); logger.debug("Uncons write complete")}).flatMap { _ => writeChannel(tail) }
+        case None => logger.debug("Finished writes, closing channel"); Future(chan.close())
       }
     }
 
     chunk match {
-      case Left(bb) => Future { chan.write(bb); chan.close() }
+      case Left(bb) => logger.debug("Immediate write on Left(bb)"); Future { chan.write(bb); chan.close() }
       case Right(stream) => writeChannel(stream)
     }
   }
 
-  def ingest(r: APIKeyRecord, p: Path, accountId: AccountID, event: JValue): Future[Unit] = {
-    val eventInstance = Event.fromJValue(r.apiKey, p, Some(accountId), event)
+  def ingest(r: APIKeyRecord, p: Path, event: JValue): Future[Unit] = {
+    val eventInstance = Event.fromJValue(r.apiKey, p, None, event)
     logger.trace("Saving event: " + eventInstance)
     eventStore.save(eventInstance, insertTimeout)
   }
 
   case class SyncResult(total: Int, ingested: Int, errors: List[(Int, String)])
 
-  class EventQueueInserter(t: APIKeyRecord, p: Path, o: AccountID, events: Iterator[Either[String, JValue]], close: Option[Closeable]) extends Runnable {
+  class EventQueueInserter(t: APIKeyRecord, p: Path, events: Iterator[Either[String, JValue]], close: Option[Closeable]) extends Runnable {
     private[service] val result: Promise[SyncResult] = Promise()
 
     def run() {
@@ -90,7 +92,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
         val ev = events.next()
         if (errors.size < maxBatchErrors) {
           ev match {
-            case Right(event) => futures += ingest(t, p, o, event)
+            case Right(event) => futures += ingest(t, p, event)
             case Left(error) => errors += (i -> error)
           }
         }
@@ -143,7 +145,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
     }
   }
 
-  def parseCsv(byteStream: ByteChunk, t: APIKeyRecord, p: Path, o: AccountID, readCsv: File => CSVReader): Future[EventQueueInserter] = {
+  def parseCsv(byteStream: ByteChunk, t: APIKeyRecord, p: Path, readCsv: File => CSVReader): Future[EventQueueInserter] = {
     for {
       file <- writeToFile(byteStream)
     } yield {
@@ -160,14 +162,14 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
         })
       }
 
-      new EventQueueInserter(t, p, o, jVals, Some(csv))
+      new EventQueueInserter(t, p, jVals, Some(csv))
     }
   }
 
-  def parseJson(channel: ReadableByteChannel, t: APIKeyRecord, p: Path, o: AccountID): EventQueueInserter = {
-    val reader = new BufferedReader(Channels.newReader(channel, "UTF-8"))
-    val lines = Iterator.continually(reader.readLine()).takeWhile(_ != null)
-    new EventQueueInserter(t, p, o, lines map { json =>
+  def parseJson(channel: ReadableByteChannel, t: APIKeyRecord, p: Path): EventQueueInserter = {
+    val reader = new BufferedReader(Channels.newReader(channel, Charsets.UTF_8.name))
+    val lines = Iterator.continually { logger.debug("Reading line from input"); reader.readLine() }.takeWhile(_ != null)
+    new EventQueueInserter(t, p, lines map { json =>
       try {
         Right(JParser.parse(json))
       } catch {
@@ -176,23 +178,22 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
     }, Some(reader))
   }
 
-  def parseSyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path, o: AccountID): Future[EventQueueInserter] = {
+  def parseSyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path): Future[EventQueueInserter] = {
     val pipe = Pipe.open()
-    for {
-      _ <- writeChunkStream(pipe.sink(), byteStream)
-    } yield parseJson(pipe.source(), t, p, o)
+    writeChunkStream(pipe.sink(), byteStream)
+    Future(parseJson(pipe.source(), t, p))
   }
 
-  def parseAsyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path, o: AccountID): Future[EventQueueInserter] = {
+  def parseAsyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path): Future[EventQueueInserter] = {
     for {
       file <- writeToFile(byteStream)
     } yield {
-      parseJson(new FileInputStream(file).getChannel(), t, p, o)
+      parseJson(new FileInputStream(file).getChannel(), t, p)
     }
   }
 
   def execute(inserter: EventQueueInserter, async: Boolean): Future[HttpResponse[JValue]] = try {
-    
+    logger.debug("Executing inserter: " + inserter)
     threadPool.execute(inserter)
     if (async) {
       Future { HttpResponse[JValue](Accepted) }
@@ -214,15 +215,15 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
   }
 
   val service = (request: HttpRequest[Either[Future[JValue], ByteChunk]]) => {
-    Success { (r: APIKeyRecord, p: Path, o: AccountID) =>
+    Success { (r: APIKeyRecord, p: Path) =>
       accessControl.hasCapability(r.apiKey, Set(WritePermission(p, Set())), None) flatMap {
         case true => try {
-          logger.debug("Ingesting events as: APIKey: "+r.apiKey+" path: "+p+" account id: "+o)
+          logger.debug("Ingesting events as: APIKey: "+r.apiKey+" path: "+p)
           request.content map {
             case Left(futureEvent) =>
               for {
                 event <- futureEvent
-                _ <- ingest(r, p, o, event)
+                _ <- ingest(r, p, event)
               } yield HttpResponse[JValue](OK)
 
             case Right(byteStream) =>
@@ -231,17 +232,19 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
 
               val async = request.parameters.get('sync) map (_ == "async") getOrElse false
               val parser = if (request.mimeTypes contains (text / csv)) {
-                csvReaderFor(request) map (parseCsv(byteStream, r, p, o, _))
+                csvReaderFor(request) map (parseCsv(byteStream, r, p, _))
               } else if (async) {
-                success(parseAsyncJson(byteStream, r, p, o))
+                success(parseAsyncJson(byteStream, r, p))
               } else  {
-                success(parseSyncJson(byteStream, r, p, o))
+                success(parseSyncJson(byteStream, r, p))
               }
 
               parser match {
                 case Success(inserter) =>
-                  inserter flatMap (execute(_, async))
+                  logger.debug("Success for inserter")
+                  inserter flatMap { i => logger.debug("Processing inserter"); execute(i, async) }
                 case Failure(errors) => Future {
+                  logger.debug("Errors during ingest: " + errors.list.mkString("  ", "\n  ", ""))
                   HttpResponse[JValue](BadRequest, content=Some(JArray(errors.list map (JString(_)))))
                 }
               }

@@ -35,6 +35,8 @@ trait BasicAccountManager[M[+_]] {
   implicit val M: Monad[M]
 
   def listAccountIds(apiKey: APIKey) : M[Set[AccountID]]
+
+  def mapAccountIds(apiKeys: Set[APIKey]) : M[Map[APIKey, Set[AccountID]]]
   
   def findAccountById(accountId: AccountID): M[Option[Account]]
 
