@@ -60,13 +60,14 @@ trait AccountManagerClientComponent {
     val path = config[String]("service.path")
     val user = config[String]("service.user")
     val password = config[String]("service.password")
+    val cacheSize = config[Int]("service.cache_size", 1000)
     
     val settings = AccountManagerClientSettings(protocol, host, port, path, user, password)
     new AccountManagerClient(settings)
   }
 }
 
-class AccountManagerClient(settings: AccountManagerClientSettings, cacheSize: Int = 1000) extends BasicAccountManager[Future] with AkkaDefaults with Logging {
+class AccountManagerClient(settings: AccountManagerClientSettings) extends BasicAccountManager[Future] with AkkaDefaults with Logging {
   import settings._
 
   private[this] val apiKeyToAccountCache = Cache[APIKey, Set[AccountID]](cacheSize)
