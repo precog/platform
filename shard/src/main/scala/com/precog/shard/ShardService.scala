@@ -28,7 +28,7 @@ import common.Path
 import common.security._
 import daze._
 
-import akka.dispatch.Future
+import akka.dispatch.{Future, Promise}
 
 import blueeyes.json._
 import blueeyes.bkka.{AkkaDefaults, Stoppable}
@@ -83,12 +83,12 @@ trait ShardService extends
       r.copy(content = r.content.map(Left(_)))
     }
 
-  def optionsResponse = Future {
+  def optionsResponse = Promise.successful(
     HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
       "Access-Control-Allow-Origin" -> "*",
       "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
       "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
-  }
+  )
 
   import java.nio.ByteBuffer
   import java.nio.charset.Charset

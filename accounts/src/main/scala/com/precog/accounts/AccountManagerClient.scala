@@ -24,7 +24,7 @@ import com.precog.common.Path
 import com.precog.common.cache.Cache
 import com.precog.common.security._
 
-import akka.dispatch.{ ExecutionContext, Future }
+import akka.dispatch.{ ExecutionContext, Future, Promise }
 
 import blueeyes.bkka._
 import blueeyes.core.data.DefaultBijections._
@@ -76,7 +76,7 @@ class AccountManagerClient(settings: AccountManagerClientSettings) extends Basic
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
   def listAccountIds(apiKey: APIKey) : Future[Set[AccountID]] = {
-    apiKeyToAccountCache.getIfPresent(apiKey).map(Future(_)).getOrElse {
+    apiKeyToAccountCache.getIfPresent(apiKey).map(Promise.successful(_)).getOrElse {
       invoke { client =>
         client.query("apiKey", apiKey).contentType(application/MimeTypes.json).get[JValue]("") map {
           case HttpResponse(HttpStatus(OK, _), _, Some(jaccounts), _) =>

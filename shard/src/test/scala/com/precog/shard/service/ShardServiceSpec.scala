@@ -315,6 +315,6 @@ trait TestQueryExecutor extends QueryExecutor[Future] {
 
   def status() = Future(Success(JArray(List(JString("status")))))
 
-  def startup = Future(true)
+  def startup = Promise.successful(true)
   def shutdown = Future { actorSystem.shutdown; true }
 }
