@@ -47,7 +47,7 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.monad._
 
-case class AccountManagerClientSettings(protocol: String, host: String, port: Int, path: String, user: String, password: String)
+case class AccountManagerClientSettings(protocol: String, host: String, port: Int, path: String, user: String, password: String, cacheSize: Int)
 
 trait AccountManagerClientComponent {
   implicit def asyncContext: ExecutionContext
@@ -62,7 +62,7 @@ trait AccountManagerClientComponent {
     val password = config[String]("service.password")
     val cacheSize = config[Int]("service.cache_size", 1000)
     
-    val settings = AccountManagerClientSettings(protocol, host, port, path, user, password)
+    val settings = AccountManagerClientSettings(protocol, host, port, path, user, password, cacheSize)
     new AccountManagerClient(settings)
   }
 }
