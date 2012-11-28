@@ -40,10 +40,10 @@ object MongoJobServer extends BlueEyesServer with JobService with ManagedMongoJo
     import WebJobManager._
 
     val config = config0.detach("auth")
-    val protocol = config[String]("protocol", "http")
-    val host = config[String]("host", "localhost")
-    val port = config[Int]("port", 30062)
-    val path = config[String]("path", "auth")
+    val protocol = config[String]("service.protocol", "http")
+    val host = config[String]("service.host", "localhost")
+    val port = config[Int]("service.port", 80)
+    val path = config[String]("service.path", "/security/v1/")
 
     WebAuthService(protocol, host, port, path).withM[Future]
   }

@@ -167,7 +167,7 @@ verboseErrors - whether to print verbose error messages (default: false)
               val f: Future[HttpResponse[JValue]] = client.path(apiUrl)
                 .query("apiKey", apiKey)
                 .query("q", query)
-                .contentType(application/MimeTypes.json)
+                .contentType[ByteChunk](application/MimeTypes.json)
                 .get[JValue]("")
 
               Await.ready(f, 120 seconds)
