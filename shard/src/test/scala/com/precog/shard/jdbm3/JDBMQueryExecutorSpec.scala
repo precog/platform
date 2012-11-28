@@ -46,7 +46,7 @@ trait TestJDBMQueryExecutor extends JDBMQueryExecutor
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
 
-  def startup() = Future { true }
+  def startup() = Promise.successful(true)
   def shutdown() = Future {
     actorSystem.shutdown
     true

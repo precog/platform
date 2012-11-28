@@ -175,7 +175,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
   def execute(inserter: EventQueueInserter, async: Boolean): Future[HttpResponse[JValue]] = try {
     threadPool.execute(inserter)
     if (async) {
-      Future { HttpResponse[JValue](Accepted) }
+      Promise.successful(HttpResponse[JValue](Accepted))
     } else {
       inserter.result map { case SyncResult(total, ingested, errors) =>
         val failed = errors.size
@@ -221,10 +221,11 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
               parser match {
                 case Success(inserter) =>
                   inserter flatMap { execute(_, async) }
-                case Failure(errors) => Future {
+                case Failure(errors) => 
                   logger.debug("Errors during ingest: " + errors.list.mkString("  ", "\n  ", ""))
-                  HttpResponse[JValue](BadRequest, content=Some(JArray(errors.list map (JString(_)))))
-                }
+                  Promise.successful(
+                    HttpResponse[JValue](BadRequest, content=Some(JArray(errors.list map (JString(_)))))
+                  )
               }
 
           } getOrElse {

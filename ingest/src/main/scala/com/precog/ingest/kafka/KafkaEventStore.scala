@@ -11,7 +11,7 @@ import ingest.util._
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.dispatch.Future
+import akka.dispatch.{Future, Promise}
 import akka.dispatch.MessageDispatcher
 
 import com.weiglewilczek.slf4s._ 
@@ -34,7 +34,7 @@ class KafkaEventStore(router: EventRouter, producerId: Int, firstEventId: Int = 
     }
   }
 
-  def start(): Future[Unit] = Future { () }
+  def start(): Future[Unit] = Promise.successful(())
 
   def stop(): Future[Unit] = router.close.map(_ => ())
 }
@@ -51,7 +51,7 @@ class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDi
 
   private val producer = new Producer[String, IngestMessage](new ProducerConfig(localProperties))
 
-  def start(): Future[Unit] = Future { () } 
+  def start(): Future[Unit] = Promise.successful(())
 
   def save(action: Action, timeout: Timeout) = Future {
     val msg = action match {
