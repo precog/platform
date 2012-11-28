@@ -220,6 +220,6 @@ trait ShardQueryExecutor
   } */
   
   private def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
-    M.point(table renderJson ',')
+    M.point((CharBuffer.wrap("[") :: (table renderJson ',')) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer]))
 }
 // vim: set ts=4 sw=4 et:

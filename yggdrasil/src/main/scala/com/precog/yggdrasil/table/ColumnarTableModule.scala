@@ -2733,14 +2733,14 @@ trait ColumnarTableModule[M[+_]]
     }
     
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
-      val delimiterBuffer = {
+      def delimiterBuffer = {
         val back = CharBuffer.allocate(1)
         back.put(delimiter)
         back.flip()
         back
       }
       
-      val delimitStream = delimiterBuffer :: StreamT.empty[M, CharBuffer]
+      def delimitStream = delimiterBuffer :: StreamT.empty[M, CharBuffer]
       
       def foldFlatMap(slices: StreamT[M, Slice], rendered: Boolean): StreamT[M, CharBuffer] = {
         StreamT[M, CharBuffer](slices.step map {
