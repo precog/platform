@@ -25,6 +25,7 @@ import com.precog.ingest.util._
 import accounts._
 import common._
 import common.security._
+import com.precog.util.PrecogUnit
 
 import blueeyes.bkka._
 import akka.dispatch.{ExecutionContext, Future, Promise}
@@ -59,21 +60,21 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
 
   protected implicit val M = new FutureMonad(ExecutionContext.fromExecutor(threadPool))
 
-  def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[Unit] = {
-    def writeChannel(stream: StreamT[Future, ByteBuffer]): Future[Unit] = {
+  def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[PrecogUnit] = {
+    def writeChannel(stream: StreamT[Future, ByteBuffer]): Future[PrecogUnit] = {
       stream.uncons flatMap {
-        case Some((bb, tail)) => Future { chan.write(bb);  writeChannel(tail) }
-        case None => Future(chan.close())
+        case Some((bb, tail)) => { chan.write(bb);  writeChannel(tail); }
+        case None => Future { chan.close(); PrecogUnit }
       }
     }
 
     chunk match {
-      case Left(bb) => Future { chan.write(bb); chan.close() }
+      case Left(bb) => Future { chan.write(bb); chan.close(); PrecogUnit }
       case Right(stream) => writeChannel(stream)
     }
   }
 
-  def ingest(r: APIKeyRecord, p: Path, event: JValue): Future[Unit] = {
+  def ingest(r: APIKeyRecord, p: Path, event: JValue): Future[PrecogUnit] = {
     val eventInstance = Event.fromJValue(r.apiKey, p, None, event)
     eventStore.save(eventInstance, insertTimeout)
   }
@@ -85,7 +86,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
 
     def run() {
       val errors: ListBuffer[(Int, String)] = new ListBuffer()
-      val futures: ListBuffer[Future[Unit]] = new ListBuffer()
+      val futures: ListBuffer[Future[PrecogUnit]] = new ListBuffer()
       var i = 0
       while (events.hasNext) {
         val ev = events.next()
