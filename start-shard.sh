@@ -71,7 +71,7 @@ VERSION=`git describe`
 INGEST_ASSEMBLY=$BASEDIR/ingest/target/ingest-assembly-$VERSION.jar
 AUTH_ASSEMBLY=$BASEDIR/auth/target/auth-assembly-$VERSION.jar
 ACCOUNTS_ASSEMBLY=$BASEDIR/accounts/target/accounts-assembly-$VERSION.jar
-JOBS_ASSEMBLY=$BASEDIR/accounts/target/heimdall-assembly-$VERSION.jar
+JOBS_ASSEMBLY=$BASEDIR/heimdall/target/heimdall-assembly-$VERSION.jar
 SHARD_ASSEMBLY=$BASEDIR/shard/target/shard-assembly-$VERSION.jar
 YGGDRASIL_ASSEMBLY=$BASEDIR/yggdrasil/target/yggdrasil-assembly-$VERSION.jar
 
@@ -242,7 +242,7 @@ function on_exit() {
     fi
 
     if is_running $JOBSPID; then
-        echo "Stopping accounts..."
+        echo "Stopping jobs..."
         kill $JOBSPID
         wait $JOBSPID
     fi
@@ -362,6 +362,9 @@ sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/auth/configs/dev/dev-auth-v
 
 sed -e "s!/var/log!$WORKDIR/logs!; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s/port = 80/port = 30062/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < $BASEDIR/accounts/configs/dev/accounts-v1.conf > $WORKDIR/configs/accounts-v1.conf || echo "Failed to update accounts config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/accounts/configs/dev/accounts-v1.logging.xml > $WORKDIR/configs/accounts-v1.logging.xml
+
+sed -e "s!/var/log!$WORKDIR/logs!; s/port = 80/port = 30062/; s!/security/v1/!/!; s!\[\"localhost\"\]!\[\"localhost:$MONGOPORT\"\]!" < $BASEDIR/heimdall/configs/dev/jobs-v1.conf > $WORKDIR/configs/jobs-v1.conf || echo "Failed to update jobs config"
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/heimdall/configs/dev/jobs-v1.logging.xml > $WORKDIR/configs/jobs-v1.logging.xml
 
 cd $BASEDIR
 
