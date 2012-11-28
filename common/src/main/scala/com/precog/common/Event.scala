@@ -10,7 +10,7 @@ import shapeless._
 
 sealed trait Action
 
-case class Event(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountID], data: JValue, metadata: Map[JPath, Set[UserMetadata]]) extends Action 
+case class Event(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountId], data: JValue, metadata: Map[JPath, Set[UserMetadata]]) extends Action 
 
 object Event {
   implicit val eventIso = Iso.hlist(Event.apply _, Event.unapply _)
@@ -19,7 +19,7 @@ object Event {
   
   implicit val (eventDecomposer, eventExtractor) = serialization[Event](schema)
 
-  def fromJValue(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountID], data: JValue): Event = {
+  def fromJValue(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountId], data: JValue): Event = {
     Event(apiKey, path, ownerAccountId, data, Map[JPath, Set[UserMetadata]]())
   }
 }
