@@ -12,12 +12,13 @@ import com.codecommit.gll.{Failure, LineStream, Success}
 import jline.TerminalFactory
 import jline.console.ConsoleReader
 
-import com.precog.util.PrecogUnit
 
+import com.precog.accounts.InMemoryAccountManager
 import com.precog.common.Path
-
 import com.precog.common.kafka._
 import com.precog.common.security._
+import com.precog.util.PrecogUnit
+
 import yggdrasil._
 import yggdrasil.actor._
 import yggdrasil.jdbm3._
@@ -283,6 +284,7 @@ object Console extends App {
 
         class Storage extends SystemActorStorageLike(fileMetadataStorage) {
           val accessControl = new UnrestrictedAccessControl[Future]()
+          val accountManager = new InMemoryAccountManager[Future]()
         }
 
         val storage = new Storage

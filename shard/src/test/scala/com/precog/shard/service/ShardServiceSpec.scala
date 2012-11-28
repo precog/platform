@@ -3,6 +3,7 @@ package service
 
 import kafka._
 
+import com.precog.accounts.{BasicAccountManager, InMemoryAccountManager}
 import com.precog.daze._
 import com.precog.common.Path
 import com.precog.common.security._
@@ -75,11 +76,12 @@ trait TestShardService extends
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
-  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]) = new TestQueryExecutor {
+  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]) = new TestQueryExecutor {
     val actorSystem = self.actorSystem
     val executionContext = self.asyncContext
     
     val accessControl = apiKeyManager
+    val accountManager = inMemAccountMgr
     val ownerMap = Map(
       Path("/")     ->             Set("root"),
       Path("/test") ->             Set("test"),
@@ -91,6 +93,7 @@ trait TestShardService extends
   }
 
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  val inMemAccountMgr = new InMemoryAccountManager[Future]
   val to = Duration(1, "seconds")
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   
@@ -109,6 +112,8 @@ trait TestShardService extends
   }, to)
   
   def apiKeyManagerFactory(config: Configuration) = apiKeyManager
+
+  def accountManagerFactory(config: Configuration) = inMemAccountMgr
 
   import java.nio.ByteBuffer
 
