@@ -129,11 +129,11 @@ object EmitterSpecs extends Specification
     }    
     
     "emit instruction for two intersected loads" in {
-      testEmit("""load("foo") intersect load("bar")""")(
+      testEmit("""load("foo") intersect load("foo")""")(
         Vector(
           PushString("foo"),
           LoadLocal,
-          PushString("bar"),
+          PushString("foo"),
           LoadLocal,
           IIntersect))
     }    

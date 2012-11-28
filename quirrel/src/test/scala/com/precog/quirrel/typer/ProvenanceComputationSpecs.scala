@@ -1342,7 +1342,12 @@ object ProvenanceComputationSpecs extends Specification
       }
       {
         val tree = compileSingle("foo := //baz intersect //bar foo")
-        tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/baz"), StaticProvenance("/bar")) => ok }
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+      }
+      {
+        val tree = compileSingle("foo := (//foo union //bar) intersect (//bar union //baz) foo")
+        tree.provenance mustEqual StaticProvenance("/bar")
         tree.errors must beEmpty
       }
       {
@@ -1418,8 +1423,8 @@ object ProvenanceComputationSpecs extends Specification
       
       {
         val tree = compileSingle("//foo intersect //bar")
-        tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
-        tree.errors must beEmpty
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
       }
     }  
 
