@@ -25,7 +25,7 @@ import org.specs2.mutable.Specification
 import java.io.File
 
 import akka.actor.ActorSystem
-import akka.dispatch.{ Await, ExecutionContext, Future }
+import akka.dispatch.{ Await, ExecutionContext, Future, Promise }
 import org.streum.configrity.Configuration
 import scalaz.{ Copointed, Failure, Monad, Success }
 import scalaz.effect.IO

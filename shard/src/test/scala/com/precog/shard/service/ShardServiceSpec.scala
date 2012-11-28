@@ -33,7 +33,7 @@ import org.scalacheck.Gen._
 
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
-import akka.dispatch.{Await, Future}
+import akka.dispatch.{Await, Future, Promise}
 import akka.util.Duration
 
 import org.joda.time._
