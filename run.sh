@@ -20,8 +20,10 @@
 #!/bin/bash
 
 function usage {
-    echo "Usage: ./run.sh [-b] [-m <mongo port>] [-q directory] [ingest.json ...]" >&2
+    echo "Usage: ./run.sh [-b] [-l] [-d] [-m <mongo port>] [-q directory] [ingest.json ...]" >&2
     echo "  -b: Build any required artifacts for the run" >&2
+    echo "  -l: Don't clean work directory on completion" >&2
+    echo "  -d: Print debug output" >&2
     exit 1
 }
 
@@ -30,7 +32,7 @@ if [ $# -eq 0 ]; then
     usage
 fi
 
-while getopts ":q:m:bl" opt; do
+while getopts ":q:m:bld" opt; do
     case $opt in
         q)
             QUERYDIR=$OPTARG
@@ -43,7 +45,10 @@ while getopts ":q:m:bl" opt; do
             EXTRAFLAGS="$EXTRAFLAGS -b"
             ;;
         l)
-            EXTRAFLAGS="$EXTRAFLAGS -l"
+            DONTCLEAN=1
+            ;;
+        d)
+            DEBUG=1
             ;;
         \?)
             echo "Unknown option $OPTARG!"
@@ -58,8 +63,8 @@ INGEST_PORT=30060
 QUERY_PORT=30070
 
 WORKDIR=$(mktemp -d -t standaloneShard.XXXXXX 2>&1)
-echo "Starting..."
-./start-shard.sh -d $WORKDIR $EXTRAFLAGS $MONGOPORT 1>/dev/null &
+echo "Starting under $WORKDIR"
+./start-shard.sh -d $WORKDIR $EXTRAFLAGS $MONGOPORT 1> $WORKDIR/shard.stdout &
 RUN_LOCAL_PID=$!
 
 # Wait to make sure things haven't died
@@ -75,9 +80,11 @@ function finished {
     echo "Hang on, killing start-shard.sh: $RUN_LOCAL_PID"
     kill $RUN_LOCAL_PID
     wait $RUN_LOCAL_PID
-    echo "Cleaning"
-    rm -rf $WORKDIR
-    rm results.json 2>/dev/null
+    if [ -z "$DONTCLEAN" ]; then
+        echo "Cleaning"
+        rm -rf $WORKDIR
+        rm results.json 2>/dev/null
+    fi
 }
 
 trap "finished; exit 1" TERM INT
@@ -116,13 +123,18 @@ for f in $@; do
     DATA=$(./muspelheim/src/test/python/newlinejson.py $f)
     COUNT=$(echo "$DATA" | wc -l)
     echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
-    echo "$DATA" | curl -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN"
+    INGEST_RESULT=$(echo "$DATA" | curl -s -S -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
+
+    [ -n "$DEBUG" ] && echo $INGEST_RESULT
 
     COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
     while [ -z "$COUNT_RESULT" ] || [ "$COUNT_RESULT" -lt "$COUNT" ]; do
+        [ -n "$DEBUG" ] && echo "Count result for $TABLE = $COUNT_RESULT"
         sleep 2
         COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
     done
+
+    [ -n "$DEBUG" ] && echo "Good count for $TABLE"
 
     echo ""
 done
@@ -137,6 +149,12 @@ else
     for f in $(find $QUERYDIR -type f ! -name '*.pending'); do
         query "$(cat $f)" > results.json
         RESULT="$(cat results.json)"
+
+        if [ -n "$DEBUG" ]; then
+            echo -e "Result for $f:"
+            cat results.json
+            echo ""
+        fi
 
         if ! python -m json.tool results.json 1>/dev/null 2>/dev/null || [ "${RESULT:0:1}" != "[" ] || [ "${RESULT:0:2}" = "[]" ]; then
             echo "Query $f returned a bad result" 1>&2

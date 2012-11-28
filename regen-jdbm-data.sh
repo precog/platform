@@ -21,21 +21,26 @@
 
 SRCDIR=muspelheim/src/test/resources/test_data
 OWNERTOKEN=C18ED787-BF07-4097-B819-0415C759C8D5
+OWNERACCOUNT=FakeAccount
 
 function usage() {
     echo "Usage: `basename $0` [-n] [-t <owner token>] [-s <source directory>] <target data directory>" >&2
     echo "  -n : don't wipe existing data" >&2
     echo "  -t : Specify the owner token (defaults to $OWNERTOKEN)" >&2
+    cho  "  -o : Specify the owner account (defaults to $OWNERACCOUNT)" >&2
     echo "  -s : Specify the source directory (defaults to `dirname $0`/$SRCDIR)" >&2
     exit 1
 }
 
 VERSION=`git describe`
 
-while getopts "nt:s:" OPTNAME; do
+while getopts "nt:o:s:" OPTNAME; do
     case $OPTNAME in
         t)
             OWNERTOKEN=$OPTARG
+            ;;
+        o)
+            OWNERACCOUNT=$OPTARG
             ;;
         s)
             [ -d $OPTARG ] || {
@@ -92,4 +97,4 @@ popd > /dev/null
 
 [ -z "$DONTWIPE" ] && rm -rf $DATADIR/*
 
-java -Xmx1G -cp yggdrasil/target/yggdrasil-assembly-$VERSION.jar com.precog.yggdrasil.util.YggUtils import -t $OWNERTOKEN -s $DATADIR $SOURCES
+java -Xmx1G -cp yggdrasil/target/yggdrasil-assembly-$VERSION.jar com.precog.yggdrasil.util.YggUtils import -t $OWNERTOKEN -o $OWNERACCOUNT -s $DATADIR $SOURCES
