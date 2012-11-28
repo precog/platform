@@ -62,20 +62,19 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
   def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[Unit] = {
     def writeChannel(stream: StreamT[Future, ByteBuffer]): Future[Unit] = {
       stream.uncons flatMap {
-        case Some((bb, tail)) => M.point({ logger.debug("Uncons write of Some(bb) to " + chan); chan.write(bb); logger.debug("Uncons write complete")}).flatMap { _ => writeChannel(tail) }
-        case None => logger.debug("Finished writes, closing channel"); Future(chan.close())
+        case Some((bb, tail)) => Future { chan.write(bb);  writeChannel(tail) }
+        case None => Future(chan.close())
       }
     }
 
     chunk match {
-      case Left(bb) => logger.debug("Immediate write on Left(bb)"); Future { chan.write(bb); chan.close() }
+      case Left(bb) => Future { chan.write(bb); chan.close() }
       case Right(stream) => writeChannel(stream)
     }
   }
 
   def ingest(r: APIKeyRecord, p: Path, event: JValue): Future[Unit] = {
     val eventInstance = Event.fromJValue(r.apiKey, p, None, event)
-    logger.trace("Saving event: " + eventInstance)
     eventStore.save(eventInstance, insertTimeout)
   }
 
@@ -168,7 +167,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
 
   def parseJson(channel: ReadableByteChannel, t: APIKeyRecord, p: Path): EventQueueInserter = {
     val reader = new BufferedReader(Channels.newReader(channel, Charsets.UTF_8.name))
-    val lines = Iterator.continually { logger.debug("Reading line from input"); reader.readLine() }.takeWhile(_ != null)
+    val lines = Iterator.continually { reader.readLine() }.takeWhile(_ != null)
     new EventQueueInserter(t, p, lines map { json =>
       try {
         Right(JParser.parse(json))
@@ -193,7 +192,6 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
   }
 
   def execute(inserter: EventQueueInserter, async: Boolean): Future[HttpResponse[JValue]] = try {
-    logger.debug("Executing inserter: " + inserter)
     threadPool.execute(inserter)
     if (async) {
       Future { HttpResponse[JValue](Accepted) }
@@ -241,8 +239,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
 
               parser match {
                 case Success(inserter) =>
-                  logger.debug("Success for inserter")
-                  inserter flatMap { i => logger.debug("Processing inserter"); execute(i, async) }
+                  inserter flatMap { execute(_, async) }
                 case Failure(errors) => Future {
                   logger.debug("Errors during ingest: " + errors.list.mkString("  ", "\n  ", ""))
                   HttpResponse[JValue](BadRequest, content=Some(JArray(errors.list map (JString(_)))))
