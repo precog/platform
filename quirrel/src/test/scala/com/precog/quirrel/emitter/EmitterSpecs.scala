@@ -859,7 +859,7 @@ object EmitterSpecs extends Specification
           Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
           Merge))
     }
-
+    
     "emit merge_buckets & for trivial cf example with conjunction" in {
       testEmit("clicks := //clicks onDay := solve 'day clicks where clicks.day = 'day & clicks.din = 'day onDay")(
         Vector(

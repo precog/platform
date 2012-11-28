@@ -517,16 +517,20 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
   
   
   private def findCommonality(exprs: Set[Expr], sigma: Map[Formal, Expr], order: List[Formal]): Option[Expr] = {
-    val env: Map[Formal, Set[List[Expr]]] = order.reverse.foldLeft(Map[Formal, Set[List[Expr]]]()) { (env, formal) =>
-      val results = buildChains(env)(sigma(formal))
-      env + (formal -> results)
+    if (exprs.size <= 1) {
+      exprs.headOption
+    } else {
+      val env: Map[Formal, Set[List[Expr]]] = order.reverse.foldLeft(Map[Formal, Set[List[Expr]]]()) { (env, formal) =>
+        val results = buildChains(env)(sigma(formal))
+        env + (formal -> results)
+      }
+          
+      val sharedPrefixReversed = exprs flatMap buildChains(env) map { _.reverse } reduceOption { (left, right) =>
+        left zip right takeWhile { case (a, b) => a equalsIgnoreLoc b } map { _._1 }
+      }
+      
+      sharedPrefixReversed flatMap { _.lastOption }
     }
-        
-    val sharedPrefixReversed = exprs flatMap buildChains(env) map { _.reverse } reduceOption { (left, right) =>
-      left zip right takeWhile { case (a, b) => a equalsIgnoreLoc b } map { _._1 }
-    }
-    
-    sharedPrefixReversed flatMap { _.lastOption }
   }
     
   private def buildChains(env: Map[(Identifier, Let), Set[List[Expr]]])(expr: Expr): Set[List[Expr]] = expr match {

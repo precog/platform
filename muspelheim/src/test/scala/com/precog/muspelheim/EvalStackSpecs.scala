@@ -2334,6 +2334,18 @@ trait EvalStackSpecs extends Specification {
         
       eval(input) must not(throwAn[Exception])
     }
+    
+    "solve on a constraint clause defined by an object with two non-const fields" in {
+      val input = """
+        | clicks := //clicks
+        | data := { user: clicks.user, page: clicks.page }
+        | 
+        | solve 'bins = data
+        |   'bins
+        | """.stripMargin
+      
+      evalE(input) must not(throwAn[Exception])
+    }
   }
 }
 

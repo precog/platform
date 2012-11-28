@@ -29,3 +29,4 @@ jprofiler.jnilib
 /mongo/proguard.log
 /mongo/precog*.zip
 /mongo/precog/
+.tag
