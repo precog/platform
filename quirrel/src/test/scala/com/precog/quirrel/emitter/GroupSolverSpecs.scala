@@ -1000,5 +1000,16 @@ object GroupSolverSpecs extends Specification
         
       compileSingle(input).errors must beEmpty
     }
+    
+    "reject a solve where the extras involve reductions" in {
+      val input = """
+        | sales := //sales
+        | solve 'state
+        |   sales where sales.state = 'state &
+        |     (sales.total = max(sales.total) | sales.total = min(sales.total))
+        | """.stripMargin
+        
+      compileSingle(input).errors must not(beEmpty)
+    }
   }
 }
