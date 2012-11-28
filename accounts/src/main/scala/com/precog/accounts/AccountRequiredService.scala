@@ -34,9 +34,9 @@ import scalaz.syntax.std.option._
 import com.precog.common.Path
 import com.precog.common.security._
 
-class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], val delegate: HttpService[A, (APIKeyRecord, Path, AccountID) => Future[B]])
+class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], val delegate: HttpService[A, (APIKeyRecord, Path, AccountId) => Future[B]])
   (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
-  extends DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, AccountID) => Future[B]] with Logging {
+  extends DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, AccountId) => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
     delegate.service(request) map { f => (apiKey: APIKeyRecord, path: Path) =>
       logger.debug("Locating account for request with apiKey " + apiKey.apiKey)
@@ -54,7 +54,7 @@ class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], 
             if(accts.size == 1) {
               f(apiKey, path, accts.head)
             } else {
-              logger.warn("Unable to determine account ID from api key: " + apiKey.apiKey)
+              logger.warn("Unable to determine account Id from api key: " + apiKey.apiKey)
               Future(err(BadRequest, "Unable to identify target account from apiKey"))
             }
           }
@@ -73,5 +73,5 @@ class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], 
   val metadata =
     Some(AboutMetadata(
       ParameterMetadata('ownerAccountId, None),
-      DescriptionMetadata("An explicit or implicit Precog account ID is required for the use of this service.")))
+      DescriptionMetadata("An explicit or implicit Precog account Id is required for the use of this service.")))
 }

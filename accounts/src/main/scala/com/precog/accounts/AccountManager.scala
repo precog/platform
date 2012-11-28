@@ -34,11 +34,11 @@ import scalaz.syntax.monad._
 trait BasicAccountManager[M[+_]] {
   implicit val M: Monad[M]
 
-  def listAccountIds(apiKey: APIKey) : M[Set[AccountID]]
+  def listAccountIds(apiKey: APIKey) : M[Set[AccountId]]
 
-  def mapAccountIds(apiKeys: Set[APIKey]) : M[Map[APIKey, Set[AccountID]]]
+  def mapAccountIds(apiKeys: Set[APIKey]) : M[Map[APIKey, Set[AccountId]]]
   
-  def findAccountById(accountId: AccountID): M[Option[Account]]
+  def findAccountById(accountId: AccountId): M[Option[Account]]
 
   def close(): M[Unit]
 }
@@ -63,7 +63,7 @@ trait AccountManager[M[+_]] extends BasicAccountManager[M] {
     updateAccount(account.copy(passwordHash = saltAndHash(newPassword, salt), passwordSalt = salt))
   }
  
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountID] = None)(f: (AccountID, Path) => M[APIKey]): M[Account]
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None)(f: (AccountId, Path) => M[APIKey]): M[Account]
 
   def findAccountByEmail(email: String) : M[Option[Account]]
 
@@ -92,5 +92,5 @@ trait AccountManager[M[+_]] extends BasicAccountManager[M] {
     }
   }
 
-  def deleteAccount(accountId: AccountID): M[Option[Account]]
+  def deleteAccount(accountId: AccountId): M[Option[Account]]
 } 

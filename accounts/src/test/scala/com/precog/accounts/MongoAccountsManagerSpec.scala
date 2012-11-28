@@ -72,7 +72,7 @@ object MongoAccountManagerSpec extends Specification {
     
     "not find missing Account" in new AccountManager { 
 
-      val result = Await.result(accountManager.findAccount(notFoundAccountID), timeout)
+      val result = Await.result(accountManager.findAccount(notFoundAccountId), timeout)
 
       result must beLike {
         case None => ok 
@@ -151,7 +151,7 @@ object MongoAccountManagerSpec extends Specification {
 
     val to = Duration(30, "seconds")
   
-    val notFoundAccountID = "NOT-GOING-TO-FIND"
+    val notFoundAccountId = "NOT-GOING-TO-FIND"
 
     val account = new Account(accountManager.newUserID,
                                         "email",

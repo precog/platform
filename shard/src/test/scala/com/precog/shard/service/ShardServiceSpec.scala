@@ -267,7 +267,7 @@ trait TestQueryExecutor extends QueryExecutor[Future] {
   val to = Duration(1, "seconds")
   
   val accessControl: AccessControl[Future]
-  val ownerMap: Map[Path, Set[AccountID]]
+  val ownerMap: Map[Path, Set[AccountId]]
 
   private def wrap(a: JArray): StreamT[Future, CharBuffer] = {
     val str = a.toString

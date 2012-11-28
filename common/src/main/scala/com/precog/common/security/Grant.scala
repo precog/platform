@@ -33,11 +33,11 @@ import scalaz.Scalaz._
 import shapeless._
 
 case class Grant(
-  grantId:        GrantID,
+  grantId:        GrantId,
   name:           Option[String],
   description:    Option[String],
   issuerKey:      Option[APIKey],
-  parentIds:      Set[GrantID],
+  parentIds:      Set[GrantId],
   permissions:    Set[Permission],
   expirationDate: Option[DateTime]) {
   
@@ -113,7 +113,7 @@ object Grant extends Logging {
   }
 }
 
-case class NewGrantRequest(name: Option[String], description: Option[String], parentIds: Set[GrantID], permissions: Set[Permission], expirationDate: Option[DateTime]) {
+case class NewGrantRequest(name: Option[String], description: Option[String], parentIds: Set[GrantId], permissions: Set[Permission], expirationDate: Option[DateTime]) {
   def isExpired(at: Option[DateTime]) = (expirationDate, at) match {
     case (None, _) => false
     case (_, None) => true
@@ -128,7 +128,7 @@ object NewGrantRequest {
   
   implicit val (newGrantRequestDecomposer, newGrantRequestExtractor) = serialization[NewGrantRequest](schema)
 
-  def newAccount(accountId: AccountID, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantID], expiration: Option[DateTime]): NewGrantRequest = {
+  def newAccount(accountId: AccountId, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantId], expiration: Option[DateTime]): NewGrantRequest = {
     // Path is "/" so that an account may read data it owns no matter what path it exists under. See AccessControlSpec, APIKeyManager.newAccountGrant
     val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path("/"), Set(accountId)) : Permission)
     val writePerms = Set(WritePermission, DeletePermission).map(_(path, Set()) : Permission)

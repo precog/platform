@@ -218,7 +218,7 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
 
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
   lazy val ingestAPIKey = config.getProperty("apiKey", "dummy")
-  val ingestOwnerAccountId: Option[AccountID] = None
+  val ingestOwnerAccountId: Option[AccountId] = None
   val client = new HttpClientXLightWeb 
 
   implicit val M: scalaz.Monad[Future] = new blueeyes.bkka.FutureMonad(defaultFutureDispatch)

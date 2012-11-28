@@ -70,17 +70,17 @@ trait AccountManagerClientComponent {
 class AccountManagerClient(settings: AccountManagerClientSettings) extends BasicAccountManager[Future] with AkkaDefaults with Logging {
   import settings._
 
-  private[this] val apiKeyToAccountCache = Cache[APIKey, Set[AccountID]](cacheSize)
+  private[this] val apiKeyToAccountCache = Cache[APIKey, Set[AccountId]](cacheSize)
 
   val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
-  def listAccountIds(apiKey: APIKey) : Future[Set[AccountID]] = {
+  def listAccountIds(apiKey: APIKey) : Future[Set[AccountId]] = {
     apiKeyToAccountCache.getIfPresent(apiKey).map(Promise.successful(_)).getOrElse {
       invoke { client =>
         client.query("apiKey", apiKey).contentType(application/MimeTypes.json).get[JValue]("") map {
           case HttpResponse(HttpStatus(OK, _), _, Some(jaccounts), _) =>
-            jaccounts.validated[Set[WrappedAccountID]] match {
+            jaccounts.validated[Set[WrappedAccountId]] match {
               case Success(accountIds) => {
                 val ids = accountIds.map(_.accountId)
                 apiKeyToAccountCache.put(apiKey, ids)
@@ -103,12 +103,12 @@ class AccountManagerClient(settings: AccountManagerClientSettings) extends Basic
     }
   }
 
-  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountID]]] =
-    apiKeys.foldLeft(Future(Map.empty[APIKey, Set[AccountID]])) {
+  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountId]]] =
+    apiKeys.foldLeft(Future(Map.empty[APIKey, Set[AccountId]])) {
       case (fmap, key) => fmap.flatMap { m => listAccountIds(key).map { ids => m + (key -> ids) } }
     }
   
-  def findAccountById(accountId: AccountID): Future[Option[Account]] = {
+  def findAccountById(accountId: AccountId): Future[Option[Account]] = {
     invoke { client =>
       client.contentType(application/MimeTypes.json).get[JValue](accountId) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jaccount), _) =>

@@ -120,16 +120,16 @@ trait AccountAuthorization {
   }
 }
 
-case class WrappedAccountID(accountId: AccountID)
+case class WrappedAccountId(accountId: AccountId)
 
-object WrappedAccountID {
+object WrappedAccountId {
   import com.precog.common.json._
 
-  implicit val wrappedAccountIdIso = Iso.hlist(WrappedAccountID.apply _, WrappedAccountID.unapply _)
+  implicit val wrappedAccountIdIso = Iso.hlist(WrappedAccountId.apply _, WrappedAccountId.unapply _)
   
   val schema = "accountId" :: HNil
 
-  implicit val (wrappedAccountIdDecomposer, wrappedAccountIdExtractor) = serialization[WrappedAccountID](schema)
+  implicit val (wrappedAccountIdDecomposer, wrappedAccountIdExtractor) = serialization[WrappedAccountId](schema)
 }
 
 class ListAccountsHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
@@ -142,7 +142,7 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
       accountManagement.listAccountIds(auth.apiKey).map { 
         case accountIds =>
           logger.debug("Found accounts for API key: "+auth.apiKey+" "+accountIds)
-          HttpResponse[JValue](OK, content = Some(accountIds.map(WrappedAccountID(_)).serialize))
+          HttpResponse[JValue](OK, content = Some(accountIds.map(WrappedAccountId(_)).serialize))
       }
     }
   }

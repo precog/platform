@@ -112,7 +112,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
 
   private implicit val impTimeout = settings.timeout
   
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountID] = None)(f: (AccountID, Path) => Future[APIKey]): Future[Account] = {
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId] = None)(f: (AccountId, Path) => Future[APIKey]): Future[Account] = {
     for {
       accountId <- newAccountId
       path = Path(accountId)
@@ -155,8 +155,8 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
   
   def listAccountIds(apiKey: String) = findAllMatching[Account]("apiKey", apiKey, settings.accounts).map(_.map(_.accountId))
   
-  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountID]]] =
-    apiKeys.foldLeft(Future(Map.empty[APIKey, Set[AccountID]])) {
+  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountId]]] =
+    apiKeys.foldLeft(Future(Map.empty[APIKey, Set[AccountId]])) {
       case (fmap, key) => fmap.flatMap { m => listAccountIds(key).map { ids => m + (key -> ids) } }
     }
   

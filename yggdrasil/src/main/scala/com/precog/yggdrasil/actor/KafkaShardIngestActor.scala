@@ -184,7 +184,7 @@ abstract class KafkaShardIngestActor(shardId: String,
     @tailrec
     def buildBatch(
       input: List[(IngestMessage,Long)],
-      apiKeyMap: Map[APIKey, Set[AccountID]],
+      apiKeyMap: Map[APIKey, Set[AccountId]],
       batch: Vector[IngestMessage],
       checkpoint: YggCheckpoint
     ): (Vector[IngestMessage], YggCheckpoint) = input match {

@@ -363,11 +363,11 @@ class APIKeyManagement(val apiKeyManager: APIKeyManager[Future])(implicit val ex
     }
   }
   
-  def addAPIKeyGrant(apiKey: APIKey, grantId: GrantID): Future[Validation[String, Unit]] = {
+  def addAPIKeyGrant(apiKey: APIKey, grantId: GrantId): Future[Validation[String, Unit]] = {
     apiKeyManager.addGrants(apiKey, Set(grantId)).map(_.map(_ => ()).toSuccess("Unable to add grant "+grantId+" to API key "+apiKey))
   }
   
-  def removeAPIKeyGrant(apiKey: APIKey, grantId: GrantID): Future[Validation[String, Unit]] = {
+  def removeAPIKeyGrant(apiKey: APIKey, grantId: GrantId): Future[Validation[String, Unit]] = {
     apiKeyManager.removeGrants(apiKey, Set(grantId)).map(_.map(_ => ()).toSuccess("Unable to remove grant "+grantId+" from API key "+apiKey))
   } 
 
@@ -375,27 +375,27 @@ class APIKeyManagement(val apiKeyManager: APIKeyManager[Future])(implicit val ex
     apiKeyManager.deleteAPIKey(apiKey).map(_.isDefined)
   } 
 
-  def createGrant(apiKey: APIKey, request: NewGrantRequest): Future[Validation[String, GrantID]] = {
+  def createGrant(apiKey: APIKey, request: NewGrantRequest): Future[Validation[String, GrantId]] = {
     apiKeyManager.deriveGrant(request.name, request.description, apiKey, request.permissions, request.expirationDate).map(
       _.toSuccess("Requestor lacks permissions to create grant")
     )
   }
   
-  def grantDetails(grantId: GrantID): Future[Validation[String, Grant]] = {
+  def grantDetails(grantId: GrantId): Future[Validation[String, Grant]] = {
     apiKeyManager.findGrant(grantId).map(_.toSuccess("Unable to find grant "+grantId))
   }
 
-  def grantChildren(grantId: GrantID): Future[Set[Grant]] = {
+  def grantChildren(grantId: GrantId): Future[Set[Grant]] = {
     apiKeyManager.findGrantChildren(grantId)
   }
   
-  def addGrantChild(issuerKey: APIKey, parentId: GrantID, request: NewGrantRequest): Future[Validation[String, GrantID]] = {
+  def addGrantChild(issuerKey: APIKey, parentId: GrantId, request: NewGrantRequest): Future[Validation[String, GrantId]] = {
     apiKeyManager.deriveSingleParentGrant(None, None, issuerKey, parentId, request.permissions, request.expirationDate).map(
       _.toSuccess("Requestor lacks permissions to create grant")
     )
   }
 
-  def deleteGrant(grantId: GrantID): Future[Boolean] = {
+  def deleteGrant(grantId: GrantId): Future[Boolean] = {
     apiKeyManager.deleteGrant(grantId).map(!_.isEmpty)
   } 
 

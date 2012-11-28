@@ -33,7 +33,7 @@ case class APIKeyRecord(
   name:           Option[String],
   description:    Option[String],
   issuerKey:      Option[APIKey],
-  grants:         Set[GrantID],
+  grants:         Set[GrantId],
   isRoot:         Boolean)
 
 object APIKeyRecord {
@@ -61,7 +61,7 @@ object NewAPIKeyRequest {
   implicit val (newAPIKeyRequestDecomposer, newAPIKeyRequestExtractor) = serialization[NewAPIKeyRequest](schema)
   
   def newAccount(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None) = {
-    val grants = NewGrantRequest.newAccount(accountId, path, name.map(_+"-grant"), description.map(_+" standard account grant"), Set.empty[GrantID], None)
+    val grants = NewGrantRequest.newAccount(accountId, path, name.map(_+"-grant"), description.map(_+" standard account grant"), Set.empty[GrantId], None)
     NewAPIKeyRequest(name, description, Set(grants))
   }
 }
