@@ -306,21 +306,21 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     }
     
     def extract(res: Result): Table = {
-      val res2 = res filter {
-        case (count, sum1, sum2, sumsq1, sumsq2, _) => (count > 0) && (sqrt(count * sumsq1 - sum1 * sum1) != 0) && (sqrt(count * sumsq2 - sum2 * sum2) != 0)
-      } 
-      
-      res2 map { //TODO division by zero, negative sqrt
-        case (count, sum1, sum2, sumsq1, sumsq2, productSum) => {
+      res filter (_._1 > 0) map { case (count, sum1, sum2, sumsq1, sumsq2, productSum) =>
+        val unscaledVar1 = count * sumsq1 - sum1 * sum1
+        val unscaledVar2 = count * sumsq2 - sum2 * sum2
+        if (unscaledVar1 != 0 && unscaledVar2 != 0) {
           val cov = (productSum - ((sum1 * sum2) / count)) / count
-          val stdDev1 = sqrt(count * sumsq1 - sum1 * sum1) / count
-          val stdDev2 = sqrt(count * sumsq2 - sum2 * sum2) / count
+          val stdDev1 = sqrt(unscaledVar1) / count
+          val stdDev2 = sqrt(unscaledVar2) / count
 
           val resultTable = Table.constDecimal(Set(CNum(cov / (stdDev1 * stdDev2))))  //TODO the following lines are used throughout. refactor! 
           val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
           val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+        } else {
+          Table.empty
         }
       } getOrElse Table.empty
     }
