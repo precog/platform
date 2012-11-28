@@ -2346,6 +2346,36 @@ trait EvalStackSpecs extends Specification {
       
       evalE(input) must not(throwAn[Exception])
     }
+    
+    "solve a chaining of user-defined functions involving repeated where clauses" in {
+      val input = """
+        | import std::time::*
+        | import std::stats::*
+        | 
+        | agents := load("/snapEngage/agents")
+        | 
+        | upperBound := getMillis("2012-04-03T23:59:59")
+        | lowerBound := getMillis("2012-04-03T00:00:00")
+        | extraLowerBound := lowerBound - (upperBound - lowerBound)/3 
+        | 
+        | data := {agentId: agents.agentId, timeStamp: agents.timeStamp, action: agents.action, millis: getMillis(agents.timeStamp)}
+        | data' := data where data.millis < upperBound & data.millis > extraLowerBound & data.agentId = "agent1"
+        | 
+        | 
+        | lastEvent(data) := data where data.millis = max(data.millis )
+        | --lastEvent(data')
+        | 
+        | previousEvents(data, millis) := data where data.millis < millis
+        | --previous := previousEvents(data', 1333477670000)
+        | --last := lastEvent(previous)
+        | --last
+        | 
+        | solve 'time = data'.millis
+        |  {end: 'time, start: lastEvent(previousEvents(data', 'time))}
+        | """.stripMargin
+        
+      evalE(input) must not(throwAn[Exception])
+    }
   }
 }
 
