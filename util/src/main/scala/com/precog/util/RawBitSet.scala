@@ -21,6 +21,8 @@ package com.precog.util
 
 import scala.annotation.tailrec
 
+import java.util.Arrays.fill
+
 
 object RawBitSet {
   final def create(size: Int): RawBitSet = new Array[Int]((size >>> 5) + 1)
@@ -49,6 +51,8 @@ object RawBitSet {
       bits(pos) &= ~(1 << (i & 0x1F))
     }
   }
+
+  final def clear(bits: Array[Int]) = fill(bits, 0)
 
   final def toArray(bits: Array[Int]): Array[Int] = {
     var n = 0

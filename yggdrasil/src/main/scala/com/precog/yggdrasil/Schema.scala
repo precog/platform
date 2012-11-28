@@ -24,7 +24,11 @@ import com.precog.common.json._
 import com.precog.bytecode._
 
 object Schema {
-  def ctypes(primitive : JPrimitiveType): Set[CType] = primitive match {
+  def ctypes(jtype : JType): Set[CType] = jtype match {
+    case JArrayFixedT(indices) if indices.isEmpty => Set(CEmptyArray)
+    case JObjectFixedT(fields) if fields.isEmpty => Set(CEmptyObject)
+    case JArrayFixedT(indices) => indices.values.toSet.flatMap { tpe: JType => ctypes(tpe) }
+    case JObjectFixedT(fields) => fields.values.toSet.flatMap { tpe: JType => ctypes(tpe) }
     case JArrayHomogeneousT(elemType) => ctypes(elemType) collect {
       case cType: CValueType[_] => CArrayType(cType)
     }
@@ -32,9 +36,10 @@ object Schema {
     case JTextT => Set(CString)
     case JBooleanT => Set(CBoolean)
     case JNullT => Set(CNull)
+    case _ => Set.empty
   }
 
-  private def fromCValueType(t: CValueType[_]): Option[JPrimitiveType] = t match {
+  private def fromCValueType(t: CValueType[_]): Option[JType] = t match {
     case CBoolean => Some(JBooleanT)
     case CString => Some(JTextT)
     case CLong | CDouble | CNum => Some(JNumberT)

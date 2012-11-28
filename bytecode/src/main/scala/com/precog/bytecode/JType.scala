@@ -31,8 +31,7 @@ case object JBooleanT extends JPrimitiveType
 case object JNullT extends JPrimitiveType
 
 sealed trait JArrayT extends JType
-//TODO JArrayHomogeneoutT(JNullT) is allowed here, but not in CArrayType(_).
-case class JArrayHomogeneousT(jType: JPrimitiveType) extends JArrayT with JPrimitiveType
+case class JArrayHomogeneousT(jType: JType) extends JArrayT
 case class JArrayFixedT(elements: Map[Int, JType]) extends JArrayT
 case object JArrayUnfixedT extends JArrayT
 
