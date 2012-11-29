@@ -22,6 +22,7 @@ package actor
 
 import metadata._
 
+import com.precog.accounts.BasicAccountManager
 import com.precog.common._
 import com.precog.common.security._
 
@@ -50,6 +51,7 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
 
   trait ActorStorageLike extends StorageLike with Logging {
     def accessControl: AccessControl[Future]
+    def accountManager: BasicAccountManager[Future]
     def shardSystemActor: ActorRef
 
     def start(): Future[Boolean]

@@ -25,6 +25,8 @@ import blueeyes.core.service._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 
+import com.weiglewilczek.slf4s.Logging
+
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.std.option._
@@ -32,21 +34,38 @@ import scalaz.syntax.std.option._
 import com.precog.common.Path
 import com.precog.common.security._
 
-class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], val delegate: HttpService[A, (APIKeyRecord, Path, Account) => Future[B]])
+class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], val delegate: HttpService[A, (APIKeyRecord, Path, AccountId) => Future[B]])
   (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
-  extends DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, Account) => Future[B]] {
+  extends DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, AccountId) => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
     delegate.service(request) map { f => (apiKey: APIKeyRecord, path: Path) =>
+      logger.debug("Locating account for request with apiKey " + apiKey.apiKey)
       request.parameters.get('ownerAccountId).map { accountId =>
+        logger.debug("Using provided ownerAccountId: " + accountId)
         accountManager.findAccountById(accountId).flatMap {
-          case Some(account) => f(apiKey, path, account)
+          case Some(account) => f(apiKey, path, account.accountId)
           case None => Future(err(BadRequest, "Unknown account Id: "+accountId))
         }
       }.getOrElse {
-        accountManager.listAccountIds(apiKey.apiKey).flatMap { accts =>
-          if(accts.size == 1) f(apiKey, path, accts.head)
-          else Future(err(BadRequest, "Unknown to identify target account"))
-        }        
+        logger.debug("Looking up accounts based on apiKey")
+        try {
+          accountManager.listAccountIds(apiKey.apiKey).flatMap { accts =>
+            logger.debug("Found accounts: " + accts)
+            if(accts.size == 1) {
+              f(apiKey, path, accts.head)
+            } else {
+              logger.warn("Unable to determine account Id from api key: " + apiKey.apiKey)
+              Future(err(BadRequest, "Unable to identify target account from apiKey"))
+            }
+          }
+        } catch {
+          case e => {
+            logger.error("Error locating account from apiKey " + apiKey, e);
+            Future(err(BadRequest, "Unable to identify target account from apiKey"))
+          }
+        } finally {
+          logger.debug("Exiting AccountRequiredService handling")
+        }
       }
     }
   }
@@ -54,5 +73,5 @@ class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], 
   val metadata =
     Some(AboutMetadata(
       ParameterMetadata('ownerAccountId, None),
-      DescriptionMetadata("An explicit or implicit Precog account ID is required for the use of this service.")))
+      DescriptionMetadata("An explicit or implicit Precog account Id is required for the use of this service.")))
 }

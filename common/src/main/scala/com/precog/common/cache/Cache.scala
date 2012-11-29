@@ -17,33 +17,19 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.common
+package com.precog.common.cache
 
-import blueeyes.json._
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.serialization.DefaultSerialization.{DateTimeDecomposer => _, DateTimeExtractor => _, _}
-import blueeyes.json.serialization.Extractor._
+import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache, Cache => GCache}
+import java.util.concurrent.ExecutionException
 
-import org.joda.time.DateTime
-import org.joda.time.format.ISODateTimeFormat
+class Cache[K,V] (private val backing: GCache[K,V]) {
+  def getIfPresent(key: K): Option[V] = Option(backing.getIfPresent(key))
+  def put(key: K, value: V): Unit = backing.put(key, value)
+}
 
-import scalaz._
-
-package object security {
-  type AccountId = String
-  type APIKey    = String
-  type GrantId   = String
-
-  private val isoFormat = ISODateTimeFormat.dateTime
-
-  implicit val TZDateTimeDecomposer: Decomposer[DateTime] = new Decomposer[DateTime] {
-    override def decompose(d: DateTime): JValue = JString(isoFormat.print(d))
-  }
-
-  implicit val TZDateTimeExtractor: Extractor[DateTime] = new Extractor[DateTime] with ValidatedExtraction[DateTime] {    
-    override def validated(obj: JValue): Validation[Error, DateTime] = obj match {
-      case JString(dt) => Success(isoFormat.parseDateTime(dt))
-      case _           => Failure(Invalid("Date time must be represented as JSON string"))
-    }
+object Cache {
+ def apply[K, V] (size: Int): Cache[K, V] = {
+   val builder: CacheBuilder[K, V] = CacheBuilder.newBuilder.asInstanceOf[CacheBuilder[K, V]]
+   new Cache[K, V](builder.maximumSize(size).build())
   }
 }

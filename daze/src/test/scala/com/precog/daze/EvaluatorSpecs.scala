@@ -2687,6 +2687,31 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
     
+    "split where the commonality is an object concat" in {
+      /*
+       * clicks := //clicks
+       * data := { user: clicks.user, page: clicks.page }
+       * 
+       * solve 'bins = data
+       *   'bins
+       */
+       
+      val line = Line(0, "")
+      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      
+      val data = Join(line, JoinObject, IdentitySort,
+        Join(line, DerefObject, CrossLeftSort,
+          clicks,
+          Root(line, CString("user"))),
+        Join(line, DerefObject, CrossLeftSort,
+          clicks,
+          Root(line, CString("page"))))
+      
+      lazy val input: dag.Split = dag.Split(line,
+        dag.Group(1, data, UnfixedSolution(0, data)),
+        SplitParam(line, 0)(input))
+    }
+    
     "split where the commonality is a union" in {
       // clicks := //clicks 
       // data := clicks union clicks

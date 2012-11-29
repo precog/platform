@@ -22,6 +22,7 @@ package ingest
 
 import common._
 import util._
+import com.precog.util.PrecogUnit
 
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
@@ -32,9 +33,9 @@ import scalaz.{Success, Failure}
 
 trait EventIdSequence {
   def next(offset: Long): (Int, Int)
-  def saveState(offset: Long): Unit
+  def saveState(offset: Long): PrecogUnit
   def getLastOffset(): Long
-  def close(): Future[Unit]
+  def close(): Future[PrecogUnit]
 }
 
 class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blockSize: Int = 100000)(implicit dispatcher: MessageDispatcher) extends EventIdSequence {
@@ -80,15 +81,17 @@ class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blo
     }
   }
 
-  def saveState(offset: Long) {
+  def saveState(offset: Long) = {
     state = coordination.saveEventRelayState(agent, currentRelayState(offset)) match {
       case Success(ers @ EventRelayState(_,_,_)) => InternalState(ers)
       case Failure(e)                            => sys.error("Error trying to save relay agent state: " + e)
     }
+    PrecogUnit
   }
 
   def close() = Future {
     coordination.close()
+    PrecogUnit
   }
 
   def getLastOffset(): Long = {

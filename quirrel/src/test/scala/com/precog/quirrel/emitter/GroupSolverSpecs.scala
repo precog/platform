@@ -20,8 +20,7 @@
 package com.precog.quirrel
 package emitter
 
-import com.precog.bytecode.Instructions
-import com.precog.bytecode.RandomLibrary
+import com.precog.bytecode.{Instructions, StaticLibrary}
 
 import org.specs2.mutable._
 
@@ -38,7 +37,7 @@ object GroupSolverSpecs extends Specification
     with GroupSolver
     with ProvenanceChecker
     with RawErrors 
-    with RandomLibrary {
+    with StaticLibrary {
       
   import ast._
   import buckets._
@@ -105,7 +104,7 @@ object GroupSolverSpecs extends Specification
 
       let.errors must beEmpty
     }
- 
+    
     "accept acceptable case of nested solves" in {
       val input = """
         | medals := //summer_games/london_medals
@@ -126,7 +125,7 @@ object GroupSolverSpecs extends Specification
       tree1.errors must beEmpty
       tree2.errors must beEmpty
     }
-    
+     
     "accept acceptable case when one solve contains a dispatch which contains tic variable from another solve" in {
       val input = """
        |  medals := //summer_games/london_medals
@@ -882,6 +881,135 @@ object GroupSolverSpecs extends Specification
         
       val tree = compileSingle(input)
       tree.errors must beEmpty
+    }
+    
+    "accept a solve defined by a constraint clause and inequalities in the body" in {
+      val input = """
+        | import std::time::*
+        | import std::stats::*
+        | import std::math::*
+        | 
+        | agents := //snapEngage/customer/widget
+        | 
+        | upperBound := getMillis("2012-10-05T23:59:59")
+        | lowerBound := getMillis("2012-10-05T00:00:00")
+        | 
+        | minuteOfDay(time) := minuteOfHour(time) + hourOfDay(time)*60
+        | 
+        | data := {agentId: agents.agentId, action: agents.action, minuteOfDay: minuteOfDay(agents.timeStamp) , millis: getMillis(agents.timeStamp)}
+        | 
+        | 
+        | data' := data where data.millis > lowerBound & data.millis < upperBound
+        | 
+        | bin(time, sizeOfBin) := floor((time)/sizeOfBin)
+        | 
+        | bins := bin(data'.minuteOfDay, 5)
+        | 
+        | --result := data' with {bins: bins}
+        | 
+        | 
+        | result2 := solve 'agent
+        |     data' := data where data.millis <= upperBound & data.millis >= lowerBound & data.agentId = 'agent
+        |     
+        |     order := denseRank(data'.millis)
+        |     data'' := data' with {rank: order}
+        |     
+        |     newData := new data''
+        |     newData' := newData with {rank: newData.rank -1}
+        |     
+        |     result := newData' ~ data''
+        |      {first: data'', second: newData'}
+        |     where newData'.rank = data''.rank
+        |     
+        |     {start: result.first.millis, end: result.second.millis, agent: result.first.agentId, action: result.first.action, startBin: bin(minuteOfDay(millisToISO(result.first.millis, "+00:00")),5) , endBin:bin(minuteOfDay(millisToISO(result.second.millis, "+00:00")),5) }
+        | 
+        | 
+        | solve 'bins = bins
+        |   {bin: 'bins, count: count(result2.action where result2.action = "Online"  & 'bins >= result2.startBin & 'bins <=result2.endBin)}
+        | """.stripMargin
+      
+      compileSingle(input).errors must beEmpty
+    }
+    
+    "correctly identify commonality for constraint clause deriving from object def on non-constant fields" in {
+      val input = """
+        | clicks := //clicks
+        | data := { user: clicks.user, page: clicks.page }
+        | 
+        | solve 'bins = data
+        |   'bins
+        | """.stripMargin
+        
+      val tree @ Let(_, _, _, _,
+        Let(_, _, _, _,
+          solve @ Solve(_, Vector(Eq(_, _, target)), _))) = compileSingle(input)
+          
+      val expected = Group(None, target, UnfixedSolution("'bins", target), Nil)
+      
+      tree.errors must beEmpty
+      solve.buckets mustEqual Map(Set() -> expected)
+    }
+    
+    "reject a solve where the target includes a reduction on the commonality" in {
+      val input = """
+        | clicks := //clicks
+        |
+        | solve 'userId
+        |   count(clicks) / clicks.time where clicks.userId = 'userId
+        | """.stripMargin
+          
+      compileSingle(input).errors must not(beEmpty)
+    }
+    
+    "accept interaction-totals.qrl" in {
+      val input = """
+        | interactions := //interactions
+        | 
+        | hourOfDay(time) := time / 3600000           -- timezones, anyone?
+        | dayOfWeek(time) := time / 604800000         -- not even slightly correct
+        | 
+        | solve 'hour, 'day
+        |   dayAndHour := dayOfWeek(interactions.time) = 'day & hourOfDay(interactions.time) = 'hour
+        |   sum(interactions where dayAndHour)
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
+    
+    "accept a solve grouping on the results of an object concat with a stdlib op1" in {
+      val input = """
+        | import std::time::*
+        | 
+        | agents := //clicks
+        | data := { agentId: agents.userId, millis: getMillis(agents.timeString) }
+        | 
+        | upperBound := getMillis("2012-04-03T23:59:59")
+        | 
+        | solve 'agent
+        |   data where data.millis < upperBound & data.agentId = 'agent
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
+    
+    "accept a solve where the commonality is only equal ignoring location" in {
+      val input = """
+        | solve 'a
+        |   //campaigns where (//campaigns).foo = 'a
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
+    
+    "reject a solve where the extras involve reductions" in {
+      val input = """
+        | sales := //sales
+        | solve 'state
+        |   sales where sales.state = 'state &
+        |     (sales.total = max(sales.total) | sales.total = min(sales.total))
+        | """.stripMargin
+        
+      compileSingle(input).errors must not(beEmpty)
     }
   }
 }

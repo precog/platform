@@ -22,12 +22,13 @@ package com.precog.ingest
 import util.FutureUtils
 
 import com.precog.common.{ Action, IngestMessage }
+import com.precog.util.PrecogUnit
 
 import blueeyes.json._
 
 import akka.util.Timeout
 import akka.actor.ActorSystem
-import akka.dispatch.{ExecutionContext, Future, MessageDispatcher}
+import akka.dispatch.{ExecutionContext, Future, MessageDispatcher, Promise}
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -37,19 +38,19 @@ import scalaz._
 trait EventStore {
   // Returns a Future that completes when the storage layer has taken ownership of and
   // acknowledged the receipt of the data.
-  def save(action: Action, timeout: Timeout): Future[Unit]
-  def start: Future[Unit]
-  def stop: Future[Unit]
+  def save(action: Action, timeout: Timeout): Future[PrecogUnit]
+  def start: Future[PrecogUnit]
+  def stop: Future[PrecogUnit]
 }
 
 trait RouteTable {
   def routeTo(message: IngestMessage): NonEmptyList[MailboxAddress]
-  def close: Future[Unit]
+  def close: Future[PrecogUnit]
 }
 
 trait Messaging {
-  def send(address: MailboxAddress, msg: IngestMessage): Future[Unit]
-  def close: Future[Unit]
+  def send(address: MailboxAddress, msg: IngestMessage): Future[PrecogUnit]
+  def close: Future[PrecogUnit]
 }
 
 case class MailboxAddress(id: Long)
@@ -57,7 +58,7 @@ case class MailboxAddress(id: Long)
 class EventRouter(routeTable: RouteTable, messaging: Messaging) {
   def route(msg: IngestMessage)(implicit dispatcher: MessageDispatcher): Future[Boolean] = {
     val routes = routeTable.routeTo(msg).list
-    val futures: List[Future[Unit]] = routes map { messaging.send(_, msg) }
+    val futures: List[Future[PrecogUnit]] = routes map { messaging.send(_, msg) }
 
     Future.find(futures)(_ => true) map { _.isDefined }
   }
@@ -69,26 +70,27 @@ class EventRouter(routeTable: RouteTable, messaging: Messaging) {
 
 class ConstantRouteTable(addresses: NonEmptyList[MailboxAddress])(implicit dispather: MessageDispatcher) extends RouteTable {
   def routeTo(msg: IngestMessage): NonEmptyList[MailboxAddress] = addresses
-  def close = Future(())
+  def close = Promise.successful(PrecogUnit)
 }
 
 class EchoMessaging(implicit dispatcher: MessageDispatcher) extends Messaging {
-  def send(address: MailboxAddress, msg: IngestMessage): Future[Unit] = {
-    Future(println("Sending: " + msg + " to " + address))
+  def send(address: MailboxAddress, msg: IngestMessage): Future[PrecogUnit] = {
+    println("Sending: " + msg + " to " + address)
+    Promise.successful(PrecogUnit)
   }
 
-  def close = Future(())
+  def close = Promise.successful(PrecogUnit)
 }
 
 class CollectingMessaging(implicit dispatcher: MessageDispatcher) extends Messaging {
 
   val messages = ListBuffer[IngestMessage]()
 
-  def send(address: MailboxAddress, msg: IngestMessage): Future[Unit] = {
+  def send(address: MailboxAddress, msg: IngestMessage): Future[PrecogUnit] = {
     messages += msg
-    Future(())
+    Promise.successful(PrecogUnit)
   }
 
-  def close() = Future(())
+  def close() = Promise.successful(PrecogUnit)
 }
 // vim: set ts=4 sw=4 et:

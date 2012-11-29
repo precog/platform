@@ -107,8 +107,14 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
         parseEvalLogger.debug("Beginning evaluation of query: " + str)
         
-        val forest = compile(str) filter { _.errors.isEmpty }
-        forest must haveSize(1)
+        val preForest = compile(str)
+        val forest = preForest filter { _.errors.isEmpty }
+        
+        forest must haveSize(1) or {
+          forall(preForest) { tree =>
+            tree.errors must beEmpty
+          }
+        }
         
         val tree = forest.head
         

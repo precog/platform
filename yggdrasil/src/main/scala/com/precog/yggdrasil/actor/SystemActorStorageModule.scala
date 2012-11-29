@@ -47,7 +47,7 @@ trait SystemActorStorageModule extends ActorStorageModule with ShardSystemActorM
     def shardSystemActor = shardSystemActor0
     
     def start() = Future {
-      shardSystemActor0 = actorSystem.actorOf(Props(new ShardSystemActor(metadataStorage)), "shardSystem")
+      shardSystemActor0 = actorSystem.actorOf(Props(new ShardSystemActor(metadataStorage, accountManager)), "shardSystem")
       true
     }
 

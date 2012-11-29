@@ -21,23 +21,26 @@ package com.precog.yggdrasil
 package actor
 
 import metadata.ColumnMetadata
+import com.precog.accounts.BasicAccountManager
 import com.precog.util._
 import com.precog.common._
 import com.precog.common.kafka._
+import com.precog.common.security._
 import ColumnMetadata.monoid
 
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Props
 import akka.actor.PoisonPill
-import akka.dispatch.Await
-import akka.dispatch.Promise
+import akka.dispatch.{Await, ExecutionContext, Future, Promise}
 import akka.pattern.ask
 import akka.util.duration._
 import akka.util.Timeout
 
 import com.weiglewilczek.slf4s._
 import org.slf4j._
+
+import java.util.concurrent.TimeUnit.SECONDS
 
 import _root_.kafka.api.FetchRequest
 import _root_.kafka.consumer.SimpleConsumer
@@ -75,6 +78,7 @@ abstract class KafkaShardIngestActor(shardId: String,
                                      consumer: SimpleConsumer,
                                      topic: String,
                                      ingestEnabled: Boolean,
+                                     accountManager: BasicAccountManager[Future],
                                      fetchBufferSize: Int = 1024 * 1024,
                                      ingestTimeout: Timeout = 120 seconds, 
                                      maxCacheSize: Int = 5,
@@ -133,8 +137,8 @@ abstract class KafkaShardIngestActor(shardId: String,
       logger.trace("Responding to GetMessages starting from checkpoint: " + lastCheckpoint)
       if (ingestEnabled) {
         if (ingestCache.size < maxCacheSize) {
-          readRemote(lastCheckpoint) match {
-            case Success((messages, checkpoint)) => 
+          readRemote(lastCheckpoint).foreach {
+            case Success((messages, checkpoint)) =>
               if (messages.size > 0) {
                 logger.debug("Sending " + messages.size + " events to batch ingest handler.")
 
@@ -170,7 +174,7 @@ abstract class KafkaShardIngestActor(shardId: String,
   protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]): Unit
 
   private def readRemote(fromCheckpoint: YggCheckpoint):
-    Validation[Throwable, (Vector[IngestMessage], YggCheckpoint)] = {
+    Future[Validation[Throwable, (Vector[IngestMessage], YggCheckpoint)]] = {
 
     // The shard ingest actor needs to compute the maximum offset, so it has
     // to traverse the full message set in process; to avoid traversing it
@@ -179,17 +183,30 @@ abstract class KafkaShardIngestActor(shardId: String,
     // initial message, or using all inserts up to that point
     @tailrec
     def buildBatch(
-      input: Stream[(IngestMessage,Long)],
+      input: List[(IngestMessage,Long)],
+      apiKeyMap: Map[APIKey, Set[AccountId]],
       batch: Vector[IngestMessage],
       checkpoint: YggCheckpoint
     ): (Vector[IngestMessage], YggCheckpoint) = input match {
-      case Stream.Empty =>
+      case Nil =>
         (batch, checkpoint)
-      case (em @ EventMessage(EventId(pid, sid), _), offset) #:: tail =>
-        buildBatch(tail, batch :+ em, checkpoint.update(offset, pid, sid))
-      case (ar: ArchiveMessage, _) #:: tail if batch.nonEmpty =>
+      case (emOrig @ EventMessage(EventId(pid, sid), event), offset) :: tail => {
+        val accountIds = apiKeyMap(event.apiKey)
+        if (accountIds.size == 0) {
+          // Non-existent account means it must be deleted, so we discard
+          buildBatch(tail, apiKeyMap, batch, checkpoint.update(offset, pid, sid))
+        } else {
+          if (accountIds.size != 1) {
+            throw new Exception("Invalid account ID results for apiKey %s : %s".format(accountIds, event.apiKey))
+          } else {
+            val em = emOrig.copy(event = event.copy(ownerAccountId = Some(accountIds.head)))
+            buildBatch(tail, apiKeyMap, batch :+ em, checkpoint.update(offset, pid, sid))
+          }
+        }
+      }
+      case (ar: ArchiveMessage, _) :: tail if batch.nonEmpty =>
         (batch, checkpoint)
-      case (ar @ ArchiveMessage(ArchiveId(pid, sid), _), offset) #:: tail =>
+      case (ar @ ArchiveMessage(ArchiveId(pid, sid), _), offset) :: tail =>
         (Vector(ar), checkpoint.update(offset, pid, sid))
     }
 
@@ -200,12 +217,24 @@ abstract class KafkaShardIngestActor(shardId: String,
         offset = lastCheckpoint.offset,
         maxSize = fetchBufferSize
       )
-      val messageSet = consumer.fetch(req)
 
-      buildBatch(messageSet.toStream.map {
+      consumer.fetch(req).toList.map {
         msgAndOffset =>
           (IngestMessageSerialization.read(msgAndOffset.message.payload), msgAndOffset.offset)
-        }, Vector.empty, fromCheckpoint)
+      }
+    } match {
+      case Success(messageSet) => {
+        accountManager.mapAccountIds(messageSet.collect {
+          case (EventMessage(_, event), _) => event.apiKey
+        }.toSet).map { apiKeyMap =>
+          Success(buildBatch(messageSet, apiKeyMap, Vector.empty, fromCheckpoint))
+        }
+      }
+      case Failure(t) => {
+        import context.system
+        implicit val executor = ExecutionContext.defaultExecutionContext
+        Future(Failure[Throwable, (Vector[IngestMessage], YggCheckpoint)](t))
+      }
     }
   }
 

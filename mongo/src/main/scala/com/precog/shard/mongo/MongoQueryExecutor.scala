@@ -24,6 +24,8 @@ import blueeyes.json._
 import blueeyes.json.serialization._
 import DefaultSerialization._
 
+import com.precog.accounts._
+
 import com.precog.common.json._
 import com.precog.common.security._
 
@@ -93,23 +95,27 @@ class MongoQueryExecutorConfig(val config: Configuration)
 }
 
 trait MongoQueryExecutorComponent {
-  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor[Future] = {
+  val actorSystem = ActorSystem("mongoExecutorActorSystem")
+  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit val futureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
+  
+  def accountManagerFactory(config: Configuration) = new InMemoryAccountManager[Future]()
+  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutor[Future] = {
     new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
   }
 }
 
-class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig) extends ShardQueryExecutor with MongoColumnarTableModule {
+class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future]) extends ShardQueryExecutor with MongoColumnarTableModule {
   type YggConfig = MongoQueryExecutorConfig
-
-  val actorSystem = ActorSystem("mongoExecutorActorSystem")
-  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
-
 
   trait TableCompanion extends MongoColumnarTableCompanion
   object Table extends TableCompanion {
     var mongo: Mongo = _
   }
+
+  // to satisfy abstract defines in parent traits
+  val asyncContext = extAsyncContext
+  val M = extM
 
   def startup() = Future {
     Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
@@ -144,9 +150,9 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig) extends ShardQ
     }
   }
 
-  def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = Future {
+  def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = Promise.successful (
     Success(JObject.empty) // TODO: Implement somehow?
-  }
+  )
 }
 
 

@@ -25,6 +25,7 @@ import actor._
 import jdbm3._
 import metadata.MetadataStorage
 import metadata.FileMetadataStorage
+import com.precog.accounts.InMemoryAccountManager
 import com.precog.common._
 import com.precog.util._
 import com.precog.common.kafka._
@@ -157,12 +158,12 @@ object DatabaseTools extends Command with YggUtilsCommon {
     }
   }
 
-  implicit val usord = new Ordering[Seq[AccountID]] {
+  implicit val usord = new Ordering[Seq[AccountId]] {
     val sord = implicitly[Ordering[String]]
 
-    def compare(a: Seq[AccountID], b: Seq[AccountID]) = order(a,b)
+    def compare(a: Seq[AccountId], b: Seq[AccountId]) = order(a,b)
 
-    private def order(a: Seq[AccountID], b: Seq[AccountID], i: Int = 0): Int = {
+    private def order(a: Seq[AccountId], b: Seq[AccountId], i: Int = 0): Int = {
       if(a.length < i && b.length < i) {
         val comp = sord.compare(a(i), b(i))
         if(comp != 0) comp else order(a,b,i+1)
@@ -178,12 +179,12 @@ object DatabaseTools extends Command with YggUtilsCommon {
     }
   }
 
-  implicit val t3ord = new Ordering[(CPath, CType, Seq[AccountID])] {
+  implicit val t3ord = new Ordering[(CPath, CType, Seq[AccountId])] {
     val jord = implicitly[Ordering[CPath]]
     val sord = implicitly[Ordering[String]]
-    val ssord = implicitly[Ordering[Seq[AccountID]]]
+    val ssord = implicitly[Ordering[Seq[AccountId]]]
 
-    def compare(a: (CPath, CType, Seq[AccountID]), b: (CPath, CType, Seq[AccountID])) = {
+    def compare(a: (CPath, CType, Seq[AccountId]), b: (CPath, CType, Seq[AccountId])) = {
       val j = jord.compare(a._1,b._1)
       if(j != 0) {
         j 
@@ -206,13 +207,13 @@ object DatabaseTools extends Command with YggUtilsCommon {
     show(extract(load(config.dataDir).map(_._2)), config.verbose)
   }
 
-  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(CPath, CType, Seq[AccountID])]] = {
+  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(CPath, CType, Seq[AccountId])]] = {
     implicit val pord = new Ordering[Path] {
       val sord = implicitly[Ordering[String]] 
       def compare(a: Path, b: Path) = sord.compare(a.toString, b.toString)
     }
 
-    descs.foldLeft(SortedMap[Path,SortedSet[(CPath, CType, Seq[AccountID])]]()) {
+    descs.foldLeft(SortedMap[Path,SortedSet[(CPath, CType, Seq[AccountId])]]()) {
       case (acc, desc) =>
        desc.columns.foldLeft(acc) {
          case (acc, ColumnDescriptor(p, s, t, u)) =>
@@ -222,7 +223,7 @@ object DatabaseTools extends Command with YggUtilsCommon {
     }
   }
 
-  def show(summary: SortedMap[Path, SortedSet[(CPath, CType, Seq[AccountID])]], verbose: Boolean) {
+  def show(summary: SortedMap[Path, SortedSet[(CPath, CType, Seq[AccountId])]], verbose: Boolean) {
     summary.foreach { 
       case (p, sels) =>
         println(p)
@@ -736,6 +737,7 @@ object ImportTools extends Command with Logging {
 
         class Storage extends SystemActorStorageLike(ms) {
           val accessControl = new UnrestrictedAccessControl()
+          val accountManager = new InMemoryAccountManager()
         }
 
         val storage = new Storage
@@ -782,7 +784,7 @@ object ImportTools extends Command with Logging {
     var input: Vector[(String, String)] = Vector.empty, 
     val batchSize: Int = 10000,
     var apiKey: APIKey = "root",     // FIXME
-    var accountId: Option[AccountID] = None,
+    var accountId: Option[AccountId] = None,
     var verbose: Boolean = false ,
     var storageRoot: File = new File("./data"),
     var archiveRoot: File = new File("./archive")
