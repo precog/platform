@@ -188,7 +188,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
     def takeRange(startIndex: Long, numberToTake: Long): Table
 
     def schemas: M[Set[JType]]
-    
+
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer]
     
     // for debugging only!!

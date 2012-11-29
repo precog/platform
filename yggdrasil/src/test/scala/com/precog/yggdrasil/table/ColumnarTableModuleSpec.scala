@@ -394,6 +394,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 
     "in schemas" >> {
       "find a schema in single-schema table" in testSingleSchema
+      "find a schema in homogeneous array table" in testHomogeneousArraySchema
       "find schemas separated by slice boundary" in testCrossSliceSchema
       "extract intervleaved schemas" in testIntervleavedSchema
       "don't include undefineds in schema" in testUndefinedsInSchema
@@ -416,6 +417,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 
   "sample" should {
     "sample from a dataset" in testSample
+    "return no samples given empty sequence of transspecs" in testSampleEmpty
+    "sample from a dataset given non-identity transspecs" in testSampleTransSpecs
     "return full set when sample size larger than dataset" in testLargeSampleSize
     "resurn empty table when sample size is 0" in test0SampleSize
   }

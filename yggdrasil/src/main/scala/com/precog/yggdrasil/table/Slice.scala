@@ -109,7 +109,8 @@ trait Slice { source =>
   }
 
   def toArray[A](implicit tpe0: CValueType[A]) = new Slice {
-    //TODO need to hang on to the cpaths so we can order the original columns in the homarraycolumn
+    // TODO I'm really concerned about the ordering of columns 
+    // the columns always need to be in the correct order when going through the regression code
     val size = source.size
 
     val cols0 = (source.columns).toList sortBy { case (ref, _) => ref.selector }

@@ -226,25 +226,12 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     }
 
     def apply(table: Table) = {
-      val sampleTable = table.sample(10000, 1)
-      sampleTable.flatMap(_.head.reduce(reducer).map(extract))
+      val specs: M[Seq[TransSpec1]] = table.schemas map { jtypes => 
+        jtypes.toSeq map { jtype => trans.Typed(TransSpec1.Id, jtype) }
+      }
+
+      val sampleTables: M[Seq[Table]] = specs.map { seq => table.sample(10000, seq) }.join
+      sampleTables.flatMap(_.head.reduce(reducer).map(extract))
     }
   }
 }
-
-
-// type Result = Option[(Seq[ColumnValues], JType)]
-//
-// 
-//
-// val schemas: M[Set[JType]] = table.schemas
-// val sampleTables: M[Set[Table]] = schemas flatMap { jtypes => table.sample(10000, 1, jtypes) }
-// val results: M[Set[Table]] = for {
-//    tables <- sampleTables
-//    table <- tables
-// } yield table.reduce(reducer).map(extract)
-// results flatMap { set => set reduce { (t1, t2) => concatTables(t2, t2) } }
-// 
-
-
-

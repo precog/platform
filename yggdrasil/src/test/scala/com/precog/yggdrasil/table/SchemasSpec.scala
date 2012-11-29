@@ -44,6 +44,14 @@ trait SchemasSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
     table.schemas.copoint must_== expected
   }
 
+  def testHomogeneousArraySchema = {
+    val expected = Set(JArrayHomogeneousT(JNumberT))
+    val data = Stream.fill(10)(JParser.parse("""[1, 2, 3]"""))
+    val table0 = fromSample(SampleData(data), Some(10))
+    val table = table0.toArray[Long]
+    table.schemas.copoint must_== expected
+  }
+
   def testCrossSliceSchema = {
     val expected = Set(
       JObjectFixedT(Map("a" -> JNumberT, "b" -> JTextT)),

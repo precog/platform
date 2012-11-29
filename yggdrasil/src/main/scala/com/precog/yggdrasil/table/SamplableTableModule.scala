@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.json._
+import com.precog.yggdrasil._
 import com.precog.yggdrasil.util._
 
 import com.precog.util.{BitSet, BitSetUtil, IOUtils, Loop}
@@ -40,13 +41,16 @@ trait SamplableTableModule[M[+_]]
   type Table <: SamplableTable
   
   trait SamplableTable extends TableLike { self: Table =>
-    def sample(sampleSize: Int, numOfSamples: Int): M[Set[Table]]
+    import trans._
+    def sample(sampleSize: Int, specs: Seq[TransSpec1]): M[Seq[Table]]
   }
 }
 
 
 trait SamplableColumnarTableModule[M[+_]]
-    extends SamplableTableModule[M] { self: ColumnarTableModule[M] =>
+    extends SamplableTableModule[M] { self: ColumnarTableModule[M] with SliceTransforms[M] =>
+
+  import trans._
 
   def rng: Random = scala.util.Random
 
@@ -64,45 +68,52 @@ trait SamplableColumnarTableModule[M[+_]]
      * Of course, the hope is that this will not be used once we get efficient
      * sampling in that runs in O(m lg n) time.
      */
-    def sample(sampleSize: Int, numOfSamples: Int): M[Set[Table]] = {
-      def build(prevInserters: Option[Array[RowInserter]], n: Int, slices: StreamT[M, Slice]): M[Set[Table]] = {
+    def sample(sampleSize: Int, specs: Seq[TransSpec1]): M[Seq[Table]] = {
+      case class SampleState(rowInserters: Option[RowInserter], length: Int, transform: SliceTransform1[_])
+
+      def build(states: Seq[SampleState], slices: StreamT[M, Slice]): M[Seq[Table]] = {
         slices.uncons flatMap {
-          case Some((slice, slices)) =>
-            val inserters = prevInserters map { _ map (_.withSource(slice)) } getOrElse {
-              Array.fill(numOfSamples)(RowInserter(sampleSize, slice))
-            }
+          case Some((origSlice, tail)) =>
+            val nextStates = states map { case SampleState(maybePrevInserters, len, transform) =>
+            
+              val (nextTransform, slice) = transform advance origSlice
 
-            @tailrec
-            def loop(i: Int): Int = if (i < slice.size) {
-              var j = 0
-              while (j < inserters.length) {
-                var k = rng.nextInt(n + i + 1)
+              val inserter = maybePrevInserters map { _.withSource(slice) } getOrElse RowInserter(sampleSize, slice)
+            
+              @tailrec
+              def loop(i: Int): Int = if (i < slice.size) {
+                // `k` is a number between 0 and number of rows we've seen
+                val k = rng.nextInt(len + i + 1)
                 if (k < sampleSize) {
-                  inserters(j).insert(src=i, dest=k)
+                  inserter.insert(src=i, dest=k)
                 }
-                j += 1
-              }
-              loop(i + 1)
-            } else i
+                loop(i + 1)
+              } else i
 
-            val len = loop(0)
-            build(Some(inserters), n + len, slices)
+              val newLength = len + loop(0)
+
+              SampleState(Some(inserter), newLength, nextTransform)
+            }
+            
+            build(nextStates, tail)
 
           case None =>
-            M.point {
-              val len = n min sampleSize
-              prevInserters map { _ map (_.toSlice(len)) } map { slices =>
-                slices.map { slice =>
+            M.point { 
+              states map { case SampleState(inserter, length, _) =>
+                val len = length min sampleSize
+                inserter map { _.toSlice(len) } map { slice =>
                   Table(slice :: StreamT.empty[M, Slice], ExactSize(len)).paged(yggConfig.maxSliceSize)
-                }.toSet
-              } getOrElse {
-                Seq.fill(sampleSize)(Table(StreamT.empty[M, Slice], ExactSize(0))).toSet
+                } getOrElse {
+                  Table(StreamT.empty[M, Slice], ExactSize(0))
+                }
               }
             }
         }
       }
 
-      build(None, 0, slices)
+      val transforms = specs map { SliceTransform.composeSliceTransform }
+      val states = transforms map { transform => SampleState(None, 0, transform) }
+      build(states, slices)
     }
   }
 
@@ -143,7 +154,7 @@ trait SamplableColumnarTableModule[M[+_]]
         case CNull => MutableNullColumn.empty()
         case CEmptyObject => MutableEmptyObjectColumn.empty()
         case CEmptyArray => MutableEmptyArrayColumn.empty()
-        case CUndefined => sys.error("this shound't exist")
+        case CUndefined => sys.error("this shouldn't exist")
       })
     }
 
