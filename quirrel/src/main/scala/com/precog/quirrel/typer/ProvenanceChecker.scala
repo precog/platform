@@ -955,14 +955,4 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   case class Related(left: Provenance, right: Provenance) extends ProvConstraint
   case class NotRelated(left: Provenance, right: Provenance) extends ProvConstraint
   case class SameCard(left: Provenance, right: Provenance) extends ProvConstraint
-
-
-  private case class ExprWrapper(expr: Expr) {
-    override def equals(a: Any): Boolean = a match {
-      case ExprWrapper(expr2) => expr equalsIgnoreLoc expr2
-      case _ => false
-    }
-
-    override def hashCode = expr.hashCodeIgnoreLoc
-  }
 }

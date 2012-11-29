@@ -58,7 +58,9 @@ trait LineErrors extends Errors with Phases with parser.AST {
     case _ => false
   }
   
-  class Error(val loc: LineStream, val tp: ErrorType)
+  class Error(val loc: LineStream, val tp: ErrorType) {
+    override def toString = "Error(<%d:%d>, %s)".format(loc.lineNum, loc.colNum, tp)
+  }
 }
 
 

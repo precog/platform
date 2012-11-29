@@ -104,7 +104,7 @@ object GroupSolverSpecs extends Specification
 
       let.errors must beEmpty
     }
- 
+    
     "accept acceptable case of nested solves" in {
       val input = """
         | medals := //summer_games/london_medals
@@ -125,7 +125,7 @@ object GroupSolverSpecs extends Specification
       tree1.errors must beEmpty
       tree2.errors must beEmpty
     }
-    
+     
     "accept acceptable case when one solve contains a dispatch which contains tic variable from another solve" in {
       val input = """
        |  medals := //summer_games/london_medals
@@ -948,6 +948,68 @@ object GroupSolverSpecs extends Specification
       
       tree.errors must beEmpty
       solve.buckets mustEqual Map(Set() -> expected)
+    }
+    
+    "reject a solve where the target includes a reduction on the commonality" in {
+      val input = """
+        | clicks := //clicks
+        |
+        | solve 'userId
+        |   count(clicks) / clicks.time where clicks.userId = 'userId
+        | """.stripMargin
+          
+      compileSingle(input).errors must not(beEmpty)
+    }
+    
+    "accept interaction-totals.qrl" in {
+      val input = """
+        | interactions := //interactions
+        | 
+        | hourOfDay(time) := time / 3600000           -- timezones, anyone?
+        | dayOfWeek(time) := time / 604800000         -- not even slightly correct
+        | 
+        | solve 'hour, 'day
+        |   dayAndHour := dayOfWeek(interactions.time) = 'day & hourOfDay(interactions.time) = 'hour
+        |   sum(interactions where dayAndHour)
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
+    
+    "accept a solve grouping on the results of an object concat with a stdlib op1" in {
+      val input = """
+        | import std::time::*
+        | 
+        | agents := //clicks
+        | data := { agentId: agents.userId, millis: getMillis(agents.timeString) }
+        | 
+        | upperBound := getMillis("2012-04-03T23:59:59")
+        | 
+        | solve 'agent
+        |   data where data.millis < upperBound & data.agentId = 'agent
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
+    
+    "accept a solve where the commonality is only equal ignoring location" in {
+      val input = """
+        | solve 'a
+        |   //campaigns where (//campaigns).foo = 'a
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
+    
+    "reject a solve where the extras involve reductions" in {
+      val input = """
+        | sales := //sales
+        | solve 'state
+        |   sales where sales.state = 'state &
+        |     (sales.total = max(sales.total) | sales.total = min(sales.total))
+        | """.stripMargin
+        
+      compileSingle(input).errors must not(beEmpty)
     }
   }
 }
