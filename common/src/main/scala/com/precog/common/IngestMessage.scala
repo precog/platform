@@ -38,6 +38,7 @@ trait EventMessageSerialization {
       List(
         JField("producerId", eventMessage.eventId.producerId.serialize),
         JField("eventId", eventMessage.eventId.sequenceId.serialize),
+        JField("schemaVersion", JString("1")),
         JField("event", eventMessage.event.serialize)))
   }
 
@@ -69,6 +70,7 @@ trait ArchiveMessageSerialization {
       List(
         JField("producerId", archiveMessage.archiveId.producerId.serialize),
         JField("deletionId", archiveMessage.archiveId.sequenceId.serialize),
+        JField("schemaVersion", JString("1")),
         JField("deletion", archiveMessage.archive.serialize)))
   }
 
