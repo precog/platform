@@ -18,7 +18,7 @@ FAILEDTARGETS=""
 MONGOPORT=27117
 
 function run_sbt() {
-    sbt -mem 2048 -J-Dsbt.log.noformat=true $@
+    sbt -mem 2048 $OPTIMIZE -J-Dsbt.log.noformat=true $@
     if [[ $? != 0 ]]; then
         SUCCESS=1
         for TARGET in $@; do
@@ -27,7 +27,7 @@ function run_sbt() {
     fi
 }
 
-while getopts ":m:sa" opt; do
+while getopts ":m:sao" opt; do
     case $opt in
         m)
             echo "Overriding default mongo port with $OPTARG"
@@ -39,9 +39,13 @@ while getopts ":m:sa" opt; do
         a)
             SKIPTEST=1
             ;;
+        o)
+            OPTIMIZE="-J-Dcom.precog.build.optimize=true"
+            ;;
         \?)
-            echo "Usage: `basename $0` [-a] [-s] [-m <mongo port>]"
+            echo "Usage: `basename $0` [-a] [-o] [-s] [-m <mongo port>]"
             echo "  -a: Build assemdblies only"
+            echo "  -o: Optimized build"
             echo "  -s: Skip clean/compile setup steps"
             echo "  -m: Use the specified port for mongo"
             exit 1
