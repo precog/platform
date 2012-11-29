@@ -8,6 +8,8 @@ import daze._
 
 import pandora._
 
+import com.precog.accounts.InMemoryAccountManager
+
 import com.precog.common.Path
 
 import quirrel._
@@ -107,6 +109,7 @@ object SBTConsole {
 
     class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
       val accessControl = new UnrestrictedAccessControl[Future]()
+      val accountManager = new InMemoryAccountManager[Future]()
     }
 
     val storage = new Storage

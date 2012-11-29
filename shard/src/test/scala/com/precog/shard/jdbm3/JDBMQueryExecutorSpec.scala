@@ -6,7 +6,7 @@ import org.specs2.mutable.Specification
 import java.io.File
 
 import akka.actor.ActorSystem
-import akka.dispatch.{ Await, ExecutionContext, Future }
+import akka.dispatch.{ Await, ExecutionContext, Future, Promise }
 import org.streum.configrity.Configuration
 import scalaz.{ Copointed, Failure, Monad, Success }
 import scalaz.effect.IO
@@ -46,7 +46,7 @@ trait TestJDBMQueryExecutor extends JDBMQueryExecutor
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
 
-  def startup() = Future { true }
+  def startup() = Promise.successful(true)
   def shutdown() = Future {
     actorSystem.shutdown
     true

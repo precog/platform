@@ -2,6 +2,7 @@ package com.precog.yggdrasil
 package actor
 
 import metadata.ColumnMetadata
+import com.precog.accounts.BasicAccountManager
 import com.precog.util._
 import com.precog.common._
 import com.precog.common.kafka._
@@ -50,13 +51,14 @@ trait ProductionShardSystemConfig extends ShardConfig {
 trait ProductionShardSystemActorModule extends ShardSystemActorModule {
   type YggConfig <: ProductionShardSystemConfig
 
-  def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef) = {
+  def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
     Some(() => new KafkaShardIngestActor(shardId = yggConfig.shardId, 
                                          initialCheckpoint = checkpoint, 
                                          consumer = consumer, 
                                          topic = yggConfig.kafkaTopic, 
-                                         ingestEnabled = yggConfig.ingestEnabled, 
+                                         ingestEnabled = yggConfig.ingestEnabled,
+                                         accountManager = accountManager,
                                          fetchBufferSize = yggConfig.ingestBufferSize,
                                          ingestTimeout = yggConfig.ingestTimeout,
                                          maxCacheSize = yggConfig.ingestMaxParallel,
@@ -79,7 +81,7 @@ trait StandaloneShardSystemConfig extends SystemActorStorageConfig {
 
 trait StandaloneShardSystemActorModule extends ShardSystemActorModule {
   type YggConfig <: StandaloneShardSystemConfig
-  def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef) = None
+  def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = None
   def checkpointCoordination = CheckpointCoordination.Noop
 }
 

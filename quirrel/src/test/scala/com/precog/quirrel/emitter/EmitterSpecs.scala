@@ -2,8 +2,7 @@ package com.precog
 package quirrel
 package emitter
 
-import com.precog.bytecode.Instructions
-import com.precog.bytecode.RandomLibrary
+import com.precog.bytecode.{Instructions, StaticLibrary}
 
 import org.specs2.mutable._
 
@@ -25,7 +24,7 @@ object EmitterSpecs extends Specification
     with Compiler
     with Emitter
     with RawErrors 
-    with RandomLibrary {
+    with StaticLibrary {
 
   import instructions._
 
@@ -846,7 +845,7 @@ object EmitterSpecs extends Specification
           Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
           Merge))
     }
-
+    
     "emit merge_buckets & for trivial cf example with conjunction" in {
       testEmit("clicks := //clicks onDay := solve 'day clicks where clicks.day = 'day & clicks.din = 'day onDay")(
         Vector(
@@ -1092,7 +1091,7 @@ object EmitterSpecs extends Specification
         |   
         | totalPairs("fubar")""".stripMargin)(Vector())
     }.pendingUntilFixed     // TODO this *really* should be working
-
+    
     "emit split and merge for ctr example" in {
       testEmit("""
         | clicks := //clicks
