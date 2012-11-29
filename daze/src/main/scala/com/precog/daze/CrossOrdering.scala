@@ -233,12 +233,20 @@ trait CrossOrdering extends DAG {
   }
 
   private def determineSort(left2: DepGraph, right2: DepGraph): (Vector[Int], Vector[Int]) = {
-    val leftPairs = left2.identities.zipWithIndex filter {
-      case (p, i) => right2.identities contains p
+    val leftPairs = (left2.identities, right2.identities) match {
+      case (IdentitySpecs(a), IdentitySpecs(b)) =>
+        a.zipWithIndex filter {
+          case (p, i) => b contains p
+        }
+      case (UndefinedIdentity, _) | (_, UndefinedIdentity) => Vector.empty
     }
 
-    val rightPairs = right2.identities.zipWithIndex filter {
-      case (p, i) => left2.identities contains p
+    val rightPairs = (right2.identities, left2.identities) match {
+      case (IdentitySpecs(a), IdentitySpecs(b)) =>
+        a.zipWithIndex filter {
+          case (p, i) => b contains p
+        }
+      case (UndefinedIdentity, _) | (_, UndefinedIdentity) => Vector.empty
     }
     
     val (_, leftIndices) = leftPairs.unzip

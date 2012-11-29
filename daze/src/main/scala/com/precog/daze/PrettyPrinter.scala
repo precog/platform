@@ -133,7 +133,7 @@ trait PrettyPrinter extends DAG {
             
           case sp @ SplitParam(_, id) => "SplitParam(line, "+id+")("+bindings(sp.parent)+")" 
   
-          case sp @ SplitGroup(_, id, identities) => "SplitParam(line, "+id+", "+identities.map(prettyPrintIdentitySpec)+"("+bindings(sp.parent)+")" 
+          case sp @ SplitGroup(_, id, identities) => "SplitParam(line, "+id+", "+identities.fold(_.map(prettyPrintIdentitySpec), "UndefinedIdentity")+"("+bindings(sp.parent)+")" 
         }
       }) +
       (if(suffixNL) "\n" else "")

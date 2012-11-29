@@ -36,7 +36,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification with EvaluatorTestSupport[M]
 
       val result = rewriteDAG(true)(input)
 
-      result.identities mustEqual Vector(LoadIds("/numbers"))
+      result.identities mustEqual IdentitySpecs(Vector(LoadIds("/numbers")))
     }
   }
 }

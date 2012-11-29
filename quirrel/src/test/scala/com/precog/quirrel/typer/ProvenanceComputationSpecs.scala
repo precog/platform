@@ -1160,6 +1160,21 @@ object ProvenanceComputationSpecs extends Specification
           }
         }
         {
+          val tree = compileSingle("f(a) := a intersect undefined f(//foo)")
+          tree.provenance mustEqual UndefinedProvenance
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compileSingle("f(a) := a union undefined f(//foo)")
+          tree.provenance mustEqual StaticProvenance("/foo")
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compileSingle("f(a) := g(b) := b union undefined g(a) f(//foo)")
+          tree.provenance mustEqual StaticProvenance("/foo")
+          tree.errors must beEmpty
+        }
+        {
           val tree = compileSingle("f := true union false f")
           tree.provenance mustEqual ValueProvenance
           tree.errors must beEmpty

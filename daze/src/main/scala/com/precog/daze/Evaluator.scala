@@ -685,31 +685,37 @@ trait Evaluator[M[+_]] extends DAG
             if (pendingTableLeft.graph == pendingTableRight.graph) {
               PendingTable(pendingTableLeft.table, pendingTableLeft.graph, transFromBinOp(op)(pendingTableLeft.trans, pendingTableRight.trans))
             } else {
-              val prefixLength = sharedPrefixLength(left, right)
+              (left.identities, right.identities) match {
+                case (IdentitySpecs(_), IdentitySpecs(_)) =>
+                  val prefixLength = sharedPrefixLength(left, right)
 
-              val key = joinSort match {
-                case IdentitySort =>
-                  buildJoinKeySpec(prefixLength)
-                
-                case ValueSort(id) =>
-                  trans.DerefObjectStatic(Leaf(Source), CPathField("sort-" + id))
-                
-                case _ => sys.error("unreachable code")
+                  val key = joinSort match {
+                    case IdentitySort =>
+                      buildJoinKeySpec(prefixLength)
+
+                    case ValueSort(id) =>
+                      trans.DerefObjectStatic(Leaf(Source), CPathField("sort-" + id))
+
+                    case _ => sys.error("unreachable code")
+                  }
+
+                  val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op))
+
+                  val result = for {
+                    parentLeftTable <- pendingTableLeft.table
+                    val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
+
+                    parentRightTable <- pendingTableRight.table
+                    val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
+
+                  } yield join(leftResult, rightResult)(key, spec)
+
+                  PendingTable(result, graph, TransSpec1.Id)
+
+                case (UndefinedIdentity, _) | (_, UndefinedIdentity) =>
+                  PendingTable(M.point(Table.empty), graph, TransSpec1.Id)
               }
-              
-              val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op))
-
-              val result = for {
-                parentLeftTable <- pendingTableLeft.table
-                val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
-                
-                parentRightTable <- pendingTableRight.table
-                val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
-
-              } yield join(leftResult, rightResult)(key, spec)
-
-              PendingTable(result, graph, TransSpec1.Id)
-            } 
+            }
           }
         }
   
@@ -1212,8 +1218,12 @@ trait Evaluator[M[+_]] extends DAG
     case (a, b) => a == b
   }
   
-  private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
-    left.identities zip right.identities takeWhile disjunctiveEquals length
+  private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int = (left.identities, right.identities) match {
+    case (IdentitySpecs(a), IdentitySpecs(b)) =>
+      a zip b takeWhile disjunctiveEquals length
+    case (UndefinedIdentity, _) | (_, UndefinedIdentity) =>
+      0
+  }
 
   private def enumerateGraphs(forest: BucketSpec): Set[DepGraph] = forest match {
     case UnionBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)

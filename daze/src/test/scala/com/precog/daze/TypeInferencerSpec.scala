@@ -600,7 +600,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
           Group(0, clicks, UnfixedSolution(1, clicksTime)),
           Join(line, WrapObject, CrossLeftSort,
             Root(line, CString("foo")),
-            SplitGroup(line, 0, Vector(LoadIds("/clicks")))(split)))
+            SplitGroup(line, 0, IdentitySpecs(Vector(LoadIds("/clicks"))))(split)))
             
       val input =
         Join(line, DerefObject, CrossLeftSort,

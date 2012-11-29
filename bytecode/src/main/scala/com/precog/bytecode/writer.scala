@@ -186,7 +186,7 @@ trait BytecodeWriter extends Writer with Version {
         case PushObject => (0x84, 0.toShort, 0)
         case PushArray => (0x85, 0.toShort, 0)
         case PushNull => (0x86, 0.toShort, 0)
-        case PushNull => (0x87, 0.toShort, 0)
+        case PushUndefined => (0x87, 0.toShort, 0)
         
         case PushGroup(id) => (0x90, 0.toShort, id)
         case PushKey(id) => (0x91, 0.toShort, id)
