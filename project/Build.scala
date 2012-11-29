@@ -59,7 +59,7 @@ object PlatformBuild extends Build {
 
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "2.1.4",
+    version := "2.1.5",
     scalacOptions ++= {
       Seq("-deprecation", "-unchecked", "-g:none") ++ 
       Option(System.getProperty("com.precog.build.optimize")).map { _ => Seq("-optimize") }.getOrElse(Seq())
