@@ -129,7 +129,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
               Root(`line`, CBoolean(true)),
               UnfixedSolution(1, Root(`line`, CBoolean(true)))),
             IUI(`line`, true, 
-              sg @ SplitGroup(`line`, 2, Vector()),
+              sg @ SplitGroup(`line`, 2, IdentitySpecs(Vector())),
               sp @ SplitParam(`line`, 1)))) => {
               
           sp.parent mustEqual s
@@ -164,9 +164,9 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
           s1 @ dag.Split(`line`,
             dag.Group(2, Root(`line`, CBoolean(false)), UnfixedSolution(1, Root(`line`, CBoolean(true)))),
             s2 @ dag.Split(`line`,
-              dag.Group(4, sp1 @ SplitParam(`line`, 1), UnfixedSolution(3, sg1 @ SplitGroup(`line`, 2, Vector()))),
+              dag.Group(4, sp1 @ SplitParam(`line`, 1), UnfixedSolution(3, sg1 @ SplitGroup(`line`, 2, IdentitySpecs(Vector())))),
               IUI(`line`, true,
-                sg2 @ SplitGroup(`line`, 4, Vector()),
+                sg2 @ SplitGroup(`line`, 4, IdentitySpecs(Vector())),
                 sp2 @ SplitParam(`line`, 3))))) => {
           
           sp1.parent mustEqual s1
@@ -209,9 +209,9 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
               dag.Group(4, Root(`line`, CBoolean(false)), UnfixedSolution(3, Root(`line`, CLong(42)))),
               IUI(`line`, true,
                 Join(`line`, Add, CrossLeftSort,
-                  sg1 @ SplitGroup(`line`, 2, Vector()),
+                  sg1 @ SplitGroup(`line`, 2, IdentitySpecs(Vector())),
                   sp1 @ SplitParam(`line`, 1)),
-                sg2 @ SplitGroup(`line`, 4, Vector()))))) => {
+                sg2 @ SplitGroup(`line`, 4, IdentitySpecs(Vector())))))) => {
           
           sp1.parent mustEqual s1
           sg1.parent mustEqual s1
@@ -249,7 +249,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
                   UnfixedSolution(1, Root(`line`, CLong(1))),
                   UnfixedSolution(1, Root(`line`, CLong(3))))),
               IUI(`line`, true,
-                sg @ SplitGroup(`line`, 3, Vector()),
+                sg @ SplitGroup(`line`, 3, IdentitySpecs(Vector())),
                 sp @ SplitParam(`line`, 1)))) => {
             
             sg.parent mustEqual s
@@ -285,7 +285,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
                   UnfixedSolution(1, Root(`line`, CLong(1))),
                   UnfixedSolution(1, Root(`line`, CLong(3))))),
               IUI(`line`, true,
-                sg @ SplitGroup(`line`, 3, Vector()),
+                sg @ SplitGroup(`line`, 3, IdentitySpecs(Vector())),
                 sp @ SplitParam(`line`, 1)))) => {
             
             sg.parent mustEqual s
@@ -325,9 +325,9 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
               dag.Group(2, Root(`line`, CLong(2)), UnfixedSolution(1, Root(`line`, CLong(1)))),
               dag.Group(3, Root(`line`, CLong(4)), UnfixedSolution(1, Root(`line`, CLong(3))))),
             IUI(`line`, true,
-              sg2 @ SplitGroup(`line`, 2, Vector()),
+              sg2 @ SplitGroup(`line`, 2, IdentitySpecs(Vector())),
               IUI(`line`, true,
-                sg1 @ SplitGroup(`line`, 3, Vector()),
+                sg1 @ SplitGroup(`line`, 3, IdentitySpecs(Vector())),
                 sp1 @ SplitParam(`line`, 1))))) => {
           
           sg1.parent mustEqual s
@@ -358,7 +358,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
             dag.Group(2, Root(`line`, CNull), UnfixedSolution(1, Root(`line`, CBoolean(true)))),
             Join(`line`, Add, IdentitySort,
               Root(`line`, CLong(42)),
-              sg @ SplitGroup(`line`, 2, Vector())))) => {
+              sg @ SplitGroup(`line`, 2, IdentitySpecs(Vector()))))) => {
           
           sg.parent mustEqual s
         }
@@ -450,7 +450,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
         SplitParam(line,1)(expectedSplit)),
       Join(line,WrapObject,CrossLeftSort,
         Root(line,CString("num")),
-        dag.Reduce(line, Reduction(Vector(), "count", 0x002000),SplitGroup(line,4,Vector(LoadIds("/campaigns")))(expectedSplit))))
+        dag.Reduce(line, Reduction(Vector(), "count", 0x002000),SplitGroup(line,4,IdentitySpecs(Vector(LoadIds("/campaigns"))))(expectedSplit))))
 
 
       result mustEqual Right(expectedSplit)
@@ -767,7 +767,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
       lazy val split: dag.Split = dag.Split(line,
         dag.Group(2, Root(line, CLong(12)), UnfixedSolution(1, Root(line, CLong(42)))),
         IUI(line, true,
-          SplitGroup(line, 2, Vector())(split),
+          SplitGroup(line, 2, IdentitySpecs(Vector()))(split),
           Root(line, CBoolean(true))))
       
       val expect = IUI(line, false, Root(line, CBoolean(false)), split)

@@ -481,11 +481,11 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
             Join(line, WrapObject, CrossLeftSort,
               Root(line, CString("min")),
               dag.Reduce(line, Min,
-                SplitGroup(line, 1, Vector(LoadIds("/clicks")))(input))),
+                SplitGroup(line, 1, IdentitySpecs(Vector(LoadIds("/clicks"))))(input))),
             Join(line, WrapObject, CrossLeftSort,
               Root(line, CString("max")),
               dag.Reduce(line, Max,
-                SplitGroup(line, 1, Vector(LoadIds("/clicks")))(input))))))
+                SplitGroup(line, 1, IdentitySpecs(Vector(LoadIds("/clicks"))))(input))))))
 
       val parent = SplitGroup(line, 1, clicks.identities)(input)
       val red1 = dag.Reduce(line, Min, parent)
@@ -728,7 +728,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val clicksUser = Join(line, DerefObject, CrossLeftSort, clicks, userRoot)
       val group1 = dag.Group(1, clicksFoo, UnfixedSolution(0, clicksUser))
 
-      lazy val parent = SplitGroup(line, 1, Vector(LoadIds("/clicks")))(input)
+      lazy val parent = SplitGroup(line, 1, IdentitySpecs(Vector(LoadIds("/clicks"))))(input)
       lazy val r1 = dag.Reduce(line, Min, parent)
       lazy val r2 = dag.Reduce(line, Max, parent)
 
