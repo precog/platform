@@ -2648,7 +2648,7 @@ trait ColumnarTableModule[M[+_]]
           case CLong | CDouble | CNum => JNumberT
           case CString => JTextT
           case CDate => JTextT
-          case CArrayType(elemType) => JArrayHomogeneousT(leafType(elemType))
+          case CArrayType(elemType) => leafType(elemType)
           case CEmptyObject => JObjectFixedT(Map.empty)
           case CEmptyArray => JArrayFixedT(Map.empty)
           case CNull => JNullT
@@ -2718,7 +2718,7 @@ trait ColumnarTableModule[M[+_]]
 
       collectSchemas(Set.empty, slices)
     }
-    
+
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
       def delimiterBuffer = {
         val back = CharBuffer.allocate(1)
