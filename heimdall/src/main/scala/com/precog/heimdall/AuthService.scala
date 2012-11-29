@@ -60,7 +60,7 @@ case class WebAuthService(protocol: String, host: String, port: Int, path: Strin
   }
 
   final def isValid(apiKey: APIKey): Response[Boolean] = withClient { client =>
-    eitherT(client.get[JValue]("apikeys/" + apiKey) map {
+    eitherT(client.query("apiKey", apiKey).get[JValue]("apikeys/" + apiKey) map {
       case HttpResponse(HttpStatus(OK, _), _, _, _) => \/.right(true)
       case HttpResponse(HttpStatus(NotFound, _), _, _, _) => \/.right(false)
       case res => \/.left("Unexpected response from auth service:\n" + res)
