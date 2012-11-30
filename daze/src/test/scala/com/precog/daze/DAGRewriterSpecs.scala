@@ -32,11 +32,11 @@ trait DAGRewriterSpecs[M[+_]] extends Specification with EvaluatorTestSupport[M]
     "compute identities given a relative path" in {
       val line = Line(0, "")
 
-      val input = dag.LoadLocal(line, Root(line, CString("/numbers")))
+      val input = dag.LoadLocal(line, Const(line, CString("/numbers")))
 
       val result = rewriteDAG(true)(input)
 
-      result.identities mustEqual IdentitySpecs(Vector(LoadIds("/numbers")))
+      result.identities mustEqual Identities.Specs(Vector(LoadIds("/numbers")))
     }
   }
 }

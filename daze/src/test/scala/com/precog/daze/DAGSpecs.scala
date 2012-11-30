@@ -31,60 +31,60 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
   "dag decoration" should {
     "recognize root instructions" in {
       "push_str" >> {
-        decorate(Vector(Line(0, ""), PushString("test"))) mustEqual Right(Root(Line(0, ""), CString("test")))
+        decorate(Vector(Line(0, ""), PushString("test"))) mustEqual Right(Const(Line(0, ""), CString("test")))
       }
       
       "push_num" >> {
-        decorate(Vector(Line(0, ""), PushNum("42"))) mustEqual Right(Root(Line(0, ""), CLong(42)))
+        decorate(Vector(Line(0, ""), PushNum("42"))) mustEqual Right(Const(Line(0, ""), CLong(42)))
       }
       
       "push_true" >> {
-        decorate(Vector(Line(0, ""), PushTrue)) mustEqual Right(Root(Line(0, ""), CBoolean(true)))
+        decorate(Vector(Line(0, ""), PushTrue)) mustEqual Right(Const(Line(0, ""), CBoolean(true)))
       }
       
       "push_false" >> {
-        decorate(Vector(Line(0, ""), PushFalse)) mustEqual Right(Root(Line(0, ""), CBoolean(false)))
+        decorate(Vector(Line(0, ""), PushFalse)) mustEqual Right(Const(Line(0, ""), CBoolean(false)))
       }      
 
       "push_null" >> {
-        decorate(Vector(Line(0, ""), PushNull)) mustEqual Right(Root(Line(0, ""), CNull))
+        decorate(Vector(Line(0, ""), PushNull)) mustEqual Right(Const(Line(0, ""), CNull))
       }
       
       "push_object" >> {
-        decorate(Vector(Line(0, ""), PushObject)) mustEqual Right(Root(Line(0, ""), CEmptyObject))
+        decorate(Vector(Line(0, ""), PushObject)) mustEqual Right(Const(Line(0, ""), CEmptyObject))
       }
       
       "push_array" >> {
-        decorate(Vector(Line(0, ""), PushArray)) mustEqual Right(Root(Line(0, ""), CEmptyArray))
+        decorate(Vector(Line(0, ""), PushArray)) mustEqual Right(Const(Line(0, ""), CEmptyArray))
       }
 
       "push_undefined" >> {
-        decorate(Vector(Line(0, ""), PushUndefined)) mustEqual Right(Root(Line(0, ""), CUndefined))
+        decorate(Vector(Line(0, ""), PushUndefined)) mustEqual Right(Undefined(Line(0, "")))
       }
     }
     
     "recognize a new instruction" in {
-      decorate(Vector(Line(0, ""), PushNum("5"), Map1(instructions.New))) mustEqual Right(dag.New(Line(0, ""), Root(Line(0, ""), CLong(5))))
+      decorate(Vector(Line(0, ""), PushNum("5"), Map1(instructions.New))) mustEqual Right(dag.New(Line(0, ""), Const(Line(0, ""), CLong(5))))
     }
     
     "parse out load_local" in {
       val result = decorate(Vector(Line(0, ""), PushString("/foo"), instructions.LoadLocal))
-      result mustEqual Right(dag.LoadLocal(Line(0, ""), Root(Line(0, ""), CString("/foo"))))
+      result mustEqual Right(dag.LoadLocal(Line(0, ""), Const(Line(0, ""), CString("/foo"))))
     }
     
     "parse out map1" in {
       val result = decorate(Vector(Line(0, ""), PushTrue, Map1(Neg)))
-      result mustEqual Right(Operate(Line(0, ""), Neg, Root(Line(0, ""), CBoolean(true))))
+      result mustEqual Right(Operate(Line(0, ""), Neg, Const(Line(0, ""), CBoolean(true))))
     }
     
     "parse out reduce" in {
       val result = decorate(Vector(Line(0, ""), PushFalse, instructions.Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000)))))
-      result mustEqual Right(dag.Reduce(Line(0, ""), Reduction(Vector(), "count", 0x2000), Root(Line(0, ""), CBoolean(false))))
+      result mustEqual Right(dag.Reduce(Line(0, ""), Reduction(Vector(), "count", 0x2000), Const(Line(0, ""), CBoolean(false))))
     }
 
     "parse out distinct" in {
       val result = decorate(Vector(Line(0, ""), PushNull, instructions.Distinct))
-      result mustEqual Right(dag.Distinct(Line(0, ""), Root(Line(0, ""), CNull)))
+      result mustEqual Right(dag.Distinct(Line(0, ""), Const(Line(0, ""), CNull)))
     }
     
     // TODO morphisms
@@ -107,19 +107,19 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
         Map2Cross(JoinArray)))
 
       val line = Line(0, "")
-      val medals = dag.LoadLocal(line, Root(line, CString("/summer_games/london_medals")))
+      val medals = dag.LoadLocal(line, Const(line, CString("/summer_games/london_medals")))
 
       val expected = Join(line, JoinArray, CrossLeftSort,
         Operate(line, WrapArray,
           dag.Reduce(line, Reduction(Vector(), "max", 0x2001), 
             Join(line, DerefObject, CrossLeftSort,
               medals,
-              Root(line, CString("Weight"))))),
+              Const(line, CString("Weight"))))),
         Operate(line, WrapArray,
           dag.Reduce(line, Reduction(Vector(), "max", 0x2001), 
             Join(line, DerefObject, CrossLeftSort,
               medals,
-              Root(line, CString("HeightIncm"))))))
+              Const(line, CString("HeightIncm"))))))
 
       
       result mustEqual Right(expected)
@@ -145,10 +145,10 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
         case Right(
           s @ dag.Split(`line`,
             dag.Group(2,
-              Root(`line`, CBoolean(true)),
-              UnfixedSolution(1, Root(`line`, CBoolean(true)))),
+              Const(`line`, CBoolean(true)),
+              UnfixedSolution(1, Const(`line`, CBoolean(true)))),
             IUI(`line`, true, 
-              sg @ SplitGroup(`line`, 2, IdentitySpecs(Vector())),
+              sg @ SplitGroup(`line`, 2, Identities.Specs(Vector())),
               sp @ SplitParam(`line`, 1)))) => {
               
           sp.parent mustEqual s
@@ -181,11 +181,11 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
       result must beLike {
         case Right(
           s1 @ dag.Split(`line`,
-            dag.Group(2, Root(`line`, CBoolean(false)), UnfixedSolution(1, Root(`line`, CBoolean(true)))),
+            dag.Group(2, Const(`line`, CBoolean(false)), UnfixedSolution(1, Const(`line`, CBoolean(true)))),
             s2 @ dag.Split(`line`,
-              dag.Group(4, sp1 @ SplitParam(`line`, 1), UnfixedSolution(3, sg1 @ SplitGroup(`line`, 2, IdentitySpecs(Vector())))),
+              dag.Group(4, sp1 @ SplitParam(`line`, 1), UnfixedSolution(3, sg1 @ SplitGroup(`line`, 2, Identities.Specs(Vector())))),
               IUI(`line`, true,
-                sg2 @ SplitGroup(`line`, 4, IdentitySpecs(Vector())),
+                sg2 @ SplitGroup(`line`, 4, Identities.Specs(Vector())),
                 sp2 @ SplitParam(`line`, 3))))) => {
           
           sp1.parent mustEqual s1
@@ -223,14 +223,14 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
       result must beLike {
         case Right(
           s1 @ dag.Split(`line`,
-            dag.Group(2, Root(`line`, CBoolean(false)), UnfixedSolution(1, Root(`line`, CBoolean(true)))),
+            dag.Group(2, Const(`line`, CBoolean(false)), UnfixedSolution(1, Const(`line`, CBoolean(true)))),
             s2 @ dag.Split(`line`,
-              dag.Group(4, Root(`line`, CBoolean(false)), UnfixedSolution(3, Root(`line`, CLong(42)))),
+              dag.Group(4, Const(`line`, CBoolean(false)), UnfixedSolution(3, Const(`line`, CLong(42)))),
               IUI(`line`, true,
                 Join(`line`, Add, CrossLeftSort,
-                  sg1 @ SplitGroup(`line`, 2, IdentitySpecs(Vector())),
+                  sg1 @ SplitGroup(`line`, 2, Identities.Specs(Vector())),
                   sp1 @ SplitParam(`line`, 1)),
-                sg2 @ SplitGroup(`line`, 4, IdentitySpecs(Vector())))))) => {
+                sg2 @ SplitGroup(`line`, 4, Identities.Specs(Vector())))))) => {
           
           sp1.parent mustEqual s1
           sg1.parent mustEqual s1
@@ -263,12 +263,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
           case Right(
             s @ dag.Split(`line`,
               dag.Group(3,
-                Root(`line`, CLong(2)),
+                Const(`line`, CLong(2)),
                 UnionBucketSpec(
-                  UnfixedSolution(1, Root(`line`, CLong(1))),
-                  UnfixedSolution(1, Root(`line`, CLong(3))))),
+                  UnfixedSolution(1, Const(`line`, CLong(1))),
+                  UnfixedSolution(1, Const(`line`, CLong(3))))),
               IUI(`line`, true,
-                sg @ SplitGroup(`line`, 3, IdentitySpecs(Vector())),
+                sg @ SplitGroup(`line`, 3, Identities.Specs(Vector())),
                 sp @ SplitParam(`line`, 1)))) => {
             
             sg.parent mustEqual s
@@ -299,12 +299,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
           case Right(
             s @ dag.Split(`line`,
               dag.Group(3,
-                Root(`line`, CLong(2)),
+                Const(`line`, CLong(2)),
                 IntersectBucketSpec(
-                  UnfixedSolution(1, Root(`line`, CLong(1))),
-                  UnfixedSolution(1, Root(`line`, CLong(3))))),
+                  UnfixedSolution(1, Const(`line`, CLong(1))),
+                  UnfixedSolution(1, Const(`line`, CLong(3))))),
               IUI(`line`, true,
-                sg @ SplitGroup(`line`, 3, IdentitySpecs(Vector())),
+                sg @ SplitGroup(`line`, 3, Identities.Specs(Vector())),
                 sp @ SplitParam(`line`, 1)))) => {
             
             sg.parent mustEqual s
@@ -341,12 +341,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
         case Right(
           s @ dag.Split(`line`,
             IntersectBucketSpec(
-              dag.Group(2, Root(`line`, CLong(2)), UnfixedSolution(1, Root(`line`, CLong(1)))),
-              dag.Group(3, Root(`line`, CLong(4)), UnfixedSolution(1, Root(`line`, CLong(3))))),
+              dag.Group(2, Const(`line`, CLong(2)), UnfixedSolution(1, Const(`line`, CLong(1)))),
+              dag.Group(3, Const(`line`, CLong(4)), UnfixedSolution(1, Const(`line`, CLong(3))))),
             IUI(`line`, true,
-              sg2 @ SplitGroup(`line`, 2, IdentitySpecs(Vector())),
+              sg2 @ SplitGroup(`line`, 2, Identities.Specs(Vector())),
               IUI(`line`, true,
-                sg1 @ SplitGroup(`line`, 3, IdentitySpecs(Vector())),
+                sg1 @ SplitGroup(`line`, 3, Identities.Specs(Vector())),
                 sp1 @ SplitParam(`line`, 1))))) => {
           
           sg1.parent mustEqual s
@@ -374,10 +374,10 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
       result must beLike {
         case Right(
           s @ dag.Split(`line`,
-            dag.Group(2, Root(`line`, CNull), UnfixedSolution(1, Root(`line`, CBoolean(true)))),
+            dag.Group(2, Const(`line`, CNull), UnfixedSolution(1, Const(`line`, CBoolean(true)))),
             Join(`line`, Add, IdentitySort,
-              Root(`line`, CLong(42)),
-              sg @ SplitGroup(`line`, 2, IdentitySpecs(Vector()))))) => {
+              Const(`line`, CLong(42)),
+              sg @ SplitGroup(`line`, 2, Identities.Specs(Vector()))))) => {
           
           sg.parent mustEqual s
         }
@@ -440,36 +440,36 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
           IntersectBucketSpec(
               dag.Group(0,
                   Join(line,DerefObject,CrossLeftSort,
-                      dag.LoadLocal(line,Root(line, CString("/organizations")), JUniverseT),
-                      Root(line, CString("revenue"))),
+                      dag.LoadLocal(line,Const(line, CString("/organizations")), JUniverseT),
+                      Const(line, CString("revenue"))),
                   UnfixedSolution(1,
                       Join(line,DerefObject,CrossLeftSort,
-                          dag.LoadLocal(line,Root(line, CString("/organizations")), JUniverseT),
-                          Root(line, CString("revenue"))))),
+                          dag.LoadLocal(line,Const(line, CString("/organizations")), JUniverseT),
+                          Const(line, CString("revenue"))))),
               dag.Group(2,
                   Join(line,DerefObject,CrossLeftSort,
-                      dag.LoadLocal(line,Root(line,CString("/organizations")), JUniverseT),
-                      Root(line,CString("campaign"))),
+                      dag.LoadLocal(line,Const(line,CString("/organizations")), JUniverseT),
+                      Const(line,CString("campaign"))),
                   UnfixedSolution(3,
                       Join(line,DerefObject,CrossLeftSort,
-                      dag.LoadLocal(line,Root(line,CString("/organizations")), JUniverseT),
-                      Root(line,CString("campaign")))))),
+                      dag.LoadLocal(line,Const(line,CString("/organizations")), JUniverseT),
+                      Const(line,CString("campaign")))))),
           dag.Group(4,
-              dag.LoadLocal(line,Root(line,CString("/campaigns")), JUniverseT),
+              dag.LoadLocal(line,Const(line,CString("/campaigns")), JUniverseT),
               UnfixedSolution(3,
                   Join(line,DerefObject,CrossLeftSort,
-                      dag.LoadLocal(line,Root(line,CString("/campaigns")), JUniverseT),
-                      Root(line,CString("campaign"))))))
+                      dag.LoadLocal(line,Const(line,CString("/campaigns")), JUniverseT),
+                      Const(line,CString("campaign"))))))
     
     lazy val expectedSplit: dag.Split = dag.Split(line, expectedSpec, expectedTarget)
       
     lazy val expectedTarget = Join(line,JoinObject,CrossLeftSort,
       Join(line,WrapObject,CrossLeftSort,
-        Root(line,CString("revenue")),
+        Const(line,CString("revenue")),
         SplitParam(line,1)(expectedSplit)),
       Join(line,WrapObject,CrossLeftSort,
-        Root(line,CString("num")),
-        dag.Reduce(line, Reduction(Vector(), "count", 0x002000),SplitGroup(line,4,IdentitySpecs(Vector(LoadIds("/campaigns"))))(expectedSplit))))
+        Const(line,CString("num")),
+        dag.Reduce(line, Reduction(Vector(), "count", 0x002000),SplitGroup(line,4,Identities.Specs(Vector(LoadIds("/campaigns"))))(expectedSplit))))
 
 
       result mustEqual Right(expectedSplit)
@@ -479,56 +479,56 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
       "map2_match" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, Map2Match(Add)))
-        result mustEqual Right(Join(line, Add, IdentitySort, Root(line, CBoolean(true)), Root(line, CBoolean(false))))
+        result mustEqual Right(Join(line, Add, IdentitySort, Const(line, CBoolean(true)), Const(line, CBoolean(false))))
       }
       
       "map2_cross" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, Map2Cross(Add)))
-        result mustEqual Right(Join(line, Add, CrossLeftSort, Root(line, CBoolean(true)), Root(line, CBoolean(false))))
+        result mustEqual Right(Join(line, Add, CrossLeftSort, Const(line, CBoolean(true)), Const(line, CBoolean(false))))
       }
       
       "iunion" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, IUnion))
-        result mustEqual Right(IUI(line, true, Root(line, CBoolean(true)), Root(line, CBoolean(false))))
+        result mustEqual Right(IUI(line, true, Const(line, CBoolean(true)), Const(line, CBoolean(false))))
       }
       
       "iintersect" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, IIntersect))
-        result mustEqual Right(IUI(line, false, Root(line, CBoolean(true)), Root(line, CBoolean(false))))
+        result mustEqual Right(IUI(line, false, Const(line, CBoolean(true)), Const(line, CBoolean(false))))
       }      
 
       "set difference" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, SetDifference))
-        result mustEqual Right(Diff(line, Root(line, CBoolean(true)), Root(line, CBoolean(false))))
+        result mustEqual Right(Diff(line, Const(line, CBoolean(true)), Const(line, CBoolean(false))))
       }
     }
     
     "parse a filter with null predicate" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushFalse, PushTrue, FilterMatch))
-      result mustEqual Right(Filter(line, IdentitySort, Root(line, CBoolean(false)), Root(line, CBoolean(true))))
+      result mustEqual Right(Filter(line, IdentitySort, Const(line, CBoolean(false)), Const(line, CBoolean(true))))
     }
     
     "parse a filter_cross" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushTrue, PushFalse, FilterCross))
-      result mustEqual Right(Filter(line, CrossLeftSort, Root(line, CBoolean(true)), Root(line, CBoolean(false))))
+      result mustEqual Right(Filter(line, CrossLeftSort, Const(line, CBoolean(true)), Const(line, CBoolean(false))))
     }
     
     "parse a filter_crossl" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossLeft))
-      result mustEqual Right(Filter(line, CrossLeftSort, Root(line, CBoolean(true)), Root(line, CBoolean(false))))
+      result mustEqual Right(Filter(line, CrossLeftSort, Const(line, CBoolean(true)), Const(line, CBoolean(false))))
     }
     
     "parse a filter_crossr" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossRight))
-      result mustEqual Right(Filter(line, CrossRightSort, Root(line, CBoolean(true)), Root(line, CBoolean(false))))
+      result mustEqual Right(Filter(line, CrossRightSort, Const(line, CBoolean(true)), Const(line, CBoolean(false))))
     }
     
     "continue processing beyond a filter" in {
@@ -537,21 +537,21 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
       result mustEqual Right(
         Operate(line, Neg,
           Filter(line, IdentitySort,
-            Root(line, CBoolean(false)),
-            Root(line, CBoolean(true)))))
+            Const(line, CBoolean(false)),
+            Const(line, CBoolean(true)))))
     }
     
     "parse and factor a dup" in {
       {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, Dup, IUnion))
-        result mustEqual Right(IUI(line, true, Root(line, CBoolean(true)), Root(line, CBoolean(true))))
+        result mustEqual Right(IUI(line, true, Const(line, CBoolean(true)), Const(line, CBoolean(true))))
       }
       
       {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushNum("42"), Map1(Neg), Dup, IUnion))
-        result mustEqual Right(IUI(line, true, Operate(line, Neg, Root(line, CLong(42))), Operate(line, Neg, Root(line, CLong(42)))))
+        result mustEqual Right(IUI(line, true, Operate(line, Neg, Const(line, CLong(42))), Operate(line, Neg, Const(line, CLong(42)))))
       }
     }
     
@@ -559,7 +559,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
       "1" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushFalse, PushTrue, Swap(1), IUnion))
-        result mustEqual Right(IUI(line, true, Root(line, CBoolean(true)), Root(line, CBoolean(false))))
+        result mustEqual Right(IUI(line, true, Const(line, CBoolean(true)), Const(line, CBoolean(false))))
       }
       
       "3" >> {
@@ -567,10 +567,10 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
         val result = decorate(Vector(line, PushTrue, PushString("foo"), PushFalse, PushNum("42"), Swap(3), IUnion, IUnion, IUnion))
         result mustEqual Right(
           IUI(line, true,
-            Root(line, CLong(42)),
+            Const(line, CLong(42)),
             IUI(line, true,
-              Root(line, CString("foo")),
-              IUI(line, true, Root(line, CBoolean(false)), Root(line, CBoolean(true))))))
+              Const(line, CString("foo")),
+              IUI(line, true, Const(line, CBoolean(false)), Const(line, CBoolean(true))))))
       }
     }
     
@@ -784,12 +784,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
         IIntersect))
       
       lazy val split: dag.Split = dag.Split(line,
-        dag.Group(2, Root(line, CLong(12)), UnfixedSolution(1, Root(line, CLong(42)))),
+        dag.Group(2, Const(line, CLong(12)), UnfixedSolution(1, Const(line, CLong(42)))),
         IUI(line, true,
-          SplitGroup(line, 2, IdentitySpecs(Vector()))(split),
-          Root(line, CBoolean(true))))
+          SplitGroup(line, 2, Identities.Specs(Vector()))(split),
+          Const(line, CBoolean(true))))
       
-      val expect = IUI(line, false, Root(line, CBoolean(false)), split)
+      val expect = IUI(line, false, Const(line, CBoolean(false)), split)
         
       result mustEqual Right(expect)
     }
@@ -828,15 +828,15 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
   "mapDown" should {
     "rewrite a LoadLocal shared across Split branches to the same object" in {
       val loc = Line(0, "")
-      val load = dag.LoadLocal(loc, Root(loc, CString("/clicks")))
+      val load = dag.LoadLocal(loc, Const(loc, CString("/clicks")))
       
       lazy val input: dag.Split = dag.Split(loc, 
         dag.Group(1, load, UnfixedSolution(0, load)),
         SplitParam(loc, 0)(input))
         
       val result = input.mapDown { recurse => {
-        case dag.LoadLocal(loc, Root(_, CString(path)), tpe) =>
-          dag.LoadLocal(loc, Root(loc, CString("/foo" + path)), tpe)
+        case dag.LoadLocal(loc, Const(_, CString(path)), tpe) =>
+          dag.LoadLocal(loc, Const(loc, CString("/foo" + path)), tpe)
       }}
       
       result must beLike {
@@ -849,7 +849,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
   "foldDown" should {
     "look within a Split branch" in {
       val loc = Line(0, "")
-      val load = dag.LoadLocal(loc, Root(loc, CString("/clicks")))
+      val load = dag.LoadLocal(loc, Const(loc, CString("/clicks")))
       
       lazy val input: dag.Split = dag.Split(loc, 
         dag.Group(1, load, UnfixedSolution(0, load)),

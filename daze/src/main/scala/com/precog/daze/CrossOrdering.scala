@@ -54,7 +54,9 @@ trait CrossOrdering extends DAG {
         
         case node @ SplitGroup(loc, index, identities) => SplitGroup(loc, index, identities)(splits(node.parent))
         
-        case node @ Root(_, _) => node
+        case node @ Const(_, _) => node
+
+        case node @ Undefined(_) => node
         
         case dag.New(loc, parent) =>
           dag.New(loc, memoized(parent, splits))
@@ -234,19 +236,19 @@ trait CrossOrdering extends DAG {
 
   private def determineSort(left2: DepGraph, right2: DepGraph): (Vector[Int], Vector[Int]) = {
     val leftPairs = (left2.identities, right2.identities) match {
-      case (IdentitySpecs(a), IdentitySpecs(b)) =>
+      case (Identities.Specs(a), Identities.Specs(b)) =>
         a.zipWithIndex filter {
           case (p, i) => b contains p
         }
-      case (UndefinedIdentity, _) | (_, UndefinedIdentity) => Vector.empty
+      case (Identities.Undefined, _) | (_, Identities.Undefined) => Vector.empty
     }
 
     val rightPairs = (right2.identities, left2.identities) match {
-      case (IdentitySpecs(a), IdentitySpecs(b)) =>
+      case (Identities.Specs(a), Identities.Specs(b)) =>
         a.zipWithIndex filter {
           case (p, i) => b contains p
         }
-      case (UndefinedIdentity, _) | (_, UndefinedIdentity) => Vector.empty
+      case (Identities.Undefined, _) | (_, Identities.Undefined) => Vector.empty
     }
     
     val (_, leftIndices) = leftPairs.unzip

@@ -132,10 +132,10 @@ trait Instructions extends Library {
     case object PushTrue extends Instruction with RootInstr
     case object PushFalse extends Instruction with RootInstr
     case object PushNull extends Instruction with RootInstr
-    case object PushUndefined extends Instruction with RootInstr
     case object PushObject extends Instruction with RootInstr
     case object PushArray extends Instruction with RootInstr
-    
+
+    case object PushUndefined extends Instruction
     case class PushGroup(id: Int) extends Instruction
     case class PushKey(id: Int) extends Instruction
     
