@@ -60,16 +60,24 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
 
   protected implicit val M = new FutureMonad(ExecutionContext.fromExecutor(threadPool))
 
+  def ensureByteBufferSanity(bb: ByteBuffer) = {
+    if (bb.remaining == 0) {
+      // Oh hell no. We don't need no stinkin' pre-read ByteBuffers
+      bb.rewind()
+    }
+  }
+
   def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[PrecogUnit] = {
+    logger.trace("Writing %s to %s".format(chunk, chan))
     def writeChannel(stream: StreamT[Future, ByteBuffer]): Future[PrecogUnit] = {
       stream.uncons flatMap {
-        case Some((bb, tail)) => { chan.write(bb);  writeChannel(tail); }
+        case Some((bb, tail)) => { ensureByteBufferSanity(bb); val written = chan.write(bb); logger.trace("Wrote %d bytes".format(written)); writeChannel(tail); }
         case None => Future { chan.close(); PrecogUnit }
       }
     }
 
     chunk match {
-      case Left(bb) => Future { chan.write(bb); chan.close(); PrecogUnit }
+      case Left(bb) => Future { ensureByteBufferSanity(bb); val written = chan.write(bb); logger.trace("Wrote %d bytes".format(written)); chan.close(); PrecogUnit }
       case Right(stream) => writeChannel(stream)
     }
   }
@@ -98,6 +106,8 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
         }
         i += 1
       }
+
+      logger.debug("Insert started on %d events".format(i))
 
       Future.sequence(futures) foreach { results =>
         close foreach (_.close())
