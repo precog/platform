@@ -306,6 +306,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
       "perform a trivial map1" in testMap1IntLeaf
+      "perform deepmap1 using numeric coercion" in testDeepMap1CoerceToDouble
+      "perform map1 using numeric coercion" in testMap1CoerceToDouble
       "fail to map1 into array and object" in testMap1ArrayObject
       "perform a less trvial map1" in checkMap1
       //"give the identity transform for the trivial filter" in checkTrivialFilter

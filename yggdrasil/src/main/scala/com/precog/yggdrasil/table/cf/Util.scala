@@ -169,6 +169,19 @@ object util {
     }
   }
 
+  //it would be nice to generalize this to `CoerceTo[A]` so we can coerce to BigDecimal as well
+  case object CoerceToDouble extends CF1P({
+    case c: DoubleColumn => c
+
+    case c: LongColumn => new Map1Column(c) with DoubleColumn {
+      def apply(row: Int) = c(row).toDouble
+    }
+
+    case c: NumColumn => new Map1Column(c) with DoubleColumn {
+      def apply(row: Int) = c(row).toDouble
+    }
+  })
+
   case class Concat(at: Int) extends CF2P({
     case (c1: BoolColumn, c2: BoolColumn) => new ConcatColumn(at, c1, c2) with BoolColumn { 
       def apply(row: Int) = if (row < at) c1(row) else c2(row - at)

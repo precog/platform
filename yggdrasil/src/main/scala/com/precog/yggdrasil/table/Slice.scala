@@ -97,21 +97,21 @@ trait Slice { source =>
     val size = source.size
 
     val columns: Map[ColumnRef, Column] = {
-      val resultColumns: Map[ColumnRef, Column] = for {
-        (ref, col) <- source.columns
+      val resultColumns: Seq[(ColumnRef, Column)] = for {
+        (ref, col) <- source.columns.toSeq
         result <- f(col)
       } yield (ref.copy(ctype = result.tpe), result)
 
       resultColumns.groupBy(_._1) map {
         case (ref, pairs) => (ref, pairs.map(_._2).reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
-      }
+      } toMap
     }
   }
 
   def toArray[A](implicit tpe0: CValueType[A]) = new Slice {
-    // TODO I'm really concerned about the ordering of columns 
-    // the columns always need to be in the correct order when going through the regression code
     val size = source.size
+
+    val grouped: Map[CPath, Map[ColumnRef, Column]] = (source.columns).groupBy { case (ref, _) => ref.selector }
 
     val cols0 = (source.columns).toList sortBy { case (ref, _) => ref.selector }
     val cols = cols0 map { case (_, col) => col }
@@ -132,8 +132,14 @@ trait Slice { source =>
           tpe0 match {
             case CLong =>
               val longcols = cols.collect { case (col: LongColumn) => col }.toArray
+              //val doublecols = cols.collect { case (col: DoubleColumn) => col }.toArray
+              //val numcols = cols.collect { case (col: NumColumn) => col }.toArray
+
               new HomogeneousArrayColumn[Long] {
-                private val cols: Array[Int => Long] = longcols map { x => x(_) }
+                private val cols: Array[Int => Long] = longcols map { col => col.apply _ }
+                //private val colsD: Array[Int => Long] = doublecols map { col => (col.apply _) andThen ((_:Double).toLong) }
+                //private val colsN: Array[Int => Long] = numcols map { col => (col.apply _) andThen ((_:BigDecimal).toLong) } 
+                //private val cols: Array[Int => Long] = colsL ++ colsD ++ colsN
 
                 val tpe = CArrayType(CLong)
                 def isDefinedAt(row: Int) = Loop.forall(longcols)(_ isDefinedAt row)
@@ -179,7 +185,6 @@ trait Slice { source =>
           }))
     }
   }
-
 
   /**
    * Transform this slice such that its columns are only defined for row indices

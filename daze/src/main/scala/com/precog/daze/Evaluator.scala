@@ -23,6 +23,7 @@ package daze
 import annotation.tailrec
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.ColumnarTableModuleConfig
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.util.IdSourceConfig
@@ -344,11 +345,11 @@ trait Evaluator[M[+_]] extends DAG
               leftSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(0)), paths.Value)
               rightSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
 
-              leftSpec = trans.DeepMap1(leftSpec0, Unary.CoerceToDouble.f1)
-              rightSpec = trans.DeepMap1(rightSpec0, Unary.CoerceToDouble.f1)
+              leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
+              rightSpec = trans.DeepMap1(rightSpec0, cf.util.CoerceToDouble)
 
               transformed = {
-                if (mor.multivariate) aligned.transform(ArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec))).toArray[Double]
+                if (mor.multivariate) aligned.transform(ArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
                 else aligned.transform(ArrayConcat(trans.WrapArray(leftSpec0), trans.WrapArray(rightSpec0)))
               }
 

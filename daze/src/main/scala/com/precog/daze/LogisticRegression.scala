@@ -234,10 +234,13 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
 
       val sampleTables: M[Seq[Table]] = specs flatMap { seq => table.sample(10000, seq) }
 
-      val tableReducer: Table => M[Table] = _.reduce(reducer).map(extract)
+      val tableReducer: Table => M[Table] = _.toArray[Double].reduce(reducer).map(extract)
       val reducedTables: M[Seq[Table]] = sampleTables flatMap { _.map(tableReducer).toStream.sequence map( _.toSeq) }
 
       reducedTables map { _ reduce { _ concat _ } }
     }
   }
 }
+
+
+//the toArray function has in its hands

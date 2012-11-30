@@ -106,7 +106,7 @@ object Schema {
    *
    * This is strict, so a JArrayFixedT(_) cannot include a CPathArray/CArrayType(_).
    */
-  def includes(jtpe: JType, path: CPath, ctpe: CType): Boolean = { /*println("(jtpe: %s\n, (path: %s\n, ctpe: %s\n))".format(jtpe, path, ctpe));*/ (jtpe, (path, ctpe)) match {
+  def includes(jtpe: JType, path: CPath, ctpe: CType): Boolean = { (jtpe, (path, ctpe)) match {
     case (JNumberT, (CPath.Identity, CLong | CDouble | CNum)) => true
 
     case (JTextT, (CPath.Identity, CString)) => true
