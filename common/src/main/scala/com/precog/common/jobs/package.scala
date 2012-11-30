@@ -17,9 +17,9 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
+package com.precog.common
 
-package object heimdall {
+package object jobs {
   type JobId = String
   type MessageId = Long
   type StatusId = Long

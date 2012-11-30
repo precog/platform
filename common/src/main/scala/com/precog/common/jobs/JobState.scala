@@ -17,7 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.heimdall
+package com.precog.common
+package jobs
 
 import blueeyes.json._
 import blueeyes.json.serialization.{ Decomposer, Extractor, ValidatedExtraction }
