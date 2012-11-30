@@ -35,7 +35,7 @@ object Event {
   implicit val eventIso = Iso.hlist(Event.apply _, Event.unapply _)
   
   val schema = "apiKey" :: "path" :: "ownerAccountId" :: "data" :: "metadata" :: HNil
-  val legacySchema = "tokenId" :: "path" :: "ownerAccountId" :: "data" :: "metadata" :: HNil
+  val legacySchema = "tokenId" :: "path" :: Omit :: "data" :: "metadata" :: HNil
   
   implicit val (eventDecomposer, eventExtractor) = serialization[Event](schema)
   val (_, legacyEventExtractor) = serialization[Event](legacySchema)
