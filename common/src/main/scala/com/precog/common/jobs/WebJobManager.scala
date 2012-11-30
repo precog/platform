@@ -76,13 +76,13 @@ object WebJobManager {
    * A natural transformation from Response to Future that maps the left side
    * to exceptions thrown inside the future.
    */
-  implicit def ResponseAsFuture(implicit F: Functor[Future]) = new NaturalTransformation[Response, Future] {
+ implicit def ResponseAsFuture(implicit F: Functor[Future]) = new (Response ~> Future) {
     def apply[A](res: Response[A]): Future[A] = res.fold({ error =>
       throw WebJobManagerException(error)
     }, identity)
   }
 
-  implicit def FutureAsResponse(implicit F: Pointed[Future]) = new NaturalTransformation[Future, Response] {
+  implicit def FutureAsResponse(implicit F: Pointed[Future]) = new (Future ~> Response) {
     def apply[A](fa: Future[A]): Response[A] = EitherT.eitherT(fa.map(\/.right).recoverWith {
       case WebJobManagerException(msg) => F.point(\/.left[String, A](msg))
     })
