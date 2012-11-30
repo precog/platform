@@ -97,7 +97,7 @@ trait ArchiveMessageSerialization {
     override def validated(obj: JValue): Validation[Error, ArchiveMessage] =
       ((obj \ "producerId" ).validated[Int] |@|
         (obj \ "deletionId").validated[Int] |@| {
-          (obj \ "deletion").validated[Archive] orElse Archive.legacyArchiveExtractor.validated(obj \ "event")
+          (obj \ "deletion").validated[Archive] orElse Archive.legacyArchiveExtractor.validated(obj \ "deletion")
         }).apply(ArchiveMessage(_, _, _))
   }
 }
@@ -190,7 +190,7 @@ object IngestMessageSerialization {
 
   def jvalueToArchive(jvalue: JValue): Validation[String, IngestMessage] = {
     jvalue.validated[ArchiveMessage] match {
-      case Failure(e)  => Failure(e.message)
+      case Failure(e)  => Failure(e.message + " parsing: " + jvalue.renderCompact)
       case Success(am) => Success(am)
     }
   }

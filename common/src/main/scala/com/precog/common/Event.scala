@@ -52,7 +52,7 @@ case class Archive(path: Path, apiKey: String) extends Action
 object Archive {
   implicit val archiveIso = Iso.hlist(Archive.apply _, Archive.unapply _)
 
-  val schema = "apiKey" :: "path" :: HNil
+  val schema =       "apiKey" ::  "path" :: HNil
   val legacySchema = "tokenId" :: "path" :: HNil
   
   implicit val (archiveDecomposer, archiveExtractor) = serialization[Archive](schema)
