@@ -1,4 +1,5 @@
-package com.precog.heimdall
+package com.precog.common
+package jobs
 
 import blueeyes.json._
 
@@ -89,7 +90,7 @@ trait JobManager[M[+_]] { self =>
    */
   def finish(job: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): M[Either[String, Job]]
 
-  def withM[N[+_]](implicit t: NaturalTransformation[M, N]) = new JobManager[N] {
+  def withM[N[+_]](implicit t: M ~> N) = new JobManager[N] {
     def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): N[Job] =
       t(self.createJob(auth, name, jobType, started, expires))
 

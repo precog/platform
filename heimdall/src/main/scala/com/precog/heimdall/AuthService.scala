@@ -1,5 +1,6 @@
 package com.precog.heimdall
 
+import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.common.JValueByteChunkTranscoders._
 
@@ -24,7 +25,7 @@ import WebJobManager._
 trait AuthService[M[+_]] { self =>
   def isValid(apiKey: APIKey): M[Boolean]
 
-  def withM[N[+_]](implicit t: NaturalTransformation[M, N]) = new AuthService[N] {
+  def withM[N[+_]](implicit t: M ~> N) = new AuthService[N] {
     def isValid(apiKey: APIKey): N[Boolean] = t(self.isValid(apiKey))
   }
 }

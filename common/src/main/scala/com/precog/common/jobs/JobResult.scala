@@ -1,4 +1,5 @@
-package com.precog.heimdall
+package com.precog.common
+package jobs
 
 import blueeyes.core.http.{ MimeType, MimeTypes }
 

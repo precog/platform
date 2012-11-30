@@ -1,5 +1,6 @@
 package com.precog.heimdall
 
+import com.precog.common.jobs._
 import com.precog.common.security.APIKey
 
 import org.specs2.mutable._
