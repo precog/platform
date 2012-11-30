@@ -25,6 +25,8 @@ import json._
 import blueeyes.json.{ JPath, JValue }
 import blueeyes.json.serialization.DefaultSerialization._
 
+import scalaz.Scalaz._
+
 import shapeless._
 
 sealed trait Action
@@ -34,8 +36,8 @@ case class Event(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountId], 
 object Event {
   implicit val eventIso = Iso.hlist(Event.apply _, Event.unapply _)
   
-  val schema = "apiKey" :: "path" :: "ownerAccountId" :: "data" :: "metadata" :: HNil
-  val legacySchema = "tokenId" :: "path" :: Omit :: "data" :: "metadata" :: HNil
+  val schema =       "apiKey"  :: "path" :: "ownerAccountId" :: "data" :: "metadata" :: HNil
+  val legacySchema = "tokenId" :: "path" :: Omit             :: "data" :: "metadata" :: HNil
   
   implicit val (eventDecomposer, eventExtractor) = serialization[Event](schema)
   val (_, legacyEventExtractor) = serialization[Event](legacySchema)
