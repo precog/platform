@@ -183,7 +183,7 @@ object IngestMessageSerialization {
   
   def jvalueToEvent(jvalue: JValue): Validation[String, IngestMessage] = {
     jvalue.validated[EventMessage] match {
-      case Failure(e)  => Failure(e.message)
+      case Failure(e)  => Failure(e.message + " parsing: " + jvalue.renderCompact)
       case Success(em) => Success(em)
     }
   }
