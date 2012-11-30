@@ -1351,7 +1351,7 @@ object ProvenanceComputationSpecs extends Specification
         tree.errors must beEmpty
       }
       {
-        val tree = compileSingle("foo := //baz difference //bar foo")
+        val tree = compileSingle("foo := //baz difference //baz foo")
         tree.provenance must beLike { case StaticProvenance("/baz") => ok }
         tree.errors must beEmpty
       }

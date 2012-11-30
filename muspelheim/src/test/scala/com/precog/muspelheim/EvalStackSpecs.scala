@@ -960,12 +960,6 @@ trait EvalStackSpecs extends Specification {
     }
 
     "basic set difference queries" >> {
-      "clicks difference campaigns" >> {
-        val input = "//clicks difference //campaigns"
-        val results = evalE(input)
-
-        results must haveSize(100)
-      }
       "clicks difference clicks" >> {
         val input = "//clicks difference //clicks"
         val results = evalE(input)

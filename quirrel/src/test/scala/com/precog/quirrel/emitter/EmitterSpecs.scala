@@ -138,11 +138,11 @@ object EmitterSpecs extends Specification
     }    
 
     "emit instruction for two set differenced loads" in {
-      testEmit("""load("foo") difference load("bar")""")(
+      testEmit("""load("foo") difference load("foo")""")(
         Vector(
           PushString("foo"),
           LoadLocal,
-          PushString("bar"),
+          PushString("foo"),
           LoadLocal,
           SetDifference))
     }

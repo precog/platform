@@ -513,15 +513,35 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         case Difference(_, left, right) => {
           val (leftErrors, leftConstr) = loop(left, relations, constraints)
           val (rightErrors, rightConstr) = loop(right, relations, constraints)
-          
+
+          // A DynamicProvenance being involved in either side means
+          // we can't _prove_ the data is coming from different sets.
+          val dynamicPossibility = (left.provenance.possibilities ++ right.provenance.possibilities) exists {
+            case DynamicProvenance(_) => true
+            case _ => false
+          }
+
+          val hasCommonality = {
+            val cartesian = for {
+              left <- left.provenance.possibilities
+              right <- right.provenance.possibilities
+            } yield (left, right)
+
+            cartesian.exists {
+              case (left, right) => pathExists(relations, left, right)
+            }
+          }
+
+          val isParametric = left.provenance.isParametric || right.provenance.isParametric
+
           val (errors, constr) = if (left.provenance == NullProvenance || right.provenance == NullProvenance) {
             expr.provenance = NullProvenance
             (Set(), Set())
-          } else {
+          } else if (dynamicPossibility || isParametric || hasCommonality) {
             val leftCard = left.provenance.cardinality
             val rightCard = right.provenance.cardinality
-            
-            if (left.provenance.isParametric || right.provenance.isParametric) {
+
+            if (isParametric) {
               expr.provenance = left.provenance
               (Set(), Set(SameCard(left.provenance, right.provenance)))
             } else {
@@ -533,6 +553,11 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                 (Set(Error(expr, DifferenceProvenanceDifferentLength)), Set())
               }
             }
+          } else {
+            // We only have static provenances, can prove that we only
+            // ever get the left side. Useless operation.
+            expr.provenance = NullProvenance
+            (Set(Error(expr, DifferenceWithNoCommonalities)), Set())
           }
           
           (leftErrors ++ rightErrors ++ errors, leftConstr ++ rightConstr ++ constr)
