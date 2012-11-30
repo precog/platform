@@ -19,6 +19,8 @@
  */
 package com.precog.heimdall
 
+import com.precog.common.jobs._
+
 import akka.dispatch.Future
 
 import blueeyes.bkka.AkkaTypeClasses._

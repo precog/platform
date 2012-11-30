@@ -19,6 +19,7 @@
  */
 package com.precog.heimdall
 
+import com.precog.common.jobs._
 import com.precog.common.security._
 
 import java.util.UUID

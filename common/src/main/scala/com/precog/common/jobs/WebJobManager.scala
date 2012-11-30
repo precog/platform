@@ -17,7 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.heimdall
+package com.precog.common
+package jobs
 
 import com.precog.common.security._
 import com.precog.common.JValueByteChunkTranscoders._
