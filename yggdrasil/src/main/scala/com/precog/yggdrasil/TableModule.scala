@@ -149,6 +149,8 @@ trait TableModule[M[+_]] extends TransSpecModule {
     
     def distinct(spec: TransSpec1): Table
 
+    def concat(t2: Table): Table
+
     def toArray[A](implicit tpe: CValueType[A]): Table
 
     /**
