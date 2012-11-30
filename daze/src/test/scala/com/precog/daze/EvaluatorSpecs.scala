@@ -3194,6 +3194,33 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
       testEval(input) { _ => failure } must throwAn[EnormousCartesianException]
     }
+    
+    "correctly perform a cross-filter" in {
+      /*
+       * t1 := //clicks
+       * t2 := //views
+       * 
+       * t1 ~ t2
+       *   t1 where t1.userId = t2.userId
+       */
+       
+      val line = Line(0, "")
+      
+      val t1 = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      val t2 = dag.LoadLocal(line, Root(line, CString("/clicks2")))
+      
+      val input = dag.Filter(line, IdentitySort,
+        t1,
+        Join(line, Eq, CrossLeftSort,
+          Join(line, DerefObject, CrossLeftSort,
+            t1,
+            Root(line, CString("time"))),
+          Join(line, DerefObject, CrossLeftSort,
+            t2,
+            Root(line, CString("time")))))
+          
+      testEval(input) { _ must not(beEmpty) }
+    }
   }
 
   def joinDeref(left: DepGraph, first: Int, second: Int, line: Line): DepGraph = 

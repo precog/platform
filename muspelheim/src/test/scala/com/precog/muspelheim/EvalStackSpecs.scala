@@ -2376,6 +2376,18 @@ trait EvalStackSpecs extends Specification {
         
       evalE(input) must not(throwAn[Exception])
     }
+    
+    "evaluate a trivial inclusion filter" in {
+      val input = """
+        | t1 := //clicks
+        | t2 := //views
+        | 
+        | t1 ~ t2
+        |   t1 where t1.userId = t2.userId
+        | """.stripMargin
+        
+      evalE(input) must not(beEmpty)
+    }
   }
 }
 
