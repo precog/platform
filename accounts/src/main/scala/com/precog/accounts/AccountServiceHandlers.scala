@@ -132,16 +132,22 @@ object WrappedAccountId {
   implicit val (wrappedAccountIdDecomposer, wrappedAccountIdExtractor) = serialization[WrappedAccountId](schema)
 }
 
-class ListAccountsHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
+class ListAccountsHandler(accountManagement: AccountManager[Future], rootAccountId: AccountId)(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed,Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
-      logger.debug("Looking up account ids for account: "+auth.accountId+" with API key: "+auth.apiKey)
+      val keyToFind = if (auth.accountId == rootAccountId) {
+        // Root can send an apiKey query param for the lookup
+        request.parameters.get('apiKey).getOrElse(auth.apiKey)
+      } else {
+        auth.apiKey
+      }
+
+      logger.debug("Looking up account ids with account: "+auth.accountId+" for API key: "+keyToFind)
       
-      //TODO, if root then can see more
-      accountManagement.listAccountIds(auth.apiKey).map { 
+      accountManagement.listAccountIds(keyToFind).map { 
         case accountIds =>
-          logger.debug("Found accounts for API key: "+auth.apiKey+" "+accountIds)
+          logger.debug("Found accounts for API key: "+keyToFind+" = "+accountIds)
           HttpResponse[JValue](OK, content = Some(accountIds.map(WrappedAccountId(_)).serialize))
       }
     }
