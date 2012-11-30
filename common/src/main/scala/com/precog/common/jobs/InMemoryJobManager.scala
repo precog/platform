@@ -1,4 +1,5 @@
-package com.precog.heimdall
+package com.precog.common
+package jobs
 
 import blueeyes.json._
 
