@@ -38,9 +38,11 @@ import scalaz._
 import scalaz.std.anyVal._
 import scalaz.std.option._
 import scalaz.std.set._
+import scalaz.std.stream._
 import scalaz.std.tuple._
 import scalaz.std.function._
 import scalaz.syntax.foldable._
+import scalaz.syntax.traverse._
 import scalaz.syntax.monad._
 
 trait ReductionHelper {
@@ -225,13 +227,17 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
       } getOrElse Table.empty
     }
 
-    def apply(table: Table) = {
+    def apply(table: Table): M[Table] = {
       val specs: M[Seq[TransSpec1]] = table.schemas map { jtypes => 
         jtypes.toSeq map { jtype => trans.Typed(TransSpec1.Id, jtype) }
       }
 
-      val sampleTables: M[Seq[Table]] = specs.map { seq => table.sample(10000, seq) }.join
-      sampleTables.flatMap(_.head.reduce(reducer).map(extract))
+      val sampleTables: M[Seq[Table]] = specs flatMap { seq => table.sample(10000, seq) }
+
+      val tableReducer: Table => M[Table] = _.reduce(reducer).map(extract)
+      val reducedTables: M[Seq[Table]] = sampleTables flatMap { _.map(tableReducer).toStream.sequence map( _.toSeq) }
+
+      reducedTables map { _ reduce { _ concat _ } }
     }
   }
 }

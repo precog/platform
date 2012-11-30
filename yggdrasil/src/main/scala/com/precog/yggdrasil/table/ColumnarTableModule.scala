@@ -1962,6 +1962,12 @@ trait ColumnarTableModule[M[+_]]
       Table(slices2, size)
     }
 
+    def concat(t2: Table): Table = {
+      val resultSize = TableSize(size.maxSize + t2.size.maxSize)
+      val resultSlices = slices ++ t2.slices
+      Table(resultSlices, resultSize)
+    }
+
     def toArray[A](implicit tpe: CValueType[A]): Table = {
       val slices2 = slices map { _.toArray[A] }
       Table(slices2, size)

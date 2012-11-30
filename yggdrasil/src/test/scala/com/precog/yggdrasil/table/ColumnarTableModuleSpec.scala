@@ -61,6 +61,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with CompactSpec[M] 
     with TakeRangeSpec[M]
     with ToArraySpec[M]
+    with ConcatSpec[M]
     with PartitionMergeSpec[M]
     with UnionAllSpec[M]
     with CrossAllSpec[M]
@@ -390,6 +391,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     "in toArray" >> {
       "create a single column given two single columns" in testToArrayHomogeneous
       "create empty column given heterogeneous data" in testToArrayHeterogeneous
+    }
+
+    "in concat" >> {
+      "concat two tables" in testConcat
     }
 
     "in schemas" >> {
