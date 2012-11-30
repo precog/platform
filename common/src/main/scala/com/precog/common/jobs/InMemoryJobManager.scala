@@ -37,13 +37,13 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
   import scalaz.syntax.monad._
   import JobState._
 
-  val jobs: mutable.Map[JobId, Job] = mutable.Map.empty
+  val jobs: mutable.Map[JobId, Job] = new mutable.HashMap[JobId, Job] with mutable.SynchronizedMap[JobId, Job]
 
-  val channels: mutable.Map[(JobId, String), List[Message]] = mutable.Map.empty
+  val channels: mutable.Map[(JobId, String), List[Message]] = new mutable.HashMap[(JobId, String), List[Message]] with mutable.SynchronizedMap[(JobId, String), List[Message]]
 
-  val statuses: mutable.Map[JobId, List[Status]] = mutable.Map.empty
+  val statuses: mutable.Map[JobId, List[Status]] = new mutable.HashMap[JobId, List[Status]] with mutable.SynchronizedMap[JobId, List[Status]]
 
-  val status: mutable.Map[JobId, Status] = mutable.Map.empty
+  val status: mutable.Map[JobId, Status] = new mutable.HashMap[JobId, Status] with mutable.SynchronizedMap[JobId, Status]
 
   private def newJobId: JobId = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
