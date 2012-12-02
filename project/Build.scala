@@ -86,7 +86,8 @@ object PlatformBuild extends Build {
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
       "org.specs2"                  %% "specs2"             % "1.12.3-SNAPSHOT" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
-      "javolution"                  %  "javolution"         % "5.5.1"//,
+      "javolution"                  %  "javolution"         % "5.5.1",
+      "com.chuusai"                 %% "shapeless"          % "1.2.3"//,
       //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
     )
   )
