@@ -791,6 +791,36 @@ trait StringLibSpec[M[+_]] extends Specification
       result2 must contain(true, false)
     }
   }
+
+  "parseNum" should {
+    "handle valid and invalid inputs" in {
+      val line = Line(0, "")
+      
+      val input = dag.Operate(line, BuiltInFunction1Op(parseNum),
+        dag.LoadLocal(line, Root(line, CString("/het/stringNums"))))
+
+      val result = testEval(input)
+
+      result must haveSize(8)
+
+      val ns = result.map {
+        case (Vector(i:Long), SDecimal(n)) => (i, n)
+      }.toList.sorted.map {
+        case (i, n) => n
+      }
+
+      ns must contain(
+        BigDecimal("42"),
+        BigDecimal("42.0"),
+        BigDecimal("42.123"),
+        BigDecimal("-666"),
+        BigDecimal("2e3"),
+        BigDecimal("0e9"),
+        BigDecimal("2.23532235235235353252352343636953295923"),
+        BigDecimal("1.2e3")
+      )
+    }
+  }
 }
 
 object StringLibSpec extends StringLibSpec[test.YId] with test.YIdInstances
