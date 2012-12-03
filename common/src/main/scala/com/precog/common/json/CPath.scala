@@ -46,6 +46,11 @@ sealed trait CPath { self =>
     ancestors0(this, Nil).reverse
   }
 
+  def combine(paths: Seq[CPath]): Seq[CPath] = {
+    if (paths.isEmpty) Seq(this)
+    else paths map { path => CPath(this.nodes ++ path.nodes) }
+  }
+
   def \ (that: CPath):  CPath = CPath(self.nodes ++ that.nodes)
   def \ (that: String): CPath = CPath(self.nodes :+ CPathField(that))
   def \ (that: Int):    CPath = CPath(self.nodes :+ CPathIndex(that))
@@ -181,12 +186,12 @@ case object CPathArray extends CPathNode {
 }
 
 trait CPathSerialization {
-  implicit val CPathDecomposer : Decomposer[CPath] = new Decomposer[CPath] {
-    def decompose(cpath: CPath) : JValue = JString(cpath.toString)
+  implicit val CPathDecomposer: Decomposer[CPath] = new Decomposer[CPath] {
+    def decompose(cpath: CPath): JValue = JString(cpath.toString)
   }
 
-  implicit val CPathExtractor : Extractor[CPath] = new Extractor[CPath] with ValidatedExtraction[CPath] {
-    override def validated(obj : JValue) : scalaz.Validation[Extractor.Error,CPath] =
+  implicit val CPathExtractor: Extractor[CPath] = new Extractor[CPath] with ValidatedExtraction[CPath] {
+    override def validated(obj: JValue): scalaz.Validation[Extractor.Error,CPath] =
       obj.validated[String].map(CPath(_))
   }
 }
@@ -239,6 +244,44 @@ object CPath extends CPathSerialization {
     apply(parse0(PathPattern.split(properPath).toList, Nil).reverse: _*)
   }
 
+  trait CPathTree[A]
+  case class RootNode[A](children: Seq[CPathTree[A]]) extends CPathTree[A]
+  case class FieldNode[A](field: CPathField, children: Seq[CPathTree[A]]) extends CPathTree[A]
+  case class IndexNode[A](index: CPathIndex, children: Seq[CPathTree[A]]) extends CPathTree[A]
+  case class LeafNode[A](value: A) extends CPathTree[A]
+  
+  case class PathWithLeaf[A](path: Seq[CPathNode], value: A) {
+    val size: Int = path.length
+  }
+  
+  def makeTree[A](cpaths0: Seq[CPath], values: Seq[A]): CPathTree[A] = {
+    val cpathNodes = cpaths0.sorted map { _.nodes }
+    val cpathWithValue = cpathNodes.zip(values) map { case (path, value) => PathWithLeaf[A](path, value) }
+
+    def inner[A](paths: Seq[PathWithLeaf[A]]): Seq[CPathTree[A]] = {
+      if (paths.size == 1 && paths.head.size == 0) {
+        List(LeafNode(paths.head.value))
+      } else {
+        val filtered = paths filterNot { case PathWithLeaf(path, _) => path.isEmpty }
+        val grouped = filtered groupBy { case PathWithLeaf(path, _) => path.head }
+
+        def recurse[A](paths: Seq[PathWithLeaf[A]]) = 
+          inner(paths map { case PathWithLeaf(path, v) => PathWithLeaf(path.tail, v) })
+
+        val result = grouped.toSeq.sortBy(_._1) map { case (node, paths) =>
+          node match {
+            case (field: CPathField) => FieldNode(field, recurse(paths))
+            case (index: CPathIndex) => IndexNode(index, recurse(paths))
+            case _ => sys.error("CPathArray and CPathMeta not implemented")
+          }
+        }
+        result
+      }
+    }
+
+    RootNode(inner(cpathWithValue))
+  }
+
   implicit def singleNodePath(node: CPathNode) = CPath(node)
 
   implicit object CPathOrder extends Order[CPath] {
@@ -268,3 +311,4 @@ trait CPathImplicits {
 }
 
 object CPathImplicits extends CPathImplicits
+

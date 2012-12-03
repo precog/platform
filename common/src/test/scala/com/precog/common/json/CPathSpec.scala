@@ -17,24 +17,36 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
-package table
+package com.precog.common.json
 
-import com.precog.common.json.CPath
-import com.precog.common.json.CPath._
+import org.specs2.mutable.Specification
 
-import com.precog.common.Path
-import scalaz.syntax.semigroup._
-import scalaz.syntax.order._
+class CPathSpec extends Specification {
+  import CPath._
 
-case class ColumnRef(selector: CPath, ctype: CType)
+  "makeTree" should {
+    "return correct tree given a sequence of CPath" in {
+      val cpaths: Seq[CPath] = Seq(
+        CPath(CPathField("foo")),
+        CPath(CPathField("bar"), CPathIndex(0)),
+        CPath(CPathField("bar"), CPathIndex(1), CPathField("baz")),
+        CPath(CPathField("bar"), CPathIndex(2)))
 
-object ColumnRef {
-  implicit object order extends scalaz.Order[ColumnRef] {
-    def order(r1: ColumnRef, r2: ColumnRef): scalaz.Ordering = {
-      (r1.selector ?|? r2.selector) |+| (r1.ctype ?|? r2.ctype)
+      val values: Seq[Int] = Seq(4, 6, 2, 0)
+
+      val result = makeTree(cpaths, values)
+
+      val expected: CPathTree[Int] = {
+        RootNode(Seq(
+          FieldNode(CPathField("bar"), 
+            Seq(
+              IndexNode(CPathIndex(0), Seq(LeafNode(4))),  
+              IndexNode(CPathIndex(1), Seq(FieldNode(CPathField("baz"), Seq(LeafNode(6))))),  
+              IndexNode(CPathIndex(2), Seq(LeafNode(2))))),  
+          FieldNode(CPathField("foo"), Seq(LeafNode(0)))))
+      }
+
+      result mustEqual expected
     }
   }
-
-  implicit val ordering: scala.math.Ordering[ColumnRef] = order.toScalaOrdering
 }

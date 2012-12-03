@@ -192,7 +192,9 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
       }
     }
 
-    def extract(res: Result): Table = {
+    def extract(res: Result, jtype: JType): Table = {
+      val cpaths = Schema.cpath(jtype)
+
       res map { 
         case seq => {
           val initialTheta: Theta = {
@@ -217,9 +219,14 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
 
           val finalTheta: Theta = gradloop(seq, initialTheta, initialAlpha)
 
+          val tree = CPath.makeTree(cpaths, Range(0, finalTheta.length).toSeq)
+          val spec = TransSpec.concatChildren(tree)
+
           val theta = Table.constArray(Set(CArray[Double](finalTheta)))
 
-          val valueTable = theta.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
+          val result = theta.transform(spec)
+
+          val valueTable = result.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
           val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
@@ -228,14 +235,27 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     }
 
     def apply(table: Table): M[Table] = {
-      val specs: M[Seq[TransSpec1]] = table.schemas map { jtypes => 
-        jtypes.toSeq map { jtype => trans.Typed(TransSpec1.Id, jtype) }
+      val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
+      
+      val specs: M[Seq[TransSpec1]] = schemas map {
+        _ map { jtype => trans.Typed(TransSpec1.Id, jtype) }
       }
 
       val sampleTables: M[Seq[Table]] = specs flatMap { seq => table.sample(10000, seq) }
 
-      val tableReducer: Table => M[Table] = _.toArray[Double].reduce(reducer).map(extract)
-      val reducedTables: M[Seq[Table]] = sampleTables flatMap { _.map(tableReducer).toStream.sequence map( _.toSeq) }
+      val tablesWithType: M[Seq[(Table, JType)]] = for {
+        samples <- sampleTables
+        jtypes <- schemas
+      } yield {
+        samples zip jtypes
+      }
+
+      val tableReducer: (Table, JType) => M[Table] = 
+        (table, jtype) => table.toArray[Double].reduce(reducer).map(res => extract(res, jtype))
+
+      val reducedTables: M[Seq[Table]] = tablesWithType flatMap { 
+        _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map( _.toSeq)
+      }
 
       reducedTables map { _ reduce { _ concat _ } }
     }
@@ -243,4 +263,8 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
 }
 
 
-//the toArray function has in its hands
+// do this before extract is called:  sampleTables zip table.schemas
+// we need to pass the Seq[JType] to extract
+// then for each JType we can procure a Seq[CPath]
+// we also have in our hand an Array[Double], which should have length one more than the Seq[CPath]   (if not, explosion? or we can zip the tail to the other...)
+// then we need a way to create a table from a value and a CPath

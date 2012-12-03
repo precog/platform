@@ -111,8 +111,6 @@ trait Slice { source =>
   def toArray[A](implicit tpe0: CValueType[A]) = new Slice {
     val size = source.size
 
-    val grouped: Map[CPath, Map[ColumnRef, Column]] = (source.columns).groupBy { case (ref, _) => ref.selector }
-
     val cols0 = (source.columns).toList sortBy { case (ref, _) => ref.selector }
     val cols = cols0 map { case (_, col) => col }
 
@@ -132,14 +130,9 @@ trait Slice { source =>
           tpe0 match {
             case CLong =>
               val longcols = cols.collect { case (col: LongColumn) => col }.toArray
-              //val doublecols = cols.collect { case (col: DoubleColumn) => col }.toArray
-              //val numcols = cols.collect { case (col: NumColumn) => col }.toArray
 
               new HomogeneousArrayColumn[Long] {
                 private val cols: Array[Int => Long] = longcols map { col => col.apply _ }
-                //private val colsD: Array[Int => Long] = doublecols map { col => (col.apply _) andThen ((_:Double).toLong) }
-                //private val colsN: Array[Int => Long] = numcols map { col => (col.apply _) andThen ((_:BigDecimal).toLong) } 
-                //private val cols: Array[Int => Long] = colsL ++ colsD ++ colsN
 
                 val tpe = CArrayType(CLong)
                 def isDefinedAt(row: Int) = Loop.forall(longcols)(_ isDefinedAt row)
