@@ -377,11 +377,17 @@ ACCOUNTSPID=$!
 wait_until_port_open 30062
 wait_until_port_open 30064
 
-# Now we need an actual account to use for testing
+# Now we need two accounts for testing: the root account and the test account
 if [ ! -e $WORKDIR/account_token.txt ]; then
+    echo "Creating root account"
+    ROOTACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password":"1234"}' http://localhost:30064/accounts/ | sed 's/.*\([0-9]\{10\}\).*/\1/')
+    echo "Created root account: $ROOTACCOUNTID"
+    echo "Updating root account with prior root APIKey"
+    echo -e "db.accounts.update({\"accountId\":\"$ROOTACCOUNTID\"},{\$set:{\"apiKey\":\"$TOKENID\"}})" | mongo --port $MONGOPORT accounts_v1
+    echo "Update of root account complete"
     echo "Creating test account"
     ACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password":"1234"}' http://localhost:30064/accounts/ | sed 's/.*\([0-9]\{10\}\).*/\1/')
-    echo "Created account: $ACCOUNTID"
+    echo "Created test account: $ACCOUNTID"
     echo $ACCOUNTID > $WORKDIR/account_id.txt
     ACCOUNTTOKEN=$(set -e; curl -S -s -u 'operations@precog.com:1234' -H 'Content-Type: application/json' -G "http://localhost:30064/accounts/$ACCOUNTID" | grep apiKey | sed 's/.*apiKey"[^"]*"\([^"]*\)".*/\1/')
     echo "Account token is $ACCOUNTTOKEN"
@@ -405,6 +411,7 @@ echo "Startup complete, running in $WORKDIR"
 
 echo "============================================================"
 echo "Root token: $TOKENID"
+echo "Root account ID: $ROOTACCOUNTID"
 echo "Test account ID: $ACCOUNTID"
 echo "Test account token: $ACCOUNTTOKEN"
 echo "Base path: $WORKDIR"
