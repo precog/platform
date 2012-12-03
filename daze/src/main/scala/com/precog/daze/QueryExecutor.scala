@@ -57,8 +57,12 @@ trait MetadataClient[M[+_]] {
   def structure(apiKey: APIKey, path: Path): M[Validation[String, JObject]]
 }
 
-trait QueryExecutor[M[+_]] extends MetadataClient[M] {
+trait QueryExecutor[M[+_]] {
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, CharBuffer]]
+}
+
+trait QueryExecutorFactory[M[+_]] extends MetadataClient[M] {
+  def executorFor(apiKey: APIKey): M[Validation[String, QueryExecutor[M]]]
   def status(): M[Validation[String, JValue]]
   def startup(): M[Boolean]
   def shutdown(): M[Boolean]

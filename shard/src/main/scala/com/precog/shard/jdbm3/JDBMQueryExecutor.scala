@@ -94,22 +94,21 @@ trait JDBMQueryExecutorComponent {
       val idSource = new FreshAtomicIdSource
     }
   }
-    
-  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutor[Future] = {
-    new JDBMQueryExecutor
-        with JDBMColumnarTableModule[Future]
+
+  def queryExecutorFactoryFactory(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutorFactory[Future] = {
+    new JDBMQueryExecutorFactory
         with JDBMProjectionModule
         with ProductionShardSystemActorModule
-        with SystemActorStorageModule {
+        with SystemActorStorageModule { self =>
 
       type YggConfig = JDBMQueryExecutorConfig
       val yggConfig = wrapConfig(config)
       val clock = blueeyes.util.Clock.System
       
       val actorSystem = ActorSystem("jdbmExecutorActorSystem")
-      implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+      val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-      implicit val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
+      val accountManager = extAccountManager
 
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
         val accessControl = extAccessControl
@@ -139,12 +138,29 @@ trait JDBMQueryExecutorComponent {
         }
       }
 
-      trait TableCompanion extends JDBMColumnarTableCompanion {
-        import scalaz.std.anyVal._
-        implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
+      trait JDBMShardQueryExecutor 
+          extends ShardQueryExecutor 
+          with JDBMColumnarTableModule[Future] {
+        type YggConfig = JDBMQueryExecutorConfig
+        type Key = Array[Byte]
+        type Projection = JDBMProjection
+        type Storage = StorageLike[Future, JDBMProjection]
+      }
+    
+      protected def newExecutor(asyncContext: ExecutionContext) = new JDBMShardQueryExecutor {
+        implicit val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
+
+        trait TableCompanion extends JDBMColumnarTableCompanion {
+          import scalaz.std.anyVal._
+          implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
+        }
+
+        object Table extends TableCompanion
+
+        val yggConfig = self.yggConfig
+        val storage = self.storage
       }
 
-      object Table extends TableCompanion
       
       def startup() = storage.start.onComplete {
         case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
@@ -159,7 +175,7 @@ trait JDBMQueryExecutorComponent {
   }
 }
 
-trait JDBMQueryExecutor extends ShardQueryExecutor with StorageModule[Future] { self =>
+trait JDBMQueryExecutorFactory extends ShardQueryExecutorFactory with StorageModule[Future] { self =>
   type YggConfig <: BaseJDBMQueryExecutorConfig
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {

@@ -22,6 +22,7 @@ package com.precog.shard
 import blueeyes.json._
 import blueeyes.util.Clock
 
+import com.precog.accounts.BasicAccountManager
 import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
@@ -51,6 +52,7 @@ import org.slf4j.{LoggerFactory, MDC}
 
 import java.io.File
 import java.nio.CharBuffer
+import java.util.concurrent.{ConcurrentHashMap, Executors}
 
 import scalaz._
 import scalaz.Validation._
@@ -61,169 +63,169 @@ import scalaz.syntax.std.either._
 
 import org.streum.configrity.Configuration
 
-trait ShardQueryExecutor 
-    extends QueryExecutor[Future]
-    with ParseEvalStack[Future]
+trait ShardQueryExecutorFactory
+    extends QueryExecutorFactory[Future]
     with IdSourceScannerModule[Future] { self =>
-
-  implicit def asyncContext: ExecutionContext
 
   protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
   private lazy val queryId = new java.util.concurrent.atomic.AtomicLong
 
-  case class StackException(error: StackError) extends Exception(error.toString)
-
   def clock: Clock
 
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
-    val evaluationContext = EvaluationContext(apiKey, prefix, clock.now())
-    val qid = queryId.getAndIncrement
-    queryLogger.info("Executing query %d for %s: %s, prefix: %s".format(qid, apiKey, query,prefix))
+  def accountManager: BasicAccountManager[Future]
 
-    import EvaluationError._
+  def defaultAsyncContext: ExecutionContext
 
-    val solution: Validation[Throwable, Validation[EvaluationError, StreamT[Future, CharBuffer]]] = Validation.fromTryCatch {
-      asBytecode(query) flatMap { bytecode =>
-        ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
-          /*(systemError _) <-: */
-          // TODO: How can jsonChunks return a Validation... or report evaluation error to user....
-          Validation.success(jsonChunks {
-            applyQueryOptions(opts) {
-              if (queryLogger.isDebugEnabled) {
-                eval(dag, evaluationContext, true) map {
-                  _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
-                    slice => "size: " + slice.size
+  private val executorCache = new ConcurrentHashMap[AccountId, ExecutionContext]()
+  
+  private def asyncContextFor(accountId: AccountId): ExecutionContext = {
+    if (executorCache.contains(accountId)) {
+      executorCache.get(accountId)
+    } else {
+      // FIXME: Dummy pool for now
+      executorCache.putIfAbsent(accountId, ExecutionContext.fromExecutor(Executors.newCachedThreadPool()))
+    }
+  }
+
+  def executorFor(apiKey: APIKey) = {
+    accountManager.listAccountIds(apiKey) map { accounts =>
+      if (accounts.size < 1) {
+        Failure("Could not locate accountId for apiKey " + apiKey)
+      } else {
+        Success(newExecutor(asyncContextFor(accounts.head))) // FIXME: Which account should we use if there's more than one?
+      }
+    }
+  }
+
+  protected def newExecutor(asyncContext: ExecutionContext): ShardQueryExecutor
+
+  trait ShardQueryExecutor extends QueryExecutor[Future] with ParseEvalStack[Future] {
+    case class StackException(error: StackError) extends Exception(error.toString)
+
+    def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
+      val evaluationContext = EvaluationContext(apiKey, prefix, clock.now())
+      val qid = queryId.getAndIncrement
+      queryLogger.info("Executing query %d for %s: %s, prefix: %s".format(qid, userUID, query,prefix))
+
+      import EvaluationError._
+
+      val solution: Validation[Throwable, Validation[EvaluationError, StreamT[Future, CharBuffer]]] = Validation.fromTryCatch {
+        asBytecode(query) flatMap { bytecode =>
+          ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
+            /*(systemError _) <-: */
+            // TODO: How can jsonChunks return a Validation... or report evaluation error to user....
+            Validation.success(jsonChunks(withContext { ctx =>
+              applyQueryOptions(opts) {
+                if (queryLogger.isDebugEnabled) {
+                  eval(dag, evaluationContext, true) map {
+                    _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
+                      slice => "size: " + slice.size
+                    }
                   }
+                } else {
+                  eval(dag, evaluationContext, true)
                 }
-              } else {
-                eval(dag, evaluationContext, true)
               }
-            }
-          })
+            }))
+          }
         }
+      }
+      
+      ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[Future, CharBuffer]]])
+    }
+
+    private def applyQueryOptions(opts: QueryOptions)(table: Future[Table]): Future[Table] = {
+      import trans._
+
+      def sort(table: Future[Table]): Future[Table] = if (!opts.sortOn.isEmpty) {
+        val sortKey = ArrayConcat(opts.sortOn map { cpath =>
+          WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
+            case (inner, f @ CPathField(_)) =>
+              DerefObjectStatic(inner, f)
+            case (inner, i @ CPathIndex(_)) =>
+              DerefArrayStatic(inner, i)
+          })
+        }: _*)
+
+        table flatMap (_.sort(sortKey, opts.sortOrder))
+      } else {
+        table
+      }
+
+      def page(table: Future[Table]): Future[Table] = opts.page map { case (offset, limit) =>
+          table map (_.takeRange(offset, limit))
+      } getOrElse table
+
+      page(sort(table map (_.compact(constants.SourceValue.Single))))
+    }
+
+    private def asBytecode(query: String): Validation[EvaluationError, Vector[Instruction]] = {
+      try {
+        val forest = compile(query)
+        val validForest = forest filter { _.errors.isEmpty }
+        
+        if (validForest.size == 1) {
+          success(emit(validForest.head))
+        } else if (validForest.size > 1) {
+          failure(UserError(
+            JArray(
+              JArray(
+                JObject(
+                  JField("message", JString("Ambiguous parse results.")) :: Nil) :: Nil) :: Nil)))
+        } else {
+          val nested = forest map { tree =>
+            JArray(
+              (tree.errors: Set[Error]) map { err =>
+                val loc = err.loc
+                val tp = err.tp
+
+                JObject(
+                  JField("message", JString("Errors occurred compiling your query."))
+                    :: JField("line", JString(loc.line))
+                    :: JField("lineNum", JNum(loc.lineNum))
+                    :: JField("colNum", JNum(loc.colNum))
+                    :: JField("detail", JString(tp.toString))
+                    :: Nil)
+              } toList)
+          }
+          
+          failure(UserError(JArray(nested.toList)))
+        }
+      } catch {
+        case ex: ParseException => failure(
+          UserError(
+            JArray(
+              JObject(
+                JField("message", JString("An error occurred parsing your query."))
+                  :: JField("line", JString(ex.failures.head.tail.line))
+                  :: JField("lineNum", JNum(ex.failures.head.tail.lineNum))
+                  :: JField("colNum", JNum(ex.failures.head.tail.colNum))
+                  :: JField("detail", JString(ex.mkString))
+                  :: Nil
+              ) :: Nil
+            )
+          )
+        )
       }
     }
 
-    ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[Future, CharBuffer]]])
+    private def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
+      import trans._
+
+      StreamT.wrapEffect(
+        tableM flatMap { table =>
+          renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)))
+        }
+      )
+    }
+
+    private def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
+      M.point((CharBuffer.wrap("[") :: (table renderJson ',')) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer]))    
   }
 
   def status(): Future[Validation[String, JValue]] = {
-    Future(Failure("Status not supported yet"))
+    Promise.successful(Failure("Status not supported yet"))(defaultAsyncContext)
   }
 
-  private def applyQueryOptions(opts: QueryOptions)(table: Future[Table]): Future[Table] = {
-    import trans._
-
-    def sort(table: Future[Table]): Future[Table] = if (!opts.sortOn.isEmpty) {
-      val sortKey = InnerArrayConcat(opts.sortOn map { cpath =>
-        WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
-          case (inner, f @ CPathField(_)) =>
-            DerefObjectStatic(inner, f)
-          case (inner, i @ CPathIndex(_)) =>
-            DerefArrayStatic(inner, i)
-        })
-      }: _*)
-
-      table flatMap (_.sort(sortKey, opts.sortOrder))
-    } else {
-      table
-    }
-
-    def page(table: Future[Table]): Future[Table] = opts.page map { case (offset, limit) =>
-      table map (_.takeRange(offset, limit))
-    } getOrElse table
-
-    page(sort(table map (_.compact(constants.SourceValue.Single))))
-  }
-
-  private def asBytecode(query: String): Validation[EvaluationError, Vector[Instruction]] = {
-    try {
-      val forest = compile(query)
-      val validForest = forest filter { _.errors.isEmpty }
-      
-      if (validForest.size == 1) {
-        success(emit(validForest.head))
-      } else if (validForest.size > 1) {
-        failure(UserError(
-          JArray(
-            JArray(
-              JObject(
-                JField("message", JString("Ambiguous parse results.")) :: Nil) :: Nil) :: Nil)))
-      } else {
-        val nested = forest map { tree =>
-          JArray(
-            (tree.errors: Set[Error]) map { err =>
-              val loc = err.loc
-              val tp = err.tp
-
-              JObject(
-                JField("message", JString("Errors occurred compiling your query.")) 
-                :: JField("line", JString(loc.line))
-                :: JField("lineNum", JNum(loc.lineNum))
-                :: JField("colNum", JNum(loc.colNum))
-                :: JField("detail", JString(tp.toString))
-                :: Nil)
-            } toList)
-        }
-        
-        failure(UserError(JArray(nested.toList)))
-      }
-    } catch {
-      case ex: ParseException => failure(
-        UserError(
-          JArray(
-            JObject(
-              JField("message", JString("An error occurred parsing your query."))
-              :: JField("line", JString(ex.failures.head.tail.line))
-              :: JField("lineNum", JNum(ex.failures.head.tail.lineNum))
-              :: JField("colNum", JNum(ex.failures.head.tail.colNum))
-              :: JField("detail", JString(ex.mkString))
-              :: Nil
-            ) :: Nil
-          )
-        )
-      )
-    }
-  }
-
-  private def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
-    import trans._
-
-    StreamT.wrapEffect(
-      tableM flatMap { table =>
-        renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)))
-      }
-    )
-  }
-
-  /* def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] = {
-    import JsonDSL._
-    table.slices.uncons map { unconsed =>
-      if (unconsed.isDefined) {
-        val rendered = StreamT.unfoldM[Future, CharBuffer, Option[(Slice, StreamT[Future, Slice])]](unconsed) { 
-          case Some((head, tail)) =>
-            tail.uncons map { next =>
-              if (next.isDefined) {
-                Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",") + ","), next))
-              } else {            
-                Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",")), None))
-              }
-            }
-
-          case None => 
-            M.point(None)
-        }
-        
-        rendered
-        //(CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
-      } else {
-        StreamT.empty[Future, CharBuffer]
-        //CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
-      }
-    }
-  } */
-  
-  private def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
-    M.point((CharBuffer.wrap("[") :: (table renderJson ',')) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer]))
 }
 // vim: set ts=4 sw=4 et:

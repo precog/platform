@@ -31,16 +31,16 @@ import scalaz.effect._
 import scalaz.syntax.bind._
 import scala.annotation.unchecked._
 
+trait StorageLike[M[+_], +Projection] extends StorageMetadataSource[M] { self =>
+  def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)]
+  def storeBatch(msgs: Seq[EventMessage]): M[PrecogUnit]
+  def store(msg: EventMessage): M[PrecogUnit] = storeBatch(Vector(msg))
+}
+
 trait StorageModule[M[+_]] {
   type Projection <: ProjectionLike
-  type Storage <: StorageLike
+  type Storage <: StorageLike[M, Projection]
   def storage: Storage
-
-  trait StorageLike extends StorageMetadataSource[M] { self =>
-    def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)]
-    def storeBatch(msgs: Seq[EventMessage]): M[PrecogUnit]
-    def store(msg: EventMessage): M[PrecogUnit] = storeBatch(Vector(msg))
-  }
 }
 
 trait StorageMetadataSource[M[+_]] {

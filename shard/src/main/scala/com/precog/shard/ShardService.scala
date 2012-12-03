@@ -51,19 +51,18 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
 
-case class ShardState(queryExecutor: QueryExecutor[Future], apiKeyManager: APIKeyManager[Future])
+case class ShardState(queryExecutorFactory: QueryExecutorFactory[Future], apiKeyManager: APIKeyManager[Future])
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
     ShardServiceCombinators with 
-    AkkaDefaults with 
     Logging {
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
   implicit def M: Monad[Future]
 
-  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future], accountManager: BasicAccountManager[Future]): QueryExecutor[Future]
+  def queryExecutorFactoryFactory(config: Configuration, accessControl: AccessControl[Future], accountManager: BasicAccountManager[Future]): QueryExecutorFactory[Future]
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
 
@@ -118,13 +117,13 @@ trait ShardService extends
 
           logger.trace("accountManager loaded")
 
-          val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), apiKeyManager, accountManager)
+          val queryExecutorFactory = queryExecutorFactoryFactory(config.detach("queryExecutor"), apiKeyManager, accountManager)
 
-          logger.trace("queryExecutor loaded")
+          logger.trace("queryExecutorFactory loaded")
 
-          queryExecutor.startup.map { _ =>
+          queryExecutorFactory.startup.map { _ =>
             ShardState(
-              queryExecutor,
+              queryExecutorFactory,
               apiKeyManager
             )
           }
@@ -132,13 +131,13 @@ trait ShardService extends
         request { (state: ShardState) =>
           jvalue[ByteChunk] {
             path("/actors/status") {
-              get(new ActorStatusHandler(state.queryExecutor))
+              get(new ActorStatusHandler(state.queryExecutorFactory))
             }
           } ~ jsonpcb[QueryResult] {
             apiKey(state.apiKeyManager) {
               dataPath("analytics/fs") {
                 query {
-                  get(new QueryServiceHandler(state.queryExecutor)) ~
+                  get(new QueryServiceHandler(state.queryExecutorFactory)) ~
                   // Handle OPTIONS requests internally to simplify the standalone service
                   options {
                     (request: HttpRequest[ByteChunk]) => {
@@ -148,7 +147,7 @@ trait ShardService extends
                 }
               } ~
               dataPath("meta/fs") {
-                get(new BrowseServiceHandler(state.queryExecutor, state.apiKeyManager)) ~
+                get(new BrowseServiceHandler(state.queryExecutorFactory, state.apiKeyManager)) ~
                 // Handle OPTIONS requests internally to simplify the standalone service
                 options {
                   (request: HttpRequest[ByteChunk]) => {
@@ -157,13 +156,13 @@ trait ShardService extends
                 }
               }
             } ~ path("actors/status") {
-              get(new ActorStatusHandler(state.queryExecutor))
+              get(new ActorStatusHandler(state.queryExecutorFactory))
             }
           }
         } ->
         shutdown { state =>
           for {
-            shardShutdown <- state.queryExecutor.shutdown()
+            shardShutdown <- state.queryExecutorFactory.shutdown()
             _             <- state.apiKeyManager.close()
           } yield {
             logger.info("Shard system clean shutdown: " + shardShutdown)            

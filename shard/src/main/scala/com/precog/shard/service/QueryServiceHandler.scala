@@ -39,7 +39,7 @@ import com.precog.common._
 import com.precog.common.security._
 
 
-class QueryServiceHandler(queryExecutor: QueryExecutor[Future])(implicit dispatcher: MessageDispatcher, M: Monad[Future])
+class QueryServiceHandler(queryExecutor: QueryExecutorFactory[Future])(implicit dispatcher: MessageDispatcher, M: Monad[Future])
 extends CustomHttpService[Future[JValue], (APIKeyRecord, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
 with Logging {
   import scalaz.syntax.monad._
@@ -53,23 +53,29 @@ with Logging {
       case Command("ds", arg) => describe(r.apiKey, Path(arg.trim))
       case Command("describe", arg) => describe(r.apiKey, Path(arg.trim))
       case qt =>
-        queryExecutor.execute(r.apiKey, q, p, opts) match {
-          case Success(stream) =>
-            Future(HttpResponse[QueryResult](OK, content = Some(Right(stream))))
+        queryExecutor.executorFor(r.apiKey).map { 
+          case Success(evaluator) => evaluator.execute(r.apiKey, q, p, opts) match {
+            case Success(stream) =>
+              HttpResponse[QueryResult](OK, content = Some(Right(stream)))
           
-          case Failure(UserError(errorData)) =>
-            Future(HttpResponse[QueryResult](UnprocessableEntity, content = Some(Left(errorData))))
+            case Failure(UserError(errorData)) =>
+              HttpResponse[QueryResult](UnprocessableEntity, content = Some(Left(errorData)))
           
-          case Failure(AccessDenied(reason)) =>
-            Future(HttpResponse[QueryResult](HttpStatus(Unauthorized, reason)))
+            case Failure(AccessDenied(reason)) =>
+              HttpResponse[QueryResult](HttpStatus(Unauthorized, reason))
           
-          case Failure(TimeoutError) => 
-            Future(HttpResponse[QueryResult](RequestEntityTooLarge))
+            case Failure(TimeoutError) =>
+              HttpResponse[QueryResult](RequestEntityTooLarge)
           
-          case Failure(SystemError(error)) =>
-            error.printStackTrace()
-            logger.error("An error occurred processing the query: " + qt, error)
-            Future(HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")))
+            case Failure(SystemError(error)) =>
+              error.printStackTrace()
+              logger.error("An error occurred processing the query: " + qt, error)
+            HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
+          }
+          case Failure(error) => {
+            logger.error("Failure during evaluator setup: " + error)
+            HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
+          }
         }
     })
   }
