@@ -774,7 +774,7 @@ trait StringLibSpec[M[+_]] extends Specification
   }
 
   "parseNum" should {
-    "determine equalsIgnoreCase" in {
+    "handle valid and invalid inputs" in {
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(parseNum),
