@@ -120,9 +120,10 @@ function repl {
 for f in $@; do
     echo "Ingesting: $f"
     TABLE=$(basename "$f" ".json")
+    ALLTABLES="$ALLTABLES $TABLE"
     DATA=$(./muspelheim/src/test/python/newlinejson.py $f)
     COUNT=$(echo "$DATA" | wc -l)
-    echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
+    [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
     INGEST_RESULT=$(echo "$DATA" | curl -s -S -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
 
     [ -n "$DEBUG" ] && echo $INGEST_RESULT
@@ -161,6 +162,29 @@ else
             EXIT_CODE=1
         fi
     done
+
+    # Test archive to make sure it works by actually removing all of our ingested data
+    echo "Deleting ingested data"
+    for TABLE in $ALLTABLES; do
+        echo "  deleting $TABLE..."
+        ARCHIVE_RESULT=$(curl -s -S -X DELETE "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
+        
+        [ -n "$DEBUG" ] && echo $ARCHIVE_RESULT
+    done
+
+    # Give the shard some time to actually process the archives
+    TRIES=10
+    while [ "$TRIES" -gt "0" ] && find $WORKDIR/shard-data/data -name projection_descriptor.json > /dev/null ; do
+        [ -n "$DEBUG" ] && echo "Archived data still found, sleeping"
+        TRIES=$(( $TRIES - 1 ))
+        sleep 10
+    done
+
+    if [ $(find $WORKDIR/shard-data/data -name projection_descriptor.json | wc -l) -gt "0" ]; then
+        echo "Archive of datasets failed. Projections still found in data directory!" 1>&2
+        EXIT_CODE=1
+    fi
+
 fi
 
 finished
