@@ -35,8 +35,8 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
 
       val input =
         Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, CString("/file"))),
-          Root(line, CString("column")))
+          dag.LoadLocal(line, Const(line, CString("/file"))),
+          Const(line, CString("column")))
 
       val result = prettyPrint(input)
       
@@ -46,9 +46,9 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
            |lazy val input =
            |  Join(line, DerefObject, CrossLeftSort,
            |    LoadLocal(line,
-           |      Root(line, CString("/file"))
+           |      Const(line, CString("/file"))
            |    ),
-           |    Root(line, CString("column"))
+           |    Const(line, CString("column"))
            |  )
            |""".stripMargin
 
@@ -57,16 +57,16 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
 
     "format a DAG with shared structure" in {
       val line = Line(0, "")
-      val file = dag.LoadLocal(line, Root(line, CString("/file"))) 
+      val file = dag.LoadLocal(line, Const(line, CString("/file")))
       
       val input =
         Join(line, Add, IdentitySort,
           Join(line, DerefObject, CrossLeftSort, 
             file,
-            Root(line, CString("time"))),
+            Const(line, CString("time"))),
           Join(line, DerefObject, CrossLeftSort,
             file,
-            Root(line, CString("height"))))
+            Const(line, CString("height"))))
 
       val result = prettyPrint(input)
 
@@ -75,18 +75,18 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
            |
            |lazy val node =
            |  LoadLocal(line,
-           |    Root(line, CString("/file"))
+           |    Const(line, CString("/file"))
            |  )
            |
            |lazy val input =
            |  Join(line, Add, IdentitySort,
            |    Join(line, DerefObject, CrossLeftSort,
            |      node,
-           |      Root(line, CString("time"))
+           |      Const(line, CString("time"))
            |    ),
            |    Join(line, DerefObject, CrossLeftSort,
            |      node,
-           |      Root(line, CString("height"))
+           |      Const(line, CString("height"))
            |    )
            |  )
            |""".stripMargin
@@ -97,7 +97,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
     "format a DAG containing a Split" in {
       val line = Line(0, "")
 
-      def clicks = dag.LoadLocal(line, Root(line, CString("/file")))
+      def clicks = dag.LoadLocal(line, Const(line, CString("/file")))
 
       lazy val input: dag.Split =
         dag.Split(line,
@@ -107,14 +107,14 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
             UnfixedSolution(0, 
               Join(line, DerefObject, CrossLeftSort,
                 clicks,
-                Root(line, CString("column0"))))),
+                Const(line, CString("column0"))))),
           Join(line, Add, IdentitySort,
             Join(line, DerefObject, CrossLeftSort,
               SplitParam(line, 0)(input),
-              Root(line, CString("column1"))),
+              Const(line, CString("column1"))),
             Join(line, DerefObject, CrossLeftSort,
               SplitGroup(line, 1, clicks.identities)(input),
-              Root(line, CString("column2")))))
+              Const(line, CString("column2")))))
 
       val result = prettyPrint(input)
       
@@ -123,7 +123,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
            |
            |lazy val node =
            |  LoadLocal(line,
-           |    Root(line, CString("/file"))
+           |    Const(line, CString("/file"))
            |  )
            |
            |lazy val input =
@@ -133,18 +133,18 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
            |      UnfixedSolution(line, 0,
            |        Join(line, DerefObject, CrossLeftSort,
            |          node,
-           |          Root(line, CString("column0"))
+           |          Const(line, CString("column0"))
            |        )
            |      )
            |    ),
            |    Join(line, Add, IdentitySort,
            |      Join(line, DerefObject, CrossLeftSort,
            |        SplitParam(line, 0)(input),
-           |        Root(line, CString("column1"))
+           |        Const(line, CString("column1"))
            |      ),
            |      Join(line, DerefObject, CrossLeftSort,
            |        SplitParam(line, 1, Vector(LoadIds("/file"))(input),
-           |        Root(line, CString("column2"))
+           |        Const(line, CString("column2"))
            |      )
            |    )
            |  )

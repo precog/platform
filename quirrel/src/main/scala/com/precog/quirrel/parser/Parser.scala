@@ -91,6 +91,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | strLiteral  ^# StrLit
     | numLiteral  ^# NumLit
     | boolLiteral ^# BoolLit
+    | undefinedLiteral ^# { (loc, _) => UndefinedLit(loc) }
     | nullLiteral ^# { (loc, _) => NullLit(loc) }
     
     | "{" ~ properties ~ "}"      ^# { (loc, _, ps, _) => ObjectDef(loc, ps) }
@@ -197,9 +198,11 @@ trait Parser extends RegexParsers with Filters with AST {
     | "false" ^^^ false
   )
 
-  private lazy val nullLiteral = """null\b""".r
+  private lazy val undefinedLiteral = """undefined\b""".r
   
-  private lazy val keywords = "new|true|false|where|with|union|intersect|difference|neg|null|import|solve".r
+  private lazy val nullLiteral = """null\b""".r
+
+  private lazy val keywords = "new|true|false|where|with|union|intersect|difference|neg|undefined|null|import|solve".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-+\))+""".r
   override val skipWhitespace = true

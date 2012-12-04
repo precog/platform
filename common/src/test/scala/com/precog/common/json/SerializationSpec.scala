@@ -34,8 +34,12 @@ class SerializationSpec extends Specification {
   implicit val fooIso = Iso.hlist(Foo.apply _, Foo.unapply _)
   val foo = Foo("Hello world", Some(23), true)
   val foo2 = Foo("Hello world", None, true)
+  val foo3 = Foo("Hello default world", Some(23), true)
   val fooSchema = "s" :: "i" :: "b" :: HNil
+  val defaultedFooSchema = ("s" ||| "Hello default world") :: "i" :: "b" :: HNil
+  val fooVariantSchema = ("s" | "z") :: "i" :: "b" :: HNil
   val safeFooSchema = "s" :: Omit :: "b" :: HNil
+  val safeDefaultedFooSchema = (Omit ||| "Hello default world") :: "i" :: "b" :: HNil
   
   case class Bar(d: Double, f: Foo, l: List[String])
   implicit val barIso = Iso.hlist(Bar.apply _, Bar.unapply _)
@@ -63,6 +67,19 @@ class SerializationSpec extends Specification {
         ))
     }
     
+    "serialize a simple case class with field aliases" in {
+      val fooDecomp = decomposer[Foo](fooVariantSchema)
+      
+      val result = fooDecomp.decompose(foo)
+      
+      result must_==
+        JObject(List(
+          JField("s", "Hello world"),
+          JField("i", 23),
+          JField("b", true)
+        ))
+    }
+    
     "serialize a simple case class omitting absent optional fields" in {
       val fooDecomp = decomposer[Foo](fooSchema)
       
@@ -75,6 +92,19 @@ class SerializationSpec extends Specification {
         ))
     }
     
+    "serialize a simple case class with defaulted fields" in {
+      val fooDecomp = decomposer[Foo](defaultedFooSchema)
+      
+      val result = fooDecomp.decompose(foo)
+      
+      result must_==
+        JObject(List(
+          JField("s", "Hello world"),
+          JField("i", 23),
+          JField("b", true)
+        ))
+    }
+    
     "serialize a simple case class with omitted fields" in {
       val fooDecomp = decomposer[Foo](safeFooSchema)
       
@@ -83,6 +113,18 @@ class SerializationSpec extends Specification {
       result must_==
         JObject(List(
           JField("s", "Hello world"),
+          JField("b", true)
+        ))
+    }
+    
+    "serialize a simple case class with defaulted omitted fields" in {
+      val fooDecomp = decomposer[Foo](safeDefaultedFooSchema)
+      
+      val result = fooDecomp.decompose(foo)
+      
+      result must_==
+        JObject(List(
+          JField("i", 23),
           JField("b", true)
         ))
     }
@@ -183,6 +225,30 @@ class SerializationSpec extends Specification {
       result must_== foo
     }
     
+    "extract to a simple case class with field aliases" in {
+      val fooExtract = extractor[Foo](fooVariantSchema)
+      
+      val result1 = fooExtract.extract(
+        JObject(List(
+          JField("s", "Hello world"),
+          JField("i", 23),
+          JField("b", true)
+        ))
+      )
+      
+      result1 must_== foo
+
+      val result2 = fooExtract.extract(
+        JObject(List(
+          JField("z", "Hello world"),
+          JField("i", 23),
+          JField("b", true)
+        ))
+      )
+      
+      result2 must_== foo
+    }
+    
     "extract to a simple case class with an absent optional field" in {
       val fooExtract = extractor[Foo](fooSchema)
       
@@ -194,6 +260,19 @@ class SerializationSpec extends Specification {
       )
       
       result must_== foo2
+    }
+    
+    "extract to a simple case class with an absent defaulted field" in {
+      val fooExtract = extractor[Foo](defaultedFooSchema)
+      
+      val result = fooExtract.extract(
+        JObject(List(
+          JField("i", 23),
+          JField("b", true)
+        ))
+      )
+      
+      result must_== foo3
     }
     
     "extract to a simple case class with omitted fields" in {
@@ -209,6 +288,19 @@ class SerializationSpec extends Specification {
       result must_== foo2
     }
     
+    "extract to a simple case class with defaulted omitted fields" in {
+      val fooExtract = extractor[Foo](safeDefaultedFooSchema)
+      
+      val result = fooExtract.extract(
+        JObject(List(
+          JField("i", 23),
+          JField("b", true)
+        ))
+      )
+      
+      result must_== foo3
+    }
+
     "extract to a case class with a nested case class element" in {
       implicit val fooExtract = extractor[Foo](fooSchema)
       val barExtract = extractor[Bar](barSchema)

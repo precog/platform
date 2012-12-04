@@ -27,8 +27,24 @@ import Extractor._
 import shapeless._
 import scalaz._
 
-case object Omit
 case object Inline
+
+case object Omit {
+  def |||[T](default: T) = orElse(default)
+  def orElse[T](default: T) = OmitWithDefault(default) 
+}
+
+case class OmitWithDefault[T](default: T)
+
+case class RichField(alts: List[String]) {
+  def |(alt: String) = alias(alt)
+  def alias(alt: String) = copy(alts = alts :+ alt)
+
+  def |||[T](default: T) = orElse(default)
+  def orElse[T](default: T) = RichFieldWithDefault(alts, default)
+}
+
+case class RichFieldWithDefault[T](alts: List[String], default: T)
 
 trait DecomposerAux[F <: HList, L <: HList] {
   def decompose(fields: F, values: L): JValue
@@ -47,6 +63,20 @@ object DecomposerAux {
     }
   
   implicit def hlistDecomposer2[FT <: HList, H, T <: HList](implicit dh: Decomposer[H], dt: DecomposerAux[FT, T]) =
+    new DecomposerAux[RichField :: FT, H :: T] {
+      def decompose(fields: RichField :: FT, values: H :: T) = 
+        // No point propagating decompose validation to the top level, we'd need to throw there anyway
+        dt.decompose(fields.tail, values.tail).insert(fields.head.alts.head, dh.decompose(values.head)).fold(throw _, identity)
+    }
+  
+  implicit def hlistDecomposer3[FT <: HList, H, T <: HList](implicit dh: Decomposer[H], dt: DecomposerAux[FT, T]) =
+    new DecomposerAux[RichFieldWithDefault[H] :: FT, H :: T] {
+      def decompose(fields: RichFieldWithDefault[H] :: FT, values: H :: T) = 
+        // No point propagating decompose validation to the top level, we'd need to throw there anyway
+        dt.decompose(fields.tail, values.tail).insert(fields.head.alts.head, dh.decompose(values.head)).fold(throw _, identity)
+    }
+  
+  implicit def hlistDecomposer4[FT <: HList, H, T <: HList](implicit dh: Decomposer[H], dt: DecomposerAux[FT, T]) =
     new DecomposerAux[String :: FT, Option[H] :: T] {
       def decompose(fields: String :: FT, values: Option[H] :: T) = { 
         val tail = dt.decompose(fields.tail, values.tail)
@@ -54,14 +84,38 @@ object DecomposerAux {
         values.head.map(h => tail.insert(fields.head, dh.decompose(h)).fold(throw _, identity)).getOrElse(tail)
       }
     }
-  
-  implicit def hlistDecomposer3[FT <: HList, H, T <: HList](implicit dt: DecomposerAux[FT, T], m: Monoid[H]) =
+
+  implicit def hlistDecomposer5[FT <: HList, H, T <: HList](implicit dh: Decomposer[H], dt: DecomposerAux[FT, T]) =
+    new DecomposerAux[RichField :: FT, Option[H] :: T] {
+      def decompose(fields: RichField :: FT, values: Option[H] :: T) = { 
+        val tail = dt.decompose(fields.tail, values.tail)
+        // No point propagating decompose validation to the top level, we'd need to throw there anyway
+        values.head.map(h => tail.insert(fields.head.alts.head, dh.decompose(h)).fold(throw _, identity)).getOrElse(tail)
+      }
+    }
+
+  implicit def hlistDecomposer6[FT <: HList, H, T <: HList](implicit dh: Decomposer[H], dt: DecomposerAux[FT, T]) =
+    new DecomposerAux[RichFieldWithDefault[H] :: FT, Option[H] :: T] {
+      def decompose(fields: RichFieldWithDefault[H] :: FT, values: Option[H] :: T) = { 
+        val tail = dt.decompose(fields.tail, values.tail)
+        // No point propagating decompose validation to the top level, we'd need to throw there anyway
+        values.head.map(h => tail.insert(fields.head.alts.head, dh.decompose(h)).fold(throw _, identity)).getOrElse(tail)
+      }
+    }
+
+  implicit def hlistDecomposer7[FT <: HList, H, T <: HList](implicit dt: DecomposerAux[FT, T]) =
     new DecomposerAux[Omit.type :: FT, H :: T] {
       def decompose(fields: Omit.type :: FT, values: H :: T) =
         dt.decompose(fields.tail, values.tail)
     }
   
-  implicit def hlistDecomposer4[FT <: HList, H, T <: HList](implicit dh: Decomposer[H], dt: DecomposerAux[FT, T]) =
+  implicit def hlistDecomposer8[FT <: HList, H, T <: HList](implicit dt: DecomposerAux[FT, T]) =
+    new DecomposerAux[OmitWithDefault[H] :: FT, H :: T] {
+      def decompose(fields: OmitWithDefault[H] :: FT, values: H :: T) =
+        dt.decompose(fields.tail, values.tail)
+    }
+  
+  implicit def hlistDecomposer9[FT <: HList, H, T <: HList](implicit dh: Decomposer[H], dt: DecomposerAux[FT, T]) =
     new DecomposerAux[Inline.type :: FT, H :: T] {
       def decompose(fields: Inline.type :: FT, values: H :: T) = 
         // No point propagating decompose validation to the top level, we'd need to throw there anyway
@@ -86,8 +140,34 @@ object ExtractorAux {
           t <- et.extract(source, fields.tail)
         } yield h :: t
     }
-  
-  implicit def hlistExtractor2[FT <: HList, H, T <: HList](implicit et: ExtractorAux[FT, T], m: Monoid[H]) =
+
+  implicit def hlistExtractor2[FT <: HList, H, T <: HList](implicit eh: Extractor[H], et: ExtractorAux[FT, T]) =
+    new ExtractorAux[RichField :: FT, H :: T] {
+      def extract(source: JValue, fields: RichField :: FT) =
+        for {
+          h <- fields.head.alts.find { alt =>
+                (source \? alt).isDefined
+               }.map { alt => 
+                 eh.validated(source \ alt)
+               }.getOrElse(Failure(Invalid("Missing field")))
+          t <- et.extract(source, fields.tail)
+        } yield h :: t
+    }
+
+  implicit def hlistExtractor3[FT <: HList, H, T <: HList](implicit eh: Extractor[H], et: ExtractorAux[FT, T]) =
+    new ExtractorAux[RichFieldWithDefault[H] :: FT, H :: T] {
+      def extract(source: JValue, fields: RichFieldWithDefault[H] :: FT) =
+        for {
+          h <- fields.head.alts.find { alt =>
+                (source \? alt).isDefined
+               }.map { alt => 
+                 eh.validated(source \ alt)
+               }.getOrElse(Success(fields.head.default))
+          t <- et.extract(source, fields.tail)
+        } yield h :: t
+    }
+
+  implicit def hlistExtractor4[FT <: HList, H, T <: HList](implicit et: ExtractorAux[FT, T], m: Monoid[H]) =
     new ExtractorAux[Omit.type :: FT, H :: T] {
       def extract(source: JValue, fields: Omit.type :: FT) =
         for {
@@ -95,7 +175,15 @@ object ExtractorAux {
         } yield m.zero :: t
     }
   
-  implicit def hlistExtractor3[FT <: HList, H, T <: HList](implicit eh: Extractor[H], et: ExtractorAux[FT, T]) =
+  implicit def hlistExtractor5[FT <: HList, H, T <: HList](implicit et: ExtractorAux[FT, T]) =
+    new ExtractorAux[OmitWithDefault[H] :: FT, H :: T] {
+      def extract(source: JValue, fields: OmitWithDefault[H] :: FT) =
+        for {
+          t <- et.extract(source, fields.tail)
+        } yield fields.head.default :: t
+    }
+
+  implicit def hlistExtractor6[FT <: HList, H, T <: HList](implicit eh: Extractor[H], et: ExtractorAux[FT, T]) =
     new ExtractorAux[Inline.type :: FT, H :: T] {
       def extract(source: JValue, fields: Inline.type :: FT) =
         for {

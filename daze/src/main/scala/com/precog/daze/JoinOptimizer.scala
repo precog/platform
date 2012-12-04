@@ -98,10 +98,10 @@ trait JoinOptimizer extends DAGTransform {
             Join(_, Eq, CrossLeftSort | CrossRightSort,
               Join(_, DerefObject, CrossLeftSort,
                 eqLHS,
-                Root(_, CString(sortFieldLHS))),
+                Const(_, CString(sortFieldLHS))),
               Join(_, DerefObject, CrossLeftSort,
                 eqRHS,
-                Root(_, CString(sortFieldRHS))))) => {
+                Const(_, CString(sortFieldRHS))))) => {
                   
             val sortId = idGen.nextInt()
             
@@ -109,9 +109,9 @@ trait JoinOptimizer extends DAGTransform {
               SortBy(
                 Join(loc, JoinObject, IdentitySort,
                   Join(loc, WrapObject, CrossLeftSort,
-                    Root(loc, CString("key")),
-                    Join(loc, DerefObject, CrossLeftSort, graph, Root(loc, CString(sortField)))),
-                  Join(loc, WrapObject, CrossLeftSort, Root(loc, CString("value")), graph)),
+                    Const(loc, CString("key")),
+                    Join(loc, DerefObject, CrossLeftSort, graph, Const(loc, CString(sortField)))),
+                  Join(loc, WrapObject, CrossLeftSort, Const(loc, CString("value")), graph)),
                 "key", "value", sortId) 
             }
             

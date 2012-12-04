@@ -138,6 +138,18 @@ trait EvalStackSpecs extends Specification {
         eval("true with []") mustEqual Set()
       }
     }
+    
+    "ensure that with operation uses inner-join semantics" in {
+      val input = """
+        | clicks := //clicks
+        | a := {dummy: if clicks.time < 1329326691939 then 1 else 0}
+        | clicks with {a:a}
+        | """.stripMargin
+        
+      forall(evalE(input)) {
+        case (ids, SObject(fields)) => fields must haveKey("a")
+      }
+    }
 
     "reduce sets" in {
       val input = """
@@ -458,6 +470,68 @@ trait EvalStackSpecs extends Specification {
       containsPageId collect {
         case obj => obj("pageId")
       } mustEqual Set(SString("page-0"), SString("page-1"), SString("page-2"), SString("page-3"), SString("page-4"))
+    }
+
+    "undefined literal" in {
+      "binary operation on load with undefined" >> {
+        val input = """
+          medals := //summer_games/london_medals
+          medals.Total + undefined
+        """
+
+        val results = evalE(input)
+
+        results must beEmpty
+      }
+
+      "multiple binary operations on loads with undefined" >> {
+        val input = """
+          medals := //summer_games/london_medals
+          campaigns := //campaigns
+          medals ~ campaigns
+            medals.Total + campaigns.cmp + undefined
+        """
+
+        val results = evalE(input)
+
+        results must beEmpty
+      }
+
+      "intersect load with undefined" >> {
+        val input = """
+          clicks  := //clicks
+          clicks intersect undefined
+        """
+
+        val results = evalE(input)
+
+        results must beEmpty
+      }
+
+      "union load with undefined" >> {
+        val input = """
+          clicks  := //clicks
+          clicks union undefined
+        """
+
+        val results = evalE(input)
+
+        results must not(beEmpty)
+      }
+
+      "multiple union on loads with undefined" >> {
+        val input = """
+          clicks  := //clicks
+          views   := //views
+          clickViews := clicks union views
+
+          clickViews union undefined
+        """
+
+        val results = evalE(input)
+
+        results must not(beEmpty)
+      }
     }
 
     "accept a solve involving a tic-var as an actual" in {
@@ -2114,6 +2188,11 @@ trait EvalStackSpecs extends Specification {
           result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SNull)))
         }
         
+        "object with undefined" >> {
+          val result = eval("""{ name: "John", age: 29, gender: undefined }""")
+          result must haveSize(0)
+        }
+
         "boolean" >> {
           val result = eval("true")
           result must haveSize(1)
@@ -2130,6 +2209,11 @@ trait EvalStackSpecs extends Specification {
           val result = eval("null")
           result must haveSize(1)
           result must contain(SNull)
+        }
+
+        "undefined" >> {
+          val result = eval("undefined")
+          result must haveSize(0)
         }
       }
 
@@ -2199,6 +2283,29 @@ trait EvalStackSpecs extends Specification {
           val result = eval(input)
           result must haveSize(1)
           result must contain(SDecimal(15))
+        }
+      }
+
+      "undefineds" >> {
+        "addition" >> {
+          val result = eval("5 + undefined")
+          result must haveSize(0)
+        }
+
+        "greater-than" >> {
+          val result = eval("5 > undefined")
+          result must haveSize(0)
+        }
+
+        "union" >> {
+          val result = eval("5 union undefined")
+          result must haveSize(1)
+          result must contain(SDecimal(5))
+        }
+
+        "intersect" >> {
+          val result = eval("5 intersect undefined")
+          result must haveSize(0)
         }
       }
 

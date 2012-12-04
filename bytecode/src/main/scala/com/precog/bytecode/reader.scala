@@ -190,6 +190,7 @@ trait BytecodeReader extends Reader {
         case 0x84 => Some(PushObject)
         case 0x85 => Some(PushArray)
         case 0x86 => Some(PushNull)
+        case 0x87 => Some(PushUndefined)
         
         case 0x90 => Some(PushGroup(parameter))
         case 0x91 => Some(PushKey(parameter))
