@@ -1,0 +1,6 @@
+/etc/precog/jobs-v1-beta.conf=beta/jobs-v1-beta.conf
+default=beta/jobs-v1-beta.default
+init=beta/jobs-v1-beta.init
+/etc/monit/conf.d/jobs-v1-beta.monit=beta/jobs-v1-beta.monit
+/etc/precog/jobs-v1-beta.logging.xml=beta/jobs-v1-beta.logging.xml
+postinstall=beta/postinstall.sh
