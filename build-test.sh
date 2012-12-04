@@ -91,14 +91,14 @@ fi
 set +e
 
 if [ -z "$SKIPTEST" ]; then
-    for PROJECT in util common daze auth accounts ragnarok ingest bytecode quirrel muspelheim yggdrasil shard pandora; do
+    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil shard pandora; do
         run_sbt "$PROJECT/test"
     done
 fi
 
 if [ $SUCCESS -eq 0 ]; then
     echo "Building assemblies"
-    run_sbt accounts/assembly auth/assembly ingest/assembly yggdrasil/assembly shard/assembly
+    run_sbt accounts/assembly auth/assembly ingest/assembly yggdrasil/assembly shard/assembly heimdall/assembly
 fi
 
 if [ $SUCCESS -eq 0 -a -z "$SKIPTEST" ]; then
