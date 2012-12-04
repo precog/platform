@@ -66,6 +66,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with DistinctSpec[M] 
     with GroupingGraphSpec[M]
     with SchemasSpec[M]
+    with IdSourceScannerModuleSpec[M]
     { spec => 
 
   //type GroupId = Int
