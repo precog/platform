@@ -792,10 +792,7 @@ object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] 
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
     
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 }
 

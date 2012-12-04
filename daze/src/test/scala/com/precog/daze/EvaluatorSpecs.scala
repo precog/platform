@@ -106,10 +106,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
     val flatMapTimeout = intToDurationInt(30).seconds
     val maxSliceSize = 10
 
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   object yggConfig extends YggConfig

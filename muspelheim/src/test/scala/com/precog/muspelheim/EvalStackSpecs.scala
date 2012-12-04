@@ -1777,6 +1777,23 @@ trait EvalStackSpecs extends Specification {
           results2 must haveSize(0)
         }
 
+        // From bug #38535135
+        "Correlation on solve results" >> {
+          val input = """
+            data := //summer_games/london_medals 
+            byCountry := solve 'Country
+              data' := data where data.Country = 'Country
+              {country: 'Country,
+              gold: sum(data'.G ),
+              silver: sum(data'.S )}
+
+            std::stats::corr(byCountry.gold,byCountry.silver)
+            """
+
+          val results = evalE(input)
+          results must haveSize(1)
+        }
+
         "Covariance" >> {
           val input = """
             | cpm := (//campaigns).cpm

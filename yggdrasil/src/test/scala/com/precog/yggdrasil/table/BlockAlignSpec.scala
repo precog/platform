@@ -457,10 +457,7 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
 object BlockAlignSpec extends TableModuleSpec[YId] with BlockAlignSpec[YId] with YIdInstances {
   type YggConfig = IdSourceConfig
   val yggConfig = new IdSourceConfig {
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   "align" should {

@@ -313,8 +313,9 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           val cov = (productSum - ((sum1 * sum2) / count)) / count
           val stdDev1 = sqrt(unscaledVar1) / count
           val stdDev2 = sqrt(unscaledVar2) / count
+          val correlation = cov / (stdDev1 * stdDev2)
 
-          val resultTable = Table.constDecimal(Set(CNum(cov / (stdDev1 * stdDev2))))  //TODO the following lines are used throughout. refactor! 
+          val resultTable = Table.constDecimal(Set(CNum(correlation)))  //TODO the following lines are used throughout. refactor! 
           val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
           val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
