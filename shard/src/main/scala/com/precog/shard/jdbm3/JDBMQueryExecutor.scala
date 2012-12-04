@@ -22,6 +22,8 @@ package jdbm3
 
 import blueeyes.json._
 
+import com.precog.accounts.BasicAccountManager
+
 import com.precog.common.json._
 import com.precog.common.security._
 
@@ -97,7 +99,7 @@ trait JDBMQueryExecutorComponent {
     }
   }
     
-  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor[Future] = {
+  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutor[Future] = {
     new JDBMQueryExecutor
         with JDBMColumnarTableModule[Future]
         with JDBMProjectionModule
@@ -114,6 +116,7 @@ trait JDBMQueryExecutorComponent {
 
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
         val accessControl = extAccessControl
+        val accountManager = extAccountManager
       }
 
       val storage = new Storage

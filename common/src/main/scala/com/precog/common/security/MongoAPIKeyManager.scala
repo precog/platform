@@ -92,9 +92,9 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
 
   val rootAPIKeyRecord : Future[APIKeyRecord] =
     findOneMatching[APIKeyRecord]("isRoot", "true", settings.apiKeys).map(_.getOrElse {
-      val rootGrantId = newGrantID()
+      val rootGrantId = newGrantId()
       val rootGrant = {
-        def mkPerm(p: (Path, Set[AccountID]) => Permission) = p(Path("/"), Set())
+        def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
         
         Grant(
           rootGrantId, some("root-grant"), some("The root grant"), None, Set(),
@@ -113,17 +113,17 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
     })
   
   def rootAPIKey: Future[APIKey] = rootAPIKeyRecord.map(_.apiKey)
-  def rootGrantId: Future[GrantID] = rootAPIKeyRecord.map(_.grants.head) 
+  def rootGrantId: Future[GrantId] = rootAPIKeyRecord.map(_.grants.head) 
 
-  def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantID]): Future[APIKeyRecord] = {
+  def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): Future[APIKeyRecord] = {
     val apiKey = APIKeyRecord(newAPIKey(), name, description, some(issuerKey), grants, false)
     database(insert(apiKey.serialize.asInstanceOf[JObject]).into(settings.apiKeys)) map {
       _ => apiKey
     }
   }
 
-  def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantID], perms: Set[Permission], expiration: Option[DateTime]): Future[Grant] = {
-    val ng = Grant(newGrantID(), name, description, some(issuerKey), parentIds, perms, expiration)
+  def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): Future[Grant] = {
+    val ng = Grant(newGrantId(), name, description, some(issuerKey), parentIds, perms, expiration)
     logger.debug("Adding grant: " + ng)
     database(insert(ng.serialize.asInstanceOf[JObject]).into(settings.grants)) map {
       _ => logger.debug("Add complete for " + ng); ng
@@ -163,22 +163,22 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
   def listGrants() = findAll[Grant](settings.grants)
 
   def findAPIKey(apiKey: APIKey) = findOneMatching[APIKeyRecord]("apiKey", apiKey, settings.apiKeys)
-  def findGrant(gid: GrantID) = findOneMatching[Grant]("grantId", gid, settings.grants)
-  def findGrantChildren(gid: GrantID) = findAllIncluding("parentIds", gid, settings.grants)
+  def findGrant(gid: GrantId) = findOneMatching[Grant]("grantId", gid, settings.grants)
+  def findGrantChildren(gid: GrantId) = findAllIncluding("parentIds", gid, settings.grants)
 
   def listDeletedAPIKeys() = findAll[APIKeyRecord](settings.apiKeys)
   def listDeletedGrants() = findAll[Grant](settings.grants)
 
   def findDeletedAPIKey(apiKey: APIKey) = findOneMatching[APIKeyRecord]("apiKey", apiKey, settings.deletedAPIKeys)
-  def findDeletedGrant(gid: GrantID) = findOneMatching[Grant]("grantId", gid, settings.deletedGrants)
+  def findDeletedGrant(gid: GrantId) = findOneMatching[Grant]("grantId", gid, settings.deletedGrants)
 
-  def findDeletedGrantChildren(gid: GrantID) = findAllIncluding("parentIds", gid, settings.deletedGrants)
+  def findDeletedGrantChildren(gid: GrantId) = findAllIncluding("parentIds", gid, settings.deletedGrants)
 
-  def addGrants(apiKey: APIKey, add: Set[GrantID]) = updateAPIKey(apiKey) { r =>
+  def addGrants(apiKey: APIKey, add: Set[GrantId]) = updateAPIKey(apiKey) { r =>
     Some(r.copy(grants = r.grants ++ add))
   }
 
-  def removeGrants(apiKey: APIKey, remove: Set[GrantID]) = updateAPIKey(apiKey) { r =>
+  def removeGrants(apiKey: APIKey, remove: Set[GrantId]) = updateAPIKey(apiKey) { r =>
     if(remove.subsetOf(r.grants)) Some(r.copy(grants = r.grants -- remove)) else None
   }
 
@@ -207,7 +207,7 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
       case None    => Future(None)
     } 
 
-  def deleteGrant(gid: GrantID): Future[Set[Grant]] = {
+  def deleteGrant(gid: GrantId): Future[Set[Grant]] = {
     findGrantChildren(gid).flatMap { gc =>
       Future.sequence(gc.map { g => deleteGrant(g.grantId)}).map { _.flatten }.flatMap { gds =>
         findGrant(gid).flatMap {

@@ -20,8 +20,8 @@
 package com.precog
 package accounts
 
-import com.precog.common.Path
 import com.precog.auth.WrappedAPIKey
+import com.precog.common.Path
 import com.precog.common.security._
 
 import akka.dispatch.{ ExecutionContext, Future, Await }
@@ -51,6 +51,8 @@ import blueeyes.util.Clock
 import HttpHeaders.Authorization
 
 import com.weiglewilczek.slf4s.Logging
+
+import shapeless._
 
 import scalaz.{ Applicative, Validation, Success, Failure }
 
@@ -118,18 +120,35 @@ trait AccountAuthorization {
   }
 }
 
+case class WrappedAccountId(accountId: AccountId)
 
-class ListAccountsHandler(accountManagement: AccountManager[Future])(implicit ctx: ExecutionContext) 
+object WrappedAccountId {
+  import com.precog.common.json._
+
+  implicit val wrappedAccountIdIso = Iso.hlist(WrappedAccountId.apply _, WrappedAccountId.unapply _)
+  
+  val schema = "accountId" :: HNil
+
+  implicit val (wrappedAccountIdDecomposer, wrappedAccountIdExtractor) = serialization[WrappedAccountId](schema)
+}
+
+class ListAccountsHandler(accountManagement: AccountManager[Future], rootAccountId: AccountId)(implicit ctx: ExecutionContext) 
 extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed,Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
-      //TODO, if root then can see more
-      accountManagement.listAccountIds(auth.apiKey).map { 
-        case accounts =>
-          val objs:List[JObject] = accounts.map {
-            account => JObject(Map("accountId" -> JString(account.accountId)))
-          } (collection.breakOut)
-          HttpResponse[JValue](OK, content = Some(JArray(objs)))
+      val keyToFind = if (auth.accountId == rootAccountId) {
+        // Root can send an apiKey query param for the lookup
+        request.parameters.get('apiKey).getOrElse(auth.apiKey)
+      } else {
+        auth.apiKey
+      }
+
+      logger.debug("Looking up account ids with account: "+auth.accountId+" for API key: "+keyToFind)
+      
+      accountManagement.listAccountIds(keyToFind).map { 
+        case accountIds =>
+          logger.debug("Found accounts for API key: "+keyToFind+" = "+accountIds)
+          HttpResponse[JValue](OK, content = Some(accountIds.map(WrappedAccountId(_)).serialize))
       }
     }
   }

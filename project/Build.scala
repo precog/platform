@@ -55,11 +55,11 @@ object PlatformBuild extends Build {
     }
   )
 
-  val blueeyesVersion = "1.0.0-M5"
+  val blueeyesVersion = "1.0.0-M6"
 
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "2.1.4",
+    version := "2.1.5",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalaVersion := "2.9.2",
@@ -86,7 +86,8 @@ object PlatformBuild extends Build {
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
       "org.specs2"                  %% "specs2"             % "1.12.3-SNAPSHOT" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
-      "javolution"                  %  "javolution"         % "5.5.1"//,
+      "javolution"                  %  "javolution"         % "5.5.1",
+      "com.chuusai"                 %% "shapeless"          % "1.2.3"//,
       //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
     )
   )
@@ -111,7 +112,7 @@ object PlatformBuild extends Build {
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
 
   lazy val platform = Project(id = "platform", base = file(".")).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, mongo)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*)
@@ -126,7 +127,7 @@ object PlatformBuild extends Build {
     settings(commonNexusSettings: _*) dependsOn (bytecode % "compile->compile;test->test", util)
 
   lazy val yggdrasil = Project(id = "yggdrasil", base = file("yggdrasil")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util)
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util, accounts)
 
   lazy val yggdrasilProf = Project(id = "yggdrasilProf", base = file("yggdrasilProf")).
     settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test")

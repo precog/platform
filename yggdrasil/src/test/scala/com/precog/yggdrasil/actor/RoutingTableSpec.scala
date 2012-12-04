@@ -47,9 +47,9 @@ class RoutingTableSpec extends Specification {
       val metadata = Map[JPath, Set[UserMetadata]]() +
                      (JPath(".selector") -> Set.empty[UserMetadata])
       
-      val msg = EventMessage(EventId(0,0), Event("apiKey", Path("/a/b"), None, jval, metadata))
+      val msg = EventMessage(EventId(0,0), Event("apiKey", Path("/a/b"), Some("someOwner"), jval, metadata))
       
-      val colDesc = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("apiKey")))
+      val colDesc = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("someOwner")))
 
       val actions = rt.routeEvent(msg)
 
@@ -75,12 +75,12 @@ class RoutingTableSpec extends Specification {
                      (JPath(".foo.baz") -> Set.empty[UserMetadata])
 
 
-      val msg = EventMessage(EventId(0,0), Event("apiKey", Path("/a/b"), None, jval, metadata))
+      val msg = EventMessage(EventId(0,0), Event("apiKey", Path("/a/b"), Some("someOwner"), jval, metadata))
 
-      val colDesc1 = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("apiKey")))
-      val colDesc2 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bar"), CLong, Authorities(Set("apiKey")))
-      val colDesc3 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bat"), CDouble, Authorities(Set("apiKey")))
-      val colDesc4 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.baz"), CNum, Authorities(Set("apiKey")))
+      val colDesc1 = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("someOwner")))
+      val colDesc2 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bar"), CLong, Authorities(Set("someOwner")))
+      val colDesc3 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bat"), CDouble, Authorities(Set("someOwner")))
+      val colDesc4 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.baz"), CNum, Authorities(Set("someOwner")))
 
       val actions = rt.routeEvent(msg)
 

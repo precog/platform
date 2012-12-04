@@ -472,6 +472,68 @@ trait EvalStackSpecs extends Specification {
       } mustEqual Set(SString("page-0"), SString("page-1"), SString("page-2"), SString("page-3"), SString("page-4"))
     }
 
+    "undefined literal" in {
+      "binary operation on load with undefined" >> {
+        val input = """
+          medals := //summer_games/london_medals
+          medals.Total + undefined
+        """
+
+        val results = evalE(input)
+
+        results must beEmpty
+      }
+
+      "multiple binary operations on loads with undefined" >> {
+        val input = """
+          medals := //summer_games/london_medals
+          campaigns := //campaigns
+          medals ~ campaigns
+            medals.Total + campaigns.cmp + undefined
+        """
+
+        val results = evalE(input)
+
+        results must beEmpty
+      }
+
+      "intersect load with undefined" >> {
+        val input = """
+          clicks  := //clicks
+          clicks intersect undefined
+        """
+
+        val results = evalE(input)
+
+        results must beEmpty
+      }
+
+      "union load with undefined" >> {
+        val input = """
+          clicks  := //clicks
+          clicks union undefined
+        """
+
+        val results = evalE(input)
+
+        results must not(beEmpty)
+      }
+
+      "multiple union on loads with undefined" >> {
+        val input = """
+          clicks  := //clicks
+          views   := //views
+          clickViews := clicks union views
+
+          clickViews union undefined
+        """
+
+        val results = evalE(input)
+
+        results must not(beEmpty)
+      }
+    }
+
     "accept a solve involving a tic-var as an actual" in {
       val input = """
         | medals := //summer_games/london_medals
@@ -1020,7 +1082,7 @@ trait EvalStackSpecs extends Specification {
         }
       }
       "empty intersection" >> {
-        val input = "//clicks intersect //views"
+        val input = "4 intersect 5"
         val results = evalE(input)
 
         results must beEmpty
@@ -1751,7 +1813,7 @@ trait EvalStackSpecs extends Specification {
       }
     }
  
-    "set critical conditions given an empty set in" in {
+    "set critical conditions given an empty set" in {
       val input = """
         | solve 'a
         |   //campaigns where (//campaigns).foo = 'a""".stripMargin
@@ -2126,6 +2188,11 @@ trait EvalStackSpecs extends Specification {
           result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SNull)))
         }
         
+        "object with undefined" >> {
+          val result = eval("""{ name: "John", age: 29, gender: undefined }""")
+          result must haveSize(0)
+        }
+
         "boolean" >> {
           val result = eval("true")
           result must haveSize(1)
@@ -2142,6 +2209,11 @@ trait EvalStackSpecs extends Specification {
           val result = eval("null")
           result must haveSize(1)
           result must contain(SNull)
+        }
+
+        "undefined" >> {
+          val result = eval("undefined")
+          result must haveSize(0)
         }
       }
 
@@ -2211,6 +2283,29 @@ trait EvalStackSpecs extends Specification {
           val result = eval(input)
           result must haveSize(1)
           result must contain(SDecimal(15))
+        }
+      }
+
+      "undefineds" >> {
+        "addition" >> {
+          val result = eval("5 + undefined")
+          result must haveSize(0)
+        }
+
+        "greater-than" >> {
+          val result = eval("5 > undefined")
+          result must haveSize(0)
+        }
+
+        "union" >> {
+          val result = eval("5 union undefined")
+          result must haveSize(1)
+          result must contain(SDecimal(5))
+        }
+
+        "intersect" >> {
+          val result = eval("5 intersect undefined")
+          result must haveSize(0)
         }
       }
 
@@ -2345,6 +2440,48 @@ trait EvalStackSpecs extends Specification {
         | """.stripMargin
         
       eval(input) must not(throwAn[Exception])
+    }
+    
+    "solve on a constraint clause defined by an object with two non-const fields" in {
+      val input = """
+        | clicks := //clicks
+        | data := { user: clicks.user, page: clicks.page }
+        | 
+        | solve 'bins = data
+        |   'bins
+        | """.stripMargin
+      
+      evalE(input) must not(throwAn[Exception])
+    }
+    
+    "solve a chaining of user-defined functions involving repeated where clauses" in {
+      val input = """
+        | import std::time::*
+        | import std::stats::*
+        | 
+        | agents := load("/snapEngage/agents")
+        | 
+        | upperBound := getMillis("2012-04-03T23:59:59")
+        | lowerBound := getMillis("2012-04-03T00:00:00")
+        | extraLowerBound := lowerBound - (upperBound - lowerBound)/3 
+        | 
+        | data := {agentId: agents.agentId, timeStamp: agents.timeStamp, action: agents.action, millis: getMillis(agents.timeStamp)}
+        | data' := data where data.millis < upperBound & data.millis > extraLowerBound & data.agentId = "agent1"
+        | 
+        | 
+        | lastEvent(data) := data where data.millis = max(data.millis )
+        | --lastEvent(data')
+        | 
+        | previousEvents(data, millis) := data where data.millis < millis
+        | --previous := previousEvents(data', 1333477670000)
+        | --last := lastEvent(previous)
+        | --last
+        | 
+        | solve 'time = data'.millis
+        |  {end: 'time, start: lastEvent(previousEvents(data', 'time))}
+        | """.stripMargin
+        
+      evalE(input) must not(throwAn[Exception])
     }
   }
 }

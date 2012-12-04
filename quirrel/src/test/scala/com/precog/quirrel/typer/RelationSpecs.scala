@@ -192,10 +192,11 @@ object RelationSpecs extends Specification
       tree.provenance must beLike { case CoproductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok }
       tree.errors must beEmpty      
     }    
+
     "accept intersect on different loads when related" in {
       val tree = compileSingle("//foo ~ //bar //foo intersect //bar")
-      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
-      tree.errors must beEmpty      
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
     }
     
     "accept intersect on static and dynamic provenances when related" in {

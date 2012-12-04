@@ -71,10 +71,12 @@ trait PrettyPrinter extends DAG {
         bindings(graph)
       else {
         graph match {
-          case Root(_, instr) => "Root(line, "+(instr match {
+          case Const(_, instr) => "Const(line, "+(instr match {
             case CString(str) => "CString("+prettyString(str)+")"
             case other => other
           })+")"
+
+          case Undefined(_) => "Undefined(line)"
 
           case New(_, parent) => wrap(depth, "New(line,\n", prettyPrintAux(parent, bindings, depth+1), ")")
   
@@ -133,7 +135,7 @@ trait PrettyPrinter extends DAG {
             
           case sp @ SplitParam(_, id) => "SplitParam(line, "+id+")("+bindings(sp.parent)+")" 
   
-          case sp @ SplitGroup(_, id, identities) => "SplitParam(line, "+id+", "+identities.map(prettyPrintIdentitySpec)+"("+bindings(sp.parent)+")" 
+          case sp @ SplitGroup(_, id, identities) => "SplitParam(line, "+id+", "+identities.fold(_.map(prettyPrintIdentitySpec), "UndefinedIdentity")+"("+bindings(sp.parent)+")" 
         }
       }) +
       (if(suffixNL) "\n" else "")

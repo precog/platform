@@ -42,7 +42,7 @@ trait Tracer extends parser.AST with typer.Binder {
     case Relate(_, from, to, in) =>
       Tree.node((sigma, expr), buildTrace(sigma)(from) #:: buildTrace(sigma)(to) #:: buildTrace(sigma)(in) #:: SNil)
     
-    case _: TicVar | _: StrLit | _: NumLit | _: BoolLit | _: NullLit =>
+    case _: TicVar | _: StrLit | _: NumLit | _: BoolLit | _: NullLit | _: UndefinedLit =>
       Tree.node((sigma, expr), SNil)
     
     

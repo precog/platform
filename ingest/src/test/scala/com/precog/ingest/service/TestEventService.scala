@@ -134,7 +134,7 @@ trait TestEventService extends
     contentType: MimeType,
     apiKey: Option[APIKey],
     path: Path,
-    ownerAccountId: Option[AccountID],
+    ownerAccountId: Option[AccountId],
     sync: Boolean = true
   )(data: A)(implicit
     bi: A => Future[JValue],

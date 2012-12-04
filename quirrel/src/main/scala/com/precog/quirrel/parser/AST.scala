@@ -133,6 +133,10 @@ trait AST extends Phases {
           indent + "value: " + value
       }
             
+      case UndefinedLit(loc) => {
+        indent + "type: undefined\n"
+      }
+
       case NullLit(loc) => {
         indent + "type: null\n" 
       }
@@ -412,6 +416,8 @@ trait AST extends Phases {
     }
     
     def equalsIgnoreLoc(that: Expr): Boolean = (this, that) match {
+      case (a, b) if a == b => true
+      
       case (Let(_, id1, params1, left1, right1), Let(_, id2, params2, left2, right2)) =>
         (id1 == id2) &&
           (params1 == params2) &&
@@ -451,6 +457,9 @@ trait AST extends Phases {
       case (BoolLit(_, value1), BoolLit(_, value2)) =>
         value1 == value2
 
+      case (UndefinedLit(_), UndefinedLit(_)) =>
+        true
+
       case (NullLit(_), NullLit(_)) =>
         true
 
@@ -482,14 +491,15 @@ trait AST extends Phases {
       case (Deref(_, left1, right1), Deref(_, left2, right2)) =>
         (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
 
-      case (Dispatch(_, name1, actuals1), Dispatch(_, name2, actuals2)) => {
+      case (d1 @ Dispatch(_, name1, actuals1), d2 @ Dispatch(_, name2, actuals2)) => {
         val naming = name1 == name2
         val sizing = actuals1.length == actuals2.length
+        val binding = d1.binding == d2.binding
         val contents = actuals1 zip actuals2 forall {
           case (e1, e2) => e1 equalsIgnoreLoc e2
         }
 
-        naming && sizing && contents
+        naming && sizing && binding && contents
       }
 
       case (Cond(_, pred1, left1, right1), Cond(_, pred2, left2, right2)) =>
@@ -581,6 +591,8 @@ trait AST extends Phases {
 
       case BoolLit(_, value) => value.hashCode
 
+      case UndefinedLit(_) => "undefined".hashCode
+
       case NullLit(_) => "null".hashCode
 
       case ObjectDef(_, props) => {
@@ -601,8 +613,8 @@ trait AST extends Phases {
       case Deref(_, left, right) =>
         left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
 
-      case Dispatch(_, name, actuals) =>
-        name.hashCode + (actuals map { _.hashCodeIgnoreLoc } sum)
+      case d @ Dispatch(_, name, actuals) =>
+        name.hashCode + d.binding.hashCode + (actuals map { _.hashCodeIgnoreLoc } sum)
 
       case Cond(_, pred, left, right) =>
         "if".hashCode + pred.hashCodeIgnoreLoc + "then".hashCode + left.hashCodeIgnoreLoc + "else".hashCode + right.hashCodeIgnoreLoc
@@ -671,6 +683,15 @@ trait AST extends Phases {
     protected def attribute[A](phase: Phase): Atom[A] = atom[A] {
       _errors ++= phase(root)
     }
+  }
+  
+  case class ExprWrapper(expr: Expr) {
+    override def equals(a: Any): Boolean = a match {
+      case ExprWrapper(expr2) => expr equalsIgnoreLoc expr2
+      case _ => false
+    }
+
+    override def hashCode = expr.hashCodeIgnoreLoc
   }
   
   object ast {    
@@ -784,6 +805,10 @@ trait AST extends Phases {
       val sym = 'bool
     }
     
+    final case class UndefinedLit(loc: LineStream) extends ExprLeafNode {
+      val sym = 'undefined
+    }
+
     final case class NullLit(loc: LineStream) extends ExprLeafNode {
       val sym = 'null
     }

@@ -83,7 +83,7 @@ trait SortBySerialization {
 
 object SortBy extends SortBySerialization
 
-case class Authorities(ownerAccountIds: Set[AccountID]) {
+case class Authorities(ownerAccountIds: Set[AccountId]) {
 
   @tailrec
   final def hashSeq(l: Seq[String], hash: Int, i: Int = 0): Int = {
