@@ -3,9 +3,12 @@ package security
 
 import json._
 
+import blueeyes.json.JValue
+import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
 import scalaz.Scalaz._
+import scalaz.Validation
 
 import shapeless._
 
@@ -20,8 +23,10 @@ case class APIKeyRecord(
 object APIKeyRecord {
   implicit val apiKeyRecordIso = Iso.hlist(APIKeyRecord.apply _, APIKeyRecord.unapply _)
   
-  val schema =     "apiKey" :: "name" :: "description" :: "issuerKey" :: "grants" :: "isRoot" :: HNil
-  val safeSchema = "apiKey" :: "name" :: "description" :: Omit        :: "grants" :: "isRoot" :: HNil
+  val schema =       "apiKey"  :: "name" :: "description" :: "issuerKey" :: "grants" :: "isRoot" :: HNil
+  val safeSchema =   "apiKey"  :: "name" :: "description" :: Omit        :: "grants" :: "isRoot" :: HNil
+
+  val legacySchema = ("apiKey" | "tokenId") :: "name" :: "description" :: "issuerKey" :: "grants" :: ("isRoot" ||| false) :: HNil
   
   object Serialization {
     implicit val (apiKeyRecordDecomposer, apiKeyRecordExtractor) = serialization[APIKeyRecord](schema)
@@ -29,6 +34,10 @@ object APIKeyRecord {
   
   object SafeSerialization {
     implicit val (safeAPIKeyRecordDecomposer, safeAPIKeyRecordExtractor) = serialization[APIKeyRecord](safeSchema)
+  }
+
+  object LegacySerialization {
+    val legacyAPIKeyExtractor = extractor[APIKeyRecord](legacySchema)
   }
 }
 
