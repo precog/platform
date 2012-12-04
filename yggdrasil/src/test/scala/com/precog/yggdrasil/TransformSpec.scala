@@ -756,6 +756,26 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       })
     }
   }
+  
+  def testInnerObjectConcatJoinSemantics = {
+    val data = Stream(JObject(Map("a" -> JNum(42))))
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+    
+    val spec = InnerObjectConcat(
+      Leaf(Source),
+      WrapObject(
+        Filter(
+          DerefObjectStatic(
+            Leaf(Source),
+            CPathField("a")),
+          ConstLiteral(CBoolean(false), Leaf(Source))),   // undefined
+        "b"))
+    
+    val results = toJson(table transform spec)
+  
+    results.copoint mustEqual Stream()
+  }
 
   def checkArrayConcat = {
     implicit val gen = sample(_ => Seq(JPath("[0]") -> CLong, JPath("[1]") -> CLong))
