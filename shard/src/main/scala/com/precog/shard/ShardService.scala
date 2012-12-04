@@ -1,13 +1,15 @@
 package com.precog
 package shard
 
+import com.precog.accounts.BasicAccountManager
+
 import service._
 import ingest.service._
 import common.Path
 import common.security._
 import daze._
 
-import akka.dispatch.Future
+import akka.dispatch.{Future, Promise}
 
 import blueeyes.json._
 import blueeyes.bkka.{AkkaDefaults, Stoppable}
@@ -42,9 +44,11 @@ trait ShardService extends
 
   implicit def M: Monad[Future]
 
-  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]): QueryExecutor[Future]
+  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future], accountManager: BasicAccountManager[Future]): QueryExecutor[Future]
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
+
+  def accountManagerFactory(config: Configuration): BasicAccountManager[Future]
 
   // TODO: maybe some of these implicits should be moved, but for now i
   // don't have the patience to figure out where.
@@ -59,6 +63,13 @@ trait ShardService extends
     (fr: Future[HttpResponse[JValue]]) => fr.map { r => 
       r.copy(content = r.content.map(Left(_)))
     }
+
+  def optionsResponse = Promise.successful(
+    HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
+      "Access-Control-Allow-Origin" -> "*",
+      "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
+      "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
+  )
 
   import java.nio.ByteBuffer
   import java.nio.charset.Charset
@@ -84,7 +95,11 @@ trait ShardService extends
 
           logger.trace("apiKeyManager loaded")
 
-          val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), apiKeyManager)
+          val accountManager = accountManagerFactory(config.detach("accounts"))
+
+          logger.trace("accountManager loaded")
+
+          val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), apiKeyManager, accountManager)
 
           logger.trace("queryExecutor loaded")
 
@@ -108,12 +123,7 @@ trait ShardService extends
                   // Handle OPTIONS requests internally to simplify the standalone service
                   options {
                     (request: HttpRequest[ByteChunk]) => {
-                      (a: APIKeyRecord, p: Path, s: String, o: QueryOptions) => Future {
-                        HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS", 
-                                                                            "Access-Control-Allow-Origin" -> "*",
-                                                                            "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
-                                                                            "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
-                      }
+                      (a: APIKeyRecord, p: Path, s: String, o: QueryOptions) => optionsResponse
                     }
                   }
                 }
@@ -123,12 +133,7 @@ trait ShardService extends
                 // Handle OPTIONS requests internally to simplify the standalone service
                 options {
                   (request: HttpRequest[ByteChunk]) => {
-                    (a: APIKeyRecord, p: Path) => Future {
-                      HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS", 
-                                                                          "Access-Control-Allow-Origin" -> "*",
-                                                                          "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
-                                                                          "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
-                    }
+                    (a: APIKeyRecord, p: Path) => optionsResponse
                   }
                 }
               }

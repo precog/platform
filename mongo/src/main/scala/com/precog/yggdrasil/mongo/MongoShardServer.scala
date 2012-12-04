@@ -1,7 +1,7 @@
 package com.precog.shard
 package mongo
 
-import akka.dispatch.Future
+import akka.dispatch.{ExecutionContext, Future, Promise}
 
 import com.precog.common.security._
 
@@ -21,12 +21,12 @@ object MongoShardServer extends BlueEyesServer with ShardService with MongoQuery
   
   val clock = Clock.System
 
-  val asyncContext = defaultFutureDispatch
-
   val jettyService = this.service("labcoat", "1.0") { context =>
     startup {
+      val rootConfig = context.rootConfig
       val config = rootConfig.detach("services.quirrel.v1")
       val serverPort = config[Int]("labcoat.port", 8000)
+      val quirrelPort = rootConfig[Int]("server.port", 8888)
       val rootKey = config[String]("security.masterAccount.apiKey")
 
       val server = new Server(serverPort)
@@ -41,7 +41,7 @@ object MongoShardServer extends BlueEyesServer with ShardService with MongoQuery
                    request: HttpServletRequest,
                    response: HttpServletResponse): Unit = {
           if (target == "/") {
-            response.sendRedirect("http://localhost:%d/index.html?apiKey=%s&analyticsService=http://localhost:%d/&version=false&useJsonp=true".format(serverPort, rootKey, port))
+            response.sendRedirect("http://localhost:%d/index.html?apiKey=%s&analyticsService=http://localhost:%d/&version=false&useJsonp=true".format(serverPort, rootKey, quirrelPort))
           }
         }
       }
@@ -56,7 +56,7 @@ object MongoShardServer extends BlueEyesServer with ShardService with MongoQuery
     } -> 
     request { (server: Server) =>
       get {
-        (req: HttpRequest[ByteChunk]) => Future { HttpResponse[ByteChunk]() }
+        (req: HttpRequest[ByteChunk]) => Promise.successful(HttpResponse[ByteChunk]())
       }
     } ->
     shutdown { (server: Server) =>

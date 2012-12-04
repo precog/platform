@@ -46,6 +46,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with CrossAllSpec[M]
     with DistinctSpec[M] 
     with GroupingGraphSpec[M]
+    with SchemasSpec[M]
     { spec => 
 
   //type GroupId = Int
@@ -363,6 +364,14 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "select nothing with a negative starting index" in testTakeRangeNegStart
       "select nothing with a negative number to take" in testTakeRangeNegNumber
       "select the correct rows using scalacheck" in checkTakeRange
+    }
+
+    "in schemas" >> {
+      "find a schema in single-schema table" in testSingleSchema
+      "find schemas separated by slice boundary" in testCrossSliceSchema
+      "extract intervleaved schemas" in testIntervleavedSchema
+      "don't include undefineds in schema" in testUndefinedsInSchema
+      "deal with most expected types" in testAllTypesInSchema
     }
   }
 
