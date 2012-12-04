@@ -53,7 +53,18 @@ import org.scalacheck.Arbitrary._
 import TableModule._
 import SampleData._
 
-trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
+trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] 
+    with TableModuleSpec[M]
+    with CogroupSpec[M]
+    with CrossSpec[M]
+    with TransformSpec[M]
+    with CompactSpec[M] 
+    with TakeRangeSpec[M]
+    with PartitionMergeSpec[M]
+    with DistinctSpec[M] 
+    with SchemasSpec[M]
+    { spec => 
+
   type GroupId = Int
   import trans._
   import constants._
@@ -64,7 +75,7 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
   class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size) {
     import trans._
     def load(apiKey: APIKey, jtpe: JType): M[Table] = sys.error("todo")
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false) = sys.error("todo")
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false) = M.point(this)
     def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("todo")
   }
   
@@ -88,10 +99,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     with CompactSpec[M] 
     with TakeRangeSpec[M]
     with PartitionMergeSpec[M]
-    with UnionAllSpec[M]
-    with CrossAllSpec[M]
     with DistinctSpec[M] 
-    with GroupingGraphSpec[M]
     with SchemasSpec[M]
     { spec => 
 
@@ -100,7 +108,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     
   override val defaultPrettyParams = Pretty.Params(2)
 
-  private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.table.ColumnarTableModuleSpec")
+  lazy val xlogger = LoggerFactory.getLogger("com.precog.yggdrasil.table.ColumnarTableModuleSpec")
 
   "a table dataset" should {
     "verify bijection from static JSON" in {
@@ -403,388 +411,61 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     "concatenate reductions of subsequences" in testPartitionMerge
   }
 
-  "unionAll" should {
-    "union a simple homogeneous borg result set" in simpleUnionAllTest
-    "union a simple reversed borg result set" in reversedUnionAllTest
-  }
-
-  "crossAll" should {
-    "cross a simple borg result set" in simpleCrossAllTest
-  }
-
   "logging" should {
     "run" in {
-      testSimpleCogroup(t => t.logged(logger, "test-logging", "start stream", "end stream") {
+      testSimpleCogroup(t => t.logged(xlogger, "test-logging", "start stream", "end stream") {
         slice => "size: " + slice.size
       })
     }
   }
 
-  "grouping support" >> {
-    import Table._
-    import Table.Universe._
+  "track table metrics" in {
+    "single traversal" >> {
+      implicit val gen = sample(objectSchema(_, 3))
+      check { (sample: SampleData) =>
+        val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
 
-    def constraint(str: String) = OrderingConstraint(str.split(",").toSeq.map(_.toSet.map((c: Char) => CPathField(c.toString))))
-    def ticvars(str: String) = str.toSeq.map((c: Char) => CPathField(c.toString))
-    def order(str: String) = OrderingConstraint.fromFixed(ticvars(str))
-    def mergeNode(str: String) = MergeNode(ticvars(str).toSet, null)
+        val table = fromSample(sample)
+        val t0 = table.transform(TransSpec1.Id)
+        t0.toJson.copoint must_== sample.data
 
-    "derive the universes of binding constraints" >> {
-      "single-source groupings should generate single binding universes" in {
-        val spec = GroupingSource(
-          Table.empty, 
-          SourceKey.Single, Some(TransSpec1.Id), 2, 
-          GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
-
-        Table.findBindingUniverses(spec) must haveSize(1)
-      }
-      
-      "single-source groupings should generate single binding universes if no disjunctions are present" in {
-        val spec = GroupingSource(
-          Table.empty,
-          SourceKey.Single, Some(SourceValue.Single), 3,
-          GroupKeySpecAnd(
-            GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
-            GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
-
-        Table.findBindingUniverses(spec) must haveSize(1)
-      }
-      
-      "multiple-source groupings should generate single binding universes if no disjunctions are present" in {
-        val spec1 = GroupingSource(
-          Table.empty,
-          SourceKey.Single, Some(TransSpec1.Id), 2,
-          GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
-          
-        val spec2 = GroupingSource(
-          Table.empty,
-          SourceKey.Single, Some(TransSpec1.Id), 3,
-          GroupKeySpecSource(CPathField("1"), TransSpec1.Id))
-          
-        val union = GroupingAlignment(
-          DerefObjectStatic(Leaf(Source), CPathField("1")),
-          DerefObjectStatic(Leaf(Source), CPathField("1")),
-          spec1,
-          spec2, GroupingSpec.Union)
-
-        Table.findBindingUniverses(union) must haveSize(1)
-      }
-
-      "single-source groupings should generate a number of binding universes equal to the number of disjunctive clauses" in {
-        val spec = GroupingSource(
-          Table.empty,
-          SourceKey.Single, Some(SourceValue.Single), 3,
-          GroupKeySpecOr(
-            GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
-            GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
-
-        Table.findBindingUniverses(spec) must haveSize(2)
-      }
-      
-      "multiple-source groupings should generate a number of binding universes equal to the product of the number of disjunctive clauses from each source" in {
-        val spec1 = GroupingSource(
-          Table.empty,
-          SourceKey.Single, Some(TransSpec1.Id), 2,
-          GroupKeySpecOr(
-            GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
-            GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
-          
-        val spec2 = GroupingSource(
-          Table.empty,
-          SourceKey.Single, Some(TransSpec1.Id), 3,
-          GroupKeySpecOr(
-            GroupKeySpecSource(CPathField("1"), DerefObjectStatic(Leaf(Source), CPathField("a"))),
-            GroupKeySpecSource(CPathField("2"), DerefObjectStatic(Leaf(Source), CPathField("b")))))
-          
-        val union = GroupingAlignment(
-          DerefObjectStatic(Leaf(Source), CPathField("1")),
-          DerefObjectStatic(Leaf(Source), CPathField("1")),
-          spec1,
-          spec2, GroupingSpec.Union)
-
-        Table.findBindingUniverses(union) must haveSize(4)
+        table.metrics.startCount must_== 1
+        table.metrics.sliceTraversedCount must_== expectedSlices
+        t0.metrics.startCount must_== 1
+        t0.metrics.sliceTraversedCount must_== expectedSlices
       }
     }
 
-    "derive a correct TransSpec for a conjunctive GroupKeySpec" in {
-      val keySpec = GroupKeySpecAnd(
-        GroupKeySpecAnd(
-          GroupKeySpecSource(CPathField("tica"), DerefObjectStatic(SourceValue.Single, CPathField("a"))),
-          GroupKeySpecSource(CPathField("ticb"), DerefObjectStatic(SourceValue.Single, CPathField("b")))),
-        GroupKeySpecSource(CPathField("ticc"), DerefObjectStatic(SourceValue.Single, CPathField("c"))))
+    "multiple transforms" >> {
+      implicit val gen = sample(objectSchema(_, 3))
+      check { (sample: SampleData) =>
+        val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
 
-      val transspec = GroupKeyTrans(Table.Universe.sources(keySpec))
-      val JArray(data) = JParser.parse("""[
-        {"key": [1], "value": {"a": 12, "b": 7}},
-        {"key": [2], "value": {"a": 42}},
-        {"key": [1], "value": {"a": 13, "c": true}}
-      ]""")
+        val table = fromSample(sample)
+        val t0 = table.transform(TransSpec1.Id).transform(TransSpec1.Id).transform(TransSpec1.Id)
+        t0.toJson.copoint must_== sample.data
 
-      val JArray(expected) = JParser.parse("""[
-        {"000000": 12, "000001": 7},
-        {"000000": 42},
-        {"000000": 13, "000002": true}
-      ]""")
-
-      fromJson(data.toStream).transform(transspec.spec).toJson.copoint must_== expected
-    }
-
-    "find the maximal spanning forest of a set of merge trees" in {
-      import Table.Universe._
-
-      val abcd = MergeNode(ticvars("abcd").toSet, null)
-      val abc = MergeNode(ticvars("abc").toSet, null)
-      val ab = MergeNode(ticvars("ab").toSet, null)
-      val ac = MergeNode(ticvars("ac").toSet, null)
-      val a = MergeNode(ticvars("a").toSet, null)
-      val e = MergeNode(ticvars("e").toSet, null)
-
-      val connectedNodes = Set(abcd, abc, ab, ac, a)
-      val allNodes = connectedNodes + e
-      val result = findSpanningGraphs(edgeMap(allNodes))
-
-      result.toList must beLike {
-        case MergeGraph(n1, e1) :: MergeGraph(n2, e2) :: Nil =>
-          val (nodes, edges) = if (n1 == Set(e)) (n2, e2) else (n1, e1)
-
-          nodes must haveSize(5)
-          edges must haveSize(4) 
-          edges.map(_.sharedKeys.size) must_== Set(3, 2, 2, 1)
+        table.metrics.startCount must_== 1
+        table.metrics.sliceTraversedCount must_== expectedSlices
+        t0.metrics.startCount must_== 1
+        t0.metrics.sliceTraversedCount must_== expectedSlices
       }
     }
 
-    "find the maximal spanning forest of a set of merge trees" in {
-      import Table.Universe._
+    "multiple forcing calls" >> {
+      implicit val gen = sample(objectSchema(_, 3))
+      check { (sample: SampleData) =>
+        val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
 
-      val ab = MergeNode(ticvars("ab").toSet, null)
-      val bc = MergeNode(ticvars("bc").toSet, null)
-      val ac = MergeNode(ticvars("ac").toSet, null)
+        val table = fromSample(sample)
+        val t0 = table.compact(TransSpec1.Id).compact(TransSpec1.Id).compact(TransSpec1.Id)
+        table.toJson.copoint must_== sample.data
+        t0.toJson.copoint must_== sample.data
 
-      val connectedNodes = Set(ab, bc, ac)
-      val result = findSpanningGraphs(edgeMap(connectedNodes))
-
-      result must haveSize(1)
-      result.head.nodes must_== connectedNodes
-
-      val expectedUnorderedEdges = edgeMap(connectedNodes).values.flatten.toSet
-      forall(result.head.edges) { edge =>
-        (expectedUnorderedEdges must contain(edge)) //or
-        //(expectedUnorderedEdges must contain(edge.reverse))
-      }
-    }
-
-    "binding constraints" >> {
-      import Table.OrderingConstraints._
-
-      "minimize" >> {
-        "minimize to multiple sets" in {
-          val abcd = constraint("abcd")
-          val abc = constraint("abc")
-          val ab = constraint("ab")
-          val ac = constraint("ac")
-
-          val expected = Set(
-            constraint("ab,c,d"),
-            constraint("ac")
-          )
-
-          minimize(Set(abcd, abc, ab, ac)) must_== expected
-        }
-
-        "minimize to multiple sets with a singleton" in {
-          val abcd = constraint("abcd")
-          val abc = constraint("abc")
-          val ab = constraint("ab")
-          val ac = constraint("ac")
-          val c = constraint("c")
-
-          val expected = Set(
-            constraint("c,a,b,d"),
-            constraint("ab")
-          )
-
-          minimize(Set(abcd, abc, ab, ac, c)) must_== expected
-        }
-
-        "not minimize completely disjoint constraints" in {
-          val ab = constraint("ab")
-          val bc = constraint("bc")
-          val ca = constraint("ca")
-
-          val expected = Set(
-            constraint("ab"),
-            constraint("bc"),
-            constraint("ca")
-          )
-
-          minimize(Set(ab, bc, ca)) must_== expected
-        }
-      }
-
-      "find required sorts" >> {
-        "simple sort" in {
-          val abcd = MergeNode(ticvars("abcd").toSet, null)
-          val abc = MergeNode(ticvars("abc").toSet, null)
-          val ab = MergeNode(ticvars("ab").toSet, null)
-          val ac = MergeNode(ticvars("ac").toSet, null)
-          val a = MergeNode(ticvars("a").toSet, null)
-
-          val spanningGraph = findSpanningGraphs(edgeMap(Set(abcd, abc, ab, ac, a))).head
-
-          def checkPermutation(nodeList: List[MergeNode]) = {
-            val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
-
-            requiredSorts(a) must_== Set(ticvars("a"))
-            requiredSorts(ac) must_== Set(ticvars("ac"))
-            requiredSorts(ab) must_== Set(ticvars("ab"))
-            (requiredSorts(abc), requiredSorts(abcd)) must beLike {
-              case (sabc, sabcd) =>
-                (
-                  (sabc == Set(ticvars("abc")) && (sabcd == Set(ticvars("abc"), ticvars("ac")))) ||
-                  (sabc == Set(ticvars("acb")) && (sabcd == Set(ticvars("acb"), ticvars("ab")))) ||
-                  (sabc == Set(ticvars("abc"), ticvars("ac")) && (sabcd == Set(ticvars("abc")))) ||
-                  (sabc == Set(ticvars("acb"), ticvars("ab")) && (sabcd == Set(ticvars("acb")))) 
-                ) must beTrue
-            }
-          }
-
-          forall(spanningGraph.nodes.toList.permutations) { nodeList =>
-            checkPermutation(nodeList)
-          }
-        }
-
-        "in a cycle" in {
-          val ab = MergeNode(ticvars("ab").toSet, null)
-          val ac = MergeNode(ticvars("ac").toSet, null)
-          val bc = MergeNode(ticvars("bc").toSet, null)
-
-          val spanningGraph = findSpanningGraphs(edgeMap(Set(ab, ac, bc))).head
-
-          forall(spanningGraph.nodes.toList.permutations) { nodeList =>
-            val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
-
-            requiredSorts(ab) must_== Set(ticvars("a"), ticvars("b"))
-            requiredSorts(ac) must_== Set(ticvars("a"), ticvars("c"))
-            requiredSorts(bc) must_== Set(ticvars("b"), ticvars("c"))
-          }
-        }
-
-        "in connected cycles" in {
-          val ab = MergeNode(ticvars("ab").toSet, null)
-          val ac = MergeNode(ticvars("ac").toSet, null)
-          val bc = MergeNode(ticvars("bc").toSet, null)
-          val ad = MergeNode(ticvars("ad").toSet, null)
-          val db = MergeNode(ticvars("db").toSet, null)
-
-          val spanningGraph = findSpanningGraphs(edgeMap(Set(ab, ac, bc, ad, db))).head
-
-          forall(spanningGraph.nodes.toList.permutations) { nodeList =>
-            val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
-
-            requiredSorts(ab) must_== Set(ticvars("a"), ticvars("b"))
-            requiredSorts(ac) must_== Set(ticvars("a"), ticvars("c"))
-            requiredSorts(bc) must_== Set(ticvars("b"), ticvars("c"))
-            requiredSorts(ad) must_== Set(ticvars("a"), ticvars("d"))
-            requiredSorts(db) must_== Set(ticvars("d"), ticvars("b"))
-          }
-        }
-
-        "in a connected cycle with extraneous constraints" in {
-          val ab = MergeNode(ticvars("ab").toSet, null)
-          val ac = MergeNode(ticvars("ac").toSet, null)
-          val bc = MergeNode(ticvars("bc").toSet, null)
-          val ad = MergeNode(ticvars("ad").toSet, null)
-
-          val spanningGraph = findSpanningGraphs(edgeMap(Set(ab, ac, bc, ad))).head
-
-          forall(spanningGraph.nodes.toList.permutations) { nodeList =>
-            val requiredSorts = findRequiredSorts(spanningGraph, nodeList)
-
-            requiredSorts(ab) must_== Set(ticvars("a"), ticvars("b"))
-            requiredSorts(ac) must_== Set(ticvars("a"), ticvars("c"))
-            requiredSorts(bc) must_== Set(ticvars("b"), ticvars("c"))
-            requiredSorts(ad) must_== Set(ticvars("a"))
-          }
-        }
-      }
-    }
-
-    "transform a group key transspec to use a desired sort key order" in {
-      import GroupKeyTrans._
-
-      val trans = GroupKeyTrans(
-        OuterObjectConcat(
-          WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("a")), keyName(0)),
-          WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("b")), keyName(1)),
-          WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("c")), keyName(2))
-        ),
-        ticvars("abc")
-      )
-
-      val JArray(data) = JParser.parse("""[
-        {"key": [1], "value": {"a": 12, "b": 7}},
-        {"key": [2], "value": {"a": 42}},
-        {"key": [1], "value": {"a": 13, "c": true}}
-      ]""")
-
-      val JArray(expected) = JParser.parse("""[
-        {"000001": 12, "000002": 7},
-        {"000001": 42},
-        {"000001": 13, "000000": true}
-      ]""")
-
-      val alignedSpec = trans.alignTo(ticvars("ca")).spec
-      fromJson(data.toStream).transform(alignedSpec).toJson.copoint must_== expected
-    }
-
-    "track table metrics" in {
-      "single traversal" >> {
-        implicit val gen = sample(objectSchema(_, 3))
-        check { (sample: SampleData) =>
-          val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
-
-          val table = fromSample(sample)
-          val t0 = table.transform(TransSpec1.Id)
-          t0.toJson.copoint must_== sample.data
-
-          table.metrics.startCount must_== 1
-          table.metrics.sliceTraversedCount must_== expectedSlices
-          t0.metrics.startCount must_== 1
-          t0.metrics.sliceTraversedCount must_== expectedSlices
-        }
-      }
-
-      "multiple transforms" >> {
-        implicit val gen = sample(objectSchema(_, 3))
-        check { (sample: SampleData) =>
-          val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
-
-          val table = fromSample(sample)
-          val t0 = table.transform(TransSpec1.Id).transform(TransSpec1.Id).transform(TransSpec1.Id)
-          t0.toJson.copoint must_== sample.data
-
-          table.metrics.startCount must_== 1
-          table.metrics.sliceTraversedCount must_== expectedSlices
-          t0.metrics.startCount must_== 1
-          t0.metrics.sliceTraversedCount must_== expectedSlices
-        }
-      }
-
-      "multiple forcing calls" >> {
-        implicit val gen = sample(objectSchema(_, 3))
-        check { (sample: SampleData) =>
-          val expectedSlices = (sample.data.size.toDouble / defaultSliceSize).ceil
-
-          val table = fromSample(sample)
-          val t0 = table.compact(TransSpec1.Id).compact(TransSpec1.Id).compact(TransSpec1.Id)
-          table.toJson.copoint must_== sample.data
-          t0.toJson.copoint must_== sample.data
-
-          table.metrics.startCount must_== 2
-          table.metrics.sliceTraversedCount must_== (expectedSlices * 2)
-          t0.metrics.startCount must_== 1
-          t0.metrics.sliceTraversedCount must_== expectedSlices
-        }
+        table.metrics.startCount must_== 2
+        table.metrics.sliceTraversedCount must_== (expectedSlices * 2)
+        t0.metrics.startCount must_== 1
+        t0.metrics.sliceTraversedCount must_== expectedSlices
       }
     }
   }
