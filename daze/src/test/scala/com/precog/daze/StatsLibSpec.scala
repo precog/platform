@@ -949,10 +949,7 @@ trait StatsLibSpec[M[+_]] extends Specification
 
         val result = testEval(input)
         
-        result must haveSize(1)
-        result must haveAllElementsLike { case (ids, SDecimal(d)) if ids.length == 0 =>
-          d.toDouble must_== 0.0
-        }
+        result must haveSize(0)
       }
     
       "with value on the left" in {
@@ -966,10 +963,7 @@ trait StatsLibSpec[M[+_]] extends Specification
 
         val result = testEval(input)
         
-        result must haveSize(1)
-        result must haveAllElementsLike { case (ids, SDecimal(d)) if ids.length == 0 =>
-          d.toDouble must_== 0.0
-        }
+        result must haveSize(0)
       }
     }
 
@@ -1695,38 +1689,17 @@ trait StatsLibSpec[M[+_]] extends Specification
       
       val input = dag.Morph2(line, LinearCorrelation,
         Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, CString("uncorrelated"))),
-          Root(line, CLong(0))),
+          dag.LoadLocal(line, Const(line, CString("uncorrelated"))),
+          Const(line, CLong(0))),
         Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, CString("uncorrelated"))),
-          Root(line, CLong(1))))
+          dag.LoadLocal(line, Const(line, CString("uncorrelated"))),
+          Const(line, CLong(1))))
 
       val result = testEval(input)
       
       result must haveSize(1)
       result must haveAllElementsLike { case (ids, SDecimal(d)) if ids.length == 0 =>
         d.toDouble must_== 0.0
-      }
-    }
-
-    "compute correlation of tricky dataset" in {
-      // Test for #38535135
-      val line = Line(0, "")
-      
-      val input = dag.Morph2(line, LinearCorrelation,
-        Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, CString("corr-bug-38535135"))),
-          Root(line, CLong(0))),
-        Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, CString("corr-bug-38535135"))),
-          Root(line, CLong(1))))
-
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      result must haveAllElementsLike { case (ids, SDecimal(d)) if ids.length == 0 =>
-        println("Answer: " + d)
-        ok
       }
     }
 
