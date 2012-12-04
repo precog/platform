@@ -797,7 +797,7 @@ trait StringLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(parseNum),
-        dag.LoadLocal(line, Root(line, CString("/het/stringNums"))))
+        dag.LoadLocal(line, Const(line, CString("/het/stringNums"))))
 
       val result = testEval(input)
 

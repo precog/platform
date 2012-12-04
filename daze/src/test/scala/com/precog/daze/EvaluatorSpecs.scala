@@ -2864,27 +2864,27 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val clicks = 
         Join(line, WrapObject, CrossLeftSort,
-          Root(line, CString("time")),
-          Root(line, CLong(42)))
+          Const(line, CString("time")),
+          Const(line, CLong(42)))
       
       val predicate = Join(line, Lt, CrossLeftSort,
         Join(line, DerefObject, CrossLeftSort,
           clicks,
-          Root(line, CString("time"))),
-        Root(line, CLong(1000)))
+          Const(line, CString("time"))),
+        Const(line, CLong(1000)))
       
       val a = dag.IUI(line, true,
         dag.Filter(line, CrossLeftSort,
-          Root(line, CLong(1)),
+          Const(line, CLong(1)),
           predicate),
         dag.Filter(line, CrossLeftSort,
-          Root(line, CLong(0)),
+          Const(line, CLong(0)),
           Operate(line, Comp, predicate)))
       
       val input = Join(line, JoinObject, CrossLeftSort,    // TODO CrossLeftSort breaks even more creatively!
         clicks,
         Join(line, WrapObject, CrossLeftSort,
-          Root(line, CString("a")),
+          Const(line, CString("a")),
           a))
           
       testEval(input) { result =>
