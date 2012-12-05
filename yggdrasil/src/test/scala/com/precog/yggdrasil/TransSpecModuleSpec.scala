@@ -41,8 +41,3 @@ trait TransSpecModuleSpec extends TransSpecModule with FNDummyModule with Specif
 }
 
 object TransSpecModuleSpec extends TransSpecModuleSpec
-
-
-
-
-
