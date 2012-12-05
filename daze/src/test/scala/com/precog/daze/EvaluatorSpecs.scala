@@ -3247,18 +3247,18 @@ trait EvaluatorSpecs[M[+_]] extends Specification
        
       val line = Line(0, "")
       
-      val t1 = dag.LoadLocal(line, Root(line, CString("/clicks")))
-      val t2 = dag.LoadLocal(line, Root(line, CString("/clicks2")))
+      val t1 = dag.LoadLocal(line, Const(line, CString("/clicks")))
+      val t2 = dag.LoadLocal(line, Const(line, CString("/clicks2")))
       
       val input = dag.Filter(line, IdentitySort,
         t1,
         Join(line, Eq, CrossLeftSort,
           Join(line, DerefObject, CrossLeftSort,
             t1,
-            Root(line, CString("time"))),
+            Const(line, CString("time"))),
           Join(line, DerefObject, CrossLeftSort,
             t2,
-            Root(line, CString("time")))))
+            Const(line, CString("time")))))
           
       testEval(input) { _ must not(beEmpty) }
     }
