@@ -52,15 +52,30 @@ trait AccountManager[M[+_]] extends BasicAccountManager[M] {
     saltBytes.flatMap(byte => Integer.toHexString(0xFF & byte))(collection.breakOut) : String
   }
 
-  def saltAndHash(password: String, salt: String): String = {
+  // FIXME: Remove when there are no SHA1 hashes in the accounts db
+  def saltAndHashSHA1(password: String, salt: String): String = {
     Hashing.sha1().hashString(password + salt, Charsets.UTF_8).toString
+  }
+
+  def saltAndHashSHA256(password: String, salt: String): String = {
+    Hashing.sha256().hashString(password + salt, Charsets.UTF_8).toString
+  }
+
+  // FIXME: Remove when there are no old-style SHA256 hashes in the accounts db
+  def saltAndHashLegacy(password: String, salt: String): String = {
+    val md = java.security.MessageDigest.getInstance("SHA-256");
+    val dataBytes = (password + salt).getBytes("UTF-8")
+    md.update(dataBytes, 0, dataBytes.length)
+    val hashBytes = md.digest()
+
+    hashBytes.flatMap(byte => Integer.toHexString(0xFF & byte))(collection.breakOut) : String
   }
   
   def updateAccount(account: Account): M[Boolean]
   
   def updateAccountPassword(account: Account, newPassword: String): M[Boolean] = {
     val salt = randomSalt()
-    updateAccount(account.copy(passwordHash = saltAndHash(newPassword, salt), passwordSalt = salt))
+    updateAccount(account.copy(passwordHash = saltAndHashSHA256(newPassword, salt), passwordSalt = salt))
   }
  
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None)(f: (AccountId, Path) => M[APIKey]): M[Account]
@@ -87,7 +102,9 @@ trait AccountManager[M[+_]] extends BasicAccountManager[M] {
       accountOpt <- findAccountByEmail(email)
     } yield {
       accountOpt filter { account =>
-        account.passwordHash == saltAndHash(password, account.passwordSalt)
+        account.passwordHash == saltAndHashSHA1(password, account.passwordSalt) ||
+        account.passwordHash == saltAndHashSHA256(password, account.passwordSalt) ||
+        account.passwordHash == saltAndHashLegacy(password, account.passwordSalt)        
       }
     }
   }
