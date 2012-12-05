@@ -26,9 +26,12 @@ import org.joda.time.DateTime
 
 import com.weiglewilczek.slf4s.Logging
 
+import blueeyes.json.{JValue, JString}
+import blueeyes.json.serialization.{Extractor, ValidatedExtraction}
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
 import scalaz.Scalaz._
+import scalaz.std.set._
 
 import shapeless._
 
@@ -67,11 +70,39 @@ object Grant extends Logging {
   val safeSchema = "grantId" :: "name" :: "description" :: Omit        :: Omit        :: "permissions" :: "expirationDate" :: HNil
   
   object Serialization {
-    implicit val (grantDecomposer, grantExtractor) = serialization[Grant](schema)
+    implicit val grantDecomposer = decomposer[Grant](schema)
+    val v1GrantExtractor = extractor[Grant](schema)
   }
   
   object SafeSerialization {
-    implicit val (safeGrantDecomposer, safeGrantExtractor) = serialization[Grant](safeSchema)
+    implicit val safeGrantDecomposer = decomposer[Grant](safeSchema)
+    val v1SafeGrantExtractor = extractor[Grant](safeSchema)
+  }
+
+  val v0GrantExtractor = new Extractor[Grant] with ValidatedExtraction[Grant] {
+    override def validated(obj: JValue) = {
+      ((obj \ "gid").validated[GrantId] |@|
+       (obj \ "issuer").validated[Option[GrantId]] |@|
+       {
+         (obj \ "permission" \ "type") match {
+           case JString("owner") => Permission.accessTypeExtractor.validated(JString("delete"))
+           case other            => Permission.accessTypeExtractor.validated(other)
+         }
+       } |@|
+       (obj \ "permission" \ "path").validated[Path] |@|
+       (obj \ "permission" \ "ownerAccountId").validated[Option[String]] |@|
+       (obj \ "permission" \ "expirationDate").validated[Option[DateTime]]).apply {
+        (gid, issuer, permBuild, path, ownerId, expiration) => Grant(gid, None, None, None, issuer.toSet, Set(permBuild.apply(path, ownerId.toSet)), expiration)
+      }
+    }
+  }
+
+  implicit val grantExtractor = new Extractor[Grant] with ValidatedExtraction[Grant] {
+    override def validated(obj: JValue) = {
+      Serialization.v1GrantExtractor.validated(obj) orElse
+      SafeSerialization.v1SafeGrantExtractor.validated(obj) orElse
+      v0GrantExtractor.validated(obj)
+    }
   }
 
   def implies(grants: Set[Grant], perms: Set[Permission], at: Option[DateTime] = None) = {
@@ -82,7 +113,7 @@ object Grant extends Logging {
   /*
    * Computes the weakest subset of the supplied set of grants which is sufficient to support the supplied set
    * of permissions. Grant g1 is (weakly) weaker than grant g2 if g2 implies all the permissions implied by g1 and
-   * g2 does not expire before g1 (nb. this relation is reflexive). The stragegy is greedy: the gransts are
+   * g2 does not expire before g1 (nb. this relation is reflexive). The stragegy is greedy: the grants are
    * topologically sorted in order of decreasing strength, and then winnowed from strongest to weakest until it isn't
    * possible to remove any futher grants without undermining the support for the permissions. Where multiple solutions
    * are possible, one will be chosen arbitrarily.
