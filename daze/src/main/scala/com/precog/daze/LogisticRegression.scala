@@ -108,7 +108,7 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     def cost(seq: Seq[ColumnValues], theta: Theta): Double = {
       val result = seq.foldLeft(0D) {
         case (sum, colVal) => {
-          //TODO deal with taking and last from empty seq
+          //TODO deal with taking last from empty seq
           val xs = colVal.take(colVal.length - 1)
           val y = colVal.last
 
@@ -134,7 +134,7 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     def gradient(seq: Seq[ColumnValues], theta: Theta, alpha: Double): Theta = { 
       seq.foldLeft(theta) { 
         case (theta, colVal) => {
-          //TODO deal with taking and last from empty seq
+          //TODO deal with taking last from empty seq
           val xs = colVal.take(colVal.length - 1)
           val y = colVal.last
 
@@ -219,7 +219,9 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
 
           val finalTheta: Theta = gradloop(seq, initialTheta, initialAlpha)
 
-          val tree = CPath.makeTree(cpaths, Range(0, finalTheta.length).toSeq)
+          //todo this is a hack?
+          val tree = CPath.makeTree(cpaths, Range(1, finalTheta.length).toSeq :+ 0)
+
           val spec = TransSpec.concatChildren(tree)
 
           val theta = Table.constArray(Set(CArray[Double](finalTheta)))
@@ -261,10 +263,3 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     }
   }
 }
-
-
-// do this before extract is called:  sampleTables zip table.schemas
-// we need to pass the Seq[JType] to extract
-// then for each JType we can procure a Seq[CPath]
-// we also have in our hand an Array[Double], which should have length one more than the Seq[CPath]   (if not, explosion? or we can zip the tail to the other...)
-// then we need a way to create a table from a value and a CPath

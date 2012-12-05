@@ -20,9 +20,14 @@
 package com.precog.daze
 
 import scala.util.Random
+import scala.collection.mutable
+
+import blueeyes.json._
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.util.CPathUtils._
 import com.precog.common.Path
+import com.precog.common.json._
 import com.precog.util.IOUtils
 
 import org.specs2.mutable._
@@ -57,7 +62,7 @@ trait RegressionTestSupport[M[+_]] extends RegressionLib[M] {
     Seq.fill(length)(makeT).toArray
   }
 
-  def createSamplePoints(length: Int, noSamples: Int, actualThetas: Array[Double]): Seq[String] = {
+  def createSamplePoints(length: Int, noSamples: Int, actualThetas: Array[Double]): Seq[(Array[Double], Int)] = {
     val direction: Array[Double] = {
       var result = new Array[Double](actualThetas.length - 1)
       result(0) = -actualThetas(0) / actualThetas(1)
@@ -88,10 +93,20 @@ trait RegressionTestSupport[M[+_]] extends RegressionLib[M] {
       }
     }
   
-    val seqs = testSeqX zip testSeqY
-
-    seqs map { case (xs, y) => "[" + "[" + xs.mkString(",") + "]," + y + "]" }
+    testSeqX zip testSeqY
   }
+
+  def jvalues(samples: Seq[(Array[Double], Int)], cpaths: Seq[CPath], mod: Int = 1): Seq[JValue] = samples.zipWithIndex map { case ((xs, y), idx) => 
+    val cvalues = xs.map { x => CDouble(x).asInstanceOf[CValue] } :+ CLong(y).asInstanceOf[CValue] 
+    val withCPath = {
+      if (idx % mod == 0) cpaths zip cvalues.toSeq
+      else if (idx % mod == 1) cpaths.tail zip cvalues.tail.toSeq
+      else cpaths.tail.tail zip cvalues.tail.tail.toSeq
+    }
+    val withJPath = withCPath map { case (cpath, cvalue) => cPathToJPaths(cpath, cvalue) head }  // `head` is only okay if we don't have any homogeneous arrays
+    val withJValue = withJPath map { case (jpath, cvalue) => (jpath, cvalue.toJValue) }
+    withJValue.foldLeft(JArray(Nil).asInstanceOf[JValue]) { case (target, (jpath, jvalue)) => target.unsafeInsert(jpath, jvalue) }
+  } 
 
   def stdDevMean(values: List[Double]): (Double, Double) = {
     val count = values.size
@@ -120,14 +135,23 @@ trait RegressionTestSupport[M[+_]] extends RegressionLib[M] {
     (mad, median) 
   }
 
+  def combineResults(num: Int, thetas: List[List[Double]]) = {
+    thetas.foldLeft(mutable.Seq.fill(num)(List.empty[Double])) { case (acc, li) => 
+      var i = 0
+      while (i < li.length) {
+        acc(i) = acc(i) :+ li(i)
+        i += 1
+      }
+      acc
+    }
+  }
+
   def isOk(actual: Double, computed: List[Double]): Boolean = {  
     val (mad, median) = madMedian(computed)
-    println("median: " + median)
 
     val diff = math.abs(median - actual)
-
     val (dev, mean) = stdDevMean(computed)
-  
+
     diff < mad * 3D
   }
 }
@@ -150,21 +174,24 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
   }
 
   "logistic regression" should {
-    /*
     "pass randomly generated test with a single feature" in {
       val line = Line(0, "")
 
-      val actualThetas = makeThetas(2)
+      val num = 2
 
-      println("t1: " + actualThetas(0))
-      println("t2: " + actualThetas(1))
+      val actualThetas = makeThetas(num)
 
       var thetas: List[List[Double]] = List.empty[List[Double]]
       var i = 0
 
       //runs the logistic regression function on 50 sets of data generated from the same distribution
       while (i < 50) {
-        val points = createSamplePoints(2, 1000, actualThetas)
+        val cpaths = Seq(
+          CPath(CPathIndex(0), CPathIndex(0)),
+          CPath(CPathIndex(1))) sorted
+
+        val samples = createSamplePoints(num, 1000, actualThetas)
+        val points = jvalues(samples, cpaths) map { _.toString }
 
         val tmpFile = File.createTempFile("values", ".json")
         IOUtils.writeSeqToFile(points, tmpFile).unsafePerformIO
@@ -185,9 +212,9 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
         val theta = result collect {
           case (ids, SArray(elems)) if ids.length == 0 => {
-            val SDecimal(theta1) = elems(0)
-            val SDecimal(theta2) = elems(1) match { case SArray(elems2) => elems2(0) }
-            List(theta1.toDouble, theta2.toDouble)
+            val SDecimal(theta1) = elems(0) match { case SArray(elems2) => elems2(0) }
+            val SDecimal(theta0) = elems(1)
+            List(theta0.toDouble, theta1.toDouble)
           }
         }
 
@@ -195,29 +222,33 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
         i += 1
       }
 
-      val theta1s = thetas map { l => l(0) }
-      val theta2s = thetas map { l => l(1) }
-       
-      isOk(actualThetas(0), theta1s) mustEqual(true)
-      isOk(actualThetas(1), theta2s) mustEqual(true)
-    }*/
+      val allThetas = actualThetas zip combineResults(num, thetas)
 
-    "pass randomly generated test with three features" in {
+      val ok = allThetas map { case (t, ts) => isOk(t, ts) }
+
+      ok mustEqual Array.fill(num)(true)
+    }
+
+    "pass randomly generated test with three features inside an object" in {
       val line = Line(0, "")
 
-      val actualThetas = makeThetas(4)
+      val num = 4
 
-      println("t0n: " + actualThetas(0))
-      println("t1n: " + actualThetas(1))
-      println("t2n: " + actualThetas(2))
-      println("t3n: " + actualThetas(3))
+      val actualThetas = makeThetas(num)
 
       var thetas: List[List[Double]] = List.empty[List[Double]]
       var i = 0
 
       //runs the logistic regression function on 50 sets of data generated from the same distribution
       while (i < 50) {
-        val points = createSamplePoints(4, 1000, actualThetas)
+        val cpaths = Seq(
+          CPath(CPathIndex(0), CPathField("foo")),
+          CPath(CPathIndex(0), CPathField("bar")),
+          CPath(CPathIndex(0), CPathField("baz")),
+          CPath(CPathIndex(1))) sorted
+
+        val samples = createSamplePoints(num, 1000, actualThetas)
+        val points = jvalues(samples, cpaths) map { _.toString }
 
         val tmpFile = File.createTempFile("values", ".json")
         IOUtils.writeSeqToFile(points, tmpFile).unsafePerformIO
@@ -238,11 +269,10 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
         val theta = result collect {
           case (ids, SArray(elems)) if ids.length == 0 => {
-            println("elems: " + elems)
-            val SDecimal(theta0) = elems(0)
-            val SDecimal(theta1) = elems(1) match { case SArray(elems2) => elems2(0) }
-            val SDecimal(theta2) = elems(1) match { case SArray(elems2) => elems2(1) }
-            val SDecimal(theta3) = elems(1) match { case SArray(elems2) => elems2(2) }
+            val SDecimal(theta1) = elems(0) match { case SObject(map) => map("bar") }
+            val SDecimal(theta2) = elems(0) match { case SObject(map) => map("baz") }
+            val SDecimal(theta3) = elems(0) match { case SObject(map) => map("foo") }
+            val SDecimal(theta0) = elems(1) 
             List(theta0.toDouble, theta1.toDouble, theta2.toDouble, theta3.toDouble)
           }
         }
@@ -251,16 +281,96 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
         i += 1
       }
 
-      val theta0s = thetas map { l => l(0) }
-      val theta1s = thetas map { l => l(1) }
-      val theta2s = thetas map { l => l(2) }
-      val theta3s = thetas map { l => l(3) }
-       
-      isOk(actualThetas(0), theta0s) mustEqual(true)
-      isOk(actualThetas(1), theta1s) mustEqual(true)
-      isOk(actualThetas(2), theta2s) mustEqual(true)
-      isOk(actualThetas(3), theta3s) mustEqual(true)
+      val allThetas = actualThetas zip combineResults(num, thetas)
+
+      val ok = allThetas map { case (t, ts) => isOk(t, ts) }
+
+      ok mustEqual Array.fill(num)(true)
     }
+
+    "pass randomly generated test with three distinct schemata" in {
+      val line = Line(0, "")
+
+      val num = 3
+
+      val actualThetas = makeThetas(num)
+
+      var thetasSchema1: List[List[Double]] = List.empty[List[Double]]
+      var thetasSchema2: List[List[Double]] = List.empty[List[Double]]
+      var thetasSchema3: List[List[Double]] = List.empty[List[Double]]
+      var i = 0
+
+      //runs the logistic regression function on 50 sets of data generated from the same distribution
+      while (i < 50) {
+        val cpaths = Seq(
+          CPath(CPathIndex(0), CPathField("ack"), CPathIndex(0)),
+          CPath(CPathIndex(0), CPathField("bak"), CPathField("bazoo")),
+          CPath(CPathIndex(0), CPathField("bar"), CPathField("baz"), CPathIndex(0)),
+          CPath(CPathIndex(0), CPathField("foo")),
+          CPath(CPathIndex(1))) sorted
+
+        val samples = {
+          val samples0 = createSamplePoints(num, 1000, actualThetas)
+          samples0 map { case (xs, y) => (Random.nextGaussian +: Random.nextGaussian +: xs, y) }
+        }
+        val points = jvalues(samples, cpaths, num) map { _.toString }
+
+        val tmpFile = File.createTempFile("values", ".json")
+        IOUtils.writeSeqToFile(points, tmpFile).unsafePerformIO
+
+        val pointsString0 = "filesystem" + tmpFile.toString
+        val pointsString = pointsString0.take(pointsString0.length - 5)
+        
+        val input = dag.Morph2(line, LogisticRegression,
+          dag.Join(line, DerefArray, CrossLeftSort,
+            dag.LoadLocal(line, Root(line, CString(pointsString))),
+            dag.Root(line, CLong(0))),
+          dag.Join(line, DerefArray, CrossLeftSort,
+            dag.LoadLocal(line, Root(line, CString(pointsString))),
+            dag.Root(line, CLong(1))))
+
+        val result = testEval(input)
+        tmpFile.delete()
+
+        result must haveSize(3)
+
+        def theta(numOfFields: Int) = result collect {
+          case (ids, SArray(elems)) if ids.length == 0 && elems(0).asInstanceOf[SObject].fields.size == numOfFields => {
+            val SDecimal(theta1) = elems(0) match { case SObject(map) => 
+              map("bar") match { case SObject(map) => 
+                map("baz") match { case SArray(elems) =>
+                  elems(0)
+                }
+              } 
+            }
+            val SDecimal(theta2) = elems(0) match { case SObject(map) => map("foo") }
+            val SDecimal(theta0) = elems(1) 
+            List(theta0.toDouble, theta1.toDouble, theta2.toDouble)
+          }
+        }
+
+        //todo add check that only these two schemas are returned - maybe do this explicitely by asking for schema?
+
+        thetasSchema1 = thetasSchema1 ++ theta(2)
+        thetasSchema2 = thetasSchema2 ++ theta(3)
+        thetasSchema3 = thetasSchema3 ++ theta(4)
+
+        i += 1
+      }
+
+      val allThetas1 = actualThetas zip combineResults(num, thetasSchema1)
+      val allThetas2 = actualThetas zip combineResults(num, thetasSchema2)
+      val allThetas3 = actualThetas zip combineResults(num, thetasSchema3)
+
+      val ok1 = allThetas1 map { case (t, ts) => isOk(t, ts) }
+      val ok2 = allThetas2 map { case (t, ts) => isOk(t, ts) }
+      val ok3 = allThetas3 map { case (t, ts) => isOk(t, ts) }
+
+      ok1 mustEqual Array.fill(num)(true)
+      ok2 mustEqual Array.fill(num)(true)
+      ok3 mustEqual Array.fill(num)(true)
+    }
+
   }
 }
 
