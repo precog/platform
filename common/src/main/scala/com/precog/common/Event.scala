@@ -44,8 +44,8 @@ object Event {
   implicit val metadataMonoid = implicitly[Monoid[Map[JPath, Set[UserMetadata]]]]
 
 
-  val v1Schema = "apiKey"  :: "path" :: "ownerAccountId" :: "data" :: "metadata" :: HNil
-  val v0Schema = "tokenId" :: "path" :: Omit             :: "data" :: "metadata" :: HNil
+  val v1Schema = "apiKey"  :: "path" :: "ownerAccountId" :: "data" :: ("metadata" ||| Map.empty[JPath, Set[UserMetadata]]) :: HNil
+  val v0Schema = "tokenId" :: "path" :: Omit             :: "data" :: ("metadata" ||| Map.empty[JPath, Set[UserMetadata]]) :: HNil
   
   implicit val eventDecomposer = decomposer[Event](v1Schema)
 

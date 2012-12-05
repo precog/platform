@@ -44,7 +44,7 @@ object APIKeyRecord {
   
   val v1Schema =       "apiKey"  :: "name" :: "description" :: "issuerKey" :: "grants" :: "isRoot" :: HNil
   val v1SafeSchema =   "apiKey"  :: "name" :: "description" :: Omit        :: "grants" :: "isRoot" :: HNil
-  val v0Schema = "tid"     :: "name" :: "description" :: "cid"       :: "gids"   :: ("isRoot" ||| false) :: HNil
+  val v0Schema =       "tid"     :: "name" :: "description" :: "cid"       :: "gids"   :: ("isRoot" ||| false) :: HNil
   
   object Serialization {
     implicit val apiKeyRecordDecomposer = decomposer[APIKeyRecord](v1Schema)

@@ -155,7 +155,7 @@ case class NewGrantRequest(name: Option[String], description: Option[String], pa
 object NewGrantRequest {
   implicit val newGrantRequestIso = Iso.hlist(NewGrantRequest.apply _, NewGrantRequest.unapply _)
   
-  val schema = "name" :: "description" :: "parentIds" :: "permissions" :: "expirationDate" :: HNil
+  val schema = "name" :: "description" :: ("parentIds" ||| Set.empty[GrantId]) :: "permissions" :: "expirationDate" :: HNil
   
   implicit val (newGrantRequestDecomposer, newGrantRequestExtractor) = serialization[NewGrantRequest](schema)
 

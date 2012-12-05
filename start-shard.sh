@@ -25,7 +25,7 @@ MONGOPORT=27017
 while getopts ":d:lbm:" opt; do
     case $opt in
         d) 
-            WORKDIR=$OPTARG
+            WORKDIR=$(cd $OPTARG; pwd)
             ;;
         l)
             DONTCLEAN=1
@@ -332,7 +332,7 @@ MONGOPID=$!
 
 wait_until_port_open $MONGOPORT
 
-if [ ! -e $WORKDIR/root_token.json ]; then
+if [ ! -e $WORKDIR/root_token.txt ]; then
     echo "Retrieving new root token"
     $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -r | tail -n 1 > $WORKDIR/root_token.txt || {
         echo "Error retrieving new root token" >&2
@@ -386,6 +386,9 @@ if [ ! -e $WORKDIR/account_token.txt ]; then
     ACCOUNTTOKEN=$(set -e; curl -S -s -u 'operations@precog.com:1234' -H 'Content-Type: application/json' -G "http://localhost:30064/accounts/$ACCOUNTID" | grep apiKey | sed 's/.*apiKey"[^"]*"\([^"]*\)".*/\1/')
     echo "Account token is $ACCOUNTTOKEN"
     echo $ACCOUNTTOKEN > $WORKDIR/account_token.txt
+else
+    ACCOUNTID=$(cat $WORKDIR/account_id.txt)
+    ACCOUNTTOKEN=$(cat $WORKDIR/account_token.txt)
 fi
 
 echo "Starting ingest service"
