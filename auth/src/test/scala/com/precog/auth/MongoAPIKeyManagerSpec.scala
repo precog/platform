@@ -1,5 +1,8 @@
-package com.precog.common
-package security
+package com.precog
+package auth
+
+import com.precog.common._
+import com.precog.common.security._
 
 import com.mongodb.{Mongo => TGMongo}
 

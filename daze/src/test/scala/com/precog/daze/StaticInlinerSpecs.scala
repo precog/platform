@@ -18,10 +18,10 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Add, CrossLeftSort,
-        Root(line, CLong(42)),
-        Root(line, CDouble(3.14)))
+        Const(line, CLong(42)),
+        Const(line, CDouble(3.14)))
         
-      val expected = Root(line, CNum(45.14))
+      val expected = Const(line, CNum(45.14))
       
       inlineStatics(input) mustEqual expected
     }
@@ -30,12 +30,12 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Add, CrossLeftSort,
-        Root(line, CLong(42)),
+        Const(line, CLong(42)),
         Join(line, Mul, CrossRightSort,
-          Root(line, CDouble(3.14)),
-          Root(line, CLong(2))))
+          Const(line, CDouble(3.14)),
+          Const(line, CLong(2))))
         
-      val expected = Root(line, CNum(48.28))
+      val expected = Const(line, CNum(48.28))
       
       inlineStatics(input) mustEqual expected
     }
@@ -44,10 +44,10 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Div, CrossLeftSort,
-        Root(line, CLong(42)),
-        Root(line, CLong(0)))
+        Const(line, CLong(42)),
+        Const(line, CLong(0)))
         
-      val expected = Root(line, CUndefined)
+      val expected = Const(line, CUndefined)
       
       inlineStatics(input) mustEqual expected
     }
@@ -56,12 +56,12 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Add, CrossLeftSort,
-        Root(line, CLong(42)),
+        Const(line, CLong(42)),
         Join(line, Div, CrossRightSort,
-          Root(line, CDouble(3.14)),
-          Root(line, CLong(0))))
+          Const(line, CDouble(3.14)),
+          Const(line, CLong(0))))
         
-      val expected = Root(line, CUndefined)
+      val expected = Const(line, CUndefined)
       
       inlineStatics(input) mustEqual expected
     }
@@ -71,12 +71,12 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       
       "left" >> {
         val input = Join(line, Add, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, CString("/foo"))),
+          dag.LoadLocal(line, Const(line, CString("/foo"))),
           Join(line, Div, CrossRightSort,
-            Root(line, CDouble(3.14)),
-            Root(line, CLong(0))))
+            Const(line, CDouble(3.14)),
+            Const(line, CLong(0))))
           
-        val expected = Root(line, CUndefined)
+        val expected = Const(line, CUndefined)
         
         inlineStatics(input) mustEqual expected
       }
@@ -84,11 +84,11 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       "right" >> {
         val input = Join(line, Add, CrossLeftSort,
           Join(line, Div, CrossRightSort,
-            Root(line, CDouble(3.14)),
-            Root(line, CLong(0))),
-          dag.LoadLocal(line, Root(line, CString("/foo"))))
+            Const(line, CDouble(3.14)),
+            Const(line, CLong(0))),
+          dag.LoadLocal(line, Const(line, CString("/foo"))))
           
-        val expected = Root(line, CUndefined)
+        val expected = Const(line, CUndefined)
         
         inlineStatics(input) mustEqual expected
       }
@@ -99,18 +99,18 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       
       "true" >> {
         val input = Filter(line, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, CString("/foo"))),
-          Root(line, CBoolean(true)))
+          dag.LoadLocal(line, Const(line, CString("/foo"))),
+          Const(line, CBoolean(true)))
           
-        inlineStatics(input) mustEqual dag.LoadLocal(line, Root(line, CString("/foo")))
+        inlineStatics(input) mustEqual dag.LoadLocal(line, Const(line, CString("/foo")))
       }
       
       "false" >> {
         val input = Filter(line, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, CString("/foo"))),
-          Root(line, CBoolean(false)))
+          dag.LoadLocal(line, Const(line, CString("/foo"))),
+          Const(line, CBoolean(false)))
           
-        inlineStatics(input) mustEqual Root(line, CUndefined)
+        inlineStatics(input) mustEqual Const(line, CUndefined)
       }
     }
   }
