@@ -123,7 +123,7 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
 
             sum + checkValue(result)
           } else {
-            sum
+            sys.error("unreachable case")
           }
         }
       }
@@ -149,11 +149,13 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
       }
     }
     
-    def reduceDouble(seq: Seq[ColumnValues]): Result = {
-      if (seq.isEmpty) {
+    def reduceDouble(seq0: Seq[ColumnValues]): Result = {
+      if (seq0.isEmpty) {
         None
       } else {
-        Some(seq)
+        val seq = seq0 filter { arr => arr.last == 0 || arr.last == 1 }
+        if (seq.isEmpty) None
+        else Some(seq)
       }
     }
 
@@ -259,7 +261,7 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
         _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map( _.toSeq)
       }
 
-      reducedTables map { _ reduce { _ concat _ } }
+      reducedTables map { _ reduceOption { _ concat _ } getOrElse Table.empty }
     }
   }
 }
