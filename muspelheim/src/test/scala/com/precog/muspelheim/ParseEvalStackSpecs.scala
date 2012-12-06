@@ -71,7 +71,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
 
   val sliceSize = 10
   
-  def controlTimeout = Duration(120, "seconds")      // it's just unreasonable to run tests longer than this
+  def controlTimeout = Duration(5, "minutes")      // it's just unreasonable to run tests longer than this
   
   implicit val actorSystem = ActorSystem("platformSpecsActorSystem")
 

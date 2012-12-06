@@ -250,10 +250,10 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors must beEmpty
     }    
 
-    "accept difference on different loads" in {
+    "reject difference on different loads" in {
       val tree = compileSingle("//foo difference //bar")
-      tree.provenance must beLike { case StaticProvenance("/foo") => ok }
-      tree.errors must beEmpty
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
     }
     
     "accept difference on static and dynamic provenances" in {
@@ -274,6 +274,24 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors must beEmpty
     }
     
+    "give left for difference with coproducts containing commonality" in {
+      val tree = compileSingle("(//foo union //bar) difference (//bar union //baz)")
+      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
+      tree.errors must beEmpty
+    }
+
+    "give null provenance for difference with unrelated coproducts" in {
+      val tree = compileSingle("(//foo union //bar) difference (//baz union //qux)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
+    }
+
+    "give coproduct provenance for difference with coproducts containing dynamic provenance" in {
+      val tree = compileSingle("(//foo union //bar) difference ((new //baz) union //qux)")
+      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
+      tree.errors must beEmpty
+    }
+
     "propagate provenance through multiple let bindings" in {
       val tree @ Let(_, _, _, _, _) = compileSingle("back := //foo ~ //bar //foo + //bar back")
       
@@ -408,7 +426,7 @@ object ProvenanceCheckingSpecs extends Specification
       val input = """
         | f(a, b) := a difference b
         | 
-        | f(//foo, //bar)
+        | f(//foo, //foo)
         | """.stripMargin
       
       val tree = compileSingle(input)
@@ -529,7 +547,7 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
     }
     
     "reject union through a function on non-matching union provenances" in {

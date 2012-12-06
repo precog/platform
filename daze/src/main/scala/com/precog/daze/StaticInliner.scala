@@ -33,9 +33,9 @@ trait StaticInliner[M[+_]] extends DAG with EvaluatorMethods[M] {
         
         
         child2 match {
-          case Root(_, CUndefined) => Root(loc, CUndefined)
+          case Const(_, CUndefined) => Const(loc, CUndefined)
           
-          case Root(_, value) => {
+          case Const(_, value) => {
             op match {
               case instructions.WrapArray =>    // TODO currently can't be a cvalue
                 Operate(loc, op, child2)
@@ -46,7 +46,7 @@ trait StaticInliner[M[+_]] extends DAG with EvaluatorMethods[M] {
                   if col isDefinedAt 0
                 } yield col cValue 0
                 
-                Root(loc, result getOrElse CUndefined)
+                Const(loc, result getOrElse CUndefined)
               }
             }
           }
@@ -61,19 +61,19 @@ trait StaticInliner[M[+_]] extends DAG with EvaluatorMethods[M] {
         
         op2ForBinOp(op) flatMap { op2 =>
           (left2, right2) match {
-            case (Root(_, CUndefined), _) =>
-              Some(Root(loc, CUndefined))
+            case (Const(_, CUndefined), _) =>
+              Some(Const(loc, CUndefined))
             
-            case (_, Root(_, CUndefined)) =>
-              Some(Root(loc, CUndefined))
+            case (_, Const(_, CUndefined)) =>
+              Some(Const(loc, CUndefined))
             
-            case (Root(_, leftValue), Root(_, rightValue)) => {
+            case (Const(_, leftValue), Const(_, rightValue)) => {
               val result = for {
                 col <- op2.f2.partialLeft(leftValue).apply(rightValue)
                 if col isDefinedAt 0
               } yield col cValue 0
               
-              Some(Root(loc, result getOrElse CUndefined))
+              Some(Const(loc, result getOrElse CUndefined))
             }
             
             case _ => None
@@ -86,8 +86,8 @@ trait StaticInliner[M[+_]] extends DAG with EvaluatorMethods[M] {
         val right2 = recurse(right)
         
         val back = (left2, right2) match {
-          case (_, Root(_, CBoolean(true))) => Some(left2)
-          case (_, Root(_, _)) => Some(Root(loc, CUndefined))
+          case (_, Const(_, CBoolean(true))) => Some(left2)
+          case (_, Const(_, _)) => Some(Const(loc, CUndefined))
           case _ => None
         }
         

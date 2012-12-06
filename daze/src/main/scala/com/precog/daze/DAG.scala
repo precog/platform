@@ -277,6 +277,10 @@ trait DAG extends Instructions with TransSpecModule {
             case _ => Left(StackUnderflow(instr))
           }
         }
+
+        case PushUndefined => {
+          loop(loc, Right(Undefined(loc)) :: roots, splits, stream.tail)
+        }
         
         case PushKey(id) => {
           val openPoss = splits find { open => findGraphWithId(id)(open.spec).isDefined }
@@ -292,7 +296,7 @@ trait DAG extends Instructions with TransSpecModule {
             loop(loc, Right(SplitGroup(loc, id, graph.identities)(open.result)) :: roots, splits, stream.tail)
           } getOrElse Left(UnableToLocateSplitDescribingId(id)).point[Trampoline]
         }
-        
+
         case instr: RootInstr => {
           val cvalue = instr match {
             case PushString(str) => CString(str)
@@ -308,7 +312,7 @@ trait DAG extends Instructions with TransSpecModule {
             case PushArray => CEmptyArray
           }
           
-          loop(loc, Right(Root(loc, cvalue)) :: roots, splits, stream.tail)
+          loop(loc, Right(Const(loc, cvalue)) :: roots, splits, stream.tail)
         }
       }
       
@@ -329,7 +333,7 @@ trait DAG extends Instructions with TransSpecModule {
     }
     
     def findFirstRoot(line: Option[Line], stream: Vector[Instruction]): Either[StackError, (Root, Vector[Instruction])] = {
-      def buildRoot(instr: RootInstr): Either[StackError, (Root, Vector[Instruction])] = {
+      def buildConstRoot(instr: RootInstr): Either[StackError, (Root, Vector[Instruction])] = {
         val cvalue = instr match {
           case PushString(str) => CString(str)
           
@@ -344,20 +348,23 @@ trait DAG extends Instructions with TransSpecModule {
           case PushArray => CEmptyArray
         }
           
-        line map { ln => Right((Root(ln, cvalue), stream.tail)) } getOrElse Left(UnknownLine)
+        line map { ln => Right((Const(ln, cvalue), stream.tail)) } getOrElse Left(UnknownLine)
       }
       
       val back = stream.headOption collect {
         case ln: Line => findFirstRoot(Some(ln), stream.tail)
         
-        case i: PushString => buildRoot(i)
-        case i: PushNum => buildRoot(i)
-        case PushTrue => buildRoot(PushTrue)
-        case PushFalse => buildRoot(PushFalse)
-        case PushNull => buildRoot(PushNull)
-        case PushObject => buildRoot(PushObject)
-        case PushArray => buildRoot(PushArray)
-        
+        case i: PushString => buildConstRoot(i)
+        case i: PushNum => buildConstRoot(i)
+        case PushTrue => buildConstRoot(PushTrue)
+        case PushFalse => buildConstRoot(PushFalse)
+        case PushNull => buildConstRoot(PushNull)
+        case PushObject => buildConstRoot(PushObject)
+        case PushArray => buildConstRoot(PushArray)
+
+        case PushUndefined =>
+          line map { ln => Right((Undefined(ln), stream.tail)) } getOrElse Left(UnknownLine)
+
         case instr => Left(StackUnderflow(instr))
       }
       
@@ -381,26 +388,42 @@ trait DAG extends Instructions with TransSpecModule {
     case dag.Extra(_) => None
   }
   
-  private class IdentityContainer(private val self: AnyRef) {
-    
-    override def equals(that: Any) = that match {
-      case c: IdentityContainer => c.self eq self
-      case _ => false
-    }
-    
-    override def hashCode = System.identityHashCode(self)
-    
-    override def toString = self.toString
-  }
-  
   private case class OpenSplit(loc: Line, spec: dag.BucketSpec, oldTail: List[Either[dag.BucketSpec, DepGraph]]) {
     var result: dag.Split = _           // gross!
   }
-  
+
+  sealed trait Identities {
+    def ++(other: Identities): Identities = (this, other) match {
+      case (Identities.Undefined, _) => Identities.Undefined
+      case (_, Identities.Undefined) => Identities.Undefined
+      case (Identities.Specs(a), Identities.Specs(b)) => Identities.Specs(a ++ b)
+    }
+
+    def length: Int
+    def distinct: Identities
+    def fold[A](identities: Vector[dag.IdentitySpec] => A, undefined: A): A
+  }
+
+  object Identities {
+    object Specs extends (Vector[dag.IdentitySpec] => Identities.Specs) {
+      def empty = Specs(Vector.empty)
+    }
+    case class Specs(specs: Vector[dag.IdentitySpec]) extends Identities {
+      override def length = specs.length
+      override def distinct = Specs(specs.distinct)
+      override def fold[A](identities: Vector[dag.IdentitySpec] => A, b: A) = identities(specs)
+    }
+    case object Undefined extends Identities {
+      override def length = 0
+      override def distinct = Identities.Undefined
+      override def fold[A](identities: Vector[dag.IdentitySpec] => A, undefined: A) = undefined
+    }
+  }
+
   sealed trait DepGraph {
     val loc: Line
     
-    def identities: Vector[dag.IdentitySpec]
+    def identities: Identities
     
     def sorting: dag.TableSort
     
@@ -426,7 +449,9 @@ trait DAG extends Instructions with TransSpecModule {
 
           case s @ dag.SplitGroup(loc, id, identities) => dag.SplitGroup(loc, id, identities)(splits(s.parent))
           
-          case dag.Root(_, _) => graph
+          case dag.Const(_, _) => graph
+
+          case dag.Undefined(_) => graph
 
           case dag.New(loc, parent) => dag.New(loc, memoized(splits)(parent))
           
@@ -518,7 +543,9 @@ trait DAG extends Instructions with TransSpecModule {
 
         case dag.SplitGroup(_, _, identities) => acc
 
-        case node @ dag.Root(_, _) => acc
+        case node @ dag.Const(_, _) => acc
+
+        case dag.Undefined(_) => acc
 
         case dag.New(_, parent) => foldDown0(parent, acc |+| f(parent))
 
@@ -576,19 +603,20 @@ trait DAG extends Instructions with TransSpecModule {
   
   object dag {
     sealed trait StagingPoint extends DepGraph
+    sealed trait Root extends DepGraph
     
     object ConstString {
       def unapply(graph: DepGraph): Option[String] = graph match {
-        case Root(_, CString(str)) => Some(str)
+        case Const(_, CString(str)) => Some(str)
         case _ => None
       }
     }
 
     object ConstDecimal {
       def unapply(graph: DepGraph): Option[BigDecimal] = graph match {
-        case Root(_, CNum(d)) => Some(d)
-        case Root(_, CLong(d)) => Some(d)
-        case Root(_, CDouble(d)) => Some(d)
+        case Const(_, CNum(d)) => Some(d)
+        case Const(_, CLong(d)) => Some(d)
+        case Const(_, CDouble(d)) => Some(d)
         case _ => None
       }
     }
@@ -597,7 +625,7 @@ trait DAG extends Instructions with TransSpecModule {
     case class SplitParam(loc: Line, id: Int)(_parent: => Split) extends DepGraph {
       lazy val parent = _parent
       
-      val identities = Vector()
+      val identities = Identities.Specs.empty
       
       val sorting = IdentitySort
       
@@ -607,7 +635,7 @@ trait DAG extends Instructions with TransSpecModule {
     }
     
     //grouping node (e.g. foo where foo.a = 'b)
-    case class SplitGroup(loc: Line, id: Int, identities: Vector[IdentitySpec])(_parent: => Split) extends DepGraph {
+    case class SplitGroup(loc: Line, id: Int, identities: Identities)(_parent: => Split) extends DepGraph {
       lazy val parent = _parent
       
       val sorting = IdentitySort
@@ -617,8 +645,8 @@ trait DAG extends Instructions with TransSpecModule {
       val containsSplitArg = true
     }
     
-    case class Root(loc: Line, value: CValue) extends DepGraph {
-      lazy val identities = Vector()
+    case class Const(loc: Line, value: CValue) extends DepGraph with Root {
+      lazy val identities = Identities.Specs.empty
       
       val sorting = IdentitySort
       
@@ -626,9 +654,19 @@ trait DAG extends Instructions with TransSpecModule {
       
       val containsSplitArg = false
     }
+
+    case class Undefined(loc: Line) extends DepGraph with Root {
+      lazy val identities = Identities.Undefined
+
+      val sorting = IdentitySort
+
+      val isSingleton = false
+
+      val containsSplitArg = false
+    }
     
     case class New(loc: Line, parent: DepGraph) extends DepGraph {
-      lazy val identities = Vector(SynthIds(IdGen.nextInt()))
+      lazy val identities = Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       
       val sorting = IdentitySort
       
@@ -640,7 +678,7 @@ trait DAG extends Instructions with TransSpecModule {
     case class Morph1(loc: Line, mor: Morphism1, parent: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = {
         if (mor.retainIds) parent.identities
-        else Vector(SynthIds(IdGen.nextInt()))
+        else Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       }
       
       val sorting = IdentitySort
@@ -653,7 +691,7 @@ trait DAG extends Instructions with TransSpecModule {
     case class Morph2(loc: Line, mor: Morphism2, left: DepGraph, right: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = {
         if (mor.retainIds) sys.error("not implemented yet") //TODO need to retain only the identities that are being used in the match
-        else Vector(SynthIds(IdGen.nextInt()))
+        else Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       }
       
       val sorting = IdentitySort
@@ -664,7 +702,7 @@ trait DAG extends Instructions with TransSpecModule {
     }
 
     case class Distinct(loc: Line, parent: DepGraph) extends DepGraph with StagingPoint {
-      lazy val identities = Vector(SynthIds(IdGen.nextInt()))
+      lazy val identities = Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       
       val sorting = IdentitySort
       
@@ -675,8 +713,8 @@ trait DAG extends Instructions with TransSpecModule {
     
     case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JType.JUnfixedT) extends DepGraph with StagingPoint {
       lazy val identities = parent match {
-        case Root(_, CString(path)) => Vector(LoadIds(path))
-        case _ => Vector(SynthIds(IdGen.nextInt()))
+        case Const(_, CString(path)) => Identities.Specs(Vector(LoadIds(path)))
+        case _ => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       }
       
       val sorting = IdentitySort
@@ -698,7 +736,7 @@ trait DAG extends Instructions with TransSpecModule {
     }
     
     case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph with StagingPoint {
-      lazy val identities = Vector()
+      lazy val identities = Identities.Specs.empty
       
       val sorting = IdentitySort
       
@@ -708,7 +746,7 @@ trait DAG extends Instructions with TransSpecModule {
     }
     
     case class MegaReduce(loc: Line, reds: List[(trans.TransSpec1, List[Reduction])], parent: DepGraph) extends DepGraph with StagingPoint {
-      lazy val identities = Vector()
+      lazy val identities = Identities.Specs.empty
       
       val sorting = IdentitySort
       
@@ -718,7 +756,7 @@ trait DAG extends Instructions with TransSpecModule {
     }
     
     case class Split(loc: Line, spec: BucketSpec, child: DepGraph) extends DepGraph with StagingPoint {
-      lazy val identities = Vector(SynthIds(IdGen.nextInt()))
+      lazy val identities = Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       
       val sorting = IdentitySort
       
@@ -744,7 +782,10 @@ trait DAG extends Instructions with TransSpecModule {
     }
     
     case class IUI(loc: Line, union: Boolean, left: DepGraph, right: DepGraph) extends DepGraph with StagingPoint {
-      lazy val identities = (left.identities, right.identities).zipped map CoproductIds
+      lazy val identities = (left.identities, right.identities) match {
+        case (Identities.Specs(a), Identities.Specs(b)) => Identities.Specs((a, b).zipped map CoproductIds)
+        case _ => Identities.Undefined
+      }
 
       val sorting = IdentitySort
       
@@ -802,8 +843,8 @@ trait DAG extends Instructions with TransSpecModule {
     case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph with StagingPoint {
       val loc = parent.loc
       
-      lazy val identities = {
-        val (first, second) = parent.identities.zipWithIndex partition {
+      lazy val identities = parent.identities.fold(specs => {
+        val (first, second) = specs.zipWithIndex partition {
           case (_, i) => indexes contains i
         }
         
@@ -812,8 +853,8 @@ trait DAG extends Instructions with TransSpecModule {
         }
         
         val (back, _) = (prefix ++ second).unzip
-        back
-      }
+        Identities.Specs(back)
+      }, Identities.Undefined)
       
       val sorting = IdentitySort
       

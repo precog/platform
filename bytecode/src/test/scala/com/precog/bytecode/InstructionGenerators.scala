@@ -76,6 +76,7 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genPushTrue,
     genPushFalse,
     genPushNull,
+    genPushUndefined,
     genPushObject,
     genPushArray,
     
@@ -125,6 +126,7 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genPushTrue = PushTrue
   private lazy val genPushFalse = PushFalse
   private lazy val genPushNull = PushNull 
+  private lazy val genPushUndefined = PushUndefined
   private lazy val genPushObject = PushObject
   private lazy val genPushArray = PushArray
   
