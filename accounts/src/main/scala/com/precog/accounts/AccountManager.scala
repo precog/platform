@@ -75,7 +75,7 @@ trait AccountManager[M[+_]] extends BasicAccountManager[M] {
   
   def updateAccountPassword(account: Account, newPassword: String): M[Boolean] = {
     val salt = randomSalt()
-    updateAccount(account.copy(passwordHash = saltAndHashSHA256(newPassword, salt), passwordSalt = salt))
+    updateAccount(account.copy(passwordHash = saltAndHashSHA256(newPassword, salt), passwordSalt = salt, lastPasswordChangeTime = Some(new DateTime)))
   }
  
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None)(f: (AccountId, Path) => M[APIKey]): M[Account]
@@ -97,15 +97,13 @@ trait AccountManager[M[+_]] extends BasicAccountManager[M] {
     }
   }
 
-  def authAccount(email: String, password: String) = {
-    for {
-      accountOpt <- findAccountByEmail(email)
-    } yield {
-      accountOpt filter { account =>
-        account.passwordHash == saltAndHashSHA1(password, account.passwordSalt) ||
-        account.passwordHash == saltAndHashSHA256(password, account.passwordSalt) ||
-        account.passwordHash == saltAndHashLegacy(password, account.passwordSalt)        
-      }
+  def authAccount(email: String, password: String): M[Validation[String, Account]] = {
+    findAccountByEmail(email) map {
+      case Some(account) if account.passwordHash == saltAndHashSHA1(password, account.passwordSalt) ||
+          account.passwordHash == saltAndHashSHA256(password, account.passwordSalt) ||
+          account.passwordHash == saltAndHashLegacy(password, account.passwordSalt) => Success(account)
+      case Some(account) => Failure("password mismatch")
+      case None          => Failure("account not found")
     }
   }
 
