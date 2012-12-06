@@ -68,7 +68,7 @@ trait ShardQueryExecutorFactory
     with IdSourceScannerModule[Future] { self =>
 
   protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
-  private lazy val queryId = new java.util.concurrent.atomic.AtomicLong
+  protected val queryId = new java.util.concurrent.atomic.AtomicLong
 
   def clock: Clock
 
