@@ -233,7 +233,7 @@ trait Evaluator[M[+_]] extends DAG
           state(PendingTable(f(index), graph, TransSpec1.Id))
         }
         
-        case Root(_, value) => {
+        case Const(_, value) => {
           val table = value match {
             case str @ CString(_) => Table.constString(Set(str))
             
@@ -250,7 +250,7 @@ trait Evaluator[M[+_]] extends DAG
             
             case CEmptyObject => Table.constEmptyObject
             case CEmptyArray => Table.constEmptyArray
-            
+
             case CUndefined => Table.empty
           }
           
@@ -258,6 +258,9 @@ trait Evaluator[M[+_]] extends DAG
           
           state(PendingTable(M.point(table.transform(spec)), graph, TransSpec1.Id))
         }
+
+        case Undefined(_) =>
+          state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         
         // TODO technically, we can do this without forcing by pre-lifting PendingTable#trans
         case dag.New(_, parent) => {
@@ -491,31 +494,31 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
           for {
             pendingTable <- prepareEval(left, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, false))
         }
         
-        case Join(_, Eq, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
+        case Join(_, Eq, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
           for {
             pendingTable <- prepareEval(right, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, false))
         }
         
-        case Join(_, NotEq, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+        case Join(_, NotEq, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
           for {
             pendingTable <- prepareEval(left, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, true))
         }
         
-        case Join(_, NotEq, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
+        case Join(_, NotEq, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
           for {
             pendingTable <- prepareEval(right, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, true))
         }
         
-        case Join(_, instructions.WrapObject, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
+        case Join(_, instructions.WrapObject, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
           value match {
             case value @ CString(str) => {
               //prepareEval(right, splits) map { pendingTable => PendingTable(pendingTable.table, pendingTable.graph, trans.WrapObject(pendingTable.trans, str)) }
@@ -530,7 +533,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, DerefObject, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+        case Join(_, DerefObject, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
           value match {
             case value @ CString(str) => {
               for {
@@ -543,7 +546,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, DerefMetadata, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+        case Join(_, DerefMetadata, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
           value match {
             case value @ CString(str) => {
               for {
@@ -556,7 +559,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+        case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
           val optIndex = value match {
             case CNum(d) => Some(d.toInt)
             case CLong(ln) => Some(ln.toInt)
@@ -571,7 +574,7 @@ trait Evaluator[M[+_]] extends DAG
           } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         
-        case Join(_, instructions.ArraySwap, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+        case Join(_, instructions.ArraySwap, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
           val optIndex = value match {
             case CNum(d) => Some(d.toInt)
             case CLong(ln) => Some(ln.toInt)
@@ -586,7 +589,7 @@ trait Evaluator[M[+_]] extends DAG
           } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         
-        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
           value match {
             case CEmptyObject => {
               for {
@@ -599,7 +602,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
+        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
           value match {
             case CEmptyObject => {
               for {
@@ -612,7 +615,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
           value match {
             case CEmptyArray => {
               for {
@@ -625,7 +628,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
+        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
           value match {
             case CEmptyArray => {
               for {
@@ -639,7 +642,7 @@ trait Evaluator[M[+_]] extends DAG
         }
   
         // begin: annoyance with Scala's lousy pattern matcher
-        case Join(_, op, CrossLeftSort | CrossRightSort, left, Root(_, value)) => {
+        case Join(_, op, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
           op2ForBinOp(op) map { _.f2.partialRight(value) } map { f1 =>
             for {
               pendingTable <- prepareEval(left, splits)
@@ -647,7 +650,7 @@ trait Evaluator[M[+_]] extends DAG
           } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         
-        case Join(_, op, CrossLeftSort | CrossRightSort, Root(_, value), right) => {
+        case Join(_, op, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
           op2ForBinOp(op) map { _.f2.partialLeft(value) } map { f1 =>
             for {
               pendingTable <- prepareEval(right, splits)
@@ -666,31 +669,37 @@ trait Evaluator[M[+_]] extends DAG
             if (pendingTableLeft.graph == pendingTableRight.graph) {
               PendingTable(pendingTableLeft.table, pendingTableLeft.graph, transFromBinOp(op)(pendingTableLeft.trans, pendingTableRight.trans))
             } else {
-              val prefixLength = sharedPrefixLength(left, right)
+              (left.identities, right.identities) match {
+                case (Identities.Specs(_), Identities.Specs(_)) =>
+                  val prefixLength = sharedPrefixLength(left, right)
 
-              val key = joinSort match {
-                case IdentitySort =>
-                  buildJoinKeySpec(prefixLength)
-                
-                case ValueSort(id) =>
-                  trans.DerefObjectStatic(Leaf(Source), CPathField("sort-" + id))
-                
-                case _ => sys.error("unreachable code")
+                  val key = joinSort match {
+                    case IdentitySort =>
+                      buildJoinKeySpec(prefixLength)
+
+                    case ValueSort(id) =>
+                      trans.DerefObjectStatic(Leaf(Source), CPathField("sort-" + id))
+
+                    case _ => sys.error("unreachable code")
+                  }
+
+                  val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op))
+
+                  val result = for {
+                    parentLeftTable <- pendingTableLeft.table
+                    val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
+
+                    parentRightTable <- pendingTableRight.table
+                    val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
+
+                  } yield join(leftResult, rightResult)(key, spec)
+
+                  PendingTable(result, graph, TransSpec1.Id)
+
+                case (Identities.Undefined, _) | (_, Identities.Undefined) =>
+                  PendingTable(M.point(Table.empty), graph, TransSpec1.Id)
               }
-              
-              val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op))
-
-              val result = for {
-                parentLeftTable <- pendingTableLeft.table
-                val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
-                
-                parentRightTable <- pendingTableRight.table
-                val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
-
-              } yield join(leftResult, rightResult)(key, spec)
-
-              PendingTable(result, graph, TransSpec1.Id)
-            } 
+            }
           }
         }
   
@@ -730,9 +739,11 @@ trait Evaluator[M[+_]] extends DAG
             if (pendingTableTarget.graph == pendingTableBoolean.graph) {
               PendingTable(pendingTableTarget.table, pendingTableTarget.graph, trans.Filter(pendingTableTarget.trans, pendingTableBoolean.trans))
             } else {
+              val prefixLength = sharedPrefixLength(target, boolean)
+              
               val key = joinSort match {
                 case IdentitySort =>
-                  trans.DerefObjectStatic(Leaf(Source), paths.Key)
+                  buildJoinKeySpec(prefixLength)
                 
                 case ValueSort(id) =>
                   trans.DerefObjectStatic(Leaf(Source), CPathField("sort-" + id))
@@ -740,7 +751,7 @@ trait Evaluator[M[+_]] extends DAG
                 case _ => sys.error("unreachable code")
               }
 
-              val spec = buildWrappedJoinSpec(sharedPrefixLength(target, boolean), target.identities.length, boolean.identities.length) { (srcLeft, srcRight) =>
+              val spec = buildWrappedJoinSpec(prefixLength, target.identities.length, boolean.identities.length) { (srcLeft, srcRight) =>
                 trans.Filter(srcLeft, srcRight)
               }
 
@@ -1193,8 +1204,12 @@ trait Evaluator[M[+_]] extends DAG
     case (a, b) => a == b
   }
   
-  private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
-    left.identities zip right.identities takeWhile disjunctiveEquals length
+  private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int = (left.identities, right.identities) match {
+    case (Identities.Specs(a), Identities.Specs(b)) =>
+      a zip b takeWhile disjunctiveEquals length
+    case (Identities.Undefined, _) | (_, Identities.Undefined) =>
+      0
+  }
 
   private def enumerateGraphs(forest: BucketSpec): Set[DepGraph] = forest match {
     case UnionBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)

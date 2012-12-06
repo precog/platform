@@ -114,6 +114,10 @@ trait AST extends Phases {
           indent + "value: " + value
       }
             
+      case UndefinedLit(loc) => {
+        indent + "type: undefined\n"
+      }
+
       case NullLit(loc) => {
         indent + "type: null\n" 
       }
@@ -434,6 +438,9 @@ trait AST extends Phases {
       case (BoolLit(_, value1), BoolLit(_, value2)) =>
         value1 == value2
 
+      case (UndefinedLit(_), UndefinedLit(_)) =>
+        true
+
       case (NullLit(_), NullLit(_)) =>
         true
 
@@ -564,6 +571,8 @@ trait AST extends Phases {
       case NumLit(_, value) => value.hashCode
 
       case BoolLit(_, value) => value.hashCode
+
+      case UndefinedLit(_) => "undefined".hashCode
 
       case NullLit(_) => "null".hashCode
 
@@ -777,6 +786,10 @@ trait AST extends Phases {
       val sym = 'bool
     }
     
+    final case class UndefinedLit(loc: LineStream) extends ExprLeafNode {
+      val sym = 'undefined
+    }
+
     final case class NullLit(loc: LineStream) extends ExprLeafNode {
       val sym = 'null
     }

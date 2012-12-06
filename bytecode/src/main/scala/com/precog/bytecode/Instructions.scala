@@ -53,6 +53,7 @@ trait Instructions extends Library {
       case PushTrue => (0, 1)
       case PushFalse => (0, 1)
       case PushNull => (0, 1)
+      case PushUndefined => (0, 1)
       case PushObject => (0, 1)
       case PushArray => (0, 1)
       
@@ -114,7 +115,8 @@ trait Instructions extends Library {
     case object PushNull extends Instruction with RootInstr
     case object PushObject extends Instruction with RootInstr
     case object PushArray extends Instruction with RootInstr
-    
+
+    case object PushUndefined extends Instruction
     case class PushGroup(id: Int) extends Instruction
     case class PushKey(id: Int) extends Instruction
     
