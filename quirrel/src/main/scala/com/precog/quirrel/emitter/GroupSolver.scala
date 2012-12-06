@@ -109,6 +109,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       case NumLit(_, _) => Set()
       case BoolLit(_, _) => Set()
       case NullLit(_) => Set()
+      case UndefinedLit(_) => Set()
       
       case ObjectDef(_, props) =>
         (props map { case (_, e) => loop(dispatches)(e) }).fold(Set[Error]()) { _ ++ _ }
@@ -657,6 +658,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case NumLit(_, _) => Set()
     case BoolLit(_, _) => Set()
     case NullLit(_) => Set()
+    case UndefinedLit(_) => Set()
     case ObjectDef(_, props) => (props.unzip._2 map { listTicVars(b, _, sigma) }).fold(Set()) { _ ++ _ }
     case ArrayDef(_, values) => (values map { listTicVars(b, _, sigma) }).fold(Set()) { _ ++ _ }
     case Descent(_, child, _) => listTicVars(b, child, sigma)
@@ -780,7 +782,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case Relate(_, _, _, in) => (Set(in), sigma)
     
-    case _: TicVar | _: StrLit | _: NumLit | _: BoolLit | _: NullLit => (Set(), sigma)
+    case _: TicVar | _: StrLit | _: NumLit | _: BoolLit | _: NullLit | _: UndefinedLit => (Set(), sigma)
     
     case ObjectDef(_, props) => (Set(props map { _._2 }: _*), sigma)
     case ArrayDef(_, values) => (Set(values: _*), sigma)

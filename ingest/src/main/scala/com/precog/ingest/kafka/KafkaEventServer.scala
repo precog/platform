@@ -27,6 +27,7 @@ import blueeyes.util.Clock
 import akka.util.Timeout
 import akka.dispatch.{ ExecutionContext, Future, MessageDispatcher }
 
+import com.precog.auth._
 import com.precog.accounts._
 import com.precog.common._
 import com.precog.ingest.service._

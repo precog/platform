@@ -54,7 +54,9 @@ trait Memoizer extends DAG {
         
         case s @ dag.SplitGroup(loc, id, identities) => dag.SplitGroup(loc, id, identities)(splits(s.parent))
         
-        case dag.Root(_, _) => target
+        case dag.Const(_, _) => target
+
+        case dag.Undefined(_) => target
         
         case dag.New(loc, parent) => {
           if (numRefs(node) > MemoThreshold)
@@ -198,7 +200,7 @@ trait Memoizer extends DAG {
   }
   
   private def findForcingRefs(graph: DepGraph, force: Option[DepGraph]): Map[DepGraph, Set[DepGraph]] = graph match {
-    case SplitParam(_, _) | SplitGroup(_, _, _) | Root(_, _) => Map()
+    case SplitParam(_, _) | SplitGroup(_, _, _) | Const(_, _) | Undefined(_) => Map()
     
     case New(_, parent) =>
       updateMap(findForcingRefs(parent, force), graph, force)

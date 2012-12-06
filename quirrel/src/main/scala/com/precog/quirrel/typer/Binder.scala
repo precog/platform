@@ -146,6 +146,8 @@ trait Binder extends parser.AST with Library {
       
       case BoolLit(_, _) => Set()
 
+      case UndefinedLit(_) => Set()
+
       case NullLit(_) => Set()
       
       case ObjectDef(_, props) => {
@@ -298,6 +300,7 @@ trait Binder extends parser.AST with Library {
     case StrLit(_, _) => Set()
     case NumLit(_, _) => Set()
     case BoolLit(_, _) => Set()
+    case UndefinedLit(_) => Set()
     case NullLit(_) => Set()
     case ObjectDef(_, props) => props map { _._2 } map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()
     case ArrayDef(_, values) => values map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()
