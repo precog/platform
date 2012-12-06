@@ -342,6 +342,10 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parseSingle("false") must beLike { case BoolLit(_, false) => ok }
     }    
 
+    "accept an undefined literal" in {
+      parseSingle("undefined") must beLike { case UndefinedLit(_) => ok }
+    }
+
     "accept a null literal" in {
       parseSingle("null") must beLike { case NullLit(_) => ok }
     }
@@ -1317,6 +1321,12 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
         }
       }      
       
+      "undefined" >> {
+        parseSingle("undefinedfoo") must beLike {
+          case Dispatch(_, Identifier(Vector(), "undefinedfoo"), Vector()) => ok
+        }
+      }
+
       "null" >> {
         parseSingle("nullfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "nullfoo"), Vector()) => ok
