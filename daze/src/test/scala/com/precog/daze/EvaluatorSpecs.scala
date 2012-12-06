@@ -2923,6 +2923,20 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
 
+    "evaluate filter with non-boolean where clause (with empty result)" in {
+      val line = Line(0, "")
+
+      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
+
+      val input = Filter(line, IdentitySort,
+        clicks,
+        clicks)
+
+      testEval(input) { result =>
+        result must haveSize(0)
+      }
+    }
+
     "evaluate filter on the results of a histogram function" in {
       val line = Line(0, "")
       
