@@ -41,37 +41,37 @@ trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with InfixLib[
   // for a reduce, build the single transpecable chain, ignoring other irrelevant branches
   def buildReduceInfo(reduce: dag.Reduce): ReduceInfo = {
     def loop(graph: DepGraph, f: TransSpec1 => TransSpec1): (TransSpec1, DepGraph) = graph match {
-      case Join(_, Eq, _, left, Root(_, value)) =>
+      case Join(_, Eq, _, left, Const(_, value)) =>
         loop(left, t => f(trans.EqualLiteral(t, value, false)))
 
-      case Join(_, Eq, _, Root(_, value), right) =>
+      case Join(_, Eq, _, Const(_, value), right) =>
         loop(right, t => f(trans.EqualLiteral(t, value, false)))
 
-      case Join(_, NotEq, _, left, Root(_, value)) =>
+      case Join(_, NotEq, _, left, Const(_, value)) =>
         loop(left, t => f(trans.EqualLiteral(t, value, true)))
 
-      case Join(_, NotEq, _, Root(_, value), right) =>
+      case Join(_, NotEq, _, Const(_, value), right) =>
         loop(right, t => f(trans.EqualLiteral(t, value, true)))
 
-      case Join(_, instructions.WrapObject, _, Root(_, value), right) =>
+      case Join(_, instructions.WrapObject, _, Const(_, value), right) =>
         value match {
           case value @ CString(str) => loop(right, t => f(trans.WrapObject(t, str)))
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, instructions.DerefObject, _, left, Root(_, value)) =>
+      case Join(_, instructions.DerefObject, _, left, Const(_, value)) =>
         value match {
           case value @ CString(str) => loop(left, t => f(DerefObjectStatic(t, CPathField(str))))
           case _ => (f(Leaf(Source)), graph)
         }
       
-      case Join(_, instructions.DerefMetadata, _, left, Root(_, value)) =>
+      case Join(_, instructions.DerefMetadata, _, left, Const(_, value)) =>
         value match {
           case value @ CString(str) => loop(left, t => f(DerefMetadataStatic(t, CPathMeta(str))))
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, DerefArray, _, left, Root(_, value)) =>
+      case Join(_, DerefArray, _, left, Const(_, value)) =>
         value match {
           case CNum(n) => loop(left, t => f(DerefArrayStatic(t, CPathIndex(n.toInt))))
           case CLong(n) => loop(left, t => f(DerefArrayStatic(t, CPathIndex(n.toInt))))
@@ -79,7 +79,7 @@ trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with InfixLib[
           case _ => (f(Leaf(Source)), graph)
         }
       
-      case Join(_, instructions.ArraySwap, _, left, Root(_, value)) =>
+      case Join(_, instructions.ArraySwap, _, left, Const(_, value)) =>
         value match {
           case CNum(n) => loop(left, t => f(trans.ArraySwap(t, n.toInt)))
           case CLong(n) => loop(left, t => f(trans.ArraySwap(t, n.toInt)))
@@ -87,37 +87,37 @@ trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with InfixLib[
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, instructions.JoinObject, _, left, Root(_, value)) =>
+      case Join(_, instructions.JoinObject, _, left, Const(_, value)) =>
         value match {
           case CEmptyObject => loop(left, t => f(trans.InnerObjectConcat(t)))
           case _ => (f(Leaf(Source)), graph)
         }
                   
-      case Join(_, instructions.JoinObject, _, Root(_, value), right) =>
+      case Join(_, instructions.JoinObject, _, Const(_, value), right) =>
         value match {
           case CEmptyObject => loop(right, t => f(trans.InnerObjectConcat(t)))
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, instructions.JoinArray, _, left, Root(_, value)) =>
+      case Join(_, instructions.JoinArray, _, left, Const(_, value)) =>
         value match {
           case CEmptyArray => loop(left, t => f(trans.ArrayConcat(t)))
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, instructions.JoinArray, _, Root(_, value), right) =>
+      case Join(_, instructions.JoinArray, _, Const(_, value), right) =>
         value match {
           case CEmptyArray => loop(right, t => f(trans.ArrayConcat(t)))
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, op, _, left, Root(_, value)) =>
+      case Join(_, op, _, left, Const(_, value)) =>
         op2ForBinOp(op) map { _.f2.partialRight(value) } match {
           case Some(f1) => loop(left, t => f(trans.Map1(t, f1)))
           case None => (f(Leaf(Source)), graph)
         }
           
-      case Join(_, op, CrossLeftSort | CrossRightSort, Root(_, value), right) =>
+      case Join(_, op, CrossLeftSort | CrossRightSort, Const(_, value), right) =>
         op2ForBinOp(op) map { _.f2.partialLeft(value) } match {
           case Some(f1) => loop(right, t => f(trans.Map1(t, f1)))
           case None => (f(Leaf(Source)), graph)
@@ -220,8 +220,8 @@ trait ReductionFinder[M[+_]] extends TransSpecModule with TransSpecFinder[M] {
         dag.Join(loc, DerefArray, CrossLeftSort, 
           dag.Join(loc, DerefArray, CrossLeftSort, 
             left,
-            Root(loc, CLong(firstIndex))),
-          Root(loc, CLong(secondIndex)))
+            Const(loc, CLong(firstIndex))),
+          Const(loc, CLong(secondIndex)))
       }
     }}
   }

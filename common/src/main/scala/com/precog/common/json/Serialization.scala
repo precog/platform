@@ -27,6 +27,24 @@ import Extractor._
 import shapeless._
 import scalaz._
 
+trait Zero[A] {
+  def zero: A
+}
+
+object Zero {
+  implicit def optionZero[A]: Zero[Option[A]] = new Zero[Option[A]] {
+    def zero = None
+  }
+
+  implicit def mapZero[A, B]: Zero[Map[A, B]] = new Zero[Map[A, B]] {
+    def zero = Map.empty[A, B]
+  }
+
+  implicit def monoidZero[A](implicit monoid: Monoid[A]): Zero[A] = new Zero[A] {
+    def zero = monoid.zero
+  }
+}
+
 case object Inline
 
 case object Omit {
@@ -167,7 +185,7 @@ object ExtractorAux {
         } yield h :: t
     }
 
-  implicit def hlistExtractor4[FT <: HList, H, T <: HList](implicit et: ExtractorAux[FT, T], m: Monoid[H]) =
+  implicit def hlistExtractor4[FT <: HList, H, T <: HList](implicit et: ExtractorAux[FT, T], m: Zero[H]) =
     new ExtractorAux[Omit.type :: FT, H :: T] {
       def extract(source: JValue, fields: Omit.type :: FT) =
         for {

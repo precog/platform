@@ -468,10 +468,9 @@ case object CEmptyArray extends CNullType with CNullValue {
 }
 
 //
-// Undefined - cannot ever exist as a value.
+// Undefined
 //
 case object CUndefined extends CNullType with CNullValue {
   def readResolve() = CUndefined
   def toJValue = JUndefined
 }
-

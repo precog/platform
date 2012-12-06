@@ -69,7 +69,6 @@ object RecoverJson {
     )
   }
 
-  // TODO: Consider trailing commas
   private def balancedStack(buffers: Vector[CharBuffer]) = {
     @tailrec @inline def buildState(accum: BalancedStackState): BalancedStackState =
       if (accum.bufferIndex >= buffers.length)
@@ -120,7 +119,6 @@ object RecoverJson {
               )
             } getOrElse {
               // String didn't end
-              // TODO: Consider if the last character the escape character (\)
               val lastBuffer = buffers(buffers.length - 1)
               val lastCharacter = lastBuffer.get(lastBuffer.length - 1)
               val quoted = next.stack push Quote
@@ -156,13 +154,17 @@ object RecoverJson {
     val stringStack = balancedStack(buffers).map(balancedToString)
     // "}] <- stringStack
     // ,null <- 5
-    val closerBuffer = CharBuffer.allocate(stringStack.map(_.length).sum + 5)
+    val lastChar = buffers.last.get(buffers.last.length - 1)
+    val needsComma = lastChar != ',' || stringStack.size > 1
+    val closerBuffer = CharBuffer.allocate(stringStack.map(_.length).sum + 4 + (if (needsComma) 1 else 0))
 
     @tailrec def addToCloserBuffer(s: Stack[String]) {
       if (s.length == 1) {
         // Last element should always be a Bracket (']')
         // Put the blank element before end of array
-        closerBuffer.put(',')
+        if (needsComma) {
+          closerBuffer.put(',')
+        }
         closerBuffer.put(BlankElement)
       }
       if (!s.isEmpty) {

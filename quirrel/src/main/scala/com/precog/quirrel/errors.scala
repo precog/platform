@@ -94,6 +94,10 @@ case object DifferenceProvenanceDifferentLength extends ErrorType {
   override def toString = "cannot perform set difference on two sets each with different numbers of identities"
 }
 
+case object DifferenceWithNoCommonalities extends ErrorType {
+  override def toString = "cannot perform set difference on two sets which have no commonality (always returns left)"
+}
+
 case object DifferenceProvenanceValue extends ErrorType {
   override def toString = "cannot perform set difference on values"
 }

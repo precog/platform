@@ -21,6 +21,7 @@ package com.precog
 package accounts
 
 import com.precog.auth.WrappedAPIKey
+import com.precog.common.NetUtils.remoteIpFrom
 import com.precog.common.Path
 import com.precog.common.security._
 
@@ -82,8 +83,10 @@ extends DelegatingService[A, Future[B], A, Account => Future[B]] with Logging {
         _.basic map {
           case BasicAuthCredentials(email,  password) =>
             accountManager.authAccount(email, password) flatMap { 
-              case Some(account)   => f(account)
-              case None            => Future(err(AuthMismatch("Credentials provided were formatted correctly, but did not match a known account.")))
+              case Success(account)   => f(account)
+              case Failure(error)     =>
+                logger.warn("Authentication failure from %s for %s: %s".format(remoteIpFrom(request), email, error))
+                Future(err(AuthMismatch("Credentials provided were formatted correctly, but did not match a known account.")))
             }
         }
       } getOrElse {
@@ -95,15 +98,18 @@ extends DelegatingService[A, Future[B], A, Account => Future[B]] with Logging {
   val metadata = Some(AboutMetadata(ParameterMetadata('accountId, None), DescriptionMetadata("A accountId is required for the use of this service.")))
 }
 
-trait AccountAuthorization {
+trait AccountAuthorization extends Logging {
   def accountManagement: AccountManager[Future]
 
-  def withAccountAdmin[A](accountId: String, auth: Account)(f: Account => Future[HttpResponse[JValue]])(implicit executor: ExecutionContext): Future[HttpResponse[JValue]] = {
+  def withAccountAdmin[A](accountId: String, auth: Account, request: HttpRequest[_])(f: Account => Future[HttpResponse[JValue]])(implicit executor: ExecutionContext): Future[HttpResponse[JValue]] = {
     accountManagement.findAccountById(accountId) flatMap { 
       case Some(account) =>
         accountManagement.hasAncestor(account, auth) flatMap {
           case true  => f(account)
-          case false => Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId))))
+          case false => {
+            logger.warn("Unauthorized access attempt to account %s from account %s (%s)".format(accountId, auth.accountId, remoteIpFrom(request)))
+            Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("You do not have access to account "+ accountId))))
+          }
         }
 
       case None => 
@@ -113,7 +119,7 @@ trait AccountAuthorization {
 
   def withAccountAdmin[A](request: HttpRequest[_], auth: Account)(f: Account => Future[HttpResponse[JValue]])(implicit executor: ExecutionContext): Future[HttpResponse[JValue]] = {
     request.parameters.get('accountId).map { accountId =>
-      withAccountAdmin(accountId, auth) { f }
+      withAccountAdmin(accountId, auth, request) { f }
     } getOrElse {
       Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))
     }
@@ -179,10 +185,10 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                     Future(HttpResponse[JValue](OK, content = Some(JObject(List(JField("accountId", account.accountId))))))
                   } getOrElse {
                     accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free) { (accountId, path) =>
-                      val request = NewAPIKeyRequest.newAccount(accountId, path, None, None)
-                      val createBody = request.serialize 
+                      val keyRequest = NewAPIKeyRequest.newAccount(accountId, path, None, None)
+                      val createBody = keyRequest.serialize 
 
-                      logger.debug("Creating new account with id " + accountId + " and request body " + createBody)
+                      logger.info("Creating new account for " + email + " with id " + accountId + " and request body " + createBody + " by " + remoteIpFrom(request))
 
                       securityService.withRootClient { client =>
                         client.contentType(application/MimeTypes.json).path("apikeys/").post[JValue]("")(createBody) map {
@@ -243,9 +249,11 @@ extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue
                         .post[JValue]("apikeys/" + account.apiKey + "/grants/")(jvalue) map {
                                                     
                     case HttpResponse(HttpStatus(Created, _), _, None, _) => 
+                      logger.info("Grant created by %s (%s): %s".format(auth.accountId, remoteIpFrom(request), jvalue.renderCompact))
                       HttpResponse[JValue](OK, content = Some(""))
                     
                     case _ =>
+                      logger.error("Grant creation by %s (%s) failed for %s".format(auth.accountId, remoteIpFrom(request), jvalue.renderCompact))
                       HttpResponse[JValue](HttpStatus(InternalServerError), content = Some(JString("could not create grants")))
                   }
                 }
@@ -300,16 +308,22 @@ class PutAccountPasswordHandler(val accountManagement: AccountManager[Future])(i
           futureContent flatMap { jvalue =>
             (jvalue \ "password").validated[String] match {
               case Success(newPassword) => 
-                accountManagement.updateAccountPassword(account, newPassword) map { 
-                  case true => HttpResponse[JValue](OK, content = None)
-                  case _ => Responses.failure(InternalServerError, "Account update failed, please contact support.")
+                accountManagement.updateAccountPassword(account, newPassword) map {
+                  case true => 
+                    logger.info("Password for account %s successfully updated by %s".format(account.accountId, remoteIpFrom(request)))
+                    HttpResponse[JValue](OK, content = None)
+                  case _ => 
+                    logger.error("Password update for account %s from %s failed".format(account.accountId, remoteIpFrom(request)))
+                    Responses.failure(InternalServerError, "Account update failed, please contact support.")
                 } 
 
               case Failure(error) => 
+                logger.warn("Invalid password update body \"%s\" for account %s from %s: %s".format(jvalue.renderCompact, account.accountId, remoteIpFrom(request), error))
                 Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body."), content = Some(JString("Could not determine replacement password from request body."))))
             }
           }
         } getOrElse {
+          logger.warn("Missing password update body for account %s from %s".format(account.accountId, remoteIpFrom(request)))
           Future(HttpResponse[JValue](HttpStatus(BadRequest, "Request body missing."), content = Some(JString("You must provide a JSON object containing a password field."))))
         }
       }
@@ -334,8 +348,12 @@ class PutAccountPlanHandler(val accountManagement: AccountManager[Future])(impli
             (jvalue \ "type").validated[String] match {
               case Success(planType) => 
                 accountManagement.updateAccount(account.copy(plan = new AccountPlan(planType))) map { 
-                  case true => HttpResponse[JValue](OK, content = None)
-                  case _ => Responses.failure(InternalServerError, "Account update failed, please contact support.")
+                  case true => 
+                    logger.info("Plan changed for %s to %s from %s".format(account.accountId, planType, remoteIpFrom(request)))
+                    HttpResponse[JValue](OK, content = None)
+                  case _ => 
+                    logger.error("Plan change to %s for account %s by %s failed".format(planType, account.accountId, remoteIpFrom(request)))
+                    Responses.failure(InternalServerError, "Account update failed, please contact support.")
                 }
 
               case Failure(error) => 
@@ -363,8 +381,12 @@ class DeleteAccountPlanHandler(val accountManagement: AccountManager[Future])(im
     Success { (auth: Account) =>
       withAccountAdmin(request, auth) { account =>
         accountManagement.updateAccount(account.copy(plan = AccountPlan.Free)) map {
-          case true => HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
-          case _ => Responses.failure(InternalServerError, "Account update failed, please contact support.")
+          case true => 
+            logger.info("Account plan for %s deleted (converted to free plan) by %s".format(account.accountId, remoteIpFrom(request)))
+            HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
+          case _ => 
+            logger.error("Account plan for %s deletion by %s failed".format(account.accountId, remoteIpFrom(request)))
+            Responses.failure(InternalServerError, "Account update failed, please contact support.")
         }
       }
     }
@@ -400,8 +422,12 @@ class DeleteAccountHandler(val accountManagement: AccountManager[Future])(implic
     Success { (auth: Account) =>
       withAccountAdmin(request, auth) { account =>
         accountManagement.deleteAccount(account.accountId).map { 
-          case Some(_) => HttpResponse[JValue](HttpStatus(NoContent))
-          case None    => HttpResponse[JValue](HttpStatus(InternalServerError), content = Some(JString("Account deletion failed, please contact support.")))
+          case Some(_) => 
+            logger.warn("Account %s deleted by %s".format(account.accountId, remoteIpFrom(request)))
+            HttpResponse[JValue](HttpStatus(NoContent))
+          case None    => 
+            logger.error("Account %s deletion by %s failed".format(account.accountId, remoteIpFrom(request)))
+            HttpResponse[JValue](HttpStatus(InternalServerError), content = Some(JString("Account deletion failed, please contact support.")))
         }
       }
     }
