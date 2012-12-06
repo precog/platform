@@ -25,7 +25,7 @@ import com.precog.util.FileOps
 
 import org.joda.time.DateTime
 
-import java.io.{File, FileNotFoundException}
+import java.io.{File, FileNotFoundException, IOException}
 import java.nio.ByteBuffer
 import java.util.concurrent.{Executors,TimeoutException}
 
@@ -81,7 +81,19 @@ trait JDBMProjectionModule extends ProjectionModule with YggConfigComponent {
 
       dirs flatMap {
         case (Some(base), Some(archive)) =>
-          val timeStampedArchive = new File(archive.getParentFile, archive.getName+"-"+System.currentTimeMillis()) 
+          val timeStampedArchive = new File(archive.getParentFile, archive.getName+"-"+System.currentTimeMillis())
+          val archiveParent = timeStampedArchive.getParentFile
+          if (! archiveParent.isDirectory) {
+            // Ensure that the parent dir exists
+            if (! archiveParent.mkdirs()) {
+              throw new IOException("Failed to create archive parent dir for " + timeStampedArchive)
+            }
+          }
+
+          if (! archiveParent.canWrite) {
+            throw new IOException("Invalid permissions on archive directory parent: " + archiveParent)
+          }
+
           fileOps.rename(base, timeStampedArchive)
           
         case (Some(base), _) =>
