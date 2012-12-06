@@ -40,7 +40,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
     "in a load, rewrite to itself" in {
       val line = Line(0, "")
-      val input = dag.LoadLocal(line, Root(line, CString("/foo")))
+      val input = dag.LoadLocal(line, Const(line, CString("/foo")))
 
       megaReduce(input, findReductions(input)) mustEqual input
     }
@@ -48,8 +48,8 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "in a reduction of a singleton" in {
       val line = Line(0, "")
 
-      val input = dag.Reduce(line, Count, Root(line, CString("alpha")))
-      val megaR = dag.MegaReduce(line, List((trans.Leaf(trans.Source), List(input.red))), Root(line, CString("alpha")))
+      val input = dag.Reduce(line, Count, Const(line, CString("alpha")))
+      val megaR = dag.MegaReduce(line, List((trans.Leaf(trans.Source), List(input.red))), Const(line, CString("alpha")))
 
       val expected = joinDeref(megaR, 0, 0, line)
 
@@ -60,10 +60,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Reduce(line, Count, 
-        dag.LoadLocal(line, Root(line, CString("/foo"))))
+        dag.LoadLocal(line, Const(line, CString("/foo"))))
 
 
-      val parent = dag.LoadLocal(line, Root(line, CString("/foo")))
+      val parent = dag.LoadLocal(line, Const(line, CString("/foo")))
       val red = Count 
       val megaR = dag.MegaReduce(line, List((trans.Leaf(trans.Source), List(red))), parent)
 
@@ -75,30 +75,30 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "in joins where transpecs are eq, wrap object, operate, filter" in {
       val line = Line(0, "")
 
-      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
 
       val notEq = Join(line, NotEq, CrossLeftSort,
         Join(line, DerefObject, CrossLeftSort,
           clicks,
-          Root(line, CString("foo"))), 
-        Root(line, CNum(5)))
+          Const(line, CString("foo"))), 
+        Const(line, CNum(5)))
 
       val obj = Join(line, WrapObject, CrossLeftSort,
-        Root(line, CString("bar")),
+        Const(line, CString("bar")),
         clicks)
 
       val op = Operate(line, Neg, 
         Join(line, DerefArray, CrossLeftSort,
           clicks,
-          Root(line, CNum(1))))
+          Const(line, CNum(1))))
 
       val filter = Filter(line, IdentitySort, 
         clicks,
         Join(line, Eq, CrossLeftSort,
           Join(line, DerefObject, CrossLeftSort,
             clicks,
-            Root(line, CString("baz"))), 
-          Root(line, CNum(12))))
+            Const(line, CString("baz"))), 
+          Const(line, CNum(12))))
 
       val nonEqTrans = trans.EqualLiteral(trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("foo")), CNum(5), true)
       val objTrans = trans.WrapObject(trans.Leaf(trans.Source), "bar")
@@ -134,7 +134,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "in a join of two reductions on the same dataset" in {
       val line = Line(0, "")
 
-      val parent = dag.LoadLocal(line, Root(line, CString("/foo")))
+      val parent = dag.LoadLocal(line, Const(line, CString("/foo")))
       val red1 = Count
       val red2 = StdDev
       val left = dag.Reduce(line, red1, parent)
@@ -165,7 +165,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
     "in a join where only one side is a reduction" in {
       val line = Line(0, "")
-      val load = dag.LoadLocal(line, Root(line, CString("/foo")))
+      val load = dag.LoadLocal(line, Const(line, CString("/foo")))
       val reduction = StdDev
       val r = dag.Reduce(line, reduction, load)
 
@@ -194,8 +194,8 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "where two different sets are being reduced" in {
       val line = Line(0, "")
 
-      val load1 = dag.LoadLocal(line, Root(line, CString("/foo")))
-      val load2 = dag.LoadLocal(line, Root(line, CString("/bar")))
+      val load1 = dag.LoadLocal(line, Const(line, CString("/foo")))
+      val load2 = dag.LoadLocal(line, Const(line, CString("/bar")))
 
       val red = Count
       val r1 = dag.Reduce(line, red, load1)
@@ -217,8 +217,8 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "where two different sets are being reduced" in {
       val line = Line(0, "")
 
-      val load1 = dag.LoadLocal(line, Root(line, CString("/foo")))
-      val load2 = dag.LoadLocal(line, Root(line, CString("/bar")))
+      val load1 = dag.LoadLocal(line, Const(line, CString("/foo")))
+      val load2 = dag.LoadLocal(line, Const(line, CString("/bar")))
 
       val r1 = dag.Reduce(line, Sum, load1)
       val r2 = dag.Reduce(line, Max, load1)
@@ -256,7 +256,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
     "where a single set is being reduced three times" in {
       val line = Line(0, "")
-      val load = dag.LoadLocal(line, Root(line, CString("/foo")))
+      val load = dag.LoadLocal(line, Const(line, CString("/foo")))
     
       val red1 = Count
       val r1 = dag.Reduce(line, red1, load)
@@ -283,15 +283,15 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val line = Line(0, "")
 
-      val load = dag.LoadLocal(line, Root(line, CString("/hom/heightWeightAcrossSlices")))
+      val load = dag.LoadLocal(line, Const(line, CString("/hom/heightWeightAcrossSlices")))
 
       val min = Min
       val max = Max
       val mean = Mean
 
-      val id = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("userId")))
-      val height = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("height")))
-      val weight = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("weight")))
+      val id = Join(line, DerefObject, CrossLeftSort, load, Const(line, CString("userId")))
+      val height = Join(line, DerefObject, CrossLeftSort, load, Const(line, CString("height")))
+      val weight = Join(line, DerefObject, CrossLeftSort, load, Const(line, CString("weight")))
 
       val r1 = dag.Reduce(line, min, id)
       val r2 = dag.Reduce(line, max, height)
@@ -323,14 +323,14 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val line = Line(0, "")
 
-      val load = dag.LoadLocal(line, Root(line, CString("/hom/heightWeightAcrossSlices")))
+      val load = dag.LoadLocal(line, Const(line, CString("/hom/heightWeightAcrossSlices")))
 
       val min = Min
       val max = Max
       val mean = Mean
 
-      val height = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("height")))
-      val weight = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("weight")))
+      val height = Join(line, DerefObject, CrossLeftSort, load, Const(line, CString("height")))
+      val weight = Join(line, DerefObject, CrossLeftSort, load, Const(line, CString("weight")))
 
       val r1 = dag.Reduce(line, min, height)
       val r2 = dag.Reduce(line, max, height)
@@ -361,13 +361,13 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val line = Line(0, "")
 
-      val load = dag.LoadLocal(line, Root(line, CString("/hom/heightWeightAcrossSlices")))
+      val load = dag.LoadLocal(line, Const(line, CString("/hom/heightWeightAcrossSlices")))
 
       val min = Min
       val max = Max
       val mean = Mean
 
-      val weight = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("weight")))
+      val weight = Join(line, DerefObject, CrossLeftSort, load, Const(line, CString("weight")))
 
       val r1 = dag.Reduce(line, min, weight)
       val r2 = dag.Reduce(line, max, weight)
@@ -397,13 +397,13 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val line = Line(0, "")
 
-      val load = dag.LoadLocal(line, Root(line, CString("/hom/heightWeightAcrossSlices")))
+      val load = dag.LoadLocal(line, Const(line, CString("/hom/heightWeightAcrossSlices")))
 
       val mean = Mean
 
-      val id = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("userId")))
-      val height = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("height")))
-      val weight = Join(line, DerefObject, CrossLeftSort, load, Root(line, CString("weight")))
+      val id = Join(line, DerefObject, CrossLeftSort, load, Const(line, CString("userId")))
+      val height = Join(line, DerefObject, CrossLeftSort, load, Const(line, CString("height")))
+      val weight = Join(line, DerefObject, CrossLeftSort, load, Const(line, CString("weight")))
 
       val r1 = dag.Reduce(line, mean, id)
       val r2 = dag.Reduce(line, mean, height)
@@ -440,7 +440,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       // sums
       // 
        
-      val nums = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
+      val nums = dag.LoadLocal(line, Const(line, CString("/hom/numbers")))
       
       val reduction = Max
 
@@ -483,28 +483,28 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       //  --if max is taken instead of clicks.bar, the change in the DAG not show up inside the Reduce, and so is hard to track the reductions
       // histogram
       
-      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
        
       lazy val input: dag.Split = dag.Split(line,
         dag.Group(1,
-          Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("foo"))),
+          Join(line, DerefObject, CrossLeftSort, clicks, Const(line, CString("foo"))),
           UnfixedSolution(0,
             Join(line, DerefObject, CrossLeftSort,
               clicks,
-              Root(line, CString("user"))))),
+              Const(line, CString("user"))))),
         Join(line, JoinObject, CrossLeftSort,
           Join(line, WrapObject, CrossLeftSort,
-            Root(line, CString("user")),
+            Const(line, CString("user")),
             SplitParam(line, 0)(input)),
           Join(line, JoinObject, CrossLeftSort,
             Join(line, WrapObject, CrossLeftSort,
-              Root(line, CString("min")),
+              Const(line, CString("min")),
               dag.Reduce(line, Min,
-                SplitGroup(line, 1, Vector(LoadIds("/clicks")))(input))),
+                SplitGroup(line, 1, Identities.Specs(Vector(LoadIds("/clicks"))))(input))),
             Join(line, WrapObject, CrossLeftSort,
-              Root(line, CString("max")),
+              Const(line, CString("max")),
               dag.Reduce(line, Max,
-                SplitGroup(line, 1, Vector(LoadIds("/clicks")))(input))))))
+                SplitGroup(line, 1, Identities.Specs(Vector(LoadIds("/clicks"))))(input))))))
 
       val parent = SplitGroup(line, 1, clicks.identities)(input)
       val red1 = dag.Reduce(line, Min, parent)
@@ -513,21 +513,21 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val expected = dag.Split(line,
         dag.Group(1,
-          Join(line, DerefObject, CrossLeftSort, clicks, Root(line, CString("foo"))),
+          Join(line, DerefObject, CrossLeftSort, clicks, Const(line, CString("foo"))),
           UnfixedSolution(0,
             Join(line, DerefObject, CrossLeftSort,
               clicks,
-              Root(line, CString("user"))))),
+              Const(line, CString("user"))))),
         Join(line, JoinObject, CrossLeftSort,
           Join(line, WrapObject, CrossLeftSort,
-            Root(line, CString("user")),
+            Const(line, CString("user")),
             SplitParam(line, 0)(input)),
           Join(line, JoinObject, CrossLeftSort,
             Join(line, WrapObject, CrossLeftSort,
-              Root(line, CString("min")),
+              Const(line, CString("min")),
               joinDeref(megaR, 0, 1, line)),
             Join(line, WrapObject, CrossLeftSort,
-              Root(line, CString("max")),
+              Const(line, CString("max")),
               joinDeref(megaR, 0, 0, line)))))
 
       megaReduce(input, findReductions(input)) mustEqual expected
@@ -538,7 +538,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "in a load, find no reductions when there aren't any" in {
       val line = Line(0, "")
 
-      val input = dag.LoadLocal(line, Root(line, CString("/foo")))
+      val input = dag.LoadLocal(line, Const(line, CString("/foo")))
       val expected = MegaReduceState(
         Map(),
         Map(),
@@ -552,7 +552,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "in a single reduction" in {
       val line = Line(0, "")
 
-      val load = dag.LoadLocal(line, Root(line, CString("/foo")))
+      val load = dag.LoadLocal(line, Const(line, CString("/foo")))
       val reduction = Count
       val r = dag.Reduce(line, reduction, load)
 
@@ -569,7 +569,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "in a join of two reductions on the same dataset #2" in {
       val line = Line(0, "")
 
-      val load = dag.LoadLocal(line, Root(line, CString("/foo")))
+      val load = dag.LoadLocal(line, Const(line, CString("/foo")))
       val r1 = dag.Reduce(line, Count, load)
       val r2 = dag.Reduce(line, StdDev, load)
 
@@ -588,7 +588,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "findReductions given a reduction inside a reduction" in {
       val line = Line(0, "")
 
-      val load = dag.LoadLocal(line, Root(line, CString("/foo")))
+      val load = dag.LoadLocal(line, Const(line, CString("/foo")))
       val r1 = dag.Reduce(line, Mean, load)
       val r2 = dag.Reduce(line, Count, r1)
 
@@ -605,7 +605,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "findReductions given two reductions inside a reduction" in {
       val line = Line(0, "")
 
-      val foo = dag.LoadLocal(line, Root(line, CString("/foo")))
+      val foo = dag.LoadLocal(line, Const(line, CString("/foo")))
       val mean = dag.Reduce(line, Mean, foo)
       val stdDev = dag.Reduce(line, StdDev, foo)
       val parentCount = dag.Join(line, Add, CrossLeftSort, mean, stdDev)
@@ -639,7 +639,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "findReductions inside a Split" in {
       val line = Line(0, "")
 
-      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
       val red = Count
       val count = dag.Reduce(line, red, clicks)
 
@@ -662,7 +662,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
     "in a join where only one side is a reduction" in {
       val line = Line(0, "")
-      val load = dag.LoadLocal(line, Root(line, CString("/foo")))
+      val load = dag.LoadLocal(line, Const(line, CString("/foo")))
 
       "right" in {
         val r = dag.Reduce(line, StdDev, load)
@@ -701,7 +701,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       //   (nums where nums = 'n) + m     -- actually, we used split root, but close enough
       // sums
 
-      val nums = dag.LoadLocal(line, Root(line, CString("/hom/numbers")))
+      val nums = dag.LoadLocal(line, Const(line, CString("/hom/numbers")))
 
       lazy val j = Join(line, Lt, CrossLeftSort, nums, SplitParam(line, 0)(input))
       lazy val parent = Filter(line, IdentitySort, nums, j)
@@ -736,18 +736,18 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       // -- if max is taken instead of clicks.bar, the change in the DAG does
       // -- not show up inside the Reduce, so it's hard to track the reductions
       
-      val clicks = dag.LoadLocal(line, Root(line, CString("/clicks")))
+      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
 
-      val fooRoot = Root(line, CString("foo"))
-      val userRoot = Root(line, CString("user"))
-      val minRoot = Root(line, CString("min"))
-      val maxRoot = Root(line, CString("max"))
+      val fooRoot = Const(line, CString("foo"))
+      val userRoot = Const(line, CString("user"))
+      val minRoot = Const(line, CString("min"))
+      val maxRoot = Const(line, CString("max"))
 
       val clicksFoo = Join(line, DerefObject, CrossLeftSort, clicks, fooRoot)
       val clicksUser = Join(line, DerefObject, CrossLeftSort, clicks, userRoot)
       val group1 = dag.Group(1, clicksFoo, UnfixedSolution(0, clicksUser))
 
-      lazy val parent = SplitGroup(line, 1, Vector(LoadIds("/clicks")))(input)
+      lazy val parent = SplitGroup(line, 1, Identities.Specs(Vector(LoadIds("/clicks"))))(input)
       lazy val r1 = dag.Reduce(line, Min, parent)
       lazy val r2 = dag.Reduce(line, Max, parent)
 
@@ -776,8 +776,8 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     Join(line, DerefArray, CrossLeftSort,
       Join(line, DerefArray, CrossLeftSort,
         left,
-        Root(line, CLong(first))),
-      Root(line, CLong(second)))
+        Const(line, CLong(first))),
+      Const(line, CLong(second)))
 }
 
 
