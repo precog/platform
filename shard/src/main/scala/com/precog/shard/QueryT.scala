@@ -21,117 +21,82 @@ package com.precog.shard
 
 import scalaz._
 
-private final case class JobInfo[M[+_]](jobManager: JobManager[M], jobId: JobId, pollingInterval: Long)
+trait QueryState[+A] {
+  def value: Option[A]
+}
 
-private final case class QueryState[M[+_], A](jobInfo: Option[JobInfo[M]], lastPolled: Long, value: Option[A])
+trait QueryStateManager[Q[+_] <: QueryState[_]] extends Monad[Q] {
+  def poll[A](q: Q[A]): Q[A] = if (isCancelled(q)) cancel(q) else q
 
-final case class QueryT[M[+_], +A](state: M[QueryState[M, A]]) {
+  def isCancelled[A](q: Q[A]): Boolean
+  def cancel[A](q: Q[A]): Q[Nothing]
+}
+
+final case class QueryT[Q[+_] <: QueryState[_], M[+_], +A](stateM: M[Q[A]])(implicit Q: QueryStateManager[Q]) {
   import scalaz.syntax.monad._
-
-  def getJobId: M[Option[JobId]] = state map (_.job map (_._2))
 
   def isAborted: M[Boolean] = state map (_.value.isEmpty)
 
   def getOrElse[AA >: A](aa: => AA): M[AA] = state map (_.value getOrElse aa)
 
-  def map[B](f: A => B)(implicit M: Monad[M]) = QueryT(poll map { newState =>
-    newState.copy(value = value map f)
-  })
-
-  def flatMap[B](f: A => QueryT[B])(implicit M: Monad[M]) = QueryT(poll flatMap {
-    case orig @ QueryState(jobId0, lastPoll0, value0) =>
-      value0 map f map { _.state map { case QueryState(jobId, lastPoll, value) =>
-        QueryState(jobId orElse jobId0, lastPoll, value)
-      } } getOrElse orig
-  })
-
-  // Still need to implement type class.
-  def traverse[N[_], B](f: A => N[B])(implicit M: Traverse[M], N: Applicative[N]): N[QueryT[M, B]] = {
-    N.map(M.traverse(state) { case QueryState(jobId, lastPolled, value0) =>
-      N.map(Traverse[Option].traverse(value0)(f))(QueryState(jobId, lastPolled, _))
-    })(QueryT(_))
+  def map[B](f: A => B)(implicit M: Monad[M]) = stateM map { state =>
+    Q.poll(state) map f
   }
 
-  private def isCancelled(implicit M: Pointed[M]): M[Boolean] = jobInfo map { case JobInfo(jobManager, jobId, _) =>
-    f(jobManager.getJob(jobId) map {
-      case Some(Job(_, _, Cancelled(_, _, _), _)) => true
-      case _ => false
-    })
-  } getOrElse M.point(false)
+  def flatMap[B](f: A => QueryT[Q, M, B])(implicit M: Monad[M]) = QueryT(stateM map (Q.poll(_)) flatMap { state =>
+    state.value map f map { _.stateM map (state *> _) } getOrElse M.point(state)
+  })
+}
 
-  private def poll(implicit M: Monad): M[QueryState[M, A]] = state flatMap {
-    case QueryState(None, _, _) | QueryState(_, _, None) =>
-      state
-
-    case QueryState(Some(JobInfo(_, jobId, interval), lastPoll, Some(a)) =>
-      val curPoll = clock.nanoTime() / 1000
-      val duration = curPoll - lastPoll
-      if (duration < interval) {
-        state
-      } else {
-        isCancelled map { cancelled =>
-          QueryState(Some(job), curPoll, cancelled.option(a))
-        }
-      }
+trait QueryTCompanion[Q[+_] <: QueryState[_]] extends QueryTInstances[Q] {
+  def apply[Q[+_] <: QueryState[_], M[+_], A](a: M[A])(implicit M: Functor[M], Q: QueryStateManager[Q]): QueryT[Q, M, A] = {
+    QueryT(a map Q.point)
   }
 }
 
-object QueryT with QueryTInstances {
-  val DefaultPollingInterval = 2000 // ms
-
-  def apply[M[+_], A](a: M[A]): QueryT[M, A] = QueryT(a map { a => (None, clock.nanoTime(), Some(a)) })
-
-  def createJob[M[+_], N[+_]](jobManager: JobManager[N], apiKey: APIKey, pollingInterval: Long = DefaultPollingInterval)(implicit N: Functor[N], f: N ~> M): N[QueryT[M, Job]] = {
-    import scalaz.syntax.functor._
-    QueryT(f(jobManager.createJob(apiKey) map { job =>
-      QueryState(Some(jobManager, job.id), clock.nanoTime(), Some(job))
-    }))
-  }
-}
-
-private trait QueryTInstances1 {
-  implicit def queryTFunctor[M[+_]](implicit M0: Monad[M]): Monad[({type λ[α] = QueryT[M, α]})#λ] = new QueryTFunctor[M] {
+private trait QueryTInstances1[Q[+_] <: QueryState[_]] {
+  implicit def queryTFunctor[M[+_]](implicit M0: Monad[M]): Monad[({type λ[α] = QueryT[M, Q, α]})#λ] = new QueryTFunctor[M] {
     implicit def M: Monad[M] = M0
   }
 }
 
-private trait QueryTInstances0 extends QueryTInstances1 {
+private trait QueryTInstances0[Q[+_] <: QueryState[_]] extends QueryTInstances1[Q] {
   implicit def queryTPointed[M[+_]](implicit M0: Monad[M]): Pointed[({type λ[α] = QueryT[M, α]})#λ] = new QueryTPointed[M] {
     implicit def M: Monad[M] = M0
   }
 }
 
-private trait QueryTInstances extends QueryTInstances0 {
-  implicit def queryTMonadTrans: Hoist[QueryT] = new QueryTHoist {}
+private trait QueryTInstances[Q[+_] <: QueryState[_]] extends QueryTInstances0[Q] {
+  implicit def queryTMonadTrans: Hoist[QueryT] = new QueryTHoist[Q] { }
 
-  implicit def queryTMonad[M[+_]](implicit M0: Monad[M]): Monad[({type λ[α] = QueryT[M, α]})#λ] = new QueryTMonad[M] {
+  implicit def queryTMonad[M[+_]](implicit M0: Monad[M]): Monad[({type λ[α] = QueryT[Q, M, α]})#λ] = new QueryTMonad[Q, M] {
     implicit def M: Monad[M] = M0
   }
 }
 
-private trait QueryTFunctor[M[+_]] extends Functor[({ type λ[α] = QueryT[M, α] })#λ] {
+private trait QueryTFunctor[Q[+_] <: QueryState[_], M[+_]] extends Functor[({ type λ[α] = QueryT[Q, M, α] })#λ] {
   implicit def M: Monad[M]
 
   // Unfortunately, we need a Monad, even for this case.
-  def map[A, B](ma: QueryT[M, A])(f: A => B): QueryT[M, B] = ma map f
+  def map[A, B](ma: QueryT[Q, M, A])(f: A => B): QueryT[Q, M, B] = ma map f
 }
 
-private trait QueryTPointed[M[+_]] extends Pointed[({ type λ[α] = QueryT[M, α] })#λ] extends QueryTFunctor[M] {
-  def point[A](a: => A): QueryT[M, A] = QueryT(M.point(a))
+private trait QueryTPointed[Q[+_] <: QueryState[_], M[+_]] extends Pointed[({ type λ[α] = QueryT[Q, M, α] })#λ] extends QueryTFunctor[Q, M] {
+  def point[A](a: => A): QueryT[Q, M, A] = QueryT(M.point(a))
 }
 
-private trait QueryTMonad[M[+_]] extends Monad[({ type λ[α] = QueryT[M, α] })#λ] extends QueryTPointed[M] {
-  def bind[A, B](fa: QueryT[M, A])(f: A => QueryT[M, B]): QueryT[M, B] = fa flatMap f
+private trait QueryTMonad[Q[+_] <: QueryState[_], M[+_]] extends Monad[({ type λ[α] = QueryT[Q, M, α] })#λ] extends QueryTPointed[Q, M] {
+  def bind[A, B](fa: QueryT[Q, M, A])(f: A => QueryT[Q, M, B]): QueryT[Q, M, B] = fa flatMap f
 }
 
-private trait QueryTHoist extends Hoist[QueryT] {
-  def liftM[M[+_], A](ma: M[A])(implicit M: Monad[M]): QueryT[M, A] = QueryT[M, A](M.map[A, QueryState[A]](ma) { a =>
+private trait QueryTHoist[Q[+_] <: QueryState[_]] extends Hoist[({ type λ[m, α] = QueryT[Q, m, α] })#λ] {
+  def liftM[M[+_], A](ma: M[A])(implicit M: Monad[M]): QueryT[Q, M, A] = QueryT[Q, M, A](M.map[A, QueryState[A]](ma) { a =>
     QueryState(None, clock.nanoTime(), Some(a))
   }
 
-  def hoist[M[+_]: Monad, N[+_]](f: M ~> N) = new (({ type λ[α] = QueryT[M, α] })#λ ~> ({ type λ[α] = QueryT[N, α] })#λ) {
-    def apply[A](ma: QueryT[M, A]): QueryT[N, A] = QueryT(f(ma.state))
+  def hoist[M[+_]: Monad, N[+_]](f: M ~> N) = new (({ type λ[α] = QueryT[Q, M, α] })#λ ~> ({ type λ[α] = QueryT[Q, N, α] })#λ) {
+    def apply[A](ma: QueryT[Q, M, A]): QueryT[Q, N, A] = QueryT(f(ma.state))
   }
 
-  implicit def apply[M[+_] : Monad]: Monad[({type λ[α] = QueryT[M, α]})#λ] = QueryT.queryTMonad[M]
+  implicit def apply[M[+_] : Monad]: Monad[({type λ[α] = QueryT[Q, M, α]})#λ] = QueryT.queryTMonad[M]
 }
