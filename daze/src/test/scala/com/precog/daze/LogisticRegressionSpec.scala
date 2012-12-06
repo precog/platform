@@ -145,10 +145,10 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
   import dag._
   import instructions._
 
-  val testUID = "testUID"
+  val testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph): Set[SEvent] = withContext { ctx =>
-    consumeEval(testUID, graph, ctx, Path.Root) match {
+    consumeEval(testAPIKey, graph, ctx, Path.Root) match {
       case Success(results) => results
       case Failure(error) => throw error
     }
@@ -182,11 +182,11 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
         
         val input = dag.Morph2(line, LogisticRegression,
           dag.Join(line, DerefArray, CrossLeftSort,
-            dag.LoadLocal(line, Root(line, CString(pointsString))),
-            dag.Root(line, CLong(0))),
+            dag.LoadLocal(line, Const(line, CString(pointsString))),
+            dag.Const(line, CLong(0))),
           dag.Join(line, DerefArray, CrossLeftSort,
-            dag.LoadLocal(line, Root(line, CString(pointsString))),
-            dag.Root(line, CLong(1))))
+            dag.LoadLocal(line, Const(line, CString(pointsString))),
+            dag.Const(line, CLong(1))))
 
         val result = testEval(input)
         tmpFile.delete()
@@ -239,11 +239,11 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
         
         val input = dag.Morph2(line, LogisticRegression,
           dag.Join(line, DerefArray, CrossLeftSort,
-            dag.LoadLocal(line, Root(line, CString(pointsString))),
-            dag.Root(line, CLong(0))),
+            dag.LoadLocal(line, Const(line, CString(pointsString))),
+            dag.Const(line, CLong(0))),
           dag.Join(line, DerefArray, CrossLeftSort,
-            dag.LoadLocal(line, Root(line, CString(pointsString))),
-            dag.Root(line, CLong(1))))
+            dag.LoadLocal(line, Const(line, CString(pointsString))),
+            dag.Const(line, CLong(1))))
 
         val result = testEval(input)
         tmpFile.delete()
@@ -304,11 +304,11 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
         
         val input = dag.Morph2(line, LogisticRegression,
           dag.Join(line, DerefArray, CrossLeftSort,
-            dag.LoadLocal(line, Root(line, CString(pointsString))),
-            dag.Root(line, CLong(0))),
+            dag.LoadLocal(line, Const(line, CString(pointsString))),
+            dag.Const(line, CLong(0))),
           dag.Join(line, DerefArray, CrossLeftSort,
-            dag.LoadLocal(line, Root(line, CString(pointsString))),
-            dag.Root(line, CLong(1))))
+            dag.LoadLocal(line, Const(line, CString(pointsString))),
+            dag.Const(line, CLong(1))))
 
         val result = testEval(input)
         tmpFile.delete()
