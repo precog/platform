@@ -26,114 +26,118 @@ case class QueryResource[A](a: A, closeable: Closeable[A]) {
 }
 
 sealed trait JobQueryState[+A] extends QueryState[A] {
-  def jobId: Option[JobId]
-  def resources: Set[QueryResources[_]]
+  import JobQueryState._
+
+  def running[B](f: (Set[QueryResource[_]], A) => B): Option[B] = this match {
+    case Cancelled => None
+    case Running(resources, value) = Some(f(resources, value))
+  }
 }
 
 object JobQueryState {
-  case class Cancelled(jobId: Option[JobId]) extends JobQueryState[Nothing] {
-    def resources: Set[QueryResources[_]] = Set.empty
-    def value = None
-  }
-
-  case class Managed[A](jobId0: JobId, resources: Set[QueryResource[_]], value0: A) extends JobQueryState[A] {
-    def jobId = Some(jobId0)
-    def value = Some(value0)
-  }
-
-  case class Unmanaged[A](resources: Set[QueryResource[_]], value0: A) extends JobQueryState[A] {
-    def jobId = None
+  case object Cancelled extends JobQueryState[Nothing] { def value = None }
+  case class Running[A](resources: Set[QueryResource[_]], value0: A) extends JobQueryState[A] {
     def value = Some(value0)
   }
 }
 
-trait JobQueryStateManager[M[+_]] extends QueryStateManager[JobQueryState] {
-  import JobQueryState._
+trait JobQueryStateMonad extends Monad[JobQueryState] {
+  def point[A](a: => A): JobQueryState[A] = Running(Set.empty, a)
 
-  def point[A](a: => A): JobQueryState[A] = Unmanaged(Set.empty, a)
-
-  def map[A, B](fa: JobQueryState[A](f: A => B): JobQueryState[B] = fa match {
-    case Managed(jobId, resources, value) => Managed(jobId, resources, f(value))
-    case Unmanaged(resources, value) => Unmanaged(resources, f(value))
-    case cancelled => cancelled
+  def map[A, B](fa: JobQueryState[A])(f: A => B): JobQueryState[B] = fa match {
+    case Running(resources, value) => Running(resources, f(value))
+    case Cancelled => Cancelled
   }
 
-  def bind[A, B](fa: JobQueryState[A])(f: A => JobQueryState[B]): JobQueryState[B] = {
-    fa.value map f map {
-      case Managed(jobId, resources, value) =>
-        Managed(jobId, fa.resources ++ resources, value)
-      case Unmanaged(resources, value) =>
-        fa.jobId map (Managed(_, fa.resources ++ resources, value)) getOrElse Unmanaged(fa.resources ++ resources, value)
-      case cancelled @ Cancelled(_) =>
-        cancelled
-    } getOrElse fa
+  def bind[A, B](fa: JobQueryState[A])(f: A => JobQueryState[B]): JobQueryState[B] = fa match {
+    case Running(resources0, value0) => f(value0) match {
+      case Running(resources1, value) => Running(resources0 ++ resources1, value)
+      case Cancelled => Cancelled
+    }
+    case Cancelled => Cancelled
   }
+}
 
-  protected def rootAPIKey: APIKey
-  protected def jobManager: JobManager[M]
+
+trait ManagedQueryModule[M[+_]] {
   def actorSystem: ActorSystem
-  def pollFrequency: Duration
+  def jobManager: JobManager[M]
 
-  private val rwlock = new ReentrantReadWriteLock()
-  private val readLock = rwlock.readLock()
-  private val writeLock = rwlock.writeLock()
-  private val jobStatus: Map[JobId, Job] = Map.empty
+  // This can be used when the Job service is down.
+  final object FakeJobQueryStateManager extends QueryStateManager[JobQueryState] with JobQueryStateMonad {
+    def isCancelled[A](q: JobQueryState[A]): Boolean = q match
+      case Running(_, _) => false
+      case Cancelled => true
+    }
 
-  private def poll() {
-    jobManager.listJobs(rootAPIKey) map { jobs =>
-      val newStatus = jobs.groupBy(_.id)
-      writeLock.lock()
-      try {
-        jobStatus = newStatus
-      } finally {
-        writeLock.unlock()
+    def cancel[A](q: JobQueryState[A]): JobQueryState[Nothing] = Cancelled
+  }
+
+  final case class JobQueryStateManager[M[+_]](jobId: JobId) extends QueryStateManager[JobQueryState] with JobQueryStateMonad {
+    import JobQueryState._
+
+    private val rwlock = new ReentrantReadWriteLock()
+    private val readLock = rwlock.readLock()
+    private val writeLock = rwlock.writeLock()
+    private var jobStatus: Option[Job] = None
+
+    private def poll() {
+      jobManager.findJob(jobId) map { job =>
+        writeLock.lock()
+        try {
+          jobStatus = job
+        } finally {
+          writeLock.unlock()
+        }
       }
     }
-  }
 
-  private def isCancelled(jobId: JobId): Boolean = {
-    readLock.lock()
-    val status = try {
-      status = jobStatus get jobId
-    } finally {
-      readLock.unlock()
+    private def isCancelled(): Boolean = {
+      readLock.lock()
+      val status = try {
+        jobStatus
+      } finally {
+        readLock.unlock()
+      }
+
+      status map {
+        case Job(_, _, _, _, Cancelled(_, _, _), _) => true
+        case _ => false
+      } getOrElse false
     }
 
-    status map {
-      case Job(_, _, _, _, Cancelled(_, _, _), _) => true
-      case _ => false
-    } getOrElse false
-  }
+    private def freeResources(resources: Set[QueryResource]) = resources foreach { _.close() }
 
-  private val poller = actorSystem.scheduler.schedule(pollFrequency, pollFrequency) {
-    poll()
-  }
+    def isCancelled[A](q: JobQueryState[A]): Boolean =  q.running { (_, _) => isCancelled() } getOrElse true
 
-  def stop(): Unit = poller.cancel()
+    def cancel[A](q: JobQueryState[A]): JobQueryState[Nothing] = {
+      q.running { (resources, _) => freeResources(resources) }
+      Cancelled
+    }
 
-  def freeResources(resources: Set[QueryResource]) = resources foreach { _.close() }
+    // TODO: Should this be explicitly started?
+    private val poller = actorSystem.scheduler.schedule(pollFrequency, pollFrequency) {
+      poll()
+    }
 
-  def isCancelled[A](q: JobQueryState[A]): Boolean = q match {
-    case Cancelled(_) => true
-    case Managed(jobId, _, _) => isCancelled(jobId)
-    case Unmanaged(_, _) => false
-  }
+    def stop(): Unit = poller.cancel()
 
-  def cancel[A](q: JobQueryState[A]): JobQueryState[Nothing] = q match {
-    case cancelled @ Cancelled(_) =>
-      cancelled
-    case Managed(jobId, resources, _) =>
-      freeResources(resources)
-      Cancelled(Some(jobId))
-    case Unmanaged(_, _) =>
-      freeResources(resources)
-      Cancelled(None)
-  }
-}
+    // Monad implementation.
 
-object JobQueryStateManager {
-  def apply[M[+_]](jobManager0: JobManager[M]): JobQueryStateManager[M] = new JobQueryStateManager[M] {
-    val jobManager = jobManager0
+    def point[A](a: => A): JobQueryState[A] = Running(Set.empty, a)
+
+    def map[A, B](fa: JobQueryState[A])(f: A => B): JobQueryState[B] = fa match {
+      case Running(resources, value) => Running(resources, f(value))
+      case Cancelled => Cancelled
+    }
+
+    def bind[A, B](fa: JobQueryState[A])(f: A => JobQueryState[B]): JobQueryState[B] = fa match {
+      case Running(resources0, value0) => f(value0) match {
+        case Running(resources1, value) => Running(resources0 ++ resources1, value)
+        case Cancelled => Cancelled
+      }
+      case Cancelled => Cancelled
+    }
   }
 }
 
