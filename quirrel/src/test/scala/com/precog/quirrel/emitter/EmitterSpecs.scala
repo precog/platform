@@ -71,6 +71,12 @@ object EmitterSpecs extends Specification
           PushNull))
     }
 
+    "emit literal undefined" in {
+      testEmit("undefined")(
+        Vector(
+          PushUndefined))
+    }
+
     "emit filter of two where'd loads with value provenance" >> {
       "which are numerics" >> {
         testEmit("5 where 2")(
@@ -119,11 +125,11 @@ object EmitterSpecs extends Specification
     }    
 
     "emit instruction for two set differenced loads" in {
-      testEmit("""load("foo") difference load("bar")""")(
+      testEmit("""load("foo") difference load("foo")""")(
         Vector(
           PushString("foo"),
           LoadLocal,
-          PushString("bar"),
+          PushString("foo"),
           LoadLocal,
           SetDifference))
     }
