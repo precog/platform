@@ -52,7 +52,7 @@ class InMemoryAccountManager[M[+_]](implicit val M: Monad[M]) extends AccountMan
       val salt = randomSalt()
       val account = Account(
         accountId, email, 
-        saltAndHash(password, salt), salt,
+        saltAndHashSHA256(password, salt), salt,
         creationDate,
         apiKey, path, plan)
       accounts.put(accountId, account)
