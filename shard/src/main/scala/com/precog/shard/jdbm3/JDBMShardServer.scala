@@ -1,6 +1,7 @@
 package com.precog.shard
 package jdbm3
 
+import com.precog.auth.MongoAPIKeyManagerComponent
 import com.precog.accounts.AccountManagerClientComponent
 import com.precog.common.security._
 
