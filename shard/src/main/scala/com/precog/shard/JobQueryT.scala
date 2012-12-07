@@ -19,18 +19,29 @@
  */
 package com.precog.shard
 
-import java.util.concurrent.locks.ReadWriteLock
+import com.precog.yggdrasil.YggConfigComponent
+import com.precog.common.jobs._
 
-case class QueryResource[A](a: A, closeable: Closeable[A]) {
-  def close(): M[PrecogUnit] closeable.close(a)
+import blueeyes.util.Close
+
+import java.util.concurrent.locks.ReentrantReadWriteLock
+
+import akka.dispatch.Future
+import akka.actor.ActorSystem
+import akka.util.Duration
+
+import scalaz._
+
+case class QueryResource[A](a: A, close0: Close[A]) {
+  def close(): Unit = close0.close(a)
 }
 
-sealed trait JobQueryState[+A] extends QueryState[A] {
+sealed trait JobQueryState[+A] {
   import JobQueryState._
 
-  def running[B](f: (Set[QueryResource[_]], A) => B): Option[B] = this match {
-    case Cancelled => None
-    case Running(resources, value) = Some(f(resources, value))
+  def getOrElse[AA >: A](aa: => AA) = this match {
+    case Cancelled => aa
+    case Running(_, value) => value
   }
 }
 
@@ -41,15 +52,33 @@ object JobQueryState {
   }
 }
 
-trait JobQueryStateMonad extends Monad[JobQueryState] {
-  def point[A](a: => A): JobQueryState[A] = Running(Set.empty, a)
+trait JobQueryStateMonad extends SwappableMonad[JobQueryState] {
+  import JobQueryState._
 
-  def map[A, B](fa: JobQueryState[A])(f: A => B): JobQueryState[B] = fa match {
+  def isCancelled(): Boolean
+
+  def swap[M[+_], A](state: JobQueryState[M[A]])(implicit M: Monad[M]): M[JobQueryState[A]] = {
+    state match {
+      case Running(resources, ma) => M.map(ma)(Running(resources, _))
+      case Cancelled => M.point(Cancelled)
+    }
+  }
+
+  def point[A](a: => A): JobQueryState[A] = if (isCancelled()) Cancelled else Running(Set.empty, a)
+
+  def maybeCancel[A](q: JobQueryState[A]): JobQueryState[A] = if (isCancelled()) {
+    // Free resources from q.
+    Cancelled
+  } else {
+    q
+  }
+
+  override def map[A, B](fa: JobQueryState[A])(f: A => B): JobQueryState[B] = maybeCancel(fa) match {
     case Running(resources, value) => Running(resources, f(value))
     case Cancelled => Cancelled
   }
 
-  def bind[A, B](fa: JobQueryState[A])(f: A => JobQueryState[B]): JobQueryState[B] = fa match {
+  def bind[A, B](fa: JobQueryState[A])(f: A => JobQueryState[B]): JobQueryState[B] = maybeCancel(fa) match {
     case Running(resources0, value0) => f(value0) match {
       case Running(resources1, value) => Running(resources0 ++ resources1, value)
       case Cancelled => Cancelled
@@ -59,21 +88,26 @@ trait JobQueryStateMonad extends Monad[JobQueryState] {
 }
 
 
-trait ManagedQueryModule[M[+_]] {
-  def actorSystem: ActorSystem
-  def jobManager: JobManager[M]
+trait ManagedQueryModuleConfig {
+  def jobPollFrequency: Duration
+}
+
+trait ManagedQueryModule[M[+_]] extends YggConfigComponent {
+  import scalaz.syntax.monad._
+  import JobQueryState._
+
+  type YggConfig <: ManagedQueryModuleConfig
+
+  private implicit val jobActorSystem = ActorSystem("jobPollingActorSystem")
+  // private implicit val futureFunctor: Functor[M] = new blueeyes.bkka.FutureMonad(ExecutionContext.defaultExecutionContext(actorSystem))
+  def jobManager: JobManager[Future]
 
   // This can be used when the Job service is down.
-  final object FakeJobQueryStateManager extends QueryStateManager[JobQueryState] with JobQueryStateMonad {
-    def isCancelled[A](q: JobQueryState[A]): Boolean = q match
-      case Running(_, _) => false
-      case Cancelled => true
-    }
-
-    def cancel[A](q: JobQueryState[A]): JobQueryState[Nothing] = Cancelled
+  final object FakeJobQueryStateManager extends JobQueryStateMonad {
+    def isCancelled() = false
   }
 
-  final case class JobQueryStateManager[M[+_]](jobId: JobId) extends QueryStateManager[JobQueryState] with JobQueryStateMonad {
+  final case class JobQueryStateManager[M[+_]](jobId: JobId) extends JobQueryStateMonad {
     import JobQueryState._
 
     private val rwlock = new ReentrantReadWriteLock()
@@ -92,7 +126,7 @@ trait ManagedQueryModule[M[+_]] {
       }
     }
 
-    private def isCancelled(): Boolean = {
+    def isCancelled(): Boolean = {
       readLock.lock()
       val status = try {
         jobStatus
@@ -100,44 +134,19 @@ trait ManagedQueryModule[M[+_]] {
         readLock.unlock()
       }
 
+      import JobState._
       status map {
         case Job(_, _, _, _, Cancelled(_, _, _), _) => true
         case _ => false
       } getOrElse false
     }
 
-    private def freeResources(resources: Set[QueryResource]) = resources foreach { _.close() }
-
-    def isCancelled[A](q: JobQueryState[A]): Boolean =  q.running { (_, _) => isCancelled() } getOrElse true
-
-    def cancel[A](q: JobQueryState[A]): JobQueryState[Nothing] = {
-      q.running { (resources, _) => freeResources(resources) }
-      Cancelled
-    }
-
     // TODO: Should this be explicitly started?
-    private val poller = actorSystem.scheduler.schedule(pollFrequency, pollFrequency) {
+    private val poller = jobActorSystem.scheduler.schedule(yggConfig.jobPollFrequency, yggConfig.jobPollFrequency) {
       poll()
     }
 
     def stop(): Unit = poller.cancel()
-
-    // Monad implementation.
-
-    def point[A](a: => A): JobQueryState[A] = Running(Set.empty, a)
-
-    def map[A, B](fa: JobQueryState[A])(f: A => B): JobQueryState[B] = fa match {
-      case Running(resources, value) => Running(resources, f(value))
-      case Cancelled => Cancelled
-    }
-
-    def bind[A, B](fa: JobQueryState[A])(f: A => JobQueryState[B]): JobQueryState[B] = fa match {
-      case Running(resources0, value0) => f(value0) match {
-        case Running(resources1, value) => Running(resources0 ++ resources1, value)
-        case Cancelled => Cancelled
-      }
-      case Cancelled => Cancelled
-    }
   }
 }
 

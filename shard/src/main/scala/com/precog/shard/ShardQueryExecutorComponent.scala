@@ -87,6 +87,10 @@ trait ShardQueryExecutorFactory
     }
   }
 
+  def status(): Future[Validation[String, JValue]] = {
+    Promise.successful(Failure("Status not supported yet"))(defaultAsyncContext)
+  }
+
   def executorFor(apiKey: APIKey) = {
     accountManager.listAccountIds(apiKey) map { accounts =>
       if (accounts.size < 1) {
@@ -97,23 +101,23 @@ trait ShardQueryExecutorFactory
     }
   }
 
-  protected def newExecutor(asyncContext: ExecutionContext): ShardQueryExecutor
+  protected def newExecutor(asyncContext: ExecutionContext): QueryExecutor[Future]
 
-  trait ShardQueryExecutor extends QueryExecutor[Future] with ParseEvalStack[Future] {
+  trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M] with ParseEvalStack[M] {
+    import scalaz.syntax.monad._
+
     case class StackException(error: StackError) extends Exception(error.toString)
 
-    def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
+    def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, CharBuffer]] = {
       val evaluationContext = EvaluationContext(apiKey, prefix, clock.now())
       val qid = queryId.getAndIncrement
       queryLogger.info("Executing query %d for %s: %s, prefix: %s".format(qid, userUID, query,prefix))
 
       import EvaluationError._
 
-      val solution: Validation[Throwable, Validation[EvaluationError, StreamT[Future, CharBuffer]]] = Validation.fromTryCatch {
+      val solution: Validation[Throwable, Validation[EvaluationError, StreamT[M, CharBuffer]]] = Validation.fromTryCatch {
         asBytecode(query) flatMap { bytecode =>
           ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
-            /*(systemError _) <-: */
-            // TODO: How can jsonChunks return a Validation... or report evaluation error to user....
             Validation.success(jsonChunks(withContext { ctx =>
               applyQueryOptions(opts) {
                 if (queryLogger.isDebugEnabled) {
@@ -131,13 +135,13 @@ trait ShardQueryExecutorFactory
         }
       }
       
-      ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[Future, CharBuffer]]])
+      ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[M, CharBuffer]]])
     }
 
-    private def applyQueryOptions(opts: QueryOptions)(table: Future[Table]): Future[Table] = {
+    private def applyQueryOptions(opts: QueryOptions)(table: M[Table]): M[Table] = {
       import trans._
 
-      def sort(table: Future[Table]): Future[Table] = if (!opts.sortOn.isEmpty) {
+      def sort(table: M[Table]): M[Table] = if (!opts.sortOn.isEmpty) {
         val sortKey = ArrayConcat(opts.sortOn map { cpath =>
           WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
             case (inner, f @ CPathField(_)) =>
@@ -152,7 +156,7 @@ trait ShardQueryExecutorFactory
         table
       }
 
-      def page(table: Future[Table]): Future[Table] = opts.page map { case (offset, limit) =>
+      def page(table: M[Table]): M[Table] = opts.page map { case (offset, limit) =>
           table map (_.takeRange(offset, limit))
       } getOrElse table
 
@@ -209,7 +213,7 @@ trait ShardQueryExecutorFactory
       }
     }
 
-    private def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
+    private def jsonChunks(tableM: M[Table]): StreamT[M, CharBuffer] = {
       import trans._
 
       StreamT.wrapEffect(
@@ -219,13 +223,8 @@ trait ShardQueryExecutorFactory
       )
     }
 
-    private def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
-      M.point((CharBuffer.wrap("[") :: (table renderJson ',')) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer]))    
+    private def renderStream(table: Table): M[StreamT[M, CharBuffer]] =
+      M.point((CharBuffer.wrap("[") :: (table renderJson ',')) ++ (CharBuffer.wrap("]") :: StreamT.empty[M, CharBuffer]))    
   }
-
-  def status(): Future[Validation[String, JValue]] = {
-    Promise.successful(Failure("Status not supported yet"))(defaultAsyncContext)
-  }
-
 }
 // vim: set ts=4 sw=4 et:

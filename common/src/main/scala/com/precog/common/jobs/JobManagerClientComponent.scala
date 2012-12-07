@@ -17,21 +17,24 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
+package com.precog.common.jobs
 
-import com.precog.common.security._
-import com.precog.common.jobs._
+import akka.dispatch.{ Future, ExecutionContext }
 
-import akka.dispatch.Future
-import scalaz.StreamT
-import blueeyes.json.JValue
-import java.nio.CharBuffer
+import org.streum.configrity.Configuration
 
-package object shard {
-  type QueryResult = Either[JValue, StreamT[Future, CharBuffer]]
+import scalaz._
 
-  type JobQueryT[M[+_], +A] = QueryT[JobQueryState, M, A]
+trait JobManagerClientComponent {
+  implicit def asyncContext: ExecutionContext
+  implicit def M: Monad[Future]
 
-  type ShardQuery[+A] = JobQueryT[Future, A]
+  def jobManagerFactory(config: Configuration): JobManager[Future] = {
+    import WebJobManager._
+
+    WebJobManager(config).withM[Future]
+  }
 }
+
+
 
