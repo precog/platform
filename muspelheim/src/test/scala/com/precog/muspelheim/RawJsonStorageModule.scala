@@ -66,7 +66,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 //  val Projection: ProjectionCompanion
   def projectionFor(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
 
-  abstract class Storage extends StorageLike {
+  abstract class Storage extends StorageLike[M, Projection] {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
     val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
 

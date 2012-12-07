@@ -92,7 +92,7 @@ trait ManagedQueryModuleConfig {
   def jobPollFrequency: Duration
 }
 
-trait ManagedQueryModule[M[+_]] extends YggConfigComponent {
+trait ManagedQueryModule extends YggConfigComponent {
   import scalaz.syntax.monad._
   import JobQueryState._
 
@@ -107,7 +107,7 @@ trait ManagedQueryModule[M[+_]] extends YggConfigComponent {
     def isCancelled() = false
   }
 
-  final case class JobQueryStateManager[M[+_]](jobId: JobId) extends JobQueryStateMonad {
+  final case class JobQueryStateManager(jobId: JobId) extends JobQueryStateMonad {
     import JobQueryState._
 
     private val rwlock = new ReentrantReadWriteLock()

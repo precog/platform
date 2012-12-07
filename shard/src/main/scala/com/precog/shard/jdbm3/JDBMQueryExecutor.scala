@@ -169,28 +169,39 @@ trait JDBMQueryExecutorComponent {
         type Storage = StorageLike[ShardQuery, JDBMProjection]
       }
 
-      protected def newExecutor(asyncContext: ExecutionContext): QueryExecutor[Future] = {
-        implicit val FutureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
-        implicit val ShardQueryMonad = new QueryTMonad[JobQueryState, Future] with QueryTHoist[JobQueryState] {
-          val Q: SwappableMonad[JobQueryState] = FakeJobQueryStateManager
-          val M: Monad[Future] = FutureMonad
-        }
+      protected def newExecutor(apiKey: APIKey, asyncContext: ExecutionContext): Future[QueryExecutor[Future]] = {
+        val futureJob = jobManager.createJob(
+            apiKey,
+            "Super-Awesome Shard Query",
+            "shard-query",
+            Some(yggConfig.clock.now()),
+            None
+          )
 
-        val shardQueryExecutor = new JDBMShardQueryExecutor {
-          val M = ShardQueryMonad
+        futureJob map (Some(_)) recover { case _ => None } map { job =>
 
-          trait TableCompanion extends JDBMColumnarTableCompanion {
-            import scalaz.std.anyVal._
-            implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
+          implicit val FutureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
+          implicit val ShardQueryMonad = new QueryTMonad[JobQueryState, Future] with QueryTHoist[JobQueryState] {
+            val Q: SwappableMonad[JobQueryState] = job map { job => JobQueryStateManager(job.id) } getOrElse FakeJobQueryStateManager
+            val M: Monad[Future] = FutureMonad
           }
 
-          object Table extends TableCompanion
+          val shardQueryExecutor = new JDBMShardQueryExecutor {
+            val M = ShardQueryMonad
 
-          val yggConfig = self.yggConfig
-          val storage = self.storage.liftM[JobQueryT]
+            trait TableCompanion extends JDBMColumnarTableCompanion {
+              import scalaz.std.anyVal._
+              implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
+            }
+
+            object Table extends TableCompanion
+
+            val yggConfig = self.yggConfig
+            val storage = self.storage.liftM[JobQueryT]
+          }
+
+          demoteToFuture(shardQueryExecutor)
         }
-
-        demoteToFuture(shardQueryExecutor)
       }
       
       def startup() = storage.start.onComplete {
@@ -209,7 +220,7 @@ trait JDBMQueryExecutorComponent {
 trait JDBMQueryExecutorFactory
     extends ShardQueryExecutorFactory
     with StorageModule[Future]
-    with ManagedQueryModule[Future] { self =>
+    with ManagedQueryModule { self =>
 
   type YggConfig <: BaseJDBMQueryExecutorConfig
 

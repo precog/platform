@@ -26,6 +26,7 @@ import com.precog.accounts.{BasicAccountManager, InMemoryAccountManager}
 import com.precog.daze._
 import com.precog.common.Path
 import com.precog.common.security._
+import com.precog.common.jobs._
 
 import org.specs2.mutable.Specification
 import org.specs2.specification._
@@ -95,12 +96,14 @@ trait TestShardService extends
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
-  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]) = new TestQueryExecutor {
+  def queryExecutorFactoryFactory(config: Configuration, accessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future], extJobManager: JobManager[Future]) = new TestQueryExecutorFactory {
     val actorSystem = self.actorSystem
     val executionContext = self.asyncContext
     
     val accessControl = apiKeyManager
     val accountManager = inMemAccountMgr
+    val jobManager = inMemJobManager
+
     val ownerMap = Map(
       Path("/")     ->             Set("root"),
       Path("/test") ->             Set("test"),
@@ -113,6 +116,7 @@ trait TestShardService extends
 
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
   val inMemAccountMgr = new InMemoryAccountManager[Future]
+  val inMemJobManager = new InMemoryJobManager[Future]
   val to = Duration(1, "seconds")
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   
@@ -133,6 +137,8 @@ trait TestShardService extends
   def apiKeyManagerFactory(config: Configuration) = apiKeyManager
 
   def accountManagerFactory(config: Configuration) = inMemAccountMgr
+
+  def jobManagerFactory(config: Configuration) = inMemJobManager
 
   import java.nio.ByteBuffer
 
@@ -257,7 +263,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   }
 }
 
-trait TestQueryExecutor extends QueryExecutor[Future] {
+trait TestQueryExecutorFactory extends QueryExecutorFactory[Future] {
   import scalaz.syntax.monad._
   import scalaz.syntax.traverse._
   import AkkaTypeClasses._
@@ -278,16 +284,20 @@ trait TestQueryExecutor extends QueryExecutor[Future] {
     StreamT.fromStream(Stream(buffer).point[Future])
   }
 
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-    val requiredPaths = if(query startsWith "//") Set(prefix / Path(query.substring(1))) else Set.empty[Path]
-    val allowed = Await.result(Future.sequence(requiredPaths.map {
-      path => accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime))
-    }).map(_.forall(identity)), to)
-    
-    if(allowed)
-      success(wrap(JArray(List(JNum(2)))))
-    else
-      failure(AccessDenied("No data accessable at the specified path"))
+  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future]]] = Future {
+    Success(new QueryExecutor[Future] {
+      def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+        val requiredPaths = if(query startsWith "//") Set(prefix / Path(query.substring(1))) else Set.empty[Path]
+        val allowed = Await.result(Future.sequence(requiredPaths.map {
+          path => accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime))
+        }).map(_.forall(identity)), to)
+        
+        if(allowed)
+          success(wrap(JArray(List(JNum(2)))))
+        else
+          failure(AccessDenied("No data accessable at the specified path"))
+      }
+    })
   }
 
   def browse(apiKey: APIKey, path: Path) = {
