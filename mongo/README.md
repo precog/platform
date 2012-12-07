@@ -141,16 +141,15 @@ with the **precog.bat** script.
 
 
 Once Precog has been launched, it will start a web server that exposes
-the REST API as well as labcoat.
+the Analytics REST API as well as labcoat.
 
 
 Step 4: Try the API
 -------------------
 
-Once Precog is running, you have full access to the Precog REST
-API. You can find a large number of open source client libraries
-available on Github, and the Precog developers site contains a bunch
-of documentation and tutorials for interacting with the API.
+Once Precog is running, you have full access to the Precog Analytics REST
+API. However, you will need to load data into MongoDB using MongoDB's API.  That is, you cannot use the Precog Ingest API to load data into MongoDB because Precog for MongoDB does not bundle the auth, accounts or ingest services. To obtain access to the rest of the Precog REST API you will need to sign-up for an account and use the cloud-based service. You can find a large number of open source client libraries
+available on Github, and the Precog developers site contains documentation and tutorials for interacting with the API.
 
 
 Step 5: Try Labcoat
