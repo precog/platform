@@ -342,7 +342,7 @@ trait Slice { source =>
     }
   }
 
-  def typed(jtpe: JType) : Slice = new Slice {
+  def typed(jtpe: JType): Slice = new Slice {
     val size = source.size
     val columns = source.columns filter { case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe) }
   }
@@ -1354,8 +1354,7 @@ trait Slice { source =>
   def toJValue(row: Int) = {
     columns.foldLeft[JValue](JUndefined) {
       case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
-        val x = col.cValue(row)
-        CPathUtils.cPathToJPaths(selector, x).foldLeft(jv) {
+        CPathUtils.cPathToJPaths(selector, col.cValue(row)).foldLeft(jv) {
           case (jv, (path, value)) => jv.unsafeInsert(path, value.toJValue)
         }
 

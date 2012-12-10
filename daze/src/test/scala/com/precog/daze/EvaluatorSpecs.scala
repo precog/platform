@@ -66,13 +66,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
                 }
               }
 
-              //val target = path.path.replaceAll("/$", ".json")
-
-              //val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-
               val parsed: Stream[JValue] = src.getLines map JParser.parse toStream
-
-              //println("parsed: " + parsed)
 
               currentIndex += parsed.length
               
