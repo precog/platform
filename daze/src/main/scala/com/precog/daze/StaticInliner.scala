@@ -26,7 +26,7 @@ trait StaticInliner[M[+_]] extends DAG with EvaluatorMethods[M] {
   import dag._
   import instructions._
   
-  def inlineStatics(graph: DepGraph): DepGraph = {
+  def inlineStatics(graph: DepGraph, ctx: EvaluationContext): DepGraph = {
     graph mapDown { recurse => {
       case Operate(loc, op, child) => {
         val child2 = recurse(child)
@@ -42,7 +42,7 @@ trait StaticInliner[M[+_]] extends DAG with EvaluatorMethods[M] {
               
               case _ => {
                 val result = for {
-                  col <- op1(op).f1(value)
+                  col <- op1(op).f1(ctx).apply(value)
                   if col isDefinedAt 0
                 } yield col cValue 0
                 
@@ -69,7 +69,7 @@ trait StaticInliner[M[+_]] extends DAG with EvaluatorMethods[M] {
             
             case (Const(_, leftValue), Const(_, rightValue)) => {
               val result = for {
-                col <- op2.f2.partialLeft(leftValue).apply(rightValue)
+                col <- op2.f2(ctx).partialLeft(leftValue).apply(rightValue)
                 if col isDefinedAt 0
               } yield col cValue 0
               

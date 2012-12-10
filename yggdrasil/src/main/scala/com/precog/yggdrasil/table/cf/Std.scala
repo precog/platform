@@ -22,7 +22,7 @@ package table
 package cf
 
 object std {
-  object Eq extends CF2P ({
+  val Eq = CF2P("builtin::ct::eq") {
     case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
       def apply(row: Int) = c1(row) == c2(row)
     }
@@ -71,20 +71,20 @@ object std {
     case (c1, c2) => new Map2Column(c1, c2) with BoolColumn {
       def apply(row: Int) = false   // equality is defined between all types
     }
-  })
+  }
 
-  object And extends CF2P ({
+  val And = CF2P("builtin::ct::and") {
     case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
       def apply(row: Int) = c1(row) && c2(row)
     }
-  })
+  }
 
-  object Or extends CF2P ({
+  val Or = CF2P("builtin::ct::or") {
     case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
       def apply(row: Int) = c1(row) || c2(row)
     }
-  })
+  }
 }
 
 
-// vim: set ts=4 sw=4 et:
+// type Std

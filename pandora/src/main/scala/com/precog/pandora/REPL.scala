@@ -117,8 +117,8 @@ trait REPL
           // TODO decoration errors
           
           for (graph <- eitherGraph.right) {
-            val result = withContext { ctx =>
-              consumeEval(dummyAPIKey, graph, ctx,Path.Root) fold (
+            val result = {
+              consumeEval(dummyAPIKey, graph, Path.Root) fold (
                 error   => "An error occurred processing your query: " + error.getMessage,
                 results => JArray(results.toList.map(_._2.toJValue)).renderPretty
               )
@@ -243,7 +243,6 @@ object Console extends App {
   class REPLConfig(dataDir: Option[String]) extends 
       BaseConfig with
       IdSourceConfig with
-      EvaluatorConfig with
       StandaloneShardSystemConfig with
       ColumnarTableModuleConfig with
       BlockStoreColumnarTableModuleConfig with

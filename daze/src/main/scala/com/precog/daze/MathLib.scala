@@ -39,11 +39,11 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
   abstract class Op1DD(name: String, defined: Double => Boolean, f: Double => Double)
   extends Op1(MathNamespace, name) {
      val tpe = UnaryOperationType(JNumberT, JNumberT)
-     def f1: F1 = new CF1P({
+     def f1(ctx: EvaluationContext): F1 = CF1P("builtin::math::op1dd::" + name) {
       case c: DoubleColumn => new DoubleFrom.D(c, defined, f)
       case c: LongColumn => new DoubleFrom.L(c, defined, f)
       case c: NumColumn => new DoubleFrom.N(c, defined, f)
-     })
+     }
   }
 
   object sinh extends Op1DD("sinh", doubleIsDefined, Math.sinh)
@@ -110,7 +110,7 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
   abstract class Op2DDD(name: String, defined:(Double, Double) => Boolean,
     f:(Double, Double) => Double) extends Op2(MathNamespace, name) {
     val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
-    def f2: F2 = new CF2P({
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::math::op2dd::name") {
       case (c1: DoubleColumn, c2: DoubleColumn) =>
           new DoubleFrom.DD(c1, c2, defined, f)
 
@@ -137,7 +137,7 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
 
       case (c1: NumColumn, c2: NumColumn) =>
         new DoubleFrom.NN(c1, c2, defined, f)
-    })
+    }
   }
 
   def bothDefined(x: Double, y: Double) = doubleIsDefined(x) && doubleIsDefined(y)
