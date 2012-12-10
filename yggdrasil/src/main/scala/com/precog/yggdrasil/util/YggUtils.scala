@@ -25,6 +25,8 @@ import actor._
 import jdbm3._
 import metadata.MetadataStorage
 import metadata.FileMetadataStorage
+
+import com.precog.auth._
 import com.precog.accounts.InMemoryAccountManager
 import com.precog.common._
 import com.precog.util._

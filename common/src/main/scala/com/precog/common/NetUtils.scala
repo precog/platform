@@ -17,14 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "daze"
+package com.precog.common
 
-scalacOptions += "-Ydependent-method-types"
+import blueeyes.core.http.HttpRequest
 
-libraryDependencies ++= Seq(
-  "com.eed3si9n" %  "treehugger_2.9.1" % "0.1.2"
-)
-  
-logBuffered := false       // gives us incremental output from Specs2
-
-parallelExecution in Test := false
+object NetUtils {
+  def remoteIpFrom(req: HttpRequest[_]) = req.remoteHost.map(_.getHostAddress).getOrElse("Unknown")
+}

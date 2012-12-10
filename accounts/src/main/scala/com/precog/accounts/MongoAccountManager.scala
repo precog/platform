@@ -121,7 +121,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
         val salt = randomSalt()
         val account0 = Account(
           accountId, email, 
-          saltAndHash(password, salt), salt,
+          saltAndHashSHA256(password, salt), salt,
           creationDate,
           apiKey, path, plan,
           parent)
