@@ -169,41 +169,34 @@ trait JDBMQueryExecutorComponent {
         type Storage = StorageLike[ShardQuery, JDBMProjection]
       }
 
-      protected def newExecutor(apiKey: APIKey, asyncContext: ExecutionContext): Future[QueryExecutor[Future]] = {
-        val futureJob = jobManager.createJob(
-            apiKey,
-            "Super-Awesome Shard Query",
-            "shard-query",
-            Some(yggConfig.clock.now()),
-            None
-          )
+      def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future]]] = {
+        implicit val futureMonad = new blueeyes.bkka.FutureMonad(defaultAsyncContext)
 
-        futureJob map (Some(_)) recover { case _ => None } map { job =>
+        val shardQueryExecutor = for {
+          executionContext <- getAccountExecutionContext(apiKey)
+          shardQueryMonad <- createJob(apiKey, executionContext)
+          queryExecutor = newExecutor(shardQueryMonad)
+        } yield demoteToFuture(queryExecutor)(shardQueryMonad)
 
-          implicit val FutureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
-          implicit val ShardQueryMonad = new QueryTMonad[JobQueryState, Future] with QueryTHoist[JobQueryState] {
-            val Q: SwappableMonad[JobQueryState] = job map { job => JobQueryStateManager(job.id) } getOrElse FakeJobQueryStateManager
-            val M: Monad[Future] = FutureMonad
+        shardQueryExecutor.validation
+      }
+
+      private def newExecutor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery] = {
+        new JDBMShardQueryExecutor {
+          implicit val M = shardQueryMonad
+
+          trait TableCompanion extends JDBMColumnarTableCompanion {
+            import scalaz.std.anyVal._
+            implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
           }
 
-          val shardQueryExecutor = new JDBMShardQueryExecutor {
-            val M = ShardQueryMonad
+          object Table extends TableCompanion
 
-            trait TableCompanion extends JDBMColumnarTableCompanion {
-              import scalaz.std.anyVal._
-              implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
-            }
-
-            object Table extends TableCompanion
-
-            val yggConfig = self.yggConfig
-            val storage = self.storage.liftM[JobQueryT]
-          }
-
-          demoteToFuture(shardQueryExecutor)
+          val yggConfig = self.yggConfig
+          val storage = self.storage.liftM[JobQueryT](shardQueryMonad, shardQueryMonad.M)
         }
       }
-      
+
       def startup() = storage.start.onComplete {
         case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
         case Right(_) => queryLogger.info("Actor ecosystem started.")

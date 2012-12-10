@@ -91,17 +91,15 @@ trait ShardQueryExecutorFactory
     Promise.successful(Failure("Status not supported yet"))(defaultAsyncContext)
   }
 
-  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future]]] = {
-    accountManager.listAccountIds(apiKey) flatMap { accounts =>
+  def getAccountExecutionContext(apiKey: APIKey): EitherT[Future, String, ExecutionContext] = {
+    EitherT.eitherT(accountManager.listAccountIds(apiKey) map { accounts =>
       if (accounts.size < 1) {
-        Future(Failure("Could not locate accountId for apiKey " + apiKey))
+        \/.left("Could not locate accountId for apiKey " + apiKey)
       } else {
-        newExecutor(apiKey, asyncContextFor(accounts.head)) map (Success(_)) // FIXME: Which account should we use if there's more than one?
+        \/.right(asyncContextFor(accounts.head)) // FIXME: Which account should we use if there's more than one?
       }
-    }
+    })
   }
-
-  protected def newExecutor(apiKey: APIKey, asyncContext: ExecutionContext): Future[QueryExecutor[Future]]
 
   trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M] with ParseEvalStack[M] {
     import scalaz.syntax.monad._
