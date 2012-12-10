@@ -118,7 +118,7 @@ object Schema {
    *
    * This is strict, so a JArrayFixedT(_) cannot include a CPathArray/CArrayType(_).
    */
-  def includes(jtpe: JType, path: CPath, ctpe: CType): Boolean = { (jtpe, (path, ctpe)) match {
+  def includes(jtpe: JType, path: CPath, ctpe: CType): Boolean = (jtpe, (path, ctpe)) match {
     case (JNumberT, (CPath.Identity, CLong | CDouble | CNum)) => true
 
     case (JTextT, (CPath.Identity, CString)) => true
@@ -155,7 +155,7 @@ object Schema {
     case (JUnionT(ljtpe, rjtpe), (path, ctpe)) => includes(ljtpe, path, ctpe) || includes(rjtpe, path, ctpe)
 
     case _ => false
-  }}
+  }
 
   /**
    * Tests whether the supplied sequence contains all the (CPath, CType) pairs that are

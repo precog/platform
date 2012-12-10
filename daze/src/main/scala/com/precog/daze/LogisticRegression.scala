@@ -59,12 +59,13 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
   override def _libMorphism2 = super._libMorphism2 ++ Set(LogisticRegression)
 
   object LogisticRegression extends Morphism2(Stats2Namespace, "logisticRegression") with ReductionHelper {
+    //todo this `tpe` is wrong
     val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
 
     override val multivariate = true
     lazy val alignment = MorphismAlignment.Match
 
-    def sigmoid(z: Double): Double = 1 / (1 + exp(z))
+    def sigmoid(z: Double): Double = 1.0 / (1.0 + exp(z))
 
     type Theta = Array[Double]
     type ColumnValues = Array[Double]
@@ -150,13 +151,10 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     }
     
     def reduceDouble(seq0: Seq[ColumnValues]): Result = {
-      if (seq0.isEmpty) {
-        None
-      } else {
-        val seq = seq0 filter { arr => arr.last == 0 || arr.last == 1 }
-        if (seq.isEmpty) None
-        else Some(seq)
-      }
+      val seq = seq0 filter { arr => arr.last == 0 || arr.last == 1 }
+
+      if (seq.isEmpty) None
+      else Some(seq)
     }
 
     def reducer: Reducer[Result] = new Reducer[Result] {
@@ -182,7 +180,7 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
       val diffs = theta0.zip(theta) map { case (t0, t) => math.abs(t0 - t) }
       val sum = diffs.sum
 
-      if (sum / theta.length < 0.0001) {
+      if (sum / theta.length < 0.01) {
         theta
       } else if (cost(seq, theta) > cost(seq, theta0)) {
         if (alpha > Double.MinValue * 2.0)
@@ -197,11 +195,11 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     def extract(res: Result, jtype: JType): Table = {
       val cpaths = Schema.cpath(jtype)
 
-      res map { 
+      res map {
         case seq => {
           val initialTheta: Theta = {
-            val thetaLength = seq(0).length
-            val thetas = Seq.fill(1000)(Array.fill(thetaLength - 1)(Random.nextGaussian * 10))
+            val thetaLength = seq.headOption map { _.length } getOrElse sys.error("unreachable: `res` would have been None")
+            val thetas = Seq.fill(100)(Array.fill(thetaLength - 1)(Random.nextGaussian * 10))
 
             val (result, _) = (thetas.tail).foldLeft((thetas.head, cost(seq, thetas.head))) {
               case ((theta0, cost0), theta) => {
@@ -221,7 +219,6 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
 
           val finalTheta: Theta = gradloop(seq, initialTheta, initialAlpha)
 
-          //todo this is a hack?
           val tree = CPath.makeTree(cpaths, Range(1, finalTheta.length).toSeq :+ 0)
 
           val spec = TransSpec.concatChildren(tree)

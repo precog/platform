@@ -43,12 +43,4 @@ object Loop {
 
     loop(0)
   }
-
-  final def exists[@spec A](as: Array[A])(f: A => Boolean): Boolean = {
-    @tailrec def loop(i: Int): Boolean = {
-      if (i == as.length) false else if (f(as(i))) true else loop(i + 1)
-    }
-
-    loop(0)
-  }
 }

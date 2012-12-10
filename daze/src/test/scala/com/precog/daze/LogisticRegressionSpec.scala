@@ -295,9 +295,10 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
       val actualThetas = makeThetas(num)
 
-      var thetasSchema1: List[List[Double]] = List.empty[List[Double]]
-      var thetasSchema2: List[List[Double]] = List.empty[List[Double]]
-      var thetasSchema3: List[List[Double]] = List.empty[List[Double]]
+      var thetasSchema1 = List.empty[List[Double]]
+      var thetasSchema2 = List.empty[List[Double]]
+      var thetasSchema3 = List.empty[List[Double]]
+
       var i = 0
 
       //runs the logistic regression function on 50 sets of data generated from the same distribution
@@ -315,11 +316,12 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
         }
         val points = jvalues(samples, cpaths, num) map { _.toString }
 
-        val tmpFile = File.createTempFile("values", ".json")
+        val suffix = ".json"
+        val tmpFile = File.createTempFile("values", suffix)
         IOUtils.writeSeqToFile(points, tmpFile).unsafePerformIO
 
         val pointsString0 = "filesystem" + tmpFile.toString
-        val pointsString = pointsString0.take(pointsString0.length - 5)
+        val pointsString = pointsString0.take(pointsString0.length - suffix.length)
         
         val input = dag.Morph2(line, LogisticRegression,
           dag.Join(line, DerefArray, CrossLeftSort,
@@ -349,8 +351,6 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
           }
         }
 
-        //todo add check that only these two schemas are returned - maybe do this explicitely by asking for schema?
-
         thetasSchema1 = thetasSchema1 ++ theta(2)
         thetasSchema2 = thetasSchema2 ++ theta(3)
         thetasSchema3 = thetasSchema3 ++ theta(4)
@@ -358,19 +358,17 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
         i += 1
       }
 
-      val allThetas1 = actualThetas zip combineResults(num, thetasSchema1)
-      val allThetas2 = actualThetas zip combineResults(num, thetasSchema2)
-      val allThetas3 = actualThetas zip combineResults(num, thetasSchema3)
+      def getBooleans(thetas: List[List[Double]]): Array[Boolean] = {
+        val zipped = actualThetas zip combineResults(num, thetas)
+        zipped map { case (t, ts) => isOk(t, ts) }
+      }
 
-      val ok1 = allThetas1 map { case (t, ts) => isOk(t, ts) }
-      val ok2 = allThetas2 map { case (t, ts) => isOk(t, ts) }
-      val ok3 = allThetas3 map { case (t, ts) => isOk(t, ts) }
+      val allThetas = List(thetasSchema1, thetasSchema2, thetasSchema3)
 
-      ok1 mustEqual Array.fill(num)(true)
-      ok2 mustEqual Array.fill(num)(true)
-      ok3 mustEqual Array.fill(num)(true)
+      val result = allThetas map { getBooleans }
+
+      result foreach { _ mustEqual Array.fill(num)(true) }
     }
-
   }
 }
 

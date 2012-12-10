@@ -146,13 +146,15 @@ trait TransSpecModule extends FNModule {
           case LeafNode(_) => Seq()
         }
 
-        initialSpecs reduce { (t1, t2) => //todo must be reduceOption to deal with empty Seq, even though the case should no be reachable...?
+        val result = initialSpecs reduceOption { (t1, t2) =>
           (t1, t2) match {  
-            case (t1: ObjectSpec[A], t2: ObjectSpec[A]) => trans.InnerObjectConcat(t1, t2)
-            case (t1: ArraySpec[A], t2: ArraySpec[A]) => trans.ArrayConcat(t1, t2)
+            case (t1: ObjectSpec[_], t2: ObjectSpec[_]) => trans.InnerObjectConcat(t1, t2)
+            case (t1: ArraySpec[_], t2: ArraySpec[_]) => trans.ArrayConcat(t1, t2)
             case _ => sys.error("cannot have this")
           }
         }
+
+        result getOrElse trans.Leaf(Source).asInstanceOf[TransSpec[A]]
       }
       
       def mapSources[A <: SourceType, B <: SourceType](spec: TransSpec[A])(f: A => B): TransSpec[B] = {

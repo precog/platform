@@ -345,13 +345,10 @@ trait Evaluator[M[+_]] extends DAG
               leftSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(0)), paths.Value)
               rightSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
 
-              //use DeepMap1 to preserve the structure
               leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
-
-              //use Map1 to only consier paths at the identity level 
               rightSpec = trans.Map1(rightSpec0, cf.util.CoerceToDouble)
 
-              //doing this in place of InnerArrayConcat...
+              //todo doing this in place of InnerArrayConcat... 
               toObject = InnerObjectConcat(trans.WrapObject(leftSpec, "0"), trans.WrapObject(rightSpec, "1"))
               toArray = ArrayConcat(
                 trans.WrapArray(DerefObjectStatic(toObject, CPathField("0"))), 
