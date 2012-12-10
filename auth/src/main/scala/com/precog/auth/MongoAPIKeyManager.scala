@@ -94,7 +94,7 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
   import APIKeyRecord.Serialization._
 
   val rootAPIKeyRecord : Future[APIKeyRecord] =
-    findOneMatching[APIKeyRecord](Seq("isRoot"), "true", settings.apiKeys).map(_.getOrElse {
+    findOneMatching[APIKeyRecord](Seq("isRoot"), true, settings.apiKeys).map(_.getOrElse {
       val rootGrantId = newGrantId()
       val rootGrant = {
         def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
@@ -133,7 +133,7 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
     }
   }
 
-  private def findOneMatching[A](keyNames: Seq[String], keyValue: String, collection: String)(implicit extractor: Extractor[A]): Future[Option[A]] = {
+  private def findOneMatching[A](keyNames: Seq[String], keyValue: MongoPrimitive, collection: String)(implicit extractor: Extractor[A]): Future[Option[A]] = {
     database {
       selectOne().from(collection).where(MongoOrFilter(keyNames.map { _ === keyValue }))
     }.map {
@@ -141,7 +141,7 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
     }
   }
 
-  private def findAllMatching[A](keyNames: Seq[String], keyValue: String, collection: String)(implicit extractor: Extractor[A]): Future[Set[A]] = {
+  private def findAllMatching[A](keyNames: Seq[String], keyValue: MongoPrimitive, collection: String)(implicit extractor: Extractor[A]): Future[Set[A]] = {
     database {
       selectAll.from(collection).where(MongoOrFilter(keyNames.map { _ === keyValue }))
     }.map {
@@ -149,11 +149,10 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
     }
   }
 
-  private def findAllIncluding[A](keyNames: Seq[String], keyValue: String, collection: String)(implicit extractor: Extractor[A]): Future[Set[A]] = {
+  private def findAllIncluding[A](keyNames: Seq[String], keyValue: MongoPrimitive, collection: String)(implicit extractor: Extractor[A]): Future[Set[A]] = {
     database {
-      val valueFilter = stringToMongoPrimitive(keyValue)
       val filter = MongoOrFilter(keyNames.map { keyName =>
-        stringToMongoFilterBuilder(keyName) contains valueFilter
+        stringToMongoFilterBuilder(keyName) contains keyValue
       })
       selectAll.from(collection).where(filter)
     }.map {
