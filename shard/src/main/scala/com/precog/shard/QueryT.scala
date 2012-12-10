@@ -39,12 +39,12 @@ trait SwappableMonad[Q[+_]] extends Monad[Q] {
  * }
  * }}}
  */
-final case class QueryT[Q[+_], M[+_], +A](stateM: M[Q[A]])(implicit Q: SwappableMonad[Q]) {
+final case class QueryT[Q[+_], M[+_], +A](stateM: M[Q[A]]) {
   import scalaz.syntax.monad._
 
-  def map[B](f: A => B)(implicit M: Monad[M]): QueryT[Q, M, B] = QueryT(stateM map { _ map f })
+  def map[B](f: A => B)(implicit M: Functor[M], Q: Functor[Q]): QueryT[Q, M, B] = QueryT(stateM map { _ map f })
 
-  def flatMap[B](f: A => QueryT[Q, M, B])(implicit M: Monad[M]): QueryT[Q, M, B] = {
+  def flatMap[B](f: A => QueryT[Q, M, B])(implicit M: Monad[M], Q: SwappableMonad[Q]): QueryT[Q, M, B] = {
     QueryT(stateM flatMap { (state0: Q[A]) =>
       Q.swap(state0 map f map (_.stateM)) map { _ flatMap identity }
     })
@@ -58,13 +58,14 @@ trait QueryTCompanion[Q[+_]] extends QueryTInstances[Q] with QueryTHoist[Q] {
 }
 
 trait QueryTInstances1[Q[+_]] {
-  implicit def queryTFunctor[M[+_]](implicit M0: Monad[M]): Functor[({type λ[α] = QueryT[Q, M, α]})#λ] = new QueryTFunctor[Q, M] {
+  implicit def queryTFunctor[M[+_]](implicit M0: Functor[M], Q0: Functor[Q]): Functor[({type λ[α] = QueryT[Q, M, α]})#λ] = new QueryTFunctor[Q, M] {
+    def Q = Q0
     def M = M0
   }
 }
 
 trait QueryTInstances0[Q[+_]] extends QueryTInstances1[Q] {
-  implicit def queryTPointed[M[+_]](implicit M0: Monad[M], Q0: SwappableMonad[Q]): Pointed[({type λ[α] = QueryT[Q, M, α]})#λ] = new QueryTPointed[Q, M] {
+  implicit def queryTPointed[M[+_]](implicit M0: Pointed[M], Q0: Pointed[Q]): Pointed[({type λ[α] = QueryT[Q, M, α]})#λ] = new QueryTPointed[Q, M] {
     def Q = Q0
     def M = M0
   }
@@ -83,18 +84,23 @@ trait QueryTInstances[Q[+_]] extends QueryTInstances0[Q] {
 }
 
 trait QueryTFunctor[Q[+_], M[+_]] extends Functor[({ type λ[α] = QueryT[Q, M, α] })#λ] {
-  implicit def M: Monad[M]
+  implicit def M: Functor[M]
+  implicit def Q: Functor[Q]
 
   def map[A, B](ma: QueryT[Q, M, A])(f: A => B): QueryT[Q, M, B] = ma map f
 }
 
 trait QueryTPointed[Q[+_], M[+_]] extends Pointed[({ type λ[α] = QueryT[Q, M, α] })#λ] with QueryTFunctor[Q, M] {
-  implicit def Q: SwappableMonad[Q]
+  implicit def M: Pointed[M]
+  implicit def Q: Pointed[Q]
 
   def point[A](a: => A): QueryT[Q, M, A] = QueryT(M.point(Q.point(a)))
 }
 
 trait QueryTMonad[Q[+_], M[+_]] extends Monad[({ type λ[α] = QueryT[Q, M, α] })#λ] with QueryTPointed[Q, M] {
+  implicit def M: Monad[M]
+  implicit def Q: SwappableMonad[Q]
+
   def bind[A, B](fa: QueryT[Q, M, A])(f: A => QueryT[Q, M, B]): QueryT[Q, M, B] = fa flatMap f
   override def map[A, B](ma: QueryT[Q, M, A])(f: A => B): QueryT[Q, M, B] = super.map(ma)(f)
 }
