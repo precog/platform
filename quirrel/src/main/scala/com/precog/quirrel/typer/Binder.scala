@@ -29,6 +29,7 @@ trait Binder extends parser.AST with Library {
   type Formal = (Identifier, Let)
   
   protected override lazy val LoadId = Identifier(Vector(), "load")
+  protected override lazy val ExpandPathId = Identifier(Vector("std", "fs"), "expandPath")
   protected override lazy val DistinctId = Identifier(Vector(), "distinct")
 
   override def bindNames(tree: Expr) = {
