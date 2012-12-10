@@ -97,7 +97,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     val tpe = UnaryOperationType(JType.JUnfixedT, JNumberT)
     
-    def reducer: Reducer[Result] = new CReducer[Result] {
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range) = {
         val cx = cols(JType.JUnfixedT).toArray
         var count = 0L
@@ -123,7 +123,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
     
-    def reducer: Reducer[Result] = new CReducer[Result] {
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         val maxs = cols(JNumberT) map {
           case col: LongColumn =>
@@ -180,7 +180,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
     
-    def reducer: Reducer[Result] = new CReducer[Result] {
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         val mins = cols(JNumberT) map {
           case col: LongColumn =>
@@ -233,7 +233,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new CReducer[Result] {
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range) = {
 
         val sum = cols(JNumberT) map {
@@ -274,7 +274,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new Reducer[Result] {
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         val results = cols(JNumberT) map {
 
@@ -331,7 +331,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new Reducer[Option[(BigDecimal, Long)]] {
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Option[(BigDecimal, Long)]] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         val results = cols(JNumberT) map {
           case col: LongColumn =>
@@ -385,7 +385,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new Reducer[Result] {
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         val result = cols(JNumberT) map {
 
@@ -481,7 +481,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
     
-    def reducer: Reducer[Result] = new CountSumSumSqReducer()
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new CountSumSumSqReducer()
 
     // todo using toDouble is BAD
     def extract(res: Result): Table = res map {
@@ -500,7 +500,7 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new CountSumSumSqReducer()
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new CountSumSumSqReducer()
 
     // todo using toDouble is BAD
     def extract(res: Result): Table = res map {
