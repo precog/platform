@@ -35,6 +35,7 @@ object QuirrelConsole {
 
   trait StubPhases extends Phases {
     protected def LoadId = Identifier(Vector(), "load")
+    protected def ExpandPathId = Identifier(Vector("std", "fs"), "expandPath")
     protected def DistinctId = Identifier(Vector(), "distinct")
     
     def bindNames(tree: Expr) = Set()
