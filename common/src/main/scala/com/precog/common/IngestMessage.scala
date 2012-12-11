@@ -57,14 +57,16 @@ trait EventMessageSerialization {
       List(
         JField("producerId", eventMessage.eventId.producerId.serialize),
         JField("eventId", eventMessage.eventId.sequenceId.serialize),
+        JField("schemaVersion", JString("1")),
         JField("event", eventMessage.event.serialize)))
   }
 
   implicit val EventMessageExtractor: Extractor[EventMessage] = new Extractor[EventMessage] with ValidatedExtraction[EventMessage] {
     override def validated(obj: JValue): Validation[Error, EventMessage] =
       ((obj \ "producerId" ).validated[Int] |@|
-        (obj \ "eventId").validated[Int] |@|
-        (obj \ "event").validated[Event]).apply(EventMessage(_, _, _))
+        (obj \ "eventId").validated[Int] |@| {
+          (obj \ "event").validated[Event] orElse Event.legacyEventExtractor.validated(obj \ "event")
+        }).apply(EventMessage(_, _, _))
   }
 }
 
@@ -87,14 +89,16 @@ trait ArchiveMessageSerialization {
       List(
         JField("producerId", archiveMessage.archiveId.producerId.serialize),
         JField("deletionId", archiveMessage.archiveId.sequenceId.serialize),
+        JField("schemaVersion", JString("1")),
         JField("deletion", archiveMessage.archive.serialize)))
   }
 
   implicit val ArchiveMessageExtractor: Extractor[ArchiveMessage] = new Extractor[ArchiveMessage] with ValidatedExtraction[ArchiveMessage] {
     override def validated(obj: JValue): Validation[Error, ArchiveMessage] =
       ((obj \ "producerId" ).validated[Int] |@|
-        (obj \ "deletionId").validated[Int] |@|
-        (obj \ "deletion").validated[Archive]).apply(ArchiveMessage(_, _, _))
+        (obj \ "deletionId").validated[Int] |@| {
+          (obj \ "deletion").validated[Archive] orElse Archive.legacyArchiveExtractor.validated(obj \ "deletion")
+        }).apply(ArchiveMessage(_, _, _))
   }
 }
 
@@ -161,7 +165,7 @@ object IngestMessageSerialization {
   def readMessage(buffer: ByteBuffer): Validation[String, IngestMessage] = {
     val magic = buffer.get()
     if (magic != magicByte) {
-      Failure("Invaild message bad magic byte. Found [" + magic + "]")
+      Failure("Invalid message bad magic byte. Found [" + magic + "]")
     } else {
       val msgType = buffer.get()
       val stop    = buffer.get()
@@ -179,14 +183,14 @@ object IngestMessageSerialization {
   
   def jvalueToEvent(jvalue: JValue): Validation[String, IngestMessage] = {
     jvalue.validated[EventMessage] match {
-      case Failure(e)  => Failure(e.message)
+      case Failure(e)  => Failure(e.message + " parsing: " + jvalue.renderCompact)
       case Success(em) => Success(em)
     }
   }
 
   def jvalueToArchive(jvalue: JValue): Validation[String, IngestMessage] = {
     jvalue.validated[ArchiveMessage] match {
-      case Failure(e)  => Failure(e.message)
+      case Failure(e)  => Failure(e.message + " parsing: " + jvalue.renderCompact)
       case Success(am) => Success(am)
     }
   }

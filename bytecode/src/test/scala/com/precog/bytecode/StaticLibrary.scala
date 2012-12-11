@@ -22,17 +22,17 @@ package com.precog.bytecode
 trait StaticLibrary extends Library {
 
   lazy val libReduction = Set(
-    Reduction(Vector(), "count", 0x0000),
-    Reduction(Vector(), "max", 0x0001),
-    Reduction(Vector(), "min", 0x0004),
-    Reduction(Vector(), "sum", 0x0002),
-    Reduction(Vector(), "mean", 0x0013),
-    Reduction(Vector(), "geometricMean", 0x0003),
-    Reduction(Vector(), "sumSq", 0x0005),
-    Reduction(Vector(), "variance", 0x0006),
-    Reduction(Vector(), "stdDev", 0x0007),
-    Reduction(Vector(), "median", 0x0008),
-    Reduction(Vector(), "mode", 0x0009),
+    Reduction(Vector(), "count", 0x2000),
+    Reduction(Vector(), "max", 0x2001),
+    Reduction(Vector(), "min", 0x2004), 
+    Reduction(Vector(), "sum", 0x2002),
+    Reduction(Vector(), "mean", 0x2013),
+    Reduction(Vector(), "geometricMean", 0x2003),
+    Reduction(Vector(), "sumSq", 0x2005),
+    Reduction(Vector(), "variance", 0x2006),
+    Reduction(Vector(), "stdDev", 0x2007),
+    Reduction(Vector(), "median", 0x2008),
+    Reduction(Vector(), "mode", 0x2009),
     Reduction(Vector("std", "lib"), "sum", 0x0010),
     Reduction(Vector("ack"), "ook", 0x0011),
     Reduction(Vector("one", "two", "three"), "qnd", 0x0012))

@@ -23,6 +23,7 @@ package kafka
 
 import common._
 import common.kafka._
+import com.precog.util.PrecogUnit
 
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
@@ -55,9 +56,9 @@ class KafkaRelayAgent(eventIdSeq: EventIdSequence, localConfig: Configuration, c
     new KafkaMessageConsumer(hostname, port, localTopic)(relayMessages _)
   }
 
-  def start() = consumer.start(eventIdSeq.getLastOffset)
+  def start(): Future[PrecogUnit] = consumer.start(eventIdSeq.getLastOffset)
 
-  def stop() = consumer.stop().map
+  def stop(): Future[PrecogUnit] = consumer.stop().map
                { _ => producer.close } flatMap
                { _ => eventIdSeq.close }
 
@@ -86,7 +87,7 @@ private class KafkaMessageConsumer(host: String, port: Int, topic: String)(proce
 
   val bufferSize = 1024 * 1024
 
-  def start(nextOffset: => Long) = Future[Unit] {
+  def start(nextOffset: => Long) = Future[PrecogUnit] {
     val consumerThread = new Thread() {
       val retryDelay = 5000
 
@@ -134,9 +135,10 @@ private class KafkaMessageConsumer(host: String, port: Int, topic: String)(proce
       }
     }
     consumerThread.start()
+    PrecogUnit
   }
 
-  def stop() = Future { consumer.close }
+  def stop() = Future { consumer.close; PrecogUnit }
 
   val maxDelay = 100.0
   val waitCountFactor = 25

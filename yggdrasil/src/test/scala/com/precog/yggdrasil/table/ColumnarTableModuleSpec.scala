@@ -65,6 +65,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with CrossAllSpec[M]
     with DistinctSpec[M] 
     with GroupingGraphSpec[M]
+    with SchemasSpec[M]
     { spec => 
 
   //type GroupId = Int
@@ -329,6 +330,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "test inner object concat with a single boolean" in testObjectConcatSingletonNonObject
       "test inner object concat with a boolean and an empty object" in testObjectConcatTrivial
       "concatenate dissimilar objects" in checkObjectConcat
+      "test inner object concat join semantics" in testInnerObjectConcatJoinSemantics
       "concatenate dissimilar arrays" in checkArrayConcat
       "delete elements according to a JType" in checkObjectDelete //.set(minTestsOk -> 5000) TODO: saw an error here once
       "perform a trivial type-based filter" in checkTypedTrivial
@@ -381,6 +383,14 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "select nothing with a negative starting index" in testTakeRangeNegStart
       "select nothing with a negative number to take" in testTakeRangeNegNumber
       "select the correct rows using scalacheck" in checkTakeRange
+    }
+
+    "in schemas" >> {
+      "find a schema in single-schema table" in testSingleSchema
+      "find schemas separated by slice boundary" in testCrossSliceSchema
+      "extract intervleaved schemas" in testIntervleavedSchema
+      "don't include undefineds in schema" in testUndefinedsInSchema
+      "deal with most expected types" in testAllTypesInSchema
     }
   }
 
@@ -698,7 +708,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       import GroupKeyTrans._
 
       val trans = GroupKeyTrans(
-        InnerObjectConcat(
+        OuterObjectConcat(
           WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("a")), keyName(0)),
           WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("b")), keyName(1)),
           WrapObject(DerefObjectStatic(SourceValue.Single, CPathField("c")), keyName(2))

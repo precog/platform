@@ -113,7 +113,7 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Authe
             path("/accounts/") {
               post(new PostAccountHandler(state.accountManagement, state.clock, state.securityService, state.rootAccountId)) ~
               auth(state.accountManagement) {
-                get(new ListAccountsHandler(state.accountManagement)) ~ 
+                get(new ListAccountsHandler(state.accountManagement, state.rootAccountId)) ~ 
                 path("'accountId") {
                   get(new GetAccountDetailsHandler(state.accountManagement)) ~ 
                   delete(new DeleteAccountHandler(state.accountManagement)) ~

@@ -102,7 +102,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
     }
     
-    def handleCoproduct(expr: Expr, left: Expr, right: Expr, relations: Map[Provenance, Set[Provenance]], constraints: Map[Provenance, Expr]): (Provenance, (Set[Error], Set[ProvConstraint])) = {
+    def handleUnion(expr: Expr, left: Expr, right: Expr, relations: Map[Provenance, Set[Provenance]], constraints: Map[Provenance, Expr]): (Provenance, (Set[Error], Set[ProvConstraint])) = {
       val (leftErrors, leftConstr) = loop(left, relations, constraints)
       val (rightErrors, rightConstr) = loop(right, relations, constraints)
       
@@ -113,7 +113,11 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val leftCard = left.provenance.cardinality
         val rightCard = right.provenance.cardinality
         
-        if (left.provenance.isParametric || right.provenance.isParametric) {
+        if (left.provenance == UndefinedProvenance) {
+          (right.provenance, Set(), Set())
+        } else if (right.provenance == UndefinedProvenance) {
+          (left.provenance, Set(), Set())
+        } else if (left.provenance.isParametric || right.provenance.isParametric) {
           val card = leftCard orElse rightCard
 
           val provenance = card map { cardinality =>
@@ -139,19 +143,55 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         } else {
           val provenance = NullProvenance
 
-          val errorType = expr match {
-            case _: Union => ProductProvenanceDifferentLength
-            case _: Intersect => IntersectProvenanceDifferentLength
-            case _ => sys.error("unreachable")
-          }
-
-          (provenance, Set(Error(expr, errorType)), Set())
+          (provenance, Set(Error(expr, ProductProvenanceDifferentLength)), Set())
         }
       }
       
       (provenance, (leftErrors ++ rightErrors ++ errors, leftConstr ++ rightConstr ++ constr))
     }
     
+    def handleIntersect(expr: Expr, left: Expr, right: Expr, relations: Map[Provenance, Set[Provenance]], constraints: Map[Provenance, Expr]): (Provenance, (Set[Error], Set[ProvConstraint])) = {
+      val (leftErrors, leftConstr) = loop(left, relations, constraints)
+      val (rightErrors, rightConstr) = loop(right, relations, constraints)
+
+      val sameCardinality = left.provenance.cardinality == right.provenance.cardinality
+
+      val (provenance, errors, constr) = (left.provenance, right.provenance) match {
+        case (NullProvenance, _) | (_, NullProvenance) =>
+          (NullProvenance, Set(), Set())
+
+        case (UndefinedProvenance, _) | (_, UndefinedProvenance) =>
+          (UndefinedProvenance, Set(), Set())
+
+        case (a, b@DynamicProvenance(_)) if sameCardinality =>
+          (CoproductProvenance(a, b), Set(), Set())
+
+        case (a@DynamicProvenance(_), b) if sameCardinality =>
+          (CoproductProvenance(a, b), Set(), Set())
+
+        case _ =>
+          val unified = unifyProvenance(Map.empty)(left.provenance, right.provenance)
+
+          if (left.provenance.isParametric || right.provenance.isParametric) {
+            val provenance =
+              if (left.provenance == right.provenance)
+                left.provenance
+              else
+                DynamicDerivedProvenance(left.provenance, right.provenance)
+
+            (provenance, Set(), Set(SameCard(left.provenance, right.provenance)))
+          } else if (unified.isDefined && sameCardinality) {
+            (unified.get, Set(), Set())
+          } else {
+            val provenance = NullProvenance
+
+            (provenance, Set(Error(expr, IntersectProvenanceDifferentLength)), Set())
+          }
+      }
+
+      (provenance, (leftErrors ++ rightErrors ++ errors, leftConstr ++ rightConstr ++ constr))
+    }
+
     def loop(expr: Expr, relations: Map[Provenance, Set[Provenance]], constraints: Map[Provenance, Expr]): (Set[Error], Set[ProvConstraint]) = {
       val back: (Set[Error], Set[ProvConstraint]) = expr match {
         case expr @ Let(_, _, _, left, right) => {
@@ -228,7 +268,11 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           
           (fromErrors ++ toErrors ++ inErrors ++ contribErrors, fromConstr ++ toConstr ++ inConstr ++ contribConstr)
         }
-        
+
+        case UndefinedLit(_) =>
+          expr.provenance = UndefinedProvenance
+          (Set(), Set())
+
         case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => {
           expr.provenance = ValueProvenance
           (Set(), Set())
@@ -449,7 +493,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
 
         case Cond(_, pred, left, right) =>
           val predResult = loop(pred, relations, constraints)
-          val (provenance, result) = handleCoproduct(expr, left, right, relations, constraints)
+          val (provenance, result) = handleUnion(expr, left, right, relations, constraints)
 
           val unifiedLeft = unifyProvenance(relations)(pred.provenance, left.provenance)
           val unifiedRight = unifyProvenance(relations)(pred.provenance, right.provenance)
@@ -468,27 +512,47 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             result
         
         case Union(_, left, right) =>
-            val (provenance, result) = handleCoproduct(expr, left, right, relations, constraints)
+            val (provenance, result) = handleUnion(expr, left, right, relations, constraints)
             expr.provenance = provenance
             result
 
         case Intersect(_, left, right) =>
-            val (provenance, result) = handleCoproduct(expr, left, right, relations, constraints)
+            val (provenance, result) = handleIntersect(expr, left, right, relations, constraints)
             expr.provenance = provenance
             result
         
         case Difference(_, left, right) => {
           val (leftErrors, leftConstr) = loop(left, relations, constraints)
           val (rightErrors, rightConstr) = loop(right, relations, constraints)
-          
+
+          // A DynamicProvenance being involved in either side means
+          // we can't _prove_ the data is coming from different sets.
+          val dynamicPossibility = (left.provenance.possibilities ++ right.provenance.possibilities) exists {
+            case DynamicProvenance(_) => true
+            case _ => false
+          }
+
+          val hasCommonality = {
+            val cartesian = for {
+              left <- left.provenance.possibilities
+              right <- right.provenance.possibilities
+            } yield (left, right)
+
+            cartesian.exists {
+              case (left, right) => pathExists(relations, left, right)
+            }
+          }
+
+          val isParametric = left.provenance.isParametric || right.provenance.isParametric
+
           val (errors, constr) = if (left.provenance == NullProvenance || right.provenance == NullProvenance) {
             expr.provenance = NullProvenance
             (Set(), Set())
-          } else {
+          } else if (dynamicPossibility || isParametric || hasCommonality) {
             val leftCard = left.provenance.cardinality
             val rightCard = right.provenance.cardinality
-            
-            if (left.provenance.isParametric || right.provenance.isParametric) {
+
+            if (isParametric) {
               expr.provenance = left.provenance
               (Set(), Set(SameCard(left.provenance, right.provenance)))
             } else {
@@ -500,6 +564,11 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                 (Set(Error(expr, DifferenceProvenanceDifferentLength)), Set())
               }
             }
+          } else {
+            // We only have static provenances, can prove that we only
+            // ever get the left side. Useless operation.
+            expr.provenance = NullProvenance
+            (Set(Error(expr, DifferenceWithNoCommonalities)), Set())
           }
           
           (leftErrors ++ rightErrors ++ errors, leftConstr ++ rightConstr ++ constr)
@@ -592,6 +661,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case (p1, p2) if pathExists(relations, p1, p2) || pathExists(relations, p2, p1) => 
       Some(p1 & p2)
     
+    case (UndefinedProvenance, _) => Some(UndefinedProvenance)
+    case (_, UndefinedProvenance) => Some(UndefinedProvenance)
+
     case (ProductProvenance(left, right), p2) => {
       val leftP = unifyProvenance(relations)(left, p2)
       val rightP = unifyProvenance(relations)(right, p2)
@@ -608,7 +680,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       val unionP = (leftP |@| rightP) {
         case (p1, p2) => p1 & p2
       }
-      
+
       unionP orElse leftP orElse rightP
     }
     
@@ -727,7 +799,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case DynamicDerivedProvenance(left, right) =>
       DynamicDerivedProvenance(resolveUnifications(relations)(left), resolveUnifications(relations)(right))
     
-    case ParamProvenance(_, _) | StaticProvenance(_) | DynamicProvenance(_) | ValueProvenance | NullProvenance =>
+    case ParamProvenance(_, _) | StaticProvenance(_) | DynamicProvenance(_) | ValueProvenance | UndefinedProvenance | NullProvenance =>
       prov
   }
   
@@ -856,6 +928,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         case (ValueProvenance, _) => GT
         case (_, ValueProvenance) => LT
 
+        case (UndefinedProvenance, UndefinedProvenance) => EQ
+        case (UndefinedProvenance, _) => GT
+        case (_, UndefinedProvenance) => LT
+
         case (NullProvenance, NullProvenance) => EQ
       }
     }
@@ -911,6 +987,11 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     val isParametric = false
   }
   
+  case object UndefinedProvenance extends Provenance {
+    override val toString = "<undefined>"
+    val isParametric = false
+  }
+
   case object NullProvenance extends Provenance {
     override val toString = "<null>"
     val isParametric = false
@@ -922,14 +1003,4 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   case class Related(left: Provenance, right: Provenance) extends ProvConstraint
   case class NotRelated(left: Provenance, right: Provenance) extends ProvConstraint
   case class SameCard(left: Provenance, right: Provenance) extends ProvConstraint
-
-
-  private case class ExprWrapper(expr: Expr) {
-    override def equals(a: Any): Boolean = a match {
-      case ExprWrapper(expr2) => expr equalsIgnoreLoc expr2
-      case _ => false
-    }
-
-    override def hashCode = expr.hashCodeIgnoreLoc
-  }
 }

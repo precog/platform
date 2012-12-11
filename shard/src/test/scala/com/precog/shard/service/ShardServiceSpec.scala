@@ -22,6 +22,7 @@ package service
 
 import kafka._
 
+import com.precog.accounts.{BasicAccountManager, InMemoryAccountManager}
 import com.precog.daze._
 import com.precog.common.Path
 import com.precog.common.security._
@@ -32,7 +33,7 @@ import org.scalacheck.Gen._
 
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
-import akka.dispatch.{Await, Future}
+import akka.dispatch.{Await, Future, Promise}
 import akka.util.Duration
 
 import org.joda.time._
@@ -94,11 +95,12 @@ trait TestShardService extends
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
-  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]) = new TestQueryExecutor {
+  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]) = new TestQueryExecutor {
     val actorSystem = self.actorSystem
     val executionContext = self.asyncContext
     
     val accessControl = apiKeyManager
+    val accountManager = inMemAccountMgr
     val ownerMap = Map(
       Path("/")     ->             Set("root"),
       Path("/test") ->             Set("test"),
@@ -110,6 +112,7 @@ trait TestShardService extends
   }
 
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  val inMemAccountMgr = new InMemoryAccountManager[Future]
   val to = Duration(1, "seconds")
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   
@@ -128,6 +131,8 @@ trait TestShardService extends
   }, to)
   
   def apiKeyManagerFactory(config: Configuration) = apiKeyManager
+
+  def accountManagerFactory(config: Configuration) = inMemAccountMgr
 
   import java.nio.ByteBuffer
 
@@ -262,7 +267,7 @@ trait TestQueryExecutor extends QueryExecutor[Future] {
   val to = Duration(1, "seconds")
   
   val accessControl: AccessControl[Future]
-  val ownerMap: Map[Path, Set[AccountID]]
+  val ownerMap: Map[Path, Set[AccountId]]
 
   private def wrap(a: JArray): StreamT[Future, CharBuffer] = {
     val str = a.toString
@@ -310,6 +315,6 @@ trait TestQueryExecutor extends QueryExecutor[Future] {
 
   def status() = Future(Success(JArray(List(JString("status")))))
 
-  def startup = Future(true)
+  def startup = Promise.successful(true)
   def shutdown = Future { actorSystem.shutdown; true }
 }

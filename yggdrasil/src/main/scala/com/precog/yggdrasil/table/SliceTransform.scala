@@ -301,23 +301,72 @@ trait SliceTransforms[M[+_]] extends TableModule[M] with ColumnarTableTypes {
             val typed = Typed(objects.head, JObjectUnfixedT)
             composeSliceTransform2(typed) 
           } else {
-            objects.map(composeSliceTransform2).reduceLeft { (l0, r0) =>
+            objects map composeSliceTransform2 reduceLeft { (l0, r0) =>
               l0.zip(r0) { (sl, sr) =>
                 new Slice {
                   val size = sl.size
-                  val columns = if (sl.columns.isEmpty || sr.columns.isEmpty) {
-                    Map.empty[ColumnRef, Column]
-                  } else {
-                    val logicalFilters = sr.columns.groupBy(_._1.selector) mapValues { cols => new BoolColumn {
-                      def isDefinedAt(row: Int) = cols.exists(_._2.isDefinedAt(row))
-                      def apply(row: Int) = !isDefinedAt(row)
-                    }}
-
-                    val remapped = sl.columns map {
-                      case (ref @ ColumnRef(jpath, ctype), col) => (ref, logicalFilters.get(jpath).flatMap(c => cf.util.FilterComplement(c)(col)).getOrElse(col))
+                  val columns: Map[ColumnRef, Column] = {
+                    if (sl.columns.isEmpty || sr.columns.isEmpty) {
+                      Map.empty[ColumnRef, Column]
+                    } else {
+                      val leftFields = sl.columns filter {
+                        case (ColumnRef(CPath(CPathField(_), _ @ _*), _), _) => true
+                        case _ => false
+                      } values
+                      
+                      val rightFields = sr.columns filter {
+                        case (ColumnRef(CPath(CPathField(_), _ @ _*), _), _) => true
+                        case _ => false
+                      } values
+                      
+                      val maskComplement = new BoolColumn {
+                        def isDefinedAt(row: Int) =
+                          !(leftFields exists { _ isDefinedAt row }) ||
+                            !(rightFields exists { _ isDefinedAt row })
+                        
+                        def apply(row: Int) = true      // trivial
+                      }
+                      
+                      val (leftInner, leftOuter) = sl.columns partition {
+                        case (ColumnRef(path, _), _) =>
+                          sr.columns exists { case (ColumnRef(path2, _), _) => path == path2 }
+                      }
+                      
+                      val (rightInner, rightOuter) = sr.columns partition {
+                        case (ColumnRef(path, _), _) =>
+                          sl.columns exists { case (ColumnRef(path2, _), _) => path == path2 }
+                      }
+                      
+                      val innerPaths = Set(leftInner.keys map { _.selector } toSeq: _*)
+                      
+                      val mergedPairs: Set[(ColumnRef, Column)] = innerPaths flatMap { path =>
+                        val rightSelection = rightInner filter {
+                          case (ColumnRef(path2, _), _) => path == path2
+                        }
+                        
+                        val leftSelection = leftInner filter {
+                          case (ref @ ColumnRef(path2, _), _) =>
+                            path == path2 && !rightSelection.contains(ref)    // handled separately
+                        }
+                        
+                        val rightMerged = rightSelection map {
+                          case (ref, col) => {
+                            if (leftInner contains ref)
+                              ref -> cf.util.UnionRight(leftInner(ref), col).get    // assert
+                            else
+                              ref -> col
+                          }
+                        }
+                        
+                        rightMerged ++ leftSelection
+                      }
+                      
+                      val result = leftOuter ++ rightOuter ++ mergedPairs
+                      
+                      result mapValues { col =>
+                        cf.util.FilterComplement(maskComplement)(col).get   // assert
+                      }
                     }
-
-                    remapped ++ sr.columns 
                   }
                 }
               }

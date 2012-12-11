@@ -62,32 +62,35 @@ case class Account(accountId: String,
                    apiKey: String, 
                    rootPath: Path, 
                    plan: AccountPlan, 
-                   parentId: Option[String] = None) 
+                   parentId: Option[String] = None,
+                   lastPasswordChangeTime: Option[DateTime] = None)
 
 trait AccountSerialization extends AccountPlanSerialization {
   val UnsafeAccountDecomposer: Decomposer[Account] = new Decomposer[Account] {
-    override def decompose(t: Account): JValue = JObject(
-      JField("accountId", t.accountId) ::
-      JField("email", t.email) ::
-      JField("passwordHash", t.passwordHash) ::
-      JField("passwordSalt", t.passwordSalt) ::
-      JField("accountCreationDate", t.accountCreationDate.serialize) ::
-      JField("apiKey", t.apiKey) ::
-      JField("rootPath", t.rootPath) ::
-      JField("plan", t.plan.serialize) ::
-      t.parentId.map(i => JField("parentId", i) :: Nil).getOrElse(Nil)
+    override def decompose(t: Account): JValue = JObject(List(
+      Some(JField("accountId", t.accountId)),
+      Some(JField("email", t.email)),
+      Some(JField("passwordHash", t.passwordHash)),
+      Some(JField("passwordSalt", t.passwordSalt)),
+      Some(JField("accountCreationDate", t.accountCreationDate.serialize)),
+      Some(JField("apiKey", t.apiKey)),
+      Some(JField("rootPath", t.rootPath)),
+      Some(JField("plan", t.plan.serialize)),
+      t.parentId.map(i => JField("parentId", i)),
+      t.lastPasswordChangeTime.map(i => JField("lastPasswordChangeTime", i.serialize))).flatten
     ) 
   }
 
   implicit val AccountDecomposer: Decomposer[Account] = new Decomposer[Account] {
     override def decompose(t: Account): JValue = JObject(List(
-      JField("accountId", t.accountId),
-      JField("email", t.email),
-      JField("accountCreationDate", t.accountCreationDate.serialize),
-      JField("apiKey", t.apiKey),
-      JField("rootPath", t.rootPath),
-      JField("plan", t.plan.serialize)
-      )) 
+      Some(JField("accountId", t.accountId)),
+      Some(JField("email", t.email)),
+      Some(JField("accountCreationDate", t.accountCreationDate.serialize)),
+      Some(JField("apiKey", t.apiKey)),
+      Some(JField("rootPath", t.rootPath)),
+      Some(JField("plan", t.plan.serialize)),
+      t.lastPasswordChangeTime.map(i => JField("lastPasswordChangeTime", i.serialize))
+      ).flatten) 
   }
 
   implicit val AccountExtractor: Extractor[Account] = new Extractor[Account] with ValidatedExtraction[Account] {    
@@ -100,7 +103,8 @@ trait AccountSerialization extends AccountPlanSerialization {
        (obj \ "apiKey").validated[String] |@|
        (obj \ "rootPath").validated[Path] |@|
        (obj \ "plan").validated[AccountPlan] |@| 
-       (obj \ "parentId").validated[Option[String]]) {
+       (obj \ "parentId").validated[Option[String]] |@|
+       (obj \ "lastPasswordChangeTime").validated[Option[DateTime]]) {
          Account.apply _
        }
   }

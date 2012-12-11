@@ -30,9 +30,9 @@ import org.joda.time.format.ISODateTimeFormat
 import scalaz._
 
 package object security {
-  type AccountID = String
+  type AccountId = String
   type APIKey    = String
-  type GrantID   = String
+  type GrantId   = String
 
   private val isoFormat = ISODateTimeFormat.dateTime
 

@@ -98,7 +98,10 @@ class SingleColumnProjectionRoutingTable extends RoutingTable {
   
   @inline
   private final def toProjectionData(msg: EventMessage, selector: CPath, value: JValue): ProjectionData = {
-    val authorities = Set.empty + msg.event.apiKey
+    val authorities = Set.empty + (msg.event.ownerAccountId getOrElse {
+      throw new IllegalArgumentException("Cannot process an event without an ownerAccountId: " + msg.event)
+    })
+
     val colDesc = ColumnDescriptor(msg.event.path, selector, CType.forJValue(value).get, Authorities(authorities))
 
     val projDesc = ProjectionDescriptor(1, List(colDesc))

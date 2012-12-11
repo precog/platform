@@ -173,4 +173,24 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
   object indexOf extends Op2SSL("indexOf", _ indexOf _)
 
   object lastIndexOf extends Op2SSL("lastIndexOf", _ lastIndexOf _)
+
+  object parseNum extends Op1(StringNamespace, "parseNum") {
+    import java.util.regex.Pattern
+
+    val intPattern = Pattern.compile("^-?(?:0|[1-9][0-9]*)$")
+    val decPattern = Pattern.compile("^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?$")
+
+    val tpe = UnaryOperationType(JTextT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: StrColumn => new Map1Column(c) with NumColumn {
+        override def isDefinedAt(row: Int): Boolean = {
+          if (!super.isDefinedAt(row)) return false
+          val s = c(row)
+          s != null && decPattern.matcher(s).matches
+        }
+
+        def apply(row: Int) = BigDecimal(c(row))
+      }
+    })
+  }
 }

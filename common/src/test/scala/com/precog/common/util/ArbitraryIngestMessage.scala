@@ -50,7 +50,7 @@ trait ArbitraryIngestMessage extends ArbitraryJValue {
 
 trait RealisticIngestMessage extends ArbitraryIngestMessage {
   val ingestAPIKey: APIKey 
-  val ingestOwnerAccountId: Option[AccountID] 
+  val ingestOwnerAccountId: Option[AccountId] 
   
   def buildBoundedPaths(depth: Int): List[String] = {
     buildChildPaths(List.empty, depth).map("/" + _.reverse.mkString("/"))

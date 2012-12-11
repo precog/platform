@@ -55,8 +55,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ParseDateTime), CrossLeftSort,
-        Root(line, CString("Jun 3, 2020 3:12:33 AM")),
-        Root(line, CString("MMM d, yyyy h:mm:ss a")))
+        Const(line, CString("Jun 3, 2020 3:12:33 AM")),
+        Const(line, CString("MMM d, yyyy h:mm:ss a")))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 0 => d.toString
@@ -71,8 +71,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ParseDateTime), CrossLeftSort,
-        Root(line, CString("Jun 3, 2020 3:12:33 AM -08:00")),
-        Root(line, CString("MMM d, yyyy h:mm:ss a Z")))
+        Const(line, CString("Jun 3, 2020 3:12:33 AM -08:00")),
+        Const(line, CString("MMM d, yyyy h:mm:ss a Z")))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 0 => d.toString
@@ -87,8 +87,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ParseDateTime), CrossLeftSort,
-        Root(line, CString("Jun 3, 2020 3:12:33 AM -08:00 asteroid")),
-        Root(line, CString("MMM d, yyyy h:mm:ss a Z")))
+        Const(line, CString("Jun 3, 2020 3:12:33 AM -08:00 asteroid")),
+        Const(line, CString("MMM d, yyyy h:mm:ss a Z")))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 0 => d.toString
@@ -102,8 +102,8 @@ trait TimeLibSpec[M[+_]] extends Specification
 
       val input = dag.Operate(line, BuiltInFunction1Op(Date),
         Join(line, BuiltInFunction2Op(ParseDateTime), CrossLeftSort,
-          dag.LoadLocal(line, Root(line, CString("/hom/timeString"))),
-          Root(line, CString("MMM dd yyyy k:mm:ss.SSS"))))
+          dag.LoadLocal(line, Const(line, CString("/hom/timeString"))),
+          Const(line, CString("MMM dd yyyy k:mm:ss.SSS"))))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 1 => d.toString
@@ -118,8 +118,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ParseDateTime), CrossLeftSort,
-          dag.LoadLocal(line, Root(line, CString("/het/timeString"))),
-          Root(line, CString("MMM dd yyyy k:mm:ss.SSS")))
+          dag.LoadLocal(line, Const(line, CString("/het/timeString"))),
+          Const(line, CString("MMM dd yyyy k:mm:ss.SSS")))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 1 => d.toString
@@ -134,8 +134,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-          Root(line, CString("2010-06-04")),
-          Root(line, CString("-10:00")))
+          Const(line, CString("2010-06-04")),
+          Const(line, CString("-10:00")))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 0 => d.toString
@@ -150,8 +150,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-          Root(line, CString("2010-06-04T+05:00")),
-          Root(line, CString("-10:00")))
+          Const(line, CString("2010-06-04T+05:00")),
+          Const(line, CString("-10:00")))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 0 => d.toString
@@ -166,8 +166,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
-          Root(line, CString("2010-06-04T05:04:01")),
-          Root(line, CLong(10)))
+          Const(line, CString("2010-06-04T05:04:01")),
+          Const(line, CLong(10)))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 0 => d.toString
@@ -182,8 +182,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
-          Root(line, CString("2010-06-04T05:04:01.000+05:00")),
-          Root(line, CLong(10)))
+          Const(line, CString("2010-06-04T05:04:01.000+05:00")),
+          Const(line, CLong(10)))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 0 => d.toString
@@ -198,8 +198,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(HoursBetween), CrossLeftSort,
-          Root(line, CString("2010-06-04T05:04:01")),
-          Root(line, CString("2010-06-04T07:04:01+00:00")))
+          Const(line, CString("2010-06-04T05:04:01")),
+          Const(line, CString("2010-06-04T07:04:01+00:00")))
         
       val result = testEval(input) collect {
         case (ids, SDecimal(d)) if ids.length == 0 => d.toInt
@@ -214,8 +214,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(HoursBetween), CrossLeftSort,
-          Root(line, CString("2010-06-04T05:04:01+05:00")),
-          Root(line, CString("2010-06-04T05:04:01+01:00")))
+          Const(line, CString("2010-06-04T05:04:01+05:00")),
+          Const(line, CString("2010-06-04T05:04:01+01:00")))
         
       val result = testEval(input) collect {
         case (ids, SDecimal(d)) if ids.length == 0 => d.toInt
@@ -230,7 +230,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Operate(line, BuiltInFunction1Op(GetMillis),
-          Root(line, CString("2010-06-04T05")))
+          Const(line, CString("2010-06-04T05")))
         
       val result = testEval(input) collect {
         case (ids, SDecimal(d)) if ids.length == 0 => d.toLong
@@ -245,7 +245,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Operate(line, BuiltInFunction1Op(GetMillis),
-          Root(line, CString("2010-06-04T03-02:00")))
+          Const(line, CString("2010-06-04T03-02:00")))
         
       val result = testEval(input) collect {
         case (ids, SDecimal(d)) if ids.length == 0 => d.toLong
@@ -260,7 +260,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Operate(line, BuiltInFunction1Op(TimeZone),
-          Root(line, CString("2010-06-04T05")))
+          Const(line, CString("2010-06-04T05")))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 0 => d.toString
@@ -275,7 +275,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Operate(line, BuiltInFunction1Op(TimeZone),
-          Root(line, CString("2010-06-04T03-02:00")))
+          Const(line, CString("2010-06-04T03-02:00")))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 0 => d.toString
@@ -290,7 +290,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Operate(line, BuiltInFunction1Op(Season),
-          Root(line, CString("2010-01-04")))
+          Const(line, CString("2010-01-04")))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 0 => d.toString
@@ -305,7 +305,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Operate(line, BuiltInFunction1Op(Season),
-          Root(line, CString("2010-01-04T-02:00")))
+          Const(line, CString("2010-01-04T-02:00")))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 0 => d.toString
@@ -320,7 +320,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Operate(line, BuiltInFunction1Op(HourOfDay),
-          Root(line, CString("2010-01-04")))
+          Const(line, CString("2010-01-04")))
         
       val result = testEval(input) collect {
         case (ids, SDecimal(d)) if ids.length == 0 => d.toInt
@@ -335,7 +335,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Operate(line, BuiltInFunction1Op(HourOfDay),
-          Root(line, CString("2010-01-04T03-02:00")))
+          Const(line, CString("2010-01-04T03-02:00")))
         
       val result = testEval(input) collect {
         case (ids, SDecimal(d)) if ids.length == 0 => d.toInt
@@ -352,8 +352,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("-10:00")))
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 1 => d.toString
@@ -366,8 +366,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("-10:00")))
         
       val result = testEval(input)
       
@@ -386,8 +386,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("-10:30")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("-10:30")))
         
       val result = testEval(input)
       
@@ -406,8 +406,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("-10:00")))
         
       val result = testEval(input)
       
@@ -424,8 +424,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("-10:00")))
         
       val result = testEval(input)
       
@@ -444,8 +444,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("-10:30")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("-10:30")))
         
       val result = testEval(input)
       
@@ -464,7 +464,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(GetMillis),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -483,7 +483,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(GetMillis),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -502,8 +502,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MillisToISO), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/millisSinceEpoch"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/millisSinceEpoch"))),
+        Const(line, CString("-10:00")))
         
       val result = testEval(input)
       
@@ -525,8 +525,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MillisToISO), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/millisSinceEpoch"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/millisSinceEpoch"))),
+        Const(line, CString("-10:00")))
         
       val result = testEval(input)
       
@@ -548,8 +548,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(YearsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -570,8 +570,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(YearsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CLong(-5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CLong(-5)))
         
       val result = testEval(input)
       
@@ -592,8 +592,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(YearsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CLong(0)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CLong(0)))
         
       val result = testEval(input)
       
@@ -615,8 +615,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MonthsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -638,8 +638,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(WeeksPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -660,8 +660,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(DaysPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -682,8 +682,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(HoursPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -704,8 +704,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -726,8 +726,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(SecondsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -748,8 +748,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MillisPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -773,8 +773,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(YearsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -796,8 +796,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MonthsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -819,8 +819,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(WeeksPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -841,8 +841,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(DaysPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -863,8 +863,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(HoursPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -885,8 +885,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -907,8 +907,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(SecondsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -929,8 +929,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MillisPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CLong(5)))
         
       val result = testEval(input)
       
@@ -954,8 +954,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(YearsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -971,8 +971,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MonthsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -988,8 +988,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(WeeksBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1005,8 +1005,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(DaysBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1022,8 +1022,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(HoursBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1039,8 +1039,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MinutesBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1056,8 +1056,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(SecondsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1073,8 +1073,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MillisBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1093,8 +1093,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(YearsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1110,8 +1110,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MonthsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1127,8 +1127,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(WeeksBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1144,8 +1144,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(DaysBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1161,8 +1161,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(HoursBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1178,8 +1178,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MinutesBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1195,8 +1195,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(SecondsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1212,8 +1212,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = Join(line, BuiltInFunction2Op(MillisBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
       
@@ -1233,7 +1233,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeZone),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1250,7 +1250,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Season),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1267,7 +1267,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Year),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1284,7 +1284,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(QuarterOfYear),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1301,7 +1301,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MonthOfYear),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1318,7 +1318,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfYear),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1334,7 +1334,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfMonth),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1350,7 +1350,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfYear),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1366,7 +1366,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfMonth),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1382,7 +1382,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfWeek),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1398,7 +1398,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourOfDay),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1414,7 +1414,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MinuteOfHour),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1430,7 +1430,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(SecondOfMinute),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1446,7 +1446,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MillisOfSecond),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1465,7 +1465,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeZone),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1482,7 +1482,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Season),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1499,7 +1499,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Year),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1516,7 +1516,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(QuarterOfYear),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1533,7 +1533,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MonthOfYear),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1550,7 +1550,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfYear),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1566,7 +1566,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfMonth),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1582,7 +1582,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfYear),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1598,7 +1598,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfMonth),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1614,7 +1614,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfWeek),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1630,7 +1630,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourOfDay),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1646,7 +1646,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MinuteOfHour),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1662,7 +1662,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(SecondOfMinute),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1678,7 +1678,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MillisOfSecond),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1697,7 +1697,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Date),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1713,7 +1713,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(YearMonth),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1729,7 +1729,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(YearDayOfYear),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1745,7 +1745,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MonthDay),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1761,7 +1761,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHour),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1777,7 +1777,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinute),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1793,7 +1793,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecond),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1809,7 +1809,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecondMillis),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1825,7 +1825,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithZone),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1841,7 +1841,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithoutZone),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1857,7 +1857,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinute),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1873,7 +1873,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinuteSecond),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1892,7 +1892,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Date),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1908,7 +1908,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(YearMonth),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1924,7 +1924,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(YearDayOfYear),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1940,7 +1940,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MonthDay),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1956,7 +1956,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHour),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1972,7 +1972,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinute),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1988,7 +1988,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecond),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2004,7 +2004,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecondMillis),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2020,7 +2020,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithZone),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2036,7 +2036,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithoutZone),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2052,7 +2052,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinute),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2068,7 +2068,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinuteSecond),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2087,8 +2087,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("-10:00")))
 
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 1 => d.toString
@@ -2101,8 +2101,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("-10:00")))
 
       val result = testEval(input)
 
@@ -2121,8 +2121,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("-10:30")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("-10:30")))
 
       val result = testEval(input)
 
@@ -2141,8 +2141,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("-10:00")))
 
       val result = testEval(input)
 
@@ -2159,8 +2159,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))),
+        Const(line, CString("-10:00")))
 
       val result = testEval(input)
 
@@ -2179,8 +2179,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))),
-        Root(line, CString("-10:30")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))),
+        Const(line, CString("-10:30")))
 
       val result = testEval(input)
 
@@ -2199,7 +2199,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(GetMillis),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601"))))
 
       val result = testEval(input)
 
@@ -2218,7 +2218,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(GetMillis),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601"))))
 
       val result = testEval(input)
 
@@ -2237,8 +2237,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MillisToISO), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/millisSinceEpoch"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/millisSinceEpoch"))),
+        Const(line, CString("-10:00")))
 
       val result = testEval(input)
 
@@ -2260,8 +2260,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MillisToISO), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/millisSinceEpoch"))),
-        Root(line, CString("-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/millisSinceEpoch"))),
+        Const(line, CString("-10:00")))
 
       val result = testEval(input)
 
@@ -2283,8 +2283,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(YearsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2322,8 +2322,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(YearsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CLong(-5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CLong(-5)))
 
       val result = testEval(input)
 
@@ -2361,8 +2361,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(YearsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CLong(0)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CLong(0)))
 
       val result = testEval(input)
 
@@ -2401,8 +2401,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MonthsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2441,8 +2441,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(WeeksPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2480,8 +2480,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(DaysPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2519,8 +2519,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(HoursPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2558,8 +2558,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2597,8 +2597,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(SecondsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2636,8 +2636,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MillisPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2678,8 +2678,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(YearsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2706,8 +2706,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MonthsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2734,8 +2734,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(WeeksPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2761,8 +2761,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(DaysPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2788,8 +2788,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(HoursPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2815,8 +2815,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2842,8 +2842,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(SecondsPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2869,8 +2869,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MillisPlus), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CLong(5)))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CLong(5)))
 
       val result = testEval(input)
 
@@ -2899,8 +2899,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(YearsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -2916,8 +2916,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MonthsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -2933,8 +2933,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(WeeksBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -2950,8 +2950,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(DaysBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -2967,8 +2967,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(HoursBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -2984,8 +2984,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MinutesBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -3001,8 +3001,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(SecondsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -3018,8 +3018,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MillisBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -3038,8 +3038,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(YearsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -3055,8 +3055,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MonthsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -3072,8 +3072,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(WeeksBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -3089,8 +3089,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(DaysBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -3106,8 +3106,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(HoursBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -3123,8 +3123,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MinutesBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -3140,8 +3140,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(SecondsBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -3157,8 +3157,8 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = Join(line, BuiltInFunction2Op(MillisBetween), CrossLeftSort,
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))),
-        Root(line, CString("2010-09-23T18:33:22.520-10:00")))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))),
+        Const(line, CString("2010-09-23T18:33:22.520-10:00")))
 
       val result = testEval(input)
 
@@ -3177,7 +3177,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(TimeZone),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3194,7 +3194,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(Season),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3211,7 +3211,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(Year),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3228,7 +3228,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(QuarterOfYear),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3245,7 +3245,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(MonthOfYear),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3262,7 +3262,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfYear),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3278,7 +3278,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfMonth),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3294,7 +3294,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfYear),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3310,7 +3310,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfMonth),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3326,7 +3326,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfWeek),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3342,7 +3342,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(HourOfDay),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3358,7 +3358,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(MinuteOfHour),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3374,7 +3374,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(SecondOfMinute),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3390,7 +3390,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(MillisOfSecond),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3409,7 +3409,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(TimeZone),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3426,7 +3426,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(Season),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3443,7 +3443,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(Year),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3460,7 +3460,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(QuarterOfYear),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3477,7 +3477,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(MonthOfYear),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3494,7 +3494,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfYear),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3510,7 +3510,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfMonth),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3526,7 +3526,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfYear),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3542,7 +3542,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfMonth),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3558,7 +3558,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfWeek),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3574,7 +3574,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(HourOfDay),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3590,7 +3590,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(MinuteOfHour),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3606,7 +3606,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(SecondOfMinute),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3622,7 +3622,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(MillisOfSecond),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3641,7 +3641,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(Date),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3657,7 +3657,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(YearMonth),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3673,7 +3673,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(YearDayOfYear),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3689,7 +3689,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(MonthDay),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3705,7 +3705,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DateHour),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3721,7 +3721,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinute),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3737,7 +3737,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecond),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3753,7 +3753,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecondMillis),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3769,7 +3769,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithZone),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3785,7 +3785,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithoutZone),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3801,7 +3801,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinute),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3817,7 +3817,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinuteSecond),
-        dag.LoadLocal(line, Root(line, CString("/hom/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3836,7 +3836,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(Date),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3852,7 +3852,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(YearMonth),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3868,7 +3868,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(YearDayOfYear),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3884,7 +3884,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(MonthDay),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3900,7 +3900,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DateHour),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3916,7 +3916,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinute),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3932,7 +3932,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecond),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3948,7 +3948,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecondMillis),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3964,7 +3964,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithZone),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3980,7 +3980,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithoutZone),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -3996,7 +3996,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinute),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
@@ -4012,7 +4012,7 @@ trait TimeLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinuteSecond),
-        dag.LoadLocal(line, Root(line, CString("/het/iso8601AcrossSlices"))))
+        dag.LoadLocal(line, Const(line, CString("/het/iso8601AcrossSlices"))))
 
       val result = testEval(input)
 
