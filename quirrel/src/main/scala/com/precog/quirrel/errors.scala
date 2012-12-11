@@ -39,7 +39,9 @@ trait LineErrors extends Errors with Phases with parser.AST {
     case _ => false
   }
   
-  class Error(val loc: LineStream, val tp: ErrorType)
+  class Error(val loc: LineStream, val tp: ErrorType) {
+    override def toString = "Error(<%d:%d>, %s)".format(loc.lineNum, loc.colNum, tp)
+  }
 }
 
 
@@ -71,6 +73,10 @@ case object IntersectProvenanceDifferentLength extends ErrorType {
 
 case object DifferenceProvenanceDifferentLength extends ErrorType {
   override def toString = "cannot perform set difference on two sets each with different numbers of identities"
+}
+
+case object DifferenceWithNoCommonalities extends ErrorType {
+  override def toString = "cannot perform set difference on two sets which have no commonality (always returns left)"
 }
 
 case object DifferenceProvenanceValue extends ErrorType {

@@ -1,6 +1,8 @@
 package com.precog
 package pandora
 
+import accounts.InMemoryAccountManager
+
 import common.VectorCase
 import common.kafka._
 import common.security._
@@ -79,6 +81,7 @@ object PlatformSpecs extends ParseEvalStackSpecs[Future]
 
   class Storage extends SystemActorStorageLike(fileMetadataStorage) {
     val accessControl = new UnrestrictedAccessControl[Future]
+    val accountManager = new InMemoryAccountManager[Future]()
   }
 
   val storage = new Storage

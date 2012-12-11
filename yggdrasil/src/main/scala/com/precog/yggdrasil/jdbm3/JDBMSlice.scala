@@ -55,6 +55,7 @@ object JDBMSlice {
         } catch {
           case t: Throwable =>
             logger.warn("Error during block read, retrying")
+            Thread.sleep(50)
         }
         tries += 1
       }

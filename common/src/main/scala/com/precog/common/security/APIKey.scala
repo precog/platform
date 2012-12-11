@@ -3,9 +3,12 @@ package security
 
 import json._
 
+import blueeyes.json.JValue
+import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
 import scalaz.Scalaz._
+import scalaz.Validation
 
 import shapeless._
 
@@ -14,14 +17,16 @@ case class APIKeyRecord(
   name:           Option[String],
   description:    Option[String],
   issuerKey:      Option[APIKey],
-  grants:         Set[GrantID],
+  grants:         Set[GrantId],
   isRoot:         Boolean)
 
 object APIKeyRecord {
   implicit val apiKeyRecordIso = Iso.hlist(APIKeyRecord.apply _, APIKeyRecord.unapply _)
   
-  val schema =     "apiKey" :: "name" :: "description" :: "issuerKey" :: "grants" :: "isRoot" :: HNil
-  val safeSchema = "apiKey" :: "name" :: "description" :: Omit        :: "grants" :: "isRoot" :: HNil
+  val schema =       "apiKey"  :: "name" :: "description" :: "issuerKey" :: "grants" :: "isRoot" :: HNil
+  val safeSchema =   "apiKey"  :: "name" :: "description" :: Omit        :: "grants" :: "isRoot" :: HNil
+
+  val legacySchema = ("apiKey" | "tokenId") :: "name" :: "description" :: "issuerKey" :: "grants" :: ("isRoot" ||| false) :: HNil
   
   object Serialization {
     implicit val (apiKeyRecordDecomposer, apiKeyRecordExtractor) = serialization[APIKeyRecord](schema)
@@ -29,6 +34,10 @@ object APIKeyRecord {
   
   object SafeSerialization {
     implicit val (safeAPIKeyRecordDecomposer, safeAPIKeyRecordExtractor) = serialization[APIKeyRecord](safeSchema)
+  }
+
+  object LegacySerialization {
+    val legacyAPIKeyExtractor = extractor[APIKeyRecord](legacySchema)
   }
 }
 
@@ -42,7 +51,7 @@ object NewAPIKeyRequest {
   implicit val (newAPIKeyRequestDecomposer, newAPIKeyRequestExtractor) = serialization[NewAPIKeyRequest](schema)
   
   def newAccount(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None) = {
-    val grants = NewGrantRequest.newAccount(accountId, path, name.map(_+"-grant"), description.map(_+" standard account grant"), Set.empty[GrantID], None)
+    val grants = NewGrantRequest.newAccount(accountId, path, name.map(_+"-grant"), description.map(_+" standard account grant"), Set.empty[GrantId], None)
     NewAPIKeyRequest(name, description, Set(grants))
   }
 }

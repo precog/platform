@@ -1,0 +1,6 @@
+/etc/precog/jobs-v1.conf=special/jobs-v1.conf
+default=special/jobs-v1.default
+init=special/jobs-v1.init
+/etc/monit/conf.d/jobs-v1.monit=special/jobs-v1.monit
+/etc/precog/jobs-v1.logging.xml=special/jobs-v1.logging.xml
+postinstall=special/postinstall.sh

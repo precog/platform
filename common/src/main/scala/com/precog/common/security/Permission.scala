@@ -12,7 +12,7 @@ import scalaz.syntax.apply._
 
 sealed trait Permission {
   def path: Path
-  def ownerAccountIds: Set[AccountID]
+  def ownerAccountIds: Set[AccountId]
   
   def implies(other: Permission): Boolean
   
@@ -23,28 +23,28 @@ sealed trait Permission {
   }
 }
 
-case class ReadPermission  (path: Path, ownerAccountIds: Set[AccountID]) extends Permission {
+case class ReadPermission  (path: Path, ownerAccountIds: Set[AccountId]) extends Permission {
   def implies(other: Permission): Boolean = other match {
     case _ : ReadPermission | _ : ReducePermission => pathImplies(other)
     case _ => false
   }
 }
 
-case class ReducePermission(path: Path, ownerAccountIds: Set[AccountID]) extends Permission {
+case class ReducePermission(path: Path, ownerAccountIds: Set[AccountId]) extends Permission {
   def implies(other: Permission): Boolean = other match {
     case _ : ReducePermission => pathImplies(other)
     case _ => false
   }
 }
 
-case class WritePermission (path: Path, ownerAccountIds: Set[AccountID]) extends Permission {
+case class WritePermission (path: Path, ownerAccountIds: Set[AccountId]) extends Permission {
   def implies(other: Permission): Boolean = other match {
     case _ : WritePermission => pathImplies(other)
     case _ => false
   }
 }
 
-case class DeletePermission(path: Path, ownerAccountIds: Set[AccountID]) extends Permission {
+case class DeletePermission(path: Path, ownerAccountIds: Set[AccountId]) extends Permission {
   def implies(other: Permission): Boolean = other match {
     case _ : DeletePermission => pathImplies(other)
     case _ => false
@@ -59,7 +59,7 @@ object Permission {
     case _ : DeletePermission => "delete"  
   }
   
-  object accessTypeExtractor extends Extractor[(Path, Set[AccountID]) => Permission] with ValidatedExtraction[(Path, Set[AccountID]) => Permission] {
+  object accessTypeExtractor extends Extractor[(Path, Set[AccountId]) => Permission] with ValidatedExtraction[(Path, Set[AccountId]) => Permission] {
     override def validated(label: JValue) =
       label.validated[String].flatMap {
         case "read" =>   Success(ReadPermission.apply) 
@@ -84,8 +84,8 @@ object Permission {
     override def validated(obj: JValue) = 
       ((obj \ "accessType").validated(accessTypeExtractor) |@|
        (obj \ "path").validated[Path] |@|
-       (obj \? "ownerAccountIds").map(_.validated[Set[AccountID]]).getOrElse(Success(Set.empty[AccountID]))).apply((c, p, o) => c(p, o))
+       (obj \? "ownerAccountIds").map(_.validated[Set[AccountId]]).getOrElse(Success(Set.empty[AccountId]))).apply((c, p, o) => c(p, o))
   }
   
-  def unapply(perm: Permission): Option[(Path, Set[AccountID])] = Some((perm.path, perm.ownerAccountIds))
+  def unapply(perm: Permission): Option[(Path, Set[AccountId])] = Some((perm.path, perm.ownerAccountIds))
 }
