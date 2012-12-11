@@ -45,6 +45,7 @@ object Event {
 
 
   val v1Schema = "apiKey"  :: "path" :: "ownerAccountId" :: "data" :: ("metadata" ||| Map.empty[JPath, Set[UserMetadata]]) :: HNil
+  @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")
   val v0Schema = "tokenId" :: "path" :: Omit             :: "data" :: ("metadata" ||| Map.empty[JPath, Set[UserMetadata]]) :: HNil
   
   implicit val eventDecomposer = decomposer[Event](v1Schema)
@@ -67,6 +68,7 @@ object Archive {
   implicit val archiveIso = Iso.hlist(Archive.apply _, Archive.unapply _)
 
   val v1Schema = "apiKey"  :: "path" :: HNil
+  @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")
   val v0Schema = "tokenId" :: "path" :: HNil
   
   implicit val archiveDecomposer = decomposer[Archive](v1Schema)
