@@ -94,13 +94,13 @@ class HardCodedAccountManager(accountId: AccountId) extends BasicAccountManager[
 class AccountManagerClient(settings: AccountManagerClientSettings) extends BasicAccountManager[Future] with AkkaDefaults with Logging {
   import settings._
 
-  private[this] val apiKeyToAccountCache = Cache[APIKey, Set[AccountId]](cacheSize)
+  private[this] val apiKeyToAccountCache = Cache.simple[APIKey, Set[AccountId]](Cache.MaxSize(cacheSize))
 
   val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
   def listAccountIds(apiKey: APIKey) : Future[Set[AccountId]] = {
-    apiKeyToAccountCache.getIfPresent(apiKey).map(Promise.successful(_)).getOrElse {
+    apiKeyToAccountCache.get(apiKey).map(Promise.successful(_)).getOrElse {
       invoke { client =>
         client.query("apiKey", apiKey).contentType(application/MimeTypes.json).get[JValue]("") map {
           case HttpResponse(HttpStatus(OK, _), _, Some(jaccounts), _) =>
