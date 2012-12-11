@@ -1100,15 +1100,21 @@ trait Evaluator[M[+_]] extends DAG
       }
     }
     
+    println("nodes >>> " + nodes)
+    
     val commonality = if (nodes.size <= 1)
       nodes.headOption
     else
       loop(nodes)
     
+    println("commonality >>> " + commonality)
+    
     val results = for {
       n <- nodes
       c <- commonality
     } yield isTranspecable(n, c)
+    
+    println("results >>> " + results)
     
     if (results == Set(true))
       commonality
