@@ -42,7 +42,7 @@ trait EvaluatorMethods[M[+_]] extends Instructions with UnaryLib[M] with TransSp
     case NotEq => trans.Map1(trans.Equal(left, right), op1(Comp).f1)
     case instructions.WrapObject => WrapObjectDynamic(left, right)
     case JoinObject => InnerObjectConcat(left, right)
-    case JoinArray => ArrayConcat(left, right)
+    case JoinArray => InnerArrayConcat(left, right)
     case instructions.ArraySwap => sys.error("nothing happens")
     case DerefObject => DerefObjectDynamic(left, right)
     case DerefMetadata => sys.error("cannot do a dynamic metadata deref")

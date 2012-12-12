@@ -103,46 +103,43 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
 
     import scala.math.max
 
-    def mergeJsonPairwise(jv1: JValue, jv2: JValue): JValue = (jv1, jv2) match {
-      case (JArray(el1), JArray(el2)) => {
-        val len = max(el1.length, el2.length)
-        val pairs = el1.padTo(len, JUndefined).zip(el2.padTo(len, JUndefined))
-        JArray(pairs.map { case (a, b) => mergeJsonPairwise(a, b) })
-      }
-      case (JObject(m1), JObject(m2)) => {
-        val keys = m1.keys ++ m2.keys
-        JObject(keys.map(k => (k, mergeJsonPairwise(m1.getOrElse(k, JUndefined), m2.getOrElse(k, JUndefined)))).toMap)
-      }
-      case (v1, v2) => v1 merge v2
-    }     
-
     val expected = computeCogroup(l.data, r.data, Stream())(keyOrder) map {
       case Left3(jv) => jv
       case Middle3((jv1, jv2)) => 
-        JObject(JField("key", jv1 \ "key"), JField("value", mergeJsonPairwise(jv1 \ "value", jv2 \ "value")))
-
-        //JObject(JField("key", jv1 \ "key"), JField("value", ((jv1 \ "value") merge (jv2 \ "value")).normalize))
-
-        //jv1.insertAll(JObject(List(JField("value", jv2 \ "value")))) match {
-        //  case Success(v) => v
-        //  case Failure(ts) => throw ts.head
-        //}
+        JObject(
+          JField("key", jv1 \ "key"), 
+          JField("valueLeft", jv1 \ "value"), 
+          JField("valueRight", jv2 \ "value"))
       case Right3(jv) => jv
     } 
 
     val result: Table = ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
       Leaf(Source),
       Leaf(Source),
-      OuterObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(OuterObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
-    )
+      OuterObjectConcat(WrapObject(SourceKey.Left, "key"), OuterObjectConcat(WrapObject(SourceValue.Left, "valueLeft"), WrapObject(SourceValue.Right, "valueRight"))))
 
     val jsonResult = toJson(result)
     
-    forall(jsonResult.copoint zip expected) {
-      case (a, b) => a mustEqual b
-    }
-    
-    jsonResult.copoint must containAllOf(expected).only
+    jsonResult.copoint must_== expected
+  }
+
+  def testTrivialCogroup(f: Table => Table = identity[Table]) = {
+    def recl = toRecord(Array(0), JArray(JNum(12) :: Nil))
+    def recr = toRecord(Array(0), JArray(JUndefined :: JNum(13) :: Nil))
+
+    val ltable = fromSample(SampleData(Stream(recl)))
+    val rtable = fromSample(SampleData(Stream(recr)))
+
+    val expected = Vector(toRecord(Array(0), JArray(JNum(12) :: JUndefined :: JNum(13) :: Nil)))
+
+    val result: Table = ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
+      Leaf(Source),
+      Leaf(Source),
+      OuterObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(OuterArrayConcat(SourceValue.Left, SourceValue.Right), "value"))
+    )
+
+    val jsonResult = toJson(f(result))
+    jsonResult.copoint must_== expected
   }
 
   def testSimpleCogroup(f: Table => Table = identity[Table]) = {
@@ -177,7 +174,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     )
 
     val jsonResult = toJson(f(result))
-    jsonResult.copoint must containAllOf(expected).only
+    jsonResult.copoint must_== expected
   }
 
   def testUnionCogroup = {
@@ -200,7 +197,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     )
 
     val jsonResult = toJson(result)
-    jsonResult.copoint must containAllOf(expected).only
+    jsonResult.copoint must_== expected
   }
 
   def testAnotherSimpleCogroup = {
@@ -229,7 +226,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     )
 
     val jsonResult = toJson(result)
-    jsonResult.copoint must containAllOf(expected).only
+    jsonResult.copoint must_== expected
   }
 
   def testAnotherSimpleCogroupSwitched = {
@@ -258,7 +255,7 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
     )
 
     val jsonResult = toJson(result)
-    jsonResult.copoint must containAllOf(expected).only
+    jsonResult.copoint must_== expected
   }
 
   def testUnsortedInputs = {

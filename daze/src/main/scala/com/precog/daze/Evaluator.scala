@@ -313,8 +313,8 @@ trait Evaluator[M[+_]] extends DAG
         }
         
         case dag.Morph2(_, mor, left, right) => {
-          lazy val spec = trans.ArrayConcat(trans.WrapArray(Leaf(SourceLeft)), trans.WrapArray(Leaf(SourceRight)))
-          lazy val specRight = trans.ArrayConcat(trans.WrapArray(Leaf(SourceRight)), trans.WrapArray(Leaf(SourceLeft)))
+          lazy val spec = trans.InnerArrayConcat(trans.WrapArray(Leaf(SourceLeft)), trans.WrapArray(Leaf(SourceRight)))
+          lazy val specRight = trans.InnerArrayConcat(trans.WrapArray(Leaf(SourceRight)), trans.WrapArray(Leaf(SourceLeft)))
           lazy val key = trans.DerefObjectStatic(Leaf(Source), paths.Key)
           
           for {
@@ -343,7 +343,7 @@ trait Evaluator[M[+_]] extends DAG
               }
               leftSpec = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(0)), paths.Value)
               rightSpec = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
-              transformed = aligned.transform(ArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
+              transformed = aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
 
               result <- mor(transformed)
             } yield result
@@ -639,7 +639,7 @@ trait Evaluator[M[+_]] extends DAG
             case CEmptyArray => {
               for {
                 pendingTable <- prepareEval(left, splits)
-              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArrayConcat(pendingTable.trans))
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.InnerArrayConcat(pendingTable.trans))
             }
             
             case _ =>
@@ -652,7 +652,7 @@ trait Evaluator[M[+_]] extends DAG
             case CEmptyArray => {
               for {
                 pendingTable <- prepareEval(right, splits)
-              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.ArrayConcat(pendingTable.trans))
+              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.InnerArrayConcat(pendingTable.trans))
             }
             
             case _ =>
@@ -1275,7 +1275,7 @@ trait Evaluator[M[+_]] extends DAG
     val components = for (i <- 0 until sharedLength)
       yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, CPathIndex(i))): TransSpec1
 
-    components reduce { trans.ArrayConcat(_, _) }
+    components reduce { trans.InnerArrayConcat(_, _) }
   }
   
   private def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
@@ -1296,7 +1296,7 @@ trait Evaluator[M[+_]] extends DAG
     val newIdentitySpec = if (derefs.isEmpty)
       trans.ConstLiteral(CEmptyArray, Leaf(SourceLeft))
     else
-      derefs reduce { trans.ArrayConcat(_, _) }
+      derefs reduce { trans.InnerArrayConcat(_, _) }
     
     val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, paths.Key.name)
     
@@ -1312,7 +1312,7 @@ trait Evaluator[M[+_]] extends DAG
     val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
     val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
     
-    val newIdentitySpec = ArrayConcat(leftIdentitySpec, rightIdentitySpec)
+    val newIdentitySpec = InnerArrayConcat(leftIdentitySpec, rightIdentitySpec)
     
     val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, paths.Key.name)
 
@@ -1327,7 +1327,7 @@ trait Evaluator[M[+_]] extends DAG
   private def buildIdShuffleSpec(indexes: Vector[Int]): TransSpec1 = {
     indexes map { idx =>
       trans.WrapArray(DerefArrayStatic(Leaf(Source), CPathIndex(idx))): TransSpec1
-    } reduce { trans.ArrayConcat(_, _) }
+    } reduce { trans.InnerArrayConcat(_, _) }
   }
   
   private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
@@ -1336,7 +1336,7 @@ trait Evaluator[M[+_]] extends DAG
     TableTransSpec.makeTransSpec(Map(paths.Value -> trans))
 
   def combineTransSpecs(specs: List[TransSpec1]): TransSpec1 =
-    specs map { trans.WrapArray(_): TransSpec1 } reduceOption { trans.ArrayConcat(_, _) } get
+    specs map { trans.WrapArray(_): TransSpec1 } reduceOption { trans.OuterArrayConcat(_, _) } get
   
   type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
   type TableTransSpec1 = TableTransSpec[Source1]
