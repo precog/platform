@@ -112,6 +112,27 @@ trait ManagedQueryModule extends YggConfigComponent {
   }
 
   /**
+   * This acts as a sink for `ShardQuery`, turning it into a plain future. It
+   * will deal with cancelled and expired queries by updating the job and
+   * throwing either a `QueryCancelledException` or a `QueryExpiredException`.
+   * If a value is successfully pulled out of `f`, then it will be returned.
+   * However, `sink` will not mark the job as successful here. It onyl deals
+   * with failures.
+   */
+  implicit def sink(implicit M: ShardQueryMonad) = new (ShardQuery ~> Future) {
+    def apply[A](f: ShardQuery[A]): Future[A] = f.stateM map {
+      case Running(_, value) =>
+        value
+      case Cancelled =>
+        M.jobId map (jobManager.abort(_, "Query was cancelled.", yggConfig.clock.now()))
+        throw QueryCancelledException("Query was cancelled before it was completed.")
+      case Expired =>
+        M.jobId map (jobManager.expire(_, yggConfig.clock.now()))
+        throw QueryExpiredException("Query expired before it was completed.")
+    }
+  }
+
+  /**
    * Given the result of a managed query as a stream, this will ensure the job
    * is finished correctly. If the query is cancelled, then the job will be
    * aborted. If the stream is run to completion, then the job will be
@@ -120,36 +141,13 @@ trait ManagedQueryModule extends YggConfigComponent {
    * This also turns the result stream into a simple StreamT[Future, A], as
    * this method is essentially the sink for managed queries.
    */
-  def completeJob[A](result: StreamT[ShardQuery, A])(implicit M: ShardQueryMonad): StreamT[Future, A] = {
-    val stripShardQuery = implicitly[Hoist[StreamT]].hoist[ShardQuery, Future](new (ShardQuery ~> Future) {
-      def apply[A](f: ShardQuery[A]): Future[A] = sink(f)
-    })
-
+  def completeJob[N[+_], A](result: StreamT[ShardQuery, A])(implicit M: ShardQueryMonad, t: ShardQuery ~> N): StreamT[N, A] = {
     val finish: StreamT[ShardQuery, A] = StreamT[ShardQuery, A](M.point(StreamT.Skip {
       M.jobId map (jobManager.finish(_, None, yggConfig.clock.now()))
       StreamT.empty[ShardQuery, A]
     }))
 
-    stripShardQuery(result ++ finish)
-  }
-
-  /**
-   * This acts as a sink for `ShardQuery`, turning it into a plain future. It
-   * will deal with cancelled and expired queries by updating the job and
-   * throwing either a `QueryCancelledException` or a `QueryExpiredException`.
-   * If a value is successfully pulled out of `f`, then it will be returned.
-   * However, `sink` will not mark the job as successful here. It onyl deals
-   * with failures.
-   */
-  def sink[A](f: ShardQuery[A])(implicit M: ShardQueryMonad): Future[A] = f.stateM map {
-    case Running(_, value) =>
-      value
-    case Cancelled =>
-      M.jobId map (jobManager.abort(_, "Query was cancelled.", yggConfig.clock.now()))
-      throw QueryCancelledException("Query was cancelled before it was completed.")
-    case Expired =>
-      M.jobId map (jobManager.expire(_, yggConfig.clock.now()))
-      throw QueryExpiredException("Query expired before it was completed.")
+    implicitly[Hoist[StreamT]].hoist[ShardQuery, N](t).apply(result ++ finish)
   }
 
   // This can be used when the Job service is down.

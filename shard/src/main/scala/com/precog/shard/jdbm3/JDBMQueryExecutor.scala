@@ -169,7 +169,7 @@ trait JDBMQueryExecutorComponent {
                 import JobQueryState._
 
                 val result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] = {
-                  sink(newExecutor.execute(userUID, query, prefix, opts)) recover {
+                  sink.apply(newExecutor.execute(userUID, query, prefix, opts)) recover {
                     case _: QueryCancelledException => Failure(InvalidStateError("Query was cancelled before it could be executed."))
                     case _: QueryExpiredException => Failure(InvalidStateError("Query expired before it could be executed."))
                   }
