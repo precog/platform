@@ -147,22 +147,6 @@ trait JDBMQueryExecutorComponent {
         }
       }
 
-      // Maps a QueryExecutor[ShardQuery] -> QueryExecutor[Future]
-      def demoteToFuture(executor: QueryExecutor[ShardQuery])(implicit M: Monad[ShardQuery]): QueryExecutor[Future] = new QueryExecutor[Future] {
-
-        val shardQueryStream2futureStream = implicitly[Hoist[StreamT]].hoist[ShardQuery, Future](new (ShardQuery ~> Future) {
-          def apply[A](f: ShardQuery[A]): Future[A] = f.stateM map { _ getOrElse sys.error("Query cancelled!") }
-        })
-
-        def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
-          val result = executor.execute(userUID, query, prefix, opts)
-          // TODO: Need to use shardQuerystream2futureStream to abort cancelled queries,
-          // otherwise, if they finish successfully, we need to append a Skip to the StreamT
-          // (of ShardQuery) that finishes the query successfully.
-          result map (shardQueryStream2futureStream(_))
-        }
-      }
-
       trait JDBMShardQueryExecutor 
           extends ShardQueryExecutor[ShardQuery]
           with JDBMColumnarTableModule[ShardQuery] {
@@ -177,7 +161,7 @@ trait JDBMQueryExecutorComponent {
 
         val shardQueryExecutor = for {
           executionContext <- getAccountExecutionContext(apiKey)
-          shardQueryMonad <- createJob(apiKey, executionContext)
+          shardQueryMonad <- createJob(apiKey, "Shard Query")(executionContext)
           queryExecutor = newExecutor(shardQueryMonad)
         } yield {
           new QueryExecutor[Future] {

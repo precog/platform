@@ -89,8 +89,8 @@ trait ManagedQueryModule extends YggConfigComponent {
    * `completeJob` to ensure the job is put into a terminal state when the
    * query completes.
    */
-  def createJob(apiKey: APIKey, asyncContext: ExecutionContext): EitherT[Future, String, ShardQueryMonad] = {
-    val futureJob = jobManager.createJob(apiKey, "Super-Awesome Shard Query", "shard-query", Some(yggConfig.clock.now()), None)
+  def createJob(apiKey: APIKey, name: String)(implicit asyncContext: ExecutionContext): EitherT[Future, String, ShardQueryMonad] = {
+    val futureJob = jobManager.createJob(apiKey, name, "shard-query", Some(yggConfig.clock.now()), None)
     EitherT.eitherT(for {
       job <- futureJob map { job => Some(job) } recover { case _ => None }
       queryStateManager = job map { job => JobQueryStateManager(job.id) } getOrElse FakeJobQueryStateManager

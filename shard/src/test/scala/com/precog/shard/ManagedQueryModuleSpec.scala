@@ -182,7 +182,7 @@ trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[Future] with 
   }
 
   def executorFor(apiKey: APIKey): Future[Validation[String, TestQueryExecutor[Future]]] = {
-    (createJob(apiKey, executionContext) map { implicit M =>
+    (createJob(apiKey, "Test Shard Query")(executionContext) map { implicit M =>
       new TestQueryExecutor[Future] {
         def jobId = M.jobId
         var ticks: Int = 0
