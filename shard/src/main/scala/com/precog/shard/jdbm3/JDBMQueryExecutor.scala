@@ -161,13 +161,20 @@ trait JDBMQueryExecutorComponent {
 
         val shardQueryExecutor = for {
           executionContext <- getAccountExecutionContext(apiKey)
-          shardQueryMonad <- createJob(apiKey, "Shard Query")(executionContext)
-          queryExecutor = newExecutor(shardQueryMonad)
         } yield {
           new QueryExecutor[Future] {
             def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions) = {
-              val result = queryExecutor.execute(userUID, query, prefix, opts)
-              result map (completeJob(_)(shardQueryMonad))
+              createJob(apiKey, query, None)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
+                import JobQueryState._
+
+                val result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] = newExecutor.execute(userUID, query, prefix, opts).stateM map {
+                  case Running(_, value) => value
+                  case Cancelled => Failure(InvalidStateError("Query was cancelled before it could be executed."))
+                  case Expired => Failure(InvalidStateError("Query expired before it could be executed."))
+                }
+
+                result map { _ map (completeJob(_)) }
+              }
             }
           }
         }

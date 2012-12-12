@@ -106,7 +106,7 @@ trait ShardQueryExecutorFactory
 
     case class StackException(error: StackError) extends Exception(error.toString)
 
-    def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, CharBuffer]] = {
+    def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, StreamT[M, CharBuffer]]] = {
       val evaluationContext = EvaluationContext(apiKey, prefix, clock.now())
       val qid = queryId.getAndIncrement
       queryLogger.info("Executing query %d for %s: %s, prefix: %s".format(qid, userUID, query,prefix))
@@ -133,7 +133,9 @@ trait ShardQueryExecutorFactory
         }
       }
       
-      ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[M, CharBuffer]]])
+      M.point {
+        ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[M, CharBuffer]]])
+      }
     }
 
     private def applyQueryOptions(opts: QueryOptions)(table: M[Table]): M[Table] = {

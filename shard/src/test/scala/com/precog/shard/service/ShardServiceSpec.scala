@@ -293,9 +293,9 @@ trait TestQueryExecutorFactory extends QueryExecutorFactory[Future] {
         }).map(_.forall(identity)), to)
         
         if(allowed)
-          success(wrap(JArray(List(JNum(2)))))
+          Future(success(wrap(JArray(List(JNum(2))))))
         else
-          failure(AccessDenied("No data accessable at the specified path"))
+          Future(failure(AccessDenied("No data accessable at the specified path")))
       }
     })
   }

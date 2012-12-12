@@ -53,8 +53,8 @@ with Logging {
       case Command("ds", arg) => describe(r.apiKey, Path(arg.trim))
       case Command("describe", arg) => describe(r.apiKey, Path(arg.trim))
       case qt =>
-        queryExecutor.executorFor(r.apiKey).map { 
-          case Success(evaluator) => evaluator.execute(r.apiKey, q, p, opts) match {
+        queryExecutor.executorFor(r.apiKey).flatMap { 
+          case Success(evaluator) => evaluator.execute(r.apiKey, q, p, opts) map {
             case Success(stream) =>
               HttpResponse[QueryResult](OK, content = Some(Right(stream)))
           
@@ -70,11 +70,14 @@ with Logging {
             case Failure(SystemError(error)) =>
               error.printStackTrace()
               logger.error("An error occurred processing the query: " + qt, error)
-            HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
+              HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
+
+            case Failure(InvalidStateError(error)) =>
+              HttpResponse[QueryResult](HttpStatus(PreconditionFailed, error))
           }
           case Failure(error) => {
             logger.error("Failure during evaluator setup: " + error)
-            HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
+            Future(HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")))
           }
         }
     })

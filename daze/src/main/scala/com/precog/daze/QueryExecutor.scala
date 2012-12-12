@@ -37,6 +37,7 @@ import Validation._
 
 sealed trait EvaluationError
 case class UserError(errorData: JArray) extends EvaluationError
+case class InvalidStateError(message: String) extends EvaluationError
 case class AccessDenied(reason: String) extends EvaluationError
 case object TimeoutError extends EvaluationError
 case class SystemError(error: Throwable) extends EvaluationError
@@ -58,7 +59,7 @@ trait MetadataClient[M[+_]] {
 }
 
 trait QueryExecutor[M[+_]] {
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, CharBuffer]]
+  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, StreamT[M, CharBuffer]]]
 }
 
 trait QueryExecutorFactory[M[+_]] extends MetadataClient[M] {

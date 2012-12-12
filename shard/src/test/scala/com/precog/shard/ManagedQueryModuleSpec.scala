@@ -61,16 +61,17 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
   }
 
   // Performs an incredibly intense compuation that requires numTicks ticks.
-  def execute(numTicks: Int): Future[(Option[JobId], Future[Either[Int, Int]])] = {
+  def execute(numTicks: Int): Future[(TestQueryExecutor[Future], Future[Int])] = {
     for {
       executor <- executorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
+      result <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions())
     } yield {
-      val result = executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions())
-      val stream = result getOrElse sys.error("I'm a lumberjack")
+      def count(n: Int, cs0: StreamT[Future, CharBuffer]): Future[Int] = cs0.uncons flatMap {
+        case Some((_, cs)) => count(n + 1, cs)
+        case None => Future(n)
+      }
 
-      executor.jobId -> (stream.foldLeft(0) { (acc, _) => acc + 1 } map (Right(_)) recover {
-        case QueryCancelledException(_) => Left(executor.ticks)
-      })
+      executor -> count(0, result getOrElse sys.error("I'm a lumberjack"))
     }
   }
 
@@ -89,8 +90,8 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
 
     "start in the start state" in {
       (for {
-        (Some(jobId), _) <- execute(5)
-        job <- jobManager.findJob(jobId)
+        (executor, _) <- execute(5)
+        job <- jobManager.findJob(executor.jobId.get)
       } yield job).copoint must beLike {
         case Some(Job(_, _, _, _, Started(_, NotStarted))) => ok
       }
@@ -98,7 +99,8 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
 
     "be in a finished state if it completes successfully" in {
       (for {
-        (Some(jobId), _) <- execute(1)
+        (executor, _) <- execute(1)
+        Some(jobId) = executor.jobId
         _ <- waitFor(5)
         job <- jobManager.findJob(jobId)
       } yield job).copoint must beLike {
@@ -108,28 +110,30 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
 
     "complete successfully if not cancelled" in {
       val ticks = for {
-        (jobId, query) <- execute(10)
+        (_, query) <- execute(13)
         ticks <- query
       } yield ticks
 
-      ticks.copoint must_== Right(10)
+      ticks.copoint must_== 13
     }
 
     "be cancellable" in {
-      val ticks = for {
-        (jobId, query) <- execute(10)
-        cancelled <- cancel(jobId, 5)
-        ticks <- query
-      } yield ticks
+      val result = for {
+        (executor, ticks) <- execute(10)
+        cancelled <- cancel(executor.jobId, 5)
+      } yield (executor, ticks)
 
-      ticks.copoint must beLike {
-        case Left(ticks) => ticks must be_<(10)
+      result.copoint must beLike {
+        case (executor, ticks) =>
+          ticks.copoint must throwA[QueryCancelledException]
+          executor.ticks must be_<(10)
       }
     }
 
     "be in an aborted state if cancelled successfully" in {
       val job = for {
-        (Some(jobId), query) <- execute(6)
+        (executor, query) <- execute(6)
+        Some(jobId) = executor.jobId
         cancelled <- cancel(Some(jobId), 1)
         _ <- waitFor(8)
         job <- jobManager.findJob(jobId)
@@ -142,13 +146,13 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
 
     "cannot be cancelled after it has successfully completed" in {
       val ticks = for {
-        (jobId, query) <- execute(10)
-        cancelled <- cancel(jobId, 11)
+        (executor, query) <- execute(10)
+        cancelled <- cancel(executor.jobId, 11)
         _ <- waitFor(12)
         ticks <- query
       } yield ticks
 
-      ticks.copoint must_== Right(10)
+      ticks.copoint must_== 10
     }
   }
 
@@ -182,18 +186,21 @@ trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[Future] with 
   }
 
   def executorFor(apiKey: APIKey): Future[Validation[String, TestQueryExecutor[Future]]] = {
-    (createJob(apiKey, "Test Shard Query")(executionContext) map { implicit M =>
-      new TestQueryExecutor[Future] {
+    createJob(apiKey, "Test Shard Query")(executionContext) map { implicit M =>
+      Success(new TestQueryExecutor[Future] {
         def jobId = M.jobId
-        var ticks: Int = 0
+        def ticks: Int = _ticks
 
-        def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+        @volatile
+        var _ticks: Int = 0
+
+        def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = Future {
           val numTicks = query.toInt
           val result = StreamT.unfoldM[ShardQuery, CharBuffer, Int](0) {
             case i if i < numTicks =>
               M.point {
                 // Super crazy computation.
-                ticks += 1
+                _ticks += 1
                 Thread.sleep(tickDuration)
                 Some((tick, i + 1))
               }
@@ -204,8 +211,8 @@ trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[Future] with 
 
           Success(completeJob(result))
         }
-      }
-    }).validation
+      })
+    }
   }
 
   def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
