@@ -92,7 +92,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
         (Some(jobId), _) <- execute(5)
         job <- jobManager.findJob(jobId)
       } yield job).copoint must beLike {
-        case Some(Job(_, _, _, _, Started(_, NotStarted), _)) => ok
+        case Some(Job(_, _, _, _, Started(_, NotStarted))) => ok
       }
     }
 
@@ -102,7 +102,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
         _ <- waitFor(5)
         job <- jobManager.findJob(jobId)
       } yield job).copoint must beLike {
-        case Some(Job(_, _, _, _, Finished(None, _, _), _)) => ok
+        case Some(Job(_, _, _, _, Finished(None, _, _))) => ok
       }
     }
 
@@ -136,7 +136,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
       } yield job
 
       job.copoint must beLike {
-        case Some(Job(_, _, _, _, Aborted(_, _, Cancelled(_, _, _)), _)) => ok
+        case Some(Job(_, _, _, _, Aborted(_, _, Cancelled(_, _, _)))) => ok
       }
     }
 

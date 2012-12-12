@@ -110,18 +110,18 @@ trait JobManagerSpec[M[+_]] extends Specification {
 
   "job managers" should {
     "create jobs that aren't started" >> {
-      val job = jobs.createJob(validAPIKey, "name", "job type", None, None).copoint
-      job must beLike { case Job(_, _, "name", "job type", NotStarted, None) => ok }
+      val job = jobs.createJob(validAPIKey, "name", "job type", None).copoint
+      job must beLike { case Job(_, _, "name", "job type", NotStarted) => ok }
     }
 
     "create started jobs" in {
       val t = new DateTime
-      val job = jobs.createJob(validAPIKey, "name", "job type", Some(t), None).copoint
-      job must beLike { case Job(_, _, "name", "job type", Started(`t`, NotStarted), None) => ok }
+      val job = jobs.createJob(validAPIKey, "name", "job type", Some(t)).copoint
+      job must beLike { case Job(_, _, "name", "job type", Started(`t`, NotStarted)) => ok }
     }
 
     "find created jobs" in {
-      val job = jobs.createJob(validAPIKey, "name", "job type", None, None).copoint
+      val job = jobs.createJob(validAPIKey, "name", "job type", None).copoint
       val job2 = jobs.findJob(job.id).copoint
       job2 must_== Some(job)
 
@@ -129,7 +129,7 @@ trait JobManagerSpec[M[+_]] extends Specification {
     }
 
     "always update a job's status when not given previous" in {
-      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
+      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
       val jobId = job.id
       val status1 = jobs.updateStatus(job.id, None, "1", 0.0, "%", None).copoint
       val status2 = jobs.updateStatus(job.id, None, "2", 5.0, "%", Some(JString("..."))).copoint
@@ -139,7 +139,7 @@ trait JobManagerSpec[M[+_]] extends Specification {
     }
 
     "update a job's status if given correct previous status" in {
-      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
+      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
       val jobId = job.id
       val status1 = jobs.updateStatus(job.id, None, "1", 0.0, "%", None).copoint.right.toOption
       val status1x = jobs.getStatus(job.id).copoint
@@ -158,7 +158,7 @@ trait JobManagerSpec[M[+_]] extends Specification {
     }
 
     "refuse to update a job's status if given incorrect previous status" in {
-      val jobId = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint.id
+      val jobId = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint.id
       val status1 = jobs.updateStatus(jobId, None, "1", 0.0, "%", None).copoint.right.toOption
       val status1x = jobs.getStatus(jobId).copoint
 
@@ -175,7 +175,7 @@ trait JobManagerSpec[M[+_]] extends Specification {
     }
 
     "put job statuses in 'status' message channel" in {
-      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
+      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
       val status1 = Status.toMessage(jobs.updateStatus(job.id, None, "1", 0.0, "%", None).copoint.right getOrElse sys.error("..."))
       val status2 = Status.toMessage(jobs.updateStatus(job.id, None, "2", 5.0, "%", Some(JString("..."))).copoint.right getOrElse sys.error("..."))
       jobs.listChannels(job.id).copoint must contain(Message.channels.Status)
@@ -184,8 +184,8 @@ trait JobManagerSpec[M[+_]] extends Specification {
     }
 
     "add arbitrary messages in any channel" in {
-      val job1 = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
-      val job2 = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
+      val job1 = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
+      val job2 = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
       val m1 = jobs.addMessage(job1.id, "abc", JString("Hello, world!")).copoint
       val m2 = jobs.addMessage(job1.id, "group therapy", JString("My name is: Bob")).copoint
       val m3 = jobs.addMessage(job1.id, "group therapy", JString("Hi Bob!")).copoint
@@ -201,12 +201,12 @@ trait JobManagerSpec[M[+_]] extends Specification {
     }
 
     "return empty seq for non-existant channel" in {
-      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
+      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
       jobs.listMessages(job.id, "zzz", None).copoint.toList must_== Nil
     }
 
     "return latest results when previous message provided" in {
-      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
+      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
 
       def say(name: String, message: String): JValue = JObject(List(
         JField("name", JString(name)), JField("message", JString(message))
@@ -228,7 +228,7 @@ trait JobManagerSpec[M[+_]] extends Specification {
     }
 
     "list channels that have been posted to" in {
-      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
+      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
       jobs.addMessage(job.id, "a", JString("a")).copoint
       jobs.addMessage(job.id, "b", JString("a")).copoint
       jobs.addMessage(job.id, "c", JString("a")).copoint
@@ -236,81 +236,81 @@ trait JobManagerSpec[M[+_]] extends Specification {
     }
 
     "allow jobs to be cancelled" in {
-      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
+      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
       val state = job.state
       val jobId = job.id
 
       jobs.cancel(job.id, "I didn't like the way it looked at me.").copoint must beLike {
-        case Right(Job(`jobId`, _, _, _, Cancelled("I didn't like the way it looked at me.", _, `state`), _)) => ok
+        case Right(Job(`jobId`, _, _, _, Cancelled("I didn't like the way it looked at me.", _, `state`))) => ok
       }
 
       jobs.findJob(jobId).copoint must beLike {
-        case Some(Job(`jobId`, _, _, _, Cancelled(_, _, `state`), _)) => ok
+        case Some(Job(`jobId`, _, _, _, Cancelled(_, _, `state`))) => ok
       }
     }
 
     "not allow a double cancellation" in {
-      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
+      val job = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
       jobs.cancel(job.id, "It was redundant.").copoint must beLike { case Right(_) => ok }
       jobs.cancel(job.id, "It was redundant.").copoint must beLike { case Left(_) => ok }
     }
 
     "allow aborts from non-terminal state" in {
-      val job1 = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
+      val job1 = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
       val job1Id = job1.id
       val job1State = job1.state
 
       jobs.abort(job1Id, "The mission was compromised.").copoint must beLike {
-        case Right(Job(`job1Id`, _, _, _, Aborted("The mission was compromised.", _, `job1State`), _)) => ok
+        case Right(Job(`job1Id`, _, _, _, Aborted("The mission was compromised.", _, `job1State`))) => ok
       }
 
-      val job2Id = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint.id
+      val job2Id = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint.id
       jobs.cancel(job2Id, "Muwahaha").copoint must beLike { case Right(job2) =>
         val job2State = job2.state
 
         jobs.abort(job2.id, "Blagawaga").copoint must beLike {
-          case Right(Job(`job2Id`, _, _, _, Aborted("Blagawaga", _, `job2State`), _)) => ok
+          case Right(Job(`job2Id`, _, _, _, Aborted("Blagawaga", _, `job2State`))) => ok
         }
       }
       
-      val job3 = jobs.createJob(validAPIKey, "b", "c", None, None).copoint
+      val job3 = jobs.createJob(validAPIKey, "b", "c", None).copoint
       val job3Id = job3.id
 
       jobs.abort(job3Id, "Because I could.").copoint must beLike {
-        case Right(Job(`job3Id`, _, _, _, Aborted("Because I could.", _, NotStarted), _)) => ok
+        case Right(Job(`job3Id`, _, _, _, Aborted("Because I could.", _, NotStarted))) => ok
       }
     }
 
     "allow a job to be started after it is created" in {
-      val job = jobs.createJob(validAPIKey, "b", "c", None, None).copoint
+      val job = jobs.createJob(validAPIKey, "b", "c", None).copoint
       val jobId = job.id
       val dt = new DateTime
       jobs.start(job.id, dt).copoint must beLike {
-        case Right(Job(`jobId`, _, _, _, Started(`dt`, NotStarted), _)) => ok
+        case Right(Job(`jobId`, _, _, _, Started(`dt`, NotStarted))) => ok
       }
     }
 
     "ensure jobs are only started once" in {
-      val job = jobs.createJob(validAPIKey, "b", "c", None, None).copoint
+      val job = jobs.createJob(validAPIKey, "b", "c", None).copoint
       jobs.start(job.id).copoint
       jobs.start(job.id).copoint must beLike { case Left(_) => ok }
 
-      val job2 = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime), None).copoint
+      val job2 = jobs.createJob(validAPIKey, "b", "c", Some(new DateTime)).copoint
       jobs.start(job2.id).copoint must beLike { case Left(_) => ok }
     }
 
     "finish jobs and preserve result" in {
       import MimeTypes._
 
-      val job = jobs.createJob(validAPIKey, "b", "c", None, None).copoint
+      val job = jobs.createJob(validAPIKey, "b", "c", None).copoint
       jobs.start(job.id).copoint
       val result = JobResult(List(MimeTypes.text / plain), "Hello, world!".getBytes())
       jobs.finish(job.id, Some(result)).copoint must beLike {
-        case Right(Job(_, _, _, _, Finished(Some(stored), _, _), _)) =>
+        case Right(Job(_, _, _, _, Finished(Some(stored), _, _))) =>
           stored must_== result
       }
       jobs.findJob(job.id).copoint must beLike {
-        case Some(Job(_, _, _, _, Finished(Some(`result`), _, _), _)) => ok
+        case Some(Job(_, _, _, _, Finished(Some(`result`), _, _))) => ok
       }
     }
   }

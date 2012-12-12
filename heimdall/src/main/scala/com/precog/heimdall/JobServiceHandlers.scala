@@ -70,7 +70,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
 
               auth.isValid(apiKey) flatMap {
                 case true =>
-                  jobs.createJob(apiKey, name, tpe, None, None) map { job =>
+                  jobs.createJob(apiKey, name, tpe, None) map { job =>
                     HttpResponse[JValue](Created, content = Some(job.serialize))
                   }
                 case false =>
@@ -341,6 +341,11 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                 Future(Failure("Missing required field 'reason' in request body."))
             }
 
+          case JString("expired") =>
+            transition(obj) { (timestamp, _) =>
+              jobs.expire(jobId, timestamp) map (Validation.fromEither(_)) map (_ map (_.state))
+            }
+
           case _ =>
             Future(HttpResponse[JValue](BadRequest, content = Some(JString(
               "Invalid 'state given. Expected one of 'start', 'cancel', or 'abort'."
@@ -398,7 +403,7 @@ extends CustomHttpService[Future[Array[Byte]], Future[HttpResponse[Array[Byte]]]
   val service: HttpRequest[Future[Array[Byte]]] => Validation[NotServed, Future[HttpResponse[Array[Byte]]]] = (request: HttpRequest[Future[Array[Byte]]]) => {
     Success(request.parameters get 'jobId map { jobId =>
       jobs.findJob(jobId) map {
-        case Some(Job(_, _, _, _, Finished(result, _, _), _)) =>
+        case Some(Job(_, _, _, _, Finished(result, _, _))) =>
           HttpResponse[Array[Byte]](OK, content = result map (_.content))
         case _ =>
           HttpResponse[Array[Byte]](NotFound)

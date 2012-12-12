@@ -28,6 +28,8 @@ import blueeyes.util.Clock
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
+import org.joda.time.DateTime
+
 import akka.dispatch.{ Future, ExecutionContext }
 import akka.actor.ActorSystem
 import akka.util.Duration
@@ -39,6 +41,12 @@ import scalaz._
  * query terminated abnormally because it was cancelled from the outside.
  */
 case class QueryCancelledException(msg: String) extends Exception(msg)
+
+/**
+ * A `QueryExpiredException` is thrown in a `Future` to indicate that the
+ * query terminated abnormally because its allotted time had expired.
+ */
+case class QueryExpiredException(msg: String) extends Exception(msg)
 
 trait ManagedQueryModuleConfig {
 
@@ -89,11 +97,13 @@ trait ManagedQueryModule extends YggConfigComponent {
    * `completeJob` to ensure the job is put into a terminal state when the
    * query completes.
    */
-  def createJob(apiKey: APIKey, name: String)(implicit asyncContext: ExecutionContext): EitherT[Future, String, ShardQueryMonad] = {
-    val futureJob = jobManager.createJob(apiKey, name, "shard-query", Some(yggConfig.clock.now()), None)
+  def createJob(apiKey: APIKey, name: String, expires: Option[DateTime] = None)(implicit asyncContext: ExecutionContext): EitherT[Future, String, ShardQueryMonad] = {
+    val futureJob = jobManager.createJob(apiKey, name, "shard-query", Some(yggConfig.clock.now()))
     EitherT.eitherT(for {
       job <- futureJob map { job => Some(job) } recover { case _ => None }
-      queryStateManager = job map { job => JobQueryStateManager(job.id) } getOrElse FakeJobQueryStateManager
+      queryStateManager = job map { job =>
+        JobQueryStateManager(job.id, expires)
+      } getOrElse FakeJobQueryStateManager(expires)
     } yield \/.right(new ShardQueryMonad {
       val jobId = job map (_.id)
       val Q: SwappableMonad[JobQueryState] = queryStateManager
@@ -112,10 +122,16 @@ trait ManagedQueryModule extends YggConfigComponent {
    */
   def completeJob[A](result: StreamT[ShardQuery, A])(implicit M: ShardQueryMonad): StreamT[Future, A] = {
     val stripShardQuery = implicitly[Hoist[StreamT]].hoist[ShardQuery, Future](new (ShardQuery ~> Future) {
-      def apply[A](f: ShardQuery[A]): Future[A] = f.stateM map (_ getOrElse {
-        M.jobId map (jobManager.abort(_, "Query was cancelled.", yggConfig.clock.now()))
-        throw QueryCancelledException("Query was cancelled before it was completed!")
-      })
+      def apply[A](f: ShardQuery[A]): Future[A] = f.stateM map {
+        case Running(_, value) =>
+          value
+        case Cancelled =>
+          M.jobId map (jobManager.abort(_, "Query was cancelled.", yggConfig.clock.now()))
+          throw QueryCancelledException("Query was cancelled before it was completed.")
+        case Expired =>
+          M.jobId map (jobManager.expire(_, yggConfig.clock.now()))
+          throw QueryExpiredException("Query expired before it was completed.")
+      }
     })
 
     val finish: StreamT[ShardQuery, A] = StreamT[ShardQuery, A](M.point(StreamT.Skip {
@@ -127,11 +143,12 @@ trait ManagedQueryModule extends YggConfigComponent {
   }
 
   // This can be used when the Job service is down.
-  private final object FakeJobQueryStateManager extends JobQueryStateMonad {
+  private final case class FakeJobQueryStateManager(expires: Option[DateTime]) extends JobQueryStateMonad {
     def isCancelled() = false
+    def hasExpired() = expires map (_.compareTo(yggConfig.clock.now()) < 0) getOrElse false
   }
 
-  private final case class JobQueryStateManager(jobId: JobId) extends JobQueryStateMonad {
+  private final case class JobQueryStateManager(jobId: JobId, expires: Option[DateTime]) extends JobQueryStateMonad {
     import JobQueryState._
 
     private val rwlock = new ReentrantReadWriteLock()
@@ -150,6 +167,10 @@ trait ManagedQueryModule extends YggConfigComponent {
       }
     }
 
+    def hasExpired(): Boolean = {
+      expires map (_.compareTo(yggConfig.clock.now()) < 0) getOrElse false
+    }
+
     def isCancelled(): Boolean = {
       readLock.lock()
       val status = try {
@@ -160,7 +181,7 @@ trait ManagedQueryModule extends YggConfigComponent {
 
       import JobState._
       status map {
-        case Job(_, _, _, _, Cancelled(_, _, _), _) => true
+        case Job(_, _, _, _, Cancelled(_, _, _)) => true
         case _ => false
       } getOrElse false
     }
@@ -173,4 +194,3 @@ trait ManagedQueryModule extends YggConfigComponent {
     def stop(): Unit = poller.cancel()
   }
 }
-

@@ -30,10 +30,9 @@ import org.joda.time.DateTime
 
 import scalaz._
 
-case class Job(id: JobId, apiKey: APIKey, name: String, jobType: String, state: JobState, expires: Option[DateTime])
+case class Job(id: JobId, apiKey: APIKey, name: String, jobType: String, state: JobState)
 
 case class Status(job: JobId, id: StatusId, message: String, progress: BigDecimal, unit: String, info: Option[JValue])
-
 case class Message(job: JobId, id: MessageId, channel: String, value: JValue)
 
 object Job extends JobSerialization
@@ -82,8 +81,7 @@ trait JobSerialization {
       JField("apiKey", JString(job.apiKey)),
       JField("name", JString(job.name)),
       JField("type", JString(job.jobType)),
-      JField("state", job.state.serialize),
-      JField("expires", job.expires map (_.serialize) getOrElse JNull)
+      JField("state", job.state.serialize)
     ))
   }
 
@@ -95,8 +93,7 @@ trait JobSerialization {
        (obj \ "apiKey").validated[APIKey] |@|
        (obj \ "name").validated[String] |@|
        (obj \ "type").validated[String] |@|
-       (obj \ "state").validated[JobState] |@|
-       ((obj \ "expires").validated[DateTime].map(some(_)) <+> success(none)))(Job.apply _)
+       (obj \ "state").validated[JobState])(Job.apply _)
     }
   }
 }

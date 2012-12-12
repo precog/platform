@@ -47,10 +47,10 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
 
   private def newJobId: JobId = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
-  def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): M[Job] = {
+  def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime]): M[Job] = {
     M.point {
       val state = started map (Started(_, NotStarted)) getOrElse NotStarted
-      val job = Job(newJobId, auth, name, jobType, state, expires)
+      val job = Job(newJobId, auth, name, jobType, state)
       jobs(job.id) = job
       statuses(job.id) = Nil
       job

@@ -37,7 +37,7 @@ trait JobManager[M[+_]] { self =>
    * the job will be put in the Started state, otherwise it will be in the
    * NotStarted state until `start(...)` is run.
    */
-  def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): M[Job]
+  def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime]): M[Job]
 
   /** 
    * Returns the Job with the given ID if it exists.
@@ -109,9 +109,14 @@ trait JobManager[M[+_]] { self =>
    */
   def finish(job: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): M[Either[String, Job]]
 
+  /**
+   * Moves the job to the `Expired` terminal state.
+   */
+  def expire(job: JobId, expiredAt: DateTime = new DateTime): M[Either[String, Job]]
+
   def withM[N[+_]](implicit t: M ~> N) = new JobManager[N] {
-    def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): N[Job] =
-      t(self.createJob(auth, name, jobType, started, expires))
+    def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime]): N[Job] =
+      t(self.createJob(auth, name, jobType, started))
 
     def findJob(job: JobId): N[Option[Job]] = t(self.findJob(job))
 
@@ -135,6 +140,8 @@ trait JobManager[M[+_]] { self =>
     def abort(job: JobId, reason: String, abortedAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.abort(job, reason, abortedAt))
 
     def finish(job: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.finish(job, result, finishedAt))
+
+    def expire(job: JobId, expiredAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.expire(job, expiredAt))
   }
 }
 
@@ -168,6 +175,13 @@ trait JobStateManager[M[+_]] { self: JobManager[M] =>
   def finish(id: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): M[Either[String, Job]] = transition(id) {
     case prev @ (NotStarted | Started(_, _) | Cancelled(_, _, _)) =>
       Right(Finished(result, finishedAt, prev))
+    case badState =>
+      Left("Job already in terminal state. %s" format JobState.describe(badState))
+  }
+
+  def expire(id: JobId, expiredAt: DateTime = new DateTime): M[Either[String, Job]] = transition(id) {
+    case prev @ (NotStarted | Started(_, _) | Cancelled(_, _, _)) =>
+      Right(Expired(expiredAt, prev))
     case badState =>
       Left("Job already in terminal state. %s" format JobState.describe(badState))
   }

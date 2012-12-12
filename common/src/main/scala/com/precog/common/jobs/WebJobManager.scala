@@ -117,7 +117,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
 
   private def unexpected[A](resp: HttpResponse[A]): String = "Unexpected response from server:\n" + resp
 
-  def createJob(apiKey: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): Response[Job] = {
+  def createJob(apiKey: APIKey, name: String, jobType: String, started: Option[DateTime]): Response[Job] = {
     val content: JValue = JObject(List(
       JField("name", name),
       JField("type", jobType)

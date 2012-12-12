@@ -81,10 +81,10 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
 
   private def newJobId(): String = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
-  def createJob(apiKey: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): Future[Job] = {
+  def createJob(apiKey: APIKey, name: String, jobType: String, started: Option[DateTime]): Future[Job] = {
     val id = newJobId()
     val state = started map (Started(_, NotStarted)) getOrElse NotStarted
-    val job = Job(id, apiKey, name, jobType, state, expires)
+    val job = Job(id, apiKey, name, jobType, state)
     database(insert(job.serialize.asInstanceOf[JObject]).into(settings.jobs)) map { _ =>
       job
     }
