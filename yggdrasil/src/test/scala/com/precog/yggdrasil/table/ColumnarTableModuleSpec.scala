@@ -66,6 +66,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with DistinctSpec[M] 
     with GroupingGraphSpec[M]
     with SchemasSpec[M]
+    with IdSourceScannerModuleSpec[M]
     { spec => 
 
   //type GroupId = Int
@@ -792,10 +793,7 @@ object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] 
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
     
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 }
 

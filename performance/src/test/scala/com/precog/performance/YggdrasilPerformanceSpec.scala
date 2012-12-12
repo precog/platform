@@ -503,10 +503,7 @@ class TestQueryExecutor(config: Configuration, testShard: TestShard) extends
       val memoizationWorkDir = scratchDir
       
       val clock = blueeyes.util.Clock.System
-      val idSource = new IdSource {
-        private val source = new java.util.concurrent.atomic.AtomicLong
-        def nextId() = source.getAndIncrement
-      }
+      val idSource = new FreshAtomicIdSource
 
       object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
       object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
