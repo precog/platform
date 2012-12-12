@@ -83,6 +83,26 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
   trait MongoColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
     def mongo: Mongo
 
+    private def jTypeToProperties(tpe: JType, current: Set[String]) : Set[String] = tpe match {
+      case JArrayFixedT(elements) if current.nonEmpty => elements.map {
+        case (index, childType) =>
+          val newPaths = current.map { s => s + "[" + index + "]" }
+          jTypeToProperties(childType, newPaths)
+      }.toSet.flatten
+
+      case JObjectFixedT(fields)                      => fields.map {
+        case (name, childType) => 
+          val newPaths = if (current.nonEmpty) {
+            current.map { s => s + "." + name }
+          } else {
+            Set(name)
+          }
+          jTypeToProperties(childType, newPaths)
+      }.toSet.flatten
+
+      case _                                          => current
+    }
+
     def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
       for {
         paths <- pathsM(table)
@@ -100,7 +120,12 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
                 case dbName :: collectionName :: Nil =>
                   M.point {
                     val coll = mongo.getDB(dbName).getCollection(collectionName)
-                    val cursor = coll.find()
+
+                    val selector = jTypeToProperties(tpe, Set()).foldLeft(new BasicDBObject()) {
+                      case (obj, path) => obj.append(path, 1)
+                    }
+                    //println("Querying mongo with selector: " + selector + " for " + tpe)
+                    val cursor = coll.find(new BasicDBObject(), selector)
                     val (slice, remainder) = makeSlice(cursor)
                     Some((slice, (xs, remainder)))
                   }
