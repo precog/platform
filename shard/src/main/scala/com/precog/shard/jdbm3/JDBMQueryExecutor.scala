@@ -164,7 +164,8 @@ trait JDBMQueryExecutorComponent {
         } yield {
           new QueryExecutor[Future] {
             def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions) = {
-              createJob(apiKey, query, None)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
+              val expires = opts.timeout map (yggConfig.clock.now().plus(_))
+              createJob(apiKey, query, expires)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
                 import JobQueryState._
 
                 val result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] = newExecutor.execute(userUID, query, prefix, opts).stateM map {

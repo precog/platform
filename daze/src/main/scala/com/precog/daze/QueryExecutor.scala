@@ -49,9 +49,10 @@ object EvaluationError {
 }
 
 case class QueryOptions(
-  page: Option[(Int, Int)] = None,
+  page: Option[(Long, Long)] = None,
   sortOn: List[CPath] = Nil,
-  sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending)
+  sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending,
+  timeout: Option[Long] = None)
 
 trait MetadataClient[M[+_]] {
   def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]]
