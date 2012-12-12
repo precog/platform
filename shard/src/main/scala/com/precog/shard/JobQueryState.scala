@@ -58,5 +58,3 @@ trait JobQueryStateMonad extends SwappableMonad[JobQueryState] {
     case Cancelled => Cancelled
   }
 }
-
-
