@@ -156,6 +156,9 @@ trait JDBMQueryExecutorComponent {
 
         def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
           val result = executor.execute(userUID, query, prefix, opts)
+          // TODO: Need to use shardQuerystream2futureStream to abort cancelled queries,
+          // otherwise, if they finish successfully, we need to append a Skip to the StreamT
+          // (of ShardQuery) that finishes the query successfully.
           result map (shardQueryStream2futureStream(_))
         }
       }
@@ -176,7 +179,14 @@ trait JDBMQueryExecutorComponent {
           executionContext <- getAccountExecutionContext(apiKey)
           shardQueryMonad <- createJob(apiKey, executionContext)
           queryExecutor = newExecutor(shardQueryMonad)
-        } yield demoteToFuture(queryExecutor)(shardQueryMonad)
+        } yield {
+          new QueryExecutor[Future] {
+            def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions) = {
+              val result = queryExecutor.execute(userUID, query, prefix, opts)
+              result map (completeJob(_)(shardQueryMonad))
+            }
+          }
+        }
 
         shardQueryExecutor.validation
       }
