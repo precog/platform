@@ -168,10 +168,11 @@ trait JDBMQueryExecutorComponent {
               createJob(apiKey, query, expires)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
                 import JobQueryState._
 
-                val result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] = newExecutor.execute(userUID, query, prefix, opts).stateM map {
-                  case Running(_, value) => value
-                  case Cancelled => Failure(InvalidStateError("Query was cancelled before it could be executed."))
-                  case Expired => Failure(InvalidStateError("Query expired before it could be executed."))
+                val result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] = {
+                  sink(newExecutor.execute(userUID, query, prefix, opts)) recover {
+                    case _: QueryCancelledException => Failure(InvalidStateError("Query was cancelled before it could be executed."))
+                    case _: QueryExpiredException => Failure(InvalidStateError("Query expired before it could be executed."))
+                  }
                 }
 
                 result map { _ map (completeJob(_)) }
