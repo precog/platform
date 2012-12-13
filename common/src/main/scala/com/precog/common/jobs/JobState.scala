@@ -20,11 +20,13 @@
 package com.precog.common
 package jobs
 
+import com.precog.common.json._
+import com.precog.common.security._
+
 import blueeyes.json._
 import blueeyes.json.serialization.{ Decomposer, Extractor, ValidatedExtraction }
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
 
-import com.precog.common.security._
 
 import org.joda.time.DateTime
 

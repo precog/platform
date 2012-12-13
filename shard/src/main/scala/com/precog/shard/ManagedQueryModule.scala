@@ -69,7 +69,7 @@ trait ManagedQueryModuleConfig {
  *
  * Note that if the job service is down, then a ShardQueryMonad will still be
  * returned, it just won't actually have a job associated with it and, thus,
- * cannot be cancelled.
+ * cannot be cancelled (though timeouts still work fine).
  */
 trait ManagedQueryModule extends YggConfigComponent {
   import scalaz.syntax.monad._

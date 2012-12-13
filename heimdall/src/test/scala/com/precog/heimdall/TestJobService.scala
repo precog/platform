@@ -44,7 +44,7 @@ import scalaz._
 trait TestJobService extends BlueEyesServiceSpecification with JobService with AkkaDefaults {
   val executionContext = defaultFutureDispatch
 
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
+  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(5, "second"))
 
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 
