@@ -63,8 +63,8 @@ import scalaz.syntax.std.either._
 
 import org.streum.configrity.Configuration
 
-trait ShardQueryExecutorFactory
-    extends QueryExecutorFactory[Future]
+trait ShardQueryExecutorFactory[+A]
+    extends QueryExecutorFactory[Future, A]
     with IdSourceScannerModule[Future] { self =>
 
   protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
@@ -101,7 +101,7 @@ trait ShardQueryExecutorFactory
     })
   }
 
-  trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M] with ParseEvalStack[M] {
+  trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
     import scalaz.syntax.monad._
 
     case class StackException(error: StackError) extends Exception(error.toString)

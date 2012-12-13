@@ -121,7 +121,7 @@ trait ManagedQueryModule extends YggConfigComponent {
    * with failures.
    */
   implicit def sink(implicit M: ShardQueryMonad) = new (ShardQuery ~> Future) {
-    def apply[A](f: ShardQuery[A]): Future[A] = f.stateM map {
+    def apply[A](f: ShardQuery[A]): Future[A] = f.run map {
       case Running(_, value) =>
         value
       case Cancelled =>

@@ -105,7 +105,7 @@ trait JDBMQueryExecutorComponent {
   def queryExecutorFactoryFactory(config: Configuration,
       extAccessControl: AccessControl[Future],
       extAccountManager: BasicAccountManager[Future],
-      extJobManager: JobManager[Future]): QueryExecutorFactory[Future] = {
+      extJobManager: JobManager[Future]): QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] = {
     new JDBMQueryExecutorFactory
         with JDBMProjectionModule
         with ProductionShardSystemActorModule
@@ -158,13 +158,25 @@ trait JDBMQueryExecutorComponent {
         type Storage = StorageLike[ShardQuery, JDBMProjection]
       }
 
-      def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future]]] = {
+      def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
+        implicit val futureMonad = new blueeyes.bkka.FutureMonad(defaultAsyncContext)
+        (for {
+          executionContext0 <- getAccountExecutionContext(apiKey)
+        } yield {
+          new AsyncQueryExecutor {
+            val executionContext: ExecutionContext = executionContext0
+            def executor(implicit shardQueryMonad: ShardQueryMonad) = newExecutor
+          }
+        }).validation
+      }
+
+      def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
         implicit val futureMonad = new blueeyes.bkka.FutureMonad(defaultAsyncContext)
 
         val shardQueryExecutor = for {
           executionContext <- getAccountExecutionContext(apiKey)
         } yield {
-          new QueryExecutor[Future] {
+          new QueryExecutor[Future, StreamT[Future, CharBuffer]] {
             import UserQuery.Serialization._
 
             def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions) = {
@@ -189,7 +201,7 @@ trait JDBMQueryExecutorComponent {
         shardQueryExecutor.validation
       }
 
-      private def newExecutor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery] = {
+      private def newExecutor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
         new JDBMShardQueryExecutor {
           implicit val M = shardQueryMonad
 
@@ -219,9 +231,10 @@ trait JDBMQueryExecutorComponent {
 }
 
 trait JDBMQueryExecutorFactory
-    extends ShardQueryExecutorFactory
+    extends ShardQueryExecutorFactory[StreamT[Future, CharBuffer]]
     with StorageModule[Future]
-    with ManagedQueryModule { self =>
+    with ManagedQueryModule
+    with AsyncQueryExecutorFactory { self =>
 
   type YggConfig <: BaseJDBMQueryExecutorConfig
 

@@ -29,17 +29,19 @@ import blueeyes.util.Clock
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
 
-import scalaz.{ Monad, Success, Failure }
+import scalaz.{ Monad, Success, Failure, StreamT }
 import scalaz.Validation._
 
 import com.weiglewilczek.slf4s.Logging
+
+import java.nio.CharBuffer
 
 import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
 
 
-class QueryServiceHandler(queryExecutor: QueryExecutorFactory[Future])(implicit dispatcher: MessageDispatcher, M: Monad[Future])
+class QueryServiceHandler(queryExecutor: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]])(implicit dispatcher: MessageDispatcher, M: Monad[Future])
 extends CustomHttpService[Future[JValue], (APIKeyRecord, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
 with Logging {
   import scalaz.syntax.monad._

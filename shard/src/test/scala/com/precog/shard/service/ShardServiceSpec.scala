@@ -263,7 +263,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   }
 }
 
-trait TestQueryExecutorFactory extends QueryExecutorFactory[Future] {
+trait TestQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] {
   import scalaz.syntax.monad._
   import scalaz.syntax.traverse._
   import AkkaTypeClasses._
@@ -284,8 +284,8 @@ trait TestQueryExecutorFactory extends QueryExecutorFactory[Future] {
     StreamT.fromStream(Stream(buffer).point[Future])
   }
 
-  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future]]] = Future {
-    Success(new QueryExecutor[Future] {
+  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = Future {
+    Success(new QueryExecutor[Future, StreamT[Future, CharBuffer]] {
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
         val requiredPaths = if(query startsWith "//") Set(prefix / Path(query.substring(1))) else Set.empty[Path]
         val allowed = Await.result(Future.sequence(requiredPaths.map {

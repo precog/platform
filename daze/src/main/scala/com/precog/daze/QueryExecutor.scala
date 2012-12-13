@@ -59,18 +59,18 @@ trait MetadataClient[M[+_]] {
   def structure(apiKey: APIKey, path: Path): M[Validation[String, JObject]]
 }
 
-trait QueryExecutor[M[+_]] {
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, StreamT[M, CharBuffer]]]
+trait QueryExecutor[M[+_], +A] {
+  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, A]]
 }
 
-trait QueryExecutorFactory[M[+_]] extends MetadataClient[M] {
-  def executorFor(apiKey: APIKey): M[Validation[String, QueryExecutor[M]]]
+trait QueryExecutorFactory[M[+_], +A] extends MetadataClient[M] {
+  def executorFor(apiKey: APIKey): M[Validation[String, QueryExecutor[M, A]]]
   def status(): M[Validation[String, JValue]]
   def startup(): M[Boolean]
   def shutdown(): M[Boolean]
 }
 
-trait NullQueryExecutor extends QueryExecutor[Id.Id] {
+trait NullQueryExecutor extends QueryExecutor[Id.Id, Nothing] {
   def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
 

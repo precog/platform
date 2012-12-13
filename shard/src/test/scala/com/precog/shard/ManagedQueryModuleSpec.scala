@@ -218,8 +218,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
   }
 }
 
-trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[TestFuture] with ManagedQueryModule {
-
+trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[TestFuture, StreamT[TestFuture, CharBuffer]] with ManagedQueryModule {
   def actorSystem: ActorSystem  
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
@@ -236,8 +235,8 @@ trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[TestFuture] w
     val clock = Clock.System
   }
 
-  def executorFor(apiKey: APIKey): TestFuture[Validation[String, QueryExecutor[TestFuture]]] = {
-    Pointed[TestFuture].point(Success(new QueryExecutor[TestFuture] {
+  def executorFor(apiKey: APIKey): TestFuture[Validation[String, QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]]]] = {
+    Pointed[TestFuture].point(Success(new QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]] {
       import UserQuery.Serialization._
 
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
