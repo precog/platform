@@ -26,7 +26,7 @@ import com.precog.common.security._
 import org.joda.time.DateTime
 
 import akka.util.Timeout
-import akka.dispatch.{ ExecutionContext, Future }
+import akka.dispatch.{ ExecutionContext, Future, Promise }
 
 import blueeyes.bkka._
 import blueeyes.json._
@@ -70,7 +70,7 @@ trait MongoAPIKeyManagerComponent extends Logging {
     val deletedAPIKeys = config[String]("mongo.deleted_tokens", apiKeys + "_deleted")
     val deletedGrants = config[String]("mongo.deleted_grants", grants + "_deleted")
     val timeoutMillis = config[Int]("mongo.query.timeout", 10000)
-    val rootKeyId = config[String]("root_api_key")
+    val rootKeyId = config[String]("rootKey")
 
     val settings = MongoAPIKeyManagerSettings(
       apiKeys, grants, deletedAPIKeys, deletedGrants, timeoutMillis, rootKeyId
@@ -85,6 +85,44 @@ trait MongoAPIKeyManagerComponent extends Logging {
       new CachingAPIKeyManager(mongoAPIKeyManager)
     } else {
       mongoAPIKeyManager
+    }
+  }
+}
+
+object MongoAPIKeyManager extends Logging {
+  def findRootAPIKey(db: Database, keyCollection: String, grantCollection: String, createIfMissing: Boolean)(implicit context: ExecutionContext, timeout: Timeout): Future[APIKeyRecord] = {
+    import Grant.Serialization._
+    import APIKeyRecord.Serialization._
+
+    db(selectOne().from(keyCollection).where("isRoot" === true)).flatMap {
+      case Some(keyJv) => 
+        logger.info("Retrieved existing root key")
+        Promise.successful(keyJv.deserialize[APIKeyRecord])
+      case None if createIfMissing => {
+        logger.info("Creating new root key")
+        // Set up a new root API Key
+        val rootGrantId = APIKeyManager.newGrantId()
+        val rootGrant = {
+          def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
+        
+          Grant(
+            rootGrantId, Some("root-grant"), Some("The root grant"), None, Set(),
+            Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
+            None
+          )
+        }
+      
+        val rootAPIKeyId = APIKeyManager.newAPIKey()
+        val rootAPIKeyRecord =
+          APIKeyRecord(rootAPIKeyId, Some("root-apiKey"), Some("The root API key"), None, Set(rootGrantId), true)
+
+        db(insert(rootGrant.serialize.asInstanceOf[JObject]).into(grantCollection)) flatMap {
+          _ => db(insert(rootAPIKeyRecord.serialize.asInstanceOf[JObject]).into(keyCollection)).map { _ => rootAPIKeyRecord }
+        }
+      }
+      case _ => 
+        logger.error("Could not locate existing root API key!")
+        throw new Exception("Could not locate existing root API key!")
     }
   }
 }

@@ -66,6 +66,18 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
         case Some(APIKeyRecord(apiKey, _, _, _, _, _)) => apiKey must_== rootAPIKey
       }
     }
+
+    "return current root API key even if a new one is requested" in new TestAPIKeyManager {
+      val result = Await.result(MongoAPIKeyManager.findRootAPIKey(testDB, MongoAPIKeyManagerSettings.defaults.apiKeys,
+        MongoAPIKeyManagerSettings.defaults.grants, true), timeout)
+
+      result.apiKey mustEqual rootAPIKey
+    }
+
+    "error if a root API key cannot be found and creation isn't requested" in new TestAPIKeyManager {
+      Await.result(MongoAPIKeyManager.findRootAPIKey(testDB, MongoAPIKeyManagerSettings.defaults.apiKeys + "_empty",
+        MongoAPIKeyManagerSettings.defaults.grants, false), timeout) must throwAn[Exception]
+    }
     
     "not find missing API key" in new TestAPIKeyManager { 
 
@@ -146,32 +158,13 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
       case t => logger.error("Error during DB setup: " + t); throw t
     }
 
-    import Grant.Serialization._
-    import APIKeyRecord.Serialization._
-
     val to = Duration(30, "seconds")
     implicit val queryTimeout: Timeout = to
+
+    val rootAPIKeyOrig = Await.result(MongoAPIKeyManager.findRootAPIKey(testDB, MongoAPIKeyManagerSettings.defaults.apiKeys,
+      MongoAPIKeyManagerSettings.defaults.grants, true), to)
   
-    // Set up a new root API Key
-    val rootGrantId = APIKeyManager.newGrantId()
-    val rootGrant = {
-      def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
-        
-      Grant(
-        rootGrantId, Some("root-grant"), Some("The root grant"), None, Set(),
-        Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
-        None
-      )
-    }
-    Await.result(testDB(insert(rootGrant.serialize.asInstanceOf[JObject]).into(MongoAPIKeyManagerSettings.defaults.grants)), to)
-      
-    val rootAPIKeyId = APIKeyManager.newAPIKey()
-    val rootAPIKeyRecord =
-      APIKeyRecord(rootAPIKeyId, Some("root-apiKey"), Some("The root API key"), None, Set(rootGrantId), true)
-
-    Await.result(testDB(insert(rootAPIKeyRecord.serialize.asInstanceOf[JObject]).into(MongoAPIKeyManagerSettings.defaults.apiKeys)), to)
-
-    val apiKeyManager = new MongoAPIKeyManager(mongo, testDB, MongoAPIKeyManagerSettings.defaults.copy(rootKeyId = rootAPIKeyId))
+    val apiKeyManager = new MongoAPIKeyManager(mongo, testDB, MongoAPIKeyManagerSettings.defaults.copy(rootKeyId = rootAPIKeyOrig.apiKey))
 
     val notFoundAPIKeyID = "NOT-GOING-TO-FIND"
 
