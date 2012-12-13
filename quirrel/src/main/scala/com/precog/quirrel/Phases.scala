@@ -32,7 +32,7 @@ trait Phases {
     bindNames _ :: checkProvenance _ :: inferBuckets _ :: Nil
   
   protected def LoadId: Identifier
-  protected def ExpandPathId: Identifier
+  protected def ExpandGlobId: Identifier
   protected def DistinctId: Identifier
   
   def bindNames(expr: Expr): Set[Error]

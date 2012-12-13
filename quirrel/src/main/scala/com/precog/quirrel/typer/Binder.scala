@@ -29,7 +29,7 @@ trait Binder extends parser.AST with Library {
   type Formal = (Identifier, Let)
   
   protected override lazy val LoadId = Identifier(Vector(), "load")
-  protected override lazy val ExpandPathId = Identifier(Vector("std", "fs"), "expandPath")
+  protected override lazy val ExpandGlobId = Identifier(Vector("std", "fs"), "expandGlob")
   protected override lazy val DistinctId = Identifier(Vector(), "distinct")
 
   override def bindNames(tree: Expr) = {
@@ -179,6 +179,7 @@ trait Binder extends parser.AST with Library {
             case ReductionBinding(_) => 1
             case LoadBinding => 1
             case DistinctBinding => 1
+            case ExpandGlobBinding(_) => 1
             case Morphism1Binding(_) => 1
             case Morphism2Binding(_) => 2
             case Op1Binding(_) => 1
@@ -283,7 +284,7 @@ trait Binder extends parser.AST with Library {
       libReduction.map(ReductionBinding) ++
       libMorphism1.map(Morphism1Binding) ++
       libMorphism2.map(Morphism2Binding) ++
-      Set(LoadBinding, DistinctBinding)
+      Set(LoadBinding, DistinctBinding, ExpandGlobBinding(expandGlob))
       
     val env = Env(Map(), builtIns.map({ b => b.name -> b })(collection.breakOut))
 
@@ -362,6 +363,11 @@ trait Binder extends parser.AST with Library {
   case object LoadBinding extends BuiltInBinding {
     val name = LoadId
     override val toString = "<native: load(1)>"
+  }
+  
+  case class ExpandGlobBinding(mor: Morphism1) extends BuiltInBinding {
+    val name = ExpandGlobId
+    override val toString = "<native: expandGlob(1)>"
   }
 
   case class Morphism1Binding(mor: Morphism1) extends BuiltInBinding {

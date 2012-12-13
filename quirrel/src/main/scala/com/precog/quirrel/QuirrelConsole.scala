@@ -41,6 +41,13 @@ object QuirrelConsole {
     def lib1 = Set()
     def lib2 = Set()
     def libReduction = Set()
+    
+    lazy val expandGlob = new Morphism1Like {
+      val namespace = Vector("std", "fs")
+      val name = "expandGlob"
+      val opcode = 0x0001
+      val tpe = UnaryOperationType(JType.JUniverseT, JType.JUniverseT)
+    }
   }
 
   val compiler = new Parser
@@ -54,7 +61,7 @@ object QuirrelConsole {
 
   trait StubPhases extends Phases {
     protected def LoadId = Identifier(Vector(), "load")
-    protected def ExpandPathId = Identifier(Vector("std", "fs"), "expandPath")
+    protected def ExpandGlobId = Identifier(Vector("std", "fs"), "expandGlob")
     protected def DistinctId = Identifier(Vector(), "distinct")
     
     def bindNames(tree: Expr) = Set()

@@ -529,6 +529,9 @@ trait Emitter extends AST
             case DistinctBinding =>
               emitExpr(actuals.head, dispatches) >> emitInstr(Distinct)
 
+            case ExpandGlobBinding(m) => 
+              emitExpr(actuals.head, dispatches) >> emitInstr(Morph1(BuiltInMorphism1(m)))
+
             case Morphism1Binding(m) => 
               emitExpr(actuals.head, dispatches) >> emitInstr(Morph1(BuiltInMorphism1(m)))
 

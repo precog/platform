@@ -89,7 +89,7 @@ trait Parser extends RegexParsers with Filters with AST {
     
     | pathLiteral ^# { (loc, str) =>
       Dispatch(loc, LoadId, Vector(
-        Dispatch(loc, ExpandPathId, Vector(StrLit(loc, str)))))
+        Dispatch(loc, ExpandGlobId, Vector(StrLit(loc, str)))))
     }
     
     | strLiteral  ^# StrLit
