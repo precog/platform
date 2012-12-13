@@ -1017,7 +1017,7 @@ trait ColumnarTableModule[M[+_]]
       // post the initial sort separate from the values that it was derived from. 
       val (payloadTrans, idTrans, targetTrans, groupKeyTrans) = node.binding.targetTrans match {
         case Some(targetSetTrans) => 
-          val payloadTrans = OuterArrayConcat(WrapArray(node.binding.idTrans), 
+          val payloadTrans = InnerArrayConcat(WrapArray(node.binding.idTrans), 
                                          WrapArray(protoGroupKeyTrans.spec), 
                                          WrapArray(targetSetTrans))
 
@@ -1027,7 +1027,7 @@ trait ColumnarTableModule[M[+_]]
            GroupKeyTrans(TransSpec1.DerefArray1, protoGroupKeyTrans.keyOrder))
 
         case None =>
-          val payloadTrans = OuterArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec))
+          val payloadTrans = InnerArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec))
           (payloadTrans, 
            TransSpec1.DerefArray0, 
            None, 

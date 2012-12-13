@@ -25,7 +25,7 @@ import common.security._
 
 import daze.{ Evaluator, EvaluatorConfig }
 
-import yggdrasil.{ StorageModule, BaseConfig, IdSource }
+import yggdrasil.{ StorageModule, BaseConfig, IdSource, FreshAtomicIdSource }
 import yggdrasil.{ Identities, SValue, SEvent }
 import yggdrasil.table.ColumnarTableModuleConfig
 import yggdrasil.util._
