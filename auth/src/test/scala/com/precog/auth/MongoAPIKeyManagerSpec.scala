@@ -41,6 +41,8 @@ import blueeyes.akka_testing.FutureMatchers
 import blueeyes.persistence.mongo._
 
 import blueeyes.json._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import org.streum.configrity._
 
@@ -143,10 +145,34 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
     } catch {
       case t => logger.error("Error during DB setup: " + t); throw t
     }
-    val apiKeyManager = new MongoAPIKeyManager(mongo, testDB, MongoAPIKeyManagerSettings.defaults)
+
+    import Grant.Serialization._
+    import APIKeyRecord.Serialization._
 
     val to = Duration(30, "seconds")
+    implicit val queryTimeout: Timeout = to
   
+    // Set up a new root API Key
+    val rootGrantId = APIKeyManager.newGrantId()
+    val rootGrant = {
+      def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
+        
+      Grant(
+        rootGrantId, Some("root-grant"), Some("The root grant"), None, Set(),
+        Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
+        None
+      )
+    }
+    Await.result(testDB(insert(rootGrant.serialize.asInstanceOf[JObject]).into(MongoAPIKeyManagerSettings.defaults.grants)), to)
+      
+    val rootAPIKeyId = APIKeyManager.newAPIKey()
+    val rootAPIKeyRecord =
+      APIKeyRecord(rootAPIKeyId, Some("root-apiKey"), Some("The root API key"), None, Set(rootGrantId), true)
+
+    Await.result(testDB(insert(rootAPIKeyRecord.serialize.asInstanceOf[JObject]).into(MongoAPIKeyManagerSettings.defaults.apiKeys)), to)
+
+    val apiKeyManager = new MongoAPIKeyManager(mongo, testDB, MongoAPIKeyManagerSettings.defaults.copy(rootKeyId = rootAPIKeyId))
+
     val notFoundAPIKeyID = "NOT-GOING-TO-FIND"
 
     val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
