@@ -28,12 +28,14 @@ import blueeyes.json.JValue
 
 import DefaultBijections._
 
+import java.nio.CharBuffer
+
 import org.streum.configrity.Configuration
 
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
 
-case class ShardState(queryExecutorFactory: QueryExecutorFactory[Future], apiKeyManager: APIKeyManager[Future])
+case class ShardState(queryExecutorFactory: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]], apiKeyManager: APIKeyManager[Future])
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
@@ -47,7 +49,7 @@ trait ShardService extends
   def queryExecutorFactoryFactory(config: Configuration,
     accessControl: AccessControl[Future],
     accountManager: BasicAccountManager[Future],
-    jobManager: JobManager[Future]): QueryExecutorFactory[Future]
+    jobManager: JobManager[Future]): QueryExecutorFactory[Future, StreamT[Future, CharBuffer]]
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
 
@@ -126,6 +128,9 @@ trait ShardService extends
             }
           } ~ jsonpcb[QueryResult] {
             apiKey(state.apiKeyManager) {
+              // POST analytics/queries/
+              // Get back a jobId.
+              // GET analytics/queries/'jobId  -- status
               dataPath("analytics/fs") {
                 query {
                   get(new QueryServiceHandler(state.queryExecutorFactory)) ~
