@@ -57,7 +57,7 @@ import java.util.Comparator
 import org.apache.jdbm.DBMaker
 import org.apache.jdbm.DB
 
-import org.slf4j.LoggerFactory
+import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.Ordering._
@@ -80,8 +80,9 @@ trait MongoColumnarTableModuleConfig {
 trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
   type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig with BlockStoreColumnarTableModuleConfig with MongoColumnarTableModuleConfig
 
-  trait MongoColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
+  trait MongoColumnarTableCompanion extends BlockStoreColumnarTableCompanion with Logging {
     def mongo: Mongo
+    def dbAuthParams: Map[String, String]
 
     private def jTypeToProperties(tpe: JType, current: Set[String]) : Set[String] = tpe match {
       case JArrayFixedT(elements) if current.nonEmpty => elements.map {
@@ -119,15 +120,35 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
               path.elements.toList match {
                 case dbName :: collectionName :: Nil =>
                   M.point {
-                    val coll = mongo.getDB(dbName).getCollection(collectionName)
+                    try {
+                      val db = mongo.getDB(dbName)
 
-                    val selector = jTypeToProperties(tpe, Set()).foldLeft(new BasicDBObject()) {
-                      case (obj, path) => obj.append(path, 1)
+                      if (! db.isAuthenticated) {
+                        dbAuthParams.get(dbName).map(_.split(':')) foreach {
+                          case Array(user, password) => if (! db.authenticate(user, password.toCharArray)) {
+                            throw new Exception("Authentication failed for database " + dbName)
+                          }
+                          case invalid => throw new Exception("Invalid user:password for %s: \"%s\"".format(dbName, invalid.mkString(":")))
+                        }
+                      }
+
+                      val coll = db.getCollection(collectionName)
+
+                      val selector = jTypeToProperties(tpe, Set()).foldLeft(new BasicDBObject()) {
+                        case (obj, path) => obj.append(path, 1)
+                      }
+
+                      val cursor = coll.find(new BasicDBObject(), selector)
+
+                      val (slice, remainder) = makeSlice(cursor)
+                      Some((slice, (xs, remainder)))
+                    } catch {
+                      case t => 
+                        logger.error("Failure during Mongo query: " + t.getMessage)
+                        // FIXME: We should be able to throw here and terminate the query, but something in BlueEyes is hanging when we do so
+                        //throw new Exception("Failure during Mongo query: " + t.getMessage)
+                        None
                     }
-                    //println("Querying mongo with selector: " + selector + " for " + tpe)
-                    val cursor = coll.find(new BasicDBObject(), selector)
-                    val (slice, remainder) = makeSlice(cursor)
-                    Some((slice, (xs, remainder)))
                   }
 
                 case err => 

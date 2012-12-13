@@ -91,6 +91,8 @@ class MongoQueryExecutorConfig(val config: Configuration)
 
   def mongoServer: String = config[String]("mongo.server", "localhost:27017")
 
+  def dbAuthParams = config.detach("mongo.dbAuth")
+
   def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
 }
 
@@ -111,6 +113,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
   trait TableCompanion extends MongoColumnarTableCompanion
   object Table extends TableCompanion {
     var mongo: Mongo = _
+    val dbAuthParams = yggConfig.dbAuthParams.data
   }
 
   // to satisfy abstract defines in parent traits
