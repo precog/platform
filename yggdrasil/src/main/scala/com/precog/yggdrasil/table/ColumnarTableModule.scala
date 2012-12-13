@@ -1831,8 +1831,6 @@ trait ColumnarTableModule[M[+_]]
 
       for {
         omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
-        //json <- omniverse.table.toJson
-        //_ = println("omniverse: \n" + json.mkString("\n"))
         sorted <- if (omniverse.sorted) {
             M.point(omniverse.table)
           } else {
@@ -1923,11 +1921,11 @@ trait ColumnarTableModule[M[+_]]
         stream.uncons flatMap {
           case Some((head, tail)) => rec(tail, head |+| acc) 
           case None => M.point(acc)
-        }    
-      }    
+        }
+      }
 
       rec(slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }, monoid.zero)
-    }    
+    }
 
     def compact(spec: TransSpec1): Table = {
       val specTransform = SliceTransform.composeSliceTransform(spec)
@@ -1966,6 +1964,7 @@ trait ColumnarTableModule[M[+_]]
      * transformation on rows of the table.
      */
     def cogroup(leftKey: TransSpec1, rightKey: TransSpec1, that: Table)(leftResultTrans: TransSpec1, rightResultTrans: TransSpec1, bothResultTrans: TransSpec2): Table = {
+
       //println("Cogrouping with respect to\nleftKey: " + leftKey + "\nrightKey: " + rightKey)
       class IndexBuffers(lInitialSize: Int, rInitialSize: Int) {
         val lbuf = new ArrayIntList(lInitialSize)
@@ -2333,10 +2332,10 @@ trait ColumnarTableModule[M[+_]]
         Table(StreamT.wrapEffect(initialState map { state => StreamT.unfoldM[M, Slice, CogroupState](state getOrElse CogroupDone)(step) }), UnknownSize)
       }
 
-      cogroup0(composeSliceTransform(leftKey), 
-               composeSliceTransform(rightKey), 
-               composeSliceTransform(leftResultTrans), 
-               composeSliceTransform(rightResultTrans), 
+      cogroup0(composeSliceTransform(leftKey),
+               composeSliceTransform(rightKey),
+               composeSliceTransform(leftResultTrans),
+               composeSliceTransform(rightResultTrans),
                composeSliceTransform2(bothResultTrans))
     }
 

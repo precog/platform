@@ -84,10 +84,7 @@ class MongoQueryExecutorConfig(val config: Configuration)
   // Ingest for mongo is handled via mongo
   override val ingestEnabled = false
 
-  val idSource = new IdSource {
-    private val source = new java.util.concurrent.atomic.AtomicLong
-    def nextId() = source.getAndIncrement
-  }
+  val idSource = new FresAtomicIdSource
 
   def mongoServer: String = config[String]("mongo.server", "localhost:27017")
 

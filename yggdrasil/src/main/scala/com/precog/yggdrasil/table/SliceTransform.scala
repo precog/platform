@@ -22,7 +22,7 @@ package table
 
 import com.precog.common.json._
 import com.precog.common.{Path, VectorCase}
-import com.precog.bytecode.{ JType, JObjectUnfixedT, JArrayUnfixedT }
+import com.precog.bytecode.{ JType, JBooleanT, JObjectUnfixedT, JArrayUnfixedT }
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
 import com.precog.util.BitSet
@@ -115,7 +115,8 @@ trait SliceTransforms[M[+_]] extends
           }
 
         case Filter(source, predicate) => 
-          composeSliceTransform2(source).zip(composeSliceTransform2(predicate)) { (s: Slice, filter: Slice) => 
+          val typed = Typed(predicate, JBooleanT)
+          composeSliceTransform2(source).zip(composeSliceTransform2(typed)) { (s: Slice, filter: Slice) =>
             assert(filter.size == s.size)
             
             if (s.columns.isEmpty) {
