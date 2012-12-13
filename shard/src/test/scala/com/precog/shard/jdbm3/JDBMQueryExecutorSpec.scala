@@ -53,9 +53,7 @@ trait TestJDBMQueryExecutor extends JDBMQueryExecutor
   val yggConfig = new BaseJDBMQueryExecutorConfig with StandaloneShardSystemConfig {
     val config = Configuration(Map.empty[String, String])
     val maxSliceSize = 10000
-    val idSource = new IdSource {
-      def nextId() = groupId.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   val actorSystem = ActorSystem("yggdrasilQueryExecutorActorSystem")
