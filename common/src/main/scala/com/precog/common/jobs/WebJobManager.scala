@@ -117,11 +117,12 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
 
   private def unexpected[A](resp: HttpResponse[A]): String = "Unexpected response from server:\n" + resp
 
-  def createJob(apiKey: APIKey, name: String, jobType: String, started: Option[DateTime]): Response[Job] = {
-    val content: JValue = JObject(List(
-      JField("name", name),
-      JField("type", jobType)
-    ))
+  def createJob(apiKey: APIKey, name: String, jobType: String, data: Option[JValue], started: Option[DateTime]): Response[Job] = {
+    val content: JValue = JObject(
+      JField("name", name) ::
+      JField("type", jobType) ::
+      (data map (JField("data", _) :: Nil) getOrElse Nil)
+    )
 
     withClient { client =>
       val job0: Response[Job] = eitherT(client.query("apiKey", apiKey).post("/jobs/")(content) map {

@@ -44,6 +44,8 @@ import com.precog.common._
 import com.precog.util.FilesystemFileOps
 import com.precog.util.PrecogUnit
 
+import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
+
 import akka.actor.ActorSystem
 import akka.dispatch._
 import akka.pattern.ask
@@ -163,9 +165,12 @@ trait JDBMQueryExecutorComponent {
           executionContext <- getAccountExecutionContext(apiKey)
         } yield {
           new QueryExecutor[Future] {
+            import UserQuery.Serialization._
+
             def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions) = {
+              val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
               val expires = opts.timeout map (yggConfig.clock.now().plus(_))
-              createJob(apiKey, query, expires)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
+              createJob(apiKey, Some(userQuery.serialize), expires)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
                 import JobQueryState._
 
                 val result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] = {

@@ -32,7 +32,7 @@ import shapeless._
 
 import scalaz._
 
-case class Job(id: JobId, apiKey: APIKey, name: String, jobType: String, state: JobState)
+case class Job(id: JobId, apiKey: APIKey, name: String, jobType: String, data: Option[JValue], state: JobState)
 
 case class Status(job: JobId, id: StatusId, message: String, progress: BigDecimal, unit: String, info: Option[JValue])
 case class Message(job: JobId, id: MessageId, channel: String, value: JValue)
@@ -40,7 +40,7 @@ case class Message(job: JobId, id: MessageId, channel: String, value: JValue)
 object Job {
   implicit val jobIso = Iso.hlist(Job.apply _, Job.unapply _)
 
-  val schema = "id" :: "apiKey" :: "name" :: "type" :: "state" :: HNil
+  val schema = "id" :: "apiKey" :: "name" :: "type" :: "data" :: "state" :: HNil
 
   implicit val (decomposer, extractor) = serialization[Job](schema)
 }

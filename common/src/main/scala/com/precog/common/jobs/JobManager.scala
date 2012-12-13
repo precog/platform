@@ -37,7 +37,7 @@ trait JobManager[M[+_]] { self =>
    * the job will be put in the Started state, otherwise it will be in the
    * NotStarted state until `start(...)` is run.
    */
-  def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime]): M[Job]
+  def createJob(auth: APIKey, name: String, jobType: String, data: Option[JValue], started: Option[DateTime]): M[Job]
 
   /** 
    * Returns the Job with the given ID if it exists.
@@ -115,8 +115,8 @@ trait JobManager[M[+_]] { self =>
   def expire(job: JobId, expiredAt: DateTime = new DateTime): M[Either[String, Job]]
 
   def withM[N[+_]](implicit t: M ~> N) = new JobManager[N] {
-    def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime]): N[Job] =
-      t(self.createJob(auth, name, jobType, started))
+    def createJob(auth: APIKey, name: String, jobType: String, data: Option[JValue], started: Option[DateTime]): N[Job] =
+      t(self.createJob(auth, name, jobType, data, started))
 
     def findJob(job: JobId): N[Option[Job]] = t(self.findJob(job))
 

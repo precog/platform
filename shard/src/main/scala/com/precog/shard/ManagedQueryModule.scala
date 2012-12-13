@@ -25,6 +25,7 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 
 import blueeyes.util.Clock
+import blueeyes.json._
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
@@ -97,8 +98,8 @@ trait ManagedQueryModule extends YggConfigComponent {
    * `completeJob` to ensure the job is put into a terminal state when the
    * query completes.
    */
-  def createJob(apiKey: APIKey, name: String, expires: Option[DateTime] = None)(implicit asyncContext: ExecutionContext): Future[ShardQueryMonad] = {
-    val futureJob = jobManager.createJob(apiKey, name, "shard-query", Some(yggConfig.clock.now()))
+  def createJob(apiKey: APIKey, data: Option[JValue], expires: Option[DateTime] = None)(implicit asyncContext: ExecutionContext): Future[ShardQueryMonad] = {
+    val futureJob = jobManager.createJob(apiKey, "Quirrel Query", "shard-query", data, Some(yggConfig.clock.now()))
     for {
       job <- futureJob map { job => Some(job) } recover { case _ => None }
       queryStateManager = job map { job =>
@@ -189,7 +190,7 @@ trait ManagedQueryModule extends YggConfigComponent {
 
       import JobState._
       status map {
-        case Job(_, _, _, _, Cancelled(_, _, _)) => true
+        case Job(_, _, _, _, _, Cancelled(_, _, _)) => true
         case _ => false
       } getOrElse false
     }

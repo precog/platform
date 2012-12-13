@@ -64,13 +64,12 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     request.content map { contentM =>
       Success(contentM flatMap { content =>
-        (content \ "name", content \ "type") match {
-          case (JString(name), JString(tpe)) =>
+        (content \ "name", content \ "type", content \? "data") match {
+          case (JString(name), JString(tpe), data) =>
             request.parameters.get('apiKey) map { apiKey =>
-
               auth.isValid(apiKey) flatMap {
                 case true =>
-                  jobs.createJob(apiKey, name, tpe, None) map { job =>
+                  jobs.createJob(apiKey, name, tpe, data, None) map { job =>
                     HttpResponse[JValue](Created, content = Some(job.serialize))
                   }
                 case false =>
@@ -81,16 +80,16 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
               Future(HttpResponse[JValue](BadRequest, content = Some("Missing required paramter 'apiKey")))
             }
 
-          case (JUndefined, JUndefined) =>
+          case (JUndefined, JUndefined, _) =>
             Future(HttpResponse[JValue](BadRequest, content = Some("Missing both `name` and `type` of job.")))
 
-          case (name, JUndefined) =>
+          case (name, JUndefined, _) =>
             Future(HttpResponse[JValue](BadRequest, content = Some("Missing `type` of job.")))
 
-          case (JUndefined, tpe) =>
+          case (JUndefined, tpe, _) =>
             Future(HttpResponse[JValue](BadRequest, content = Some("Missing `name` of job.")))
 
-          case (name, tpe) =>
+          case (name, tpe, _) =>
             Future(HttpResponse[JValue](BadRequest, content = Some("Expected `name` and `type` to be strings, but found '%s' and '%s'." format (name, tpe))))
         }
       })
@@ -403,7 +402,7 @@ extends CustomHttpService[Future[Array[Byte]], Future[HttpResponse[Array[Byte]]]
   val service: HttpRequest[Future[Array[Byte]]] => Validation[NotServed, Future[HttpResponse[Array[Byte]]]] = (request: HttpRequest[Future[Array[Byte]]]) => {
     Success(request.parameters get 'jobId map { jobId =>
       jobs.findJob(jobId) map {
-        case Some(Job(_, _, _, _, Finished(result, _, _))) =>
+        case Some(Job(_, _, _, _, _, Finished(result, _, _))) =>
           HttpResponse[Array[Byte]](OK, content = result map (_.content))
         case _ =>
           HttpResponse[Array[Byte]](NotFound)

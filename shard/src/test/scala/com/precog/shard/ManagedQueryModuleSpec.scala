@@ -36,6 +36,7 @@ import akka.util.Duration
 import blueeyes.util.Clock
 import blueeyes.json._
 import blueeyes.bkka._
+import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
 
 import org.specs2.mutable.Specification
 
@@ -123,7 +124,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
         (jobId, _, _) <- execute(5)
         job <- jobManager.findJob(jobId)
       } yield job).copoint must beLike {
-        case Some(Job(_, _, _, _, Started(_, NotStarted))) => ok
+        case Some(Job(_, _, _, _, _, Started(_, NotStarted))) => ok
       }
     }
 
@@ -133,7 +134,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
         _ <- waitFor(5)
         job <- jobManager.findJob(jobId)
       } yield job).copoint must beLike {
-        case Some(Job(_, _, _, _, Finished(None, _, _))) => ok
+        case Some(Job(_, _, _, _, _, Finished(None, _, _))) => ok
       }
     }
 
@@ -168,7 +169,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
       } yield job
 
       job.copoint must beLike {
-        case Some(Job(_, _, _, _, Aborted(_, _, Cancelled(_, _, _)))) => ok
+        case Some(Job(_, _, _, _, _, Aborted(_, _, Cancelled(_, _, _)))) => ok
       }
     }
 
@@ -197,7 +198,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
         _ <- waitFor(5)
         job <- jobManager.findJob(jobId)
       } yield job).copoint must beLike {
-        case Some(Job(_, _, _, _, Expired(_, _))) => ok
+        case Some(Job(_, _, _, _, _, Expired(_, _))) => ok
       }
     }
 
@@ -237,10 +238,13 @@ trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[TestFuture] w
 
   def executorFor(apiKey: APIKey): TestFuture[Validation[String, QueryExecutor[TestFuture]]] = {
     Pointed[TestFuture].point(Success(new QueryExecutor[TestFuture] {
+      import UserQuery.Serialization._
+
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+        val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
         val numTicks = query.toInt
         val expiration = opts.timeout map (yggConfig.clock.now().plus(_))
-        WriterT(createJob(apiKey, query, expiration) map { implicit M =>
+        WriterT(createJob(apiKey, Some(userQuery.serialize), expiration) map { implicit M =>
           val ticks = new AtomicInteger()
           val result = StreamT.unfoldM[ShardQuery, CharBuffer, Int](0) {
             case i if i < numTicks =>
