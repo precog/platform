@@ -51,6 +51,7 @@ trait Evaluator[M[+_]] extends DAG
     with TableModule[M]        // TODO specific implementation
     with InfixLib[M]
     with UnaryLib[M]
+    with FSLib[M]
     with BigDecimalOperations
     with YggConfigComponent { self =>
 
