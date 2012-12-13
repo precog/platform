@@ -94,6 +94,19 @@ Change the “localhost:27017” portion to the host and port of your
 mongo server. For optimal performance, you should launch Precog on the
 same machine that is running the MongoDB server.
 
+You can also add a dbAuth section under the mongo section that allows
+you to set user/pass info for particular databases:
+
+    queryExecutor { 
+        mongo { 
+            server = "mongodb://localhost:27017" 
+            dbAuth {
+                test = "user:pass"
+                test2 = "user:pass2"
+            }
+        } 
+    }
+
 
 Precog will map the MongoDB databases and collections into the file
 system by placing the databases at the top level of the file system,
