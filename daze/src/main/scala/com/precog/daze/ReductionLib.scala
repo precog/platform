@@ -280,8 +280,9 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
       }
     }
 
-    def extract(res: Result): Table =
+    def extract(res: Result): Table = {
       res map { r => Table.constDecimal(Set(CNum(r))) } getOrElse Table.empty
+    }
   }
 
   val MeanMonoid = implicitly[Monoid[Mean.Result]]

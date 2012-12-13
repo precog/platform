@@ -1049,9 +1049,6 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 object GrouperSpec extends TableModuleSpec[YId] with GrouperSpec[YId] with YIdInstances {
   type YggConfig = IdSourceConfig
   val yggConfig = new IdSourceConfig {
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 }

@@ -94,10 +94,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     
     val maxSliceSize = self.sliceSize
 
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   include(

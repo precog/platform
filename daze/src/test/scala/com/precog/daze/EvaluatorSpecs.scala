@@ -110,10 +110,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
     val flatMapTimeout = intToDurationInt(30).seconds
     val maxSliceSize = 10
 
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   object yggConfig extends YggConfig
@@ -2924,6 +2921,20 @@ trait EvaluatorSpecs[M[+_]] extends Specification
               obj("user") must_== SNull
           }
         }
+      }
+    }
+
+    "evaluate filter with non-boolean where clause (with empty result)" in {
+      val line = Line(0, "")
+
+      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
+
+      val input = Filter(line, IdentitySort,
+        clicks,
+        clicks)
+
+      testEval(input) { result =>
+        result must haveSize(0)
       }
     }
 

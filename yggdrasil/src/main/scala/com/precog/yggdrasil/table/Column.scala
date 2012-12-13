@@ -139,7 +139,7 @@ trait LongColumn extends Column with (Int => Long) {
   def apply(row: Int): Long
 
   override val tpe = CLong
-  override def jValue(row: Int) = JNum(BigDecimal(this(row), MathContext.UNLIMITED))
+  override def jValue(row: Int) = JNum(this(row))
   override def cValue(row: Int) = CLong(this(row))
   override def strValue(row: Int): String = String.valueOf(this(row))
   override def toString = "LongColumn"
@@ -149,7 +149,7 @@ trait DoubleColumn extends Column with (Int => Double) {
   def apply(row: Int): Double
 
   override val tpe = CDouble
-  override def jValue(row: Int) = JNum(BigDecimal(this(row).toString, MathContext.UNLIMITED))
+  override def jValue(row: Int) = JNum(this(row))
   override def cValue(row: Int) = CDouble(this(row))
   override def strValue(row: Int): String = String.valueOf(this(row))
   override def toString = "DoubleColumn"
