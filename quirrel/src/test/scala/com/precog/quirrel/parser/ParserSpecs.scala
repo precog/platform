@@ -233,7 +233,7 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
 
     "accept a relate expression followed by a let" in {
       parseSingle("1 ~ 2 foo := //foo foo") must beLike {
-        case Relate(_, NumLit(_, "1"), NumLit(_, "2"), Let(_, Identifier(Vector(), "foo"), Vector(), Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/foo"))), Dispatch(_, Identifier(Vector(), "foo"), Vector()))) => ok
+        case Relate(_, NumLit(_, "1"), NumLit(_, "2"), Let(_, Identifier(Vector(), "foo"), Vector(), PathLit("/foo"), Dispatch(_, Identifier(Vector(), "foo"), Vector()))) => ok
       }
     }
     
@@ -292,9 +292,9 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     
     "accept a path literal" in {
       // TODO find a way to use LoadId instead
-      parseSingle("//foo") must beLike { case Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/foo"))) => ok }
-      parseSingle("//foo/bar/baz") must beLike { case Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/foo/bar/baz"))) => ok }
-      parseSingle("//cafe-babe42_silly/SILLY") must beLike { case Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/cafe-babe42_silly/SILLY"))) => ok }
+      parseSingle("//foo") must beLike { case PathLit("/foo") => ok }
+      parseSingle("//foo/bar/baz") must beLike { case PathLit("/foo/bar/baz") => ok }
+      parseSingle("//cafe-babe42_silly/SILLY") must beLike { case PathLit("/cafe-babe42_silly/SILLY") => ok }
     }
     
     "accept a string literal" in {
@@ -1190,7 +1190,7 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
         | e""".stripMargin
       
       parseSingle(input) must beLike {
-        case Let(_, Identifier(Vector(), "a"), Vector(), Let(_, Identifier(Vector(), "b"), Vector(), Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/f"))), Let(_, Identifier(Vector(), "c"), Vector(), Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/g"))), Dispatch(_, Identifier(Vector(), "d"), Vector()))), Dispatch(_, Identifier(Vector(), "e"), Vector())) => ok
+        case Let(_, Identifier(Vector(), "a"), Vector(), Let(_, Identifier(Vector(), "b"), Vector(), PathLit("/f"), Let(_, Identifier(Vector(), "c"), Vector(), PathLit("/g"), Dispatch(_, Identifier(Vector(), "d"), Vector()))), Dispatch(_, Identifier(Vector(), "e"), Vector())) => ok
       }
     }
     
@@ -1432,7 +1432,7 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     
     "prefer path literals in case of ambiguity" in {
       parseSingle("//foo.bar") must beLike {
-        case Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/foo.bar"))) => ok
+        case PathLit("/foo.bar") => ok
       }
     }
   }
@@ -1459,4 +1459,14 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
   }
   
   private def parseSingle(str: String): Expr = parseSingle(LineStream(str))
+  
+  private object PathLit {
+    def unapply(expr: Expr): Option[String] = expr match {
+      case Dispatch(_, Identifier(Vector(), "load"), Vector(
+        Dispatch(_, Identifier(Vector("std", "fs"), "expandPath"), Vector(
+          StrLit(_, str))))) => Some(str)
+        
+      case _ => None
+    }
+  }
 }

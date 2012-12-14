@@ -76,9 +76,6 @@ class ConcatColumn[T <: Column](at: Int, c1: T, c2: T) { this: T =>
 
 class NConcatColumn[T <: Column](offsets: Array[Int], columns: Array[T]) { this: T =>
 
-  // Is this worth it? For some operations, but not sorting... all the more
-  // reason to add materialise I suppose.
-
   @volatile private var lastIndex = 0
 
   @inline private final def inBound(row: Int, idx: Int): Boolean = {
