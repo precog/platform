@@ -720,58 +720,6 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case Extra(expr) => Set(expr)
   }
   
-  /* private def findCommonality(nodes: Set[Expr], sigma: Map[Formal, Expr]): Option[Expr] = {
-    @tailrec
-    def bfs(nodes: Seq[ExprWrapper], seen: Set[ExprWrapper], sigma: Map[Formal, Expr]): Set[ExprWrapper] = {
-      val (inter, seen2) = nodes.foldLeft((Set[ExprWrapper](), seen)) {
-        case ((inter, seen), node) => {
-          if (seen contains node)
-            (inter + node, seen)
-          else
-            (inter, seen + node)
-        }
-      }
-      
-      if (!nodes.isEmpty && inter.isEmpty) {
-        val (nodes2Unflatten, sigma2Unflatten) = nodes map { _.expr } map enumerateParents(sigma) unzip
-        
-        val nodes2 = nodes2Unflatten.flatten map ExprWrapper
-        val sigma2 = Map(sigma2Unflatten.flatten: _*)
-        
-        bfs(nodes2, seen2, sigma2)
-      } else {
-        inter
-      }
-    }
-    
-    @tailrec
-    def loop(nodes: Set[ExprWrapper]): Option[ExprWrapper] = {
-      if (nodes.size <= 1) {
-        nodes.headOption
-      } else {
-        val target = nodes take 2
-        val nodes2 = nodes &~ target
-        
-        loop(bfs(target.toSeq, Set(), sigma) ++ nodes2)
-      }
-    }
-    
-    val commonalityM = if (nodes.size <= 1)
-      nodes.headOption
-    else
-      loop(nodes map ExprWrapper) map { _.expr }
-    
-    val results = for {
-      n <- nodes
-      c <- commonalityM
-    } yield isTranspecable(n, c, sigma)
-    
-    if (results == Set(true))
-      commonalityM
-    else
-      None
-  } */
-  
   private def findCommonality(nodes: Set[Expr], sigma: Map[Formal, Expr]): Option[Expr] = {
     case class Kernel(nodes: Set[ExprWrapper], sigma: Map[Formal, Expr], seen: Set[ExprWrapper])
     
