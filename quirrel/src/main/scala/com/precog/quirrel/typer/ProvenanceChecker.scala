@@ -406,7 +406,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
               expr.provenance = actuals.head match {
                 case StrLit(_, path) => StaticProvenance(path)
                 
-                case d @ Dispatch(_, _, Vector(StrLit(_, path))) if d.binding == ExpandGlobBinding(expandGlob) =>
+                case d @ Dispatch(_, _, Vector(StrLit(_, path))) if d.binding == ExpandGlobBinding =>
                   StaticProvenance(path)
                 
                 case param if param.provenance != NullProvenance => DynamicProvenance(currentId.getAndIncrement())
@@ -416,7 +416,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
               (errors, constr)
             }
             
-            case ExpandGlobBinding(_) => {
+            case ExpandGlobBinding => {
               val (errors, constr) = loop(actuals.head, relations, constraints)
               expr.provenance = actuals.head.provenance
               (errors, constr)
