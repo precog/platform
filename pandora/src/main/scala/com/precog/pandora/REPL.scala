@@ -263,10 +263,7 @@ object Console extends App {
     val maxSliceSize = 10000
 
     //TODO: Get a producer ID
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   def loadConfig(dataDir: Option[String]): IO[REPLConfig] = IO {
