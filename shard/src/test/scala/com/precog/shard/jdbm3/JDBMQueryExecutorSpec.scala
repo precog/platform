@@ -37,7 +37,7 @@ import scalaz.syntax.foldable._
 import com.precog.common.Path
 import com.precog.daze.{ UserError, QueryOptions }
 import com.precog.muspelheim.RawJsonColumnarTableStorageModule
-import com.precog.yggdrasil.{ IdSource, ProjectionDescriptor }
+import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor.{ StandaloneShardSystemActorModule, StandaloneShardSystemConfig }
 import com.precog.util.PrecogUnit
 
@@ -53,9 +53,7 @@ trait TestJDBMQueryExecutor extends JDBMQueryExecutor
   val yggConfig = new BaseJDBMQueryExecutorConfig with StandaloneShardSystemConfig {
     val config = Configuration(Map.empty[String, String])
     val maxSliceSize = 10000
-    val idSource = new IdSource {
-      def nextId() = groupId.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   val actorSystem = ActorSystem("yggdrasilQueryExecutorActorSystem")

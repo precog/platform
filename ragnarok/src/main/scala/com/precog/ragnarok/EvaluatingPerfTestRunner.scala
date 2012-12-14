@@ -25,8 +25,7 @@ import common.security._
 
 import daze.{ Evaluator, EvaluatorConfig }
 
-import yggdrasil.{ StorageModule, BaseConfig, IdSource }
-import yggdrasil.{ Identities, SValue, SEvent }
+import yggdrasil._
 import yggdrasil.table.ColumnarTableModuleConfig
 import yggdrasil.util._
 import yggdrasil.serialization._
@@ -70,10 +69,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
     
     val maxSliceSize = 10000
 
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong()
-      def nextId() = source.getAndIncrement()
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   def eval(query: String): M[Result] = try {

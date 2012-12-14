@@ -316,6 +316,20 @@ object EmitterSpecs extends Specification
           Map2Cross(JoinObject)))
     }
 
+    "emit nested dispatches of the same function" in {
+      val input = """
+        | not(x) := !x
+        | not(not(true))
+        """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushTrue,
+          Map1(Comp),
+          Map1(Comp)
+        ))
+    }
+
     "emit two distinct callsites of the same function" in {
       val input = """
         | medals := //summer_games/london_medals 

@@ -1684,6 +1684,25 @@ trait StatsLibSpec[M[+_]] extends Specification
       result2 must contain(true).only
     }
 
+    "compute correlation of 0 when datasets are uncorrelated" in {
+      val line = Line(0, "")
+      
+      val input = dag.Morph2(line, LinearCorrelation,
+        Join(line, DerefArray, CrossLeftSort,
+          dag.LoadLocal(line, Const(line, CString("uncorrelated"))),
+          Const(line, CLong(0))),
+        Join(line, DerefArray, CrossLeftSort,
+          dag.LoadLocal(line, Const(line, CString("uncorrelated"))),
+          Const(line, CLong(1))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      result must haveAllElementsLike { case (ids, SDecimal(d)) if ids.length == 0 =>
+        d.toDouble must_== 0.0
+      }
+    }
+
     "compute linear correlation" in {
       val line = Line(0, "")
       
