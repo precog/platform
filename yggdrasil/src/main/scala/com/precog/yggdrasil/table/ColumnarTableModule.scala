@@ -109,10 +109,10 @@ trait ColumnarTableModule[M[+_]]
   }
 
   implicit def liftF2(f: F2) = new F2Like {
-    def applyl(cv: CValue) = new CF1(f(Column.const(cv), _))
-    def applyr(cv: CValue) = new CF1(f(_, Column.const(cv)))
+    def applyl(cv: CValue) = CF1("builtin::liftF2::applyl") { f(Column.const(cv), _) } 
+    def applyr(cv: CValue) = CF1("builtin::liftF2::applyl") { f(_, Column.const(cv)) }
 
-    def andThen(f1: F1) = new CF2((c1, c2) => f(c1, c2) flatMap f1.apply)
+    def andThen(f1: F1) = CF2("builtin::liftF2::andThen") { (c1, c2) => f(c1, c2) flatMap f1.apply }
   }
 
   trait ColumnarTableCompanion extends TableCompanionLike {

@@ -27,9 +27,9 @@ import scalaz._
 import scalaz.syntax.std.boolean._
 
 class Path private (val elements: String*) {
-  def components = elements.toList
-  val path = elements.mkString("/", "/", "/").replaceAll("/+", "/")
-  val length = elements.length
+  def components: List[String] = elements.toList
+  val path: String = elements.mkString("/", "/", "/").replaceAll("/+", "/")
+  val length: Int = elements.length
 
   lazy val parent: Option[Path] = elements.size match {
     case 0 => None

@@ -69,7 +69,6 @@ object SBTConsole {
         extends BaseConfig
         with IdSourceConfig
         with ColumnarTableModuleConfig
-        with EvaluatorConfig
         with StandaloneShardSystemConfig
         with JDBMProjectionModuleConfig
         with BlockStoreColumnarTableModuleConfig
@@ -143,7 +142,7 @@ object SBTConsole {
 
     def evalE(str: String) = {
       val dag = produceDAG(str)
-      withContext { ctx => consumeEval("dummyAPIKey", dag, ctx,Path.Root) }
+      consumeEval("dummyAPIKey", dag, Path.Root) 
     }
     
     def produceDAG(str: String) = {

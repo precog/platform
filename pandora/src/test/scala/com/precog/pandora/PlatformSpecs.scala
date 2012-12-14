@@ -84,7 +84,6 @@ object PlatformSpecs extends ParseEvalStackSpecs[Future]
       with StandaloneShardSystemConfig
       with IdSourceConfig
       with ColumnarTableModuleConfig
-      with EvaluatorConfig
       with BlockStoreColumnarTableModuleConfig
       with JDBMProjectionModuleConfig
       
