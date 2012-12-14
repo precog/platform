@@ -2529,7 +2529,7 @@ trait EvalStackSpecs extends Specification {
         |   { agentId: agents.agentId } where { agentId: agents.agentId } = 'rank - 1
         | """.stripMargin
         
-      evalE(input) must not(beEmpty)
+      evalE(input) must not(throwAn[Exception])
     }
   }
 }
