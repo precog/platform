@@ -141,16 +141,15 @@ with the **precog.bat** script.
 
 
 Once Precog has been launched, it will start a web server that exposes
-the REST API as well as labcoat.
+the Analytics REST API as well as labcoat.
 
 
 Step 4: Try the API
 -------------------
 
-Once Precog is running, you have full access to the Precog REST
-API. You can find a large number of open source client libraries
-available on Github, and the Precog developers site contains a bunch
-of documentation and tutorials for interacting with the API.
+Once Precog is running, you have full access to the Precog Analytics REST
+API. However, you will need to load data into MongoDB using MongoDB's API.  That is, you cannot use the Precog Ingest API to load data into MongoDB because Precog for MongoDB does not bundle the auth, accounts or ingest services. To obtain access to the rest of the Precog REST API you will need to sign-up for an account and use the cloud-based service. You can find a large number of open source client libraries
+available on Github, and the Precog developers site contains documentation and tutorials for interacting with the API.
 
 
 Step 5: Try Labcoat
@@ -181,6 +180,9 @@ Precog is a beta product, and *Precog for MongoDB* is hot off the
 press. You may encounter a few rough corners, and if so, we’d love to
 hear about them (just send an email to support@precog.com).
 
+Precog for MongoDB is a free product that Precog provides to the MongoDB community for doing data analysis on MongoDB.
+
+Due to technical limitations, we only recommend the product for exploratory data analysis. For developers interested in high-performance analytics on their MongoDB data, we recommend our cloud-based analytics solution and the MongoDB data importer, which can nicely complement existing MongoDB installations for analytic-intensive workloads.
 
 If you end up doing something cool with Precog for MongoDB, or if you
 just want to say hello, feel free to reach out to us via our website,
