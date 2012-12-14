@@ -32,6 +32,9 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
 trait FSLib[M[+_]] extends GenOpcode[M] {
+  import trans._
+  import constants._
+
   val FSNamespace = Vector("std", "fs")
   override def _libMorphism1 = super._libMorphism1 ++ Set(expandGlob)
 
@@ -43,7 +46,6 @@ trait FSLib[M[+_]] extends GenOpcode[M] {
     val pattern = Pattern.compile("""/+((?:[a-zA-Z0-9\-\._~:?#@!$&'+=]+)|\*)""")
 
     def expand_*(pathString: String, pathRoot: Path, metadata: StorageMetadata[M]): M[Stream[Path]] = {
-      println("expanding any globs in path: " + pathString)
       def traverse(m: Matcher, prefixes: Stream[Path]): M[Stream[Path]] = {
         if (m.find) {
           m.group(1).trim match {
@@ -65,8 +67,8 @@ trait FSLib[M[+_]] extends GenOpcode[M] {
 
     def apply(input: Table, ctx: EvaluationContext): M[Table] = M.point {
       val storageMetadata = storage.userMetadataView(ctx.apiKey)
-      Table(
-        input.slices flatMap { slice =>
+      val result = Table(
+        input.transform(SourceValue.Single).slices flatMap { slice =>
           slice.columns.get(ColumnRef.identity(CString)) collect { 
             case col: StrColumn => 
               val expanded: Stream[M[Stream[Path]]] = Stream.tabulate(slice.size) { i =>
@@ -74,9 +76,14 @@ trait FSLib[M[+_]] extends GenOpcode[M] {
               }
 
               StreamT wrapEffect {
-                expanded.sequence map { paths => 
-                  println("Constructing table of expanded paths from " + paths.toSet)
-                  Table.constString(paths.flatten.map(p => CString(p.toString)).toSet).slices 
+                expanded.sequence map { pathSets => 
+                  val unprefixed: Stream[CString] = for {
+                    paths <- pathSets
+                    path <- paths
+                    suffix <- (path - ctx.basePath)
+                  } yield CString(suffix.toString)
+
+                  Table.constString(unprefixed.toSet).slices 
                 }
               }
           } getOrElse {
@@ -85,6 +92,8 @@ trait FSLib[M[+_]] extends GenOpcode[M] {
         },
         UnknownSize
       )
+      
+      result.transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))
     }
   }
 }

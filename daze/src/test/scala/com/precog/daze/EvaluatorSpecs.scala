@@ -80,7 +80,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
               val target = path.path.replaceAll("/$", ".json")
 
               val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-              val parsed = src.getLines map JParser.parse toStream
+              val parsed = src.getLines map JParser.parseUnsafe toStream
                   
               currentIndex += parsed.length
                   
