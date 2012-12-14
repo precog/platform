@@ -23,7 +23,8 @@ trait FSLib[M[+_]] extends GenOpcode[M] {
 
     val pattern = Pattern.compile("""/+((?:[a-zA-Z0-9\-\._~:?#@!$&'+=]+)|\*)""")
 
-    def expand_*(pathString: String, metadata: StorageMetadata[M]): M[Stream[Path]] = {
+    def expand_*(pathString: String, pathRoot: Path, metadata: StorageMetadata[M]): M[Stream[Path]] = {
+      println("expanding any globs in path: " + pathString)
       def traverse(m: Matcher, prefixes: Stream[Path]): M[Stream[Path]] = {
         if (m.find) {
           m.group(1).trim match {
@@ -40,7 +41,7 @@ trait FSLib[M[+_]] extends GenOpcode[M] {
         }
       }
 
-      traverse(pattern.matcher(pathString), Stream(Path.Root))
+      traverse(pattern.matcher(pathString), Stream(pathRoot))
     }
 
     def apply(input: Table, ctx: EvaluationContext): M[Table] = M.point {
@@ -50,11 +51,12 @@ trait FSLib[M[+_]] extends GenOpcode[M] {
           slice.columns.get(ColumnRef.identity(CString)) collect { 
             case col: StrColumn => 
               val expanded: Stream[M[Stream[Path]]] = Stream.tabulate(slice.size) { i =>
-                expand_*(col(i), storageMetadata)
+                expand_*(col(i), ctx.basePath, storageMetadata)
               }
 
               StreamT wrapEffect {
                 expanded.sequence map { paths => 
+                  println("Constructing table of expanded paths from " + paths.toSet)
                   Table.constString(paths.flatten.map(p => CString(p.toString)).toSet).slices 
                 }
               }
