@@ -168,7 +168,7 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
               val left = x.extract(r._1)
               val right = acc.extract(r._2)
               
-              left.cross(right)(ArrayConcat(WrapArray(Leaf(SourceLeft)), Leaf(SourceRight)))
+              left.cross(right)(OuterArrayConcat(WrapArray(Leaf(SourceLeft)), Leaf(SourceRight)))
             }
 
             val namespace = Vector()

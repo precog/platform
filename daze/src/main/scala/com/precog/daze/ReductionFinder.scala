@@ -101,13 +101,13 @@ trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with InfixLib[
 
       case Join(_, instructions.JoinArray, _, left, Const(_, value)) =>
         value match {
-          case CEmptyArray => loop(left, t => f(trans.ArrayConcat(t)))
+          case CEmptyArray => loop(left, t => f(trans.InnerArrayConcat(t)))
           case _ => (f(Leaf(Source)), graph)
         }
 
       case Join(_, instructions.JoinArray, _, Const(_, value), right) =>
         value match {
-          case CEmptyArray => loop(right, t => f(trans.ArrayConcat(t)))
+          case CEmptyArray => loop(right, t => f(trans.InnerArrayConcat(t)))
           case _ => (f(Leaf(Source)), graph)
         }
 

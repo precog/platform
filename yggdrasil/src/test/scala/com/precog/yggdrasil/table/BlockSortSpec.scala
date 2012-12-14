@@ -138,6 +138,21 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     testSortDense(sampleData, SortDescending, false, JPath(".uid"))
   }
 
+  // Simple test of sorting on homogeneous data with objects
+  def homogeneousSortSampleWithNonexistentSortKey = {
+    val sampleData = SampleData(
+      (JParser.parse("""[
+        {"key":[2],"value":6},
+        {"key":[1],"value":5}  
+      ]""") --> classOf[JArray]).elements.toStream,
+      Some(
+        (1 , List(JPath(".") -> CString))
+      )
+    )
+
+    testSortDense(sampleData, SortDescending, false, JPath(".uid"))
+  }
+
   // Simple test of partially undefined sort key data
   def partiallyUndefinedSortSample = {
     val sampleData = SampleData(

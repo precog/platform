@@ -250,6 +250,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     }
     
     "in cogroup" >> {
+      "perform a trivial cogroup" in testTrivialCogroup(identity[Table])
       "perform a simple cogroup" in testSimpleCogroup(identity[Table])
       "perform another simple cogroup" in testAnotherSimpleCogroup
       "cogroup for unions" in testUnionCogroup
@@ -336,7 +337,19 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "test inner object concat with a boolean and an empty object" in testObjectConcatTrivial
       "concatenate dissimilar objects" in checkObjectConcat
       "test inner object concat join semantics" in testInnerObjectConcatJoinSemantics
+      "test inner object concat with empty objects" in testInnerObjectConcatEmptyObject
+      "test outer object concat with empty objects" in testOuterObjectConcatEmptyObject
+      "test inner object concat with undefined" in testInnerObjectConcatUndefined
+      "test outer object concat with undefined" in testOuterObjectConcatUndefined
+      "test inner object concat with empty" in testInnerObjectConcatLeftEmpty
+      "test outer object concat with empty" in testOuterObjectConcatLeftEmpty
       "concatenate dissimilar arrays" in checkArrayConcat
+      "inner concatenate arrays with undefineds" in testInnerArrayConcatUndefined
+      "outer concatenate arrays with undefineds" in testOuterArrayConcatUndefined
+      "inner concatenate arrays with empty arrays" in testInnerArrayConcatEmptyArray
+      "outer concatenate arrays with empty arrays" in testOuterArrayConcatEmptyArray
+      "inner array concatenate when one side is not an array" in testInnerArrayConcatLeftEmpty
+      "outer array concatenate when one side is not an array" in testOuterArrayConcatLeftEmpty
       "delete elements according to a JType" in checkObjectDelete //.set(minTestsOk -> 5000) TODO: saw an error here once
       "perform a trivial type-based filter" in checkTypedTrivial
       "perform a less trivial type-based filter" in checkTyped
