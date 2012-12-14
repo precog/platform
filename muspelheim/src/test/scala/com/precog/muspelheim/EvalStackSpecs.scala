@@ -2531,6 +2531,40 @@ trait EvalStackSpecs extends Specification {
         
       evalE(input) must not(throwAn[Exception])
     }
+    
+    "handle another case of solving on an object with denseRank" in {
+      val input = """
+        | import std::stats::*
+        | 
+        | upperBound := 1354122459346
+        | lowerBound := 1354036059346
+        | extraLB := lowerBound - (24*60*60000)
+        | 
+        | status := load("/8504352d-b063-400b-a10b-d6c637539469/status")
+        | status' := status where status.timestamp <= upperBound & status.timestamp >= extraLB
+        | 
+        | results := solve 'agent
+        |   data' := status' where status'.agentId = 'agent 
+        |   
+        |   rankedData := data' with {rank: denseRank(data'.timestamp)}
+        | 
+        |   result := solve 'rank
+        |     first  := rankedData where rankedData.rank = 'rank
+        |     second  := rankedData where rankedData.rank = 'rank + 1
+        |     {first: first, second: second}
+        | 
+        |   {start: std::math::max(result.first.timestamp, lowerBound), 
+        |    end: result.second.timestamp, 
+        |    agentId: result.first.agentId, 
+        |    status: result.first.status, 
+        |    name: result.first.agentAlias, 
+        |    note: result.first.note }
+        | 
+        | results where results.end > lowerBound
+        | """.stripMargin
+        
+      evalE(input) must not(throwAn[Exception])
+    }
   }
 }
 
