@@ -37,7 +37,7 @@ import scalaz.syntax.foldable._
 import com.precog.common.Path
 import com.precog.daze.{ UserError, QueryOptions }
 import com.precog.muspelheim.RawJsonColumnarTableStorageModule
-import com.precog.yggdrasil.{ IdSource, ProjectionDescriptor }
+import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor.{ StandaloneShardSystemActorModule, StandaloneShardSystemConfig }
 import com.precog.util.PrecogUnit
 
