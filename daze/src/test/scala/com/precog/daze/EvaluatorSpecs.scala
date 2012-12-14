@@ -41,6 +41,8 @@ import blueeyes.json._
 import java.io._
 import java.util.concurrent.Executors
 
+import org.joda.time.DateTime
+
 import scalaz._
 import scalaz.effect._
 import scalaz.syntax.copointed._
@@ -57,6 +59,8 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
+
+  val defaultEvaluationContext = EvaluationContext("testAPIKey", Path.Root, new DateTime())
 
   val projections = Map.empty[ProjectionDescriptor, Projection]
 
@@ -97,7 +101,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
   private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger
   private val indexLock = new AnyRef                                  // if we were doing this for real: DIE IN A FIRE!!!
   
-  class YggConfig extends IdSourceConfig with ColumnarTableModuleConfig with EvaluatorConfig with BlockStoreColumnarTableModuleConfig {
+  class YggConfig extends IdSourceConfig with ColumnarTableModuleConfig with BlockStoreColumnarTableModuleConfig {
     val sortBufferSize = 1000
     val sortWorkDir: File = IOUtils.createTmpDir("idsoSpec").unsafePerformIO
     val clock = blueeyes.util.Clock.System
@@ -106,10 +110,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
     val flatMapTimeout = intToDurationInt(30).seconds
     val maxSliceSize = 10
 
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   object yggConfig extends YggConfig
@@ -128,8 +129,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
   val testAPIKey = "testAPIKey"
 
-  def testEval(graph: DepGraph, path: Path = Path.Root)(test: Set[SEvent] => Result): Result = withContext { ctx =>
-    (consumeEval(testAPIKey, graph, ctx, path, true) match {
+  def testEval(graph: DepGraph, path: Path = Path.Root)(test: Set[SEvent] => Result): Result = {
+    (consumeEval(testAPIKey, graph, path, true) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     })/* and 
@@ -2923,6 +2924,20 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
 
+    "evaluate filter with non-boolean where clause (with empty result)" in {
+      val line = Line(0, "")
+
+      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
+
+      val input = Filter(line, IdentitySort,
+        clicks,
+        clicks)
+
+      testEval(input) { result =>
+        result must haveSize(0)
+      }
+    }
+
     "evaluate filter on the results of a histogram function" in {
       val line = Line(0, "")
       
@@ -3273,4 +3288,4 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
 }
 
-object EvaluatorSpecs extends EvaluatorSpecs[YId] with test.YIdInstances
+object EvaluatorSpecs extends EvaluatorSpecs[YId] with test.YIdInstances 

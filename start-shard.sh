@@ -68,12 +68,12 @@ function wait_until_port_open () {
 BASEDIR=$(path-canonical-simple `dirname $0`)
 
 VERSION=`git describe`
-INGEST_ASSEMBLY=$BASEDIR/ingest/target/ingest-assembly-$VERSION.jar
-AUTH_ASSEMBLY=$BASEDIR/auth/target/auth-assembly-$VERSION.jar
-ACCOUNTS_ASSEMBLY=$BASEDIR/accounts/target/accounts-assembly-$VERSION.jar
-JOBS_ASSEMBLY=$BASEDIR/heimdall/target/heimdall-assembly-$VERSION.jar
-SHARD_ASSEMBLY=$BASEDIR/shard/target/shard-assembly-$VERSION.jar
-YGGDRASIL_ASSEMBLY=$BASEDIR/yggdrasil/target/yggdrasil-assembly-$VERSION.jar
+INGEST_ASSEMBLY="$BASEDIR"/ingest/target/ingest-assembly-$VERSION.jar
+AUTH_ASSEMBLY="$BASEDIR"/auth/target/auth-assembly-$VERSION.jar
+ACCOUNTS_ASSEMBLY="$BASEDIR"/accounts/target/accounts-assembly-$VERSION.jar
+JOBS_ASSEMBLY="$BASEDIR"/heimdall/target/heimdall-assembly-$VERSION.jar
+SHARD_ASSEMBLY="$BASEDIR"/shard/target/shard-assembly-$VERSION.jar
+YGGDRASIL_ASSEMBLY="$BASEDIR"/yggdrasil/target/yggdrasil-assembly-$VERSION.jar
 
 GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
 
@@ -81,14 +81,14 @@ JAVA="java $GC_OPTS"
 
 # pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
 MISSING_ARTIFACTS=""
-for ASM in $INGEST_ASSEMBLY $SHARD_ASSEMBLY $YGGDRASIL_ASSEMBLY $AUTH_ASSEMBLY $ACCOUNTS_ASSEMBLY $JOBS_ASSEMBLY; do
-    if [ ! -f $ASM ]; then
+for ASM in "$INGEST_ASSEMBLY" "$SHARD_ASSEMBLY" "$YGGDRASIL_ASSEMBLY" "$AUTH_ASSEMBLY" "$ACCOUNTS_ASSEMBLY" "$JOBS_ASSEMBLY"; do
+    if [ ! -f "$ASM" ]; then
         if [ -n "$BUILDMISSING" ]; then
             # Darn you, bash! zsh can do this in one go, a la ${$(basename $ASM)%%-*}
-            BUILDTARGETBASE=$(basename $ASM)
-            BUILDTARGET=${BUILDTARGETBASE%%-*}/assembly
+            BUILDTARGETBASE=$(basename "$ASM")
+            BUILDTARGET="${BUILDTARGETBASE%%-*}/assembly"
             echo "Building $BUILDTARGET"
-            sbt $BUILDTARGET || {
+            sbt "$BUILDTARGET" || {
                 echo "Failed to build $BUILDTARGET!" >&2
                 exit 1
             }
@@ -149,11 +149,11 @@ ARTIFACTDIR="$BASEDIR/standaloneArtifacts"
 
 echo "Using artifacts in $ARTIFACTDIR"
 
-[ -d $ARTIFACTDIR ] || mkdir $ARTIFACTDIR
+[ -d "$ARTIFACTDIR" ] || mkdir "$ARTIFACTDIR"
 
-(exists $ARTIFACTDIR/zookeeper* && echo "  ZooKeeper exists") || {
+(exists "$ARTIFACTDIR"/zookeeper* && echo "  ZooKeeper exists") || {
     echo "Downloading current ZooKeeper artifact"
-    pushd $ARTIFACTDIR > /dev/null
+    pushd "$ARTIFACTDIR" > /dev/null
     wget -nd -q http://ops.reportgrid.com.s3.amazonaws.com/zookeeper/zookeeper-3.4.3.tar.gz || { 
         echo "Failed to download zookeeper" >&2
         exit 3
@@ -161,9 +161,9 @@ echo "Using artifacts in $ARTIFACTDIR"
     popd > /dev/null
 }
 
-(exists $ARTIFACTDIR/kafka* && echo "  Kafka exists") || {
+(exists "$ARTIFACTDIR"/kafka* && echo "  Kafka exists") || {
     echo "Downloading current Kafka artifact"
-    pushd $ARTIFACTDIR > /dev/null
+    pushd "$ARTIFACTDIR" > /dev/null
     wget -nd -q http://s3.amazonaws.com/ops.reportgrid.com/kafka/kafka-0.7.5.zip || { 
         echo "Failed to download kafka" >&2
         exit 3
@@ -171,9 +171,9 @@ echo "Using artifacts in $ARTIFACTDIR"
     popd > /dev/null
 }
 
-(exists $ARTIFACTDIR/mongo* && echo "  Mongo exists") || {
+(exists "$ARTIFACTDIR"/mongo* && echo "  Mongo exists") || {
     echo "Downloading current Mongo artifact"
-    pushd $ARTIFACTDIR > /dev/null
+    pushd "$ARTIFACTDIR" > /dev/null
     wget -nd -q $MONGOURL || { 
         echo "Failed to download kafka" >&2
         exit 3 
@@ -200,18 +200,18 @@ else
 fi
 
 # Set up dirs for all components
-ZKBASE=$WORKDIR/zookeeper
-ZKDATA=$WORKDIR/zookeeper-data
+ZKBASE="$WORKDIR"/zookeeper
+ZKDATA="$WORKDIR"/zookeeper-data
 
-KFBASE=$WORKDIR/kafka
-KFGLOBALDATA=$WORKDIR/kafka-global
-KFLOCALDATA=$WORKDIR/kafka-local
+KFBASE="$WORKDIR"/kafka
+KFGLOBALDATA="$WORKDIR"/kafka-global
+KFLOCALDATA="$WORKDIR"/kafka-local
 
-MONGOBASE=$WORKDIR/mongo
-MONGODATA=$WORKDIR/mongodata
+MONGOBASE="$WORKDIR"/mongo
+MONGODATA="$WORKDIR"/mongodata
 
 rm -rf $ZKBASE $KFBASE
-mkdir -p $ZKBASE $KFBASE $ZKDATA $MONGOBASE $MONGODATA $WORKDIR/{configs,logs,shard-data/data,shard-data/archive,shard-data/scratch}
+mkdir -p $ZKBASE $KFBASE $ZKDATA $MONGOBASE $MONGODATA "$WORKDIR"/{configs,logs,shard-data/data,shard-data/archive,shard-data/scratch}
   
 echo "Running standalone shard under $WORKDIR"
 
@@ -278,7 +278,7 @@ function on_exit() {
 
     if [ -z "$DONTCLEAN" ]; then
         echo "Cleaning up temp work dir"
-        rm -rf $WORKDIR
+        rm -rf "$WORKDIR"
     fi
 
     echo "Shutdown complete"
@@ -289,7 +289,7 @@ trap on_exit EXIT
 
 # Get zookeeper up and running first
 pushd $ZKBASE > /dev/null
-tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-maven*' --exclude='contrib*' --exclude='recipes*' -xvzf $ARTIFACTDIR/zookeeper* > /dev/null 2>&1 || {
+tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-maven*' --exclude='contrib*' --exclude='recipes*' -xvzf "$ARTIFACTDIR"/zookeeper* > /dev/null 2>&1 || {
     echo "Failed to unpack zookeeper" >&2
     exit 3
 }
@@ -306,14 +306,14 @@ cd $ZKBASE/bin
 ./zkServer.sh start
 
 # Now, start global and local kafkas
-cd $WORKDIR
-unzip $ARTIFACTDIR/kafka* > /dev/null || {
+cd "$WORKDIR"
+unzip "$ARTIFACTDIR"/kafka* > /dev/null || {
     echo "Failed to unpack kafka" >&2
     exit 3
 }
 
 # Transform the provided config into global and local configs
-cd $WORKDIR/kafka/config
+cd "$WORKDIR"/kafka/config
 sed -e "s#log.dir=.*#log.dir=$KFGLOBALDATA#; s/port=.*/port=9092/" < server.properties > server-global.properties
 sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=9082/; s/enable.zookeeper=.*/enable.zookeeper=false/" < server.properties > server-local.properties
 
@@ -334,59 +334,59 @@ echo "Kafka Local = $KFLOCALPID"
 
 # Start up mongo and set test token
 cd $MONGOBASE
-tar --strip-components=1 -xvzf $ARTIFACTDIR/mongo* &> /dev/null
+tar --strip-components=1 -xvzf "$ARTIFACTDIR"/mongo* &> /dev/null
 $MONGOBASE/bin/mongod --port $MONGOPORT --dbpath $MONGODATA --nojournal --nounixsocket --noauth --noprealloc &
 MONGOPID=$!
 
 wait_until_port_open $MONGOPORT
 
-if [ ! -e $WORKDIR/root_token.json ]; then
+if [ ! -e "$WORKDIR"/root_token.json ]; then
     echo "Retrieving new root token"
-    $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -r | tail -n 1 > $WORKDIR/root_token.txt || {
+    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -r | tail -n 1 > "$WORKDIR"/root_token.txt || {
         echo "Error retrieving new root token" >&2
         exit 3
     }
 fi
 
-TOKENID=`cat $WORKDIR/root_token.txt`
+TOKENID=`cat "$WORKDIR"/root_token.txt`
 
 # Set up ingest and shard services
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/accounts/v1/#/#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.conf > $WORKDIR/configs/ingest-v1.conf || echo "Failed to update ingest config"
-sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/ingest/configs/dev/dev-ingest-v1.logging.xml > $WORKDIR/configs/ingest-v1.logging.xml
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/accounts/v1/#/#" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.conf > "$WORKDIR"/configs/ingest-v1.conf || echo "Failed to update ingest config"
+sed -e "s#/var/log/precog#"$WORKDIR"/logs#" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.logging.xml > "$WORKDIR"/configs/ingest-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/opt/precog/shard#$WORKDIR/shard-data#" < $BASEDIR/shard/configs/dev/shard-v1.conf > $WORKDIR/configs/shard-v1.conf || echo "Failed to update shard config"
-sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/shard/configs/dev/shard-v1.logging.xml > $WORKDIR/configs/shard-v1.logging.xml
+sed -e "s#/var/log#"$WORKDIR"/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/opt/precog/shard#$WORKDIR/shard-data#" < "$BASEDIR"/shard/configs/dev/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/shard/configs/dev/shard-v1.logging.xml > "$WORKDIR"/configs/shard-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < $BASEDIR/auth/configs/dev/dev-auth-v1.conf > $WORKDIR/configs/auth-v1.conf || echo "Failed to update auth config"
-sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/auth/configs/dev/dev-auth-v1.logging.xml > $WORKDIR/configs/auth-v1.logging.xml
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.conf > "$WORKDIR"/configs/auth-v1.conf || echo "Failed to update auth config"
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.logging.xml > "$WORKDIR"/configs/auth-v1.logging.xml
 
-sed -e "s!/var/log!$WORKDIR/logs!; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s/port = 80/port = 30062/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < $BASEDIR/accounts/configs/dev/accounts-v1.conf > $WORKDIR/configs/accounts-v1.conf || echo "Failed to update accounts config"
-sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/accounts/configs/dev/accounts-v1.logging.xml > $WORKDIR/configs/accounts-v1.logging.xml
+sed -e "s!/var/log!$WORKDIR/logs!; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s/port = 80/port = 30062/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < "$BASEDIR"/accounts/configs/dev/accounts-v1.conf > "$WORKDIR"/configs/accounts-v1.conf || echo "Failed to update accounts config"
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/accounts/configs/dev/accounts-v1.logging.xml > "$WORKDIR"/configs/accounts-v1.logging.xml
 
-sed -e "s!/var/log!$WORKDIR/logs!; s/port = 80/port = 30062/; s!/security/v1/!/!; s!\[\"localhost\"\]!\[\"localhost:$MONGOPORT\"\]!" < $BASEDIR/heimdall/configs/dev/jobs-v1.conf > $WORKDIR/configs/jobs-v1.conf || echo "Failed to update jobs config"
-sed -e "s#/var/log/precog#$WORKDIR/logs#" < $BASEDIR/heimdall/configs/dev/jobs-v1.logging.xml > $WORKDIR/configs/jobs-v1.logging.xml
+sed -e "s!/var/log!$WORKDIR/logs!; s/port = 80/port = 30062/; s!/security/v1/!/!; s!\[\"localhost\"\]!\[\"localhost:$MONGOPORT\"\]!" < "$BASEDIR"/heimdall/configs/dev/jobs-v1.conf > "$WORKDIR"/configs/jobs-v1.conf || echo "Failed to update jobs config"
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/heimdall/configs/dev/jobs-v1.logging.xml > "$WORKDIR"/configs/jobs-v1.logging.xml
 
-cd $BASEDIR
+cd "$BASEDIR"
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
-if [ ! -e $WORKDIR/initial_checkpoint.json ]; then
-    $JAVA $REBEL_OPTS -jar $YGGDRASIL_ASSEMBLY zk -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
+if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
+    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" zk -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
         echo "Couldn't set initial checkpoint!" >&2
         exit 3
     }
-    touch $WORKDIR/initial_checkpoint.json
+    touch "$WORKDIR"/initial_checkpoint.json
 fi
 
 echo "Starting auth service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/auth-v1.logging.xml -jar $AUTH_ASSEMBLY --configFile $WORKDIR/configs/auth-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/auth-v1.logging.xml -jar "$AUTH_ASSEMBLY" --configFile "$WORKDIR"/configs/auth-v1.conf &
 AUTHPID=$!
 
 echo "Starting accounts service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/accounts-v1.logging.xml -jar $ACCOUNTS_ASSEMBLY --configFile $WORKDIR/configs/accounts-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/accounts-v1.logging.xml -jar "$ACCOUNTS_ASSEMBLY" --configFile "$WORKDIR"/configs/accounts-v1.conf &
 ACCOUNTSPID=$!
 
 echo "Starting jobs service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/jobs-v1.logging.xml -jar $JOBS_ASSEMBLY --configFile $WORKDIR/configs/jobs-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/jobs-v1.logging.xml -jar "$JOBS_ASSEMBLY" --configFile "$WORKDIR"/configs/jobs-v1.conf &
 JOBSPID=$!
 
 wait_until_port_open 30062
@@ -394,23 +394,22 @@ wait_until_port_open 30064
 wait_until_port_open 30066
 
 # Now we need an actual account to use for testing
-if [ ! -e $WORKDIR/account_token.txt ]; then
+if [ ! -e "$WORKDIR"/account_token.txt ]; then
     echo "Creating test account"
     ACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password":"1234"}' http://localhost:30064/accounts/ | sed 's/.*\([0-9]\{10\}\).*/\1/')
     echo "Created account: $ACCOUNTID"
-    echo $ACCOUNTID > $WORKDIR/account_id.txt
+    echo $ACCOUNTID > "$WORKDIR"/account_id.txt
     ACCOUNTTOKEN=$(set -e; curl -S -s -u 'operations@precog.com:1234' -H 'Content-Type: application/json' -G "http://localhost:30064/accounts/$ACCOUNTID" | grep apiKey | sed 's/.*apiKey"[^"]*"\([^"]*\)".*/\1/')
     echo "Account token is $ACCOUNTTOKEN"
-    echo $ACCOUNTTOKEN > $WORKDIR/account_token.txt
+    echo $ACCOUNTTOKEN > "$WORKDIR"/account_token.txt
 fi
 
 echo "Starting ingest service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/ingest-v1.logging.xml -jar $INGEST_ASSEMBLY --configFile $WORKDIR/configs/ingest-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/ingest-v1.logging.xml -jar "$INGEST_ASSEMBLY" --configFile "$WORKDIR"/configs/ingest-v1.conf &
 INGESTPID=$!
 
 echo "Starting shard service"
-echo $JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf
-$JAVA $REBEL_OPTS -Dlogback.configurationFile=$WORKDIR/configs/shard-v1.logging.xml -jar $SHARD_ASSEMBLY --configFile $WORKDIR/configs/shard-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/shard-v1.conf &
 SHARDPID=$!
 
 # Let the ingest/shard services startup in parallel

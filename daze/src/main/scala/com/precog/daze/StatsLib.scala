@@ -59,23 +59,22 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
   override def _libMorphism2 = super._libMorphism2 ++ Set(Covariance, LinearCorrelation, LinearRegression, LogarithmicRegression) 
   
   object Median extends Morphism1(EmptyNamespace, "median") {
-    
     import Mean._
     
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def apply(table: Table) = {  //TODO write tests for the empty table case
+    def apply(table: Table, ctx: EvaluationContext) = {  //TODO write tests for the empty table case
       val compactedTable = table.compact(WrapObject(Typed(DerefObjectStatic(Leaf(Source), paths.Value), JNumberT), paths.Value.name))
 
       val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
 
       for {
         sortedTable <- compactedTable.sort(sortKey, SortAscending)
-        count <- sortedTable.reduce(Count.reducer)
+        count <- sortedTable.reduce(Count.reducer(ctx))
         median <- if (count % 2 == 0) {
           val middleValues = sortedTable.takeRange((count.toLong / 2) - 1, 2)
           val transformedTable = middleValues.transform(trans.DerefObjectStatic(Leaf(Source), paths.Value))  //todo make function for this
-          Mean(transformedTable)
+          Mean(transformedTable, ctx)
         } else {
           val middleValue = M.point(sortedTable.takeRange((count.toLong / 2), 1))
           middleValue map { _.transform(trans.DerefObjectStatic(Leaf(Source), paths.Value)) }
@@ -131,7 +130,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       def append(left: Set[A], right: => Set[A]) = left ++ right
     }
 
-    def reducer: Reducer[Result] = new Reducer[Result] {  //TODO add cases for other column types; get information necessary for dealing with slice boundaries and unsoretd slices in the Iterable[Slice] that's used in table.reduce
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {  //TODO add cases for other column types; get information necessary for dealing with slice boundaries and unsoretd slices in the Iterable[Slice] that's used in table.reduce
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         cols(JNumberT) flatMap {
           case col: LongColumn => 
@@ -172,11 +171,11 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       Table.constDecimal(setC)
     }
 
-    def apply(table: Table) = {
+    def apply(table: Table, ctx: EvaluationContext) = {
       val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
       val sortedTable: M[Table] = table.sort(sortKey, SortAscending)
 
-      sortedTable.flatMap(_.reduce(reducer).map(extract))
+      sortedTable.flatMap(_.reduce(reducer(ctx)).map(extract))
     }
   }
  
@@ -190,7 +189,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
     implicit def monoid = implicitly[Monoid[Result]]
     
-    def reducer: Reducer[Result] = new Reducer[Result] {
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         val left = cols(JArrayFixedT(Map(0 -> JNumberT)))
         val right = cols(JArrayFixedT(Map(1 -> JNumberT)))
@@ -306,26 +305,27 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     }
     
     def extract(res: Result): Table = {
-      val res2 = res filter {
-        case (count, sum1, sum2, sumsq1, sumsq2, _) => (count > 0) && (sqrt(count * sumsq1 - sum1 * sum1) != 0) && (sqrt(count * sumsq2 - sum2 * sum2) != 0)
-      } 
-      
-      res2 map { //TODO division by zero, negative sqrt
-        case (count, sum1, sum2, sumsq1, sumsq2, productSum) => {
+      res filter (_._1 > 0) map { case (count, sum1, sum2, sumsq1, sumsq2, productSum) =>
+        val unscaledVar1 = count * sumsq1 - sum1 * sum1
+        val unscaledVar2 = count * sumsq2 - sum2 * sum2
+        if (unscaledVar1 != 0 && unscaledVar2 != 0) {
           val cov = (productSum - ((sum1 * sum2) / count)) / count
-          val stdDev1 = sqrt(count * sumsq1 - sum1 * sum1) / count
-          val stdDev2 = sqrt(count * sumsq2 - sum2 * sum2) / count
+          val stdDev1 = sqrt(unscaledVar1) / count
+          val stdDev2 = sqrt(unscaledVar2) / count
+          val correlation = cov / (stdDev1 * stdDev2)
 
-          val resultTable = Table.constDecimal(Set(CNum(cov / (stdDev1 * stdDev2))))  //TODO the following lines are used throughout. refactor! 
+          val resultTable = Table.constDecimal(Set(CNum(correlation)))  //TODO the following lines are used throughout. refactor! 
           val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
           val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
           valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+        } else {
+          Table.empty
         }
       } getOrElse Table.empty
     }
 
-    def apply(table: Table) = table.reduce(reducer) map extract
+    def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
   }
 
   object Covariance extends Morphism2(StatsNamespace, "cov") {
@@ -338,7 +338,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
     implicit def monoid = implicitly[Monoid[Result]]
     
-    def reducer: Reducer[Result] = new Reducer[Result] {
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
 
         val left = cols(JArrayFixedT(Map(0 -> JNumberT))) 
@@ -473,7 +473,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       } getOrElse Table.empty
     }
 
-    def apply(table: Table) = table.reduce(reducer) map extract
+    def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
   }
 
   object LinearRegression extends Morphism2(StatsNamespace, "linReg") {
@@ -486,7 +486,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
     implicit def monoid = implicitly[Monoid[Result]]
     
-    def reducer: Reducer[Result] = new Reducer[Result] {
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
 
         val left = cols(JArrayFixedT(Map(0 -> JNumberT))) 
@@ -631,9 +631,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       } getOrElse Table.empty
     }
 
-    def apply(table: Table) = {
-      table.reduce(reducer) map extract
-    }
+    def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
   }
 
   object LogarithmicRegression extends Morphism2(StatsNamespace, "logReg") {
@@ -646,7 +644,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
     implicit def monoid = implicitly[Monoid[Result]]
     
-    def reducer: Reducer[Result] = new Reducer[Result] {
+    def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
 
         val left = cols(JArrayFixedT(Map(0 -> JNumberT))) 
@@ -836,9 +834,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       } getOrElse Table.empty
     }
 
-    def apply(table: Table) = {
-      table.reduce(reducer) map extract
-    }
+    def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
   }
 
   object DenseRank extends Morphism1(StatsNamespace, "denseRank") {
@@ -913,7 +909,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       }
     }
     
-    def apply(table: Table) = {
+    def apply(table: Table, ctx: EvaluationContext) = {
       val sortByValue = DerefObjectStatic(Leaf(Source), paths.Value)
       val sortedTable = table.sort(sortByValue, SortAscending)
 
@@ -998,7 +994,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       }
     }
     
-    def apply(table: Table) = {
+    def apply(table: Table, ctx: EvaluationContext) = {
       val sortByValue = DerefObjectStatic(Leaf(Source), paths.Value)
       val sortedTable = table.sort(sortByValue, SortAscending)
 

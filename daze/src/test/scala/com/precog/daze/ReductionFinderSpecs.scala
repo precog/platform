@@ -36,13 +36,15 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
   import instructions._
   import dag._
 
+  val ctx = defaultEvaluationContext
+
   "mega reduce" should {
 
     "in a load, rewrite to itself" in {
       val line = Line(0, "")
       val input = dag.LoadLocal(line, Const(line, CString("/foo")))
 
-      megaReduce(input, findReductions(input)) mustEqual input
+      megaReduce(input, findReductions(input, ctx)) mustEqual input
     }
 
     "in a reduction of a singleton" in {
@@ -53,7 +55,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val expected = joinDeref(megaR, 0, 0, line)
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
 
     "in a single reduction" in {
@@ -69,7 +71,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val expected = joinDeref(megaR, 0, 0, line)
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     } 
 
     "in joins where transpecs are eq, wrap object, operate, filter" in {
@@ -102,7 +104,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val nonEqTrans = trans.EqualLiteral(trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("foo")), CNum(5), true)
       val objTrans = trans.WrapObject(trans.Leaf(trans.Source), "bar")
-      val opTrans = trans.Map1(trans.DerefArrayStatic(trans.Leaf(trans.Source), CPathIndex(1)), op1(Neg).f1)
+      val opTrans = trans.Map1(trans.DerefArrayStatic(trans.Leaf(trans.Source), CPathIndex(1)), op1(Neg).f1(ctx))
       val filterTrans = trans.Filter(trans.Leaf(trans.Source), trans.EqualLiteral(trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("baz")), CNum(12), false)) 
 
       val reductions: List[(trans.TransSpec1, List[Reduction])] = List((filterTrans, List(StdDev)), (opTrans, List(Max)), (objTrans, List(Max, Sum)), (nonEqTrans, List(Min))).reverse
@@ -128,7 +130,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
               joinDeref(megaR, 0, 0, line),
               joinDeref(megaR, 2, 0, line)))))
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
     
     "in a join of two reductions on the same dataset" in {
@@ -156,9 +158,9 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         Map(parent -> trans.Leaf(trans.Source))
       )
 
-      findReductions(input) mustEqual expectedReductions
+      findReductions(input, ctx) mustEqual expectedReductions
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
 
 
     }
@@ -178,7 +180,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
           dag.Operate(line, Neg, load),
           joinDeref(megaR, 0, 0, line))
 
-        megaReduce(input, findReductions(input)) mustEqual expected
+        megaReduce(input, findReductions(input, ctx)) mustEqual expected
       }
       "left" in {
         val input = Join(line, Add, CrossLeftSort, r, dag.Operate(line, Neg, load))
@@ -186,7 +188,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
           joinDeref(megaR, 0, 0, line),
           dag.Operate(line, Neg, load))
 
-        megaReduce(input, findReductions(input)) mustEqual expected
+        megaReduce(input, findReductions(input, ctx)) mustEqual expected
       }
     }
 
@@ -211,7 +213,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         joinDeref(megaR1, 0, 0, line),
         joinDeref(megaR2, 0, 0, line))
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }    
     
     "where two different sets are being reduced" in {
@@ -251,7 +253,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
               joinDeref(megaR2, 0, 1, line),
               joinDeref(megaR2, 0, 0, line)))))
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
 
     "where a single set is being reduced three times" in {
@@ -275,7 +277,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
           joinDeref(megaR, 0, 1, line), 
           joinDeref(megaR, 0, 0, line))) 
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
 
     "where three reductions use three different trans specs" in {
@@ -315,7 +317,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
           joinDeref(mega, 1, 0, line),
           joinDeref(mega, 0, 0, line)))
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
 
     "where three reductions use two trans specs" in {
@@ -353,7 +355,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
           joinDeref(mega, 1, 0, line),
           joinDeref(mega, 0, 0, line)))
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
 
     "where three reductions use one trans spec" in {
@@ -389,7 +391,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
           joinDeref(mega, 0, 1, line),
           joinDeref(mega, 0, 0, line)))
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
 
     "where one reduction uses three trans spec" in {
@@ -427,7 +429,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
           joinDeref(mega, 1, 0, line),
           joinDeref(mega, 0, 0, line)))
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
 
     "in a split" in {
@@ -469,7 +471,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
           SplitGroup(line, 1, nums.identities)(input),
           joinDeref(megaR, 0, 0, line)))
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
 
     "in a split that contains two reductions of the same dataset" in {
@@ -530,7 +532,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
               Const(line, CString("max")),
               joinDeref(megaR, 0, 0, line)))))
 
-      megaReduce(input, findReductions(input)) mustEqual expected
+      megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
   }
 
@@ -546,7 +548,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         Map()
       )
 
-      findReductions(input) mustEqual expected
+      findReductions(input, ctx) mustEqual expected
     }
 
     "in a single reduction" in {
@@ -563,7 +565,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         Map(load -> trans.Leaf(trans.Source))
       )
 
-      findReductions(r) mustEqual expected
+      findReductions(r, ctx) mustEqual expected
     }   
 
     "in a join of two reductions on the same dataset #2" in {
@@ -582,7 +584,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         Map(load -> trans.Leaf(trans.Source))
       )
 
-      findReductions(input) mustEqual expected
+      findReductions(input, ctx) mustEqual expected
     }
 
     "findReductions given a reduction inside a reduction" in {
@@ -599,7 +601,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         Map(load -> trans.Leaf(trans.Source), r1 -> trans.Leaf(trans.Source))
       )
 
-      findReductions(r2) mustEqual expected
+      findReductions(r2, ctx) mustEqual expected
     }     
 
     "findReductions given two reductions inside a reduction" in {
@@ -632,7 +634,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         )
       )
 
-      findReductions(input) mustEqual expected
+      findReductions(input, ctx) mustEqual expected
     }
 
     // TODO: need to test reductions whose parents are splits
@@ -656,7 +658,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         Map(clicks -> trans.Leaf(trans.Source))
       )
 
-      findReductions(input) mustEqual expected
+      findReductions(input, ctx) mustEqual expected
     }
 
 
@@ -675,7 +677,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
           Map(load -> trans.Leaf(trans.Source))
         )
 
-        findReductions(input) mustEqual expected
+        findReductions(input, ctx) mustEqual expected
       }
       "left" in {
         val r = dag.Reduce(line, Count, load)
@@ -688,7 +690,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
           Map(load -> trans.Leaf(trans.Source))
         )
 
-        findReductions(input) mustEqual expected
+        findReductions(input, ctx) mustEqual expected
       }
     }
     
@@ -720,7 +722,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         Map(parent -> trans.Leaf(trans.Source))
       )
 
-      findReductions(input) mustEqual expected
+      findReductions(input, ctx) mustEqual expected
     }
 
     "in a split that contains two reductions of the same dataset #2" in {
@@ -768,7 +770,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         Map(parent -> trans.Leaf(trans.Source))
       )
 
-      findReductions(input) mustEqual expected
+      findReductions(input, ctx) mustEqual expected
     }
   }
 
@@ -781,4 +783,4 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 }
 
 
-object ReductionFinderSpecs extends ReductionFinderSpecs[test.YId] with test.YIdInstances
+object ReductionFinderSpecs extends ReductionFinderSpecs[test.YId] with test.YIdInstances 

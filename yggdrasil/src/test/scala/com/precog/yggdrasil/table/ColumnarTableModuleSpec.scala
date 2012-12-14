@@ -53,27 +53,11 @@ import org.scalacheck.Arbitrary._
 import TableModule._
 import SampleData._
 
-trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] 
-    with TableModuleSpec[M]
-    with CogroupSpec[M]
-    with CrossSpec[M]
-    with TransformSpec[M]
-    with CompactSpec[M] 
-    with TakeRangeSpec[M]
-    with PartitionMergeSpec[M]
-    with UnionAllSpec[M]
-    with CrossAllSpec[M]
-    with DistinctSpec[M] 
-    with GroupingGraphSpec[M]
-    with SchemasSpec[M]
-    { spec => 
-
-  //type GroupId = Int
+trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
+  type GroupId = Int
   import trans._
   import constants._
-    
-  override val defaultPrettyParams = Pretty.Params(2)
-
+ 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
 
@@ -94,6 +78,27 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   }
 
   object Table extends TableCompanion
+}
+
+trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M] 
+    with TableModuleSpec[M]
+    with CogroupSpec[M]
+    with CrossSpec[M]
+    with TransformSpec[M]
+    with CompactSpec[M] 
+    with TakeRangeSpec[M]
+    with PartitionMergeSpec[M]
+    with UnionAllSpec[M]
+    with CrossAllSpec[M]
+    with DistinctSpec[M] 
+    with GroupingGraphSpec[M]
+    with SchemasSpec[M]
+    { spec => 
+
+  import trans._
+  import constants._
+    
+  override val defaultPrettyParams = Pretty.Params(2)
 
   private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.table.ColumnarTableModuleSpec")
 
@@ -792,10 +797,7 @@ object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] 
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
     
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 }
 

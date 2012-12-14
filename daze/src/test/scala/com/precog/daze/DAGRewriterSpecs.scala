@@ -21,7 +21,9 @@ package com.precog.daze
 
 import org.specs2.mutable._
 
+import com.precog.common.Path
 import com.precog.yggdrasil._
+import org.joda.time.DateTime
 
 trait DAGRewriterSpecs[M[+_]] extends Specification with EvaluatorTestSupport[M] {
 
@@ -34,7 +36,8 @@ trait DAGRewriterSpecs[M[+_]] extends Specification with EvaluatorTestSupport[M]
 
       val input = dag.LoadLocal(line, Const(line, CString("/numbers")))
 
-      val result = rewriteDAG(true)(input)
+      val ctx = EvaluationContext("testAPIKey", Path.Root, new DateTime())
+      val result = rewriteDAG(true, ctx)(input)
 
       result.identities mustEqual Identities.Specs(Vector(LoadIds("/numbers")))
     }
