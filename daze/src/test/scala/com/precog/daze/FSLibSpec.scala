@@ -45,10 +45,7 @@ trait FSLibSpec[M[+_]] extends Specification
 
   class YggConfig extends IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   val yggConfig = new YggConfig
