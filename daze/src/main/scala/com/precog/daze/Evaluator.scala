@@ -4,6 +4,7 @@ package daze
 import annotation.tailrec
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.ColumnarTableModuleConfig
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.util.IdSourceConfig
@@ -322,9 +323,23 @@ trait Evaluator[M[+_]] extends DAG
                   }
                 }
               }
-              leftSpec = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(0)), paths.Value)
-              rightSpec = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
-              transformed = aligned.transform(ArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
+              leftSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(0)), paths.Value)
+              rightSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
+
+              leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
+              rightSpec = trans.Map1(rightSpec0, cf.util.CoerceToDouble)
+
+              //todo doing this in place of InnerArrayConcat... 
+              toObject = InnerObjectConcat(trans.WrapObject(leftSpec, "0"), trans.WrapObject(rightSpec, "1"))
+              toArray = ArrayConcat(
+                trans.WrapArray(DerefObjectStatic(toObject, CPathField("0"))), 
+                trans.WrapArray(DerefObjectStatic(toObject, CPathField("1")))) 
+
+              transformed = {
+                if (mor.multivariate) aligned.transform(toArray)
+                //todo change the following ArrayConcat to InnerObjectConcat  
+                else aligned.transform(ArrayConcat(trans.WrapArray(leftSpec0), trans.WrapArray(rightSpec0)))
+              }
 
               result <- mor(transformed)
             } yield result

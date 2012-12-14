@@ -150,6 +150,19 @@ object util {
     }
   }
 
+  //it would be nice to generalize this to `CoerceTo[A]` so we can coerce to BigDecimal as well
+  case object CoerceToDouble extends CF1P({
+    case c: DoubleColumn => c
+
+    case c: LongColumn => new Map1Column(c) with DoubleColumn {
+      def apply(row: Int) = c(row).toDouble
+    }
+
+    case c: NumColumn => new Map1Column(c) with DoubleColumn {
+      def apply(row: Int) = c(row).toDouble
+    }
+  })
+
   case class Concat(at: Int) extends CF2P({
     case (c1: BoolColumn, c2: BoolColumn) => new ConcatColumn(at, c1, c2) with BoolColumn { 
       def apply(row: Int) = if (row < at) c1(row) else c2(row - at)
@@ -246,6 +259,9 @@ object util {
     case c: NumColumn    => new EmptyColumn[NumColumn] with NumColumn
     case c: StrColumn    => new EmptyColumn[StrColumn] with StrColumn
     case c: DateColumn   => new EmptyColumn[DateColumn] with DateColumn
+    case c: HomogeneousArrayColumn[a] => new EmptyColumn[HomogeneousArrayColumn[a]] with HomogeneousArrayColumn[a] {
+      val tpe = c.tpe
+    }
     case c: EmptyArrayColumn  => new EmptyColumn[EmptyArrayColumn] with EmptyArrayColumn
     case c: EmptyObjectColumn => new EmptyColumn[EmptyObjectColumn] with EmptyObjectColumn
     case c: NullColumn => new EmptyColumn[NullColumn] with NullColumn
@@ -274,6 +290,10 @@ object util {
     case c: NumColumn    => new RemapFilterColumn(c, filter, offset) with NumColumn { def apply(row: Int) = c(row + offset) }
     case c: StrColumn    => new RemapFilterColumn(c, filter, offset) with StrColumn { def apply(row: Int) = c(row + offset) }
     case c: DateColumn   => new RemapFilterColumn(c, filter, offset) with DateColumn { def apply(row: Int) = c(row + offset) }
+    case c: HomogeneousArrayColumn[a] => new RemapFilterColumn(c, filter, offset) with HomogeneousArrayColumn[a] {
+      val tpe = c.tpe
+      def apply(row: Int) = c(row + offset)
+    }
     case c: EmptyArrayColumn  => new RemapFilterColumn(c, filter, offset) with EmptyArrayColumn
     case c: EmptyObjectColumn => new RemapFilterColumn(c, filter, offset) with EmptyObjectColumn
     case c: NullColumn => new RemapFilterColumn(c, filter, offset) with NullColumn
@@ -286,6 +306,10 @@ object util {
     case c: NumColumn    => new RemapIndicesColumn(c, indices) with NumColumn { def apply(row: Int) = c(indices.get(row)) }
     case c: StrColumn    => new RemapIndicesColumn(c, indices) with StrColumn { def apply(row: Int) = c(indices.get(row)) }
     case c: DateColumn   => new RemapIndicesColumn(c, indices) with DateColumn { def apply(row: Int) = c(indices.get(row)) }
+    case c: HomogeneousArrayColumn[a] => new RemapIndicesColumn(c, indices) with HomogeneousArrayColumn[a] {
+      val tpe = c.tpe
+      def apply(row: Int) = c(indices.get(row))
+    }
     case c: EmptyArrayColumn  => new RemapIndicesColumn(c, indices) with EmptyArrayColumn
     case c: EmptyObjectColumn => new RemapIndicesColumn(c, indices) with EmptyObjectColumn
     case c: NullColumn => new RemapIndicesColumn(c, indices) with NullColumn
@@ -303,8 +327,6 @@ object util {
         val tpe = c.tpe
         def apply(row: Int) = c(row)
       }
-
-
     case c: EmptyArrayColumn  => new BitsetColumn(definedAt & c.definedAt(from, to)) with EmptyArrayColumn
     case c: EmptyObjectColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with EmptyObjectColumn
     case c: NullColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with NullColumn
