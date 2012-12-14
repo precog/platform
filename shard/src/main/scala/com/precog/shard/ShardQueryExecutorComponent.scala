@@ -111,7 +111,7 @@ trait ShardQueryExecutor
     import trans._
 
     def sort(table: Future[Table]): Future[Table] = if (!opts.sortOn.isEmpty) {
-      val sortKey = ArrayConcat(opts.sortOn map { cpath =>
+      val sortKey = InnerArrayConcat(opts.sortOn map { cpath =>
         WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
           case (inner, f @ CPathField(_)) =>
             DerefObjectStatic(inner, f)
