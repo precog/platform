@@ -25,7 +25,7 @@ import com.precog.common.{Path, VectorCase}
 import com.precog.bytecode.{ JType, JBooleanT, JObjectUnfixedT, JArrayUnfixedT }
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
-import com.precog.util.BitSet
+import com.precog.util._
 
 import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
@@ -279,38 +279,23 @@ trait SliceTransforms[M[+_]] extends
                   val size = sl.size
 
                   val columns: Map[ColumnRef, Column] = {
-                    val leftObjects = filterObjects(sl.columns).values toList
-                    val rightObjects = filterObjects(sr.columns).values toList
+                    val leftObjectBits = filterObjects(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
+                    val rightObjectBits = filterObjects(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
 
-                    val leftEmpty = filterEmptyObjects(sl.columns).values toList
-                    val rightEmpty = filterEmptyObjects(sr.columns).values toList
+                    val leftEmptyBits = filterEmptyObjects(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
+                    val rightEmptyBits = filterEmptyObjects(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
                     
                     val leftFields = filterFields(sl.columns)
                     val rightFields = filterFields(sr.columns)
 
-                    val maskComplement = new BoolColumn {
-                      def defined(row: Int) = check(leftObjects)(row) || check(rightObjects)(row)
+                    val emptyBits = 
+                      (rightEmptyBits & leftEmptyBits) |
+                      (rightEmptyBits &~ leftObjectBits) |
+                      (leftEmptyBits &~ rightObjectBits)
 
-                      def isDefinedAt(row: Int) = !defined(row)
-                      def apply(row: Int) = true
-                    }
+                    val emptyObjectCol = Map(ColumnRef(CPath.Identity, CEmptyObject) -> EmptyObjectColumn(emptyBits))
 
-                    val emptyComplement = new BoolColumn {
-                      def defined(row: Int) =
-                        (check(rightEmpty)(row) && check(leftEmpty)(row)) ||
-                        (check(rightEmpty)(row) && !check(leftObjects)(row)) ||
-                        (check(leftEmpty)(row) && !check(rightObjects)(row))
-
-                      def isDefinedAt(row: Int) = !defined(row)
-                      def apply(row: Int) = true
-                    }
-
-                    val result = emptyObjectCols(emptyComplement, size) ++
-                      nonemptyObjectCols(leftFields, rightFields)
-                    
-                    result mapValues { col =>
-                      cf.util.FilterComplement(maskComplement)(col).get
-                    }
+                    emptyObjectCol ++ nonemptyObjectCols(leftFields, rightFields)
                   }
                 }
               }
@@ -331,36 +316,56 @@ trait SliceTransforms[M[+_]] extends
                     if (sl.columns.isEmpty || sr.columns.isEmpty) {
                       Map.empty[ColumnRef, Column]
                     } else {
-                      val leftObjects = filterObjects(sl.columns).values toList
-                      val rightObjects = filterObjects(sr.columns).values toList
+                      val leftObjectBits = filterObjects(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
+                      val rightObjectBits = filterObjects(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
 
-                      val leftEmpty = filterEmptyObjects(sl.columns).values toList
-                      val rightEmpty = filterEmptyObjects(sr.columns).values toList
+                      val leftEmptyBits = filterEmptyObjects(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
+                      val rightEmptyBits = filterEmptyObjects(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
 
                       val leftFields = filterFields(sl.columns)
                       val rightFields = filterFields(sr.columns)
+
+                      val emptyBits = rightEmptyBits & leftEmptyBits
+                      val nonemptyBits = leftObjectBits & rightObjectBits
+
+                      val emptyObjectCol = Map(ColumnRef(CPath.Identity, CEmptyObject) -> EmptyObjectColumn(emptyBits))
                       
-                      val maskComplement = new BoolColumn {
-                        def defined(row: Int) = check(leftObjects)(row) && check(rightObjects)(row)
-
-                        def isDefinedAt(row: Int) = !defined(row)
-                        def apply(row: Int) = true
-                      }
-
-                      val intersectComplement = new BoolColumn {
-                        def defined(row: Int) = check(rightEmpty)(row) && check(leftEmpty)(row)
-
-                        def isDefinedAt(row: Int) = !defined(row)
-                        def apply(row: Int) = true
-                      }
-
-                      val result = emptyObjectCols(intersectComplement, size) ++
-                        nonemptyObjectCols(leftFields, rightFields)
+                      val result = emptyObjectCol ++ nonemptyObjectCols(leftFields, rightFields)
                       
-                      result mapValues { col =>
-                        cf.util.FilterComplement(maskComplement)(col).get   // assert
+                      result lazyMapValues { col =>
+                        cf.util.filter(0, sl.size max sr.size, nonemptyBits)(col).get   // assert
                       }
                     }
+                  }
+                }
+              }
+            }
+          }
+
+        case OuterArrayConcat(elements @ _*) =>
+          if (elements.size == 1) {
+            val typed = Typed(elements.head, JArrayUnfixedT)
+            composeSliceTransform2(typed)
+          } else {
+            elements.map(composeSliceTransform2).reduceLeft { (l0, r0) =>
+              l0.zip(r0) { (sl, sr) =>
+                new Slice {
+                  val size = sl.size
+                  val columns: Map[ColumnRef, Column] = {
+                    val leftArrayBits = filterArrays(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
+                    val rightArrayBits = filterArrays(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
+
+                    val leftEmptyBits = filterEmptyArrays(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
+                    val rightEmptyBits = filterEmptyArrays(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
+
+                    val emptyBits = 
+                      (rightEmptyBits & leftEmptyBits) |
+                      (rightEmptyBits &~ leftArrayBits) |
+                      (leftEmptyBits &~ rightArrayBits)
+
+                    val emptyArrayCol = Map(ColumnRef(CPath.Identity, CEmptyArray) -> EmptyArrayColumn(emptyBits))
+
+                    emptyArrayCol ++ nonemptyArrayCols(sl.columns, sr.columns)
                   }
                 }
               }
@@ -380,77 +385,22 @@ trait SliceTransforms[M[+_]] extends
                     if (sl.columns.isEmpty || sr.columns.isEmpty) {
                       Map.empty[ColumnRef, Column]
                     } else {
-                      val leftArrays = filterArrays(sl.columns).values toList
-                      val rightArrays = filterArrays(sr.columns).values toList
+                      val leftArrayBits = filterArrays(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
+                      val rightArrayBits = filterArrays(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
 
-                      val leftEmpty = filterEmptyArrays(sl.columns).values toList
-                      val rightEmpty = filterEmptyArrays(sr.columns).values toList
+                      val leftEmptyBits = filterEmptyArrays(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
+                      val rightEmptyBits = filterEmptyArrays(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
+                    
+                      val emptyBits = rightEmptyBits & leftEmptyBits
+                      val nonemptyBits = leftArrayBits & rightArrayBits
 
-                      val maskComplement = new BoolColumn {
-                        def defined(row: Int) = check(leftArrays)(row) && check(rightArrays)(row)
+                      val emptyArrayCol = Map(ColumnRef(CPath.Identity, CEmptyArray) -> EmptyArrayColumn(emptyBits))
 
-                        def isDefinedAt(row: Int) = !defined(row)
-                        def apply(row: Int) = true
+                      val result = emptyArrayCol ++ nonemptyArrayCols(sl.columns, sr.columns)
+
+                      result lazyMapValues { col =>
+                        cf.util.filter(0, sl.size max sr.size, nonemptyBits)(col).get   // assert
                       }
-
-                      val intersectComplement = new BoolColumn {
-                        def defined(row: Int) = check(rightEmpty)(row) && check(leftEmpty)(row)
-
-                        def isDefinedAt(row: Int) = !defined(row)
-                        def apply(row: Int) = true
-                      }
-
-                      val result = emptyArrayCols(intersectComplement, size) ++
-                        nonemptyArrayCols(sl.columns, sr.columns)
-
-                      result mapValues { col =>
-                        cf.util.FilterComplement(maskComplement)(col).get
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-        case OuterArrayConcat(elements @ _*) =>
-          if (elements.size == 1) {
-            val typed = Typed(elements.head, JArrayUnfixedT)
-            composeSliceTransform2(typed)
-          } else {
-            elements.map(composeSliceTransform2).reduceLeft { (l0, r0) =>
-              l0.zip(r0) { (sl, sr) =>
-                new Slice {
-                  val size = sl.size
-                  val columns: Map[ColumnRef, Column] = {
-                    val leftArrays = filterArrays(sl.columns).values toList
-                    val rightArrays = filterArrays(sr.columns).values toList
-
-                    val leftEmpty = filterEmptyArrays(sl.columns).values toList
-                    val rightEmpty = filterEmptyArrays(sr.columns).values toList
-
-                    val maskComplement = new BoolColumn {
-                      def defined(row: Int) = check(leftArrays)(row) || check(rightArrays)(row)
-
-                      def isDefinedAt(row: Int) = !defined(row)
-                      def apply(row: Int) = true
-                    }
-          
-                    val emptyComplement = new BoolColumn {
-                      def defined(row: Int) =
-                        (check(rightEmpty)(row) && check(leftEmpty)(row)) ||
-                        (check(rightEmpty)(row) && !check(leftArrays)(row)) ||
-                        (check(leftEmpty)(row) && !check(rightArrays)(row))
-
-                      def isDefinedAt(row: Int) = !defined(row)
-                      def apply(row: Int) = true
-                    }
-
-                    val result = emptyArrayCols(emptyComplement, size) ++
-                      nonemptyArrayCols(sl.columns, sr.columns)
-
-                    result mapValues { col =>
-                      cf.util.FilterComplement(maskComplement)(col).get
                     }
                   }
                 }
@@ -633,11 +583,7 @@ trait SliceTransforms[M[+_]] extends
   }
 }
 
-trait ConcatHelpers {
-  def check(columns: List[Column])(row: Int): Boolean = columns exists { _ isDefinedAt row }
-}
-
-trait ArrayConcatHelpers extends ConcatHelpers {
+trait ArrayConcatHelpers {
   def filterArrays(columns: Map[ColumnRef, Column]) = columns.filter {
     case (ColumnRef(CPath(CPathIndex(_), _ @ _*), _), _) => true
     case (ColumnRef(CPath.Identity, CEmptyArray), _) => true
@@ -672,7 +618,7 @@ trait ArrayConcatHelpers extends ConcatHelpers {
   }
 }
 
-trait ObjectConcatHelpers extends ConcatHelpers {
+trait ObjectConcatHelpers {
   def filterObjects(columns: Map[ColumnRef, Column]) = columns.filter {
     case (ColumnRef(CPath(CPathField(_), _ @ _*), _), _) => true
     case (ColumnRef(CPath.Identity, CEmptyObject), _) => true
