@@ -279,23 +279,17 @@ trait SliceTransforms[M[+_]] extends
                   val size = sl.size
 
                   val columns: Map[ColumnRef, Column] = {
-                    val leftObjectBits = filterObjects(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
-                    val rightObjectBits = filterObjects(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
-
-                    val leftEmptyBits = filterEmptyObjects(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
-                    val rightEmptyBits = filterEmptyObjects(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
+                    val (leftObjectBits, leftEmptyBits) = buildFilters(sl.columns, sl.size, filterObjects, filterEmptyObjects)
+                    val (rightObjectBits, rightEmptyBits) = buildFilters(sr.columns, sr.size, filterObjects, filterEmptyObjects)
                     
-                    val leftFields = filterFields(sl.columns)
-                    val rightFields = filterFields(sr.columns)
+                    val (leftFields, rightFields) = buildFields(sl.columns, sr.columns)
 
-                    val emptyBits = 
-                      (rightEmptyBits & leftEmptyBits) |
-                      (rightEmptyBits &~ leftObjectBits) |
-                      (leftEmptyBits &~ rightObjectBits)
+                    val emptyBits = buildOuterBits(leftEmptyBits, rightEmptyBits, leftObjectBits, rightObjectBits)
 
-                    val emptyObjectCol = Map(ColumnRef(CPath.Identity, CEmptyObject) -> EmptyObjectColumn(emptyBits))
+                    val emptyObjects = buildEmptyObjects(emptyBits)
+                    val nonemptyObjects = buildNonemptyObjects(leftFields, rightFields)
 
-                    emptyObjectCol ++ nonemptyObjectCols(leftFields, rightFields)
+                    emptyObjects ++ nonemptyObjects
                   }
                 }
               }
@@ -316,24 +310,20 @@ trait SliceTransforms[M[+_]] extends
                     if (sl.columns.isEmpty || sr.columns.isEmpty) {
                       Map.empty[ColumnRef, Column]
                     } else {
-                      val leftObjectBits = filterObjects(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
-                      val rightObjectBits = filterObjects(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
+                      val (leftObjectBits, leftEmptyBits) = buildFilters(sl.columns, sl.size, filterObjects, filterEmptyObjects)
+                      val (rightObjectBits, rightEmptyBits) = buildFilters(sr.columns, sr.size, filterObjects, filterEmptyObjects)
+                    
+                      val (leftFields, rightFields) = buildFields(sl.columns, sr.columns)
 
-                      val leftEmptyBits = filterEmptyObjects(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
-                      val rightEmptyBits = filterEmptyObjects(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
+                      val (emptyBits, nonemptyBits) = buildInnerBits(leftEmptyBits, rightEmptyBits, leftObjectBits, rightObjectBits)
 
-                      val leftFields = filterFields(sl.columns)
-                      val rightFields = filterFields(sr.columns)
-
-                      val emptyBits = rightEmptyBits & leftEmptyBits
-                      val nonemptyBits = leftObjectBits & rightObjectBits
-
-                      val emptyObjectCol = Map(ColumnRef(CPath.Identity, CEmptyObject) -> EmptyObjectColumn(emptyBits))
+                      val emptyObjects = buildEmptyObjects(emptyBits)
+                      val nonemptyObjects = buildNonemptyObjects(leftFields, rightFields)
                       
-                      val result = emptyObjectCol ++ nonemptyObjectCols(leftFields, rightFields)
+                      val result = emptyObjects ++ nonemptyObjects
                       
                       result lazyMapValues { col =>
-                        cf.util.filter(0, sl.size max sr.size, nonemptyBits)(col).get   // assert
+                        cf.util.filter(0, sl.size max sr.size, nonemptyBits)(col).get
                       }
                     }
                   }
@@ -351,21 +341,17 @@ trait SliceTransforms[M[+_]] extends
               l0.zip(r0) { (sl, sr) =>
                 new Slice {
                   val size = sl.size
+
                   val columns: Map[ColumnRef, Column] = {
-                    val leftArrayBits = filterArrays(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
-                    val rightArrayBits = filterArrays(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
+                    val (leftArrayBits, leftEmptyBits) = buildFilters(sl.columns, sl.size, filterArrays, filterEmptyArrays)
+                    val (rightArrayBits, rightEmptyBits) = buildFilters(sr.columns, sr.size, filterArrays, filterEmptyArrays)
+                    
+                    val emptyBits = buildOuterBits(leftEmptyBits, rightEmptyBits, leftArrayBits, rightArrayBits)
+                    
+                    val emptyArrays = buildEmptyArrays(emptyBits)
+                    val nonemptyArrays = buildNonemptyArrays(sl.columns, sr.columns)
 
-                    val leftEmptyBits = filterEmptyArrays(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
-                    val rightEmptyBits = filterEmptyArrays(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
-
-                    val emptyBits = 
-                      (rightEmptyBits & leftEmptyBits) |
-                      (rightEmptyBits &~ leftArrayBits) |
-                      (leftEmptyBits &~ rightArrayBits)
-
-                    val emptyArrayCol = Map(ColumnRef(CPath.Identity, CEmptyArray) -> EmptyArrayColumn(emptyBits))
-
-                    emptyArrayCol ++ nonemptyArrayCols(sl.columns, sr.columns)
+                    emptyArrays ++ nonemptyArrays
                   }
                 }
               }
@@ -381,25 +367,23 @@ trait SliceTransforms[M[+_]] extends
               l0.zip(r0) { (sl, sr) =>
                 new Slice {
                   val size = sl.size
+
                   val columns: Map[ColumnRef, Column] = {
                     if (sl.columns.isEmpty || sr.columns.isEmpty) {
                       Map.empty[ColumnRef, Column]
                     } else {
-                      val leftArrayBits = filterArrays(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
-                      val rightArrayBits = filterArrays(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
-
-                      val leftEmptyBits = filterEmptyArrays(sl.columns).values.map(_.definedAt(0, sl.size)).reduceOption(_ | _) getOrElse new BitSet
-                      val rightEmptyBits = filterEmptyArrays(sr.columns).values.map(_.definedAt(0, sr.size)).reduceOption(_ | _) getOrElse new BitSet
+                      val (leftArrayBits, leftEmptyBits) = buildFilters(sl.columns, sl.size, filterArrays, filterEmptyArrays)
+                      val (rightArrayBits, rightEmptyBits) = buildFilters(sr.columns, sr.size, filterArrays, filterEmptyArrays)
                     
-                      val emptyBits = rightEmptyBits & leftEmptyBits
-                      val nonemptyBits = leftArrayBits & rightArrayBits
+                      val (emptyBits, nonemptyBits) = buildInnerBits(leftEmptyBits, rightEmptyBits, leftArrayBits, rightArrayBits)
 
-                      val emptyArrayCol = Map(ColumnRef(CPath.Identity, CEmptyArray) -> EmptyArrayColumn(emptyBits))
+                      val emptyArrays = buildEmptyArrays(emptyBits)
+                      val nonemptyArrays = buildNonemptyArrays(sl.columns, sr.columns)
 
-                      val result = emptyArrayCol ++ nonemptyArrayCols(sl.columns, sr.columns)
+                      val result = emptyArrays ++ nonemptyArrays
 
                       result lazyMapValues { col =>
-                        cf.util.filter(0, sl.size max sr.size, nonemptyBits)(col).get   // assert
+                        cf.util.filter(0, sl.size max sr.size, nonemptyBits)(col).get
                       }
                     }
                   }
@@ -583,7 +567,27 @@ trait SliceTransforms[M[+_]] extends
   }
 }
 
-trait ArrayConcatHelpers {
+trait ConcatHelpers {
+  def buildFilters(columns: Map[ColumnRef, Column], size: Int, filter: Map[ColumnRef, Column] => Map[ColumnRef, Column], filterEmpty: Map[ColumnRef, Column] => Map[ColumnRef, Column]) = {
+    val definedBits = filter(columns).values.map(_.definedAt(0, size)).reduceOption(_ | _) getOrElse new BitSet
+    val emptyBits = filterEmpty(columns).values.map(_.definedAt(0, size)).reduceOption(_ | _) getOrElse new BitSet
+    (definedBits, emptyBits)
+  }
+
+  def buildOuterBits(leftEmptyBits: BitSet, rightEmptyBits: BitSet, leftDefinedBits: BitSet, rightDefinedBits: BitSet): BitSet = {
+    (rightEmptyBits & leftEmptyBits) |
+    (rightEmptyBits &~ leftDefinedBits) |
+    (leftEmptyBits &~ rightDefinedBits)
+  }
+
+  def buildInnerBits(leftEmptyBits: BitSet, rightEmptyBits: BitSet, leftDefinedBits: BitSet, rightDefinedBits: BitSet) = {
+    val emptyBits = rightEmptyBits & leftEmptyBits
+    val nonemptyBits = leftDefinedBits & rightDefinedBits
+    (emptyBits, nonemptyBits)
+  }
+}
+
+trait ArrayConcatHelpers extends ConcatHelpers {
   def filterArrays(columns: Map[ColumnRef, Column]) = columns.filter {
     case (ColumnRef(CPath(CPathIndex(_), _ @ _*), _), _) => true
     case (ColumnRef(CPath.Identity, CEmptyArray), _) => true
@@ -599,14 +603,9 @@ trait ArrayConcatHelpers {
     case (ref @ ColumnRef(CPath(CPathIndex(i), xs @ _*), ctype), col) => (i, xs, ref, col)
   }
 
-  def emptyArrayCols(column: BoolColumn, size: Int) = {
-    val baseEmptyCol = EmptyArrayColumn(BitSetUtil.range(0,size))
-    val emptyCol = cf.util.FilterComplement(column)(baseEmptyCol).get
+  def buildEmptyArrays(emptyBits: BitSet) = Map(ColumnRef(CPath.Identity, CEmptyArray) -> EmptyArrayColumn(emptyBits))
 
-    Map(ColumnRef(CPath.Identity, CEmptyArray) -> emptyCol)
-  }
-
-  def nonemptyArrayCols(left: Map[ColumnRef, Column], right: Map[ColumnRef, Column]) = {
+  def buildNonemptyArrays(left: Map[ColumnRef, Column], right: Map[ColumnRef, Column]) = {
     val leftIndices = collectIndices(left)
     val rightIndices = collectIndices(right)
 
@@ -618,7 +617,7 @@ trait ArrayConcatHelpers {
   }
 }
 
-trait ObjectConcatHelpers {
+trait ObjectConcatHelpers extends ConcatHelpers {
   def filterObjects(columns: Map[ColumnRef, Column]) = columns.filter {
     case (ColumnRef(CPath(CPathField(_), _ @ _*), _), _) => true
     case (ColumnRef(CPath.Identity, CEmptyObject), _) => true
@@ -635,14 +634,12 @@ trait ObjectConcatHelpers {
     case _ => false
   }
 
-  def emptyObjectCols(column: BoolColumn, size: Int) = {
-    val baseEmptyCol = EmptyObjectColumn(BitSetUtil.range(0,size))
-    val emptyCol = cf.util.FilterComplement(column)(baseEmptyCol).get
+  def buildFields(leftColumns: Map[ColumnRef, Column], rightColumns: Map[ColumnRef, Column]) =
+    (filterFields(leftColumns), filterFields(rightColumns))
 
-    Map(ColumnRef(CPath.Identity, CEmptyObject) -> emptyCol)
-  }
+  def buildEmptyObjects(emptyBits: BitSet) = Map(ColumnRef(CPath.Identity, CEmptyObject) -> EmptyObjectColumn(emptyBits))
 
-  def nonemptyObjectCols(leftFields: Map[ColumnRef, Column], rightFields: Map[ColumnRef, Column]) = {
+  def buildNonemptyObjects(leftFields: Map[ColumnRef, Column], rightFields: Map[ColumnRef, Column]) = {
     val (leftInner, leftOuter) = leftFields partition {
       case (ColumnRef(path, _), _) =>
         rightFields exists { case (ColumnRef(path2, _), _) => path == path2 }
