@@ -180,6 +180,9 @@ Precog is a beta product, and *Precog for MongoDB* is hot off the
 press. You may encounter a few rough corners, and if so, we’d love to
 hear about them (just send an email to support@precog.com).
 
+Precog for MongoDB is a free product that Precog provides to the MongoDB community for doing data analysis on MongoDB.
+
+Due to technical limitations, we only recommend the product for exploratory data analysis. For developers interested in high-performance analytics on their MongoDB data, we recommend our cloud-based analytics solution and the MongoDB data importer, which can nicely complement existing MongoDB installations for analytic-intensive workloads.
 
 If you end up doing something cool with Precog for MongoDB, or if you
 just want to say hello, feel free to reach out to us via our website,
