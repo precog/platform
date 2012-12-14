@@ -301,7 +301,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pendingTableLeft <- prepareEval(left, splits)
             pendingTableRight <- prepareEval(right, splits)
-            
+
             val back = for {
               leftTable <- pendingTableLeft.table
               val leftResult = leftTable.transform(liftToValues(pendingTableLeft.trans))
