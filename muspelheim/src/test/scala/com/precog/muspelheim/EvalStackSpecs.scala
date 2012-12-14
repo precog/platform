@@ -2506,11 +2506,13 @@ trait EvalStackSpecs extends Specification {
         |   data' := data where data.millis <= upperBound & data.millis >= lowerBound & data.agentId = agent
         | 
         |   data'' := data' with {rank: denseRank(data'.millis)}
+        |   data''' := new data''
         | 
         |   result := solve 'rank
         |     r0 := data'' where data''.rank = 'rank
-        |     r1 := data'' where data''.rank = 'rank - 1
+        |     r1 := data''' where data'''.rank = 'rank - 1
         | 
+        |     r0 ~ r1
         |     {first: r0, second: r1}
         | 
         |   {start: result.first.millis, end: result.second.millis, agent: result.first.agentId, action: result.first.action} 
