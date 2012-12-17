@@ -167,3 +167,4 @@ class ActorStorageMetadata(actor: ActorRef, serviceTimeout0: Timeout)(implicit v
 
   def close(): Future[Unit] = actor ? PoisonPill map { _ => () } onFailure { case e => logger.error("Error closing ActorStorageMetadata", e) }
 }
+
