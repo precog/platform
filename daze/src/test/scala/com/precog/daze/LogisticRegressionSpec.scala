@@ -184,13 +184,13 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       var thetas: List[List[Double]] = List.empty[List[Double]]
       var i = 0
 
-      //runs the logistic regression function on 50 sets of data generated from the same distribution
-      while (i < 50) {
+      //runs the logistic regression function on 100 sets of data generated from the same distribution
+      while (i < 100) {
         val cpaths = Seq(
           CPath(CPathIndex(0), CPathIndex(0)),
           CPath(CPathIndex(1))) sorted
 
-        val samples = createSamplePoints(num, 1000, actualThetas)
+        val samples = createSamplePoints(num, 100, actualThetas)
         val points = jvalues(samples, cpaths) map { _.toString }
 
         val tmpFile = File.createTempFile("values", ".json")
@@ -239,15 +239,15 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       var thetas: List[List[Double]] = List.empty[List[Double]]
       var i = 0
 
-      //runs the logistic regression function on 50 sets of data generated from the same distribution
-      while (i < 50) {
+      //runs the logistic regression function on 100 sets of data generated from the same distribution
+      while (i < 100) {
         val cpaths = Seq(
           CPath(CPathIndex(0), CPathField("foo")),
           CPath(CPathIndex(0), CPathField("bar")),
           CPath(CPathIndex(0), CPathField("baz")),
           CPath(CPathIndex(1))) sorted
 
-        val samples = createSamplePoints(num, 1000, actualThetas)
+        val samples = createSamplePoints(num, 100, actualThetas)
         val points = jvalues(samples, cpaths) map { _.toString }
 
         val tmpFile = File.createTempFile("values", ".json")
@@ -301,8 +301,8 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
       var i = 0
 
-      //runs the logistic regression function on 50 sets of data generated from the same distribution
-      while (i < 50) {
+      //runs the logistic regression function on 100 sets of data generated from the same distribution
+      while (i < 100) {
         val cpaths = Seq(
           CPath(CPathIndex(0), CPathField("ack"), CPathIndex(0)),
           CPath(CPathIndex(0), CPathField("bak"), CPathField("bazoo")),
@@ -311,7 +311,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
           CPath(CPathIndex(1))) sorted
 
         val samples = {
-          val samples0 = createSamplePoints(num, 1000, actualThetas)
+          val samples0 = createSamplePoints(num, 100, actualThetas)
           samples0 map { case (xs, y) => (Random.nextGaussian +: Random.nextGaussian +: xs, y) }
         }
         val points = jvalues(samples, cpaths, num) map { _.toString }
