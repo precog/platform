@@ -418,7 +418,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
     "in toArray" >> {
       "create a single column given two single columns" in testToArrayHomogeneous
-      "create empty column given heterogeneous data" in testToArrayHeterogeneous
+      "create a single column given heterogeneous data" in testToArrayHeterogeneous
     }
 
     "in concat" >> {
