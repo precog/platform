@@ -122,10 +122,7 @@ trait Emitter extends AST
     
     def labelFormal(id: Identifier, let: ast.Let)(state: => EmitterState): EmitterState = {
       StateT.apply[Id, Emission, Unit] { e =>
-        if (e.formals contains ((id, let)))
-          (e, ())
-        else
-          (e.copy(formals = e.formals + ((id, let) -> state)), ())
+        (e.copy(formals = e.formals + ((id, let) -> state)), ())
       }
     }
 
@@ -509,6 +506,9 @@ trait Emitter extends AST
 
             case DistinctBinding =>
               emitExpr(actuals.head, dispatches) >> emitInstr(Distinct)
+
+            case ExpandGlobBinding => 
+              emitExpr(actuals.head, dispatches) >> emitInstr(Morph1(BuiltInMorphism1(expandGlob)))
 
             case Morphism1Binding(m) => 
               emitExpr(actuals.head, dispatches) >> emitInstr(Morph1(BuiltInMorphism1(m)))
