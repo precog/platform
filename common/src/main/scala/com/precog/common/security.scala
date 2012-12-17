@@ -11,7 +11,6 @@ import org.joda.time.format.ISODateTimeFormat
 import scalaz._
 
 package object security {
-  type AccountId = String
   type APIKey    = String
   type GrantId   = String
 

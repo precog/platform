@@ -19,7 +19,7 @@ import blueeyes.core.http.MimeTypes._
 import blueeyes.core.service._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.json._
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer, IsoSerialization }
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 import blueeyes.json.serialization.Extractor._
 
@@ -110,13 +110,11 @@ trait AccountAuthorization extends Logging {
 case class WrappedAccountId(accountId: AccountId)
 
 object WrappedAccountId {
-  import com.precog.common.json._
-
   implicit val wrappedAccountIdIso = Iso.hlist(WrappedAccountId.apply _, WrappedAccountId.unapply _)
   
   val schema = "accountId" :: HNil
 
-  implicit val (wrappedAccountIdDecomposer, wrappedAccountIdExtractor) = serialization[WrappedAccountId](schema)
+  implicit val (wrappedAccountIdDecomposer, wrappedAccountIdExtractor) = IsoSerialization.serialization[WrappedAccountId](schema)
 }
 
 class ListAccountsHandler(accountManagement: AccountManager[Future], rootAccountId: AccountId)(implicit ctx: ExecutionContext) 
@@ -163,7 +161,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                 accountResponse <- 
                   existingAccountOpt map { account =>
                     logger.debug("Found existing account: " + account.accountId)
-                    Future(HttpResponse[JValue](OK, content = Some(JObject(List(JField("accountId", account.accountId))))))
+                    Future(HttpResponse[JValue](OK, content = Some(jobject(jfield("accountId", account.accountId)))))
                   } getOrElse {
                     accountManagement.newAccount(email, password, clock.now(), AccountPlan.Free) { (accountId, path) =>
                       val keyRequest = NewAPIKeyRequest.newAccount(accountId, path, None, None)
@@ -193,7 +191,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                     } map { account =>
                       // todo: send email ?
                       logger.debug("Account successfully created: " + account.accountId)
-                      HttpResponse[JValue](OK, content = Some(JObject(JField("accountId", account.accountId) :: Nil)))
+                      HttpResponse[JValue](OK, content = Some(jobject(jfield("accountId", account.accountId))))
                     }
                   }
               } yield accountResponse
@@ -231,7 +229,7 @@ extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue
                                                     
                     case HttpResponse(HttpStatus(Created, _), _, None, _) => 
                       logger.info("Grant created by %s (%s): %s".format(auth.accountId, remoteIpFrom(request), jvalue.renderCompact))
-                      HttpResponse[JValue](OK, content = Some(""))
+                      HttpResponse[JValue](OK)
                     
                     case _ =>
                       logger.error("Grant creation by %s (%s) failed for %s".format(auth.accountId, remoteIpFrom(request), jvalue.renderCompact))
@@ -267,7 +265,7 @@ class GetAccountPlanHandler(val accountManagement: AccountManager[Future])(impli
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) => 
       withAccountAdmin(request, auth) { account =>
-        Future(HttpResponse[JValue](OK, content = Some(JObject(List(JField("type", account.plan.planType))))))
+        Future(HttpResponse[JValue](OK, content = Some(jobject(jfield("type", account.plan.planType)))))
       }
     }
   }
@@ -364,7 +362,7 @@ class DeleteAccountPlanHandler(val accountManagement: AccountManager[Future])(im
         accountManagement.updateAccount(account.copy(plan = AccountPlan.Free)) map {
           case true => 
             logger.info("Account plan for %s deleted (converted to free plan) by %s".format(account.accountId, remoteIpFrom(request)))
-            HttpResponse[JValue](OK, content = Some(JObject(List(JField("type",account.plan.planType)))))
+            HttpResponse[JValue](OK, content = Some(jobject(jfield("type",account.plan.planType))))
           case _ => 
             logger.error("Account plan for %s deletion by %s failed".format(account.accountId, remoteIpFrom(request)))
             Responses.failure(InternalServerError, "Account update failed, please contact support.")
@@ -385,7 +383,8 @@ class GetAccountDetailsHandler(val accountManagement: AccountManager[Future])(im
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (auth: Account) =>
       withAccountAdmin(request, auth) { account =>
-        Future(HttpResponse[JValue](OK, content = Some(account.serialize)))
+        import Account.SafeSerialization._
+        Future(HttpResponse[JValue](OK, content = Some(account.jv)))
       }
     }
   }

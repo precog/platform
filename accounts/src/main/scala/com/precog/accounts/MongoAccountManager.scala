@@ -83,6 +83,7 @@ trait ZkAccountIdSource extends AccountManager[Future] {
   }
 }
 
+
 abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val execContext: ExecutionContext)
   extends AccountManager[Future] with ZkAccountIdSource {
   import Account._
@@ -92,6 +93,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
   private lazy val mamLogger = LoggerFactory.getLogger("com.precog.accounts.MongoAccountManager")
 
   private implicit val impTimeout = settings.timeout
+  import Account.Serialization._
   
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId] = None)(f: (AccountId, Path) => Future[APIKey]): Future[Account] = {
     for {
@@ -107,7 +109,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
           apiKey, path, plan,
           parent)
         
-        database(insert(account0.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]).into(settings.accounts)) map {
+        database(insert(account0.serialize.asInstanceOf[JObject]).into(settings.accounts)) map {
           _ => account0
         } 
       }
@@ -115,31 +117,24 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
   }
 
   private def findOneMatching[A](keyName: String, keyValue: String, collection: String)(implicit extractor: Extractor[A]): Future[Option[A]] = {
-    database {
-      selectOne().from(collection).where(keyName === keyValue)
-    }.map {
+    database(selectOne().from(collection).where(keyName === keyValue)) map {
       _.map(_.deserialize(extractor))
     }
   }
 
   private def findAllMatching[A](keyName: String, keyValue: String, collection: String)(implicit extractor: Extractor[A]): Future[Set[A]] = {
-    database {
-      selectAll.from(collection).where(keyName === keyValue)
-    }.map {
+    database(selectAll.from(collection).where(keyName === keyValue)) map {
       _.map(_.deserialize(extractor)).toSet
     }
   }
   
   private def findAll[A](collection: String)(implicit extract: Extractor[A]): Future[Seq[A]] =
-    database { selectAll.from(collection) }.map { _.map(_.deserialize(extract)).toSeq }
+    database(selectAll.from(collection)) map { 
+      _.map(_.deserialize(extract)).toSeq 
+    }
 
   
-  def listAccountIds(apiKey: String) = findAllMatching[Account]("apiKey", apiKey, settings.accounts).map(_.map(_.accountId))
-  
-  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountId]]] =
-    apiKeys.foldLeft(Future(Map.empty[APIKey, Set[AccountId]])) {
-      case (fmap, key) => fmap.flatMap { m => listAccountIds(key).map { ids => m + (key -> ids) } }
-    }
+  def listAccountIds(apiKey: String) = findOneMatching[Account]("apiKey", apiKey, settings.accounts).map(_.map(_.accountId))
   
   def findAccountById(accountId: String) = findOneMatching[Account]("accountId", accountId, settings.accounts)
 
@@ -149,7 +144,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
     findAccountById(account.accountId).flatMap {
       case Some(existingAccount) =>
         database {
-          val updateObj = account.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]
+          val updateObj = account.serialize.asInstanceOf[JObject]
           update(settings.accounts).set(updateObj).where("accountId" === account.accountId)
         } map {
           _ => true
@@ -164,7 +159,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
     findAccountById(accountId).flatMap { 
       case ot @ Some(account) =>
         for {
-          _ <- database(insert(account.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]).into(settings.deletedAccounts))
+          _ <- database(insert(account.serialize.asInstanceOf[JObject]).into(settings.deletedAccounts))
            _ <- database(remove.from(settings.accounts).where("accountId" === accountId))
         } yield { ot }
       case None    => Future(None)

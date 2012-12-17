@@ -10,6 +10,9 @@ import org.specs2.mutable.Specification
 import scalaz._
 
 class SerializationSpecs extends Specification {
+  import APIKeyRecord.Serialization._
+  import Grant.Serialization._
+
   "APIKeyRecord deserialization" should {
     "Handle V0 formats" in {
       val inputs = """[
@@ -113,11 +116,11 @@ Grant("75826da768b64748b8423cdd047d7e8f6361e5bb50d8428080feaf1c0c6269600982be9e1
     }
   }
 
-  "Event serialization" should {
+  "Ingest serialization" should {
     "Handle V0 format" in {
       (JObject("tokenId" -> JString("1234"),
                "path"    -> JString("/test/"),
-               "data"    -> JObject("test" -> JNum(1)))).validated[Event] must beLike {
+               "data"    -> JObject("test" -> JNum(1)))).validated[Ingest] must beLike {
         case Success(_) => ok
       }
     }
@@ -126,7 +129,7 @@ Grant("75826da768b64748b8423cdd047d7e8f6361e5bb50d8428080feaf1c0c6269600982be9e1
       (JObject("apiKey" -> JString("1234"),
                "path"    -> JString("/test/"),
                "data"    -> JObject("test" -> JNum(1)),
-               "metadata" -> JArray())).validated[Event] must beLike {
+               "metadata" -> JArray())).validated[Ingest] must beLike {
         case Success(_) => ok
       }
     }
