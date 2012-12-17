@@ -55,7 +55,8 @@ object PlatformBuild extends Build {
     }
   )
 
-  val blueeyesVersion = "1.0.0-M6"
+  val blueeyesVersion = "1.0.0-M6.2"
+  val scalazVersion = "7.0-precog-M1"
 
   val commonSettings = Seq(
     organization := "com.precog",
@@ -77,21 +78,22 @@ object PlatformBuild extends Build {
     libraryDependencies ++= Seq(
       "com.weiglewilczek.slf4s"     %  "slf4s_2.9.1"         % "1.0.7",
       "com.google.guava"            %  "guava"              % "12.0",
-      "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
-      "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
+      "org.scalaz"                  %% "scalaz-core"        % scalazVersion,
+      "org.scalaz"                  %% "scalaz-effect"      % scalazVersion,
       "joda-time"                   %  "joda-time"          % "1.6.2",
-      "com.reportgrid"              %% "blueeyes-json"      % blueeyesVersion changing(),
-      "com.reportgrid"              %% "blueeyes-util"      % blueeyesVersion changing(),
-      "com.reportgrid"              %% "blueeyes-core"      % blueeyesVersion changing(),
-      "com.reportgrid"              %% "blueeyes-mongo"     % blueeyesVersion changing(),
-      "com.reportgrid"              %% "bkka"               % blueeyesVersion changing(),
-      "com.reportgrid"              %% "akka_testing"       % blueeyesVersion changing(),
+      "com.reportgrid"              %% "blueeyes-json"      % blueeyesVersion,
+      "com.reportgrid"              %% "blueeyes-util"      % blueeyesVersion,
+      "com.reportgrid"              %% "blueeyes-core"      % blueeyesVersion,
+      "com.reportgrid"              %% "blueeyes-mongo"     % blueeyesVersion,
+      "com.reportgrid"              %% "bkka"               % blueeyesVersion,
+      "com.reportgrid"              %% "akka_testing"       % blueeyesVersion,
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
       "org.specs2"                  %% "specs2"             % "1.12.3-SNAPSHOT" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
       "javolution"                  %  "javolution"         % "5.5.1",
       "com.chuusai"                 %% "shapeless"          % "1.2.3"//,
       //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
+      ,"org.spire-math"              %% "spire"              % "0.2.0-M2"
     )
   )
 

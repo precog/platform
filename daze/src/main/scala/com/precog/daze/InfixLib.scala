@@ -77,7 +77,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
       numf: (BigDecimal, BigDecimal) => BigDecimal)
     extends Op2(InfixNamespace, name) {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
-      def f2: F2 = new CF2P({
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::op2") {
         case (c1: LongColumn, c2: LongColumn) =>
           new LongFrom.LL(c1, c2, longOk, longf)
 
@@ -104,7 +104,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
 
         case (c1: NumColumn, c2: NumColumn) =>
           new NumFrom.NN(c1, c2, numOk, numf)
-      })
+      }
     }
 
     val Add = new InfixOp2("add", _ + _, _ + _, _ + _)
@@ -119,7 +119,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
       def numf(x: BigDecimal, y: BigDecimal) = x(context) / y(context)
 
       val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
-      def f2: F2 = new CF2P({
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::div") {
         case (c1: LongColumn, c2: LongColumn) =>
           new DoubleFrom.LL(c1, c2, doubleNeZero, doublef)
 
@@ -146,7 +146,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
 
         case (c1: NumColumn, c2: NumColumn) =>
           new NumFrom.NN(c1, c2, numNeZero, numf)
-      })
+      }
     }
 
     val Mod = new Op2(InfixNamespace, "mod") {
@@ -160,7 +160,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
       def numMod(x: BigDecimal, y: BigDecimal) =
         if (x.signum * y.signum == -1) x % y + y else x % y
 
-      def f2: F2 = new CF2P({
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::mod") {
         case (c1: LongColumn, c2: LongColumn) =>
           new LongFrom.LL(c1, c2, longNeZero, longMod)
 
@@ -187,14 +187,14 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
 
         case (c1: NumColumn, c2: NumColumn) =>
           new NumFrom.NN(c1, c2, numNeZero, numMod)
-      })
+      }
     }
 
     class CompareOp2(name: String, f: Int => Boolean)
     extends Op2(InfixNamespace, name) {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       import NumericComparisons.compare
-      def f2: F2 = new CF2P({
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::compare") {
         case (c1: LongColumn, c2: LongColumn) =>
           new BoolFrom.LL(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
 
@@ -221,7 +221,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
 
         case (c1: NumColumn, c2: NumColumn) =>
           new BoolFrom.NN(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
-      })
+      }
     }
 
     val Lt = new CompareOp2("lt", _ < 0)
@@ -232,9 +232,9 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
     class BoolOp2(name: String, f: (Boolean, Boolean) => Boolean)
     extends Op2(InfixNamespace, name) {
       val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
-      def f2: F2 = new CF2P({
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::bool") {
         case (c1: BoolColumn, c2: BoolColumn) => new BoolFrom.BB(c1, c2, f)
-      })
+      }
     }
 
     val And = new BoolOp2("and", _ && _)
@@ -242,10 +242,10 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
     
     val concatString = new Op2(InfixNamespace, "concatString") {
       val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
-      def f2: F2 = new CF2P({
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix:concatString") {
         case (c1: StrColumn, c2: StrColumn) =>
           new StrFrom.SS(c1, c2, _ != null && _ != null, _ + _)
-      })
+      }
     }
   }
 }

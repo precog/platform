@@ -76,13 +76,13 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   def _libReduction: Set[Reduction] = Set()
 
   trait Morphism1Impl extends Morphism1Like {
-    def apply(input: Table): M[Table]
+    def apply(input: Table, ctx: EvaluationContext): M[Table]
   }
   
   trait Morphism2Impl extends Morphism2Like {
     def alignment: MorphismAlignment
     val multivariate: Boolean = false
-    def apply(input: Table): M[Table]
+    def apply(input: Table, ctx: EvaluationContext): M[Table]
   }
  
   sealed trait MorphismAlignment
@@ -93,35 +93,35 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   }
 
   trait Op1Impl extends Op1Like with Morphism1Impl {
-    def apply(table: Table) = sys.error("morphism application of an op1")     // TODO make this actually work
-    def f1: F1
+    def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op1")     // TODO make this actually work
+    def f1(ctx: EvaluationContext): F1
   }
 
   trait Op2Impl extends Op2Like {
     lazy val alignment = MorphismAlignment.Match // Was None, which would have blown up in the evaluator
-    def apply(table: Table) = sys.error("morphism application of an op2")     // TODO make this actually work
-    def f2: F2
+    def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op2")     // TODO make this actually work
+    def f2(ctx: EvaluationContext): F2
     lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   }
 
   trait ReductionImpl extends ReductionLike with Morphism1Impl {
     type Result
-    def apply(table: Table) = table.reduce(reducer) map extract
-    def reducer: CReducer[Result]
+    def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+    def reducer(ctx: EvaluationContext): CReducer[Result]
     implicit def monoid: Monoid[Result]
     def extract(res: Result): Table
   }
 
   class WrapArrayReductionImpl(val r: ReductionImpl, val idx: Option[Int]) extends ReductionImpl {
     type Result = r.Result
-    def reducer = new CReducer[Result] {
+    def reducer(ctx: EvaluationContext) = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         idx match {
           case Some(jdx) =>
             val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
-            r.reducer.reduce(cols0, range)
+            r.reducer(ctx).reduce(cols0, range)
           case None => 
-            r.reducer.reduce(cols, range)
+            r.reducer(ctx).reduce(cols, range)
         }
       }
     }
@@ -143,15 +143,15 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
           val impl = new ReductionImpl {
             type Result = (x.Result, acc.Result) 
 
-            val reducer = new CReducer[Result] {
+            def reducer(ctx: EvaluationContext) = new CReducer[Result] {
               def reduce(cols: JType => Set[Column], range: Range): Result = {
                 idx match {
                   case Some(jdx) =>
                     val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
-                    val (a, b) = (x.reducer.reduce(cols0, range), acc.reducer.reduce(cols, range))
+                    val (a, b) = (x.reducer(ctx).reduce(cols0, range), acc.reducer(ctx).reduce(cols, range))
                     (a, b)
                   case None => 
-                    (x.reducer.reduce(cols, range), acc.reducer.reduce(cols, range))
+                    (x.reducer(ctx).reduce(cols, range), acc.reducer(ctx).reduce(cols, range))
                 }
               }
             }
@@ -169,7 +169,7 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
               val left = x.extract(r._1)
               val right = acc.extract(r._2)
               
-              left.cross(right)(ArrayConcat(WrapArray(Leaf(SourceLeft)), Leaf(SourceRight)))
+              left.cross(right)(OuterArrayConcat(WrapArray(Leaf(SourceLeft)), Leaf(SourceRight)))
             }
 
             val namespace = Vector()
@@ -198,8 +198,15 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   type Reduction <: ReductionImpl
 }
 
-trait StdLib[M[+_]] extends InfixLib[M] with ReductionLib[M] with TimeLib[M]
-with MathLib[M] with StringLib[M] with StatsLib[M] with RegressionLib[M]
+trait StdLib[M[+_]] extends 
+      InfixLib[M] with 
+      ReductionLib[M] with 
+      TimeLib[M] with 
+      MathLib[M] with 
+      StringLib[M] with 
+      StatsLib[M] with 
+      RegressionLib[M] with
+      FSLib[M]
 
 object StdLib {
   import java.lang.Double.{isNaN, isInfinite}

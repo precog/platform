@@ -87,7 +87,9 @@ trait TransSpecModule extends FNModule {
 
     case class ObjectDelete[+A <: SourceType](source: TransSpec[A], fields: Set[CPathField]) extends TransSpec[A]
     
-    case class ArrayConcat[+A <: SourceType](arrays: TransSpec[A]*) extends ArraySpec[A] //done
+    case class InnerArrayConcat[+A <: SourceType](arrays: TransSpec[A]*) extends ArraySpec[A] //done
+
+    case class OuterArrayConcat[+A <: SourceType](arrays: TransSpec[A]*) extends ArraySpec[A] //done
     
     // Take the output of the specified TransSpec and prefix all of the resulting selectors with the
     // specified field. 
@@ -175,7 +177,8 @@ trait TransSpecModule extends FNModule {
           case trans.OuterObjectConcat(objects @ _*) => trans.OuterObjectConcat(objects.map(mapSources(_)(f)): _*)
           case trans.InnerObjectConcat(objects @ _*) => trans.InnerObjectConcat(objects.map(mapSources(_)(f)): _*)
           case trans.ObjectDelete(source, fields) => trans.ObjectDelete(mapSources(source)(f), fields)
-          case trans.ArrayConcat(arrays @ _*) => trans.ArrayConcat(arrays.map(mapSources(_)(f)): _*)
+          case trans.InnerArrayConcat(arrays @ _*) => trans.InnerArrayConcat(arrays.map(mapSources(_)(f)): _*)
+          case trans.OuterArrayConcat(arrays @ _*) => trans.OuterArrayConcat(arrays.map(mapSources(_)(f)): _*)
           
           case trans.WrapObject(source, field) => trans.WrapObject(mapSources(source)(f), field)
           case trans.WrapObjectDynamic(left, right) => trans.WrapObjectDynamic(mapSources(left)(f), mapSources(right)(f))
@@ -216,7 +219,8 @@ trait TransSpecModule extends FNModule {
         case trans.OuterObjectConcat(objects @ _*) => trans.OuterObjectConcat(objects.map(deepMap(_)(f)): _*)
         case trans.InnerObjectConcat(objects @ _*) => trans.InnerObjectConcat(objects.map(deepMap(_)(f)): _*)
         case trans.ObjectDelete(source, fields) => trans.ObjectDelete(deepMap(source)(f), fields)
-        case trans.ArrayConcat(arrays @ _*) => trans.ArrayConcat(arrays.map(deepMap(_)(f)): _*)
+        case trans.InnerArrayConcat(arrays @ _*) => trans.InnerArrayConcat(arrays.map(deepMap(_)(f)): _*)
+        case trans.OuterArrayConcat(arrays @ _*) => trans.OuterArrayConcat(arrays.map(deepMap(_)(f)): _*)
         
         case trans.WrapObject(source, field) => trans.WrapObject(deepMap(source)(f), field)
         case trans.WrapObjectDynamic(source, right) => trans.WrapObjectDynamic(deepMap(source)(f), deepMap(right)(f))

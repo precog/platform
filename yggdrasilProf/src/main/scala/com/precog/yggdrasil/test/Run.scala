@@ -25,10 +25,7 @@ import com.precog.yggdrasil.util.IdSourceConfig
 object Run extends com.precog.yggdrasil.table.GrouperSpec[YId] with YIdInstances {
   type YggConfig = IdSourceConfig
   val yggConfig = new IdSourceConfig {
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   def main(argv: Array[String]) = {

@@ -23,35 +23,92 @@ package table
 import blueeyes.json._
 import com.precog.bytecode.JType
 
-class CF1(f: Column => Option[Column]) { //extends (Column => Option[Column]) {
-  def apply(c: Column): Option[Column] = f(c)
-  def apply(cv: CValue): Option[Column] = f(Column.const(cv))
+sealed trait CFId
+case class LeafCFId(identity: String) extends CFId
+case class ComposedCFId(l: CFId, r: CFId) extends CFId
+case class PartialLeftCFId(cv: CValue, r: CFId) extends CFId
+case class PartialRightCFId(l: CFId, cv: CValue) extends CFId
+
+object CFId {
+  def apply(identity: String) = LeafCFId(identity)
+}
+
+trait CF {
+  def identity: CFId
+  override final def equals(other: Any): Boolean = other match {
+    case cf: CF => identity == cf.identity 
+    case _ => false
+  }
+}
+
+trait CF1 extends CF { self =>
+  def apply(c: Column): Option[Column]
+  def apply(cv: CValue): Option[Column] = apply(Column.const(cv))
 
   // Do not use PartialFunction.compose or PartialFunction.andThen for composition,
   // because they will fail out with MatchError.
-  def compose(f1: CF1): CF1 = new CF1(c => f1(c).flatMap(apply))
-  def andThen(f1: CF1): CF1 = new CF1(c => this(c).flatMap(f1.apply))
+  def compose(f1: CF1): CF1 = new CF1 {
+    def apply(c: Column) = f1(c).flatMap(self.apply)
+    val identity = ComposedCFId(f1.identity, self.identity)
+  }
+
+  def andThen(f1: CF1): CF1 = new CF1 {
+    def apply(c: Column) = self.apply(c).flatMap(f1.apply)
+    val identity = ComposedCFId(self.identity, f1.identity)
+  }
 }
 
-class CF1P(f: PartialFunction[Column, Column]) extends CF1(f.lift) 
+object CF1 {
+  def apply(name: String)(f: Column => Option[Column]): CF1 = apply(CFId(name))(f)
+  def apply(id: CFId)(f: Column => Option[Column]): CF1 = new CF1 {
+    def apply(c: Column) = f(c)
+    val identity = id
+  }
+}
 
-class CF2(f: (Column, Column) => Option[Column]) { // extends ((Column, Column) => Option[Column]) {
-  def apply(c1: Column, c2: Column): Option[Column] = f(c1, c2)
+object CF1P {
+  def apply(name: String)(f: PartialFunction[Column, Column]): CF1 = apply(CFId(name))(f)
+  def apply(id: CFId)(f: PartialFunction[Column, Column]): CF1 = new CF1 {
+    def apply(c: Column) = f.lift(c)
+    val identity = id
+  }
+}
+
+trait CF2 extends CF { self =>
+  def apply(c1: Column, c2: Column): Option[Column] 
   
   @inline
   def partialLeft(cv: CValue): CF1 = {
-    val c1 = Column.const(cv)
-    new CF1({ c2 => apply(c1, c2) })
+    new CF1 {
+      def apply(c2: Column) = self.apply(Column.const(cv), c2)
+      val identity = PartialLeftCFId(cv, self.identity)
+    }
   }
   
   @inline
   def partialRight(cv: CValue): CF1 = {
-    val c2 = Column.const(cv)
-    new CF1({ c1 => apply(c1, c2) })
+    new CF1 {
+      def apply(c1: Column) = self.apply(c1, Column.const(cv))
+      val identity = PartialRightCFId(self.identity, cv)
+    }
   }
 }
 
-class CF2P(f: PartialFunction[(Column, Column), Column]) extends CF2(Function.untupled(f.lift))
+object CF2 {
+  def apply(id: String)(f: (Column, Column) => Option[Column]): CF2 = apply(CFId(id))(f)
+  def apply(id: CFId)(f: (Column, Column) => Option[Column]): CF2 = new CF2 {
+    def apply(c1: Column, c2: Column) = f(c1, c2)
+    val identity = id
+  }
+}
+
+object CF2P {
+  def apply(id: String)(f: PartialFunction[(Column, Column), Column]): CF2 = apply(CFId(id))(f)
+  def apply(id: CFId)(f: PartialFunction[(Column, Column), Column]): CF2 = new CF2 {
+    def apply(c1: Column, c2: Column) = f.lift((c1, c2))
+    val identity = id
+  }
+}
 
 trait CScanner {
   type A

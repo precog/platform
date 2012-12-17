@@ -714,6 +714,7 @@ trait DAG extends Instructions with TransSpecModule {
     case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JType.JUnfixedT) extends DepGraph with StagingPoint {
       lazy val identities = parent match {
         case Const(_, CString(path)) => Identities.Specs(Vector(LoadIds(path)))
+        case Morph1(_, expandGlob, Const(_, CString(path))) => Identities.Specs(Vector(LoadIds(path)))
         case _ => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       }
       
