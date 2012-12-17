@@ -30,8 +30,9 @@ import blueeyes.bkka.AkkaTypeClasses._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
-import blueeyes.json.{ JField, JObject, JString, JValue }
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json._
+import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer, IsoSerialization }
+import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 import blueeyes.json.serialization.Extractor._
 
@@ -50,11 +51,12 @@ import Grant.SafeSerialization._
 case class APIKeyDetails(apiKey: APIKey, name: Option[String], description: Option[String], grants: Set[Grant])
 
 object APIKeyDetails {
+  import Grant.SafeSerialization._
   implicit val apiKeyDetailsIso = Iso.hlist(APIKeyDetails.apply _, APIKeyDetails.unapply _)
   
   val schema = "apiKey" :: "name" :: "description" :: "grants" :: HNil
   
-  implicit val (apiKeyDetailsDecomposer, apiKeyDetailsExtractor) = serialization[APIKeyDetails](schema)
+  implicit val apiKeyDetailsDecomposer = IsoSerialization.decomposer[APIKeyDetails](schema)
 }
 
 case class WrappedGrantId(grantId: String, name: Option[String], description: Option[String])
@@ -64,7 +66,7 @@ object WrappedGrantId {
   
   val schema = "grantId" :: "name" :: "description" :: HNil
 
-  implicit val (wrappedGrantIdDecomposer, wrappedGrantIdExtractor) = serialization[WrappedGrantId](schema)
+  implicit val (decomposer, extractor) = IsoSerialization.serialization[WrappedGrantId](schema)
 }
 
 case class WrappedAPIKey(apiKey: APIKey, name: Option[String], description: Option[String])
@@ -74,7 +76,7 @@ object WrappedAPIKey {
   
   val schema = "apiKey" :: "name" :: "description" :: HNil
 
-  implicit val (wrappedAPIKeyDecomposer, wrappedAPIKeyExtractor) = serialization[WrappedAPIKey](schema)
+  implicit val (decomposer, extractor) = IsoSerialization.serialization[WrappedAPIKey](schema)
 }
 
 class GetAPIKeysHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
@@ -96,24 +98,24 @@ class CreateAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit dispatche
         jvalue.validated[NewAPIKeyRequest] match {
           case Success(request) =>
             if (request.grants.exists(_.isExpired(some(new DateTime()))))
-              Future(HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new API key."), content = Some(JObject(List(
-                JField("error", "Unable to create API key with expired permission")
-              )))))
+              Future(HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new API key."), content = Some(jobject(
+                jfield("error", "Unable to create API key with expired permission")
+              ))))
             else
               apiKeyManagement.createAPIKey(authAPIKey, request).map { 
                 case Success(apiKey) => 
                   HttpResponse[JValue](OK, content = Some(WrappedAPIKey(apiKey, request.name, request.description).serialize))
                 case Failure(e) => 
                   logger.warn("Failed to create API key: " + e)
-                  HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new API key."), content = Some(JObject(List(
-                    JField("error", "Error creating new API key: " + e)
-                  ))))
+                  HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new API key."), content = Some(jobject(
+                    jfield("error", "Error creating new API key: " + e)
+                  )))
               }
           case Failure(e) =>
             logger.warn("The API key request body \n" + jvalue + "\n was invalid: " + e)
-            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new API key request body."), content = Some(JObject(List(
-              JField("error", "Invalid new API key request body: " + e)
-            )))))
+            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new API key request body."), content = Some(jobject(
+              jfield("error", "Invalid new API key request body: " + e)
+            ))))
           }
         }}.getOrElse {
         Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing new API key request body."), content = Some(JString("Missing new API key request body."))))
@@ -179,8 +181,8 @@ class AddAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatc
             case Failure(e) =>
               logger.warn("Unable to parse grant ID from " + jv + ": " + e)
               Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid add grant request body."), 
-                                          content = Some(JObject(List(JField("error", "Invalid add grant request body: " + e)
-              )))))
+                                          content = Some(jobject(jfield("error", "Invalid add grant request body: " + e)))
+              ))
           }
         }
       }).getOrElse {
@@ -201,9 +203,9 @@ class RemoveAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit disp
       } yield apiKeyManagement.removeAPIKeyGrant(apiKey, grantId).map {
         case Success(_) => HttpResponse[JValue](NoContent)
         case Failure(e) => 
-          HttpResponse[JValue](HttpStatus(BadRequest, "Invalid remove grant request."), content = Some(JObject(List(
-            JField("error", "Invalid remove grant request: " + e)
-          ))))
+          HttpResponse[JValue](HttpStatus(BadRequest, "Invalid remove grant request."), content = Some(jobject(
+            jfield("error", "Invalid remove grant request: " + e)
+          )))
       }).getOrElse {
         Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing API key in request URI."), content = Some(JString("Missing API key in request URI."))))
       }
@@ -235,18 +237,20 @@ class CreateGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher
         content <- request.content 
       } yield {
         content.flatMap { _.validated[NewGrantRequest] match {
-          case Success(request) => apiKeyManagement.createGrant(authAPIKey.apiKey, request) map {
-            case Success(grantId) => 
-              HttpResponse[JValue](OK, content = Some(WrappedGrantId(grantId, None, None).serialize))
-            case Failure(e) =>
-              HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new grant."), content = Some(JObject(List(
-                JField("error", "Error creating new grant: " + e)
-              ))))
-          }
+          case Success(request) => 
+            apiKeyManagement.createGrant(authAPIKey.apiKey, request) map {
+              case Success(grantId) => 
+                HttpResponse[JValue](OK, content = Some(WrappedGrantId(grantId, None, None).serialize))
+              case Failure(e) =>
+                HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new grant."), content = Some(jobject(
+                  jfield("error", "Error creating new grant: " + e)
+                )))
+            }
+
           case Failure(e) =>
-            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new grant request body."), content = Some(JObject(List(
-              JField("error", "Invalid new grant request body: " + e)
-            )))))
+            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new grant request body."), content = Some(jobject(
+              jfield("error", "Invalid new grant request body: " + e)
+            ))))
         }}
       }).getOrElse {
         Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing API key in request URI."), content = Some(JString("Missing API key in request URI."))))
@@ -300,14 +304,14 @@ class AddGrantChildHandler(apiKeyManagement: APIKeyManagement)(implicit dispatch
             case Success(grantId) => 
               HttpResponse[JValue](OK, content = Some(WrappedGrantId(grantId, None, None).serialize))
             case Failure(e) => 
-              HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new child grant."), content = Some(JObject(List(
-                JField("error", "Error creating new child grant: " + e)
-              ))))
+              HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new child grant."), content = Some(jobject(
+                jfield("error", "Error creating new child grant: " + e)
+              )))
           }
           case Failure(e) =>
-            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new child grant request body."), content = Some(JObject(List(
-              JField("error", "Invalid new child grant request body: " + e)
-            )))))
+            Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new child grant request body."), content = Some(jobject(
+              jfield("error", "Invalid new child grant request body: " + e)
+            ))))
         }}
       }).getOrElse {
         Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing API key in request URI."), content = Some(JString("Missing API key in request URI."))))

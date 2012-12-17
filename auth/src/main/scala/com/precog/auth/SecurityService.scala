@@ -25,11 +25,13 @@ import common.security._
 import akka.dispatch.Future
 
 import blueeyes.BlueEyesServiceBuilder
-import blueeyes.bkka.{ AkkaDefaults, Stoppable } 
+import blueeyes.bkka.{ AkkaDefaults, Stoppable }
 import blueeyes.core.data.{DefaultBijections, ByteChunk}
 import blueeyes.health.metrics.eternity
+import ByteChunk._
 
 import org.streum.configrity.Configuration
+import scalaz._
 
 case class SecurityServiceState(apiKeyManagement: APIKeyManagement)
 
@@ -38,6 +40,7 @@ trait SecurityService extends BlueEyesServiceBuilder with AkkaDefaults with APIK
 
   val insertTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now
+  implicit val M: Monad[Future]
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
 
@@ -52,30 +55,32 @@ trait SecurityService extends BlueEyesServiceBuilder with AkkaDefaults with APIK
         } ->
         request { (state: SecurityServiceState) =>
           jsonp[ByteChunk] {
-            apiKey(state.apiKeyManagement.apiKeyManager) {
-              path("/apikeys/") {
-                get(new GetAPIKeysHandler(state.apiKeyManagement)) ~
-                post(new CreateAPIKeyHandler(state.apiKeyManagement)) ~
-                path("'apikey") {
-                  get(new GetAPIKeyDetailsHandler(state.apiKeyManagement)) ~
-                  delete(new DeleteAPIKeyHandler(state.apiKeyManagement)) ~
-                  path("/grants/") {
-                    get(new GetAPIKeyGrantsHandler(state.apiKeyManagement)) ~
-                    post(new AddAPIKeyGrantHandler(state.apiKeyManagement)) ~
-                    path("'grantId") {
-                      delete(new RemoveAPIKeyGrantHandler(state.apiKeyManagement))
+            transcode {
+              apiKey(state.apiKeyManagement.apiKeyManager) {
+                path("/apikeys/") {
+                  get(new GetAPIKeysHandler(state.apiKeyManagement)) ~
+                  post(new CreateAPIKeyHandler(state.apiKeyManagement)) ~
+                  path("'apikey") {
+                    get(new GetAPIKeyDetailsHandler(state.apiKeyManagement)) ~
+                    delete(new DeleteAPIKeyHandler(state.apiKeyManagement)) ~
+                    path("/grants/") {
+                      get(new GetAPIKeyGrantsHandler(state.apiKeyManagement)) ~
+                      post(new AddAPIKeyGrantHandler(state.apiKeyManagement)) ~
+                      path("'grantId") {
+                        delete(new RemoveAPIKeyGrantHandler(state.apiKeyManagement))
+                      }
                     }
                   }
-                }
-              } ~
-              path("/grants/") {
-                post(new CreateGrantHandler(state.apiKeyManagement)) ~
-                path("'grantId") {
-                  get(new GetGrantDetailsHandler(state.apiKeyManagement)) ~
-                  delete(new DeleteGrantHandler(state.apiKeyManagement)) ~
-                  path("/children/") {
-                    get(new GetGrantChildrenHandler(state.apiKeyManagement)) ~
-                    post(new AddGrantChildHandler(state.apiKeyManagement))
+                } ~
+                path("/grants/") {
+                  post(new CreateGrantHandler(state.apiKeyManagement)) ~
+                  path("'grantId") {
+                    get(new GetGrantDetailsHandler(state.apiKeyManagement)) ~
+                    delete(new DeleteGrantHandler(state.apiKeyManagement)) ~
+                    path("/children/") {
+                      get(new GetGrantChildrenHandler(state.apiKeyManagement)) ~
+                      post(new AddGrantChildHandler(state.apiKeyManagement))
+                    }
                   }
                 }
               }

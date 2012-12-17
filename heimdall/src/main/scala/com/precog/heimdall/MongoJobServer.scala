@@ -23,14 +23,17 @@ import com.precog.common.jobs._
 
 import akka.dispatch.Future
 
+import blueeyes.bkka.FutureMonad
 import blueeyes.bkka.AkkaTypeClasses._
 import blueeyes.persistence.mongo._
 import blueeyes.BlueEyesServer
 
 import org.streum.configrity.Configuration
+import scalaz._
 
 object MongoJobServer extends BlueEyesServer with JobService with ManagedMongoJobManagerModule {
   implicit val executionContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = new FutureMonad(defaultFutureDispatch)
 
   val clock = blueeyes.util.Clock.System
 

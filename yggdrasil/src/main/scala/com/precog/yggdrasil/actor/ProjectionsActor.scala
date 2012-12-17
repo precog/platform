@@ -21,8 +21,9 @@ package com.precog.yggdrasil
 package actor
 
 import metadata._
-import com.precog.util.PrecogUnit
 import com.precog.common._
+import com.precog.common.ingest._
+import com.precog.util.PrecogUnit
 
 import akka.actor.Actor
 import akka.actor.Props
@@ -63,7 +64,7 @@ sealed trait ShardProjectionAction
 case class AcquireProjection(descriptor: ProjectionDescriptor, lockForArchive: Boolean) extends ShardProjectionAction
 case class ReleaseProjection(descriptor: ProjectionDescriptor) extends ShardProjectionAction
 
-trait ProjectionUpdate extends ShardProjectionAction {
+sealed trait ProjectionUpdate extends ShardProjectionAction {
   def descriptor: ProjectionDescriptor
 }
 
@@ -72,7 +73,7 @@ object ProjectionInsert {
   case class Row(id: EventId, values: Seq[CValue], metadata: Seq[Set[Metadata]])
 }
 
-case class ProjectionArchive(descriptor: ProjectionDescriptor, id: ArchiveId) extends ProjectionUpdate
+case class ProjectionArchive(descriptor: ProjectionDescriptor, id: EventId) extends ProjectionUpdate
 
 case class InsertMetadata(descriptor: ProjectionDescriptor, metadata: ColumnMetadata)
 case class ArchiveMetadata(descriptor: ProjectionDescriptor)

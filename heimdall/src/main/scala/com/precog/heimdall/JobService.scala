@@ -35,10 +35,12 @@ import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.health.metrics.{eternity}
 import blueeyes.util.Clock
+import ByteChunk._
 
 import akka.util.Timeout
 
 import org.streum.configrity.Configuration
+import scalaz._
 
 
 // Mongo-backed job manager that doesn't manage its mongo client.
@@ -71,6 +73,7 @@ trait JobService
 
   // Ugh. Why do I need this?
   implicit def byteArray2chunk(r: Future[HttpResponse[Array[Byte]]]): Future[HttpResponse[ByteChunk]] = r map { resp => resp.copy(content = resp.content map (ByteChunk(_))) }
+  implicit def M: Monad[Future]
 
   val jobService = this.service("jobs", "1.0") {
     requestLogging(timeout) {

@@ -93,14 +93,12 @@ trait YggUtilsCommon {
 }
 
 object YggUtils {
- 
   def usage(message: String*): String = {
     val initial = message ++ List("Usage: yggutils {command} {flags/args}",""," For details on a particular command enter yggutils {command} -help", "")
     
     commands.foldLeft(initial) {
       case (acc, cmd) => acc :+ "%-20s : %s".format(cmd.name, cmd.description)
     }.mkString("\n")
-
   }
 
   val commands = List(
@@ -452,9 +450,9 @@ object KafkaTools extends Command {
 
     def dump(i: Int, msg: MessageAndOffset) {
       codec.toEvent(msg.message) match {
-        case EventMessage(EventId(pid, sid), Event(apiKey, path, ownerAccountId, data, _)) =>
+        case IngestMessage(EventId(pid, sid), Event(apiKey, path, ownerAccountId, data, _)) =>
           println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s Owner: %s".format(i+1, pid, sid, path, apiKey, ownerAccountId))
-          println(data.renderPretty)
+          data.foreach(v => println(v.renderPretty))
         case _ =>
       }
     }
@@ -465,9 +463,9 @@ object KafkaTools extends Command {
 
     def dump(i: Int, msg: MessageAndOffset) {
       codec.toEvent(msg.message) match {
-        case EventMessage(EventId(pid, sid), Event(apiKey, path, ownerAccountId, data, _)) =>
+        case IngestMessage(EventId(pid, sid), Event(apiKey, path, ownerAccountId, data, _)) =>
           println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s Owner: %s".format(i+1, pid, sid, path, apiKey, ownerAccountId))
-          println(data.renderPretty)
+          data.foreach(v => println(v.renderPretty))
         case _ =>
       }
     }
@@ -756,18 +754,12 @@ object ImportTools extends Command with Logging {
         case (db, input) =>
           logger.info("Inserting batch: %s:%s".format(db, input))
           val result = JParser.parseFromFile(new File(input))
-          val events = result.valueOr(e => throw e).children.map { child =>
-            EventMessage(EventId(pid, sid.getAndIncrement), Event(config.apiKey, Path(db), config.accountId, child, Map.empty))
-          }
+          val ingestRecords: Vector[IngestRecord] = result.valueOr(e => throw e).children map { jv => IngestRecord(pid, sid.getAndIncrement, jv) }
+          val event = IngestMessage(config.apiKey, Path(db), config.accountId, ingestRecords, None)
           
-          logger.info(events.size + " total inserts")
-
-          events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
-              logger.info("Saving batch " + id + " of size " + batch.size)
-              Await.result(storage.storeBatch(batch.toSeq), Duration(300, "seconds"))
-              logger.info("Batch saved")
-            }
-          }
+          logger.info(events.data.size + " total events to be inserted")
+          Await.result(storage.storeBatch(List(event)), Duration(300, "seconds"))
+          logger.info("Batch saved")
       }
 
       logger.info("Waiting for shard shutdown")

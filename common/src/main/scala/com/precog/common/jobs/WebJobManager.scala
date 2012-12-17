@@ -26,7 +26,6 @@ import com.precog.common.JValueByteChunkTranscoders._
 import java.nio.ByteBuffer
 
 import blueeyes._
-import blueeyes.bkka._
 import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.MimeTypes._
@@ -90,6 +89,7 @@ object WebJobManager {
 }
 
 case class RealWebJobManager(protocol: String, host: String, port: Int, path: String)(implicit val executionContext: ExecutionContext) extends WebJobManager {
+  val M = new blueeyes.bkka.FutureMonad(executionContext)
   protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
     val client = new HttpClientXLightWeb
     f(client.protocol(protocol).host(host).port(port).path(path))
@@ -102,11 +102,11 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
   import scalaz.syntax.monad._
   import EitherT.{ left => leftT, right => rightT, _ }
   import \/.{ left, right }
-  import AkkaTypeClasses._
   import DefaultBijections._
   import blueeyes.json.serialization.DefaultSerialization._
 
   implicit def executionContext: ExecutionContext
+  implicit def M: Monad[Future]
 
   protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A
 
@@ -118,10 +118,10 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
   private def unexpected[A](resp: HttpResponse[A]): String = "Unexpected response from server:\n" + resp
 
   def createJob(apiKey: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): Response[Job] = {
-    val content: JValue = JObject(List(
-      JField("name", name),
-      JField("type", jobType)
-    ))
+    val content: JValue = jobject(
+      jfield("name", name),
+      jfield("type", jobType)
+    )
 
     withClient { client =>
       val job0: Response[Job] = eitherT(client.query("apiKey", apiKey).post("/jobs/")(content) map {

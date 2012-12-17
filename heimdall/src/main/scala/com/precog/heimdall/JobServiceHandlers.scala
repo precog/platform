@@ -78,20 +78,20 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
               }
 
             } getOrElse {
-              Future(HttpResponse[JValue](BadRequest, content = Some("Missing required paramter 'apiKey")))
+              Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing required paramter 'apiKey"))))
             }
 
           case (JUndefined, JUndefined) =>
-            Future(HttpResponse[JValue](BadRequest, content = Some("Missing both `name` and `type` of job.")))
+            Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing both `name` and `type` of job."))))
 
           case (name, JUndefined) =>
-            Future(HttpResponse[JValue](BadRequest, content = Some("Missing `type` of job.")))
+            Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing `type` of job."))))
 
           case (JUndefined, tpe) =>
-            Future(HttpResponse[JValue](BadRequest, content = Some("Missing `name` of job.")))
+            Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing `name` of job."))))
 
           case (name, tpe) =>
-            Future(HttpResponse[JValue](BadRequest, content = Some("Expected `name` and `type` to be strings, but found '%s' and '%s'." format (name, tpe))))
+            Future(HttpResponse[JValue](BadRequest, content = Some(JString("Expected `name` and `type` to be strings, but found '%s' and '%s'." format (name, tpe)))))
         }
       })
     } getOrElse {
@@ -413,3 +413,6 @@ extends CustomHttpService[Future[Array[Byte]], Future[HttpResponse[Array[Byte]]]
     DescriptionMetadata("Get the results of a job.")
   ))
 }
+
+
+// type JobServiceHandlers

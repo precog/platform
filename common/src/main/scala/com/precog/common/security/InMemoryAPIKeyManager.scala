@@ -20,6 +20,7 @@
 package com.precog.common
 package security
 
+import accounts.AccountId
 import org.joda.time.DateTime
 
 import scala.collection.mutable

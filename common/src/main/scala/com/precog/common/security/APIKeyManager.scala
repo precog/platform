@@ -20,6 +20,7 @@
 package com.precog.common
 package security
 
+import accounts.AccountId
 import com.weiglewilczek.slf4s.Logging
 
 import org.joda.time.DateTime

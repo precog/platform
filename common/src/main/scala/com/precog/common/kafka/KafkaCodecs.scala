@@ -20,7 +20,7 @@
 package com.precog.common
 package kafka
 
-import com.precog.common._
+import com.precog.common.ingest._
 
 import java.nio.charset.Charset
 import java.nio.charset.CharsetDecoder
@@ -38,31 +38,32 @@ import blueeyes.json.serialization.DefaultSerialization._
 // This could be made more efficient by writing a custom message class that bootstraps from
 // a ByteBuffer, but this was the quick and dirty way to get moving
 
-class KafkaIngestMessageCodec extends Encoder[IngestMessage] with Decoder[IngestMessage] {
-  def toMessage(message: IngestMessage) = {
-    new Message(IngestMessageSerialization.toBytes(message))
+class KafkaEventMessageCodec extends Encoder[EventMessage] with Decoder[EventMessage] {
+  def toMessage(message: EventMessage) = {
+    new Message(EventMessage.toBytes(message))
   }
 
   def toEvent(msg: Message) = {
-    IngestMessageSerialization.read(msg.payload)
+    EventMessage.read(msg.payload)
   }
 }
 
-class KafkaEventCodec extends Encoder[Event] with Decoder[Event] {
+/*
+class KafkaIngestCodec extends Encoder[Ingest] with Decoder[Ingest] {
   val charset = Charset.forName("UTF-8")
  
-  def toMessage(event: Event) = {
+  def toMessage(event: Ingest) = {
     val msgBuffer = charset.encode(event.serialize.renderCompact)
     val byteArray = new Array[Byte](msgBuffer.limit)
     msgBuffer.get(byteArray)
     new Message(byteArray)
   }
 
-  def toEvent(msg: Message): Event = {
+  def toEvent(msg: Message): Ingest = {
     val decoder = charset.newDecoder
     val charBuffer = decoder.decode(msg.payload)
     val jvalue = JParser.parse(charBuffer.toString()) 
-    jvalue.validated[Event] match {
+    jvalue.validated[Ingest] match {
       case Success(e) => e
       case Failure(e) => sys.error("Error parsing event: " + e)
     }
@@ -89,3 +90,4 @@ class KafkaArchiveCodec extends Encoder[Archive] with Decoder[Archive] {
     }
   }
 }
+*/

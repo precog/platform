@@ -17,12 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package accounts
+package com.precog.accounts
 
 import com.precog.common.Path
 import com.precog.common.cache.Cache
 import com.precog.common.security._
+import com.precog.util._
 
 import akka.dispatch.{ ExecutionContext, Future, Promise }
 
@@ -94,22 +94,29 @@ class HardCodedAccountManager(accountId: AccountId) extends BasicAccountManager[
 class AccountManagerClient(settings: AccountManagerClientSettings) extends BasicAccountManager[Future] with AkkaDefaults with Logging {
   import settings._
 
-  private[this] val apiKeyToAccountCache = Cache.simple[APIKey, Set[AccountId]](Cache.MaxSize(cacheSize))
+  private[this] val apiKeyToAccountCache = Cache[APIKey, AccountId](cacheSize)
 
   val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
-  def listAccountIds(apiKey: APIKey) : Future[Set[AccountId]] = {
-    apiKeyToAccountCache.get(apiKey).map(Promise.successful(_)).getOrElse {
+  def findOwnerAccountId(apiKey: APIKey) : Future[Option[AccountId]] = {
+    apiKeyToAccountCache.getIfPresent(apiKey).map(id => Promise.successful(Some(id))).getOrElse {
       invoke { client =>
         client.query("apiKey", apiKey).contentType(application/MimeTypes.json).get[JValue]("") map {
           case HttpResponse(HttpStatus(OK, _), _, Some(jaccounts), _) =>
             jaccounts.validated[Set[WrappedAccountId]] match {
-              case Success(accountIds) => {
-                val ids = accountIds.map(_.accountId)
-                apiKeyToAccountCache.put(apiKey, ids)
-                ids
-              }
+              case Success(accountIds) => 
+                if (accountIds.size > 1) {
+                  // FIXME: The underlying apparatus should now be modified such that
+                  // this case can be interpreted as a fatal error
+                  logger.error("Found more than one account for API key: " + apiKey + 
+                               "; proceeding with random account from those returned.")
+                } 
+
+                accountIds.headOption.map(_.accountId) tap {
+                  _ foreach { apiKeyToAccountCache.put(apiKey, _) }
+                }
+              
               case Failure(err) =>
                 logger.error("Unexpected response to account list request: " + err)
                 throw HttpException(BadGateway, "Unexpected response to account list request: " + err)
@@ -127,12 +134,8 @@ class AccountManagerClient(settings: AccountManagerClientSettings) extends Basic
     }
   }
 
-  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountId]]] =
-    apiKeys.foldLeft(Future(Map.empty[APIKey, Set[AccountId]])) {
-      case (fmap, key) => fmap.flatMap { m => listAccountIds(key).map { ids => m + (key -> ids) } }
-    }
-  
   def findAccountById(accountId: AccountId): Future[Option[Account]] = {
+    import Account.Serialization._
     invoke { client =>
       client.contentType(application/MimeTypes.json).get[JValue](accountId) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jaccount), _) =>

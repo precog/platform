@@ -20,8 +20,8 @@
 package com.precog.yggdrasil
 package actor
 
-import com.precog.accounts.BasicAccountManager
-import com.precog.common.{ Archive, ArchiveMessage, CheckpointCoordination, IngestMessage, YggCheckpoint }
+import com.precog.common.accounts.AccountFinder
+import com.precog.common.{ Archive, ArchiveMessage, CheckpointCoordination, EventMessage, YggCheckpoint }
 import com.precog.common.json._
 import com.precog.util.FilesystemFileOps
 import com.precog.yggdrasil.metadata.{ ColumnMetadata, FileMetadataStorage, MetadataStorage }
@@ -63,11 +63,11 @@ trait ShardConfig extends BaseConfig {
 trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigComponent {
   type YggConfig <: ShardConfig
 
-  protected def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]): Option[() => Actor]
+  protected def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountFinder: AccountFinder[Future]): Option[() => Actor]
 
   protected def checkpointCoordination: CheckpointCoordination
 
-  class ShardSystemActor(storage: MetadataStorage, accountManager: BasicAccountManager[Future]) extends Actor with Logging {
+  class ShardSystemActor(storage: MetadataStorage, accountFinder: AccountFinder[Future]) extends Actor with Logging {
 
     // The ingest system consists of the ingest supervisor and ingest actor(s)
     private[this] var ingestSystem: ActorRef            = _
@@ -99,7 +99,7 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
       projectionsActor = context.actorOf(Props(new ProjectionsActor(yggConfig.maxOpenProjections)), "projections")
 
       val ingestActorInit: Option[() => Actor] = initialCheckpoint flatMap {
-        checkpoint: YggCheckpoint => initIngestActor(checkpoint, metadataActor, accountManager)
+        checkpoint: YggCheckpoint => initIngestActor(checkpoint, metadataActor, accountFinder)
       }
  
       ingestSystem     = { 
@@ -111,11 +111,11 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
 
         context.actorOf(Props(new IngestSupervisor(ingestActorInit,
                                                    yggConfig.batchStoreDelay, context.system.scheduler, yggConfig.batchShutdownCheckInterval) {
-          def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
+          def processMessages(messages: Seq[EventMessage], batchCoordinator: ActorRef): Unit = {
             implicit val to = yggConfig.metadataTimeout
             implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
             
-            val archivePaths = messages.collect { case ArchiveMessage(_, Archive(path, _)) => path } 
+            val archivePaths = messages.collect { case ArchiveMessage(Archive(path, _, jobId)) => path } 
             Future.sequence {
               archivePaths map { path =>
                 (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]]

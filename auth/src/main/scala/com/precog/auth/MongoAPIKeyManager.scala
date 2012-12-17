@@ -127,16 +127,8 @@ object MongoAPIKeyManager extends Logging {
   }
 }
 
-// FIXME: This will be in scalaz when we move from our current milestone
-object TempPlusEmpty {
-  implicit def monadPlusEmpty[M[_], F[_]](implicit FM: Monad[F], PlusM: PlusEmpty[M]) = new PlusEmpty[({ type λ[α] = F[M[α]] })#λ] {
-    def empty[A] = FM.point(PlusM.empty[A])
-    def plus[A](a: F[M[A]], b: => F[M[A]]): F[M[A]] = FM.bind(a) { am => FM.map(b) { bm => PlusM.plus[A](am, bm) } }
-  }
-}
-
 class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKeyManagerSettings = MongoAPIKeyManagerSettings.defaults)
-  (implicit val execContext: ExecutionContext) extends APIKeyManager[Future] with Logging {
+  (implicit val executor: ExecutionContext) extends APIKeyManager[Future] with Logging {
   
   import TempPlusEmpty._
 
@@ -171,7 +163,7 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
 
   private def findOneMatching[A](keyName: String, keyValue: MongoPrimitive, collection: String)(implicit extractor: Extractor[A]): Future[Option[A]] = {
     database {
-      selectOne().from(collection).where(keyName === keyValue)
+      selectOne().from(collection).where(MongoOrFilter(keyNames.map { _ === keyValue }))
     }.map {
       _.map(_.deserialize(extractor))
     }
@@ -179,7 +171,7 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
 
   private def findAllMatching[A](keyName: String, keyValue: MongoPrimitive, collection: String)(implicit extractor: Extractor[A]): Future[Set[A]] = {
     database {
-      selectAll.from(collection).where(keyName === keyValue)
+      selectAll.from(collection).where(MongoOrFilter(keyNames.map { _ === keyValue }))
     }.map {
       _.map(_.deserialize(extractor)).toSet
     }

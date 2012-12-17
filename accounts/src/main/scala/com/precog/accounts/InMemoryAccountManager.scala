@@ -60,13 +60,10 @@ class InMemoryAccountManager[M[+_]](implicit val M: Monad[M]) extends AccountMan
     }
   }
 
-  def listAccountIds(apiKey: APIKey) : M[Set[AccountId]] = accounts.values.filter(_.apiKey == apiKey).map(_.accountId).toSet.point[M]
+  def listAccountIds(apiKey: APIKey) : M[Option[AccountId]] = {
+    accounts.values.find(_.apiKey == apiKey).map(_.accountId).point[M]
+  }
 
-  def mapAccountIds(apiKeys: Set[APIKey]) : M[Map[APIKey, Set[AccountId]]] =
-    apiKeys.foldLeft(M.point(Map.empty[APIKey, Set[AccountId]])) {
-      case (fmap, key) => fmap.flatMap { m => listAccountIds(key).map { ids => m + (key -> ids) } }
-    }
-  
   def findAccountById(accountId: AccountId): M[Option[Account]] = accounts.get(accountId).point[M]
   
   def findAccountByEmail(email: String) : M[Option[Account]] = accounts.values.find(_.email == email).point[M]

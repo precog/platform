@@ -22,8 +22,9 @@ package actor
 
 import metadata._
 
-import com.precog.accounts.BasicAccountManager
+import com.precog.common.accounts.AccountFinder
 import com.precog.common._
+import com.precog.common.ingest._
 import com.precog.common.security._
 
 import com.precog.util.PrecogUnit
@@ -51,7 +52,7 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
 
   trait ActorStorageLike extends StorageLike with Logging {
     def accessControl: AccessControl[Future]
-    def accountManager: BasicAccountManager[Future]
+    def accountManager: AccountFinder[Future]
     def shardSystemActor: ActorRef
 
     def start(): Future[Boolean]
@@ -79,7 +80,7 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
       }
     }
     
-    def storeBatch(msgs: Seq[EventMessage]): Future[PrecogUnit] = {
+    def storeBatch(msgs: Seq[IngestMessage]): Future[PrecogUnit] = {
       implicit val storageTimeout: Timeout = Timeout(300 seconds)
 
       val result = Promise.apply[BatchComplete]

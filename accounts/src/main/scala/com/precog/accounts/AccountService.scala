@@ -35,6 +35,7 @@ import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.health.metrics.{eternity}
 import blueeyes.util.Clock
+import ByteChunk._
 
 import HttpHeaders.Authorization
 
@@ -51,9 +52,7 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.std.option._
 
-case class SecurityService(protocol: String, host: String, port: Int, path: String, rootKey: String)(
-  implicit asyncContext: ExecutionContext
-) {
+case class SecurityService(protocol: String, host: String, port: Int, path: String, rootKey: String)(implicit executor: ExecutionContext) {
   def withClient[A](f: HttpClient[ByteChunk] => A): A = {
     val client = new HttpClientXLightWeb 
     f(client.protocol(protocol).host(host).port(port).path(path))
@@ -67,7 +66,6 @@ case class SecurityService(protocol: String, host: String, port: Int, path: Stri
 
 case class AccountServiceState(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService, rootAccountId: String)
 
-
 trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
   def auth[A](accountManager: AccountManager[Future])(service: HttpService[A, Account => Future[HttpResponse[JValue]]])(implicit ctx: ExecutionContext) = {
     new AuthenticationService[A, HttpResponse[JValue]](accountManager, service)({
@@ -79,8 +77,8 @@ trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
 
 
 trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with AuthenticationCombinators {
-
   implicit val timeout = akka.util.Timeout(120000) //for now
+  implicit def M: Monad[Future]
 
   def accountManager(config: Configuration): AccountManager[Future]
 
@@ -110,25 +108,27 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Authe
         } ->
         request { (state: AccountServiceState) =>
           jsonp[ByteChunk] {
-            path("/accounts/") {
-              post(new PostAccountHandler(state.accountManagement, state.clock, state.securityService, state.rootAccountId)) ~
-              auth(state.accountManagement) {
-                get(new ListAccountsHandler(state.accountManagement, state.rootAccountId)) ~ 
-                path("'accountId") {
-                  get(new GetAccountDetailsHandler(state.accountManagement)) ~ 
-                  delete(new DeleteAccountHandler(state.accountManagement)) ~
-                  path("/password") {
-                    put(new PutAccountPasswordHandler(state.accountManagement))
-                  } ~ 
-                  path("/grants/") {
-                    post(new CreateAccountGrantHandler(state.accountManagement, state.securityService))
-                  } ~
-                  path("/plan") {
-                    get(new GetAccountPlanHandler(state.accountManagement)) ~
-                    put(new PutAccountPlanHandler(state.accountManagement)) ~ 
-                    delete(new DeleteAccountPlanHandler(state.accountManagement))
-                  }
-                } 
+            transcode {
+              path("/accounts/") {
+                post(new PostAccountHandler(state.accountManagement, state.clock, state.securityService, state.rootAccountId)) ~
+                auth(state.accountManagement) {
+                  get(new ListAccountsHandler(state.accountManagement, state.rootAccountId)) ~ 
+                  path("'accountId") {
+                    get(new GetAccountDetailsHandler(state.accountManagement)) ~ 
+                    delete(new DeleteAccountHandler(state.accountManagement)) ~
+                    path("/password") {
+                      put(new PutAccountPasswordHandler(state.accountManagement))
+                    } ~ 
+                    path("/grants/") {
+                      post(new CreateAccountGrantHandler(state.accountManagement, state.securityService))
+                    } ~
+                    path("/plan") {
+                      get(new GetAccountPlanHandler(state.accountManagement)) ~
+                      put(new PutAccountPlanHandler(state.accountManagement)) ~ 
+                      delete(new DeleteAccountPlanHandler(state.accountManagement))
+                    }
+                  } 
+                }
               }
             }
           }

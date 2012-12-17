@@ -22,7 +22,7 @@ package com.precog.yggdrasil
 import com.precog.common.json._
 import com.precog.common.json.CPath.{CPathDecomposer, CPathExtractor}
 import com.precog.common._
-import com.precog.common.security._
+import com.precog.common.accounts._
 import com.precog.util.IOUtils
 
 import com.google.common.base.Charsets
@@ -31,6 +31,7 @@ import com.google.common.hash.Hashing
 import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization._
 
 import akka.actor._
@@ -40,6 +41,7 @@ import akka.dispatch.Future
 
 import java.io.File
 
+import shapeless._
 import scalaz._
 import scalaz.Validation._
 import scalaz.effect.IO
@@ -138,26 +140,11 @@ case class ColumnDescriptor(path: Path, selector: CPath, valueType: CType, autho
   }
 }
 
-trait ColumnDescriptorSerialization {
-  implicit val ColumnDescriptorDecomposer : Decomposer[ColumnDescriptor] = new Decomposer[ColumnDescriptor] {
-    def decompose(selector : ColumnDescriptor) : JValue = JObject (
-      List(JField("path", selector.path.serialize),
-           JField("selector", selector.selector.serialize),
-           JField("valueType", selector.valueType.serialize),
-           JField("authorities", selector.authorities.serialize))
-    )
-  }
+object ColumnDescriptor extends ((Path, CPath, CType, Authorities) => ColumnDescriptor) {
+  implicit val iso = Iso.hlist(ColumnDescriptor.apply _, ColumnDescriptor.unapply _)
+  val schemaV1 = "path" :: "selector" :: "valueType" :: "authorities" :: HNil
+  implicit val (decomposer, extractor) = IsoSerialization.serialization[ColumnDescriptor](schemaV1)
 
-  implicit val ColumnDescriptorExtractor : Extractor[ColumnDescriptor] = new Extractor[ColumnDescriptor] with ValidatedExtraction[ColumnDescriptor] {
-    override def validated(obj : JValue) : Validation[Error,ColumnDescriptor] = 
-      ((obj \ "path").validated[Path] |@|
-       (obj \ "selector").validated[CPath] |@|
-       (obj \ "valueType").validated[CType] |@|
-       (obj \ "authorities").validated[Authorities]).apply(ColumnDescriptor(_,_,_,_))
-  }
-}
-
-object ColumnDescriptor extends ColumnDescriptorSerialization with ((Path, CPath, CType, Authorities) => ColumnDescriptor) {
   implicit object briefShow extends Show[ColumnDescriptor] {
     override def shows(d: ColumnDescriptor) = {
       "%s::%s (%s)".format(d.path.path, d.selector.toString, d.valueType.toString)
@@ -191,7 +178,7 @@ case class ProjectionDescriptor(identities: Int, columns: List[ColumnDescriptor]
 trait ProjectionDescriptorSerialization {
   implicit val ProjectionDescriptorDecomposer : Decomposer[ProjectionDescriptor] = new Decomposer[ProjectionDescriptor] {
     def decompose(pd: ProjectionDescriptor) : JValue = JObject (
-      JField("columns", JArray(pd.columns.map(c => JObject(JField("descriptor", c.serialize) :: JField("index", pd.identities) :: Nil)))) :: 
+      JField("columns", JArray(pd.columns.map(c => JObject(JField("descriptor", c.jv) :: JField("index", pd.identities.jv) :: Nil)))) :: 
       Nil
     )
   } 
@@ -218,7 +205,7 @@ trait ProjectionDescriptorSerialization {
   }
 
   def toFile(descriptor: ProjectionDescriptor, path: File): IO[Boolean] = {
-    IOUtils.safeWriteToFile(descriptor.serialize.renderPretty, path)
+    IOUtils.safeWriteToFile(descriptor.jv.renderPretty, path)
   }
 
   def fromFile(path: File): IO[Validation[Error,ProjectionDescriptor]] = {

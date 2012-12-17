@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 
 import metadata.StorageMetadata
 import com.precog.common._
+import com.precog.common.ingest._
 import com.precog.util.PrecogUnit
 import com.precog.common.security._
 

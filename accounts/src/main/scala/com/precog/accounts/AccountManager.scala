@@ -21,6 +21,7 @@ package com.precog
 package accounts
 
 import com.precog.common.Path
+import com.precog.common.accounts._
 import com.precog.common.security._
 
 import org.joda.time.DateTime
@@ -31,20 +32,10 @@ import com.google.common.hash.Hashing
 import scalaz._
 import scalaz.syntax.monad._
 
-trait BasicAccountManager[M[+_]] {
-  implicit val M: Monad[M]
-
-  def listAccountIds(apiKey: APIKey) : M[Set[AccountId]]
-
-  def mapAccountIds(apiKeys: Set[APIKey]) : M[Map[APIKey, Set[AccountId]]]
-  
-  def findAccountById(accountId: AccountId): M[Option[Account]]
-
-  def close(): M[Unit]
-}
-
-trait AccountManager[M[+_]] extends BasicAccountManager[M] {
+trait AccountManager[M[+_]] extends AccountFinder[M] {
   private val randomSource = new java.security.SecureRandom
+
+  //def close(): M[Unit]
 
   def randomSalt() = {
     val saltBytes = new Array[Byte](256)

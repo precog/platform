@@ -23,7 +23,8 @@ package security
 import json._
 
 import blueeyes.json.JValue
-import blueeyes.json.serialization._
+import blueeyes.json.serialization.{ Decomposer, Extractor } 
+import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
 import scalaz.Scalaz._
@@ -42,31 +43,22 @@ case class APIKeyRecord(
 object APIKeyRecord {
   implicit val apiKeyRecordIso = Iso.hlist(APIKeyRecord.apply _, APIKeyRecord.unapply _)
   
-  val v1Schema =       "apiKey"  :: "name" :: "description" :: "issuerKey" :: "grants" :: "isRoot" :: HNil
-  val v1SafeSchema =   "apiKey"  :: "name" :: "description" :: Omit        :: "grants" :: "isRoot" :: HNil
+  val schemaV1 =       "apiKey"  :: "name" :: "description" :: "issuerKey" :: "grants" :: "isRoot" :: HNil
+  val safeSchemaV1 =   "apiKey"  :: "name" :: "description" :: Omit        :: "grants" :: "isRoot" :: HNil
   @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")
-  val v0Schema =       "tid"     :: "name" :: "description" :: "cid"       :: "gids"   :: ("isRoot" ||| false) :: HNil
+  val schemaV0 =       "tid"     :: "name" :: "description" :: "cid"       :: "gids"   :: ("isRoot" ||| false) :: HNil
   
+  val decomposerV1: Decomposer[APIKeyRecord]= decomposerV[APIKeyRecord](schemaV1, Some("1.0"))
+  val extractorV1: Extractor[APIKeyRecord] = extractorV[APIKeyRecord](schemaV1, Some("1.0"))
+  val extractorV0: Extractor[APIKeyRecord]  = extractorV[APIKeyRecord](schemaV0, None)
+
   object Serialization {
-    implicit val apiKeyRecordDecomposer = decomposer[APIKeyRecord](v1Schema)
-    val v1ApiKeyRecordExtractor = extractor[APIKeyRecord](v1Schema)
+    implicit val APIKeyRecordDecomposer: Decomposer[APIKeyRecord] = decomposerV1
+    implicit val APIKeyRecordExtractor: Extractor[APIKeyRecord] = extractorV1 <+> extractorV0
   }
   
   object SafeSerialization {
-    implicit val v1SafeAPIKeyRecordDecomposer = decomposer[APIKeyRecord](v1SafeSchema)
-    val v1SafeAPIKeyRecordExtractor = extractor[APIKeyRecord](v1SafeSchema)
-  }
-
-  object LegacySerialization {
-    val v0APIKeyRecordExtractor = extractor[APIKeyRecord](v0Schema)
-  }
-
-  implicit val apiKeyExtractor = new Extractor[APIKeyRecord] with ValidatedExtraction[APIKeyRecord] {
-    override def validated(obj: JValue): Validation[Extractor.Error, APIKeyRecord] = {
-      Serialization.v1ApiKeyRecordExtractor.validated(obj) orElse
-      SafeSerialization.v1SafeAPIKeyRecordExtractor.validated(obj) orElse
-      LegacySerialization.v0APIKeyRecordExtractor.validated(obj)
-    }
+    implicit val decomposer: Decomposer[APIKeyRecord] = decomposerV[APIKeyRecord](safeSchemaV1, None)
   }
 }
 
@@ -75,9 +67,13 @@ case class NewAPIKeyRequest(name: Option[String], description: Option[String], g
 object NewAPIKeyRequest {
   implicit val newAPIKeyRequestIso = Iso.hlist(NewAPIKeyRequest.apply _, NewAPIKeyRequest.unapply _)
   
-  val schema = "name" :: "description" :: "grants" :: HNil
-  
-  implicit val (newAPIKeyRequestDecomposer, newAPIKeyRequestExtractor) = serialization[NewAPIKeyRequest](schema)
+  val schemaV1 = "name" :: "description" :: "grants" :: HNil
+
+  val decomposerV1: Decomposer[NewAPIKeyRequest]= decomposerV[NewAPIKeyRequest](schemaV1, Some("1.0"))
+  val extractorV1: Extractor[NewAPIKeyRequest] = extractorV[NewAPIKeyRequest](schemaV1, Some("1.0"))
+
+  implicit val decomposer: Decomposer[NewAPIKeyRequest] = decomposerV1
+  implicit val dxtractor: Extractor[NewAPIKeyRequest] = extractorV1
   
   def newAccount(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None) = {
     val grants = NewGrantRequest.newAccount(accountId, path, name.map(_+"-grant"), description.map(_+" standard account grant"), Set.empty[GrantId], None)

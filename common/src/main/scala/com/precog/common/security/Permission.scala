@@ -20,6 +20,8 @@
 package com.precog.common
 package security
 
+import accounts.AccountId
+
 import blueeyes.json._
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
@@ -92,9 +94,9 @@ object Permission {
   implicit val permissionDecomposer: Decomposer[Permission] = new Decomposer[Permission] {
     override def decompose(p: Permission): JValue = {
       JObject(List(
-        some(JField("accessType", accessType(p))),
-        some(JField("path", p.path)),
-        p.ownerAccountIds.headOption.map(_ => JField("ownerAccountIds", p.ownerAccountIds.serialize))
+        some(jfield("accessType", accessType(p))),
+        some(jfield("path", p.path)),
+        p.ownerAccountIds.headOption.map(_ => jfield("ownerAccountIds", p.ownerAccountIds))
       ).flatten)
     }
   }

@@ -88,11 +88,13 @@ with DecompressCombinators with AkkaDefaults {
         } ->
         request { (state: EventServiceState) =>
           decompress {
-            jsonpOrChunk {
+            jsonp {
               apiKey(state.apiKeyManager) {
                 path("/(?<sync>a?sync)") {
                   dataPath("fs") {
-                    post(new IngestServiceHandler(state.apiKeyManager, state.eventStore, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch)) ~
+                    accountId(state.accountManager) {
+                      post(new IngestServiceHandler(state.apiKeyManager, state.eventStore, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch))
+                    } ~
                     delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.apiKeyManager, state.eventStore, deleteTimeout)(defaultFutureDispatch))
                   }
                 }

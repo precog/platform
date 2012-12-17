@@ -89,13 +89,7 @@ class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blo
     PrecogUnit
   }
 
-  def close() = Future {
-    coordination.close()
-    PrecogUnit
-  }
-
   def getLastOffset(): Long = {
     state.lastOffset
   }
-
 }

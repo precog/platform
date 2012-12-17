@@ -34,22 +34,22 @@ import scalaz.syntax.std.option._
 import com.precog.common.Path
 import com.precog.common.security._
 
-class AccountRequiredService[A, B](accountManager: BasicAccountManager[Future], val delegate: HttpService[A, (APIKeyRecord, Path, AccountId) => Future[B]])
+class AccountRequiredService[A, B](accountFinder: AccountFinder[Future], val delegate: HttpService[A, (APIKeyRecord, Path, AccountId) => Future[B]])
   (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
   extends DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, AccountId) => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
     delegate.service(request) map { f => (apiKey: APIKeyRecord, path: Path) =>
       logger.debug("Locating account for request with apiKey " + apiKey.apiKey)
-      request.parameters.get('ownerAccountId).map { accountId =>
+      request.parameters.get('ownerAccountId) map { accountId =>
         logger.debug("Using provided ownerAccountId: " + accountId)
-        accountManager.findAccountById(accountId).flatMap {
+        accountFinder.findAccountById(accountId).flatMap {
           case Some(account) => f(apiKey, path, account.accountId)
           case None => Future(err(BadRequest, "Unknown account Id: "+accountId))
         }
-      }.getOrElse {
+      } getOrElse {
         logger.debug("Looking up accounts based on apiKey")
         try {
-          accountManager.listAccountIds(apiKey.apiKey).flatMap { accts =>
+          accountFinder.listAccountIds(apiKey.apiKey).flatMap { accts =>
             logger.debug("Found accounts: " + accts)
             if(accts.size == 1) {
               f(apiKey, path, accts.head)

@@ -227,7 +227,7 @@ object FileMetadataStorage extends Logging {
       if (!df.exists) {
         Failure("Unable to find serialized projection descriptor in " + baseDir)
       } else {
-        JParser.parseFromFile(df).bimap(_.getMessage, s => s)
+        ((_: Throwable).getMessage) <-: JParser.parseFromFile(df)
       }
     }
 
@@ -372,14 +372,16 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
 case class MetadataRecord(metadata: ColumnMetadata, clock: VectorClock)
 
 trait MetadataRecordSerialization {
+  // TODO: clean up these extractors
   implicit val MetadataRecordDecomposer: Decomposer[MetadataRecord] = new Decomposer[MetadataRecord] {
     def extract(metadata: ColumnMetadata) = {
       val list: List[Set[Metadata]] = metadata.values.map{ _.values.toSet }(collection.breakOut)
       list.serialize
     }
+
     override def decompose(metadata: MetadataRecord): JValue = JObject(List(
       JField("metadata", extract(metadata.metadata)),
-      JField("checkpoint", metadata.clock)
+      JField("checkpoint", metadata.clock.jv)
     ))
   }
 

@@ -20,12 +20,13 @@
 package com.precog.common
 package security
 
+import accounts.AccountId
 import org.joda.time.DateTime
 
 import akka.util.Timeout
 import akka.dispatch.{ ExecutionContext, Future }
 
-import blueeyes.bkka._
+//import blueeyes.bkka._
 import blueeyes.json._
 import blueeyes.persistence.mongo._
 import blueeyes.json.serialization.Extractor
@@ -40,7 +41,7 @@ import scalaz.std.option._
 
 trait StaticAPIKeyManagerComponent {
   implicit def asyncContext: ExecutionContext
-  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+  implicit def M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future] = {
     new StaticAPIKeyManager(config[String]("masterAccount.apiKey"))
@@ -50,7 +51,7 @@ trait StaticAPIKeyManagerComponent {
 class StaticAPIKeyManager(apiKey: APIKey)(implicit val execContext: ExecutionContext) extends APIKeyManager[Future] with Logging {
   logger.info("Starting API Key Manager with root api key: " + apiKey)
 
-  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(execContext)
+  implicit val M: Monad[Future] = sys.error("todo")//AkkaTypeClasses.futureApplicative(execContext)
 
   private val permissions = Set[Permission](
     ReadPermission(Path("/"), Set.empty[AccountId]),

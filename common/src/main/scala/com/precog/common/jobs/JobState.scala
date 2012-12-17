@@ -67,16 +67,16 @@ trait JobStateSerialization {
   implicit object JobStateDecomposer extends Decomposer[JobState] {
     private def base(state: String, timestamp: DateTime, previous: JobState, reason: Option[String] = None): JObject = {
       JObject(
-        JField("state", state) ::
-        JField("timestamp", timestamp) ::
-        JField("previous", decompose(previous)) ::
-        (reason map { reason => JField("reason", reason) :: Nil } getOrElse Nil)
+        jfield("state", state) ::
+        jfield("timestamp", timestamp) ::
+        jfield("previous", decompose(previous)) ::
+        (reason map { jfield("reason", _) :: Nil } getOrElse Nil)
       )
     }
 
     override def decompose(job: JobState): JValue = job match {
       case NotStarted =>
-        JObject(JField("state", "not_started") :: Nil)
+        jobject(jfield("state", "not_started"))
 
       case Started(ts, prev) =>
         base("started", ts, prev)

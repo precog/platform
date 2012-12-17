@@ -19,17 +19,20 @@
  */
 package com.precog.common
 
+import com.precog.common.json._
 import com.precog.util.VectorClock
 
 import blueeyes.json._
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
 
 import com.weiglewilczek.slf4s._
 
 import java.util.concurrent.atomic.AtomicInteger
 
+import shapeless._
 import scalaz._
 import scalaz.syntax.apply._
 
@@ -78,25 +81,11 @@ case class IdSequenceBlock(producerId: Int, firstSequenceId: Int, lastSequenceId
   }   
 }
 
-trait IdSequenceBlockSerialization {
-  implicit val IdSequenceBlockDecomposer: Decomposer[IdSequenceBlock] = new Decomposer[IdSequenceBlock] {
-    override def decompose(block: IdSequenceBlock): JValue = JObject(List(
-      JField("producerId", block.producerId),
-      JField("firstSequenceId", block.firstSequenceId),
-      JField("lastSequenceId", block.lastSequenceId)
-    ))
-  }
-
-  implicit val IdSequenceBlockExtractor: Extractor[IdSequenceBlock] = new Extractor[IdSequenceBlock] with ValidatedExtraction[IdSequenceBlock] {
-    override def validated(obj: JValue): Validation[Error, IdSequenceBlock] = 
-      ((obj \ "producerId").validated[Int] |@|
-       (obj \ "firstSequenceId").validated[Int] |@|
-       (obj \ "lastSequenceId").validated[Int]).apply(IdSequenceBlock(_,_,_))
-  }
+object IdSequenceBlock {
+  implicit val iso = Iso.hlist(IdSequenceBlock.apply _ , IdSequenceBlock.unapply _)
+  val schemaV1 = "producerId" :: "firstSequenceId" :: "lastSequenceId" :: HNil
+  implicit val (decomposerV1, extractorV1) = serializationV[IdSequenceBlock](schemaV1, Some("1.0"))
 }
-
-object IdSequenceBlock extends IdSequenceBlockSerialization
-
 
 case class EventRelayState(offset: Long, nextSequenceId: Int, idSequenceBlock: IdSequenceBlock) {
   override def toString() = "EventRelayState[ offset: %d prodId: %d seqId: %d in [%d,%d] ]".format(
@@ -104,75 +93,35 @@ case class EventRelayState(offset: Long, nextSequenceId: Int, idSequenceBlock: I
   )
 }
 
-trait EventRelayStateSerialization {
-  implicit val EventRelayStateDecomposer: Decomposer[EventRelayState] = new Decomposer[EventRelayState] {
-    override def decompose(state: EventRelayState): JValue = JObject(List(
-      JField("offset", state.offset),
-      JField("nextSequenceId", state.nextSequenceId),
-      JField("idSequenceBlock", state.idSequenceBlock.serialize)
-    ))
-  }
-
-  implicit val EventRelayStateExtractor: Extractor[EventRelayState] = new Extractor[EventRelayState] with ValidatedExtraction[EventRelayState] {
-    override def validated(obj: JValue): Validation[Error, EventRelayState] = 
-      ((obj \ "offset").validated[Long] |@|
-       (obj \ "nextSequenceId").validated[Int] |@|
-       (obj \ "idSequenceBlock").validated[IdSequenceBlock]).apply(EventRelayState(_,_,_))
-  }
+object EventRelayState {
+  implicit val iso = Iso.hlist(EventRelayState.apply _ , EventRelayState.unapply _)
+  val schemaV1 = "offset" :: "nextSequenceId" :: "idSequenceBlock" :: HNil
+  implicit val (decomposerV1, extractorV1) = serializationV[EventRelayState](schemaV1, Some("1.0"))
 }
-
-object EventRelayState extends EventRelayStateSerialization
-
 
 case class ProducerState(lastSequenceId: Int)
 
-trait ProducerStateSerialization {
-  implicit val ProducerStateDecomposer: Decomposer[ProducerState] = new Decomposer[ProducerState] {
-    override def decompose(state: ProducerState): JValue = JNum(state.lastSequenceId)
-  }
-
-  implicit val ProducerStateExtractor: Extractor[ProducerState] = new Extractor[ProducerState] with ValidatedExtraction[ProducerState] {
-    override def validated(obj: JValue): Validation[Error, ProducerState] = obj match {
-      case jint @ JNum(_) => jint.validated[Int] map { id => ProducerState(id) }
-      case _              => Failure(Invalid("Invalid producer state: " + obj))
-    }   
-  }
+object ProducerState {
+  implicit val ProducerStateDecomposer = implicitly[Decomposer[Int]].contramap((_:ProducerState).lastSequenceId)
+  implicit val ProducerStateExtractor = implicitly[Extractor[Int]].map(ProducerState.apply _)
 }
-
-object ProducerState extends ProducerStateSerialization
-
 
 case class YggCheckpoint(offset: Long, messageClock: VectorClock) {
   def update(newOffset: Long, newPid: Int, newSid: Int) = this.copy(offset max newOffset, messageClock.update(newPid, newSid))
 }
 
-trait YggCheckpointSerialization {
-  implicit val YggCheckpointDecomposer: Decomposer[YggCheckpoint] = new Decomposer[YggCheckpoint] {
-    override def decompose(checkpoint: YggCheckpoint): JValue = JObject(List(
-      JField("offset", checkpoint.offset),
-      JField("messageClock", checkpoint.messageClock)
-    ))
-  }
-
-  implicit val YggCheckpointExtractor: Extractor[YggCheckpoint] = new Extractor[YggCheckpoint] with ValidatedExtraction[YggCheckpoint] {
-    override def validated(obj: JValue): Validation[Error, YggCheckpoint] = 
-      ((obj \ "offset").validated[Long] |@|
-       (obj \ "messageClock").validated[VectorClock]).apply(YggCheckpoint(_,_))
-  }
-}
-
-object YggCheckpoint extends YggCheckpointSerialization {
-  import scala.math.Ordering
-  implicit val ordering: Ordering[YggCheckpoint] = Ordering.by((_: YggCheckpoint).offset)
-
+object YggCheckpoint {
   val Empty = YggCheckpoint(0, VectorClock.empty)
 
   sealed trait LoadError 
   case class CheckpointParseError(message: String) extends LoadError
   case class ShardCheckpointMissing(shardId: String) extends LoadError
 
+  implicit val iso = Iso.hlist(YggCheckpoint.apply _ , YggCheckpoint.unapply _)
+  val schemaV1 = "offset" :: "messageClock" :: HNil
+  implicit val (decomposerV1, extractorV1) = serializationV[YggCheckpoint](schemaV1, Some("1.0"))
+
+  implicit val ordering = scala.math.Ordering.by((_: YggCheckpoint).offset)
 }
 
 case class ServiceUID(systemId: String, hostId: String, serviceId: String)
-
-

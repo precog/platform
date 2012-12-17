@@ -20,20 +20,24 @@
 package com.precog.common
 package security
 
+import accounts.AccountId
 import json._
 
 import org.joda.time.DateTime
 
 import com.weiglewilczek.slf4s.Logging
 
-import blueeyes.json.{JValue, JString}
-import blueeyes.json.serialization.{Extractor, ValidatedExtraction}
+import blueeyes.json.{ JValue, JString }
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
-import scalaz.Scalaz._
-import scalaz.std.set._
-
 import shapeless._
+
+import scalaz._
+import scalaz.syntax.plus._
+import scalaz.syntax.applicative._
+import scalaz.std.set._
 
 case class Grant(
   grantId:        GrantId,
@@ -66,21 +70,14 @@ case class Grant(
 object Grant extends Logging {
   implicit val grantIso = Iso.hlist(Grant.apply _, Grant.unapply _)
 
-  val schema =     "grantId" :: "name" :: "description" :: "issuerKey" :: "parentIds" :: "permissions" :: "expirationDate" :: HNil
-  val safeSchema = "grantId" :: "name" :: "description" :: Omit        :: Omit        :: "permissions" :: "expirationDate" :: HNil
+  val schemaV1 =     "grantId" :: "name" :: "description" :: "issuerKey" :: "parentIds" :: "permissions" :: "expirationDate" :: HNil
+  val safeSchemaV1 = "grantId" :: "name" :: "description" :: Omit        :: Omit        :: "permissions" :: "expirationDate" :: HNil
   
-  object Serialization {
-    implicit val grantDecomposer = decomposer[Grant](schema)
-    val v1GrantExtractor = extractor[Grant](schema)
-  }
-  
-  object SafeSerialization {
-    implicit val safeGrantDecomposer = decomposer[Grant](safeSchema)
-    val v1SafeGrantExtractor = extractor[Grant](safeSchema)
-  }
+  val decomposerV1: Decomposer[Grant] = decomposerV[Grant](schemaV1, Some("1.0"))
+  val extractorV1: Extractor[Grant] = extractorV[Grant](schemaV1, Some("1.0"))
 
   @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")
-  val v0GrantExtractor = new Extractor[Grant] with ValidatedExtraction[Grant] {
+  val extractorV0: Extractor[Grant] = new Extractor[Grant] with ValidatedExtraction[Grant] {
     override def validated(obj: JValue) = {
       ((obj \ "gid").validated[GrantId] |@|
        (obj \ "issuer").validated[Option[GrantId]] |@|
@@ -98,12 +95,13 @@ object Grant extends Logging {
     }
   }
 
-  implicit val grantExtractor = new Extractor[Grant] with ValidatedExtraction[Grant] {
-    override def validated(obj: JValue) = {
-      Serialization.v1GrantExtractor.validated(obj) orElse
-      SafeSerialization.v1SafeGrantExtractor.validated(obj) orElse
-      v0GrantExtractor.validated(obj)
-    }
+  object Serialization {
+    implicit val decomposer: Decomposer[Grant] = decomposerV1
+    implicit val extractor: Extractor[Grant] = extractorV1 <+> extractorV0
+  }
+  
+  object SafeSerialization {
+    implicit val decomposer: Decomposer[Grant] = decomposerV[Grant](safeSchemaV1, Some("1.0"))
   }
 
   def implies(grants: Set[Grant], perms: Set[Permission], at: Option[DateTime] = None) = {
@@ -156,9 +154,9 @@ case class NewGrantRequest(name: Option[String], description: Option[String], pa
 object NewGrantRequest {
   implicit val newGrantRequestIso = Iso.hlist(NewGrantRequest.apply _, NewGrantRequest.unapply _)
   
-  val schema = "name" :: "description" :: ("parentIds" ||| Set.empty[GrantId]) :: "permissions" :: "expirationDate" :: HNil
+  val schemaV1 = "name" :: "description" :: ("parentIds" ||| Set.empty[GrantId]) :: "permissions" :: "expirationDate" :: HNil
   
-  implicit val (newGrantRequestDecomposer, newGrantRequestExtractor) = serialization[NewGrantRequest](schema)
+  implicit val (decomposerV1, extractorV1) = serializationV[NewGrantRequest](schemaV1, Some("1.0"))
 
   def newAccount(accountId: AccountId, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantId], expiration: Option[DateTime]): NewGrantRequest = {
     // Path is "/" so that an account may read data it owns no matter what path it exists under. See AccessControlSpec, APIKeyManager.newAccountGrant

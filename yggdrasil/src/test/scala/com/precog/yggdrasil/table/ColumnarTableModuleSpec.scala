@@ -53,17 +53,7 @@ import org.scalacheck.Arbitrary._
 import TableModule._
 import SampleData._
 
-trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] 
-    with TableModuleSpec[M]
-    with CogroupSpec[M]
-    with CrossSpec[M]
-    with TransformSpec[M]
-    with CompactSpec[M] 
-    with TakeRangeSpec[M]
-    with PartitionMergeSpec[M]
-    with DistinctSpec[M] 
-    with SchemasSpec[M]
-    { spec => 
+trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
 
   type GroupId = Int
   import trans._
@@ -99,7 +89,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     with CompactSpec[M] 
     with TakeRangeSpec[M]
     with PartitionMergeSpec[M]
+    with UnionAllSpec[M]
+    with CrossAllSpec[M]
     with DistinctSpec[M] 
+    with GroupingGraphSpec[M]
     with SchemasSpec[M]
     { spec => 
 
