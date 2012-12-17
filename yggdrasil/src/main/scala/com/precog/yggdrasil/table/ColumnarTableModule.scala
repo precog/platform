@@ -109,10 +109,10 @@ trait ColumnarTableModule[M[+_]]
   }
 
   implicit def liftF2(f: F2) = new F2Like {
-    def applyl(cv: CValue) = new CF1(f(Column.const(cv), _))
-    def applyr(cv: CValue) = new CF1(f(_, Column.const(cv)))
+    def applyl(cv: CValue) = CF1("builtin::liftF2::applyl") { f(Column.const(cv), _) } 
+    def applyr(cv: CValue) = CF1("builtin::liftF2::applyl") { f(_, Column.const(cv)) }
 
-    def andThen(f1: F1) = new CF2((c1, c2) => f(c1, c2) flatMap f1.apply)
+    def andThen(f1: F1) = CF2("builtin::liftF2::andThen") { (c1, c2) => f(c1, c2) flatMap f1.apply }
   }
 
   trait ColumnarTableCompanion extends TableCompanionLike {
@@ -1017,7 +1017,7 @@ trait ColumnarTableModule[M[+_]]
       // post the initial sort separate from the values that it was derived from. 
       val (payloadTrans, idTrans, targetTrans, groupKeyTrans) = node.binding.targetTrans match {
         case Some(targetSetTrans) => 
-          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), 
+          val payloadTrans = InnerArrayConcat(WrapArray(node.binding.idTrans), 
                                          WrapArray(protoGroupKeyTrans.spec), 
                                          WrapArray(targetSetTrans))
 
@@ -1027,7 +1027,7 @@ trait ColumnarTableModule[M[+_]]
            GroupKeyTrans(TransSpec1.DerefArray1, protoGroupKeyTrans.keyOrder))
 
         case None =>
-          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec))
+          val payloadTrans = InnerArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec))
           (payloadTrans, 
            TransSpec1.DerefArray0, 
            None, 

@@ -75,7 +75,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
   def tic_aj = JPathField("tic_a")
   def tic_bj = JPathField("tic_b")
 
-  val eq12F1 = new CF1P({
+  val eq12F1 = CF1P("testing::eq12F1") {
     case c: DoubleColumn => new Map1Column(c) with BoolColumn {
       def apply(row: Int) = c(row) == 12.0d
     }
@@ -85,7 +85,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     case c: NumColumn => new Map1Column(c) with BoolColumn {
       def apply(row: Int) = c(row.toInt) == 12
     }
-  })
+  }
 
   def augmentWithIdentities(json: Stream[JValue]) = json.zipWithIndex map {
     case (v, i) => JObject(JField("key", JArray(JNum(i) :: Nil)) :: JField("value", v) :: Nil)
@@ -152,11 +152,11 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
     val data = augmentWithIdentities(set.map(JNum(_)))
     
-    val doubleF1 = new CF1P({
+    val doubleF1 = CF1P("testing::doubleF1") {
       case c: LongColumn => new Map1Column(c) with LongColumn {
         def apply(row: Int) = c(row) * 2
       }
-    })
+    }
 
     val groupId = module.newGroupId
 
@@ -214,11 +214,11 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
     val data = augmentWithIdentities(set.map(JNum(_)))
     
-    val mod2 = new CF1P({
+    val mod2 = CF1P("testing::mod2") {
       case c: LongColumn => new Map1Column(c) with LongColumn {
         def apply(row: Int) = c(row) % 2
       }
-    })
+    }
 
     val groupId = module.newGroupId
     

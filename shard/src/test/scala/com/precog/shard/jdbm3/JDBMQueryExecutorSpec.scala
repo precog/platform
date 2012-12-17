@@ -49,6 +49,7 @@ trait TestJDBMQueryExecutor extends JDBMQueryExecutor
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
+  val clock = blueeyes.util.Clock.System
 
   val yggConfig = new BaseJDBMQueryExecutorConfig with StandaloneShardSystemConfig {
     val config = Configuration(Map.empty[String, String])

@@ -23,7 +23,7 @@ package ragnarok
 import common.Path
 import common.security._
 
-import daze.{ Evaluator, EvaluatorConfig }
+import daze.{ Evaluator, EvaluationContext }
 
 import yggdrasil._
 import yggdrasil.table.ColumnarTableModuleConfig
@@ -43,7 +43,6 @@ import scalaz.syntax.monad._
 
 
 trait PerfTestRunnerConfig extends BaseConfig
-    with EvaluatorConfig
     with IdSourceConfig
     with ColumnarTableModuleConfig {
     
@@ -89,12 +88,10 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
         sys.error("Failed to construct DAG.")
 
       case Right(dag) =>
-        withContext { ctx =>
-          for {
-            table <- eval(yggConfig.apiKey, dag, ctx, Path.Root, yggConfig.optimize)
-            size <- countStream(table.renderJson(','))
-          } yield size
-        }
+        for {
+          table <- eval(dag, EvaluationContext(yggConfig.apiKey, Path.Root, new org.joda.time.DateTime()), yggConfig.optimize)
+          size <- countStream(table.renderJson(','))
+        } yield size
     }
   } catch {
     case e: com.precog.quirrel.parser.Parser$ParseException =>
