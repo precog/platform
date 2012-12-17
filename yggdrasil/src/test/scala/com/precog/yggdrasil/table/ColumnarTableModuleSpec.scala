@@ -53,27 +53,11 @@ import org.scalacheck.Arbitrary._
 import TableModule._
 import SampleData._
 
-trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] 
-    with TableModuleSpec[M]
-    with CogroupSpec[M]
-    with CrossSpec[M]
-    with TransformSpec[M]
-    with CompactSpec[M] 
-    with TakeRangeSpec[M]
-    with PartitionMergeSpec[M]
-    with UnionAllSpec[M]
-    with CrossAllSpec[M]
-    with DistinctSpec[M] 
-    with GroupingGraphSpec[M]
-    with SchemasSpec[M]
-    { spec => 
-
-  //type GroupId = Int
+trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
+  type GroupId = Int
   import trans._
   import constants._
-    
-  override val defaultPrettyParams = Pretty.Params(2)
-
+ 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
 
@@ -94,6 +78,27 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   }
 
   object Table extends TableCompanion
+}
+
+trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M] 
+    with TableModuleSpec[M]
+    with CogroupSpec[M]
+    with CrossSpec[M]
+    with TransformSpec[M]
+    with CompactSpec[M] 
+    with TakeRangeSpec[M]
+    with PartitionMergeSpec[M]
+    with UnionAllSpec[M]
+    with CrossAllSpec[M]
+    with DistinctSpec[M] 
+    with GroupingGraphSpec[M]
+    with SchemasSpec[M]
+    { spec => 
+
+  import trans._
+  import constants._
+    
+  override val defaultPrettyParams = Pretty.Params(2)
 
   private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.table.ColumnarTableModuleSpec")
 
@@ -245,6 +250,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     }
     
     "in cogroup" >> {
+      "perform a trivial cogroup" in testTrivialCogroup(identity[Table])
       "perform a simple cogroup" in testSimpleCogroup(identity[Table])
       "perform another simple cogroup" in testAnotherSimpleCogroup
       "cogroup for unions" in testUnionCogroup
@@ -331,7 +337,19 @@ trait ColumnarTableModuleSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
       "test inner object concat with a boolean and an empty object" in testObjectConcatTrivial
       "concatenate dissimilar objects" in checkObjectConcat
       "test inner object concat join semantics" in testInnerObjectConcatJoinSemantics
+      "test inner object concat with empty objects" in testInnerObjectConcatEmptyObject
+      "test outer object concat with empty objects" in testOuterObjectConcatEmptyObject
+      "test inner object concat with undefined" in testInnerObjectConcatUndefined
+      "test outer object concat with undefined" in testOuterObjectConcatUndefined
+      "test inner object concat with empty" in testInnerObjectConcatLeftEmpty
+      "test outer object concat with empty" in testOuterObjectConcatLeftEmpty
       "concatenate dissimilar arrays" in checkArrayConcat
+      "inner concatenate arrays with undefineds" in testInnerArrayConcatUndefined
+      "outer concatenate arrays with undefineds" in testOuterArrayConcatUndefined
+      "inner concatenate arrays with empty arrays" in testInnerArrayConcatEmptyArray
+      "outer concatenate arrays with empty arrays" in testOuterArrayConcatEmptyArray
+      "inner array concatenate when one side is not an array" in testInnerArrayConcatLeftEmpty
+      "outer array concatenate when one side is not an array" in testOuterArrayConcatLeftEmpty
       "delete elements according to a JType" in checkObjectDelete //.set(minTestsOk -> 5000) TODO: saw an error here once
       "perform a trivial type-based filter" in checkTypedTrivial
       "perform a less trivial type-based filter" in checkTyped
@@ -792,10 +810,7 @@ object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] 
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
     
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 }
 

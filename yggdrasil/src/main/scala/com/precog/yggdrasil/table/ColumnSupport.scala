@@ -66,18 +66,16 @@ class IntersectColumn[T <: Column](c1: T, c2: T) { this: T =>
   def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
 }
 
-class IntersectLotsColumn[T <: Column](cols: Set[Column]) { this: T =>
-  def isDefinedAt(row: Int) = cols.toList(0).isDefinedAt(row) && cols.toList(1).isDefinedAt(row)
+class IntersectLotsColumn[T <: Column](cols: Set[T]) { this: T =>
+  def isDefinedAt(row: Int) = cols.forall(_.isDefinedAt(row))
 }
 
 class ConcatColumn[T <: Column](at: Int, c1: T, c2: T) { this: T =>
-  def isDefinedAt(row: Int) = row >= 0 && ((row < at && c1.isDefinedAt(row)) || (row >= at && c2.isDefinedAt(row - at)))
+  def isDefinedAt(row: Int) = 
+    row >= 0 && ((row < at && c1.isDefinedAt(row)) || (row >= at && c2.isDefinedAt(row - at)))
 }
 
 class NConcatColumn[T <: Column](offsets: Array[Int], columns: Array[T]) { this: T =>
-
-  // Is this worth it? For some operations, but not sorting... all the more
-  // reason to add materialise I suppose.
 
   @volatile private var lastIndex = 0
 

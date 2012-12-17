@@ -347,7 +347,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), CPathField("key"))
     val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), CPathField("key"))
     
-    val newIdentitySpec = ArrayConcat(leftIdentitySpec, rightIdentitySpec)
+    val newIdentitySpec = OuterArrayConcat(leftIdentitySpec, rightIdentitySpec)
     
     val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, "key")
 
@@ -682,11 +682,16 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
       val table = fromSample(sample)
-      val results = toJson(table.transform {
+      val resultsInner = toJson(table.transform {
         InnerObjectConcat(Leaf(Source), Leaf(Source))
       })
 
-      results.copoint must_== sample.data
+      val resultsOuter = toJson(table.transform {
+        OuterObjectConcat(Leaf(Source), Leaf(Source))
+      })
+
+      resultsInner.copoint must_== sample.data
+      resultsOuter.copoint must_== sample.data
     }
   }
 
@@ -695,11 +700,16 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     val sample = SampleData(data)
     val table = fromSample(sample)
 
-    val results = toJson(table.transform {
+    val resultsInner = toJson(table.transform {
       InnerObjectConcat(Leaf(Source))
     })
 
-    results.copoint must beEmpty
+    val resultsOuter = toJson(table.transform {
+      OuterObjectConcat(Leaf(Source))
+    })
+
+    resultsInner.copoint must beEmpty
+    resultsOuter.copoint must beEmpty
   }
 
   def testObjectConcatTrivial = {
@@ -707,25 +717,223 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     val sample = SampleData(data)
     val table = fromSample(sample)
 
-    val results = toJson(table.transform {
+    val resultsInner = toJson(table.transform {
       InnerObjectConcat(Leaf(Source))
     })
 
-    results.copoint must_== Stream(JObject(Nil))
+    val resultsOuter = toJson(table.transform {
+      OuterObjectConcat(Leaf(Source))
+    })
+
+    resultsInner.copoint must_== Stream(JObject(Nil))
+    resultsOuter.copoint must_== Stream(JObject(Nil))
+  }
+
+  def testInnerObjectConcatEmptyObject = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": {}, "bar": {"ack": 12}},
+      {"foo": {}, "bar": {"ack": 12, "bak": 13}},
+      {"foo": {"ook": 99}, "bar": {}},
+      {"foo": {"ook": 99}, "bar": {"ack": 100, "bak": 101}},
+      {"foo": {"ook": 99, "ick": 100}, "bar": {}},
+      {"foo": {"ook": 99, "ick": 100}, "bar": {"ack": 102}},
+      {"foo": {}, "bar": {}},
+      {"foo": {"ook": 88}},
+      {"foo": {}},
+      {"bar": {}},
+      {"bar": {"ook": 77}},
+      {"foo": {"ook": 7}, "bar": {}, "baz": 24},
+      {"foo": {"ook": 3}, "bar": {"ack": 9}, "baz": 18},
+      {"foo": {}, "bar": {"ack": 0}, "baz": 18}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = InnerObjectConcat(
+      DerefObjectStatic(Leaf(Source), CPathField("foo")),
+      DerefObjectStatic(Leaf(Source), CPathField("bar")))
+
+    val results = toJson(table.transform(spec))
+
+    val expected: Stream[JValue] = Stream(
+      JObject(JField("ack", JNum(12)) :: Nil),
+      JObject(JField("ack", JNum(12)) :: JField("bak", JNum(13)) :: Nil),
+      JObject(JField("ook", JNum(99)) :: Nil),
+      JObject(JField("ook", JNum(99)) :: JField("ack", JNum(100)) :: JField("bak", JNum(101)) :: Nil),
+      JObject(JField("ook", JNum(99)) :: JField("ick", JNum(100)) :: Nil),
+      JObject(JField("ook", JNum(99)) :: JField("ick", JNum(100)) :: JField("ack", JNum(102)) :: Nil),
+      JObject(Nil),
+      JObject(JField("ook", JNum(7)) :: Nil),
+      JObject(JField("ook", JNum(3)) :: JField("ack", JNum(9)) :: Nil),
+      JObject(JField("ack", JNum(0)) :: Nil))
+
+    results.copoint mustEqual expected
+  }
+
+  def testOuterObjectConcatEmptyObject = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": {}, "bar": {"ack": 12}},
+      {"foo": {}, "bar": {"ack": 12, "bak": 13}},
+      {"foo": {"ook": 99}, "bar": {}},
+      {"foo": {"ook": 99}, "bar": {"ack": 100, "bak": 101}},
+      {"foo": {"ook": 99, "ick": 100}, "bar": {}},
+      {"foo": {"ook": 99, "ick": 100}, "bar": {"ack": 102}},
+      {"foo": {}, "bar": {}},
+      {"foo": {"ook": 88}},
+      {"foo": {}},
+      {"bar": {}},
+      {"bar": {"ook": 77}},
+      {"foo": {"ook": 7}, "bar": {}, "baz": 24},
+      {"foo": {"ook": 3}, "bar": {"ack": 9}, "baz": 18},
+      {"foo": {}, "bar": {"ack": 0}, "baz": 18}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = OuterObjectConcat(
+      DerefObjectStatic(Leaf(Source), CPathField("foo")),
+      DerefObjectStatic(Leaf(Source), CPathField("bar")))
+
+    val results = toJson(table.transform(spec))
+
+
+    val expected: Stream[JValue] = Stream(
+      JObject(JField("ack", JNum(12)) :: Nil),
+      JObject(JField("ack", JNum(12)) :: JField("bak", JNum(13)) :: Nil),
+      JObject(JField("ook", JNum(99)) :: Nil),
+      JObject(JField("ook", JNum(99)) :: JField("ack", JNum(100)) :: JField("bak", JNum(101)) :: Nil),
+      JObject(JField("ook", JNum(99)) :: JField("ick", JNum(100)) :: Nil),
+      JObject(JField("ook", JNum(99)) :: JField("ick", JNum(100)) :: JField("ack", JNum(102)) :: Nil),
+      JObject(Nil),
+      JObject(JField("ook", JNum(88)) :: Nil),
+      JObject(Nil),
+      JObject(Nil),
+      JObject(JField("ook", JNum(77)) :: Nil),
+      JObject(JField("ook", JNum(7)) :: Nil),
+      JObject(JField("ook", JNum(3)) :: JField("ack", JNum(9)) :: Nil),
+      JObject(JField("ack", JNum(0)) :: Nil))
+
+    results.copoint mustEqual expected
+  }
+
+  def testInnerObjectConcatUndefined = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": {"baz": 4}, "bar": {"ack": 12}},
+      {"foo": {"baz": 5}},
+      {"bar": {"ack": 45}},
+      {"foo": {"baz": 7}, "bar" : {"ack": 23}, "baz": {"foobar": 24}}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = InnerObjectConcat(
+      DerefObjectStatic(Leaf(Source), CPathField("foo")),
+      DerefObjectStatic(Leaf(Source), CPathField("bar")))
+
+    val results = toJson(table.transform(spec))
+
+    val expected: Stream[JValue] = Stream(
+      JObject(JField("baz", JNum(4)) :: JField("ack", JNum(12)) :: Nil),
+      JObject(JField("baz", JNum(7)) :: JField("ack", JNum(23)) :: Nil))
+
+    results.copoint mustEqual expected
+  }
+
+  def testOuterObjectConcatUndefined = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": {"baz": 4}, "bar": {"ack": 12}},
+      {"foo": {"baz": 5}},
+      {"bar": {"ack": 45}},
+      {"foo": {"baz": 7}, "bar" : {"ack": 23}, "baz": {"foobar": 24}}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = OuterObjectConcat(
+      DerefObjectStatic(Leaf(Source), CPathField("foo")),
+      DerefObjectStatic(Leaf(Source), CPathField("bar")))
+
+    val results = toJson(table.transform(spec))
+
+    val expected: Stream[JValue] = Stream(
+      JObject(JField("baz", JNum(4)) :: JField("ack", JNum(12)) :: Nil),
+      JObject(JField("baz", JNum(5)) :: Nil),
+      JObject(JField("ack", JNum(45)) :: Nil),
+      JObject(JField("baz", JNum(7)) :: JField("ack", JNum(23)) :: Nil))
+
+    results.copoint mustEqual expected
+  }
+
+  def testInnerObjectConcatLeftEmpty = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": 4, "bar": 12},
+      {"foo": 5},
+      {"bar": 45},
+      {"foo": 7, "bar" :23, "baz": 24}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = InnerObjectConcat(
+      DerefObjectStatic(Leaf(Source), CPathField("foobar")),
+      WrapObject(DerefObjectStatic(Leaf(Source), CPathField("bar")), "ack"))
+
+    val results = toJson(table.transform(spec))
+
+    val expected: Stream[JValue] = Stream()
+
+    results.copoint mustEqual expected
+  }
+
+  def testOuterObjectConcatLeftEmpty = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": 4, "bar": 12},
+      {"foo": 5},
+      {"bar": 45},
+      {"foo": 7, "bar" :23, "baz": 24}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = OuterObjectConcat(
+      DerefObjectStatic(Leaf(Source), CPathField("foobar")),
+      WrapObject(DerefObjectStatic(Leaf(Source), CPathField("bar")), "ack"))
+
+    val results = toJson(table.transform(spec))
+
+    val expected: Stream[JValue] = Stream(
+      JObject(JField("ack", JNum(12)) :: Nil),
+      JObject(JField("ack", JNum(45)) :: Nil),
+      JObject(JField("ack", JNum(23)) :: Nil))
+
+    results.copoint mustEqual expected
   }
 
   def checkObjectConcat = {
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
-      val results = toJson(table.transform {
+      val resultsInner = toJson(table.transform {
         InnerObjectConcat(
           WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")), "value1"), "value"), 
           WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2")), "value2"), "value") 
         )
       })
 
-      results.copoint must_== (sample.data flatMap {
+      val resultsOuter = toJson(table.transform {
+        OuterObjectConcat(
+          WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")), "value1"), "value"), 
+          WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2")), "value2"), "value") 
+        )
+      })
+
+      def isOk(results: M[Stream[JValue]]) = results.copoint must_== (sample.data flatMap {
         case JObject(fields) => {
           val back = JObject(fields filter { case (name,value) => name == "value" && value.isInstanceOf[JObject] })
           if (back \ "value" \ "value1" == JUndefined || back \ "value" \ "value2" == JUndefined)
@@ -736,6 +944,9 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         
         case _ => None
       })
+
+    isOk(resultsInner)
+    isOk(resultsOuter)
     }
   }
 
@@ -743,17 +954,27 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
       val table = fromSample(sample)
-      val results = toJson(table.transform {
+      val resultsInner = toJson(table.transform {
         InnerObjectConcat(
           WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")), "value1"),
           WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2")), "value1")
         )
       })
 
-      results.copoint must_== (sample.data map { _ \ "value" } collect {
+      val resultsOuter = toJson(table.transform {
+        OuterObjectConcat(
+          WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")), "value1"),
+          WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2")), "value1")
+        )
+      })
+
+      def isOk(results: M[Stream[JValue]]) = results.copoint must_== (sample.data map { _ \ "value" } collect {
         case v if (v \ "value1") != JUndefined && (v \ "value2") != JUndefined =>
           JObject(JField("value1", v \ "value2") :: Nil)
       })
+
+    isOk(resultsOuter)
+    isOk(resultsInner)
     }
   }
   
@@ -796,9 +1017,9 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       })
 
       val table = fromSample(sample)
-      val results = toJson(table.transform {
+      val resultsInner = toJson(table.transform {
         WrapObject(
-          ArrayConcat(
+          InnerArrayConcat(
             WrapArray(DerefArrayStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathIndex(0))),
             WrapArray(DerefArrayStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathIndex(1)))
           ), 
@@ -806,7 +1027,17 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         )
       })
 
-      results.copoint must_== (sample.data flatMap {
+      val resultsOuter = toJson(table.transform {
+        WrapObject(
+          OuterArrayConcat(
+            WrapArray(DerefArrayStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathIndex(0))),
+            WrapArray(DerefArrayStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathIndex(1)))
+          ), 
+          "value"
+        )
+      })
+
+      def isOk(results: M[Stream[JValue]]) = results.copoint must_== (sample.data flatMap {
         case obj @ JObject(fields) => {
           (obj \ "value") match {
             case JArray(inner) if inner.length >= 2 =>
@@ -818,7 +1049,201 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         
         case _ => None
       })
+
+      isOk(resultsInner)
+      isOk(resultsOuter)
     }
+  }
+
+  def testInnerArrayConcatUndefined = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": 4, "bar": 12},
+      {"foo": 5},
+      {"bar": 45},
+      {"foo": 7, "bar" :23, "baz": 24}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = InnerArrayConcat(
+      WrapArray(DerefObjectStatic(Leaf(Source), CPathField("foo"))),
+      WrapArray(DerefObjectStatic(Leaf(Source), CPathField("bar"))))
+
+    val results = toJson(table.transform(spec))
+
+    val expected: Stream[JValue] = Stream(
+      JArray(JNum(4) :: JNum(12) :: Nil),
+      JArray(JNum(7) :: JNum(23) :: Nil))
+
+    results.copoint mustEqual expected
+  }
+
+  def testOuterArrayConcatUndefined = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": 4, "bar": 12},
+      {"foo": 5},
+      {"bar": 45},
+      {"foo": 7, "bar" :23, "baz": 24}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = OuterArrayConcat(
+      WrapArray(DerefObjectStatic(Leaf(Source), CPathField("foo"))),
+      WrapArray(DerefObjectStatic(Leaf(Source), CPathField("bar"))))
+
+    val results = toJson(table.transform(spec))
+
+    val expected: Stream[JValue] = Stream(
+      JArray(JNum(4) :: JNum(12) :: Nil),
+      JArray(JNum(5) :: Nil),
+      JArray(JUndefined :: JNum(45) :: Nil),
+      JArray(JNum(7) :: JNum(23) :: Nil))
+
+    results.copoint mustEqual expected
+  }
+
+  def testInnerArrayConcatEmptyArray = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": [], "bar": [12]},
+      {"foo": [], "bar": [12, 13]},
+      {"foo": [99], "bar": []},
+      {"foo": [99], "bar": [100, 101]},
+      {"foo": [99, 100], "bar": []},
+      {"foo": [99, 100], "bar": [102]},
+      {"foo": [], "bar": []},
+      {"foo": [88]},
+      {"foo": []},
+      {"bar": []},
+      {"bar": [77]},
+      {"foo": [7], "bar": [], "baz": 24},
+      {"foo": [3], "bar": [9], "baz": 18},
+      {"foo": [], "bar": [0], "baz": 18}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = InnerArrayConcat(
+      DerefObjectStatic(Leaf(Source), CPathField("foo")),
+      DerefObjectStatic(Leaf(Source), CPathField("bar")))
+
+    val results = toJson(table.transform(spec))
+
+    // note: slice size is 10
+    // the first index of the rhs array is one after the max of the ones seen
+    // in the current slice on the lhs
+    val expected: Stream[JValue] = Stream(
+      JArray(JUndefined :: JUndefined :: JNum(12) :: Nil),
+      JArray(JUndefined :: JUndefined :: JNum(12) :: JNum(13) :: Nil),
+      JArray(JNum(99) :: Nil),
+      JArray(JNum(99) :: JUndefined :: JNum(100) :: JNum(101) :: Nil),
+      JArray(JNum(99) :: JNum(100) :: Nil),
+      JArray(JNum(99) :: JNum(100) :: JNum(102) :: Nil),
+      JArray(Nil),
+      JArray(JNum(7) :: Nil),
+      JArray(JNum(3) :: JNum(9) :: Nil),
+      JArray(JUndefined :: JNum(0) :: Nil))
+
+    results.copoint mustEqual expected
+  }
+
+  def testOuterArrayConcatEmptyArray = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": [], "bar": [12]},
+      {"foo": [], "bar": [12, 13]},
+      {"foo": [99], "bar": []},
+      {"foo": [99], "bar": [100, 101]},
+      {"foo": [99, 100], "bar": []},
+      {"foo": [99, 100], "bar": [102]},
+      {"foo": [], "bar": []},
+      {"foo": [88]},
+      {"foo": []},
+      {"bar": []},
+      {"bar": [77]},
+      {"foo": [7], "bar": [], "baz": 24},
+      {"foo": [3], "bar": [9], "baz": 18},
+      {"foo": [], "bar": [0], "baz": 18}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = OuterArrayConcat(
+      DerefObjectStatic(Leaf(Source), CPathField("foo")),
+      DerefObjectStatic(Leaf(Source), CPathField("bar")))
+
+    val results = toJson(table.transform(spec))
+
+    // note: slice size is 10
+    // the first index of the rhs array is one after the max of the ones seen
+    // in the current slice on the lhs
+    val expected: Stream[JValue] = Stream(
+      JArray(JUndefined :: JUndefined :: JNum(12) :: Nil),
+      JArray(JUndefined :: JUndefined :: JNum(12) :: JNum(13) :: Nil),
+      JArray(JNum(99) :: Nil),
+      JArray(JNum(99) :: JUndefined :: JNum(100) :: JNum(101) :: Nil),
+      JArray(JNum(99) :: JNum(100) :: Nil),
+      JArray(JNum(99) :: JNum(100) :: JNum(102) :: Nil),
+      JArray(Nil),
+      JArray(JNum(88) :: Nil),
+      JArray(Nil),
+      JArray(Nil),
+      JArray(JUndefined :: JNum(77) :: Nil),
+      JArray(JNum(7) :: Nil),
+      JArray(JNum(3) :: JNum(9) :: Nil),
+      JArray(JUndefined :: JNum(0) :: Nil))
+
+    results.copoint mustEqual expected
+  }
+
+  def testInnerArrayConcatLeftEmpty = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": 4, "bar": 12},
+      {"foo": 5},
+      {"bar": 45},
+      {"foo": 7, "bar" :23, "baz": 24}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = InnerArrayConcat(
+      DerefObjectStatic(Leaf(Source), CPathField("foobar")),
+      WrapArray(DerefObjectStatic(Leaf(Source), CPathField("bar"))))
+
+    val results = toJson(table.transform(spec))
+
+    val expected: Stream[JValue] = Stream()
+
+    results.copoint mustEqual expected
+  }
+
+  def testOuterArrayConcatLeftEmpty = {
+    val JArray(elements) = JParser.parse("""[
+      {"foo": 4, "bar": 12},
+      {"foo": 5},
+      {"bar": 45},
+      {"foo": 7, "bar" :23, "baz": 24}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val spec = OuterArrayConcat(
+      DerefObjectStatic(Leaf(Source), CPathField("foobar")),
+      WrapArray(DerefObjectStatic(Leaf(Source), CPathField("bar"))))
+
+    val results = toJson(table.transform(spec))
+
+    val expected: Stream[JValue] = Stream(
+      JArray(JNum(12) :: Nil),
+      JArray(JNum(45) :: Nil),
+      JArray(JNum(23) :: Nil))
+
+    results.copoint mustEqual expected
   }
 
   def checkObjectDelete = {

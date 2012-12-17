@@ -109,10 +109,10 @@ trait ColumnarTableModule[M[+_]]
   }
 
   implicit def liftF2(f: F2) = new F2Like {
-    def applyl(cv: CValue) = new CF1(f(Column.const(cv), _))
-    def applyr(cv: CValue) = new CF1(f(_, Column.const(cv)))
+    def applyl(cv: CValue) = CF1("builtin::liftF2::applyl") { f(Column.const(cv), _) } 
+    def applyr(cv: CValue) = CF1("builtin::liftF2::applyl") { f(_, Column.const(cv)) }
 
-    def andThen(f1: F1) = new CF2((c1, c2) => f(c1, c2) flatMap f1.apply)
+    def andThen(f1: F1) = CF2("builtin::liftF2::andThen") { (c1, c2) => f(c1, c2) flatMap f1.apply }
   }
 
   trait ColumnarTableCompanion extends TableCompanionLike {
@@ -1017,7 +1017,7 @@ trait ColumnarTableModule[M[+_]]
       // post the initial sort separate from the values that it was derived from. 
       val (payloadTrans, idTrans, targetTrans, groupKeyTrans) = node.binding.targetTrans match {
         case Some(targetSetTrans) => 
-          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), 
+          val payloadTrans = InnerArrayConcat(WrapArray(node.binding.idTrans), 
                                          WrapArray(protoGroupKeyTrans.spec), 
                                          WrapArray(targetSetTrans))
 
@@ -1027,7 +1027,7 @@ trait ColumnarTableModule[M[+_]]
            GroupKeyTrans(TransSpec1.DerefArray1, protoGroupKeyTrans.keyOrder))
 
         case None =>
-          val payloadTrans = ArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec))
+          val payloadTrans = InnerArrayConcat(WrapArray(node.binding.idTrans), WrapArray(protoGroupKeyTrans.spec))
           (payloadTrans, 
            TransSpec1.DerefArray0, 
            None, 
@@ -1831,8 +1831,6 @@ trait ColumnarTableModule[M[+_]]
 
       for {
         omniverse <- borgedUniverses.map(s => unionAll(s.toSet))
-        //json <- omniverse.table.toJson
-        //_ = println("omniverse: \n" + json.mkString("\n"))
         sorted <- if (omniverse.sorted) {
             M.point(omniverse.table)
           } else {
@@ -1923,11 +1921,11 @@ trait ColumnarTableModule[M[+_]]
         stream.uncons flatMap {
           case Some((head, tail)) => rec(tail, head |+| acc) 
           case None => M.point(acc)
-        }    
-      }    
+        }
+      }
 
       rec(slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }, monoid.zero)
-    }    
+    }
 
     def compact(spec: TransSpec1): Table = {
       val specTransform = SliceTransform.composeSliceTransform(spec)
@@ -1966,6 +1964,7 @@ trait ColumnarTableModule[M[+_]]
      * transformation on rows of the table.
      */
     def cogroup(leftKey: TransSpec1, rightKey: TransSpec1, that: Table)(leftResultTrans: TransSpec1, rightResultTrans: TransSpec1, bothResultTrans: TransSpec2): Table = {
+
       //println("Cogrouping with respect to\nleftKey: " + leftKey + "\nrightKey: " + rightKey)
       class IndexBuffers(lInitialSize: Int, rInitialSize: Int) {
         val lbuf = new ArrayIntList(lInitialSize)
@@ -2333,10 +2332,10 @@ trait ColumnarTableModule[M[+_]]
         Table(StreamT.wrapEffect(initialState map { state => StreamT.unfoldM[M, Slice, CogroupState](state getOrElse CogroupDone)(step) }), UnknownSize)
       }
 
-      cogroup0(composeSliceTransform(leftKey), 
-               composeSliceTransform(rightKey), 
-               composeSliceTransform(leftResultTrans), 
-               composeSliceTransform(rightResultTrans), 
+      cogroup0(composeSliceTransform(leftKey),
+               composeSliceTransform(rightKey),
+               composeSliceTransform(leftResultTrans),
+               composeSliceTransform(rightResultTrans),
                composeSliceTransform2(bothResultTrans))
     }
 

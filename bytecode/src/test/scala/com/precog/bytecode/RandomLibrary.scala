@@ -75,6 +75,8 @@ trait RandomLibrary extends Library {
   lazy val lib2 = containerOfN[Set, Op2](30, genOp2).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
   lazy val libReduction = reductions ++ containerOfN[Set, Reduction](30, genReduction).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
   
+  lazy val expandGlob = Morphism1(Vector("std", "fs"), "expandGlob", 0x0004)
+  
   
   case class Morphism1(namespace: Vector[String], name: String, opcode: Int) extends Morphism1Like {
     val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
