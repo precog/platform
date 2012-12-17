@@ -54,29 +54,53 @@ trait AccountManagerClientComponent {
   implicit val M: Monad[Future]
 
   def accountManagerFactory(config: Configuration): BasicAccountManager[Future] = {
-    val protocol = config[String]("service.protocol")
-    val host = config[String]("service.host")
-    val port = config[Int]("service.port")
-    val path = config[String]("service.path")
-    val user = config[String]("service.user")
-    val password = config[String]("service.password")
-    val cacheSize = config[Int]("service.cache_size", 1000)
-    
-    val settings = AccountManagerClientSettings(protocol, host, port, path, user, password, cacheSize)
-    new AccountManagerClient(settings)
+    config.get[String]("service.hardcoded_account").map { accountId =>
+      new HardCodedAccountManager(accountId)
+    }.getOrElse {
+      val protocol = config[String]("service.protocol")
+      val host = config[String]("service.host")
+      val port = config[Int]("service.port")
+      val path = config[String]("service.path")
+      val user = config[String]("service.user")
+      val password = config[String]("service.password")
+      val cacheSize = config[Int]("service.cache_size", 1000)
+      
+      val settings = AccountManagerClientSettings(protocol, host, port, path, user, password, cacheSize)
+      new AccountManagerClient(settings)
+    }
   }
+}
+
+class HardCodedAccountManager(accountId: AccountId) extends BasicAccountManager[Future] with AkkaDefaults with Logging {
+  logger.debug("Starting new hardcoded account manager. All queries resolve to \"%s\"".format(accountId))
+
+  val asyncContext = defaultFutureDispatch
+   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+
+  def listAccountIds(apiKey: APIKey) : Future[Set[AccountId]] = Promise.successful(Set(accountId))
+
+  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountId]]] = {
+    val singleton = Set(accountId)
+    Promise.successful {
+      apiKeys.map { key => (key, singleton) }.toMap
+    }
+  }
+  
+  def findAccountById(accountId: AccountId): Future[Option[Account]] = Promise.successful(None)
+
+  def close(): Future[Unit] = Promise.successful(())
 }
 
 class AccountManagerClient(settings: AccountManagerClientSettings) extends BasicAccountManager[Future] with AkkaDefaults with Logging {
   import settings._
 
-  private[this] val apiKeyToAccountCache = Cache[APIKey, Set[AccountId]](cacheSize)
+  private[this] val apiKeyToAccountCache = Cache.simple[APIKey, Set[AccountId]](Cache.MaxSize(cacheSize))
 
   val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
   def listAccountIds(apiKey: APIKey) : Future[Set[AccountId]] = {
-    apiKeyToAccountCache.getIfPresent(apiKey).map(Promise.successful(_)).getOrElse {
+    apiKeyToAccountCache.get(apiKey).map(Promise.successful(_)).getOrElse {
       invoke { client =>
         client.query("apiKey", apiKey).contentType(application/MimeTypes.json).get[JValue]("") map {
           case HttpResponse(HttpStatus(OK, _), _, Some(jaccounts), _) =>
