@@ -31,4 +31,4 @@ jprofiler.jnilib
 /mongo/precog*.zip
 /mongo/precog/
 .tag
-/test/
+
