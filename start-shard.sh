@@ -342,7 +342,7 @@ wait_until_port_open $MONGOPORT
 
 if [ ! -e "$WORKDIR"/root_token.txt ]; then
     echo "Retrieving new root token"
-    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -r | tail -n 1 > "$WORKDIR"/root_token.txt || {
+    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -c | tail -n 1 > "$WORKDIR"/root_token.txt || {
         echo "Error retrieving new root token" >&2
         exit 3
     }
@@ -351,13 +351,13 @@ fi
 TOKENID=`cat "$WORKDIR"/root_token.txt`
 
 # Set up ingest and shard services
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/accounts/v1/#/#" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.conf > "$WORKDIR"/configs/ingest-v1.conf || echo "Failed to update ingest config"
-sed -e "s#/var/log/precog#"$WORKDIR"/logs#" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.logging.xml > "$WORKDIR"/configs/ingest-v1.logging.xml
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/accounts/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.conf > "$WORKDIR"/configs/ingest-v1.conf || echo "Failed to update ingest config"
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.logging.xml > "$WORKDIR"/configs/ingest-v1.logging.xml
 
-sed -e "s#/var/log#"$WORKDIR"/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/opt/precog/shard#$WORKDIR/shard-data#" < "$BASEDIR"/shard/configs/dev/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/opt/precog/shard#$WORKDIR/shard-data#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < "$BASEDIR"/shard/configs/dev/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/shard/configs/dev/shard-v1.logging.xml > "$WORKDIR"/configs/shard-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.conf > "$WORKDIR"/configs/auth-v1.conf || echo "Failed to update auth config"
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.conf > "$WORKDIR"/configs/auth-v1.conf || echo "Failed to update auth config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.logging.xml > "$WORKDIR"/configs/auth-v1.logging.xml
 
 sed -e "s!/var/log!$WORKDIR/logs!; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s/port = 80/port = 30062/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < "$BASEDIR"/accounts/configs/dev/accounts-v1.conf > "$WORKDIR"/configs/accounts-v1.conf || echo "Failed to update accounts config"
