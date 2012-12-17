@@ -46,8 +46,8 @@ trait TransSpecModuleSpec extends TransSpecModule with FNDummyModule with Specif
 
       val expected = InnerObjectConcat(
         WrapObject(
-          ArrayConcat(
-            ArrayConcat(
+          InnerArrayConcat(
+            InnerArrayConcat(
               WrapArray(DerefArrayStatic(Leaf(Source),CPathIndex(4))), 
               WrapArray(WrapObject(DerefArrayStatic(Leaf(Source),CPathIndex(6)),"baz"))), 
             WrapArray(DerefArrayStatic(Leaf(Source),CPathIndex(2)))),"bar"), 

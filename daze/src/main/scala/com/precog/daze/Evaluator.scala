@@ -343,16 +343,9 @@ trait Evaluator[M[+_]] extends DAG
               leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
               rightSpec = trans.Map1(rightSpec0, cf.util.CoerceToDouble)
 
-              //todo doing this in place of InnerArrayConcat... 
-              toObject = InnerObjectConcat(trans.WrapObject(leftSpec, "0"), trans.WrapObject(rightSpec, "1"))
-              toArray = ArrayConcat(
-                trans.WrapArray(DerefObjectStatic(toObject, CPathField("0"))), 
-                trans.WrapArray(DerefObjectStatic(toObject, CPathField("1")))) 
-
               transformed = {
-                if (mor.multivariate) aligned.transform(toArray)
-                //todo change the following ArrayConcat to InnerObjectConcat  
-                else aligned.transform(ArrayConcat(trans.WrapArray(leftSpec0), trans.WrapArray(rightSpec0)))
+                if (mor.multivariate) aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
+                else aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec0), trans.WrapArray(rightSpec0)))
               }
 
               result <- mor(transformed, ctx)

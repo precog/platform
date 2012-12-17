@@ -151,7 +151,7 @@ trait TransSpecModule extends FNModule {
         val result = initialSpecs reduceOption { (t1, t2) =>
           (t1, t2) match {  
             case (t1: ObjectSpec[_], t2: ObjectSpec[_]) => trans.InnerObjectConcat(t1, t2)
-            case (t1: ArraySpec[_], t2: ArraySpec[_]) => trans.ArrayConcat(t1, t2)
+            case (t1: ArraySpec[_], t2: ArraySpec[_]) => trans.InnerArrayConcat(t1, t2)
             case _ => sys.error("cannot have this")
           }
         }

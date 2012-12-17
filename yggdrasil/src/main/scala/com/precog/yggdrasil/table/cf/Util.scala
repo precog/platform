@@ -170,7 +170,7 @@ object util {
   }
 
   //it would be nice to generalize this to `CoerceTo[A]` so we can coerce to BigDecimal as well
-  case object CoerceToDouble extends CF1P({
+  def CoerceToDouble = CF1P("builtin:ct:coerceToDouble") {
     case c: DoubleColumn => c
 
     case c: LongColumn => new Map1Column(c) with DoubleColumn {
@@ -180,7 +180,7 @@ object util {
     case c: NumColumn => new Map1Column(c) with DoubleColumn {
       def apply(row: Int) = c(row).toDouble
     }
-  })
+  }
 
   def Concat(at: Int) = CF2P("builtin::ct::concat") {
     case (c1: BoolColumn, c2: BoolColumn) => new ConcatColumn(at, c1, c2) with BoolColumn { 

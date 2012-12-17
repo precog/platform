@@ -62,6 +62,7 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with TakeRangeSpec[M]
     with ToArraySpec[M]
     with ConcatSpec[M]
+    with SampleSpec[M]
     with PartitionMergeSpec[M]
     with DistinctSpec[M] 
     with SchemasSpec[M]
@@ -431,6 +432,14 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "extract intervleaved schemas" in testIntervleavedSchema
       "don't include undefineds in schema" in testUndefinedsInSchema
       "deal with most expected types" in testAllTypesInSchema
+    }
+
+    "in sample" >> {
+       "sample from a dataset" in testSample
+       "return no samples given empty sequence of transspecs" in testSampleEmpty
+       "sample from a dataset given non-identity transspecs" in testSampleTransSpecs
+       "return full set when sample size larger than dataset" in testLargeSampleSize
+       "resurn empty table when sample size is 0" in test0SampleSize
     }
   }
 

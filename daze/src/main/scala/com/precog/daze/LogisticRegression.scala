@@ -235,7 +235,7 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
       } getOrElse Table.empty
     }
 
-    def apply(table: Table): M[Table] = {
+    def apply(table: Table, ctx: EvaluationContext): M[Table] = {
       val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
       
       val specs: M[Seq[TransSpec1]] = schemas map {
