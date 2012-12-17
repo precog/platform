@@ -28,28 +28,13 @@ import yggdrasil.table._
 import org.joda.time._
 import org.joda.time.format._
 
+import com.precog.util.DateTimeUtil.parseDateTime
+
 //todo instead of using StrColumn, use TimeColumn!
 //todo test is not defined cases when fails at isValidISO(_), etc
 
 trait TimeLib[M[+_]] extends GenOpcode[M] {
   val TimeNamespace = Vector("std", "time")
-  
-  private val fullParser = ISODateTimeFormat.dateTimeParser
-  private val basicParser = ISODateTimeFormat.basicDateTime
-
-  def parseDateTime(value: String, withOffset: Boolean): DateTime = {
-    val parser = if (value.contains("-") || value.contains(":")) {
-      fullParser
-    } else {
-      basicParser
-    }
-
-    (if (withOffset) {
-      parser.withOffsetParsed
-     } else {
-       parser
-     }).parseDateTime(value)
-  }
 
   override def _lib1 = super._lib1 ++ Set(
     GetMillis,

@@ -56,7 +56,6 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
     with BlockSortSpec[M] 
     with IntersectSpec[M]
     with BlockAlignSpec[M] 
-    with GroupingSupportSpec[M]
     { self =>
 
 

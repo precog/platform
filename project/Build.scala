@@ -93,6 +93,7 @@ object PlatformBuild extends Build {
       "javolution"                  %  "javolution"         % "5.5.1",
       "com.chuusai"                 %% "shapeless"          % "1.2.3"//,
       //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
+      ,"org.spire-math"              %% "spire"              % "0.2.0-M2"
     )
   )
 
