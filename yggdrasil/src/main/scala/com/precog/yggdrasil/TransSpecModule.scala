@@ -131,13 +131,13 @@ trait TransSpecModule extends FNModule {
     object TransSpec {
       import CPath._
 
-      def concatChildren[A <: SourceType](tree: CPathTree[Int]): TransSpec[A] = {
+      def concatChildren[A <: SourceType](tree: CPathTree[Int], leaf: TransSpec[A] = Leaf(Source)): TransSpec[A] = {
         def createSpecs(trees: Seq[CPathTree[Int]]): Seq[TransSpec[A]] = trees.map { child =>
           child match {
-            case node @ RootNode(_) => concatChildren(node)
-            case node @ FieldNode(CPathField(name), _) => trans.WrapObject(concatChildren(node), name)
-            case node @ IndexNode(CPathIndex(_), _) => trans.WrapArray(concatChildren(node))
-            case LeafNode(idx) => trans.DerefArrayStatic(trans.Leaf(Source), CPathIndex(idx)).asInstanceOf[TransSpec[A]]
+            case node @ RootNode(_) => concatChildren(node, leaf)
+            case node @ FieldNode(CPathField(name), _) => trans.WrapObject(concatChildren(node, leaf), name)
+            case node @ IndexNode(CPathIndex(_), _) => trans.WrapArray(concatChildren(node, leaf))
+            case LeafNode(idx) => trans.DerefArrayStatic(leaf, CPathIndex(idx))
           }
         }
 
@@ -156,7 +156,7 @@ trait TransSpecModule extends FNModule {
           }
         }
 
-        result getOrElse trans.Leaf(Source).asInstanceOf[TransSpec[A]]
+        result getOrElse leaf
       }
       
       def mapSources[A <: SourceType, B <: SourceType](spec: TransSpec[A])(f: A => B): TransSpec[B] = {

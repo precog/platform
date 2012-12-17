@@ -59,7 +59,6 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
   override def _libMorphism2 = super._libMorphism2 ++ Set(LogisticRegression)
 
   object LogisticRegression extends Morphism2(Stats2Namespace, "logisticRegression") with ReductionHelper {
-    //todo this `tpe` is wrong
     val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
 
     override val multivariate = true
@@ -107,45 +106,51 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
     }    
 
     def cost(seq: Seq[ColumnValues], theta: Theta): Double = {
-      val result = seq.foldLeft(0D) {
-        case (sum, colVal) => {
-          //TODO deal with taking last from empty seq
-          val xs = colVal.take(colVal.length - 1)
-          val y = colVal.last
+      if (seq.isEmpty) {
+        sys.error("empty sequence should never occur")
+      } else {
+        val result = seq.foldLeft(0D) {
+          case (sum, colVal) => {
+            val xs = colVal.take(colVal.length - 1)
+            val y = colVal.last
 
-          assert(xs.length == theta.length)
+            assert(xs.length == theta.length)
 
-          if (y == 1) {
-            val result = log(sigmoid(dotProduct(theta, xs)))
+            if (y == 1) {
+              val result = log(sigmoid(dotProduct(theta, xs)))
 
-            sum + checkValue(result)
-          } else if (y == 0) {
-            val result = log(1 - sigmoid(dotProduct(theta, xs)))
+              sum + checkValue(result)
+            } else if (y == 0) {
+              val result = log(1 - sigmoid(dotProduct(theta, xs)))
 
-            sum + checkValue(result)
-          } else {
-            sys.error("unreachable case")
+              sum + checkValue(result)
+            } else {
+              sys.error("unreachable case")
+            }
           }
         }
-      }
     
-      -result
+        -result
+      }
     }
     
     def gradient(seq: Seq[ColumnValues], theta: Theta, alpha: Double): Theta = { 
-      seq.foldLeft(theta) { 
-        case (theta, colVal) => {
-          //TODO deal with taking last from empty seq
-          val xs = colVal.take(colVal.length - 1)
-          val y = colVal.last
+      if (seq.isEmpty) {
+        sys.error("empty sequence should never occur")
+      } else {
+        seq.foldLeft(theta) { 
+          case (theta, colVal) => {
+            val xs = colVal.take(colVal.length - 1)
+            val y = colVal.last
 
-          assert(xs.length == theta.length)
+            assert(xs.length == theta.length)
 
-          val result = (0 until xs.length).map { i =>
-            theta(i) - alpha * (y - sigmoid(dotProduct(theta, xs))) * xs(i)
-          }.map(checkValue)
+            val result = (0 until xs.length).map { i =>
+              theta(i) - alpha * (y - sigmoid(dotProduct(theta, xs))) * xs(i)
+            }.map(checkValue)
 
-          result.toArray
+            result.toArray
+          }
         }
       }
     }

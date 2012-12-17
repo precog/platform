@@ -157,7 +157,6 @@ trait ColumnarTableModule[M[+_]]
       Table(Slice(Map(ColumnRef(CPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    //todo should be CPathArray?
     def constArray[A: CValueType](v: collection.Set[CArray[A]]): Table = {
       val column = ArrayHomogeneousArrayColumn(v.map(_.value).toArray(CValueType[A].manifest.arrayManifest))
       Table(Slice(Map(ColumnRef(CPathArray, CArrayType(CValueType[A])) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
