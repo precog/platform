@@ -1,5 +1,4 @@
 target/
-test/
 .*.marks
 .classpath
 .project
