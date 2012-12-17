@@ -49,8 +49,7 @@ trait BaseJDBMQueryExecutorConfig
     with ColumnarTableModuleConfig
     with BlockStoreColumnarTableModuleConfig 
     with JDBMProjectionModuleConfig
-    with IdSourceConfig
-    with EvaluatorConfig {
+    with IdSourceConfig {
       
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
@@ -73,10 +72,7 @@ trait JDBMQueryExecutorComponent {
       val maxSliceSize = config[Int]("jdbm.max_slice_size", 10000)
 
       //TODO: Get a producer ID
-      val idSource = new IdSource {
-        private val source = new java.util.concurrent.atomic.AtomicLong
-        def nextId() = source.getAndIncrement
-      }
+      val idSource = new FreshAtomicIdSource
     }
   }
     
@@ -89,6 +85,7 @@ trait JDBMQueryExecutorComponent {
 
       type YggConfig = JDBMQueryExecutorConfig
       val yggConfig = wrapConfig(config)
+      val clock = blueeyes.util.Clock.System
       
       val actorSystem = ActorSystem("jdbmExecutorActorSystem")
       implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -101,6 +98,7 @@ trait JDBMQueryExecutorComponent {
       }
 
       val storage = new Storage
+      def storageMetadataSource = storage
 
       object Projection extends JDBMProjectionCompanion {
         private lazy val logger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.JDBMQueryExecutor.Projection")

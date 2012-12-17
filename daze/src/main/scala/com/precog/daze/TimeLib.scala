@@ -9,28 +9,13 @@ import yggdrasil.table._
 import org.joda.time._
 import org.joda.time.format._
 
+import com.precog.util.DateTimeUtil.parseDateTime
+
 //todo instead of using StrColumn, use TimeColumn!
 //todo test is not defined cases when fails at isValidISO(_), etc
 
 trait TimeLib[M[+_]] extends GenOpcode[M] {
   val TimeNamespace = Vector("std", "time")
-  
-  private val fullParser = ISODateTimeFormat.dateTimeParser
-  private val basicParser = ISODateTimeFormat.basicDateTime
-
-  def parseDateTime(value: String, withOffset: Boolean): DateTime = {
-    val parser = if (value.contains("-") || value.contains(":")) {
-      fullParser
-    } else {
-      basicParser
-    }
-
-    (if (withOffset) {
-      parser.withOffsetParsed
-     } else {
-       parser
-     }).parseDateTime(value)
-  }
 
   override def _lib1 = super._lib1 ++ Set(
     GetMillis,
@@ -112,7 +97,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
   object ParseDateTime extends Op2(TimeNamespace, "parse") {
     val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
-    def f2: F2 = new CF2P({
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::parseDateTime") {
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
         override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidFormat(c1(row), c2(row))
 
@@ -133,12 +118,12 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
     //    val format = DateTimeFormat.forPattern(fmt).withOffsetParsed()
     //    val ISO = format.parseDateTime(time)
     //    SString(ISO.toString())
-    })
+    }
   }
 
   object ChangeTimeZone extends Op2(TimeNamespace, "changeTimeZone") {
     val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
-    def f2: F2 = new CF2P({
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::changeTimeZone") {
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
         override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row)) && isValidTimeZone(c2(row))
 
@@ -153,7 +138,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           dateTime.toString()
         }
       }
-    })
+    }
     
     /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
@@ -167,7 +152,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
   trait TimePlus extends Op2 {
     val tpe = BinaryOperationType(JTextT, JNumberT, JTextT)
-    def f2: F2 = new CF2P({
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timePlus") {
       case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with StrColumn {
         override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))   //todo test isValidInt(c2(row))
 
@@ -204,7 +189,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           plus(newTime, incr.toInt)
         }
       }
-    })
+    }
 
     //val operandType = (Some(SString), Some(SDecimal)) 
 
@@ -252,7 +237,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
   trait TimeBetween extends Op2 {
     val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
-    def f2: F2 = new CF2P({
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timeBetween") {
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
         override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row)) && isValidISO(c2(row))
 
@@ -266,7 +251,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           between(newTime1, newTime2)
         }
       }
-    })
+    }
 
     def between(d1: DateTime, d2: DateTime): Long
     /* val operandType = (Some(SString), Some(SString)) 
@@ -315,7 +300,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
   object MillisToISO extends Op2(TimeNamespace, "millisToISO") {
     val tpe = BinaryOperationType(JNumberT, JTextT, JTextT)
-    def f2: F2 = new CF2P({
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::millisToIso") {
       case (c1: LongColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
         override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c1(row) >= Long.MinValue && c1(row) <= Long.MaxValue && isValidTimeZone(c2(row))
 
@@ -355,7 +340,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           dateTime.toString()
         }
       }
-    })
+    }
     
     /* val operandType = (Some(SDecimal), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
@@ -369,7 +354,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
   object GetMillis extends Op1(TimeNamespace, "getMillis") {
     val tpe = UnaryOperationType(JTextT, JNumberT)
-    def f1: F1 = new CF1P({
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::getMillis") {
       case c: StrColumn => new Map1Column(c) with LongColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
@@ -380,7 +365,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           newTime.getMillis()
         }
       }
-    })
+    }
     
     /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
@@ -392,7 +377,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
   object TimeZone extends Op1(TimeNamespace, "timeZone") {
     val tpe = UnaryOperationType(JTextT, JTextT)
-    def f1: F1 = new CF1P({
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::timeZone") {
       case c: StrColumn => new Map1Column(c) with StrColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
@@ -404,7 +389,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           format.print(newTime)
         }
       }
-    })
+    }
     
     /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
@@ -417,7 +402,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
   object Season extends Op1(TimeNamespace, "season") {
     val tpe = UnaryOperationType(JTextT, JTextT)
-    def f1: F1 = new CF1P({
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::season") {
       case c: StrColumn => new Map1Column(c) with StrColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
@@ -433,7 +418,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           else "winter"
         }
       }
-    })
+    }
     
     /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
@@ -451,7 +436,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
   trait TimeFraction extends Op1 {
     val tpe = UnaryOperationType(JTextT, JNumberT)
-    def f1: F1 = new CF1P({
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::timeFraction") {
       case c: StrColumn => new Map1Column(c) with LongColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
@@ -462,7 +447,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           fraction(newTime)
         }
       }
-    })
+    }
 
     def fraction(d: DateTime): Int
     /* val operandType = Some(SString)
@@ -531,7 +516,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
   trait TimeTruncation extends Op1 {
     val tpe = UnaryOperationType(JTextT, JTextT)
-    def f1: F1 = new CF1P({
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::truncation") {
       case c: StrColumn => new Map1Column(c) with StrColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
@@ -542,7 +527,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           fmt.print(newTime)
         }
       }
-    })
+    }
 
     def fmt: DateTimeFormatter
 
