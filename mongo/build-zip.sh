@@ -37,7 +37,7 @@ cp -R quirrelide/build/* web/
 rm -rf web/index.html web/php web/*.php
 zip -ru $TMPDIR/precog.jar web
 rm -rf web
-cp precog.sh precog.bat config.cfg README.md $TMPDIR/
+cp precog.sh precog.bat config.cfg README.md CHANGELOG.md $TMPDIR/
 zip -r precog.zip $TMPDIR
 
 
