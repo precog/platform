@@ -27,7 +27,7 @@ function usage() {
     echo "Usage: `basename $0` [-n] [-t <owner token>] [-s <source directory>] <target data directory>" >&2
     echo "  -n : don't wipe existing data" >&2
     echo "  -t : Specify the owner token (defaults to $OWNERTOKEN)" >&2
-    cho  "  -o : Specify the owner account (defaults to $OWNERACCOUNT)" >&2
+    echo "  -o : Specify the owner account (defaults to $OWNERACCOUNT)" >&2
     echo "  -s : Specify the source directory (defaults to `dirname $0`/$SRCDIR)" >&2
     exit 1
 }

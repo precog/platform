@@ -20,24 +20,28 @@
 package com.precog.common
 package security
 
+import com.precog.common.cache.Cache
+
 import java.util.concurrent.TimeUnit._
 import org.joda.time.DateTime
 
+import akka.util.Duration
+
 import blueeyes._
-import blueeyes.persistence.cache._
 
 import scalaz._
 import scalaz.syntax.monad._
 
 case class CachingAPIKeyManagerSettings(
-  apiKeyCacheSettings: CacheSettings[APIKey, APIKeyRecord],
-  grantCacheSettings: CacheSettings[GrantId, Grant])
+  apiKeyCacheSettings: Seq[Cache.CacheOption],
+  grantCacheSettings: Seq[Cache.CacheOption]
+)
 
 class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAPIKeyManagerSettings = CachingAPIKeyManager.defaultSettings)
   (implicit val M: Monad[M]) extends APIKeyManager[M] {
 
-  private val apiKeyCache = Cache.concurrent[APIKey, APIKeyRecord](settings.apiKeyCacheSettings)
-  private val grantCache = Cache.concurrent[GrantId, Grant](settings.grantCacheSettings)
+  private val apiKeyCache = Cache.simple[APIKey, APIKeyRecord](settings.apiKeyCacheSettings: _*)
+  private val grantCache = Cache.simple[GrantId, Grant](settings.grantCacheSettings: _*)
 
   def rootGrantId: M[GrantId] = manager.rootGrantId
   def rootAPIKey: M[APIKey] = manager.rootAPIKey
@@ -56,11 +60,11 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
 
   def findAPIKey(tid: APIKey) = apiKeyCache.get(tid) match {
     case None => manager.findAPIKey(tid).map { _.map { _ ->- add } }
-    case t    => Monad[M].point(t)
+    case t    => M.point(t)
   }
   def findGrant(gid: GrantId) = grantCache.get(gid) match {
     case None        => manager.findGrant(gid).map { _.map { _ ->- add } }
-    case s @ Some(_) => Monad[M].point(s)
+    case s @ Some(_) => M.point(s)
   }
   def findGrantChildren(gid: GrantId) = manager.findGrantChildren(gid)
 
@@ -89,7 +93,7 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
 
 object CachingAPIKeyManager {
   val defaultSettings = CachingAPIKeyManagerSettings(
-    CacheSettings[APIKey, APIKeyRecord](ExpirationPolicy(Some(5), Some(5), MINUTES)),
-    CacheSettings[GrantId, Grant](ExpirationPolicy(Some(5), Some(5), MINUTES))
+    Seq(Cache.ExpireAfterWrite(Duration(5, MINUTES)), Cache.MaxSize(1000)),
+    Seq(Cache.ExpireAfterWrite(Duration(5, MINUTES)), Cache.MaxSize(1000))
   )
 }
