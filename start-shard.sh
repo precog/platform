@@ -342,7 +342,7 @@ wait_until_port_open $MONGOPORT
 
 if [ ! -e "$WORKDIR"/root_token.txt ]; then
     echo "Retrieving new root token"
-    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -c | tail -n 1 > "$WORKDIR"/root_token.txt || {
+    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -r | tail -n 1 > "$WORKDIR"/root_token.txt || {
         echo "Error retrieving new root token" >&2
         exit 3
     }
