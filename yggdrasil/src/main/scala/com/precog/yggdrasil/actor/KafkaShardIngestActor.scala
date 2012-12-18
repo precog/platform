@@ -89,7 +89,7 @@ abstract class KafkaShardIngestActor(shardId: String,
   private var lastCheckpoint: YggCheckpoint = initialCheckpoint
 
   private var totalConsecutiveFailures = 0
-  private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[IngestMessage]] 
+  private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[EventMessage]] 
   private var pendingCompletes = Vector.empty[BatchComplete]
 
   def receive = {
@@ -177,8 +177,7 @@ abstract class KafkaShardIngestActor(shardId: String,
    */
   protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]): Unit
 
-  private def readRemote(fromCheckpoint: YggCheckpoint):
-    Future[Validation[Throwable, (Vector[IngestMessage], YggCheckpoint)]] = {
+  private def readRemote(fromCheckpoint: YggCheckpoint): Future[Validation[Throwable, (Vector[EventMessage], YggCheckpoint)]] = {
 
     // The shard ingest actor needs to compute the maximum offset, so it has
     // to traverse the full message set in process; to avoid traversing it
@@ -187,40 +186,42 @@ abstract class KafkaShardIngestActor(shardId: String,
     // initial message, or using all inserts up to that point
     @tailrec
     def buildBatch(
-      input: List[(EventMessage, Long)],
-      apiKeyMap: Map[APIKey, AccountId],
-      batch: Vector[EventMessage],
-      checkpoint: YggCheckpoint
-    ): (Vector[EventMessage], YggCheckpoint) = input match {
-      case Nil =>
-        (batch, checkpoint)
+        input: List[(EventMessage, Long)],
+        apiKeyMap: Map[APIKey, AccountId],
+        batch: Vector[EventMessage],
+        checkpoint: YggCheckpoint): (Vector[EventMessage], YggCheckpoint) = {
 
-      case (event @ IngestMessage(apiKey, _, ownerAccountId0, records, _), offset) :: tail => 
-        val newCheckpoint = records.foldLeft(checkpoint) {
-          // TODO: This nested pattern match indicates that checkpoints are too closely 
-          // coupled to the representation of event IDs.
-          case (acc, IngestRecord(EventId(pid, sid), _)) => acc.update(offset, pid, sid)
-        }
+      input match {
+        case Nil =>
+          (batch, checkpoint)
 
-        apiKeyMap.get(apiKey) match {
-          case Some(accountId) =>
-            //FIXME: Deserialization need to do this.
-            //val em = event.copy(ownerAccountId = ownerAccountId0.getOrElse(accountId))
-            buildBatch(tail, apiKeyMap, batch :+ em, newCheckpoint)
+        case (event @ IngestMessage(apiKey, _, ownerAccountId0, records, _), offset) :: tail => 
+          val newCheckpoint = records.foldLeft(checkpoint) {
+            // TODO: This nested pattern match indicates that checkpoints are too closely 
+            // coupled to the representation of event IDs.
+            case (acc, IngestRecord(EventId(pid, sid), _)) => acc.update(offset, pid, sid)
+          }
 
-          case None =>
-            // Non-existent account means the account must have been deleted, so we discard the 
-            // event here. TODO: This authorization should probably be done downstream instead,
-            // since the archive authorization is not being done here.
-            buildBatch(tail, apiKeyMap, batch, newCheckpoint)
-        }
-      
-      case (ar: ArchiveMessage, _) :: tail if batch.nonEmpty =>
-        (batch, checkpoint)
+          apiKeyMap.get(apiKey) match {
+            case Some(accountId) =>
+              //FIXME: Deserialization need to do this.
+              //val em = event.copy(ownerAccountId = ownerAccountId0.getOrElse(accountId))
+              buildBatch(tail, apiKeyMap, batch :+ event, newCheckpoint)
 
-      case (ar @ ArchiveMessage(EventId(pid, sid), _), offset) :: tail =>
-        // TODO: Where is the authorization checking credentials for the archive done?
-        (Vector(ar), checkpoint.update(offset, pid, sid))
+            case None =>
+              // Non-existent account means the account must have been deleted, so we discard the 
+              // event here. TODO: This authorization should probably be done downstream instead,
+              // since the archive authorization is not being done here.
+              buildBatch(tail, apiKeyMap, batch, newCheckpoint)
+          }
+        
+        case (ar: ArchiveMessage, _) :: tail if batch.nonEmpty =>
+          (batch, checkpoint)
+
+        case (ar @ ArchiveMessage(EventId(pid, sid), _), offset) :: tail =>
+          // TODO: Where is the authorization checking credentials for the archive done?
+          (Vector(ar), checkpoint.update(offset, pid, sid))
+      }
     }
 
     Validation.fromTryCatch {
@@ -249,7 +250,7 @@ abstract class KafkaShardIngestActor(shardId: String,
       case Failure(t) => 
         import context.system
         implicit val executor = ExecutionContext.defaultExecutionContext
-        Future(Failure[Throwable, (Vector[IngestMessage], YggCheckpoint)](t))
+        Future(Failure[Throwable, (Vector[EventMessage], YggCheckpoint)](t))
     }
   }
 

@@ -20,11 +20,11 @@
 package com.precog.accounts
 
 import com.precog.util._
-import blueeyes.BlueEyesServer
+import com.precog.common.accounts._
 
 import blueeyes._
+import blueeyes.bkka._
 import blueeyes.core.data._
-import DefaultBijections._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
@@ -35,8 +35,8 @@ import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.health.metrics.{eternity}
 import blueeyes.util.Clock
+import DefaultBijections._
 import ByteChunk._
-
 import HttpHeaders.Authorization
 
 import akka.dispatch.Future
@@ -64,8 +64,6 @@ case class SecurityService(protocol: String, host: String, port: Int, path: Stri
   }
 }
 
-case class AccountServiceState(accountManagement: AccountManager[Future], clock: Clock, securityService: SecurityService, rootAccountId: String)
-
 trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
   def auth[A](accountManager: AccountManager[Future])(service: HttpService[A, Account => Future[HttpResponse[JValue]]])(implicit ctx: ExecutionContext) = {
     new AuthenticationService[A, HttpResponse[JValue]](accountManager, service)({
@@ -77,10 +75,13 @@ trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
 
 
 trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with AuthenticationCombinators {
+  type AM <: AccountManager[Future]
+  case class State(accountManagement: AM, stop: Stop[AM], clock: Clock, securityService: SecurityService, rootAccountId: String)
+
   implicit val timeout = akka.util.Timeout(120000) //for now
   implicit def M: Monad[Future]
 
-  def accountManager(config: Configuration): AccountManager[Future]
+  def accountManager(config: Configuration): (AM, Stop[AM])
 
   def clock: Clock
 
@@ -92,7 +93,7 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Authe
 
           Future {
             logger.debug("Building account service state...")
-            val accountManagement = accountManager(config)
+            val (accountManagement, stop) = accountManager(config)
             val securityService = SecurityService(
                config[String]("security.service.protocol", "http"),
                config[String]("security.service.host", "localhost"),
@@ -103,10 +104,10 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Authe
 
             val rootAccountId = config[String]("accounts.rootAccountId", "INVALID")
 
-            AccountServiceState(accountManagement, clock, securityService, rootAccountId)
+            State(accountManagement, stop, clock, securityService, rootAccountId)
           }
         } ->
-        request { (state: AccountServiceState) =>
+        request { state =>
           jsonp[ByteChunk] {
             transcode {
               path("/accounts/") {
@@ -133,10 +134,9 @@ trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with Authe
             }
           }
         } ->
-        shutdown { state => 
-          for {
-            _ <- state.accountManagement.close()
-          } yield Option.empty[Stoppable]
+        stop { state => 
+          implicit val stop = state.stop
+          Stoppable(state.accountManagement)
         }
       }
     }

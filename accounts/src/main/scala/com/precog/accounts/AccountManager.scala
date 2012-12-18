@@ -35,8 +35,6 @@ import scalaz.syntax.monad._
 trait AccountManager[M[+_]] extends AccountFinder[M] {
   private val randomSource = new java.security.SecureRandom
 
-  //def close(): M[Unit]
-
   def randomSalt() = {
     val saltBytes = new Array[Byte](256)
     randomSource.nextBytes(saltBytes)

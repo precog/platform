@@ -17,33 +17,28 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.common
-package accounts
+import AssemblyKeys._
 
-import com.precog.common.security._
+name := "ratatoskr"
 
-import scalaz._
-import scalaz.syntax.monad._
+libraryDependencies ++= Seq(
+  "com.github.scopt"            %  "scopt_2.9.1"        % "2.0.1"
+)
 
-trait AccountFinder[M[+_]] {
-  implicit val M: Monad[M]
+fork := true
 
-  def findAccountByAPIKey(apiKey: APIKey) : M[Option[AccountId]]
-
-  def findAccountById(accountId: AccountId): M[Option[Account]]
-
-  def mapAccountIds(apiKeys: Set[APIKey]) : M[Map[APIKey, AccountId]] = {
-    apiKeys.foldLeft(Map.empty[APIKey, AccountId].point[M]) {
-      case (macc, key) => 
-        for {
-          m <- macc
-          ids <- findAccountByAPIKey(key)
-        } yield {
-          m ++ ids.map(key -> _)
-        }
-    }
+run <<= inputTask { argTask =>
+  (javaOptions in run, fullClasspath in Compile, connectInput in run, outputStrategy, mainClass in run, argTask) map { (opts, cp, ci, os, mc, args) =>
+    val delim = java.io.File.pathSeparator
+    val opts2 = opts ++
+      Seq("-classpath", cp map { _.data } mkString delim) ++
+      Seq(mc.get) ++
+      args
+    Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
+    jline.Terminal.getTerminal.initializeTerminal()
   }
 }
 
+mainClass := Some("com.precog.ratatoskr.Ratatoskr")
 
-// vim: set ts=4 sw=4 et:
+test in assembly := {}

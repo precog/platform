@@ -53,9 +53,9 @@ case class GetMessages(sendTo: ActorRef)
 sealed trait ShardIngestAction
 sealed trait IngestResult extends ShardIngestAction
 case class IngestErrors(errors: Seq[String]) extends IngestResult
-case class IngestData(messages: Seq[IngestMessage]) extends IngestResult
+case class IngestData(messages: Seq[EventMessage]) extends IngestResult
 
-case class DirectIngestData(messages: Seq[IngestMessage]) extends ShardIngestAction
+case class DirectIngestData(messages: Seq[EventMessage]) extends ShardIngestAction
 
 ////////////
 // ACTORS //
@@ -125,7 +125,7 @@ abstract class IngestSupervisor(ingestActorInit: Option[() => Actor], //projecti
    * with ProjectionInsertsExpected to set the count, then sending either InsertMetadata or
    * InsertNoMetadata messages after processing each message.
    */
-  protected def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit 
+  protected def processMessages(messages: Seq[EventMessage], batchCoordinator: ActorRef): Unit 
 
   private def scheduleIngestRequest(delay: Duration): Unit = ingestActor.foreach { actor =>
     initiated += 1

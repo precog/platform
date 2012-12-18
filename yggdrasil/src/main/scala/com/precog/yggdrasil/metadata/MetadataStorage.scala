@@ -227,7 +227,9 @@ object FileMetadataStorage extends Logging {
       if (!df.exists) {
         Failure("Unable to find serialized projection descriptor in " + baseDir)
       } else {
-        ((_: Throwable).getMessage) <-: JParser.parseFromFile(df)
+        (((_: Throwable).getMessage) <-: JParser.parseFromFile(df)) flatMap { jv =>
+          ((_: Extractor.Error).message) <-: jv.validated[ProjectionDescriptor]
+        }
       }
     }
 

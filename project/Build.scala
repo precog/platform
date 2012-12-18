@@ -81,12 +81,12 @@ object PlatformBuild extends Build {
       "org.scalaz"                  %% "scalaz-core"        % scalazVersion,
       "org.scalaz"                  %% "scalaz-effect"      % scalazVersion,
       "joda-time"                   %  "joda-time"          % "1.6.2",
-      "com.reportgrid"              %% "blueeyes-json"      % blueeyesVersion,
-      "com.reportgrid"              %% "blueeyes-util"      % blueeyesVersion,
-      "com.reportgrid"              %% "blueeyes-core"      % blueeyesVersion,
-      "com.reportgrid"              %% "blueeyes-mongo"     % blueeyesVersion,
-      "com.reportgrid"              %% "bkka"               % blueeyesVersion,
-      "com.reportgrid"              %% "akka_testing"       % blueeyesVersion,
+      "com.reportgrid"              %% "blueeyes-json"      % blueeyesVersion changing(),
+      "com.reportgrid"              %% "blueeyes-util"      % blueeyesVersion changing(),
+      "com.reportgrid"              %% "blueeyes-core"      % blueeyesVersion changing(),
+      "com.reportgrid"              %% "blueeyes-mongo"     % blueeyesVersion changing(),
+      "com.reportgrid"              %% "bkka"               % blueeyesVersion changing(),
+      "com.reportgrid"              %% "akka_testing"       % blueeyesVersion changing(),
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
       "org.specs2"                  %% "specs2"             % "1.12.3-SNAPSHOT" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
@@ -117,7 +117,7 @@ object PlatformBuild extends Build {
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
 
   lazy val platform = Project(id = "platform", base = file(".")).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, ratatoskr)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*)
@@ -169,6 +169,9 @@ object PlatformBuild extends Build {
 
   lazy val ragnarok = Project(id = "ragnarok", base = file("ragnarok")).
     settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test")
+
+  lazy val ratatoskr = Project(id = "ratatoskr", base = file("ratatoskr")).
+    settings(commonAssemblySettings: _*).dependsOn(daze, ingest, auth, accounts)
 
   lazy val jprofiler = Project(id = "jprofiler", base = file("jprofiler")).
     settings(jprofilerSettings ++ commonNexusSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.jprofiler.Run")): _*).dependsOn(ragnarok)

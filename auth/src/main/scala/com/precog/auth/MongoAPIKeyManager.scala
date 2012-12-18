@@ -21,6 +21,7 @@ package com.precog
 package auth
 
 import com.precog.common._
+import com.precog.common.accounts._
 import com.precog.common.security._
 
 import org.joda.time.DateTime
@@ -127,12 +128,8 @@ object MongoAPIKeyManager extends Logging {
   }
 }
 
-class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKeyManagerSettings = MongoAPIKeyManagerSettings.defaults)
-  (implicit val executor: ExecutionContext) extends APIKeyManager[Future] with Logging {
-  
-  import TempPlusEmpty._
-
-  implicit val M = AkkaTypeClasses.futureApplicative(execContext)
+class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKeyManagerSettings = MongoAPIKeyManagerSettings.defaults)(implicit val executor: ExecutionContext) extends APIKeyManager[Future] with Logging {
+  implicit val M = new FutureMonad(executor)
 
   private implicit val impTimeout = settings.timeout
 
@@ -163,30 +160,30 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
 
   private def findOneMatching[A](keyName: String, keyValue: MongoPrimitive, collection: String)(implicit extractor: Extractor[A]): Future[Option[A]] = {
     database {
-      selectOne().from(collection).where(MongoOrFilter(keyNames.map { _ === keyValue }))
-    }.map {
-      _.map(_.deserialize(extractor))
+      selectOne().from(collection).where(keyName === keyValue)
+    } map {
+      _.map(_.deserialize[A])
     }
   }
 
   private def findAllMatching[A](keyName: String, keyValue: MongoPrimitive, collection: String)(implicit extractor: Extractor[A]): Future[Set[A]] = {
     database {
-      selectAll.from(collection).where(MongoOrFilter(keyNames.map { _ === keyValue }))
-    }.map {
-      _.map(_.deserialize(extractor)).toSet
+      selectAll.from(collection).where(keyName === keyValue )
+    } map {
+      _.map(_.deserialize[A]).toSet
     }
   }
 
   private def findAllIncluding[A](keyName: String, keyValue: MongoPrimitive, collection: String)(implicit extractor: Extractor[A]): Future[Set[A]] = {
     database {
       selectAll.from(collection).where(stringToMongoFilterBuilder(keyName) contains keyValue)
-    }.map {
-      _.map(_.deserialize(extractor)).toSet
+    } map {
+      _.map(_.deserialize[A]).toSet
     }
   }
 
   private def findAll[A](collection: String)(implicit extract: Extractor[A]): Future[Seq[A]] =
-    database { selectAll.from(collection) }.map { _.map(_.deserialize(extract)).toSeq }
+    database { selectAll.from(collection) } map { _.map(_.deserialize[A]).toSeq }
 
   def listAPIKeys() = findAll[APIKeyRecord](settings.apiKeys)
   def listGrants() = findAll[Grant](settings.grants)

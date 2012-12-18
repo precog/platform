@@ -20,8 +20,9 @@
 package com.precog.yggdrasil
 package actor
 
+import com.precog.common.{ CheckpointCoordination, YggCheckpoint, Path }
 import com.precog.common.accounts.AccountFinder
-import com.precog.common.{ Archive, ArchiveMessage, CheckpointCoordination, EventMessage, YggCheckpoint }
+import com.precog.common.ingest._
 import com.precog.common.json._
 import com.precog.util.FilesystemFileOps
 import com.precog.yggdrasil.metadata.{ ColumnMetadata, FileMetadataStorage, MetadataStorage }
@@ -111,24 +112,31 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
 
         context.actorOf(Props(new IngestSupervisor(ingestActorInit,
                                                    yggConfig.batchStoreDelay, context.system.scheduler, yggConfig.batchShutdownCheckInterval) {
+
+          //TODO: This needs review; not sure why only archive paths are being considered.
           def processMessages(messages: Seq[EventMessage], batchCoordinator: ActorRef): Unit = {
             implicit val to = yggConfig.metadataTimeout
             implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
             
-            val archivePaths = messages.collect { case ArchiveMessage(Archive(path, _, jobId)) => path } 
+            //TODO: Make sure that authorization has been checked here.
+            val archivePaths = messages.collect { case ArchiveMessage(_, Archive(_, path, jobId)) => path } 
+
             Future.sequence {
               archivePaths map { path =>
                 (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]]
               }
-            }.onSuccess {
-              case descMaps : Seq[Map[ProjectionDescriptor, ColumnMetadata]] => ()
-                val projectionMap = (for {
+            } onSuccess {
+              case descMaps : Seq[Map[ProjectionDescriptor, ColumnMetadata]] => 
+                val projectionMap = for {
                   descMap <- descMaps
                   desc    <- descMap.keys
                   column  <- desc.columns
-                } yield (column.path, desc)).groupBy(_._1).mapValues(_.map(_._2))
-              
-                val updates = routingTable.batchMessages(messages, projectionMap)
+                } yield (column.path, desc)
+                
+                // explicit type ascription to force mapValues; otherwise the resulting map is just a view that 
+                // recomputes values on accesses
+                val grouped: collection.immutable.Map[Path, Seq[ProjectionDescriptor]] = projectionMap.groupBy(_._1).mapValues(_.map(_._2))
+                val updates = routingTable.batchMessages(messages, grouped)
 
                 logger.debug("Sending " + updates.size + " update messages")
                 batchCoordinator ! ProjectionUpdatesExpected(updates.size)

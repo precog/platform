@@ -23,6 +23,7 @@ package accounts
 import com.precog.auth.WrappedAPIKey
 import com.precog.common.NetUtils.remoteIpFrom
 import com.precog.common.Path
+import com.precog.common.accounts._
 import com.precog.common.security._
 
 import akka.dispatch.{ ExecutionContext, Future, Await }
@@ -149,7 +150,7 @@ extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]
 
       logger.debug("Looking up account ids with account: "+auth.accountId+" for API key: "+keyToFind)
       
-      accountManagement.listAccountIds(keyToFind).map { 
+      accountManagement.findAccountByAPIKey(keyToFind).map { 
         case accountIds =>
           logger.debug("Found accounts for API key: "+keyToFind+" = "+accountIds)
           HttpResponse[JValue](OK, content = Some(accountIds.map(WrappedAccountId(_)).serialize))

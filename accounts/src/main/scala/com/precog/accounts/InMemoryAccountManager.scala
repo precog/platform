@@ -23,6 +23,7 @@ package accounts
 import scala.collection.mutable
 
 import com.precog.common.Path
+import com.precog.common.accounts._
 import com.precog.common.security._
 
 import org.joda.time.DateTime
@@ -60,7 +61,7 @@ class InMemoryAccountManager[M[+_]](implicit val M: Monad[M]) extends AccountMan
     }
   }
 
-  def listAccountIds(apiKey: APIKey) : M[Option[AccountId]] = {
+  def findAccountByAPIKey(apiKey: APIKey) : M[Option[AccountId]] = {
     accounts.values.find(_.apiKey == apiKey).map(_.accountId).point[M]
   }
 
@@ -69,6 +70,4 @@ class InMemoryAccountManager[M[+_]](implicit val M: Monad[M]) extends AccountMan
   def findAccountByEmail(email: String) : M[Option[Account]] = accounts.values.find(_.email == email).point[M]
   
   def deleteAccount(accountId: AccountId): M[Option[Account]] = accounts.remove(accountId).point[M]
-
-  def close(): M[Unit] = ().point[M]
 }

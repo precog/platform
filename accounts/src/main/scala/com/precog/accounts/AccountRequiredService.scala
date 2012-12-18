@@ -19,6 +19,10 @@
  */
 package com.precog.accounts
 
+import com.precog.common.Path
+import com.precog.common.security._
+import com.precog.common.accounts._
+
 import akka.dispatch.{ Future, MessageDispatcher }
 
 import blueeyes.core.service._
@@ -30,9 +34,6 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.std.option._
-
-import com.precog.common.Path
-import com.precog.common.security._
 
 class AccountRequiredService[A, B](accountFinder: AccountFinder[Future], val delegate: HttpService[A, (APIKeyRecord, Path, AccountId) => Future[B]])
   (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
@@ -49,7 +50,7 @@ class AccountRequiredService[A, B](accountFinder: AccountFinder[Future], val del
       } getOrElse {
         logger.debug("Looking up accounts based on apiKey")
         try {
-          accountFinder.listAccountIds(apiKey.apiKey).flatMap { accts =>
+          accountFinder.findAccountByAPIKey(apiKey.apiKey).flatMap { accts =>
             logger.debug("Found accounts: " + accts)
             if(accts.size == 1) {
               f(apiKey, path, accts.head)

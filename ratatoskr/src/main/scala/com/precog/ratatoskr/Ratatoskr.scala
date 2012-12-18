@@ -17,8 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
-package util
+package com.precog.ratatoskr
 
 import com.precog.common.json._
 import actor._
@@ -26,7 +25,6 @@ import jdbm3._
 import metadata.MetadataStorage
 import metadata.FileMetadataStorage
 
-import com.precog.auth._
 import com.precog.accounts.InMemoryAccountManager
 import com.precog.common._
 import com.precog.util._
@@ -80,7 +78,7 @@ import java.io._
 
 import com.weiglewilczek.slf4s.Logging
 
-trait YggUtilsCommon {
+trait RatatoskrCommon {
   def load(dataDir: String) = {
     val dir = new File(dataDir)
     for{
@@ -92,7 +90,7 @@ trait YggUtilsCommon {
   }
 }
 
-object YggUtils {
+object Ratatoskr {
   def usage(message: String*): String = {
     val initial = message ++ List("Usage: yggutils {command} {flags/args}",""," For details on a particular command enter yggutils {command} -help", "")
     
@@ -139,7 +137,7 @@ trait Command {
   def run(args: Array[String])
 }
 
-object DatabaseTools extends Command with YggUtilsCommon {
+object DatabaseTools extends Command with RatatoskrCommon {
   val name = "db" 
   val description = "describe db paths and selectors" 
   
@@ -242,7 +240,7 @@ object DatabaseTools extends Command with YggUtilsCommon {
                var verbose: Boolean = false)
 }
 
-object ChownTools extends Command with YggUtilsCommon {
+object ChownTools extends Command with RatatoskrCommon {
   val name = "dbchown" 
   val description = "change ownership" 
  
