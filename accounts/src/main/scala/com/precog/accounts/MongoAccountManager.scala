@@ -2,6 +2,7 @@ package com.precog
 package accounts
 
 import com.precog.common.Path
+import com.precog.common.accounts._
 import com.precog.common.security._
 
 import blueeyes._
@@ -33,7 +34,7 @@ trait ZkAccountManagerSettings {
   def zkAccountIdPath: String
 }
 
-trait MongoAccountManagerSettings {
+trait MongoAccountManagerSettings extends ZkAccountManagerSettings {
   def accounts: String
   def deletedAccounts: String
   def timeout: Timeout
@@ -42,11 +43,14 @@ trait MongoAccountManagerSettings {
 
 trait ZkMongoAccountManagerComponent {
   private lazy val zkmLogger = LoggerFactory.getLogger("com.precog.accounts.ZkMongoAccountManagerComponent")
-
+  
   implicit def asyncContext: ExecutionContext
   implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
-  def accountManager(config: Configuration): AccountManager[Future] = {
+  class AM(val zkc: ZkClient, mongo: Mongo, database: String, val settings: MongoAccountManagerSettings) 
+  extends MongoAccountManager(mongo, mongo.database(database), settings) 
+
+  def accountManager(config: Configuration): (AM, Stop[AM]) = {
     val mongo = RealMongo(config.detach("mongo"))
     
     val zkHosts = config[String]("zookeeper.hosts", "localhost:2181")
@@ -59,10 +63,8 @@ trait ZkMongoAccountManagerComponent {
       val timeout = new Timeout(config[Int]("mongo.timeout", 30000))
     }
 
-    new MongoAccountManager(mongo, mongo.database(database), settings0) {
-      val settings = settings0
-      val zkc = new ZkClient(zkHosts)
-    }
+    val accountManager = new AM(new ZkClient(zkHosts), mongo, database, settings0)
+    (accountManager, new Stop[AM] { def stop(am: AM) = am.close() })
   }
 }
 
@@ -134,7 +136,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
     }
 
   
-  def listAccountIds(apiKey: String) = findOneMatching[Account]("apiKey", apiKey, settings.accounts).map(_.map(_.accountId))
+  def findAccountByAPIKey(apiKey: String) = findOneMatching[Account]("apiKey", apiKey, settings.accounts).map(_.map(_.accountId))
   
   def findAccountById(accountId: String) = findOneMatching[Account]("accountId", accountId, settings.accounts)
 
