@@ -1011,5 +1011,17 @@ object GroupSolverSpecs extends Specification
         
       compileSingle(input).errors must not(beEmpty)
     }
+    
+    "accept a solve on the results of a denseRank" in {
+      val input = """
+        | agents := //snapEngage/customer/widget
+        | data' := agents with { rank: denseRank(agents.millis) }
+        |
+        | solve 'rank
+        |   data' where data'.rank = 'rank
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
   }
 }

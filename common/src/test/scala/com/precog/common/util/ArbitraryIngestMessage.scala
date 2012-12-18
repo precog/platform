@@ -36,6 +36,8 @@ trait ArbitraryIngestMessage extends ArbitraryJValue {
   def genPath: Gen[List[String]] = Gen.resize(10, Gen.containerOf[List, String](alphaStr))
 
   def genRandomEvent: Gen[Event] = for(apiKey <- alphaStr; path <- genPath; ownerAccountId <- alphaStr; content <- genContentJValue) yield Event.fromJValue(apiKey, Path("/" + path.filter(_.length != 0).mkString("/")), Some(ownerAccountId), content)
+
+  def genRandomArchive: Gen[Archive] = for(apiKey <- alphaStr; path <- genPath) yield Archive(Path("/" + path.filter(_.length != 0).mkString("/")), apiKey)
   
   def genRandomEventMessage: Gen[EventMessage] = for(producerId <- choose(0,1000000); eventId <- choose(0, 1000000); event <- genRandomEvent) 
                                            yield EventMessage(producerId, eventId, event)
