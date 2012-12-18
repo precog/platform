@@ -67,16 +67,23 @@ case class Archive(path: Path, apiKey: String) extends Action
 object Archive {
   implicit val archiveIso = Iso.hlist(Archive.apply _, Archive.unapply _)
 
-  val v1Schema = "apiKey"  :: "path" :: HNil
+  val v1Schema = "path" :: "apiKey" :: HNil
   @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")
-  val v0Schema = "tokenId" :: "path" :: HNil
+  val v0Schema = "path" :: "tokenId" :: HNil
   
   implicit val archiveDecomposer = decomposer[Archive](v1Schema)
   val v1ArchiveExtractor = extractor[Archive](v1Schema)
   val v0ArchiveExtractor = extractor[Archive](v0Schema)
 
   implicit val archiveExtractor = new Extractor[Archive] with ValidatedExtraction[Archive] {
-    override def validated(obj: JValue) = v1ArchiveExtractor.validated(obj) orElse v0ArchiveExtractor.validated(obj)
+    override def validated(obj: JValue) = (v1ArchiveExtractor.validated(obj) orElse v0ArchiveExtractor.validated(obj)).map {
+      // FIXME: This is a complete hack to work around an accidental mis-ordering of fields for serialization
+      archive => if (archive.apiKey.startsWith("/")) { 
+        Archive(Path(archive.apiKey), archive.path.components.head.toString)
+      } else { 
+        archive
+      }
+    }
   }
 }
 
