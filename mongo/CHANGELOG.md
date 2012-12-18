@@ -1,7 +1,7 @@
 Precog for MongoDB Changelog
 ==========
 
-Version 1.0.5
+Version 1.1
 ----------
 * Add support for database authentication for MongoDB (see
 README.md for configuration details)
