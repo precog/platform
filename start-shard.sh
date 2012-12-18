@@ -399,7 +399,7 @@ if [ ! -e "$WORKDIR"/account_token.txt ]; then
     ROOTACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password":"1234"}' http://localhost:30064/accounts/ | sed 's/.*\([0-9]\{10\}\).*/\1/')
     echo "Created root account: $ROOTACCOUNTID"
     echo "Updating root account with prior root APIKey"
-    echo -e "db.accounts.update({\"accountId\":\"$ROOTACCOUNTID\"},{\$set:{\"apiKey\":\"$TOKENID\"}})" | mongo --port $MONGOPORT accounts_v1
+    echo -e "db.accounts.update({\"accountId\":\"$ROOTACCOUNTID\"},{\$set:{\"apiKey\":\"$TOKENID\"}})" | "$WORKDIR"/mongo/bin/mongo --port $MONGOPORT accounts_v1
     echo "Update of root account complete"
 
     echo "Creating test account"
