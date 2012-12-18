@@ -1065,51 +1065,50 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def findCommonality(nodes: Set[DepGraph]): Option[DepGraph] = {
+    case class Kernel(nodes: Set[DepGraph], seen: Set[DepGraph])
+    
     @tailrec
-    def bfs(nodes: Seq[DepGraph], seen: Set[DepGraph]): Set[DepGraph] = {
-      val (inter, seen2) = nodes.foldLeft((Set[DepGraph](), seen)) {
-        case ((inter, seen), node) => {
-          if (seen contains node)
-            (inter + node, seen)
-          else
-            (inter, seen + node)
+    def bfs(kernels: Set[Kernel]): Set[DepGraph] = {
+      // check for convergence
+      val results = kernels flatMap { k =>
+        val results = kernels.foldLeft(k.nodes) { _ & _.seen }
+        
+        // TODO if the below isEmpty, then can drop results from all kernels
+        nodes.foldLeft(results) { (results, node) =>
+          results filter { isTranspecable(node, _) }
         }
       }
       
-      if (!nodes.isEmpty && inter.isEmpty) {
-        val nodes2 = nodes flatMap enumerateParents
-        bfs(nodes2, seen2)
-      } else {
-        inter
-      }
-    }
-    
-    @tailrec
-    def loop(nodes: Set[DepGraph]): Option[DepGraph] = {
-      if (nodes.size <= 1) {
-        nodes.headOption
-      } else {
-        val target = nodes take 2
-        val nodes2 = nodes &~ target
+      // iterate
+      if (results.isEmpty) {
+        val kernels2 = kernels map { k =>
+          val nodes2 = k.nodes flatMap enumerateParents
+          val nodes3 = nodes2 &~ k.seen
+          
+          Kernel(nodes3, k.seen ++ nodes3)
+        }
         
-        loop(bfs(target.toSeq, Set()) ++ nodes2)
+        if (kernels2 forall { _.nodes.isEmpty }) {
+          Set()
+        } else {
+          bfs(kernels2)
+        }
+      } else {
+        results
       }
     }
     
-    val commonality = if (nodes.size <= 1)
+    if (nodes.size == 1) {
       nodes.headOption
-    else
-      loop(nodes)
-    
-    val results = for {
-      n <- nodes
-      c <- commonality
-    } yield isTranspecable(n, c)
-    
-    if (results == Set(true))
-      commonality
-    else
-      None
+    } else {
+      val kernels = nodes map { n => Kernel(Set(n), Set(n)) }
+      val results = bfs(kernels)
+      
+      if (results.size == 1)
+        results.headOption
+      else
+        None
+    }
   }
   
   private def enumerateParents(node: DepGraph): Set[DepGraph] = node match {
@@ -1154,39 +1153,41 @@ trait Evaluator[M[+_]] extends DAG
     case dag.Extra(target) => Set(target)
   }
   
-  private def isTranspecable(to: DepGraph, from: DepGraph): Boolean = to match {
-    case `from` => true
-    
-    case Join(_, Eq, _, left, _: Root) => isTranspecable(left, from)
-    case Join(_, Eq, _, _: Root, right) => isTranspecable(right, from)
-    
-    case Join(_, NotEq, _, left, _: Root) => isTranspecable(left, from)
-    case Join(_, NotEq, _, _: Root, right) => isTranspecable(right, from)
-    
-    case Join(_, instructions.WrapObject, _, _: Root, right) => isTranspecable(right, from)
-    case Join(_, instructions.DerefObject, _, left, _: Root) => isTranspecable(left, from)
-    case Join(_, instructions.DerefMetadata, _, left, _: Root) => isTranspecable(left, from)
-    case Join(_, instructions.DerefArray, _, left, _: Root) => isTranspecable(left, from)
-    case Join(_, instructions.ArraySwap, _, left, _: Root) => isTranspecable(left, from)
-    
-    case Join(_, instructions.JoinObject, _, left, _: Root) => isTranspecable(left, from)
-    case Join(_, instructions.JoinObject, _, _: Root, right) => isTranspecable(right, from)
-    case Join(_, instructions.JoinArray, _, left, _: Root) => isTranspecable(left, from)
-    case Join(_, instructions.JoinArray, _, _: Root, right) => isTranspecable(right, from)
-    
-    case Join(_, op, _, left, _: Root) => op2ForBinOp(op).isDefined && isTranspecable(left, from)
-    case Join(_, op, _, _: Root, right) => op2ForBinOp(op).isDefined && isTranspecable(right, from)
-    
-    case Join(_, _, IdentitySort | ValueSort(_), left, right) =>
-      isTranspecable(left, from) && isTranspecable(right, from)
-    
-    case dag.Filter(_, IdentitySort | ValueSort(_), left, right) =>
-      isTranspecable(left, from) && isTranspecable(right, from)
-    
-    case Operate(_, _, parent) =>
-      isTranspecable(parent, from)
-    
-    case _ => false
+  private def isTranspecable(to: DepGraph, from: DepGraph): Boolean = {
+    to match {
+      case `from` => true
+      
+      case Join(_, Eq, _, left, _: Root) => isTranspecable(left, from)
+      case Join(_, Eq, _, _: Root, right) => isTranspecable(right, from)
+      
+      case Join(_, NotEq, _, left, _: Root) => isTranspecable(left, from)
+      case Join(_, NotEq, _, _: Root, right) => isTranspecable(right, from)
+      
+      case Join(_, instructions.WrapObject, _, _: Root, right) => isTranspecable(right, from)
+      case Join(_, instructions.DerefObject, _, left, _: Root) => isTranspecable(left, from)
+      case Join(_, instructions.DerefMetadata, _, left, _: Root) => isTranspecable(left, from)
+      case Join(_, instructions.DerefArray, _, left, _: Root) => isTranspecable(left, from)
+      case Join(_, instructions.ArraySwap, _, left, _: Root) => isTranspecable(left, from)
+      
+      case Join(_, instructions.JoinObject, _, left, _: Root) => isTranspecable(left, from)
+      case Join(_, instructions.JoinObject, _, _: Root, right) => isTranspecable(right, from)
+      case Join(_, instructions.JoinArray, _, left, _: Root) => isTranspecable(left, from)
+      case Join(_, instructions.JoinArray, _, _: Root, right) => isTranspecable(right, from)
+      
+      case Join(_, op, _, left, _: Root) => op2ForBinOp(op).isDefined && isTranspecable(left, from)
+      case Join(_, op, _, _: Root, right) => op2ForBinOp(op).isDefined && isTranspecable(right, from)
+      
+      case Join(_, _, IdentitySort | ValueSort(_), left, right) =>
+        isTranspecable(left, from) && isTranspecable(right, from)
+      
+      case dag.Filter(_, IdentitySort | ValueSort(_), left, right) =>
+        isTranspecable(left, from) && isTranspecable(right, from)
+      
+      case Operate(_, _, parent) =>
+        isTranspecable(parent, from)
+      
+      case _ => false
+    }
   }
   
   private def findCommonIds(left: BucketSpec, right: BucketSpec): Set[Int] =

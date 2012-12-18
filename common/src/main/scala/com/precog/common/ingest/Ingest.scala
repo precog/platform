@@ -75,7 +75,13 @@ object Archive {
   
   val decomposerV1: Decomposer[Archive] = decomposerV[Archive](schemaV1, Some("1.0"))
   val extractorV1: Extractor[Archive] = extractorV[Archive](schemaV1, Some("1.0"))
-  val extractorV0: Extractor[Archive] = extractorV[Archive](schemaV0, None)
+  val extractorV0: Extractor[Archive] = extractorV[Archive](schemaV0, None) map {
+    // FIXME: This is a complete hack to work around an accidental mis-ordering of fields for serialization
+    case Archive(apiKey, path, jobId) if (apiKey.startsWith("/")) =>
+      Archive(path.components.head.toString, Path(apiKey), jobId)
+
+    case ok => ok
+  }
 
   implicit val Decomposer: Decomposer[Archive] = decomposerV1
   implicit val Extractor: Extractor[Archive] = extractorV1 <+> extractorV0

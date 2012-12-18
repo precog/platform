@@ -48,6 +48,22 @@ object MongoShardServer extends BlueEyesServer with ShardService with MongoQuery
       val quirrelPort = rootConfig[Int]("server.port", 8888)
       val rootKey = config[String]("security.masterAccount.apiKey")
 
+      logger.warn("""
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Precog for MongoDB is a free product that Precog provides to the
+MongoDB community for doing data analysis on MongoDB.
+
+Due to technical limitations, we only recommend the product for
+exploratory data analysis. For developers interested in
+high-performance analytics on their MongoDB data, we recommend our
+cloud-based analytics solution and the MongoDB data importer, which
+can nicely complement existing MongoDB installations for
+analytic-intensive workloads.
+
+Please note that path globs are not yet supported in Precog for MongoDB
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+""")
+
       val server = new Server(serverPort)
       val resourceHandler = new ResourceHandler
       resourceHandler.setDirectoriesListed(false)
