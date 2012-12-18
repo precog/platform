@@ -66,14 +66,20 @@ case class ReleaseProjection(descriptor: ProjectionDescriptor) extends ShardProj
 
 sealed trait ProjectionUpdate extends ShardProjectionAction {
   def descriptor: ProjectionDescriptor
+  def fold[A](insertf: ProjectionInsert => A, archivef: ProjectionArchive => A): A
 }
 
-case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row]) extends ProjectionUpdate
+case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row]) extends ProjectionUpdate {
+  def fold[A](insertf: ProjectionInsert => A, archivef: ProjectionArchive => A): A = insertf(this)
+}
+
 object ProjectionInsert {
   case class Row(id: EventId, values: Seq[CValue], metadata: Seq[Set[Metadata]])
 }
 
-case class ProjectionArchive(descriptor: ProjectionDescriptor, id: EventId) extends ProjectionUpdate
+case class ProjectionArchive(descriptor: ProjectionDescriptor, id: EventId) extends ProjectionUpdate {
+  def fold[A](insertf: ProjectionInsert => A, archivef: ProjectionArchive => A): A = archivef(this)
+}
 
 case class InsertMetadata(descriptor: ProjectionDescriptor, metadata: ColumnMetadata)
 case class ArchiveMetadata(descriptor: ProjectionDescriptor)
