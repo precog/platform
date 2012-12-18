@@ -55,12 +55,16 @@ object PlatformBuild extends Build {
     }
   )
 
-  val blueeyesVersion = "1.0.0-M6"
+  val blueeyesVersion = "1.0.0-M6.2"
+  val scalazVersion = "7.0-precog-M1"
 
   val commonSettings = Seq(
     organization := "com.precog",
     version := "2.1.5",
-    scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
+    scalacOptions ++= {
+      Seq("-deprecation", "-unchecked", "-g:none") ++ 
+      Option(System.getProperty("com.precog.build.optimize")).map { _ => Seq("-optimize") }.getOrElse(Seq())
+    },
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalaVersion := "2.9.2",
 
@@ -74,21 +78,22 @@ object PlatformBuild extends Build {
     libraryDependencies ++= Seq(
       "com.weiglewilczek.slf4s"     %  "slf4s_2.9.1"         % "1.0.7",
       "com.google.guava"            %  "guava"              % "12.0",
-      "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
-      "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
+      "org.scalaz"                  %% "scalaz-core"        % scalazVersion,
+      "org.scalaz"                  %% "scalaz-effect"      % scalazVersion,
       "joda-time"                   %  "joda-time"          % "1.6.2",
-      "com.reportgrid"              %% "blueeyes-json"      % blueeyesVersion changing(),
-      "com.reportgrid"              %% "blueeyes-util"      % blueeyesVersion changing(),
-      "com.reportgrid"              %% "blueeyes-core"      % blueeyesVersion changing(),
-      "com.reportgrid"              %% "blueeyes-mongo"     % blueeyesVersion changing(),
-      "com.reportgrid"              %% "bkka"               % blueeyesVersion changing(),
-      "com.reportgrid"              %% "akka_testing"       % blueeyesVersion changing(),
+      "com.reportgrid"              %% "blueeyes-json"      % blueeyesVersion,
+      "com.reportgrid"              %% "blueeyes-util"      % blueeyesVersion,
+      "com.reportgrid"              %% "blueeyes-core"      % blueeyesVersion,
+      "com.reportgrid"              %% "blueeyes-mongo"     % blueeyesVersion,
+      "com.reportgrid"              %% "bkka"               % blueeyesVersion,
+      "com.reportgrid"              %% "akka_testing"       % blueeyesVersion,
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
       "org.specs2"                  %% "specs2"             % "1.12.3-SNAPSHOT" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
       "javolution"                  %  "javolution"         % "5.5.1",
       "com.chuusai"                 %% "shapeless"          % "1.2.3"//,
       //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
+      ,"org.spire-math"              %% "spire"              % "0.2.0-M2"
     )
   )
 
@@ -112,7 +117,7 @@ object PlatformBuild extends Build {
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
 
   lazy val platform = Project(id = "platform", base = file(".")).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, mongo)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*)
@@ -127,7 +132,7 @@ object PlatformBuild extends Build {
     settings(commonNexusSettings: _*) dependsOn (bytecode % "compile->compile;test->test", util)
 
   lazy val yggdrasil = Project(id = "yggdrasil", base = file("yggdrasil")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util, accounts)
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util, accounts, auth)
 
   lazy val yggdrasilProf = Project(id = "yggdrasilProf", base = file("yggdrasilProf")).
     settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test")
@@ -145,10 +150,10 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*) dependsOn (quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test")
 
   lazy val ingest = Project(id = "ingest", base = file("ingest")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", accounts, quirrel, daze, yggdrasil)
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", accounts, quirrel, daze, yggdrasil, auth)
 
   lazy val shard = Project(id = "shard", base = file("shard")).
-    settings(commonAssemblySettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, pandora, muspelheim % "test->test")
+    settings(commonAssemblySettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, pandora, muspelheim % "test->test", auth)
 
   lazy val auth = Project(id = "auth", base = file("auth")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test")
@@ -164,4 +169,7 @@ object PlatformBuild extends Build {
 
   lazy val jprofiler = Project(id = "jprofiler", base = file("jprofiler")).
     settings(jprofilerSettings ++ commonNexusSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.jprofiler.Run")): _*).dependsOn(ragnarok)
+
+  lazy val heimdall = Project(id = "heimdall", base = file("heimdall")).
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", util)
 }

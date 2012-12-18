@@ -138,6 +138,18 @@ trait EvalStackSpecs extends Specification {
         eval("true with []") mustEqual Set()
       }
     }
+    
+    "ensure that with operation uses inner-join semantics" in {
+      val input = """
+        | clicks := //clicks
+        | a := {dummy: if clicks.time < 1329326691939 then 1 else 0}
+        | clicks with {a:a}
+        | """.stripMargin
+        
+      forall(evalE(input)) {
+        case (ids, SObject(fields)) => fields must haveKey("a")
+      }
+    }
 
     "reduce sets" in {
       val input = """
@@ -458,6 +470,68 @@ trait EvalStackSpecs extends Specification {
       containsPageId collect {
         case obj => obj("pageId")
       } mustEqual Set(SString("page-0"), SString("page-1"), SString("page-2"), SString("page-3"), SString("page-4"))
+    }
+
+    "undefined literal" in {
+      "binary operation on load with undefined" >> {
+        val input = """
+          medals := //summer_games/london_medals
+          medals.Total + undefined
+        """
+
+        val results = evalE(input)
+
+        results must beEmpty
+      }
+
+      "multiple binary operations on loads with undefined" >> {
+        val input = """
+          medals := //summer_games/london_medals
+          campaigns := //campaigns
+          medals ~ campaigns
+            medals.Total + campaigns.cmp + undefined
+        """
+
+        val results = evalE(input)
+
+        results must beEmpty
+      }
+
+      "intersect load with undefined" >> {
+        val input = """
+          clicks  := //clicks
+          clicks intersect undefined
+        """
+
+        val results = evalE(input)
+
+        results must beEmpty
+      }
+
+      "union load with undefined" >> {
+        val input = """
+          clicks  := //clicks
+          clicks union undefined
+        """
+
+        val results = evalE(input)
+
+        results must not(beEmpty)
+      }
+
+      "multiple union on loads with undefined" >> {
+        val input = """
+          clicks  := //clicks
+          views   := //views
+          clickViews := clicks union views
+
+          clickViews union undefined
+        """
+
+        val results = evalE(input)
+
+        results must not(beEmpty)
+      }
     }
 
     "accept a solve involving a tic-var as an actual" in {
@@ -960,12 +1034,6 @@ trait EvalStackSpecs extends Specification {
     }
 
     "basic set difference queries" >> {
-      "clicks difference campaigns" >> {
-        val input = "//clicks difference //campaigns"
-        val results = evalE(input)
-
-        results must haveSize(100)
-      }
       "clicks difference clicks" >> {
         val input = "//clicks difference //clicks"
         val results = evalE(input)
@@ -1703,6 +1771,23 @@ trait EvalStackSpecs extends Specification {
           results2 must haveSize(0)
         }
 
+        // From bug #38535135
+        "Correlation on solve results" >> {
+          val input = """
+            data := //summer_games/london_medals 
+            byCountry := solve 'Country
+              data' := data where data.Country = 'Country
+              {country: 'Country,
+              gold: sum(data'.G ),
+              silver: sum(data'.S )}
+
+            std::stats::corr(byCountry.gold,byCountry.silver)
+            """
+
+          val results = evalE(input)
+          results must haveSize(1)
+        }
+
         "Covariance" >> {
           val input = """
             | cpm := (//campaigns).cpm
@@ -2114,6 +2199,11 @@ trait EvalStackSpecs extends Specification {
           result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SNull)))
         }
         
+        "object with undefined" >> {
+          val result = eval("""{ name: "John", age: 29, gender: undefined }""")
+          result must haveSize(0)
+        }
+
         "boolean" >> {
           val result = eval("true")
           result must haveSize(1)
@@ -2130,6 +2220,11 @@ trait EvalStackSpecs extends Specification {
           val result = eval("null")
           result must haveSize(1)
           result must contain(SNull)
+        }
+
+        "undefined" >> {
+          val result = eval("undefined")
+          result must haveSize(0)
         }
       }
 
@@ -2199,6 +2294,29 @@ trait EvalStackSpecs extends Specification {
           val result = eval(input)
           result must haveSize(1)
           result must contain(SDecimal(15))
+        }
+      }
+
+      "undefineds" >> {
+        "addition" >> {
+          val result = eval("5 + undefined")
+          result must haveSize(0)
+        }
+
+        "greater-than" >> {
+          val result = eval("5 > undefined")
+          result must haveSize(0)
+        }
+
+        "union" >> {
+          val result = eval("5 union undefined")
+          result must haveSize(1)
+          result must contain(SDecimal(5))
+        }
+
+        "intersect" >> {
+          val result = eval("5 intersect undefined")
+          result must haveSize(0)
         }
       }
 
@@ -2372,6 +2490,96 @@ trait EvalStackSpecs extends Specification {
         | 
         | solve 'time = data'.millis
         |  {end: 'time, start: lastEvent(previousEvents(data', 'time))}
+        | """.stripMargin
+        
+      evalE(input) must not(throwAn[Exception])
+    }
+    
+    "evaluate a trivial inclusion filter" in {
+      val input = """
+        | t1 := //clicks
+        | t2 := //views
+        | 
+        | t1 ~ t2
+        |   t1 where t1.userId = t2.userId
+        | """.stripMargin
+        
+      evalE(input) must not(beEmpty)
+    }
+    
+    "complete nathan's denseRank solve example" in {
+      val input = """
+        | import std::time::*
+        | import std::stats::*
+        | 
+        | agents := //se/widget
+        | 
+        | upperBound := getMillis("2012-10-04T23:59:59")
+        | lowerBound := getMillis("2012-10-04T00:00:00")
+        | 
+        | data := {agentId: agents.agentId, timeStamp: agents.timeStamp, action: agents.action, millis: getMillis(agents.timeStamp)}
+        | 
+        | getEvents(agent) := 
+        |   data' := data where data.millis <= upperBound & data.millis >= lowerBound & data.agentId = agent
+        | 
+        |   data'' := data' with {rank: denseRank(data'.millis)}
+        |   data''' := new data''
+        | 
+        |   result := solve 'rank
+        |     r0 := data'' where data''.rank = 'rank
+        |     r1 := data''' where data'''.rank = 'rank - 1
+        | 
+        |     r0 ~ r1
+        |     {first: r0, second: r1}
+        | 
+        |   {start: result.first.millis, end: result.second.millis, agent: result.first.agentId, action: result.first.action} 
+        | 
+        | getEvents("Blake")
+        | """.stripMargin
+        
+      evalE(input) must not(beEmpty)
+    }
+    
+    "handle a non-trivial solve on an object concat" in {
+      val input = """
+        | agents := //se/widget
+        | 
+        | solve 'rank
+        |   { agentId: agents.agentId } where { agentId: agents.agentId } = 'rank - 1
+        | """.stripMargin
+        
+      evalE(input) must not(throwAn[Exception])
+    }
+    
+    "handle another case of solving on an object with denseRank" in {
+      val input = """
+        | import std::stats::*
+        | 
+        | upperBound := 1354122459346
+        | lowerBound := 1354036059346
+        | extraLB := lowerBound - (24*60*60000)
+        | 
+        | status := load("/8504352d-b063-400b-a10b-d6c637539469/status")
+        | status' := status where status.timestamp <= upperBound & status.timestamp >= extraLB
+        | 
+        | results := solve 'agent
+        |   data' := status' where status'.agentId = 'agent 
+        |   
+        |   rankedData := data' with {rank: denseRank(data'.timestamp)}
+        | 
+        |   result := solve 'rank
+        |     first  := rankedData where rankedData.rank = 'rank
+        |     second  := rankedData where rankedData.rank = 'rank + 1
+        |     {first: first, second: second}
+        | 
+        |   {start: std::math::max(result.first.timestamp, lowerBound), 
+        |    end: result.second.timestamp, 
+        |    agentId: result.first.agentId, 
+        |    status: result.first.status, 
+        |    name: result.first.agentAlias, 
+        |    note: result.first.note }
+        | 
+        | results where results.end > lowerBound
         | """.stripMargin
         
       evalE(input) must not(throwAn[Exception])

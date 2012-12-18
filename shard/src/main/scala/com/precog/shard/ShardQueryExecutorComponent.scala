@@ -20,6 +20,7 @@
 package com.precog.shard
 
 import blueeyes.json._
+import blueeyes.util.Clock
 
 import com.precog.common._
 import com.precog.common.json._
@@ -72,9 +73,12 @@ trait ShardQueryExecutor
 
   case class StackException(error: StackError) extends Exception(error.toString)
 
-  def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
+  def clock: Clock
+
+  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
+    val evaluationContext = EvaluationContext(apiKey, prefix, clock.now())
     val qid = queryId.getAndIncrement
-    queryLogger.info("Executing query %d for %s: %s, prefix: %s".format(qid, userUID, query,prefix))
+    queryLogger.info("Executing query %d for %s: %s, prefix: %s".format(qid, apiKey, query,prefix))
 
     import EvaluationError._
 
@@ -83,19 +87,19 @@ trait ShardQueryExecutor
         ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
           /*(systemError _) <-: */
           // TODO: How can jsonChunks return a Validation... or report evaluation error to user....
-          Validation.success(jsonChunks(withContext { ctx =>
+          Validation.success(jsonChunks {
             applyQueryOptions(opts) {
               if (queryLogger.isDebugEnabled) {
-                eval(userUID, dag, ctx, prefix, true) map {
+                eval(dag, evaluationContext, true) map {
                   _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
                     slice => "size: " + slice.size
                   }
                 }
               } else {
-                eval(userUID, dag, ctx, prefix, true)
+                eval(dag, evaluationContext, true)
               }
             }
-          }))
+          })
         }
       }
     }
@@ -111,7 +115,7 @@ trait ShardQueryExecutor
     import trans._
 
     def sort(table: Future[Table]): Future[Table] = if (!opts.sortOn.isEmpty) {
-      val sortKey = ArrayConcat(opts.sortOn map { cpath =>
+      val sortKey = InnerArrayConcat(opts.sortOn map { cpath =>
         WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
           case (inner, f @ CPathField(_)) =>
             DerefObjectStatic(inner, f)

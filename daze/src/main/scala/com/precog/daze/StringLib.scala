@@ -51,9 +51,9 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
   class Op1SS(name: String, f: String => String)
   extends Op1(StringNamespace, name) {
     val tpe = UnaryOperationType(JTextT, JNumberT)
-    def f1: F1 = new CF1P({
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::op1ss::" + name) {
       case c: StrColumn => new StrFrom.S(c, _ != null, f)
-    })
+    }
   }
 
   object trim extends Op1SS("trim", _.trim)
@@ -66,27 +66,27 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
 
   object isEmpty extends Op1(StringNamespace, "isEmpty") {
     val tpe = UnaryOperationType(JTextT, JBooleanT)
-    def f1: F1 = new CF1P({
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::isEmpty") {
       case c: StrColumn => new BoolFrom.S(c, _ != null, _.isEmpty)
-    })
+    }
   }
 
   def neitherNull(x: String, y: String) = x != null && y != null
 
   object length extends Op1(StringNamespace, "length") {
     val tpe = UnaryOperationType(JTextT, JNumberT)
-    def f1: F1 = new CF1P({
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::length") {
       case c: StrColumn => new LongFrom.S(c, _ != null, _.length)
-    })
+    }
   }
 
   class Op2SSB(name: String, f: (String, String) => Boolean)
   extends Op2(StringNamespace, name) {
     val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
-    def f2: F2 = new CF2P({
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2ss" + name) {
       case (c1: StrColumn, c2: StrColumn) =>
         new BoolFrom.SS(c1, c2, neitherNull, f)
-    })
+    }
   }
 
   object equals extends Op2SSB("equals", _ equals _)
@@ -102,17 +102,17 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
 
   object concat extends Op2(StringNamespace, "concat") {
     val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
-    def f2: F2 = new CF2P({
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::concat") {
       case (c1: StrColumn, c2: StrColumn) =>
           new StrFrom.SS(c1, c2, neitherNull, _ concat _)
-    })
+    }
   }
 
   class Op2SLL(name: String,
     defined: (String, Long) => Boolean,
     f: (String, Long) => Long) extends Op2(StringNamespace, name) {
     val tpe = BinaryOperationType(JTextT, JNumberT, JNumberT)
-    def f2: F2 = new CF2P({
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2sll::" + name) {
       case (c1: StrColumn, c2: DoubleColumn) =>
         new LongFrom.SD(c1, c2,
           (s, n) => (n % 1 == 0) && defined(s, n.toLong),
@@ -125,7 +125,7 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
         new LongFrom.SN(c1, c2,
           (s, n) => (n % 1 == 0) && defined(s, n.toLong),
           (s, n) => f(s, n.toLong))
-    })
+    }
   }
 
   object codePointAt extends Op2SLL("codePointAt",
@@ -138,7 +138,7 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
 
   object substring extends Op2(StringNamespace, "substring") {
     val tpe = BinaryOperationType(JTextT, JNumberT, JTextT)
-    def f2: F2 = new CF2P({
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::substring") {
       case (c1: StrColumn, c2: LongColumn) =>
         new StrFrom.SL(c1, c2,
           (s, n) => n >= 0 && s.length > n,
@@ -153,16 +153,16 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
         new StrFrom.SD(c1, c2,
           (s, n) => n >= 0 && (n % 1 == 0) && s.length > n,
           _ substring _.toInt)
-    })
+    }
   }
 
   class Op2SSL(name: String, f: (String, String) => Long)
   extends Op2(StringNamespace, name) {
     val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
-    def f2: F2 = new CF2P({
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2ssl::" + name) {
       case (c1: StrColumn, c2: StrColumn) =>
         new LongFrom.SS(c1, c2, neitherNull, f)
-    })
+    }
   }
 
   object compareTo extends Op2SSL("compareTo", _ compareTo _)
@@ -173,4 +173,24 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
   object indexOf extends Op2SSL("indexOf", _ indexOf _)
 
   object lastIndexOf extends Op2SSL("lastIndexOf", _ lastIndexOf _)
+
+  object parseNum extends Op1(StringNamespace, "parseNum") {
+    import java.util.regex.Pattern
+
+    val intPattern = Pattern.compile("^-?(?:0|[1-9][0-9]*)$")
+    val decPattern = Pattern.compile("^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?$")
+
+    val tpe = UnaryOperationType(JTextT, JNumberT)
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::parseNum") {
+      case c: StrColumn => new Map1Column(c) with NumColumn {
+        override def isDefinedAt(row: Int): Boolean = {
+          if (!super.isDefinedAt(row)) return false
+          val s = c(row)
+          s != null && decPattern.matcher(s).matches
+        }
+
+        def apply(row: Int) = BigDecimal(c(row))
+      }
+    }
+  }
 }

@@ -29,6 +29,8 @@ import yggdrasil.table._
 import akka.dispatch.Await
 import akka.util.Duration
 
+import org.joda.time.DateTime
+
 import scalaz._
 import scalaz.Validation
 import scalaz.effect.IO
@@ -46,9 +48,10 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] {
 
   implicit def M: Monad[M] with Copointed[M]
   
-  def consumeEval(apiKey: APIKey, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
+  def consumeEval(apiKey: APIKey, graph: DepGraph, prefix: Path, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
+    val ctx = EvaluationContext(apiKey, prefix, new DateTime())
     Validation.fromTryCatch {
-      val result = eval(apiKey, graph, ctx, prefix, optimize)
+      val result = eval(graph, ctx, optimize)
       val json = result.flatMap(_.toJson).copoint filterNot { jvalue => {
         (jvalue \ "value") == JUndefined
       }}

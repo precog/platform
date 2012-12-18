@@ -42,21 +42,31 @@ case class APIKeyRecord(
 object APIKeyRecord {
   implicit val apiKeyRecordIso = Iso.hlist(APIKeyRecord.apply _, APIKeyRecord.unapply _)
   
-  val schema =       "apiKey"  :: "name" :: "description" :: "issuerKey" :: "grants" :: "isRoot" :: HNil
-  val safeSchema =   "apiKey"  :: "name" :: "description" :: Omit        :: "grants" :: "isRoot" :: HNil
-
-  val legacySchema = ("apiKey" | "tokenId") :: "name" :: "description" :: "issuerKey" :: "grants" :: ("isRoot" ||| false) :: HNil
+  val v1Schema =       "apiKey"  :: "name" :: "description" :: "issuerKey" :: "grants" :: "isRoot" :: HNil
+  val v1SafeSchema =   "apiKey"  :: "name" :: "description" :: Omit        :: "grants" :: "isRoot" :: HNil
+  @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")
+  val v0Schema =       "tid"     :: "name" :: "description" :: "cid"       :: "gids"   :: ("isRoot" ||| false) :: HNil
   
   object Serialization {
-    implicit val (apiKeyRecordDecomposer, apiKeyRecordExtractor) = serialization[APIKeyRecord](schema)
+    implicit val apiKeyRecordDecomposer = decomposer[APIKeyRecord](v1Schema)
+    val v1ApiKeyRecordExtractor = extractor[APIKeyRecord](v1Schema)
   }
   
   object SafeSerialization {
-    implicit val (safeAPIKeyRecordDecomposer, safeAPIKeyRecordExtractor) = serialization[APIKeyRecord](safeSchema)
+    implicit val v1SafeAPIKeyRecordDecomposer = decomposer[APIKeyRecord](v1SafeSchema)
+    val v1SafeAPIKeyRecordExtractor = extractor[APIKeyRecord](v1SafeSchema)
   }
 
   object LegacySerialization {
-    val legacyAPIKeyExtractor = extractor[APIKeyRecord](legacySchema)
+    val v0APIKeyRecordExtractor = extractor[APIKeyRecord](v0Schema)
+  }
+
+  implicit val apiKeyExtractor = new Extractor[APIKeyRecord] with ValidatedExtraction[APIKeyRecord] {
+    override def validated(obj: JValue): Validation[Extractor.Error, APIKeyRecord] = {
+      Serialization.v1ApiKeyRecordExtractor.validated(obj) orElse
+      SafeSerialization.v1SafeAPIKeyRecordExtractor.validated(obj) orElse
+      LegacySerialization.v0APIKeyRecordExtractor.validated(obj)
+    }
   }
 }
 

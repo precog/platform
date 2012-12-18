@@ -71,7 +71,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
 
   val sliceSize = 10
   
-  def controlTimeout = Duration(120, "seconds")      // it's just unreasonable to run tests longer than this
+  def controlTimeout = Duration(5, "minutes")      // it's just unreasonable to run tests longer than this
   
   implicit val actorSystem = ActorSystem("platformSpecsActorSystem")
 
@@ -94,10 +94,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     
     val maxSliceSize = self.sliceSize
 
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 
   include(
@@ -119,13 +116,11 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
         val tree = forest.head
         
         val Right(dag) = decorate(emit(tree))
-        withContext { ctx => 
-          consumeEval("dummyAPIKey", dag, ctx, Path.Root) match {
-            case Success(result) => 
-              parseEvalLogger.debug("Evaluation complete for query: " + str)
-              result
-            case Failure(error) => throw error
-          }
+        consumeEval("dummyAPIKey", dag, Path.Root) match {
+          case Success(result) => 
+            parseEvalLogger.debug("Evaluation complete for query: " + str)
+            result
+          case Failure(error) => throw error
         }
       }
     }
@@ -144,10 +139,8 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
         val tree = forest.head
         tree.errors must beEmpty
         val Right(dag) = decorate(emit(tree))
-        withContext { ctx => 
-          val tableM = eval("dummyAPIKey", dag, ctx, Path.Root, true)
-          tableM map { _ transform DerefObjectStatic(Leaf(Source), CPathField("value")) } copoint
-        }
+        val tableM = eval(dag, EvaluationContext("dummyAPIKey", Path.Root, new org.joda.time.DateTime()), true)
+        tableM map { _ transform DerefObjectStatic(Leaf(Source), CPathField("value")) } copoint
       }
       
       "render a set of numbers interleaved by delimiters" in {

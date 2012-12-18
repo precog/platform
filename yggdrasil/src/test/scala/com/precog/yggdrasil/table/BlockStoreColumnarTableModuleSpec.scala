@@ -56,7 +56,6 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
     with BlockSortSpec[M] 
     with IntersectSpec[M]
     with BlockAlignSpec[M] 
-    with GroupingSupportSpec[M]
     { self =>
 
 
@@ -73,6 +72,7 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
     }                           
     "sort" >> {
       "fully homogeneous data"        in homogeneousSortSample
+      "fully homogeneous data with object" in homogeneousSortSampleWithNonexistentSortKey
       "data with undefined sort keys" in partiallyUndefinedSortSample
       "heterogeneous sort keys"       in heterogeneousSortSample
       "top-level hetereogeneous values" in heterogeneousBaseValueTypeSample
@@ -100,10 +100,7 @@ object BlockStoreColumnarTableModuleSpec extends BlockStoreColumnarTableModuleSp
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
     
-    val idSource = new IdSource {
-      private val source = new java.util.concurrent.atomic.AtomicLong
-      def nextId() = source.getAndIncrement
-    }
+    val idSource = new FreshAtomicIdSource
   }
 }
 

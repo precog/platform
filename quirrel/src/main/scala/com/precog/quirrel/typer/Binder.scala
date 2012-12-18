@@ -29,6 +29,7 @@ trait Binder extends parser.AST with Library {
   type Formal = (Identifier, Let)
   
   protected override lazy val LoadId = Identifier(Vector(), "load")
+  protected override lazy val ExpandGlobId = Identifier(Vector("std", "fs"), "expandGlob")
   protected override lazy val DistinctId = Identifier(Vector(), "distinct")
 
   override def bindNames(tree: Expr) = {
@@ -146,6 +147,8 @@ trait Binder extends parser.AST with Library {
       
       case BoolLit(_, _) => Set()
 
+      case UndefinedLit(_) => Set()
+
       case NullLit(_) => Set()
       
       case ObjectDef(_, props) => {
@@ -176,6 +179,7 @@ trait Binder extends parser.AST with Library {
             case ReductionBinding(_) => 1
             case LoadBinding => 1
             case DistinctBinding => 1
+            case ExpandGlobBinding => 1
             case Morphism1Binding(_) => 1
             case Morphism2Binding(_) => 2
             case Op1Binding(_) => 1
@@ -280,7 +284,7 @@ trait Binder extends parser.AST with Library {
       libReduction.map(ReductionBinding) ++
       libMorphism1.map(Morphism1Binding) ++
       libMorphism2.map(Morphism2Binding) ++
-      Set(LoadBinding, DistinctBinding)
+      Set(LoadBinding, DistinctBinding, ExpandGlobBinding)
       
     val env = Env(Map(), builtIns.map({ b => b.name -> b })(collection.breakOut))
 
@@ -298,6 +302,7 @@ trait Binder extends parser.AST with Library {
     case StrLit(_, _) => Set()
     case NumLit(_, _) => Set()
     case BoolLit(_, _) => Set()
+    case UndefinedLit(_) => Set()
     case NullLit(_) => Set()
     case ObjectDef(_, props) => props map { _._2 } map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()
     case ArrayDef(_, values) => values map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()
@@ -358,6 +363,11 @@ trait Binder extends parser.AST with Library {
   case object LoadBinding extends BuiltInBinding {
     val name = LoadId
     override val toString = "<native: load(1)>"
+  }
+  
+  case object ExpandGlobBinding extends BuiltInBinding {
+    val name = ExpandGlobId
+    override val toString = "<native: expandGlob(1)>"
   }
 
   case class Morphism1Binding(mor: Morphism1) extends BuiltInBinding {

@@ -102,6 +102,8 @@ trait Library {
   type Op1 <: Op1Like
   type Op2 <: Op2Like
   type Reduction <: ReductionLike
+  
+  def expandGlob: Morphism1
 
   def libMorphism1: Set[Morphism1]
   def libMorphism2: Set[Morphism2]

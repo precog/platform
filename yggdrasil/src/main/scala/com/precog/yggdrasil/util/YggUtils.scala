@@ -25,6 +25,8 @@ import actor._
 import jdbm3._
 import metadata.MetadataStorage
 import metadata.FileMetadataStorage
+
+import com.precog.auth._
 import com.precog.accounts.InMemoryAccountManager
 import com.precog.common._
 import com.precog.util._
@@ -841,6 +843,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
 //      opt("c","children","List children of API key", { s: String => config.listChildren = Some(s) })
       opt("n","new","New customer account at path", { s: String => config.accountId = Some(s) })
       opt("r","root","Show root API key", { config.showRoot = true })
+      opt("c","create","Create root API key", { config.createRoot = true; config.showRoot = true })
       opt("a","name","Human-readable name for new API key", { s: String => config.newAPIKeyName = s })
       opt("x","delete","Delete API key", { s: String => config.delete = Some(s) })
       opt("d","database","APIKey database name (ie: beta_auth_v1)", {s: String => config.database = s })
@@ -872,7 +875,18 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
 
   def apiKeyManager(config: Config): APIKeyManager[Future] = {
     val mongo = RealMongo(config.mongoConfig)
-    new MongoAPIKeyManager(mongo, mongo.database(config.database), config.mongoSettings)
+    implicit val timeout = config.mongoSettings.timeout
+    val db = mongo.database(config.database)
+
+    val rootKey = Await.result(
+      MongoAPIKeyManager.findRootAPIKey(
+        db,
+        config.mongoSettings.apiKeys, 
+        config.mongoSettings.grants, 
+        config.createRoot
+      ), Duration(30, "seconds"))
+
+    new MongoAPIKeyManager(mongo, db, config.mongoSettings.copy(rootKeyId = rootKey.apiKey))
   }
 
   def list(apiKeyManager: APIKeyManager[Future]) = {
@@ -928,6 +942,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
     var accountId: Option[String] = None
     var newAPIKeyName: String = ""
     var showRoot: Boolean = false
+    var createRoot: Boolean = false
     var list: Boolean = false
     var listChildren: Option[String] = None
     var database: String = "auth_v1"

@@ -1,0 +1,152 @@
+foo := //foo
+bar := //bar
+solve 'a, 'b
+  foo' := foo where foo.a = 'a & foo.b = 'b
+  c' := bar.c where bar.a = 'a | bar.b = 'b
+  foo' ~ c'
+  { a: 'a, b: 'b, c: c', fa: foo' }
+
+GroupingSource(
+  ExactSize(6),  // bar
+  DerefObjectStatic(Leaf(Source),.key),
+  Some(InnerObjectConcat(WrappedArray(ObjectDelete(Leaf(Source),Set(.value)), WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.c),value)))),
+  0,
+  GroupKeySpecOr(
+    GroupKeySpecSource(.1,DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.a)),
+    GroupKeySpecSource(.2,DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.b)))
+)
+  
+GroupingSource(
+  ExactSize(4),  // foo
+  DerefObjectStatic(Leaf(Source),.key),
+  Some(InnerObjectConcat(WrappedArray(ObjectDelete(Leaf(Source),Set(.value)), WrapObject(DerefObjectStatic(Leaf(Source),.value),value)))),
+  3,
+  GroupKeySpecAnd(
+    GroupKeySpecSource(.1,DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.a)),
+    GroupKeySpecSource(.2,DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.b)))
+)
+
+// bar
+tableRow:
+{"key":[5908438637678328576],"value":{"a":-1,"c":8,"b":-1}}
+{"key":[5908438637678328577],"value":{"a":1,"c":9,"b":-1}}
+{"key":[5908438637678328578],"value":{"a":-1,"c":10,"b":6}}
+{"key":[5908438637678328579],"value":{"a":3,"c":11,"b":7}}
+{"key":[5908438637678328580],"value":{"a":0,"c":12,"b":-1}}
+{"key":[5908438637678328581],"value":{"a":0,"c":13,"b":-1}}
+
+targetRow:
+{"key":[5908438637678328576],"value":8}
+{"key":[5908438637678328577],"value":9}
+{"key":[5908438637678328578],"value":10}
+{"key":[5908438637678328579],"value":11}
+{"key":[5908438637678328580],"value":12}
+{"key":[5908438637678328581],"value":13}
+
+// foo
+tableRow:
+{"key":[5908438637678328470],"value":{"a":0,"b":4}}
+{"key":[5908438637678328471],"value":{"a":1,"b":5}}
+{"key":[5908438637678328472],"value":{"a":2,"b":6}}
+{"key":[5908438637678328473],"value":{"a":3,"b":7}}
+
+targetRow:
+{"key":[5908438637678328470],"value":{"a":0,"b":4}}
+{"key":[5908438637678328471],"value":{"a":1,"b":5}}
+{"key":[5908438637678328472],"value":{"a":2,"b":6}}
+{"key":[5908438637678328473],"value":{"a":3,"b":7}}
+
+// bar
+groupKeys:
+disjunct: {
+{".1":-1}
+{".1":1}
+{".1":-1}
+{".1":3}
+{".1":0}
+{".1":0}
+}
+disjunct: {
+{".2":-1}
+{".2":-1}
+{".2":6}
+{".2":7}
+{".2":-1}
+{".2":-1}
+}
+
+// foo
+groupKeys:
+disjunct: {
+{".1":0,".2":4}
+{".1":1,".2":5}
+{".1":2,".2":6}
+{".1":3,".2":7}
+}
+
+All group keys:
+{"1":0,"2":4}
+{"1":1,"2":5}
+{"1":2,"2":6}
+{"1":3,"2":7}
+
+------------------
+In evaluator: groupKeyForBody: List({"1":0,"2":4}) groupId: 0 groupTable.size: ExactSize(2)
+{"key":[5908438637678328580],"value":12}
+{"key":[5908438637678328581],"value":13}
+
+In evaluator: groupKeyForBody: List({"1":0,"2":4}) groupId: 3 groupTable.size: ExactSize(1)
+{"key":[5908438637678328470],"value":{"b":4,"a":0}}
+
+fromEvaluator:
+{"key":[5908438637678328470,5908438637678328580],"value":{"b":4,"c":12,"a":0,"fa":{"b":4,"a":0}}}
+{"key":[5908438637678328470,5908438637678328581],"value":{"b":4,"c":13,"a":0,"fa":{"b":4,"a":0}}}
+------------------
+In evaluator: groupKeyForBody: List({"1":1,"2":5}) groupId: 0 groupTable.size: ExactSize(1)
+{"value":9,"key":[5908438637678328577]}
+
+In evaluator: groupKeyForBody: List({"1":1,"2":5}) groupId: 3 groupTable.size: ExactSize(1)
+{"value":{"a":1,"b":5},"key":[5908438637678328471]}
+
+fromEvaluator:
+{"key":[5908438637678328471,5908438637678328577],"value":{"b":5,"c":9,"a":1,"fa":{"b":5,"a":1}}}
+------------------
+In evaluator: groupKeyForBody: List({"1":2,"2":6}) groupId: 0 groupTable.size: ExactSize(1)
+{"value":10,"key":[5908438637678328578]}
+
+In evaluator: groupKeyForBody: List({"1":2,"2":6}) groupId: 3 groupTable.size: ExactSize(1)
+{"value":{"a":2,"b":6},"key":[5908438637678328472]}
+
+fromEvaluator:
+{"key":[5908438637678328472,5908438637678328578],"value":{"b":6,"c":10,"a":2,"fa":{"b":6,"a":2}}}
+------------------
+In evaluator: groupKeyForBody: List({"1":3,"2":7}) groupId: 0 groupTable.size: ExactSize(1)
+{"key":[5908438637678328579],"value":11}
+
+In evaluator: groupKeyForBody: List({"1":3,"2":7}) groupId: 3 groupTable.size: ExactSize(1)
+{"key":[5908438637678328473],"value":{"b":7,"a":3}}
+
+fromEvaluator:
+{"key":[5908438637678328473,5908438637678328579],"value":{"b":7,"c":11,"a":3,"fa":{"b":7,"a":3}}}
+------------------
+
+// Query result:
+{"key":[2],"value":{"b":4,"c":12,"a":0,"fa":{"b":4,"a":0}}}
+{"key":[3],"value":{"b":4,"c":13,"a":0,"fa":{"b":4,"a":0}}}
+{"key":[4],"value":{"b":5,"c":9,"a":1,"fa":{"b":5,"a":1}}}
+{"key":[5],"value":{"b":6,"c":10,"a":2,"fa":{"b":6,"a":2}}}
+{"key":[6],"value":{"b":7,"c":11,"a":3,"fa":{"b":7,"a":3}}}
+
+// Merge result:
+{"key":[5908438637678328470,5908438637678328580],"value":{"b":4,"c":12,"a":0,"fa":{"b":4,"a":0}}}
+{"key":[5908438637678328470,5908438637678328581],"value":{"b":4,"c":13,"a":0,"fa":{"b":4,"a":0}}}
+{"key":[5908438637678328471,5908438637678328577],"value":{"b":5,"c":9,"a":1,"fa":{"b":5,"a":1}}}
+{"key":[5908438637678328472,5908438637678328578],"value":{"b":6,"c":10,"a":2,"fa":{"b":6,"a":2}}}
+{"key":[5908438637678328473,5908438637678328579],"value":{"b":7,"c":11,"a":3,"fa":{"b":7,"a":3}}}
+
+// New algorithm results:
+{"key":[2],"value":{"b":6,"c":10,"a":2,"fa":{"b":6,"a":2}}}
+{"key":[3],"value":{"b":7,"c":11,"a":3,"fa":{"b":7,"a":3}}}
+{"key":[4],"value":{"b":5,"c":9,"a":1,"fa":{"b":5,"a":1}}}
+{"key":[5],"value":{"b":4,"c":12,"a":0,"fa":{"b":4,"a":0}}}
+{"key":[6],"value":{"b":4,"c":13,"a":0,"fa":{"b":4,"a":0}}}
