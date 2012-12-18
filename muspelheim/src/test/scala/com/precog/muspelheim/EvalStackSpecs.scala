@@ -783,9 +783,9 @@ trait EvalStackSpecs extends Specification {
       "return correctly structured results in simple case of logistic regression" >> {
         val input = """
           medals := //summer_games/london_medals
-          medals' := medals with { gender: (1 where medals.Sex = "F") union (0 where medals.Sex = "M") }
+          gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
           
-          std::stats::logisticRegression({height: medals'.HeightIncm}, medals'.gender)
+          std::stats::logisticRegression({ height: medals.HeightIncm }, gender)
         """.stripMargin
 
         val results = evalE(input)
@@ -796,8 +796,8 @@ trait EvalStackSpecs extends Specification {
           case (ids, SArray(elems)) =>
             ids must haveSize(0)
             elems must haveSize(2)
-            elems(0) must beLike { case SObject(elems) => elems("height") match { case SDecimal(d) => (d mustEqual d) and (elems must haveSize(1)) } }
-            elems(1) must beLike { case SDecimal(d) => d mustEqual d }
+            elems(0) must beLike { case SObject(elems) => elems("height") match { case SDecimal(d) => elems must haveSize(1) } }
+            elems(1) must beLike { case SDecimal(d) => ok }
         }
       }
 

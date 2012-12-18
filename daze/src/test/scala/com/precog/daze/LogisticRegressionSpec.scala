@@ -184,8 +184,8 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       var thetas: List[List[Double]] = List.empty[List[Double]]
       var i = 0
 
-      //runs the logistic regression function on 100 sets of data generated from the same distribution
-      while (i < 100) {
+      //runs the logistic regression function on 50 sets of data generated from the same distribution
+      while (i < 50) {
         val cpaths = Seq(
           CPath(CPathIndex(0), CPathIndex(0)),
           CPath(CPathIndex(1))) sorted
@@ -239,8 +239,8 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       var thetas: List[List[Double]] = List.empty[List[Double]]
       var i = 0
 
-      //runs the logistic regression function on 100 sets of data generated from the same distribution
-      while (i < 100) {
+      //runs the logistic regression function on 50 sets of data generated from the same distribution
+      while (i < 50) {
         val cpaths = Seq(
           CPath(CPathIndex(0), CPathField("foo")),
           CPath(CPathIndex(0), CPathField("bar")),
@@ -301,8 +301,8 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
       var i = 0
 
-      //runs the logistic regression function on 100 sets of data generated from the same distribution
-      while (i < 100) {
+      //runs the logistic regression function on 50 sets of data generated from the same distribution
+      while (i < 50) {
         val cpaths = Seq(
           CPath(CPathIndex(0), CPathField("ack"), CPathIndex(0)),
           CPath(CPathIndex(0), CPathField("bak"), CPathField("bazoo")),
