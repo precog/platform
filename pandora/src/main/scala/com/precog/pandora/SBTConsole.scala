@@ -50,7 +50,6 @@ object SBTConsole {
         extends BaseConfig
         with IdSourceConfig
         with ColumnarTableModuleConfig
-        with EvaluatorConfig
         with StandaloneShardSystemConfig
         with JDBMProjectionModuleConfig
         with BlockStoreColumnarTableModuleConfig
@@ -97,10 +96,7 @@ object SBTConsole {
       val maxSliceSize = 10000
 
       //TODO: Get a producer ID
-      val idSource = new IdSource {
-        private val source = new java.util.concurrent.atomic.AtomicLong
-        def nextId() = source.getAndIncrement
-      }
+      val idSource = new FreshAtomicIdSource
     }
 
     implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
@@ -127,7 +123,7 @@ object SBTConsole {
 
     def evalE(str: String) = {
       val dag = produceDAG(str)
-      withContext { ctx => consumeEval("dummyAPIKey", dag, ctx,Path.Root) }
+      consumeEval("dummyAPIKey", dag, Path.Root) 
     }
     
     def produceDAG(str: String) = {

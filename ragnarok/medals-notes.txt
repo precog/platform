@@ -1,0 +1,168 @@
+import std::math::floor
+
+historic := //summer_games/historic_medals
+
+histogram := solve 'year
+  maleCount := count(historic.Gender where historic.Gender = "Men" & historic.Edition = 'year)
+  femaleCount := count(historic.Gender where historic.Gender = "Women" & historic.Edition = 'year)
+
+  {year: 'year, ratio: floor(100 * maleCount / femaleCount)}
+
+histogram
+
+
+GroupingSource(
+  ExactSize(13999),  // historic_medals (0)
+  DerefObjectStatic(Leaf(Source),.key),
+  Some(InnerObjectConcat(WrappedArray(ObjectDelete(Leaf(Source),Set(.value)), WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.Gender),value)))),
+  0,
+  GroupKeySpecAnd(
+  	GroupKeySpecSource(.extra0,Filter(EqualLiteral(DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.Gender),CString(Men),false),EqualLiteral(DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.Gender),CString(Men),false))),
+  	GroupKeySpecSource(.1,DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.Edition)))
+)
+
+GroupingSource(
+  ExactSize(13999),  // historic_medals (2)
+  DerefObjectStatic(Leaf(Source),.key),
+  Some(InnerObjectConcat(WrappedArray(ObjectDelete(Leaf(Source),Set(.value)), WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.Gender),value)))),
+  2,
+  GroupKeySpecAnd(
+    GroupKeySpecSource(.extra1,Filter(EqualLiteral(DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.Gender),CString(Women),false),EqualLiteral(DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.Gender),CString(Women),false))),
+    GroupKeySpecSource(.1,DerefObjectStatic(DerefObjectStatic(Leaf(Source),.value),.Edition)))
+)
+
+// historic_medals (0)
+tableRow:
+{"key":[5908438637678314371],"value":{"Edition":"2000","Gender":"Men"}}
+{"key":[5908438637678314372],"value":{"Edition":"1988","Gender":"Men"}}
+{"key":[5908438637678314373],"value":{"Edition":"2008","Gender":"Men"}}
+{"key":[5908438637678314374],"value":{"Edition":"1996","Gender":"Women"}}
+{"key":[5908438637678314375],"value":{"Edition":"1988","Gender":"Men"}}
+{"key":[5908438637678314376],"value":{"Edition":"1996","Gender":"Men"}}
+{"key":[5908438637678314377],"value":{"Edition":"1984","Gender":"Men"}}
+{"key":[5908438637678314378],"value":{"Edition":"2004","Gender":"Women"}}
+{"key":[5908438637678314379],"value":{"Edition":"1996","Gender":"Men"}}
+{"key":[5908438637678314380],"value":{"Edition":"1988","Gender":"Women"}}
+
+targetRow:
+{"key":[5908438637678314371],"value":"Men"}
+{"key":[5908438637678314372],"value":"Men"}
+{"key":[5908438637678314373],"value":"Men"}
+{"key":[5908438637678314374],"value":"Women"}
+{"key":[5908438637678314375],"value":"Men"}
+{"key":[5908438637678314376],"value":"Men"}
+{"key":[5908438637678314377],"value":"Men"}
+{"key":[5908438637678314378],"value":"Women"}
+{"key":[5908438637678314379],"value":"Men"}
+{"key":[5908438637678314380],"value":"Women"}
+
+// historic_medals (2)
+tableRow:
+{"key":[5908438637678314371],"value":{"Edition":"2000","Gender":"Men"}}
+{"key":[5908438637678314372],"value":{"Edition":"1988","Gender":"Men"}}
+{"key":[5908438637678314373],"value":{"Edition":"2008","Gender":"Men"}}
+{"key":[5908438637678314374],"value":{"Edition":"1996","Gender":"Women"}}
+{"key":[5908438637678314375],"value":{"Edition":"1988","Gender":"Men"}}
+{"key":[5908438637678314376],"value":{"Edition":"1996","Gender":"Men"}}
+{"key":[5908438637678314377],"value":{"Edition":"1984","Gender":"Men"}}
+{"key":[5908438637678314378],"value":{"Edition":"2004","Gender":"Women"}}
+{"key":[5908438637678314379],"value":{"Edition":"1996","Gender":"Men"}}
+{"key":[5908438637678314380],"value":{"Edition":"1988","Gender":"Women"}}
+
+targetRow:
+{"key":[5908438637678314371],"value":"Men"}
+{"key":[5908438637678314372],"value":"Men"}
+{"key":[5908438637678314373],"value":"Men"}
+{"key":[5908438637678314374],"value":"Women"}
+{"key":[5908438637678314375],"value":"Men"}
+{"key":[5908438637678314376],"value":"Men"}
+{"key":[5908438637678314377],"value":"Men"}
+{"key":[5908438637678314378],"value":"Women"}
+{"key":[5908438637678314379],"value":"Men"}
+{"key":[5908438637678314380],"value":"Women"}
+
+// historic_medals (0)
+groupKeys:
+disjunct: {
+{".extra0":true,".1":"2000"}
+{".extra0":true,".1":"1988"}
+{".extra0":true,".1":"2008"}
+{".1":"1996"}
+{".extra0":true,".1":"1988"}
+{".extra0":true,".1":"1996"}
+{".extra0":true,".1":"1984"}
+{".1":"2004"}
+{".extra0":true,".1":"1996"}
+{".1":"1988"}
+}
+
+// historic_medals (2)
+groupKeys:
+disjunct: {
+{".1":"2000"}
+{".1":"1988"}
+{".1":"2008"}
+{".extra1":true,".1":"1996"}
+{".1":"1988"}
+{".1":"1996"}
+{".1":"1984"}
+{".extra1":true,".1":"2004"}
+{".1":"1996"}
+{".extra1":true,".1":"1988"}
+}
+
+All group keys:
+{"1":"1980","extra0":true,"extra1":true}
+{"1":"1984","extra0":true,"extra1":true}
+{"1":"1988","extra0":true,"extra1":true}
+{"1":"1992","extra0":true,"extra1":true}
+{"1":"1996","extra0":true,"extra1":true}
+{"1":"2000","extra0":true,"extra1":true}
+{"1":"2004","extra0":true,"extra1":true}
+{"1":"2008","extra0":true,"extra1":true}
+
+------------------
+In evaluator: groupKeyForBody: List({"1":"1980","extra0":true,"extra1":true}) groupId: 0 groupTable.size: ExactSize(952)
+{"key":[5908438637678314384],"value":"Men"}
+
+In evaluator: groupKeyForBody: List({"1":"1980","extra0":true,"extra1":true}) groupId: 2 groupTable.size: ExactSize(423)
+{"key":[5908438637678314406],"value":"Women"}
+------------------
+In evaluator: groupKeyForBody: List({"1":"1984","extra0":true,"extra1":true}) groupId: 0 groupTable.size: ExactSize(973)
+{"key":[5908438637678314377],"value":"Men"}
+
+In evaluator: groupKeyForBody: List({"1":"1984","extra0":true,"extra1":true}) groupId: 2 groupTable.size: ExactSize(486)
+{"key":[5908438637678314394],"value":"Women"}
+------------------
+
+etc. ...
+
+// Query result:
+{"key":[0],"value":{"year":"1980","ratio":225.0}}
+{"key":[1],"value":{"year":"1984","ratio":200.0}}
+{"key":[2],"value":{"year":"1988","ratio":188.0}}
+{"key":[3],"value":{"year":"1992","ratio":184.0}}
+{"key":[4],"value":{"year":"1996","ratio":139.0}}
+{"key":[5],"value":{"year":"2000","ratio":126.0}}
+{"key":[6],"value":{"year":"2004","ratio":122.0}}
+{"key":[7],"value":{"year":"2008","ratio":119.0}}
+
+// Merge result:
+{"key":[],"value":{"year":"1980","ratio":225.0}}
+{"key":[],"value":{"year":"1984","ratio":200.0}}
+{"key":[],"value":{"year":"1988","ratio":188.0}}
+{"key":[],"value":{"year":"1992","ratio":184.0}}
+{"key":[],"value":{"year":"1996","ratio":139.0}}
+{"key":[],"value":{"year":"2000","ratio":126.0}}
+{"key":[],"value":{"year":"2004","ratio":122.0}}
+{"key":[],"value":{"year":"2008","ratio":119.0}}
+
+// New algorithm results:
+{"key":[0],"value":{"year":"1996","ratio":139.0}}
+{"key":[1],"value":{"year":"2000","ratio":126.0}}
+{"key":[2],"value":{"year":"1984","ratio":200.0}}
+{"key":[3],"value":{"year":"2008","ratio":119.0}}
+{"key":[4],"value":{"year":"2004","ratio":122.0}}
+{"key":[5],"value":{"year":"1992","ratio":184.0}}
+{"key":[6],"value":{"year":"1988","ratio":188.0}}
+{"key":[7],"value":{"year":"1980","ratio":225.0}}
