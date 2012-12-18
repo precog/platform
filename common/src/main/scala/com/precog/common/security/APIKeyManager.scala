@@ -11,9 +11,7 @@ import scalaz.std.set._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
-trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
-  implicit val M : Monad[M]
-  
+object APIKeyManager {
   def newUUID() = java.util.UUID.randomUUID.toString
 
   // 128 bit API key
@@ -21,6 +19,10 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
 
   // 384 bit grant ID
   def newGrantId(): String = (newUUID() + newUUID() + newUUID()).toLowerCase.replace("-","")
+}
+
+trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
+  implicit val M : Monad[M]
   
   def rootGrantId: M[GrantId]
   def rootAPIKey:  M[APIKey]
