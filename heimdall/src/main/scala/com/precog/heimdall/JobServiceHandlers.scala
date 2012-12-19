@@ -19,6 +19,7 @@
  */
 package com.precog.heimdall
 
+import com.precog.util.flipBytes
 import com.precog.common.jobs._
 import com.precog.common.security._
 
@@ -26,6 +27,7 @@ import blueeyes.bkka.AkkaTypeClasses._
 import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
+import blueeyes.core.http.HttpHeaders._
 import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
@@ -39,10 +41,12 @@ import akka.dispatch.{ ExecutionContext, Future }
 
 import com.weiglewilczek.slf4s.Logging
 
-import scalaz._
-
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
+
+import java.nio.ByteBuffer
+
+import scalaz._
 
 class ListJobsHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
 extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
@@ -332,6 +336,11 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
                 Future(Failure("Missing required field 'reason' in request body."))
             }
 
+          case JString("finished") =>
+            transition(obj) { (timestamp, _) =>
+              jobs.finish(jobId, timestamp) map (Validation.fromEither(_)) map (_ map (_.state))
+            }
+
           case JString("aborted") =>
             transition(obj) {
               case (timestamp, Some(reason)) =>
@@ -362,58 +371,66 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
   ))
 }
 
-class CreateResultHandler(jobs: JobManager[Future], clock: Clock)(implicit ctx: ExecutionContext)
+class CreateResultHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
 extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
-  import scalaz.std.option._
-  import scalaz.syntax.traverse._
-
   val service: HttpRequest[ByteChunk] => Validation[NotServed, Future[HttpResponse[ByteChunk]]] = (request: HttpRequest[ByteChunk]) => {
-    Success(request.parameters get 'jobId map { jobId =>
-      request.content.map(ByteChunk.forceByteArray(_)).sequence[Future, Array[Byte]] flatMap { bytes =>
-        val timestamp = request.parameters get 'timestamp flatMap { ts =>
-          JString(ts).validated[DateTime].toOption
-        } getOrElse clock.now()
+    Success((for {
+      jobId <- request.parameters get 'jobId
+      chunks <- request.content
+    } yield {
+      val mimeType = request.mimeTypes.headOption
+      val data = chunks.fold({ buffer => 
+        flipBytes(buffer) :: StreamT.empty[Future, Array[Byte]]
+      }, { buffers =>
+        buffers map (flipBytes(_))
+      })
 
-        val result = bytes map (JobResult(request.mimeTypes, _))
-
-        jobs.finish(jobId, result, timestamp) map {
-          case Right(job) =>
-            HttpResponse[ByteChunk](OK)
-          case Left(error) =>
-            HttpResponse[ByteChunk](PreconditionFailed, content = Some(ByteChunk(error.getBytes("UTF-8"))))
-        }
+      jobs.setResult(jobId, mimeType, data) map {
+        case Right(_) =>
+          HttpResponse[ByteChunk](OK)
+        case Left(error) =>
+          HttpResponse[ByteChunk](NotFound, content = Some(ByteChunk(error.getBytes("UTF-8"))))
       }
-    } getOrElse {
+    }) getOrElse {
       Future(HttpResponse[ByteChunk](BadRequest,
-        content = Some(ByteChunk("Missing required 'jobId parameter.".getBytes("UTF-8")))))
+        content = Some(ByteChunk("Missing required 'jobId parameter or request body.".getBytes("UTF-8")))))
     })
   }
 
   val metadata = Some(AboutMetadata(
     ParameterMetadata('jobId, None),
-    DescriptionMetadata("Put the final result of a finished job.")
+    DescriptionMetadata("Save the result of a job.")
   ))
 }
 
 class GetResultHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
-extends CustomHttpService[Future[Array[Byte]], Future[HttpResponse[Array[Byte]]]] {
+extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
   import JobState._
 
-  val service: HttpRequest[Future[Array[Byte]]] => Validation[NotServed, Future[HttpResponse[Array[Byte]]]] = (request: HttpRequest[Future[Array[Byte]]]) => {
+  val service: HttpRequest[ByteChunk] => Validation[NotServed, Future[HttpResponse[ByteChunk]]] = (request: HttpRequest[ByteChunk]) => {
     Success(request.parameters get 'jobId map { jobId =>
-      jobs.findJob(jobId) map {
-        case Some(Job(_, _, _, _, _, Finished(result, _, _))) =>
-          HttpResponse[Array[Byte]](OK, content = result map (_.content))
-        case _ =>
-          HttpResponse[Array[Byte]](NotFound)
+      jobs.findJob(jobId) flatMap {
+        case None =>
+          Future(HttpResponse[ByteChunk](NotFound))
+        case Some(job) =>
+          jobs.getResult(jobId) map {
+            case Left(error) =>
+              HttpResponse[ByteChunk](NoContent)
+            case Right((mimeType, data)) =>
+              val headers = mimeType.foldLeft(HttpHeaders.Empty) { (headers, mimeType) =>
+                headers + `Content-Type`(mimeType)
+              }
+              val chunks = Right(data map (ByteBuffer.wrap(_)))
+              HttpResponse[ByteChunk](OK, headers, Some(chunks))
+          }
       }
     } getOrElse {
-      Future(HttpResponse[Array[Byte]](BadRequest))
+      Future(HttpResponse[ByteChunk](BadRequest))
     })
   }
 
   val metadata = Some(AboutMetadata(
     ParameterMetadata('jobId, None),
-    DescriptionMetadata("Get the results of a job.")
+    DescriptionMetadata("Get a job's result.")
   ))
 }

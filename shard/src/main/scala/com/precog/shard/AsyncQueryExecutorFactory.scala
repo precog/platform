@@ -47,9 +47,15 @@ trait AsyncQueryExecutorFactory { self: ManagedQueryModule =>
     implicit def executionContext: ExecutionContext
     def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]]
 
+    // def encodeCharStream(stream: StreamT[ShardQuery, CharBuffer]): StreamT[Future, Array[Byte]]
+
     // Writes result to the byte channel.
     private def storeQuery(result: StreamT[ShardQuery, CharBuffer])(implicit M: ShardQueryMonad): Future[PrecogUnit] = {
       import JobQueryState._
+
+      //M.jobId map { jobId =>
+      //  completeJob(result)
+      //  jobManager.setResult(encodeCharStream(result)) map {
 
       val file = new File("ZOMG!") // createQueryResult(M.jobId)
       val channel = new FileOutputStream(file).getChannel()
@@ -76,7 +82,7 @@ trait AsyncQueryExecutorFactory { self: ManagedQueryModule =>
 
         case Running(_, None) =>
           channel.close()
-          M.jobId map (jobManager.finish(_, None, yggConfig.clock.now()) map { _ => PrecogUnit }) getOrElse Future(PrecogUnit)
+          M.jobId map (jobManager.finish(_, yggConfig.clock.now()) map { _ => PrecogUnit }) getOrElse Future(PrecogUnit)
       }
 
       loop(result)

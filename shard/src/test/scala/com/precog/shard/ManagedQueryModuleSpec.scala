@@ -134,7 +134,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
         _ <- waitFor(5)
         job <- jobManager.findJob(jobId)
       } yield job).copoint must beLike {
-        case Some(Job(_, _, _, _, _, Finished(None, _, _))) => ok
+        case Some(Job(_, _, _, _, _, Finished(_, _))) => ok
       }
     }
 

@@ -144,7 +144,7 @@ trait ManagedQueryModule extends YggConfigComponent {
    */
   def completeJob[N[+_], A](result: StreamT[ShardQuery, A])(implicit M: ShardQueryMonad, t: ShardQuery ~> N): StreamT[N, A] = {
     val finish: StreamT[ShardQuery, A] = StreamT[ShardQuery, A](M.point(StreamT.Skip {
-      M.jobId map (jobManager.finish(_, None, yggConfig.clock.now()))
+      M.jobId map (jobManager.finish(_, yggConfig.clock.now()))
       StreamT.empty[ShardQuery, A]
     }))
 

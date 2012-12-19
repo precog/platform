@@ -73,8 +73,7 @@ trait BaseJDBMQueryExecutorConfig
     with BlockStoreColumnarTableModuleConfig 
     with JDBMProjectionModuleConfig
     with ManagedQueryModuleConfig
-    with IdSourceConfig
-    with EvaluatorConfig {
+    with IdSourceConfig {
       
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)

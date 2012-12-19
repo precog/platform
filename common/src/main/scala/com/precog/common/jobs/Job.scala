@@ -33,7 +33,6 @@ import shapeless._
 import scalaz._
 
 case class Job(id: JobId, apiKey: APIKey, name: String, jobType: String, data: Option[JValue], state: JobState)
-
 case class Status(job: JobId, id: StatusId, message: String, progress: BigDecimal, unit: String, info: Option[JValue])
 case class Message(job: JobId, id: MessageId, channel: String, value: JValue)
 

@@ -62,7 +62,9 @@ trait ManagedMongoJobManagerModule {
 
     val settings = MongoJobManagerSettings(timeout, jobs, messages)
 
-    (mongo, new MongoJobManager(mongo.database(database), settings))
+    val fs = GridFSFileStorage(mongo.underlying.getDB(database))
+
+    (mongo, new MongoJobManager(mongo.database(database), settings, fs))
   }
 }
 
@@ -71,11 +73,13 @@ object MongoJobManagerSettings {
   val default: MongoJobManagerSettings = MongoJobManagerSettings(5000, "jobs", "jog_messages")
 }
 
-final class MongoJobManager(database: Database, settings: MongoJobManagerSettings)
-    (implicit executionContext: ExecutionContext) extends JobManager[Future] with JobStateManager[Future] {
+final class MongoJobManager(database: Database, settings: MongoJobManagerSettings, fs0: FileStorage[Future])
+    (implicit executionContext: ExecutionContext)
+    extends JobManager[Future] with JobStateManager[Future] with JobResultManager[Future] {
 
   import JobState._
 
+  protected val fs = fs0
   implicit val M = AkkaTypeClasses.futureApplicative(executionContext)
   implicit val queryTimeout = settings.queryTimeout
 

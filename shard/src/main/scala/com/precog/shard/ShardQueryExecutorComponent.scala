@@ -106,17 +106,17 @@ trait ShardQueryExecutorFactory[+A]
 
     case class StackException(error: StackError) extends Exception(error.toString)
 
-    def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, StreamT[M, CharBuffer]]] = {
+    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, StreamT[M, CharBuffer]]] = {
       val evaluationContext = EvaluationContext(apiKey, prefix, clock.now())
       val qid = queryId.getAndIncrement
-      queryLogger.info("Executing query %d for %s: %s, prefix: %s".format(qid, userUID, query,prefix))
+      queryLogger.info("Executing query %d for %s: %s, prefix: %s".format(qid, apiKey, query,prefix))
 
       import EvaluationError._
 
       val solution: Validation[Throwable, Validation[EvaluationError, StreamT[M, CharBuffer]]] = Validation.fromTryCatch {
         asBytecode(query) flatMap { bytecode =>
           ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
-            Validation.success(jsonChunks(withContext { ctx =>
+            Validation.success(jsonChunks {
               applyQueryOptions(opts) {
                 if (queryLogger.isDebugEnabled) {
                   eval(dag, evaluationContext, true) map {
@@ -128,7 +128,7 @@ trait ShardQueryExecutorFactory[+A]
                   eval(dag, evaluationContext, true)
                 }
               }
-            }))
+            })
           }
         }
       }
@@ -142,7 +142,7 @@ trait ShardQueryExecutorFactory[+A]
       import trans._
 
       def sort(table: M[Table]): M[Table] = if (!opts.sortOn.isEmpty) {
-        val sortKey = ArrayConcat(opts.sortOn map { cpath =>
+        val sortKey = InnerArrayConcat(opts.sortOn map { cpath =>
           WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
             case (inner, f @ CPathField(_)) =>
               DerefObjectStatic(inner, f)
