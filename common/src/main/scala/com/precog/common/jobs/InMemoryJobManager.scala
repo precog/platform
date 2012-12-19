@@ -2,6 +2,7 @@ package com.precog.common
 package jobs
 
 import blueeyes.json._
+import blueeyes.core.http.MimeType
 
 import com.precog.common.security._
 
@@ -14,9 +15,12 @@ import scala.collection.mutable
 import scalaz._
 
 
-final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManager[M] with JobStateManager[M] {
+final class InMemoryJobManager[M[+_]](implicit val M: Monad[M])
+    extends JobManager[M] with JobStateManager[M] with JobResultManager[M] {
   import scalaz.syntax.monad._
   import JobState._
+
+  val fs = new InMemoryFileStorage[M]
 
   val jobs: mutable.Map[JobId, Job] = new mutable.HashMap[JobId, Job] with mutable.SynchronizedMap[JobId, Job]
 
@@ -25,6 +29,9 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
   val statuses: mutable.Map[JobId, List[Status]] = new mutable.HashMap[JobId, List[Status]] with mutable.SynchronizedMap[JobId, List[Status]]
 
   val status: mutable.Map[JobId, Status] = new mutable.HashMap[JobId, Status] with mutable.SynchronizedMap[JobId, Status]
+
+  val result: mutable.Map[JobId, (List[MimeType], StreamT[M, Array[Byte]])] =
+    new mutable.HashMap[JobId, (List[MimeType], StreamT[M, Array[Byte]])] with mutable.SynchronizedMap[JobId, (List[MimeType], StreamT[M, Array[Byte]])]
 
   private def newJobId: JobId = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
@@ -123,4 +130,3 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
     }
   }
 }
-
