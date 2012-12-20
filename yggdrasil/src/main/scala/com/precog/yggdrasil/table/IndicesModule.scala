@@ -125,7 +125,7 @@ trait IndicesModule[M[+_]]
      * as soon as the underlying slices are available.
      */
     def createFromTable(table: Table, groupKeys: Seq[TransSpec1], valueSpec: TransSpec1): M[TableIndex] = {
-      
+
       // We are given TransSpec1s; to apply these to slices we need to
       // create SliceTransforms from them.
       val sts = groupKeys.map(composeSliceTransform).toArray
@@ -362,15 +362,15 @@ trait IndicesModule[M[+_]]
         val arr = keys(k)
         val st: SliceTransform1[_] = sts(k)
         val (_, keySlice) = st(slice)
-        keySlice.columns.foreach {
-          case (ref, col) =>
-            var i = 0
-            while (i < n) {
-              if (col.isDefinedAt(i)) {
-                arr(i) = col.jValue(i)
-              }
-              i += 1
-            }
+
+        var i = 0
+        while (i < n) {
+          val jv = keySlice.toJValue(i)
+          jv match {
+            case JUndefined =>
+            case jv => arr(i) = jv
+          }
+          i += 1
         }
         k += 1
       }
