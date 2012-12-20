@@ -31,7 +31,7 @@ import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.util.Clock
 
 import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
+import akka.dispatch.ExecutionContext
 
 import org.joda.time.DateTime
 import com.weiglewilczek.slf4s.Logging
@@ -39,22 +39,22 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.std.option._
 
-class APIKeyRequiredService[A, B](apiKeyManager: APIKeyManager[Future], val delegate: HttpService[A, APIKeyRecord => Future[B]])
-  (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
-  extends DelegatingService[A, Future[B], A, APIKeyRecord => Future[B]] with Logging {
+class APIKeyRequiredService[A, B](keyFinder: APIKeyFinder[Future], val delegate: HttpService[A, APIKey => Future[B]], err: (HttpFailure, String) => B, executor: ExecutionContext) 
+extends DelegatingService[A, Future[B], A, APIKey => Future[B]] with Logging {
+  implicit val executor0 = executor
   val service = (request: HttpRequest[A]) => {
     request.parameters.get('apiKey).
       toSuccess[NotServed](DispatchError(BadRequest, "An apiKey query parameter is required to access this URL")) flatMap { apiKey =>
-      delegate.service(request) map { (f: APIKeyRecord => Future[B]) =>
-        logger.debug("Locating API key: " + apiKey)
-        apiKeyManager.findAPIKey(apiKey) flatMap {  
+      delegate.service(request) map { (f: APIKey => Future[B]) =>
+        logger.trace("Locating API key: " + apiKey)
+        keyFinder.findAPIKey(apiKey) flatMap {  
           case None =>
             logger.warn("Could not locate API key " + apiKey)
             Future(err(BadRequest, "The specified API key does not exist: "+apiKey))
             
-          case Some(apiKey) =>
-            logger.debug("Found API key " + apiKey)
-            f(apiKey)
+          case Some(apiKeyRecord) =>
+            logger.trace("Found API key " + apiKeyRecord)
+            f(apiKeyRecord.apiKey)
         }
       }
     }

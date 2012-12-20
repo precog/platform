@@ -20,7 +20,6 @@
 package com.precog
 package accounts
 
-import com.precog.auth.WrappedAPIKey
 import com.precog.common.NetUtils.remoteIpFrom
 import com.precog.common.Path
 import com.precog.common.accounts._
@@ -125,16 +124,6 @@ trait AccountAuthorization extends Logging {
       Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))
     }
   }
-}
-
-case class WrappedAccountId(accountId: AccountId)
-
-object WrappedAccountId {
-  implicit val wrappedAccountIdIso = Iso.hlist(WrappedAccountId.apply _, WrappedAccountId.unapply _)
-  
-  val schema = "accountId" :: HNil
-
-  implicit val (wrappedAccountIdDecomposer, wrappedAccountIdExtractor) = IsoSerialization.serialization[WrappedAccountId](schema)
 }
 
 class ListAccountsHandler(accountManagement: AccountManager[Future], rootAccountId: AccountId)(implicit ctx: ExecutionContext) 

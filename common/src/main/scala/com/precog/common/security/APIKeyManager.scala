@@ -20,7 +20,7 @@
 package com.precog.common
 package security
 
-import accounts.AccountId
+import com.precog.common.accounts.AccountId
 import com.weiglewilczek.slf4s.Logging
 
 import org.joda.time.DateTime
@@ -28,6 +28,7 @@ import org.joda.time.DateTime
 import scalaz._
 import scalaz.std.option._
 import scalaz.std.set._
+import scalaz.syntax.id._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
@@ -41,9 +42,7 @@ object APIKeyManager {
   def newGrantId(): String = (newUUID() + newUUID() + newUUID()).toLowerCase.replace("-","")
 }
 
-trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
-  implicit val M : Monad[M]
-  
+trait APIKeyManager[M[+_]] extends APIKeyFinder[M] with Logging {
   def rootGrantId: M[GrantId]
   def rootAPIKey:  M[APIKey]
  
@@ -79,9 +78,6 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
   
   def listAPIKeys(): M[Seq[APIKeyRecord]]
   def listGrants(): M[Seq[Grant]]
-  
-  def findAPIKey(apiKey: APIKey): M[Option[APIKeyRecord]]
-  def findGrant(gid: GrantId): M[Option[Grant]]
   def findGrantChildren(gid: GrantId): M[Set[Grant]]
 
   def listDeletedAPIKeys(): M[Seq[APIKeyRecord]]
@@ -94,31 +90,10 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
   def addGrants(apiKey: APIKey, grants: Set[GrantId]): M[Option[APIKeyRecord]]
   def removeGrants(apiKey: APIKey, grants: Set[GrantId]): M[Option[APIKeyRecord]]
 
-
   def deleteAPIKey(apiKey: APIKey): M[Option[APIKeyRecord]]
   def deleteGrant(apiKey: GrantId): M[Set[Grant]]
 
   def close(): M[Unit]
-
-  def isValidGrant(grantId: GrantId, at: Option[DateTime] = None): M[Option[Grant]] =
-    findGrant(grantId).flatMap { grantOpt =>
-      grantOpt.map { grant =>
-        if(grant.isExpired(at)) None.point[M]
-        else grant.parentIds.foldLeft(some(grant).point[M]) { case (accM, parentId) =>
-          accM.flatMap(_.map { grant => isValidGrant(parentId, at).map(_ => grant) }.sequence)
-        }
-      }.getOrElse(None.point[M])
-    }
-  
-  def validGrants(apiKey: APIKey, at: Option[DateTime] = None): M[Set[Grant]] = {
-    logger.trace("Checking grant validity for apiKey " + apiKey)
-    findAPIKey(apiKey).flatMap(_.map { apiKeyRecord =>
-      apiKeyRecord.grants.map(isValidGrant(_, at)).sequence.map(_.flatten)
-    }.getOrElse(Set.empty.point[M]))
-  }
-
-  def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime] = None): M[Boolean] =
-    validGrants(apiKey, at).map(Grant.implies(_, perms, at))
 
   def deriveGrant(name: Option[String], description: Option[String], issuerKey: APIKey, perms: Set[Permission], expiration: Option[DateTime] = None): M[Option[GrantId]] = {
     validGrants(issuerKey, expiration).flatMap { grants =>
@@ -160,4 +135,42 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
       }
     }
   } 
-} 
+}
+
+class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAPIKeyFinderSettings = CachingAPIKeyFinderSettings.Default)(implicit M: Monad[M]) 
+extends CachingAPIKeyFinder[M](manager, settings)(M) with APIKeyManager[M] {
+  def rootGrantId: M[GrantId] = manager.rootGrantId
+  def rootAPIKey: M[APIKey] = manager.rootAPIKey
+  
+  def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]) =
+    manager.newAPIKey(name, description, issuerKey, grants).map { _ tap add }
+
+  def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]) =
+    manager.newGrant(name, description, issuerKey, parentIds, perms, expiration).map { _ tap add }
+
+  def listAPIKeys() = manager.listAPIKeys
+  def listGrants() = manager.listGrants
+
+  def listDeletedAPIKeys() = manager.listDeletedAPIKeys
+  def listDeletedGrants() = manager.listDeletedGrants
+
+  def findGrantChildren(gid: GrantId) = manager.findGrantChildren(gid)
+
+  def findDeletedAPIKey(tid: APIKey) = manager.findDeletedAPIKey(tid)
+  def findDeletedGrant(gid: GrantId) = manager.findDeletedGrant(gid)
+  def findDeletedGrantChildren(gid: GrantId) = manager.findDeletedGrantChildren(gid)
+
+  def addGrants(tid: APIKey, grants: Set[GrantId]) =
+    manager.addGrants(tid, grants).map { _.map { _ tap add } }
+  def removeGrants(tid: APIKey, grants: Set[GrantId]) =
+    manager.removeGrants(tid, grants).map { _.map { _ tap add } }
+
+  def deleteAPIKey(tid: APIKey) =
+    manager.deleteAPIKey(tid) map { _.map { _ tap remove } }
+  def deleteGrant(gid: GrantId) =
+    manager.deleteGrant(gid) map { _.map { _ tap remove } }
+
+  def close() = manager.close
+}
+
+// vim: set ts=4 sw=4 et:

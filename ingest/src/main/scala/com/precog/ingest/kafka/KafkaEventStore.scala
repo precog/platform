@@ -17,32 +17,26 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package ingest
+package com.precog.ingest
 package kafka
 
+import com.precog.common._
+import com.precog.common.ingest._
+import com.precog.util._
+
 import akka.util.Timeout
-
-import common._
-import util._
-import ingest.util._
-import com.precog.util.PrecogUnit
-
+import akka.dispatch.{Future, Promise}
+import akka.dispatch.MessageDispatcher
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.dispatch.{Future, Promise}
-import akka.dispatch.MessageDispatcher
-
-import com.weiglewilczek.slf4s._ 
-
-import scalaz._
-import Scalaz._
-
 import _root_.kafka.producer._
 
 import org.streum.configrity.{Configuration, JProperties}
+import com.weiglewilczek.slf4s._ 
+
+import scalaz._
 
 class KafkaEventStore(router: EventRouter, producerId: Int, firstEventId: Int = 0)(implicit dispatcher: MessageDispatcher) extends EventStore {
   private val nextEventId = new AtomicInteger(firstEventId)
@@ -76,7 +70,7 @@ class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDi
 
   def save(action: Action, timeout: Timeout) = Future {
     val msg = action match {
-      case event : Event => EventMessage(-1, -1, event)
+      case event : Ingest => EventMessage(-1, -1, event)
       case archive : Archive => ArchiveMessage(-1, -1, archive)
     }
     val data = new ProducerData[String, IngestMessage](localTopic, msg)

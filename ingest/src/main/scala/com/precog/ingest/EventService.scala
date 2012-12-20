@@ -17,106 +17,90 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package ingest
+package com.precog.ingest
 
 import service._
-import ingest.service._
-import accounts._
-import common.security._
-import daze._
+import com.precog.common.accounts._
+import com.precog.common.jobs._
+import com.precog.common.security._
 
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
 
+import blueeyes.BlueEyesServiceBuilder
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
-import blueeyes.BlueEyesServiceBuilder
-import blueeyes.core.data.{DefaultBijections, ByteChunk}
-import blueeyes.health.metrics.{eternity}
-
+import blueeyes.core.data._
 import blueeyes.core.http._
+import blueeyes.health.metrics.{eternity}
 import blueeyes.json._
+import blueeyes.util.Clock
+
+import DefaultBijections._
+import MimeTypes._
+import ByteChunk._
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 
 import org.streum.configrity.Configuration
 
-import scalaz.Monad
+import scalaz._
 import scalaz.syntax.monad._
 
 import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
 
-case class EventServiceState(apiKeyManager: APIKeyManager[Future], eventStore: EventStore, ingestPool: ExecutorService)
+case class EventServiceState(accessControl: APIKeyFinder[Future], ingestHandler: IngestServiceHandler, archiveHandler: ArchiveServiceHandler[ByteChunk], stop: Stoppable)
 
 trait EventService extends BlueEyesServiceBuilder with EventServiceCombinators
 with DecompressCombinators with AkkaDefaults { 
-  import DefaultBijections._
-
-  val insertTimeout = akka.util.Timeout(10000)
-  val deleteTimeout = akka.util.Timeout(10000)
-  implicit val timeout = akka.util.Timeout(120000) //for now
   implicit def M: Monad[Future]
 
-  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
-  def eventStoreFactory(config: Configuration): EventStore
+  def ApiKeyFinder(config: Configuration): APIKeyFinder[Future]
+  def AccountFinder(config: Configuration): AccountFinder[Future]
+  def EventStore(config: Configuration): EventStore
+  def JobManager(config: Configuration): JobManager[Future]
 
   val eventService = this.service("ingest", "1.0") {
-    requestLogging(timeout) {
-      healthMonitor(timeout, List(eternity)) { monitor => context =>
+    requestLogging {
+      healthMonitor(defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
         startup {
           import context._
 
-          val eventStore = eventStoreFactory(config.detach("eventStore"))
-          val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
+          val eventStore = EventStore(config.detach("eventStore"))
+          val apiKeyFinder = ApiKeyFinder(config.detach("security"))
+          val accountFinder = AccountFinder(config.detach("accounts"))
+          val jobManager = JobManager(config.detach("jobs"))
 
-          // Set up a thread pool for ingest tasks
-          val readPool = new ThreadPoolExecutor(config[Int]("readpool.min_threads", 2),
-                                                config[Int]("readpool.max_threads", 8),
-                                                config[Int]("readpool.keepalive_seconds", 5),
-                                                TimeUnit.SECONDS,
-                                                new ArrayBlockingQueue[Runnable](config[Int]("readpool.queue_size", 50)),
-                                                new ThreadFactoryBuilder().setNameFormat("ingestpool-%d").build())
+          val ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l))
+          val ingestBatchSize = config[Int]("ingest.batch_size", 500)
+
+          val deleteTimeout = akka.util.Timeout(config[Long]("delete.timeout", 10000l))
+
+          val ingestHandler = new IngestServiceHandler(accountFinder, apiKeyFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize)
+          val archiveHandler = new ArchiveServiceHandler[ByteChunk](apiKeyFinder, eventStore, deleteTimeout)
 
           eventStore.start map { _ =>
-            EventServiceState(
-              apiKeyManager,
-              eventStore,
-              readPool
-            )
+            EventServiceState(apiKeyFinder, ingestHandler, archiveHandler, Stoppable.fromFuture(eventStore.stop))
           }
         } ->
         request { (state: EventServiceState) =>
           decompress {
             jsonp {
-              apiKey(state.apiKeyManager) {
-                path("/(?<sync>a?sync)") {
-                  dataPath("fs") {
-                    accountId(state.accountManager) {
-                      post(new IngestServiceHandler(state.apiKeyManager, state.eventStore, insertTimeout, state.ingestPool, maxBatchErrors = 100)(defaultFutureDispatch))
-                    } ~
-                    delete(new ArchiveServiceHandler[Either[Future[JValue], ByteChunk]](state.apiKeyManager, state.eventStore, deleteTimeout)(defaultFutureDispatch))
+              produce[ByteChunk, JValue, ByteChunk](application / json) {
+                apiKey(state.accessControl) {
+                  path("/(?<sync>a?sync)") {
+                    dataPath("fs") {
+                      post(state.ingestHandler) ~ 
+                      delete(state.archiveHandler)
+                    }
                   }
                 }
               }
             }
           }
         } ->
-        shutdown { state => 
-          for {
-            _ <- state.eventStore.stop
-            _ <- state.apiKeyManager.close()
-          } yield {
-            logger.info("Stopping read threads")
-            state.ingestPool.shutdown()
-            if (!state.ingestPool.awaitTermination(timeout.duration.toMillis, TimeUnit.MILLISECONDS)) {
-              logger.warn("Forcibly terminating remaining read threads")
-              state.ingestPool.shutdownNow()
-            } else {
-              logger.info("Read threads stopped")
-            }
-            Option.empty[Stoppable]
-          }
+        stop { state => 
+          state.stop
         }
       }
     }

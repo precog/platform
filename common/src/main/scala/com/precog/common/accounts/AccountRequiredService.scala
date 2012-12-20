@@ -17,13 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.accounts
+package com.precog.common
+package accounts
 
-import com.precog.common.Path
 import com.precog.common.security._
-import com.precog.common.accounts._
 
-import akka.dispatch.{ Future, MessageDispatcher }
+import akka.dispatch.{ Future, ExecutionContext }
 
 import blueeyes.core.service._
 import blueeyes.core.http._
@@ -35,37 +34,25 @@ import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.std.option._
 
-class AccountRequiredService[A, B](accountFinder: AccountFinder[Future], val delegate: HttpService[A, (APIKeyRecord, Path, AccountId) => Future[B]])
-  (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
-  extends DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, AccountId) => Future[B]] with Logging {
+class AccountRequiredService[A, B](accountFinder: AccountFinder[Future], val delegate: HttpService[A, (APIKey, Path, AccountId) => Future[B]])(implicit err: (HttpFailure, String) => B, executor: ExecutionContext) 
+extends DelegatingService[A, (APIKey, Path) => Future[B], A, (APIKey, Path, AccountId) => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
-    delegate.service(request) map { f => (apiKey: APIKeyRecord, path: Path) =>
-      logger.debug("Locating account for request with apiKey " + apiKey.apiKey)
+    delegate.service(request) map { f => (apiKey: APIKey, path: Path) =>
+      logger.debug("Locating account for request with apiKey " + apiKey)
+
       request.parameters.get('ownerAccountId) map { accountId =>
         logger.debug("Using provided ownerAccountId: " + accountId)
-        accountFinder.findAccountById(accountId).flatMap {
+        accountFinder.findAccountById(accountId) flatMap {
           case Some(account) => f(apiKey, path, account.accountId)
-          case None => Future(err(BadRequest, "Unknown account Id: "+accountId))
+          case None => Future(err(BadRequest, "Unknown account Id: " + accountId))
         }
       } getOrElse {
-        logger.debug("Looking up accounts based on apiKey")
-        try {
-          accountFinder.findAccountByAPIKey(apiKey.apiKey).flatMap { accts =>
-            logger.debug("Found accounts: " + accts)
-            if(accts.size == 1) {
-              f(apiKey, path, accts.head)
-            } else {
-              logger.warn("Unable to determine account Id from api key: " + apiKey.apiKey)
-              Future(err(BadRequest, "Unable to identify target account from apiKey"))
-            }
-          }
-        } catch {
-          case e => {
-            logger.error("Error locating account from apiKey " + apiKey, e);
-            Future(err(BadRequest, "Unable to identify target account from apiKey"))
-          }
-        } finally {
-          logger.debug("Exiting AccountRequiredService handling")
+        logger.trace("Looking up accounts based on apiKey " + apiKey)
+        accountFinder.findAccountByAPIKey(apiKey) flatMap { 
+          case Some(accountId) => f(apiKey, path, accountId)
+          case None =>
+            logger.warn("Unable to determine account Id from api key: " + apiKey)
+            Future(err(BadRequest, "Unable to identify target account from apiKey " + apiKey))
         }
       }
     }

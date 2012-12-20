@@ -22,12 +22,14 @@ package com.precog.yggdrasil
 import actor._
 import metadata._
 import util._
-import com.precog.util._
 import SValue._
 import com.precog.common._
+import com.precog.common.accounts._
+import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.util._
 import com.precog.common.json._
+import com.precog.util._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -80,6 +82,7 @@ trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
 
 
 trait DistributedSampleStubStorageModule[M[+_]] extends StubStorageModule[M] {
+  import ProjectionInsert.Row
   val dataPath = Path("/test")
   def sampleSize: Int
   def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]): TestDataset
@@ -99,9 +102,13 @@ trait DistributedSampleStubStorageModule[M[+_]] extends StubStorageModule[M] {
   lazy val sampleData: Vector[JValue] = DistributedSampleSet.sample(sampleSize, 0)._1
 
   lazy val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, Projection]) { 
-    case (acc, (jobj, i)) => routingTable.routeEvent(EventMessage(EventId(0, i), Event("", dataPath, None, jobj, Map()))).foldLeft(acc) {
-      case (acc, ProjectionData(descriptor, values, _)) =>
-        acc + (descriptor -> (Projection(descriptor, acc.get(descriptor).map(_.data).getOrElse(TreeMap.empty(ordering)) + (Array(EventId(0,i).uid) -> values))))
+    case (acc, (jv, i)) => routingTable.routeIngest(IngestMessage("", dataPath, "", Vector(IngestRecord(EventId(0, i), jv)), None)).foldLeft(acc) {
+      case (acc, ProjectionInsert(descriptor, rows)) =>
+        rows.foldLeft(acc) { 
+          case (acc, Row(eventId, values, _)) =>
+            val data = acc.get(descriptor).map(_.data).getOrElse(TreeMap.empty(ordering)) + (Array(eventId.uid) -> values)
+            acc + (descriptor -> Projection(descriptor, data))
+        }
     }
   }
 }

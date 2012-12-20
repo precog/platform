@@ -21,7 +21,7 @@ package com.precog.ingest
 
 import util.FutureUtils
 
-import com.precog.common.{ Action, IngestMessage }
+import com.precog.common.ingest._
 import com.precog.util.PrecogUnit
 
 import blueeyes.json._
@@ -44,19 +44,19 @@ trait EventStore {
 }
 
 trait RouteTable {
-  def routeTo(message: IngestMessage): NonEmptyList[MailboxAddress]
+  def routeTo(message: EventMessage): NonEmptyList[MailboxAddress]
   def close: Future[PrecogUnit]
 }
 
 trait Messaging {
-  def send(address: MailboxAddress, msg: IngestMessage): Future[PrecogUnit]
+  def send(address: MailboxAddress, msg: EventMessage): Future[PrecogUnit]
   def close: Future[PrecogUnit]
 }
 
 case class MailboxAddress(id: Long)
 
 class EventRouter(routeTable: RouteTable, messaging: Messaging) {
-  def route(msg: IngestMessage)(implicit dispatcher: MessageDispatcher): Future[Boolean] = {
+  def route(msg: EventMessage)(implicit dispatcher: MessageDispatcher): Future[Boolean] = {
     val routes = routeTable.routeTo(msg).list
     val futures: List[Future[PrecogUnit]] = routes map { messaging.send(_, msg) }
 
@@ -69,12 +69,12 @@ class EventRouter(routeTable: RouteTable, messaging: Messaging) {
 }
 
 class ConstantRouteTable(addresses: NonEmptyList[MailboxAddress])(implicit dispather: MessageDispatcher) extends RouteTable {
-  def routeTo(msg: IngestMessage): NonEmptyList[MailboxAddress] = addresses
+  def routeTo(msg: EventMessage): NonEmptyList[MailboxAddress] = addresses
   def close = Promise.successful(PrecogUnit)
 }
 
 class EchoMessaging(implicit dispatcher: MessageDispatcher) extends Messaging {
-  def send(address: MailboxAddress, msg: IngestMessage): Future[PrecogUnit] = {
+  def send(address: MailboxAddress, msg: EventMessage): Future[PrecogUnit] = {
     println("Sending: " + msg + " to " + address)
     Promise.successful(PrecogUnit)
   }
@@ -84,9 +84,9 @@ class EchoMessaging(implicit dispatcher: MessageDispatcher) extends Messaging {
 
 class CollectingMessaging(implicit dispatcher: MessageDispatcher) extends Messaging {
 
-  val messages = ListBuffer[IngestMessage]()
+  val messages = ListBuffer[EventMessage]()
 
-  def send(address: MailboxAddress, msg: IngestMessage): Future[PrecogUnit] = {
+  def send(address: MailboxAddress, msg: EventMessage): Future[PrecogUnit] = {
     messages += msg
     Promise.successful(PrecogUnit)
   }

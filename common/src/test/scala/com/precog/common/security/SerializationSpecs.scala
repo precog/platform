@@ -20,6 +20,8 @@
 package com.precog.common
 package security
 
+import ingest._
+
 import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._

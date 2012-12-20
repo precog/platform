@@ -56,7 +56,7 @@ object PlatformBuild extends Build {
   )
 
   val blueeyesVersion = "1.0.0-SNAPSHOT"
-  val scalazVersion = "7.0-precog-M1.1"
+  val scalazVersion = "7.0-precog-SNAPSHOT"
 
   val commonSettings = Seq(
     organization := "com.precog",
@@ -119,6 +119,8 @@ object PlatformBuild extends Build {
   lazy val platform = Project(id = "platform", base = file(".")).
     aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, ratatoskr, mongo)
 
+  /// Libraries ///
+
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*)
 
@@ -128,23 +130,16 @@ object PlatformBuild extends Build {
   lazy val bytecode = Project(id = "bytecode", base = file("bytecode")).
     settings(commonNexusSettings: _*)
 
-  lazy val heimdall = Project(id = "heimdall", base = file("heimdall")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", util)
-
   lazy val quirrel = Project(id = "quirrel", base = file("quirrel")).
     settings(commonNexusSettings: _*) dependsOn (bytecode % "compile->compile;test->test", util)
 
   lazy val yggdrasil = Project(id = "yggdrasil", base = file("yggdrasil")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util)
 
-  lazy val yggdrasilProf = Project(id = "yggdrasilProf", base = file("yggdrasilProf")).
-    settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test")
-
-  lazy val mongo = Project(id = "mongo", base = file("mongo")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard)
-
   lazy val daze = Project(id = "daze", base = file("daze")).
     settings(commonNexusSettings: _*).dependsOn (common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util)
+
+  /// Testing ///
 
   lazy val muspelheim = Project(id = "muspelheim", base = file("muspelheim")).
     settings(commonNexusSettings: _*) dependsOn (common, quirrel, daze, yggdrasil % "compile->compile;test->test")
@@ -152,27 +147,40 @@ object PlatformBuild extends Build {
   lazy val pandora = Project(id = "pandora", base = file("pandora")).
     settings(commonAssemblySettings: _*) dependsOn (quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test")
 
-  lazy val accounts     = Project(id = "accounts", base = file("accounts")).
-    settings(commonAssemblySettings: _*) dependsOn (common % "compile->compile;test->test", auth, common)
- 
-  lazy val ingest = Project(id = "ingest", base = file("ingest")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", quirrel, daze, yggdrasil, accounts, auth)
-
-  lazy val shard = Project(id = "shard", base = file("shard")).
-    settings(commonAssemblySettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, heimdall, pandora, muspelheim % "test->test")
-
-  lazy val auth = Project(id = "auth", base = file("auth")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test")
+  lazy val ragnarok = Project(id = "ragnarok", base = file("ragnarok")).
+    settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test")
 
   lazy val performance = Project(id = "performance", base = file("performance")).
     settings(commonNexusSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard)
 
-  lazy val ragnarok = Project(id = "ragnarok", base = file("ragnarok")).
-    settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test")
-
-  lazy val ratatoskr = Project(id = "ratatoskr", base = file("ratatoskr")).
-    settings(commonAssemblySettings: _*).dependsOn(daze, ingest, auth, accounts)
+  lazy val yggdrasilProf = Project(id = "yggdrasilProf", base = file("yggdrasilProf")).
+    settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test")
 
   lazy val jprofiler = Project(id = "jprofiler", base = file("jprofiler")).
     settings(jprofilerSettings ++ commonNexusSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.jprofiler.Run")): _*).dependsOn(ragnarok)
+
+  /// Services ///
+
+  lazy val accounts     = Project(id = "accounts", base = file("accounts")).
+    settings(commonAssemblySettings: _*) dependsOn (common % "compile->compile;test->test", common)
+ 
+  lazy val auth = Project(id = "auth", base = file("auth")).
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test")
+
+  lazy val ingest = Project(id = "ingest", base = file("ingest")).
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil)
+
+  lazy val heimdall = Project(id = "heimdall", base = file("heimdall")).
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", util)
+
+  lazy val shard = Project(id = "shard", base = file("shard")).
+    settings(commonAssemblySettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, heimdall, pandora, muspelheim % "test->test")
+
+  lazy val mongo = Project(id = "mongo", base = file("mongo")).
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard)
+
+  /// Tooling ///
+
+  lazy val ratatoskr = Project(id = "ratatoskr", base = file("ratatoskr")).
+    settings(commonAssemblySettings: _*).dependsOn(daze, ingest, auth, accounts)
 }

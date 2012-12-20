@@ -20,6 +20,11 @@
 package com.precog.ingest
 package kafka
 
+import com.precog.common._
+import com.precog.common.accounts._
+import com.precog.common.security._
+import com.precog.ingest.service._
+
 import blueeyes.bkka.{ AkkaDefaults, AkkaTypeClasses }
 import blueeyes.BlueEyesServer
 import blueeyes.util.Clock
@@ -27,18 +32,10 @@ import blueeyes.util.Clock
 import akka.util.Timeout
 import akka.dispatch.{ ExecutionContext, Future, MessageDispatcher }
 
-import com.precog.auth._
-import com.precog.accounts._
-import com.precog.common._
-import com.precog.ingest.service._
-import com.precog.common.security._
-
 import java.util.Properties
-
 import java.net.InetAddress
 
 import com.weiglewilczek.slf4s.Logging
-
 import org.streum.configrity.Configuration
 
 import scalaz._
@@ -46,8 +43,8 @@ import scalaz._
 object KafkaEventServer extends 
     BlueEyesServer with 
     EventService with 
-    AccountManagerClientComponent with
-    MongoAPIKeyManagerComponent with
+    WebAccountFinderComponent with
+    WebAPIKeyFinderComponent with
     KafkaEventStoreComponent {
 
   val clock = Clock.System
@@ -57,11 +54,8 @@ object KafkaEventServer extends
 }
 
 
-
 trait KafkaEventStoreComponent extends AkkaDefaults with Logging {
-
-  def eventStoreFactory(config: Configuration): EventStore = {
-
+  def EventStore(config: Configuration): EventStore = {
     val centralZookeeperHosts = getConfig(config, "central.zk.connect")
 
     val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
@@ -83,9 +77,8 @@ trait KafkaEventStoreComponent extends AkkaDefaults with Logging {
     }
   }
 
-  def getConfig(cfg: Configuration, key: String): String = cfg.get[String](key).getOrElse(
+  def getConfig(cfg: Configuration, key: String): String = cfg.get[String](key) getOrElse {
     sys.error("Invalid configuration eventStore.%s required".format(key))
-  )
-
+  }
 }
 

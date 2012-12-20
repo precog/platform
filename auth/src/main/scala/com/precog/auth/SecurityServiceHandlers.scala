@@ -69,20 +69,10 @@ object WrappedGrantId {
   implicit val (decomposer, extractor) = IsoSerialization.serialization[WrappedGrantId](schema)
 }
 
-case class WrappedAPIKey(apiKey: APIKey, name: Option[String], description: Option[String])
-
-object WrappedAPIKey {
-  implicit val wrappedAPIKeyIso = Iso.hlist(WrappedAPIKey.apply _, WrappedAPIKey.unapply _)
-  
-  val schema = "apiKey" :: "name" :: "description" :: HNil
-
-  implicit val (decomposer, extractor) = IsoSerialization.serialization[WrappedAPIKey](schema)
-}
-
-class GetAPIKeysHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
+class GetAPIKeysHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) => 
-      apiKeyManagement.apiKeys(authAPIKey.apiKey).map { apiKeys =>
+    Success { (authAPIKey: APIKey) => 
+      apiKeyManagement.apiKeys(authAPIKey).map { apiKeys =>
         HttpResponse[JValue](OK, content = Some(apiKeys.map(r => WrappedAPIKey(r.apiKey, r.name, r.description)).serialize))
       }
     }
@@ -90,9 +80,9 @@ class GetAPIKeysHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher:
   val metadata = None
 }
 
-class CreateAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
-  val service: HttpRequest[Future[JValue]] => Validation[NotServed, APIKeyRecord => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) => 
+class CreateAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+  val service: HttpRequest[Future[JValue]] => Validation[NotServed, APIKey => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
+    Success { (authAPIKey: APIKey) => 
       request.content.map { _.flatMap { jvalue =>
         logger.debug("Creating API key in response to request with auth API key " + authAPIKey + ":\n" + jvalue)
         jvalue.validated[NewAPIKeyRequest] match {
@@ -125,9 +115,9 @@ class CreateAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit dispatche
   val metadata = None
 }
 
-class GetAPIKeyDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
+class GetAPIKeyDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) => 
+    Success { (authAPIKey: APIKey) => 
       request.parameters.get('apikey).map { apiKey =>
         apiKeyManagement.apiKeyDetails(apiKey).map { 
           case Some((apiKey, grants)) =>
@@ -144,9 +134,9 @@ class GetAPIKeyDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit dispa
   val metadata = None
 }
 
-class GetAPIKeyGrantsHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
+class GetAPIKeyGrantsHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) =>
+    Success { (authAPIKey: APIKey) =>
       request.parameters.get('apikey).map { apiKey =>
         apiKeyManagement.apiKeyGrants(apiKey).map {
           case Some(grants) =>
@@ -163,9 +153,9 @@ class GetAPIKeyGrantsHandler(apiKeyManagement: APIKeyManagement)(implicit dispat
   val metadata = None
 }
 
-class AddAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
+class AddAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) => 
+    Success { (authAPIKey: APIKey) => 
       (for {
         apiKey <- request.parameters.get('apikey) 
         contentFuture <- request.content 
@@ -194,9 +184,9 @@ class AddAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatc
   val metadata = None
 }
 
-class RemoveAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
+class RemoveAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) =>
+    Success { (authAPIKey: APIKey) =>
       (for {
         apiKey <- request.parameters.get('apikey) 
         grantId <- request.parameters.get('grantId)
@@ -214,9 +204,9 @@ class RemoveAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit disp
   val metadata = None
 }
 
-class DeleteAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
+class DeleteAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) => 
+    Success { (authAPIKey: APIKey) => 
       request.parameters.get('apikey).map { apiKey =>
         apiKeyManagement.deleteAPIKey(apiKey).map { 
           if(_) HttpResponse[JValue](HttpStatus(NoContent))
@@ -230,15 +220,15 @@ class DeleteAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit dispatche
   val metadata = None
 }
 
-class CreateGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
+class CreateGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) =>
+    Success { (authAPIKey: APIKey) =>
       (for {
         content <- request.content 
       } yield {
         content.flatMap { _.validated[NewGrantRequest] match {
           case Success(request) => 
-            apiKeyManagement.createGrant(authAPIKey.apiKey, request) map {
+            apiKeyManagement.createGrant(authAPIKey, request) map {
               case Success(grantId) => 
                 HttpResponse[JValue](OK, content = Some(WrappedGrantId(grantId, None, None).serialize))
               case Failure(e) =>
@@ -260,9 +250,9 @@ class CreateGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher
   val metadata = None
 }
 
-class GetGrantDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
+class GetGrantDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: APIKeyRecord) => 
+    Success { (authAPIKey: APIKey) => 
       (for {
         grantId <- request.parameters.get('grantId)
       } yield apiKeyManagement.grantDetails(grantId).map {
@@ -277,9 +267,9 @@ class GetGrantDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit dispat
   val metadata = None
 }
 
-class GetGrantChildrenHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
+class GetGrantChildrenHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) =>
+    Success { (authAPIKey: APIKey) =>
       (for {
         grantId <- request.parameters.get('grantId)
       } yield apiKeyManagement.grantChildren(grantId).map { grants =>
@@ -292,15 +282,15 @@ class GetGrantChildrenHandler(apiKeyManagement: APIKeyManagement)(implicit dispa
   val metadata = None
 }
 
-class AddGrantChildHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
+class AddGrantChildHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) =>
+    Success { (authAPIKey: APIKey) =>
       (for {
         parentId <- request.parameters.get('grantId) 
         content <- request.content 
       } yield {
         content.flatMap { _.validated[NewGrantRequest] match {
-          case Success(request) => apiKeyManagement.addGrantChild(authAPIKey.apiKey, parentId, request) map {
+          case Success(request) => apiKeyManagement.addGrantChild(authAPIKey, parentId, request) map {
             case Success(grantId) => 
               HttpResponse[JValue](OK, content = Some(WrappedGrantId(grantId, None, None).serialize))
             case Failure(e) => 
@@ -321,9 +311,9 @@ class AddGrantChildHandler(apiKeyManagement: APIKeyManagement)(implicit dispatch
   val metadata = None
 }
 
-class DeleteGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKeyRecord => Future[HttpResponse[JValue]]] with Logging {
+class DeleteGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (authAPIKey: APIKeyRecord) =>
+    Success { (authAPIKey: APIKey) =>
       request.parameters.get('grantId).map { grantId =>
         apiKeyManagement.deleteGrant(grantId).map {
           if(_) HttpResponse[JValue](HttpStatus(NoContent))
@@ -337,13 +327,12 @@ class DeleteGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher
 }
 
 class APIKeyManagement(val apiKeyManager: APIKeyManager[Future])(implicit val execContext: ExecutionContext) {
-  
   def apiKeys(apiKey: APIKey) : Future[Set[APIKeyRecord]] = {
     apiKeyManager.listAPIKeys.map(_.filter(_.issuerKey == apiKey).toSet)
   }
 
-  def createAPIKey(requestor: APIKeyRecord, request: NewAPIKeyRequest): Future[Validation[String, APIKey]] = {
-    apiKeyManager.newAPIKeyWithGrants(request.name, request.description, requestor.apiKey, request.grants.toSet).map {
+  def createAPIKey(creator: APIKey, request: NewAPIKeyRequest): Future[Validation[String, APIKey]] = {
+    apiKeyManager.newAPIKeyWithGrants(request.name, request.description, creator, request.grants.toSet).map {
       case Some(t) => Success(t)
       case None => failure("Requestor lacks permissions to assign given grants to API key")
     }

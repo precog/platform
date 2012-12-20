@@ -18,6 +18,7 @@
  *
  */
 package com.precog.common
+package ingest
 
 import util._
 
@@ -35,7 +36,7 @@ import scalaz._
 import scalaz.std.list._
 import scalaz.syntax.traverse._
 
-class ArchiveSpecs extends Specification with ArbitraryIngestMessage with ScalaCheck {
+class ArchiveSpecs extends Specification with ArbitraryEventMessage with ScalaCheck {
   implicit val arbArchive = Arbitrary(genRandomArchive)
   "serialization of an archive" should {
     "read back the data that was written" in check { in: Archive =>

@@ -17,11 +17,11 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.accounts
+package com.precog.common
+package accounts
 
 import com.precog.common.Path
 import com.precog.common.cache.Cache
-import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.util._
 
@@ -48,13 +48,13 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.monad._
 
-trait AccountManagerClientComponent {
+trait WebAccountFinderComponent {
   implicit def asyncContext: ExecutionContext
   implicit val M: Monad[Future]
 
-  def accountManagerFactory(config: Configuration): AccountFinder[Future] = {
+  def AccountFinder(config: Configuration): AccountFinder[Future] = {
     config.get[String]("service.hardcoded_account").map { accountId =>
-      new HardCodedAccountManager(accountId)
+      new ConstantAccountFinder(accountId)
     }.getOrElse {
       val protocol = config[String]("service.protocol")
       val host = config[String]("service.host")
@@ -64,15 +64,13 @@ trait AccountManagerClientComponent {
       val password = config[String]("service.password")
       val cacheSize = config[Int]("service.cache_size", 1000)
       
-      val settings = AccountManagerClientSettings(protocol, host, port, path, user, password, cacheSize)
-      new AccountManagerClient(settings)
+      val settings = WebAccountFinderSettings(protocol, host, port, path, user, password, cacheSize)
+      new WebAccountFinder(settings)
     }
   }
 }
 
-class HardCodedAccountManager(accountId: AccountId) extends AccountFinder[Future] with AkkaDefaults with Logging {
-  logger.debug("Starting new hardcoded account manager. All queries resolve to \"%s\"".format(accountId))
-
+class ConstantAccountFinder(accountId: AccountId) extends AccountFinder[Future] with AkkaDefaults with Logging {
   val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(asyncContext)
 
@@ -80,9 +78,9 @@ class HardCodedAccountManager(accountId: AccountId) extends AccountFinder[Future
   def findAccountById(accountId: AccountId): Future[Option[Account]] = Promise.successful(None)
 }
 
-case class AccountManagerClientSettings(protocol: String, host: String, port: Int, path: String, user: String, password: String, cacheSize: Int)
+case class WebAccountFinderSettings(protocol: String, host: String, port: Int, path: String, user: String, password: String, cacheSize: Int)
 
-class AccountManagerClient(settings: AccountManagerClientSettings) extends AccountFinder[Future] with AkkaDefaults with Logging {
+class WebAccountFinder(settings: WebAccountFinderSettings) extends AccountFinder[Future] with AkkaDefaults with Logging {
   import settings._
 
   private[this] val apiKeyToAccountCache = Cache.simple[APIKey, AccountId](Cache.MaxSize(cacheSize))

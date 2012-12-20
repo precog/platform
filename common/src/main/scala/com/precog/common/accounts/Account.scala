@@ -76,5 +76,15 @@ object Account {
   }
 }
 
+case class WrappedAccountId(accountId: AccountId)
+
+object WrappedAccountId {
+  implicit val wrappedAccountIdIso = Iso.hlist(WrappedAccountId.apply _, WrappedAccountId.unapply _)
+  
+  val schema = "accountId" :: HNil
+
+  implicit val (wrappedAccountIdDecomposer, wrappedAccountIdExtractor) = IsoSerialization.serialization[WrappedAccountId](schema)
+}
+
 
 
