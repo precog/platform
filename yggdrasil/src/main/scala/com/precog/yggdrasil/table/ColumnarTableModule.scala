@@ -617,6 +617,54 @@ trait ColumnarTableModule[M[+_]]
       Table(slices2, size)
     }
 
+    case class SlicesInfo(previousSlice: Option[Slice], stream: StreamT[M, Slice], acc: Vector[Slice], done: Boolean = false)
+
+    def canonicalize(length: Int): Table = {
+      def makeNewInfo(toConcat: Vector[Slice], stream: StreamT[M, Slice], acc: Vector[Slice], taken: Int): M[SlicesInfo] = {
+        stream.uncons flatMap {
+          case Some((head, tail)) =>
+            if (length - taken <= head.size) {
+              val sameSlice = toConcat :+ head.take(length - taken)
+              val concatted = Slice.concat(sameSlice)
+              inner(M.point(SlicesInfo(Some(head.drop(length - taken)), tail, acc :+ concatted)))
+            } else {
+              makeNewInfo(toConcat :+ head, tail, acc, taken + head.size)
+            }
+          case None =>
+            val newSlices = if (toConcat.isEmpty) acc else acc :+ Slice.concat(toConcat)
+            M.point(SlicesInfo(None, stream, newSlices, true))
+        }
+      }
+
+      def inner(slicesInfo0: M[SlicesInfo]): M[SlicesInfo] = {
+        slicesInfo0 flatMap { slicesInfo =>
+          if (slicesInfo.done) {
+            slicesInfo0
+          } else {
+            slicesInfo.previousSlice match {
+              case Some(slice) =>
+                val info = {
+                  if (length <= slice.size) {
+                    M.point(SlicesInfo(Some(slice.drop(length)), slicesInfo.stream, slicesInfo.acc :+ slice.take(length)))
+                  } else {
+                    makeNewInfo(Vector(slice), slicesInfo.stream, slicesInfo.acc, slice.size)
+                  }
+                }
+                inner(info)
+              case None =>
+                makeNewInfo(Vector.empty[Slice], slicesInfo.stream, slicesInfo.acc, 0)
+            }
+          }
+        }
+      }
+
+      val result =
+        if (length <= 0) M.point(SlicesInfo(None, StreamT.empty[M, Slice], Vector.empty[Slice]))
+        else inner(M.point(SlicesInfo(None, slices, Vector.empty[Slice])))
+
+      Table(StreamT.fromStream(result map { case slicesInfo => slicesInfo.acc.toStream }), size)
+    }
+
     /**
      * Cogroups this table with another table, using equality on the specified
      * transformation on rows of the table.

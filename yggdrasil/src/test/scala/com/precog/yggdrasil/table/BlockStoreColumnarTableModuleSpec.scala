@@ -63,11 +63,11 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
 
   "a block store columnar table" should {
     "load" >> {
-      "a problem sample" in testLoadSample1
-      "a problem sample" in testLoadSample2
-      "a problem sample" in testLoadSample3
-      "a problem sample" in testLoadSample4
-      //"a problem sample" in testLoadSample5 //pathological sample in the case of duplicated ids.
+      "a problem sample1" in testLoadSample1
+      "a problem sample2" in testLoadSample2
+      "a problem sample3" in testLoadSample3
+      "a problem sample4" in testLoadSample4
+      //"a problem sample5" in testLoadSample5 //pathological sample in the case of duplicated ids.
       "a dense dataset" in checkLoadDense
     }                           
     "sort" >> {
