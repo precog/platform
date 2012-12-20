@@ -60,7 +60,7 @@ object PlatformBuild extends Build {
 
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "2.1.5",
+    version := "2.3.0-SNAPSHOT",
     scalacOptions ++= {
       Seq("-deprecation", "-unchecked", "-g:none") ++ 
       Option(System.getProperty("com.precog.build.optimize")).map { _ => Seq("-optimize") }.getOrElse(Seq())
@@ -117,7 +117,7 @@ object PlatformBuild extends Build {
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
 
   lazy val platform = Project(id = "platform", base = file(".")).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*)
