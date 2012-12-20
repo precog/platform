@@ -164,43 +164,22 @@ trait JDBMQueryExecutorComponent {
         } yield {
           new AsyncQueryExecutor {
             val executionContext: ExecutionContext = executionContext0
-            def executor(implicit shardQueryMonad: ShardQueryMonad) = newExecutor
           }
         }).validation
       }
 
       def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
         implicit val futureMonad = new blueeyes.bkka.FutureMonad(defaultAsyncContext)
-
-        val shardQueryExecutor = for {
-          executionContext <- getAccountExecutionContext(apiKey)
+        (for {
+          executionContext0 <- getAccountExecutionContext(apiKey)
         } yield {
-          new QueryExecutor[Future, StreamT[Future, CharBuffer]] {
-            import UserQuery.Serialization._
-
-            def execute(userUID: String, query: String, prefix: Path, opts: QueryOptions) = {
-              val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
-              val expires = opts.timeout map (yggConfig.clock.now().plus(_))
-              createJob(apiKey, Some(userQuery.serialize), expires)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
-                import JobQueryState._
-
-                val result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] = {
-                  sink.apply(newExecutor.execute(userUID, query, prefix, opts)) recover {
-                    case _: QueryCancelledException => Failure(InvalidStateError("Query was cancelled before it could be executed."))
-                    case _: QueryExpiredException => Failure(InvalidStateError("Query expired before it could be executed."))
-                  }
-                }
-
-                result map { _ map (completeJob(_)) }
-              }
-            }
+          new SyncQueryExecutor {
+            val executionContext: ExecutionContext = executionContext0
           }
-        }
-
-        shardQueryExecutor.validation
+        }).validation
       }
 
-      private def newExecutor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
+      protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
         new JDBMShardQueryExecutor {
           implicit val M = shardQueryMonad
 

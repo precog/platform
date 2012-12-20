@@ -38,16 +38,56 @@ import blueeyes.core.http.MimeTypes
 
 import scalaz._
 
-trait AsyncQueryExecutorFactory { self: ManagedQueryModule =>
+/**
+ * An `AsyncQueryExecutorFactory` extends `QueryExecutorFactory` by allowing the
+ * creation of a `QueryExecutor` that returns `JobId`s, rather than a stream of
+ * results. It also has default implementable traits for both synchronous and
+ * asynchronous QueryExecutors.
+ */
+trait AsyncQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] { self: ManagedQueryModule =>
+
+  protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]]
 
   def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]]
 
-  trait AsyncQueryExecutor extends QueryExecutor[Future, JobId] {
-    private final val charset = Charset.forName("UTF-8")
+  trait ManagedQueryExecutor[+A] extends QueryExecutor[Future, A] {
+    import UserQuery.Serialization._
 
     implicit def executionContext: ExecutionContext
-    def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]]
-    
+    implicit def futureMonad = new blueeyes.bkka.FutureMonad(executionContext)
+
+    def complete(results: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]])(implicit
+        M: ShardQueryMonad): Future[Validation[EvaluationError, A]]
+
+    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): Future[Validation[EvaluationError, A]] = {
+      val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
+      val expires = opts.timeout map (yggConfig.clock.now().plus(_))
+      createJob(apiKey, Some(userQuery.serialize), expires)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
+        import JobQueryState._
+
+        val result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] = {
+          sink.apply(executor.execute(apiKey, query, prefix, opts)) recover {
+            case _: QueryCancelledException => Failure(InvalidStateError("Query was cancelled before it could be executed."))
+            case _: QueryExpiredException => Failure(InvalidStateError("Query expired before it could be executed."))
+          }
+        }
+
+        complete(result)
+      }
+    }
+  }
+
+  trait SyncQueryExecutor extends ManagedQueryExecutor[StreamT[Future, CharBuffer]] {
+    def complete(result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]])(implicit
+        M: ShardQueryMonad): Future[Validation[EvaluationError, StreamT[Future, CharBuffer]]] = {
+      result map { _ map (completeJob(_)) }
+    }
+  }
+
+  trait AsyncQueryExecutor extends ManagedQueryExecutor[JobId] {
+    private val Utf8 = Charset.forName("UTF-8")
+    private val JSON = MimeTypes.application / MimeTypes.json
+
     // Encode a stream of CharBuffers using the specified charset.
     private def encodeCharStream(stream: StreamT[Future, CharBuffer], charset: Charset)(implicit M: Monad[Future]): StreamT[Future, Array[Byte]] = {
       val encoder = charset.newEncoder
@@ -57,7 +97,7 @@ trait AsyncQueryExecutorFactory { self: ManagedQueryModule =>
           buffer.array()
         } catch {
           case (_: ReadOnlyBufferException) | (_: UnsupportedOperationException) =>
-            // This won't happen normally.
+            // This won't happen normally, but should handled in any case.
             val bytes = new Array[Byte](buffer.remaining())
             buffer.get(bytes)
             bytes
@@ -65,35 +105,20 @@ trait AsyncQueryExecutorFactory { self: ManagedQueryModule =>
       }
     }
 
-    private val Utf8 = Charset.forName("UTF-8")
-    private val JSON = MimeTypes.application / MimeTypes.json
-
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions) = {
-      import UserQuery.Serialization._
-
-      val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
-      val expires = opts.timeout map (yggConfig.clock.now().plus(_))
-      createJob(apiKey, Some(userQuery.serialize), expires)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
-        import JobQueryState._
-
-        val resultV: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] = {
-          sink.apply(executor.execute(apiKey, query, prefix, opts)) recover {
-            case _: QueryCancelledException => Failure(InvalidStateError("Query was cancelled before it could be executed."))
-            case _: QueryExpiredException => Failure(InvalidStateError("Query expired before it could be executed."))
+    def complete(resultV: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]])(implicit
+        M: ShardQueryMonad): Future[Validation[EvaluationError, JobId]] = {
+      M.jobId map { jobId =>
+        resultV map (_ map { result =>
+          jobManager.setResult(jobId, Some(JSON), encodeCharStream(completeJob(result), Utf8)) map {
+            case Left(error) =>
+              jobManager.abort(jobId, "Error occured while storing job results: " + error, yggConfig.clock.now())
+            case Right(_) =>
+              // This is "finished" by `completeJob`.
           }
-        }
-
-        shardQueryMonad.jobId map { jobId =>
-          resultV map (_ map { result =>
-            jobManager.setResult(jobId, Some(JSON), encodeCharStream(completeJob(result), Utf8)(shardQueryMonad.M)) map {
-              case Left(error) => sys.error("Failed to create results... what to do.") // FIXME: Yep.
-              case Right(_) => // Yay!
-            }
-            jobId
-          })
-        } getOrElse {
-          Future(Failure(InvalidStateError("Jobs service is down; cannot execute asynchronous queries.")))
-        }
+          jobId
+        })
+      } getOrElse {
+        Future(Failure(InvalidStateError("Jobs service is down; cannot execute asynchronous queries.")))
       }
     }
   }
