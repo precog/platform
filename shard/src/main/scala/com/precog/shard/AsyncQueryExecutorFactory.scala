@@ -30,10 +30,11 @@ import akka.dispatch.{ Future, ExecutionContext }
 
 import java.nio.charset._
 import java.nio.channels.WritableByteChannel
-import java.nio.{ CharBuffer, ByteBuffer }
+import java.nio.{ CharBuffer, ByteBuffer, ReadOnlyBufferException }
 import java.io.{ File, FileOutputStream }
 
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
+import blueeyes.core.http.MimeTypes
 
 import scalaz._
 
@@ -46,47 +47,26 @@ trait AsyncQueryExecutorFactory { self: ManagedQueryModule =>
 
     implicit def executionContext: ExecutionContext
     def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]]
-
-    // def encodeCharStream(stream: StreamT[ShardQuery, CharBuffer]): StreamT[Future, Array[Byte]]
-
-    // Writes result to the byte channel.
-    private def storeQuery(result: StreamT[ShardQuery, CharBuffer])(implicit M: ShardQueryMonad): Future[PrecogUnit] = {
-      import JobQueryState._
-
-      //M.jobId map { jobId =>
-      //  completeJob(result)
-      //  jobManager.setResult(encodeCharStream(result)) map {
-
-      val file = new File("ZOMG!") // createQueryResult(M.jobId)
-      val channel = new FileOutputStream(file).getChannel()
+    
+    // Encode a stream of CharBuffers using the specified charset.
+    private def encodeCharStream(stream: StreamT[Future, CharBuffer], charset: Charset)(implicit M: Monad[Future]): StreamT[Future, Array[Byte]] = {
       val encoder = charset.newEncoder
-      val buffer = ByteBuffer.allocate(1024 * 50)
-
-      def loop(result: StreamT[ShardQuery, CharBuffer]): Future[PrecogUnit] = result.uncons.run flatMap {
-        case Running(_, Some((chars, tail))) =>
-          while (encoder.encode(chars, buffer, false) != CoderResult.UNDERFLOW) {
-            while (buffer.remaining() > 0) {
-              channel.write(buffer)
-            }
-            buffer.clear()
-          }
-          loop(tail)
-
-        case Cancelled =>
-          channel.close()
-          M.jobId map (jobManager.abort(_, "Query was cancelled.", yggConfig.clock.now()) map { _ => PrecogUnit }) getOrElse Future(PrecogUnit)
-
-        case Expired =>
-          channel.close()
-          M.jobId map (jobManager.expire(_, yggConfig.clock.now()) map { _ => PrecogUnit }) getOrElse Future(PrecogUnit)
-
-        case Running(_, None) =>
-          channel.close()
-          M.jobId map (jobManager.finish(_, yggConfig.clock.now()) map { _ => PrecogUnit }) getOrElse Future(PrecogUnit)
+      stream map { chars =>
+        val buffer = encoder.encode(chars)
+        try {
+          buffer.array()
+        } catch {
+          case (_: ReadOnlyBufferException) | (_: UnsupportedOperationException) =>
+            // This won't happen normally.
+            val bytes = new Array[Byte](buffer.remaining())
+            buffer.get(bytes)
+            bytes
+        }
       }
-
-      loop(result)
     }
+
+    private val Utf8 = Charset.forName("UTF-8")
+    private val JSON = MimeTypes.application / MimeTypes.json
 
     def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions) = {
       import UserQuery.Serialization._
@@ -103,13 +83,18 @@ trait AsyncQueryExecutorFactory { self: ManagedQueryModule =>
           }
         }
 
-        resultV map (_ map { stream =>
-          storeQuery(stream)
-          shardQueryMonad.jobId.get // FIXME: FIXME: FIXME: Yep.
-        })
+        shardQueryMonad.jobId map { jobId =>
+          resultV map (_ map { result =>
+            jobManager.setResult(jobId, Some(JSON), encodeCharStream(completeJob(result), Utf8)(shardQueryMonad.M)) map {
+              case Left(error) => sys.error("Failed to create results... what to do.") // FIXME: Yep.
+              case Right(_) => // Yay!
+            }
+            jobId
+          })
+        } getOrElse {
+          Future(Failure(InvalidStateError("Jobs service is down; cannot execute asynchronous queries.")))
+        }
       }
     }
   }
-
 }
-
