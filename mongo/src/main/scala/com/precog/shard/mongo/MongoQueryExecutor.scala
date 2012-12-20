@@ -54,7 +54,6 @@ class MongoQueryExecutorConfig(val config: Configuration)
   with MongoColumnarTableModuleConfig
   with BlockStoreColumnarTableModuleConfig
   with IdSourceConfig
-  with EvaluatorConfig 
   with ShardConfig {
     
   val maxSliceSize = config[Int]("mongo.max_slice_size", 10000)
@@ -65,7 +64,7 @@ class MongoQueryExecutorConfig(val config: Configuration)
   // Ingest for mongo is handled via mongo
   override val ingestEnabled = false
 
-  val idSource = new FresAtomicIdSource
+  val idSource = new FreshAtomicIdSource
 
   def mongoServer: String = config[String]("mongo.server", "localhost:27017")
 
@@ -93,6 +92,10 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     var mongo: Mongo = _
     val dbAuthParams = yggConfig.dbAuthParams.data
   }
+
+  val clock = blueeyes.util.Clock.System
+
+  lazy val storage = new MongoStorageMetadataSource(Table.mongo)
 
   // to satisfy abstract defines in parent traits
   val asyncContext = extAsyncContext
