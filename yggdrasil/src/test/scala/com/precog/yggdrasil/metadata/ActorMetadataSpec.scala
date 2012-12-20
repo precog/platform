@@ -3,6 +3,7 @@ package metadata
 
 import actor._
 import com.precog.common._
+import com.precog.common.ingest._
 import com.precog.common.util._
 import com.precog.common.json._
 import com.precog.util._
@@ -36,8 +37,8 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
     implicit val actorSystem = ActorSystem("test" + System.nanoTime)
   }
 
-  def buildMetadata(sample: List[Event]): Map[ProjectionDescriptor, ColumnMetadata] = {
-    def projectionDescriptors(e: Event) = {
+  def buildMetadata(sample: List[Ingest]): Map[ProjectionDescriptor, ColumnMetadata] = {
+    def projectionDescriptors(e: Ingest) = {
       e.data.flattenWithPath.map {
         case (sel, value) => ProjectionDescriptor(1, ColumnDescriptor(e.path, CPath(sel), typeOf(value), Authorities(Set(e.apiKey))) :: Nil)
       }
@@ -59,29 +60,29 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
     }
   }
 
-  implicit val eventListArbitrary = Arbitrary(containerOfN[List, Event](50, genEvent))
+  implicit val eventListArbitrary = Arbitrary(containerOfN[List, Ingest](50, genIngest))
 
   implicit val timeout = Timeout(Long.MaxValue)
  
-  def extractSelectorsFor(path: Path)(events: List[Event]): Set[JPath] = {
+  def extractSelectorsFor(path: Path)(events: List[Ingest]): Set[JPath] = {
     events.flatMap {
-      case Event(apiKey, epath, None, data, metadata) if epath == path => data.flattenWithPath.map(_._1) 
+      case Ingest(apiKey, epath, None, data, metadata) if epath == path => data.flattenWithPath.map(_._1) 
       case _                                                    => List.empty
     }.toSet
   }
 
   def isEqualOrChild(ref: JPath, test: JPath): Boolean = test.nodes.startsWith(ref.nodes) 
   
-  def extractPathsFor(ref: Path)(events: List[Event]): Set[Path] = {
+  def extractPathsFor(ref: Path)(events: List[Ingest]): Set[Path] = {
     events.collect {
-      case Event(_, test, _, _, _) if test.isChildOf(ref) => Path(test.elements(ref.length))
+      case Ingest(_, test, _, _, _) if test.isChildOf(ref) => Path(test.elements(ref.length))
     }.toSet
   }
 
-  def extractMetadataFor(path: Path, selector: JPath)(events: List[Event]): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
+  def extractMetadataFor(path: Path, selector: JPath)(events: List[Ingest]): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
     def convertColDesc(cd: ColumnDescriptor) = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (cd -> Map[MetadataType, Metadata]())
     Map(events.flatMap {
-      case e @ Event(apiKey, epath, _, data, metadata) if epath == path => 
+      case e @ Ingest(apiKey, epath, _, data, metadata) if epath == path => 
         data.flattenWithPath.collect {
           case (k, v) if isEqualOrChild(selector, k) => k
         }.map( toProjectionDescriptor(e, _) )
@@ -139,9 +140,9 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
     }
   }
 
-  def extractPathMetadataFor(path: Path, selector: JPath)(events: List[Event]): PathRoot = {
+  def extractPathMetadataFor(path: Path, selector: JPath)(events: List[Ingest]): PathRoot = {
     val col: Set[(JPath, CType, String)] = events.collect {
-      case Event(apiKey, `path`, _, data, _) =>
+      case Ingest(apiKey, `path`, _, data, _) =>
         data.flattenWithPath.collect {
           case (s, v) if isEqualOrChild(selector, s) => 
              val ns = s.nodes.slice(selector.length, s.length-1)
@@ -152,7 +153,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
     PathRoot(extractPathMetadata(path, JPath(""), col)) 
   }
 
-  def toProjectionDescriptor(e: Event, selector: JPath) = {
+  def toProjectionDescriptor(e: Ingest, selector: JPath) = {
     def extractType(selector: JPath, data: JValue): CType = {
       data.flattenWithPath.find( _._1 == selector).flatMap[CType]( t => CType.forJValue(t._2) ).getOrElse(sys.error("bang"))
     }
@@ -162,7 +163,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
   }
     
   "ShardMetadata" should {
-    "return all children for the root path" ! new WithActorSystem { check { (sample: List[Event]) =>
+    "return all children for the root path" ! new WithActorSystem { check { (sample: List[Ingest]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
       
@@ -174,7 +175,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       }
     }}
     
-    "return all children for the an arbitrary path" ! new WithActorSystem { check { (sample: List[Event]) =>
+    "return all children for the an arbitrary path" ! new WithActorSystem { check { (sample: List[Ingest]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
@@ -188,7 +189,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       }
     }}
 
-    "return all selectors for a given path" ! new WithActorSystem { check { (sample: List[Event]) =>
+    "return all selectors for a given path" ! new WithActorSystem { check { (sample: List[Ingest]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
@@ -200,7 +201,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       }
     }}
 
-    "return all metadata for a given (path, selector)" ! new WithActorSystem { check { (sample: List[Event]) =>
+    "return all metadata for a given (path, selector)" ! new WithActorSystem { check { (sample: List[Ingest]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
 

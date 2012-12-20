@@ -1,5 +1,4 @@
-package com.precog
-package auth
+package com.precog.auth 
 
 import com.precog.common._
 import com.precog.common.accounts._
