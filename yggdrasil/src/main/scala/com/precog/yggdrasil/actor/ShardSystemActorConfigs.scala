@@ -35,6 +35,7 @@ import akka.pattern.gracefulStop
 
 import _root_.kafka.consumer._
 
+import blueeyes.bkka._
 import blueeyes.json._
 
 import com.weiglewilczek.slf4s.Logging
@@ -70,6 +71,8 @@ trait ProductionShardSystemConfig extends ShardConfig {
 trait ProductionShardSystemActorModule extends ShardSystemActorModule {
   type YggConfig <: ProductionShardSystemConfig
 
+  implicit def executionContext: ExecutionContext
+
   def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountFinder: AccountFinder[Future]) = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
     Some(() => new KafkaShardIngestActor(shardId = yggConfig.shardId, 
@@ -82,6 +85,9 @@ trait ProductionShardSystemActorModule extends ShardSystemActorModule {
                                          ingestTimeout = yggConfig.ingestTimeout,
                                          maxCacheSize = yggConfig.ingestMaxParallel,
                                          maxConsecutiveFailures = yggConfig.ingestMaxConsecutiveFailures) {
+
+      val M = new FutureMonad(executionContext)
+      
       def handleBatchComplete(pendingCheckpoint: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]) {
         logger.debug(pendingCheckpoint + " to be updated")
         metadataActor ! IngestBatchMetadata(updates, pendingCheckpoint.messageClock, Some(pendingCheckpoint.offset))

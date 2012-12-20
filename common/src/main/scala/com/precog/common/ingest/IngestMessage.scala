@@ -54,63 +54,6 @@ object EventMessage {
       eventMessage.fold(IngestMessage.Decomposer.apply _, ArchiveMessage.Decomposer.apply _)
     }
   }
-
-  // Kafka serialization 
-
-  private val stopByte: Byte = 0x00
-  private val jsonIngestFlag: Byte = 0x01
-  //private val jsonSyncFlag: Byte = 0x02
-  private val jsonArchiveFlag: Byte = 0x03
-  private val magicByte: Byte = -123
-
-  val charset = Charset.forName("UTF-8")
-
-  def toBytes(msg: EventMessage): Array[Byte] = {
-    val buf = ByteBuffer.allocate(1024*1024)
-    write(buf, msg)
-    buf.flip()
-    val result = new Array[Byte](buf.limit)
-    buf.get(result)
-    result
-  }
-
-  def write(buffer: ByteBuffer, msg: EventMessage) {
-    val msgType = msg.fold(_ => jsonIngestFlag, _ => jsonArchiveFlag)
-    ((writeHeader(_: ByteBuffer, msgType)) andThen (writeMessage(_: ByteBuffer, msg)))(buffer)
-  }
-  
-  def writeHeader(buffer: ByteBuffer, encodingFlag: Byte): ByteBuffer = {
-    buffer.put(magicByte).put(encodingFlag).put(stopByte)
-  }
-
-  def writeMessage(buffer: ByteBuffer, msg: EventMessage): ByteBuffer = {
-    val msgBuffer = charset.encode(msg.serialize.renderCompact)
-    buffer.put(msgBuffer)
-  }
-
-
-  def read(buf: ByteBuffer): EventMessage = {
-    readMessage(buf) match {
-      case Failure(e)   => throw new RuntimeException("Ingest message parse error: " + e)
-      case Success(msg) => msg
-    }
-  }
-
-  def readMessage(buffer: ByteBuffer): Validation[Error, EventMessage] = {
-    val magic = buffer.get()
-    if (magic != magicByte) {
-      failure(Error.invalid("Invalid message bad magic byte. Found [" + magic + "]"))
-    } else {
-      val msgType = buffer.get()
-      val stop    = buffer.get()
-      ((Error.thrown _) <-: JParser.parseFromByteBuffer(buffer)) flatMap { jv =>
-        (stop, msgType) match {
-          case (`stopByte`, `jsonIngestFlag`)  => jv.validated[IngestMessage]
-          case (`stopByte`, `jsonArchiveFlag`) => jv.validated[ArchiveMessage]
-        }
-      }
-    }
-  }
 }
 
 case class EventId(producerId: ProducerId, sequenceId: SequenceId) {

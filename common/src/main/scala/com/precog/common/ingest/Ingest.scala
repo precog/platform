@@ -40,9 +40,21 @@ import scalaz.syntax.validation._
 
 import shapeless._
 
-sealed trait Action
+sealed trait Event {
+  def fold[A](ingest: Ingest => A, archive: Archive => A): A
+}
 
-case class Ingest(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountId], data: Vector[JValue], jobId: Option[JobId]) extends Action 
+object Event {
+  implicit val decomposer: Decomposer[Event] = new Decomposer[Event] {
+    override def decompose(event: Event): JValue = {
+      event.fold(_.serialize, _.serialize)
+    }
+  }
+}
+
+case class Ingest(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountId], data: Vector[JValue], jobId: Option[JobId]) extends Event {
+  def fold[A](ingest: Ingest => A, archive: Archive => A): A = ingest(this)
+}
 
 object Ingest {
   implicit val eventIso = Iso.hlist(Ingest.apply _, Ingest.unapply _)
@@ -65,7 +77,9 @@ object Ingest {
   implicit val Extractor: Extractor[Ingest] = extractorV1 <+> extractorV0
 }
 
-case class Archive(apiKey: APIKey, path: Path, jobId: Option[JobId]) extends Action
+case class Archive(apiKey: APIKey, path: Path, jobId: Option[JobId]) extends Event {
+  def fold[A](ingest: Ingest => A, archive: Archive => A): A = archive(this)
+}
 
 object Archive {
   implicit val archiveIso = Iso.hlist(Archive.apply _, Archive.unapply _)

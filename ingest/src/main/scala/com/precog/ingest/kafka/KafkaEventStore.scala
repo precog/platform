@@ -38,22 +38,6 @@ import com.weiglewilczek.slf4s._
 
 import scalaz._
 
-class KafkaEventStore(router: EventRouter, producerId: Int, firstEventId: Int = 0)(implicit dispatcher: MessageDispatcher) extends EventStore {
-  private val nextEventId = new AtomicInteger(firstEventId)
-  
-  def save(action: Action, timeout: Timeout) = {
-    val actionId = nextEventId.incrementAndGet
-    action match {
-      case event : Event => router.route(EventMessage(producerId, actionId, event)) map { _ => PrecogUnit }
-      case archive : Archive => router.route(ArchiveMessage(producerId, actionId, archive)) map { _ => PrecogUnit }
-    }
-  }
-
-  def start(): Future[PrecogUnit] = Promise.successful(PrecogUnit)
-
-  def stop(): Future[PrecogUnit] = router.close.map(_ => PrecogUnit)
-}
-
 class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDispatcher) extends EventStore with Logging {
   private val localTopic = config[String]("topic")
   private val localProperties = {
@@ -64,17 +48,15 @@ class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDi
     props
   }
 
-  private val producer = new Producer[String, IngestMessage](new ProducerConfig(localProperties))
+  private val producer = new Producer[String, Message](new ProducerConfig(localProperties))
 
   def start(): Future[PrecogUnit] = Promise.successful(PrecogUnit)
 
-  def save(action: Action, timeout: Timeout) = Future {
-    val msg = action match {
-      case event : Ingest => EventMessage(-1, -1, event)
-      case archive : Archive => ArchiveMessage(-1, -1, archive)
+  def save(event: Event, timeout: Timeout) = Future {
+    producer send {
+      new ProducerData[String, Message](localTopic, new Message(EventEncoding.toBytes(event)))
     }
-    val data = new ProducerData[String, IngestMessage](localTopic, msg)
-    producer.send(data)
+
     PrecogUnit
   }
 

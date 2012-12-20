@@ -48,14 +48,19 @@ import _root_.kafka.consumer.SimpleConsumer
 import _root_.kafka.message.MessageSet
 
 import blueeyes.json._
-import blueeyes.json.serialization.Decomposer
+import blueeyes.json.serialization.Extractor.Error
 import blueeyes.json.serialization.DefaultSerialization._
+
+import scalaz._
+import scalaz.std.list._
+import scalaz.syntax.monad._
+import scalaz.syntax.monoid._
+import scalaz.syntax.traverse._
+import Validation._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.immutable.TreeMap
-import scalaz._
-import scalaz.syntax.monoid._
 
 //////////////
 // MESSAGES //
@@ -84,6 +89,7 @@ abstract class KafkaShardIngestActor(shardId: String,
                                      ingestTimeout: Timeout = 120 seconds, 
                                      maxCacheSize: Int = 5,
                                      maxConsecutiveFailures: Int = 3) extends Actor {
+
   protected lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.KafkaShardIngestActor")
 
   private var lastCheckpoint: YggCheckpoint = initialCheckpoint
@@ -91,6 +97,8 @@ abstract class KafkaShardIngestActor(shardId: String,
   private var totalConsecutiveFailures = 0
   private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[EventMessage]] 
   private var pendingCompletes = Vector.empty[BatchComplete]
+
+  implicit def M: Monad[Future]
 
   def receive = {
     case Status => sender ! status
@@ -160,8 +168,8 @@ abstract class KafkaShardIngestActor(shardId: String,
               }
   
             case Failure(error)    => 
-              logger.error("An error occurred retrieving data from Kafka.", error)
-              requestor ! IngestErrors(List("An error occurred retrieving data from Kafka: " + error.getMessage))
+              logger.error("Error(s) occurred retrieving data from Kafka: " + error.message)
+              requestor ! IngestErrors(List("Error(s) retrieving data from Kafka: " + error.message))
           }
         } else {
           logger.warn("Concurrent ingest window full (%d). Cannot start new ingest batch".format(ingestCache.size))
@@ -177,8 +185,7 @@ abstract class KafkaShardIngestActor(shardId: String,
    */
   protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]): Unit
 
-  private def readRemote(fromCheckpoint: YggCheckpoint): Future[Validation[Throwable, (Vector[EventMessage], YggCheckpoint)]] = {
-
+  private def readRemote(fromCheckpoint: YggCheckpoint): Future[Validation[Error, (Vector[EventMessage], YggCheckpoint)]] = {
     // The shard ingest actor needs to compute the maximum offset, so it has
     // to traverse the full message set in process; to avoid traversing it
     // twice, we simply read the payload into event messages at this point.
@@ -224,7 +231,7 @@ abstract class KafkaShardIngestActor(shardId: String,
       }
     }
 
-    Validation.fromTryCatch {
+    val read = M.point {
       val req = new FetchRequest(
         topic,
         partition = 0,
@@ -234,24 +241,25 @@ abstract class KafkaShardIngestActor(shardId: String,
 
       // read a fetch buffer worth of messages from kafka, deserializing each one
       // and recording the offset
-      consumer.fetch(req).toList.map { msgAndOffset =>
-        (EventMessage.read(msgAndOffset.message.payload), msgAndOffset.offset)
+      val eventMessages: List[Validation[Error, (EventMessage, Long)]] = consumer.fetch(req).toList.map { msgAndOffset =>
+        EventMessageEncoding.read(msgAndOffset.message.payload) map { (_, msgAndOffset.offset) }
       }
-    } match {
-      case Success(messageSet) => 
-        val apiKeys = messageSet collect { 
-          case (IngestMessage(apiKey, _, _, _, _), _) => apiKey 
+
+      val batched: Validation[Error, Future[(Vector[EventMessage], YggCheckpoint)]] = 
+        eventMessages.sequence[({ type λ[α] = Validation[Error, α] })#λ, (EventMessage, Long)] map { messageSet =>
+          val apiKeys = messageSet collect { 
+            case (IngestMessage(apiKey, _, _, _, _), _) => apiKey 
+          }
+
+          accountFinder.mapAccountIds(apiKeys.toSet) map { apiKeyMap =>
+            buildBatch(messageSet, apiKeyMap, Vector.empty, fromCheckpoint)
+          }
         }
 
-        accountFinder.mapAccountIds(apiKeys.toSet) map { apiKeyMap =>
-          Success(buildBatch(messageSet, apiKeyMap, Vector.empty, fromCheckpoint))
-        }
-      
-      case Failure(t) => 
-        import context.system
-        implicit val executor = ExecutionContext.defaultExecutionContext
-        Future(Failure[Throwable, (Vector[EventMessage], YggCheckpoint)](t))
+      batched.sequence[Future, (Vector[EventMessage], YggCheckpoint)]
     }
+
+    read.join
   }
 
   protected def status: JValue = 
