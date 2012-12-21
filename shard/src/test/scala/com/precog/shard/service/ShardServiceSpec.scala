@@ -263,7 +263,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   }
 }
 
-trait TestQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQueryModule {
+trait TestQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQueryModule { self =>
   import scalaz.syntax.monad._
   import scalaz.syntax.traverse._
   import AkkaTypeClasses._
@@ -275,13 +275,13 @@ trait TestQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQue
   val accessControl: AccessControl[Future]
   val ownerMap: Map[Path, Set[AccountId]]
 
-  private def wrap(a: JArray): StreamT[Future, CharBuffer] = {
+  private def wrap[M[+_]: Monad](a: JArray): StreamT[M, CharBuffer] = {
     val str = a.toString
     val buffer = CharBuffer.allocate(str.length)
     buffer.put(str)
     buffer.flip()
     
-    StreamT.fromStream(Stream(buffer).point[Future])
+    StreamT.fromStream(Stream(buffer).point[M])
   }
 
   type YggConfig = ManagedQueryModuleConfig
@@ -290,12 +290,22 @@ trait TestQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQue
     val clock = Clock.System
   }
 
-  protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = sys.error("todo")
+  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
+    Future(Success(new AsyncQueryExecutor {
+      val executionContext = self.executionContext
+    }))
+  }
 
-  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = sys.error("todo")
+  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
+    Future(Success(new SyncQueryExecutor {
+      val executionContext = self.executionContext
+    }))
+  }
 
-  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = Future {
-    Success(new QueryExecutor[Future, StreamT[Future, CharBuffer]] {
+
+  // def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = Future {
+  protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
+    new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
         val requiredPaths = if(query startsWith "//") Set(prefix / Path(query.substring(1))) else Set.empty[Path]
         val allowed = Await.result(Future.sequence(requiredPaths.map {
@@ -303,11 +313,11 @@ trait TestQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQue
         }).map(_.forall(identity)), to)
         
         if(allowed)
-          Future(success(wrap(JArray(List(JNum(2))))))
+          shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
         else
-          Future(failure(AccessDenied("No data accessable at the specified path")))
+          shardQueryMonad.point(failure(AccessDenied("No data accessable at the specified path")))
       }
-    })
+    }
   }
 
   def browse(apiKey: APIKey, path: Path) = {
