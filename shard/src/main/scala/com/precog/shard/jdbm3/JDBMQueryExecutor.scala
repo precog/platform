@@ -104,7 +104,7 @@ trait JDBMQueryExecutorComponent {
   def queryExecutorFactoryFactory(config: Configuration,
       extAccessControl: AccessControl[Future],
       extAccountManager: BasicAccountManager[Future],
-      extJobManager: JobManager[Future]): QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] = {
+      extJobManager: JobManager[Future]): AsyncQueryExecutorFactory = {
     new JDBMQueryExecutorFactory
         with JDBMProjectionModule
         with ProductionShardSystemActorModule

@@ -263,7 +263,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   }
 }
 
-trait TestQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] {
+trait TestQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQueryModule {
   import scalaz.syntax.monad._
   import scalaz.syntax.traverse._
   import AkkaTypeClasses._
@@ -283,6 +283,16 @@ trait TestQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Futu
     
     StreamT.fromStream(Stream(buffer).point[Future])
   }
+
+  type YggConfig = ManagedQueryModuleConfig
+  object yggConfig extends YggConfig {
+    val jobPollFrequency = Duration(2, "seconds")
+    val clock = Clock.System
+  }
+
+  protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = sys.error("todo")
+
+  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = sys.error("todo")
 
   def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = Future {
     Success(new QueryExecutor[Future, StreamT[Future, CharBuffer]] {

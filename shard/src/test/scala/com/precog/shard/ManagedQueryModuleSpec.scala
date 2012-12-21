@@ -271,4 +271,3 @@ trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[TestFuture, S
   def startup = Pointed[TestFuture].point { true }
   def shutdown = Pointed[TestFuture].point { actorSystem.shutdown; true }
 }
-

@@ -157,6 +157,20 @@ trait ShardServiceCombinators extends EventServiceCombinators {
     }
   }
 
+  def asyncQuery[A, B](next: HttpService[A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]]) = {
+    new DelegatingService[A, APIKeyRecord => Future[B], A, (APIKeyRecord, Path) => Future[B]] {
+      val delegate = query(next)
+      val service = { (request: HttpRequest[A]) =>
+        val path = request.parameters.get('prefixPath).filter(_ != null).getOrElse("")
+        delegate.service(request.copy(parameters = request.parameters + ('sync -> "async"))) map { f =>
+          (apiKey: APIKeyRecord) => f(apiKey, Path(path))
+        }
+      }
+
+      def metadata = delegate.metadata
+    }
+  }
+
   import java.nio.ByteBuffer
 
   implicit def bbToString(bb: ByteBuffer): String = {

@@ -54,7 +54,7 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
 
-case class ShardState(queryExecutorFactory: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]], apiKeyManager: APIKeyManager[Future])
+case class ShardState(queryExecutorFactory: AsyncQueryExecutorFactory, apiKeyManager: APIKeyManager[Future], jobManager: JobManager[Future])
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
@@ -68,7 +68,7 @@ trait ShardService extends
   def queryExecutorFactoryFactory(config: Configuration,
     accessControl: AccessControl[Future],
     accountManager: BasicAccountManager[Future],
-    jobManager: JobManager[Future]): QueryExecutorFactory[Future, StreamT[Future, CharBuffer]]
+    jobManager: JobManager[Future]): AsyncQueryExecutorFactory // [Future, StreamT[Future, CharBuffer]]
 
   def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
 
@@ -78,6 +78,10 @@ trait ShardService extends
 
   // TODO: maybe some of these implicits should be moved, but for now i
   // don't have the patience to figure out where.
+
+  implicit val err: (HttpFailure, String) => HttpResponse[ByteChunk] = { (failure, s) =>
+    HttpResponse(failure, content = Some(ByteChunk(s.getBytes("UTF-8"))))
+  }
 
   implicit val failureToQueryResult:
       (HttpFailure, String) => HttpResponse[QueryResult] =
@@ -99,13 +103,31 @@ trait ShardService extends
 
   import java.nio.ByteBuffer
   import java.nio.charset.Charset
+
   val utf8 = Charset.forName("UTF-8")
-  implicit val queryResultToFutureByteChunk:
-      QueryResult => Future[ByteChunk] =
+
+  implicit val queryResultToFutureByteChunk: QueryResult => Future[ByteChunk] = {
     (qr: QueryResult) => qr match {
       case Left(jv) => Future(Left(ByteBuffer.wrap(jv.renderCompact.getBytes)))
       case Right(stream) => Future(Right(stream.map(cb => utf8.encode(cb))))
     }
+  }
+
+  implicit val futureByteChunk2byteChunk: Future[ByteChunk] => ByteChunk = { fb =>
+    Right(StreamT.wrapEffect[Future, ByteBuffer] {
+      fb map {
+        case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
+        case Right(stream) => stream
+      }
+    })
+  }
+
+  implicit val queryResult2byteChunk = futureByteChunk2byteChunk compose queryResultToFutureByteChunk
+
+  // I feel dirty inside.
+  implicit def futureMapper[A, B](implicit a2b: A => B): Future[HttpResponse[A]] => Future[HttpResponse[B]] = { fa =>
+    fa map { res => res.copy(content = res.content map a2b) }
+  }
 
   val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {
@@ -136,23 +158,33 @@ trait ShardService extends
           queryExecutorFactory.startup.map { _ =>
             ShardState(
               queryExecutorFactory,
-              apiKeyManager
+              apiKeyManager,
+              jobManager
             )
           }
         } ->
-        request { (state: ShardState) =>
+        request { case ShardState(queryExecutorFactory, apiKeyManager, jobManager) =>
+          apiKey[ByteChunk, HttpResponse[ByteChunk]](apiKeyManager) {
+            path("analytics/queries") {
+              path("'jobId") {
+                get(new AsyncQueryServiceHandler(jobManager))
+              }
+            }
+          } ~
+          apiKey(apiKeyManager) {
+            asyncQuery {
+              post(new QueryServiceHandler(queryExecutorFactory))
+            }
+          } ~
           jvalue[ByteChunk] {
             path("/actors/status") {
-              get(new ActorStatusHandler(state.queryExecutorFactory))
+              get(new ActorStatusHandler(queryExecutorFactory))
             }
           } ~ jsonpcb[QueryResult] {
-            apiKey(state.apiKeyManager) {
-              // POST analytics/queries/
-              // Get back a jobId.
-              // GET analytics/queries/'jobId  -- status
+            apiKey(apiKeyManager) {
               dataPath("analytics/fs") {
                 query {
-                  get(new QueryServiceHandler(state.queryExecutorFactory)) ~
+                  get(new QueryServiceHandler(queryExecutorFactory)) ~
                   // Handle OPTIONS requests internally to simplify the standalone service
                   options {
                     (request: HttpRequest[ByteChunk]) => {
@@ -162,7 +194,7 @@ trait ShardService extends
                 }
               } ~
               dataPath("meta/fs") {
-                get(new BrowseServiceHandler(state.queryExecutorFactory, state.apiKeyManager)) ~
+                get(new BrowseServiceHandler(queryExecutorFactory, apiKeyManager)) ~
                 // Handle OPTIONS requests internally to simplify the standalone service
                 options {
                   (request: HttpRequest[ByteChunk]) => {
@@ -171,16 +203,16 @@ trait ShardService extends
                 }
               }
             } ~ path("actors/status") {
-              get(new ActorStatusHandler(state.queryExecutorFactory))
+              get(new ActorStatusHandler(queryExecutorFactory))
             }
           }
         } ->
         shutdown { state =>
           for {
             shardShutdown <- state.queryExecutorFactory.shutdown()
-            _             <- state.apiKeyManager.close()
+            _ <- state.apiKeyManager.close()
           } yield {
-            logger.info("Shard system clean shutdown: " + shardShutdown)            
+            logger.info("Shard system clean shutdown: " + shardShutdown)
             Option.empty[Stoppable]
           }
         }
