@@ -79,6 +79,46 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     results.copoint mustEqual expected
   }
   
+  def testDeepMap1CoerceToDouble = {
+    val data: Stream[JValue] = Stream(
+        JObject(JField("value", JNum(12)) :: JField("key", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value", JNum(34.5)) :: JField("key", JArray(JNum(2) :: Nil)) :: Nil),
+        JObject(JField("value", JNum(31.9)) :: JField("key", JArray(JNum(3) :: Nil)) :: Nil),
+        JObject(JField("value", JObject(JField("baz", JNum(31)) :: Nil)) :: JField("key", JArray(JNum(3) :: Nil)) :: Nil),
+        JObject(JField("value", JString("foo")) :: JField("key", JArray(JNum(3) :: Nil)) :: Nil),
+        JObject(JField("value", JNum(20)) :: JField("key", JArray(JNum(4) :: Nil)) :: Nil))
+    
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform { DeepMap1(DerefObjectStatic(Leaf(Source), CPathField("value")), lookupF1(Nil, "coerceToDouble")) })
+    val expected = Stream(JNum(12), JNum(34.5), JNum(31.9), JObject(JField("baz", JNum(31)) :: Nil), JNum(20))
+
+    results.copoint must haveSize(5)
+
+    results.copoint mustEqual expected
+  }
+  
+  def testMap1CoerceToDouble = {
+    val data: Stream[JValue] = Stream(
+        JObject(JField("value", JNum(12)) :: JField("key", JArray(JNum(1) :: Nil)) :: Nil),
+        JObject(JField("value", JNum(34.5)) :: JField("key", JArray(JNum(2) :: Nil)) :: Nil),
+        JObject(JField("value", JNum(31.9)) :: JField("key", JArray(JNum(3) :: Nil)) :: Nil),
+        JObject(JField("value", JObject(JField("baz", JNum(31)) :: Nil)) :: JField("key", JArray(JNum(3) :: Nil)) :: Nil),
+        JObject(JField("value", JString("foo")) :: JField("key", JArray(JNum(3) :: Nil)) :: Nil),
+        JObject(JField("value", JNum(20)) :: JField("key", JArray(JNum(4) :: Nil)) :: Nil))
+    
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform { Map1(DerefObjectStatic(Leaf(Source), CPathField("value")), lookupF1(Nil, "coerceToDouble")) })
+    val expected = Stream(JNum(12), JNum(34.5), JNum(31.9), JNum(20))
+
+    results.copoint must haveSize(4)
+
+    results.copoint mustEqual expected
+  }
+  
   def checkMap1 = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>

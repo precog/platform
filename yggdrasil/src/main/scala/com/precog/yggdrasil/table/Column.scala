@@ -300,6 +300,11 @@ object Column {
       def isDefinedAt(row: Int) = col.isDefinedAt(row)
       def apply(row: Int) = Array(col(row))
     }
+    case col: DoubleColumn => new HomogeneousArrayColumn[Double] {
+      val tpe = CArrayType(CDouble)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Array(col(row))
+    }
     case col: NumColumn => new HomogeneousArrayColumn[BigDecimal] {
       val tpe = CArrayType(CNum)
       def isDefinedAt(row: Int) = col.isDefinedAt(row)

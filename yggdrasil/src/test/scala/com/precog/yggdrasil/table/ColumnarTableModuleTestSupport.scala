@@ -151,6 +151,7 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] wi
   def lookupF1(namespace: List[String], name: String): F1 = {
     val lib = Map[String, CF1](
       "negate" -> cf.math.Negate,
+      "coerceToDouble" -> cf.util.CoerceToDouble,
       "true" -> CF1("testing::true") { _ => Some(Column.const(true)) }
     )
 

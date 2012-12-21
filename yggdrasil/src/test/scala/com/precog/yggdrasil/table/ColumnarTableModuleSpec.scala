@@ -60,6 +60,9 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with TransformSpec[M]
     with CompactSpec[M] 
     with TakeRangeSpec[M]
+    with ToArraySpec[M]
+    with ConcatSpec[M]
+    with SampleSpec[M]
     with PartitionMergeSpec[M]
     with DistinctSpec[M] 
     with SchemasSpec[M]
@@ -317,6 +320,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
       "perform a trivial map1" in testMap1IntLeaf
+      "perform deepmap1 using numeric coercion" in testDeepMap1CoerceToDouble
+      "perform map1 using numeric coercion" in testMap1CoerceToDouble
       "fail to map1 into array and object" in testMap1ArrayObject
       "perform a less trvial map1" in checkMap1
       //"give the identity transform for the trivial filter" in checkTrivialFilter
@@ -411,12 +416,30 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "select the correct rows using scalacheck" in checkTakeRange
     }
 
+    "in toArray" >> {
+      "create a single column given two single columns" in testToArrayHomogeneous
+      "create a single column given heterogeneous data" in testToArrayHeterogeneous
+    }
+
+    "in concat" >> {
+      "concat two tables" in testConcat
+    }
+
     "in schemas" >> {
       "find a schema in single-schema table" in testSingleSchema
+      "find a schema in homogeneous array table" in testHomogeneousArraySchema
       "find schemas separated by slice boundary" in testCrossSliceSchema
       "extract intervleaved schemas" in testIntervleavedSchema
       "don't include undefineds in schema" in testUndefinedsInSchema
       "deal with most expected types" in testAllTypesInSchema
+    }
+
+    "in sample" >> {
+       "sample from a dataset" in testSample
+       "return no samples given empty sequence of transspecs" in testSampleEmpty
+       "sample from a dataset given non-identity transspecs" in testSampleTransSpecs
+       "return full set when sample size larger than dataset" in testLargeSampleSize
+       "resurn empty table when sample size is 0" in test0SampleSize
     }
   }
 
