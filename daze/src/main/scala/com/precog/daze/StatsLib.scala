@@ -177,7 +177,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
         val cross = for (l <- left; r <- right) yield (l, r)
 
-        val result = cross flatMap {
+        val result: Set[Result] = cross map {
           case (c1: LongColumn, c2: LongColumn) => 
             val mapped = range filter { r => c1.isDefinedAt(r) && c2.isDefinedAt(r) } map { i => (c1(i), c2(i)) }
             if (mapped.isEmpty) {
@@ -281,7 +281,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         }
 
         if (result.isEmpty) None
-        else Some(result.suml)
+        else result.suml(monoid)
       }
     }
     
@@ -327,7 +327,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
         val cross = for (l <- left; r <- right) yield (l, r)
 
-        val result = cross flatMap {
+        val result = cross map {
           case (c1: LongColumn, c2: LongColumn) => 
             val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
             if (mapped.isEmpty) {
@@ -432,7 +432,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         }
 
         if (result.isEmpty) None
-        else Some(result.suml)
+        else result.suml(monoid)
       }
     }
     
@@ -475,7 +475,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
         val cross = for (l <- left; r <- right) yield (l, r)
 
-        val result = cross flatMap {
+        val result = cross map {
           case (c1: LongColumn, c2: LongColumn) => 
             val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
             if (mapped.isEmpty) {
@@ -580,7 +580,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         }
        
         if (result.isEmpty) None
-        else Some(result.suml)
+        else result.suml(monoid)
       }
     }
     
@@ -633,7 +633,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
         val cross = for (l <- left; r <- right) yield (l, r)
 
-        val result = cross flatMap {
+        val result = cross map {
           case (c1: LongColumn, c2: LongColumn) => 
             val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
             if (mapped.isEmpty) {
@@ -783,7 +783,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         }
 
         if (result.isEmpty) None
-        else Some(result.suml)
+        else result.suml(monoid)
       }
     }
     
