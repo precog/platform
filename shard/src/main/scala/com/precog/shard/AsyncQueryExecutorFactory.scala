@@ -74,6 +74,7 @@ trait AsyncQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Fut
       val encoder = charset.newEncoder
       stream map { chars =>
         val buffer = encoder.encode(chars)
+        chars.flip()
         try {
           buffer.array()
         } catch {
