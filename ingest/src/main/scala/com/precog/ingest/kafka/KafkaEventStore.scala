@@ -22,6 +22,7 @@ package kafka
 
 import com.precog.common._
 import com.precog.common.ingest._
+import com.precog.common.kafka._
 import com.precog.util._
 
 import akka.util.Timeout
@@ -31,6 +32,7 @@ import akka.dispatch.MessageDispatcher
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 
+import _root_.kafka.message._
 import _root_.kafka.producer._
 
 import org.streum.configrity.{Configuration, JProperties}
@@ -54,7 +56,7 @@ class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDi
 
   def save(event: Event, timeout: Timeout) = Future {
     producer send {
-      new ProducerData[String, Message](localTopic, new Message(EventEncoding.toBytes(event)))
+      new ProducerData[String, Message](localTopic, new Message(EventEncoding.toMessageBytes(event)))
     }
 
     PrecogUnit

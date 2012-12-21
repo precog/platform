@@ -22,6 +22,7 @@ package kafka
 
 import com.precog.common._
 import com.precog.common.accounts._
+import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.ingest.service._
 
@@ -54,7 +55,7 @@ object KafkaEventServer extends
 }
 
 
-trait KafkaEventStoreComponent extends AkkaDefaults with Logging {
+trait KafkaEventStoreComponent extends WebAccountFinderComponent with AkkaDefaults with Logging {
   def EventStore(config: Configuration): EventStore = {
     val centralZookeeperHosts = getConfig(config, "central.zk.connect")
 
@@ -62,16 +63,15 @@ trait KafkaEventStoreComponent extends AkkaDefaults with Logging {
     val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
     val agent = serviceUID.hostId + serviceUID.serviceId  
 
-    val eventIdSeq = new SystemEventIdSequence(agent, coordination)
-
     val localConfig = config.detach("local")
-    val centralConfig = config.detach("central")
 
+    val eventIdSeq = new SystemEventIdSequence(agent, coordination)
+    val accountFinder = AccountFinder(config.detach("accountFinder"))
     val eventStore = new LocalKafkaEventStore(localConfig)
-    val relayAgent = new KafkaRelayAgent(eventIdSeq, localConfig, centralConfig)
+    val relayAgent = new KafkaRelayAgent(accountFinder, eventIdSeq, localConfig, config.detach("central"))
 
     new EventStore {
-      def save(action: Action, timeout: Timeout) = eventStore.save(action, timeout)
+      def save(action: Event, timeout: Timeout) = eventStore.save(action, timeout)
       def start() = relayAgent.start flatMap { _ => eventStore.start }
       def stop() = eventStore.stop flatMap { _ => relayAgent.stop }
     }
