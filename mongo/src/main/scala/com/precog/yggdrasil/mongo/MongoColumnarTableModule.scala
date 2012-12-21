@@ -167,74 +167,11 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
       import TransSpecModule.paths._
 
       @tailrec def buildColArrays(from: DBCursor, into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
-        if (from.hasNext && sliceIndex < yggConfig.maxSliceSize) {
+        if (sliceIndex < yggConfig.maxSliceSize && from.hasNext) {
           // horribly inefficient, but a place to start
           val Success(jv) = MongoToJson(from.next())
-          val withIdsAndValues = jv.flattenWithPath.foldLeft(into) {
-            case (acc, (jpath, JUndefined)) => acc
-            case (acc, (jpath, v)) =>
-              val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
-
-              // The objectId becomes identity for the slices, everything else is a value
-              val transformedPath = if (jpath == JPath("._id")) {
-                Key \ 0
-              } else {
-                Value \ CPath(jpath)
-              }
-
-              val ref = ColumnRef(transformedPath, ctype)
-
-              val pair: (BitSet, Array[_]) = v match {
-                case JBool(b) => 
-                  val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Boolean](yggConfig.maxSliceSize))).asInstanceOf[(BitSet, Array[Boolean])]
-                  col(sliceIndex) = b
-                  (defined + sliceIndex, col)
-                  
-                case JNum(d) => {
-                  val isLong = ctype == CLong
-                  val isDouble = ctype == CDouble
-                  
-                  val (defined, col) = if (isLong) {
-                    val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Long](yggConfig.maxSliceSize))).asInstanceOf[(BitSet, Array[Long])]
-                    col(sliceIndex) = d.toLong
-                    (defined, col)
-                  } else if (isDouble) {
-                    val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Double](yggConfig.maxSliceSize))).asInstanceOf[(BitSet, Array[Double])]
-                    col(sliceIndex) = d.toDouble
-                    (defined, col)
-                  } else {
-                    val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[BigDecimal](yggConfig.maxSliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
-                    col(sliceIndex) = d
-                    (defined, col)
-                  }
-                  
-                  (defined + sliceIndex, col)
-                }
-
-                case JString(s) => 
-                  val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[String](yggConfig.maxSliceSize))).asInstanceOf[(BitSet, Array[String])]
-                  col(sliceIndex) = s
-                  (defined + sliceIndex, col)
-                
-                case JArray(Nil)  => 
-                  val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-                  (defined + sliceIndex, col)
-
-                case JObject(values) if values.isEmpty => 
-                  val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-                  (defined + sliceIndex, col)
-
-                case JNull        => 
-                  val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-                  (defined + sliceIndex, col)
-              }
-
-              acc + (ref -> pair)
-          }
-
-          //println("Computed " + withIdsAndValues)
-
-          buildColArrays(from, withIdsAndValues, sliceIndex + 1)
+          val refs = withIdsAndValues(jv, into, sliceIndex, yggConfig.maxSliceSize)
+          buildColArrays(from, refs, sliceIndex + 1)
         } else {
           (into, sliceIndex)
         }

@@ -435,6 +435,68 @@ trait ColumnarTableModule[M[+_]]
       }
     }
 
+    /**
+     * Given a JValue, an existing map of columnrefs to column data,
+     * a sliceIndex, and a sliceSize, return an updated map.
+     */
+    def withIdsAndValues(jv: JValue, into: Map[ColumnRef, (BitSet, Array[_])],
+      sliceIndex: Int, sliceSize: Int): Map[ColumnRef, (BitSet, Array[_])] = {
+
+      jv.flattenWithPath.foldLeft(into) {
+        case (acc, (jpath, JUndefined)) => acc
+        case (acc, (jpath, v)) =>
+          val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
+          val ref = ColumnRef(CPath(jpath), ctype)
+          
+          val pair: (BitSet, Array[_]) = v match {
+            case JBool(b) =>
+              val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Boolean](sliceSize))).asInstanceOf[(BitSet, Array[Boolean])]
+              col(sliceIndex) = b
+              (defined + sliceIndex, col)
+              
+            case JNum(d) => {
+              val isLong = ctype == CLong
+              val isDouble = ctype == CDouble
+              
+              val (defined, col) = if (isLong) {
+                val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Long](sliceSize))).asInstanceOf[(BitSet, Array[Long])]
+                col(sliceIndex) = d.toLong
+                (defined, col)
+              } else if (isDouble) {
+                val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Double](sliceSize))).asInstanceOf[(BitSet, Array[Double])]
+                col(sliceIndex) = d.toDouble
+                (defined, col)
+              } else {
+                val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
+                col(sliceIndex) = d
+                (defined, col)
+              }
+              
+              (defined + sliceIndex, col)
+            }
+              
+            case JString(s) =>
+              val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[String](sliceSize))).asInstanceOf[(BitSet, Array[String])]
+              col(sliceIndex) = s
+              (defined + sliceIndex, col)
+              
+            case JArray(Nil) =>
+              val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
+              (defined + sliceIndex, col)
+              
+            case JObject(_) =>
+              val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
+              (defined + sliceIndex, col)
+              
+            case JNull        =>
+              val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
+              (defined + sliceIndex, col)
+          }
+          
+          acc + (ref -> pair)
+      }
+    }
+
     def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
       val sliceSize = maxSliceSize.getOrElse(yggConfig.maxSliceSize)
   
@@ -444,63 +506,10 @@ trait ColumnarTableModule[M[+_]]
         @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
           from match {
             case jv #:: xs =>
-              val withIdsAndValues = jv.flattenWithPath.foldLeft(into) {
-                case (acc, (jpath, JUndefined)) => acc
-                case (acc, (jpath, v)) =>
-                  val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
-                  val ref = ColumnRef(CPath(jpath), ctype)
-    
-                  val pair: (BitSet, Array[_]) = v match {
-                    case JBool(b) => 
-                      val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Boolean](sliceSize))).asInstanceOf[(BitSet, Array[Boolean])]
-                      col(sliceIndex) = b
-                      (defined + sliceIndex, col)
-                      
-                    case JNum(d) => {
-                      val isLong = ctype == CLong
-                      val isDouble = ctype == CDouble
-                      
-                      val (defined, col) = if (isLong) {
-                        val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Long](sliceSize))).asInstanceOf[(BitSet, Array[Long])]
-                        col(sliceIndex) = d.toLong
-                        (defined, col)
-                      } else if (isDouble) {
-                        val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Double](sliceSize))).asInstanceOf[(BitSet, Array[Double])]
-                        col(sliceIndex) = d.toDouble
-                        (defined, col)
-                      } else {
-                        val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
-                        col(sliceIndex) = d
-                        (defined, col)
-                      }
-                      
-                      (defined + sliceIndex, col)
-                    }
-    
-                    case JString(s) => 
-                      val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[String](sliceSize))).asInstanceOf[(BitSet, Array[String])]
-                      col(sliceIndex) = s
-                      (defined + sliceIndex, col)
-                    
-                    case JArray(Nil) => 
-                      val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-                      (defined + sliceIndex, col)
-    
-                    case JObject(_) => 
-                      val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-                      (defined + sliceIndex, col)
-    
-                    case JNull        => 
-                      val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-                      (defined + sliceIndex, col)
-                  }
-    
-                  acc + (ref -> pair)
-              }
-  
-              buildColArrays(xs, withIdsAndValues, sliceIndex + 1)
-    
-            case _ => (into, sliceIndex)
+              val refs = withIdsAndValues(jv, into, sliceIndex, sliceSize)
+              buildColArrays(xs, refs, sliceIndex + 1)
+            case _ =>
+              (into, sliceIndex)
           }
         }
     
