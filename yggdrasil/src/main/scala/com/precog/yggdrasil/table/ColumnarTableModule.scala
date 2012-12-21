@@ -70,6 +70,7 @@ trait ColumnarTableModule[M[+_]]
     with ColumnarTableTypes
     with IdSourceScannerModule[M]
     with SliceTransforms[M]
+    with SamplableColumnarTableModule[M]
     with IndicesModule[M]
     with YggConfigComponent {
       
@@ -139,7 +140,7 @@ trait ColumnarTableModule[M[+_]]
 
     def constArray[A: CValueType](v: collection.Set[CArray[A]]): Table = {
       val column = ArrayHomogeneousArrayColumn(v.map(_.value).toArray(CValueType[A].manifest.arrayManifest))
-      Table(Slice(Map(ColumnRef(CPath.Identity, CArrayType(CValueType[A])) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
+      Table(Slice(Map(ColumnRef(CPathArray, CArrayType(CValueType[A])) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
     def constNull: Table = 
@@ -431,7 +432,7 @@ trait ColumnarTableModule[M[+_]]
     }
   }
 
-  abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: TableSize) extends TableLike { self: Table =>
+  abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: TableSize) extends TableLike with SamplableColumnarTable { self: Table =>
     import SliceTransform._
 
     private final val readStarts = new java.util.concurrent.atomic.AtomicInteger
@@ -488,6 +489,17 @@ trait ColumnarTableModule[M[+_]]
         }
       }
       
+      Table(slices2, size)
+    }
+
+    def concat(t2: Table): Table = {
+      val resultSize = TableSize(size.maxSize + t2.size.maxSize)
+      val resultSlices = slices ++ t2.slices
+      Table(resultSlices, resultSize)
+    }
+
+    def toArray[A](implicit tpe: CValueType[A]): Table = {
+      val slices2 = slices map { _.toArray[A] }
       Table(slices2, size)
     }
 
@@ -1192,7 +1204,7 @@ trait ColumnarTableModule[M[+_]]
           case CLong | CDouble | CNum => JNumberT
           case CString => JTextT
           case CDate => JTextT
-          case CArrayType(elemType) => JArrayHomogeneousT(leafType(elemType))
+          case CArrayType(elemType) => leafType(elemType)
           case CEmptyObject => JObjectFixedT(Map.empty)
           case CEmptyArray => JArrayFixedT(Map.empty)
           case CNull => JNullT
@@ -1262,7 +1274,7 @@ trait ColumnarTableModule[M[+_]]
 
       collectSchemas(Set.empty, slices)
     }
-    
+
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
       def delimiterBuffer = {
         val back = CharBuffer.allocate(1)
