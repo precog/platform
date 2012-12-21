@@ -112,10 +112,18 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
         context.actorOf(Props(new IngestSupervisor(ingestActorInit,
                                                    yggConfig.batchStoreDelay, context.system.scheduler, yggConfig.batchShutdownCheckInterval) {
           def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
+            logger.debug("Beginning processing of %d messages".format(messages.size))
             implicit val to = yggConfig.metadataTimeout
             implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
             
             val archivePaths = messages.collect { case ArchiveMessage(_, Archive(path, _)) => path } 
+
+            if (archivePaths.nonEmpty) {
+              logger.debug("Processing archive paths: " + archivePaths)
+            } else {
+              logger.debug("No archive paths")
+            }
+
             Future.sequence {
               archivePaths map { path =>
                 (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]]
@@ -130,7 +138,7 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
               
                 val updates = routingTable.batchMessages(messages, projectionMap)
 
-                logger.debug("Sending " + updates.size + " update messages")
+                logger.debug("Sending " + updates.size + " update message(s)")
                 batchCoordinator ! ProjectionUpdatesExpected(updates.size)
                 for (update <- updates) projectionsActor.tell(update, batchCoordinator)
             }

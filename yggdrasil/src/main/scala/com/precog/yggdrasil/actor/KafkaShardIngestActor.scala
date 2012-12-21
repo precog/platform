@@ -204,9 +204,11 @@ abstract class KafkaShardIngestActor(shardId: String,
           }
         }
       }
-      case (ar: ArchiveMessage, _) :: tail if batch.nonEmpty =>
+      case (ar: ArchiveMessage, offset) :: tail if batch.nonEmpty =>
+        logger.debug("Batch stopping on receipt of ArchiveMessage at offset/id %d/%d".format(offset, ar.archiveId.uid))
         (batch, checkpoint)
       case (ar @ ArchiveMessage(ArchiveId(pid, sid), _), offset) :: tail =>
+        logger.debug("Singleton batch of ArchiveMessage at offset/id %d/%d".format(offset, ar.archiveId.uid))
         (Vector(ar), checkpoint.update(offset, pid, sid))
     }
 
