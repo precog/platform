@@ -280,11 +280,23 @@ trait Slice { source =>
   }
 
   def deleteFields(prefixes: scala.collection.Set[CPathField]) = {
+    val (removed, withoutPrefixes) = source.columns partition {
+      case (ColumnRef(CPath(head @ CPathField(_), _ @ _*), _), _) => prefixes contains head
+      case _ => false
+    }
+
+    def becomeEmpty(row: Int) =
+      Column.isDefinedAt(removed.values.toArray, row) && !Column.isDefinedAt(withoutPrefixes.values.toArray, row)
+
     new Slice {
       val size = source.size
-      val columns = source.columns filterNot {
-        case (ColumnRef(CPath(head @ CPathField(_), _ @ _*), _), _) => prefixes contains head
-        case _ => false
+      val columns = withoutPrefixes mapValues {
+        // The object might have become empty. Make the
+        // EmptyObjectColumn defined at the row position.
+        case c: EmptyObjectColumn => new EmptyObjectColumn {
+          def isDefinedAt(row: Int) = c.isDefinedAt(row) || becomeEmpty(row)
+        }
+        case column => column
       }
     }
   }

@@ -358,7 +358,33 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "outer concatenate arrays with empty arrays" in testOuterArrayConcatEmptyArray
       "inner array concatenate when one side is not an array" in testInnerArrayConcatLeftEmpty
       "outer array concatenate when one side is not an array" in testOuterArrayConcatLeftEmpty
-      "delete elements according to a JType" in checkObjectDelete //.set(minTestsOk -> 5000) TODO: saw an error here once
+
+      "delete elements according to a JType" in checkObjectDelete
+      "delete only field in object without removing from array" in {
+        val JArray(elements) = JParser.parse("""[
+          {"foo": 4, "bar": 12},
+          {"foo": 5},
+          {"bar": 45},
+          {},
+          {"foo": 7, "bar" :23, "baz": 24}
+        ]""")
+
+        val sample = SampleData(elements.toStream)
+        val table = fromSample(sample)
+
+        val spec = ObjectDelete(Leaf(Source), Set(CPathField("foo")))
+        val results = toJson(table.transform(spec))
+        val JArray(expected) = JParser.parse("""[
+          {"bar": 12},
+          {},
+          {"bar": 45},
+          {},
+          {"bar" :23, "baz": 24}
+        ]""")
+
+        results.copoint mustEqual expected.toStream
+      }
+
       "perform a trivial type-based filter" in checkTypedTrivial
       "perform a less trivial type-based filter" in checkTyped
       "perform a type-based filter across slice boundaries" in testTypedAtSliceBoundary
