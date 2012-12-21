@@ -2603,6 +2603,18 @@ trait EvalStackSpecs extends Specification {
         
       evalE(input) must not(throwAn[Exception])
     }
+    
+    "return the non-empty set for a trivial cartesian" in {
+      val input = """
+        | jobs := //cm
+        | titles' := new "foo"
+        | 
+        | titles' ~ jobs
+        |   [titles', jobs.PositionHeader.PositionTitle]
+        | """.stripMargin
+        
+      evalE(input) must not(beEmpty)
+    }
   }
 }
 
