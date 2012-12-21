@@ -1605,6 +1605,25 @@ trait EvalStackSpecs extends Specification {
 
         sanityCheck must not be empty
       }
+
+      "using a solve more than once" >> {
+        val input = """
+          | medals := //summer_games/london_medals
+          |
+          | f(y, z) := solve 'age
+          |   medals' := medals where y = 'age
+          |   sum(medals'.Weight where z = "F")
+          |
+          | {
+          |   min: min(f(medals.Age, medals.Sex)),
+          |   max: max(f(medals.Age, medals.Sex))
+          | }
+          | """.stripMargin
+
+        val results = eval(input)
+
+        results must not be empty
+      }
     }
 
     "evaluate denseRank" >> {
