@@ -2584,6 +2584,30 @@ trait EvalStackSpecs extends Specification {
         
       evalE(input) must not(throwAn[Exception])
     }
+
+    "handle array creation with constant dispatch" in {
+      val input = """
+        | a := 31
+        |
+        | error := 0.05
+        | range(data) := [data*(1-error), data*(1 +error)]
+        | range(a)
+        | """.stripMargin
+
+      evalE(input) must not(throwAn[Exception])
+    }
+
+    "handle object creation with constant dispatch" in {
+      val input = """
+        | a := 31
+        |
+        | error := 0.05
+        | range(data) := {low: data*(1-error), high: data*(1 +error)}
+        | range(a)
+        | """.stripMargin
+
+      evalE(input) must not(throwAn[Exception])
+    }
   }
 }
 
