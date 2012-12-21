@@ -1,9 +1,9 @@
-package com.precog
-package ingest
+package com.precog.ingest
 package service
 
-import common._
-import common.security._
+import com.precog.common._
+import com.precog.common.security._
+import com.precog.common.ingest._
 
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
@@ -26,7 +26,7 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[JValue]]] wit
     Success { (apiKey: APIKey, path: Path) =>
       accessControl.hasCapability(apiKey, Set(DeletePermission(path, Set())), None) flatMap { 
         case true =>
-          val archiveInstance = Archive(path, apiKey)
+          val archiveInstance = Archive(apiKey, path, None)
           logger.trace("Archiving path: " + archiveInstance)
           eventStore.save(archiveInstance, archiveTimeout) map {
             _ => HttpResponse[JValue](OK)

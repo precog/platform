@@ -1,8 +1,8 @@
-package com.precog
-package ingest
+package com.precog.ingest
 
-import common._
-import util._
+import com.precog.common._
+import com.precog.common.ingest._
+import com.precog.util._
 import com.precog.util.PrecogUnit
 
 import akka.dispatch.Future
@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scalaz.{Success, Failure}
 
 trait EventIdSequence {
-  def next(offset: Long): (Int, Int)
+  def next(offset: Long): EventId
   def saveState(offset: Long): PrecogUnit
   def getLastOffset(): Long
   def close(): Future[PrecogUnit]
@@ -30,7 +30,7 @@ class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blo
     def current = nextSequenceId.get
     def isEmpty = current > block.lastSequenceId
     def next() = if(isEmpty) sys.error("Next on empty sequence is invalid.") else
-                             (block.producerId, nextSequenceId.getAndIncrement)
+                             EventId(block.producerId, nextSequenceId.getAndIncrement)
   }
 
   // How to approach this from a lazy viewpoint (deferred at this time but need to return) -nm
