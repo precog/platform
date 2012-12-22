@@ -200,8 +200,7 @@ trait EvalStackSpecs extends Specification {
       result1 mustEqual result2
     }
 
-    //commented out because of timeout issues on jenkins
-    /* "accept division inside an object" in {
+    "accept division inside an object" in {
       val input = """
         | data := //conversions
         | 
@@ -225,7 +224,7 @@ trait EvalStackSpecs extends Specification {
           (obj("min") match { case SDecimal(num) => num.toDouble ~= 862.7464285714286 }) mustEqual true
           (obj("max") match { case SDecimal(num) => num.toDouble ~= 941.0645161290323 }) mustEqual true
       }
-    } */
+    }
 
     "accept division of two BigDecimals" in {
       val input = "92233720368547758073 / 12223372036854775807"
@@ -761,7 +760,7 @@ trait EvalStackSpecs extends Specification {
       val input = """
         clicks := //clicks
         counts := solve 'time
-          {count: count(clicks where clicks.time = 'time) }
+          { count: count(clicks where clicks.time = 'time) }
 
         cov := std::stats::cov(counts.count, counts.count)
         counts with {covariance: cov}
@@ -776,6 +775,89 @@ trait EvalStackSpecs extends Specification {
           ids must haveSize(1)
           obj must haveKey("covariance")
           obj must haveKey("count")
+      }
+    }
+
+    "logistic regression" >> {
+      "return correctly structured results in simple case of logistic regression" >> {
+        val input = """
+          medals := //summer_games/london_medals
+          gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
+          
+          std::stats::logisticRegression({ height: medals.HeightIncm }, gender)
+        """.stripMargin
+
+        val results = evalE(input)
+
+        results must haveSize(1)  
+
+        forall(results) {
+          case (ids, SArray(elems)) =>
+            ids must haveSize(0)
+            elems must haveSize(2)
+            elems(0) must beLike { case SObject(elems) => elems("height") match { case SDecimal(d) => elems must haveSize(1) } }
+            elems(1) must beLike { case SDecimal(d) => ok }
+        }
+      }
+
+      "return something when fed constants" >> {
+        val input = """
+          std::stats::logisticRegression(4, 0)
+        """.stripMargin
+
+        val results = evalE(input)
+
+        results must haveSize(1)  
+      }
+
+      "return empty set when the classification variable is not at the root path" >> {
+        val input = """
+          medals := //summer_games/london_medals
+          medals' := medals with { gender: (1 where medals.Sex = "F") union (0 where medals.Sex = "M") }
+          
+          std::stats::logisticRegression({height: medals'.HeightIncm}, {gender: medals'.gender})
+        """.stripMargin
+
+        val results = evalE(input)
+
+        results must haveSize(0)  
+      }
+
+      "return empty set when none of the classification values are 0 or 1" >> {
+        val input = """
+          medals := //summer_games/london_medals
+          medals' := medals with { gender: (1 where medals.Sex = "F") union (0 where medals.Sex = "M") }
+          
+          std::stats::logisticRegression({height: medals'.HeightIncm}, 5)
+        """.stripMargin
+
+        val results = evalE(input)
+
+        results must haveSize(0)  
+      }
+
+      "return empty set when given feature values of wrong type" in {
+        val input = """
+          medals := //summer_games/london_medals
+          
+          std::stats::logisticRegression(medals.Country, medals.WeightIncm)
+        """.stripMargin
+
+        val results = evalE(input)
+
+        results must haveSize(0)  
+      }
+
+      "return empty set when given classication values of wrong type" in {
+        val input = """
+          medals := //summer_games/london_medals
+          
+          std::stats::logisticRegression(medals.WeightIncm, medals.Country)
+        """.stripMargin
+
+        val results = evalE(input)
+
+        results must haveSize(0)  
       }
     }
 
@@ -1471,8 +1553,7 @@ trait EvalStackSpecs extends Specification {
       results must contain(SObject(Map("count" -> SDecimal(BigDecimal("153")), "state" -> SString("72"))))
     }
     
-    //commented out because of timeout issues on jenkins
-    /* "evaluate nathan's query, once and for all" in {
+    "evaluate nathan's query, once and for all" in {
       val input = """
         | import std::time::*
         | 
@@ -1495,7 +1576,7 @@ trait EvalStackSpecs extends Specification {
         | """.stripMargin
       
       evalE(input) must not(beEmpty)
-    } */
+    }
 
     "load a nonexistent dataset with a dot in the name" in {
       val input = """
@@ -1604,6 +1685,25 @@ trait EvalStackSpecs extends Specification {
         results must be empty
 
         sanityCheck must not be empty
+      }
+
+      "using a solve more than once" >> {
+        val input = """
+          | medals := //summer_games/london_medals
+          |
+          | f(y, z) := solve 'age
+          |   medals' := medals where y = 'age
+          |   sum(medals'.Weight where z = "F")
+          |
+          | {
+          |   min: min(f(medals.Age, medals.Sex)),
+          |   max: max(f(medals.Age, medals.Sex))
+          | }
+          | """.stripMargin
+
+        val results = eval(input)
+
+        results must not be empty
       }
     }
 
@@ -2607,6 +2707,17 @@ trait EvalStackSpecs extends Specification {
         | """.stripMargin
 
       evalE(input) must not(throwAn[Exception])
+    
+    "return the non-empty set for a trivial cartesian" in {
+      val input = """
+        | jobs := //cm
+        | titles' := new "foo"
+        | 
+        | titles' ~ jobs
+        |   [titles', jobs.PositionHeader.PositionTitle]
+        | """.stripMargin
+        
+      evalE(input) must not(beEmpty)
     }
   }
 }
