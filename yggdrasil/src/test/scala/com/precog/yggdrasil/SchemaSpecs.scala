@@ -18,25 +18,32 @@
  *
  */
 package com.precog.yggdrasil
-package table
 
-import com.precog.common.json.CPath
-import com.precog.common.json.CPath._
+import com.precog.bytecode._
 
-import com.precog.common.Path
-import scalaz.syntax.semigroup._
-import scalaz.syntax.order._
+import com.precog.common.json._
 
-case class ColumnRef(selector: CPath, ctype: CType)
+import org.specs2.mutable.Specification
 
-object ColumnRef {
-  def identity(ctype: CType) = ColumnRef(CPath.Identity, ctype)
+class SchemaSpec extends Specification {
+  "cpath" should {
+    "return the correct sequence of CPath" in {
+      val jtype = JObjectFixedT(Map(
+        "foo" -> JNumberT, 
+        "bar" -> JArrayFixedT(Map(
+          0 -> JBooleanT, 
+          1 -> JObjectFixedT(Map(
+            "baz" -> JArrayHomogeneousT(JNullT))),
+          2 -> JTextT))))
 
-  implicit object order extends scalaz.Order[ColumnRef] {
-    def order(r1: ColumnRef, r2: ColumnRef): scalaz.Ordering = {
-      (r1.selector ?|? r2.selector) |+| (r1.ctype ?|? r2.ctype)
+      val result = Schema.cpath(jtype)
+      val expected = Seq(
+        CPath(CPathField("foo")),
+        CPath(CPathField("bar"), CPathIndex(0)),
+        CPath(CPathField("bar"), CPathIndex(1), CPathField("baz"), CPathArray),
+        CPath(CPathField("bar"), CPathIndex(2))) sorted
+        
+      result mustEqual expected
     }
   }
-
-  implicit val ordering: scala.math.Ordering[ColumnRef] = order.toScalaOrdering
 }

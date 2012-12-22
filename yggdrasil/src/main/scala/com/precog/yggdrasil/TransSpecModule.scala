@@ -54,6 +54,9 @@ trait TransSpecModule extends FNModule {
   object trans {
     sealed trait TransSpec[+A <: SourceType]
     sealed trait SourceType
+
+    sealed trait ObjectSpec[+A <: SourceType] extends TransSpec[A]
+    sealed trait ArraySpec[+A <: SourceType] extends TransSpec[A]
   
     sealed trait Source1 extends SourceType
     case object Source extends Source1
@@ -70,29 +73,31 @@ trait TransSpecModule extends FNModule {
     case class Scan[+A <: SourceType](source: TransSpec[A], scanner: Scanner) extends TransSpec[A] //done
     
     case class Map1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A] //done
-    
+
+    case class DeepMap1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A] //done
+
     // apply a function to the cartesian product of the transformed left and right subsets of columns
     case class Map2[+A <: SourceType](left: TransSpec[A], right: TransSpec[A], f: F2) extends TransSpec[A] //done
-    
+
     // Perform the specified transformation on the all sources, and then create a new set of columns
     // containing all the resulting columns.
-    case class InnerObjectConcat[+A <: SourceType](objects: TransSpec[A]*) extends TransSpec[A] //done
+    case class InnerObjectConcat[+A <: SourceType](objects: TransSpec[A]*) extends ObjectSpec[A] //done
 
-    case class OuterObjectConcat[+A <: SourceType](objects: TransSpec[A]*) extends TransSpec[A] //done
+    case class OuterObjectConcat[+A <: SourceType](objects: TransSpec[A]*) extends ObjectSpec[A] //done
 
     case class ObjectDelete[+A <: SourceType](source: TransSpec[A], fields: Set[CPathField]) extends TransSpec[A]
     
-    case class InnerArrayConcat[+A <: SourceType](arrays: TransSpec[A]*) extends TransSpec[A] //done
+    case class InnerArrayConcat[+A <: SourceType](arrays: TransSpec[A]*) extends ArraySpec[A] //done
 
-    case class OuterArrayConcat[+A <: SourceType](arrays: TransSpec[A]*) extends TransSpec[A] //done
+    case class OuterArrayConcat[+A <: SourceType](arrays: TransSpec[A]*) extends ArraySpec[A] //done
     
     // Take the output of the specified TransSpec and prefix all of the resulting selectors with the
     // specified field. 
-    case class WrapObject[+A <: SourceType](source: TransSpec[A], field: String) extends TransSpec[A] //done
+    case class WrapObject[+A <: SourceType](source: TransSpec[A], field: String) extends ObjectSpec[A] //done
     
     case class WrapObjectDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class WrapArray[+A <: SourceType](source: TransSpec[A]) extends TransSpec[A] //done
+    case class WrapArray[+A <: SourceType](source: TransSpec[A]) extends ArraySpec[A] //done
     
     case class DerefObjectStatic[+A <: SourceType](source: TransSpec[A], field: CPathField) extends TransSpec[A] //done
     
@@ -124,6 +129,36 @@ trait TransSpecModule extends FNModule {
     type TransSpec1 = TransSpec[Source1]
 
     object TransSpec {
+      import CPath._
+
+      def concatChildren[A <: SourceType](tree: CPathTree[Int], leaf: TransSpec[A] = Leaf(Source)): TransSpec[A] = {
+        def createSpecs(trees: Seq[CPathTree[Int]]): Seq[TransSpec[A]] = trees.map { child =>
+          child match {
+            case node @ RootNode(_) => concatChildren(node, leaf)
+            case node @ FieldNode(CPathField(name), _) => trans.WrapObject(concatChildren(node, leaf), name)
+            case node @ IndexNode(CPathIndex(_), _) => trans.WrapArray(concatChildren(node, leaf))
+            case LeafNode(idx) => trans.DerefArrayStatic(leaf, CPathIndex(idx))
+          }
+        }
+
+        val initialSpecs = tree match {
+          case RootNode(children) => createSpecs(children)
+          case FieldNode(_, children) => createSpecs(children)
+          case IndexNode(_, children) => createSpecs(children)
+          case LeafNode(_) => Seq()
+        }
+
+        val result = initialSpecs reduceOption { (t1, t2) =>
+          (t1, t2) match {  
+            case (t1: ObjectSpec[_], t2: ObjectSpec[_]) => trans.InnerObjectConcat(t1, t2)
+            case (t1: ArraySpec[_], t2: ArraySpec[_]) => trans.InnerArrayConcat(t1, t2)
+            case _ => sys.error("cannot have this")
+          }
+        }
+
+        result getOrElse leaf
+      }
+      
       def mapSources[A <: SourceType, B <: SourceType](spec: TransSpec[A])(f: A => B): TransSpec[B] = {
         spec match {
           case Leaf(source) => Leaf(f(source))
@@ -136,8 +171,9 @@ trait TransSpecModule extends FNModule {
           case Scan(source, scanner) => Scan(mapSources(source)(f), scanner)
           
           case trans.Map1(source, f1) => trans.Map1(mapSources(source)(f), f1)
+          case trans.DeepMap1(source, f1) => trans.DeepMap1(mapSources(source)(f), f1)
           case trans.Map2(left, right, f2) => trans.Map2(mapSources(left)(f), mapSources(right)(f), f2)
-          
+
           case trans.OuterObjectConcat(objects @ _*) => trans.OuterObjectConcat(objects.map(mapSources(_)(f)): _*)
           case trans.InnerObjectConcat(objects @ _*) => trans.InnerObjectConcat(objects.map(mapSources(_)(f)): _*)
           case trans.ObjectDelete(source, fields) => trans.ObjectDelete(mapSources(source)(f), fields)
@@ -177,8 +213,9 @@ trait TransSpecModule extends FNModule {
         case Scan(source, scanner) => Scan(deepMap(source)(f), scanner)
         
         case trans.Map1(source, f1) => trans.Map1(deepMap(source)(f), f1)
+        case trans.DeepMap1(source, f1) => trans.DeepMap1(deepMap(source)(f), f1)
         case trans.Map2(left, right, f2) => trans.Map2(deepMap(left)(f), deepMap(right)(f), f2)
-        
+
         case trans.OuterObjectConcat(objects @ _*) => trans.OuterObjectConcat(objects.map(deepMap(_)(f)): _*)
         case trans.InnerObjectConcat(objects @ _*) => trans.InnerObjectConcat(objects.map(deepMap(_)(f)): _*)
         case trans.ObjectDelete(source, fields) => trans.ObjectDelete(deepMap(source)(f), fields)

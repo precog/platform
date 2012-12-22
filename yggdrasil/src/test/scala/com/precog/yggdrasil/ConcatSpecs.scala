@@ -20,23 +20,26 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.common.json.CPath
-import com.precog.common.json.CPath._
+import org.specs2.mutable._
 
-import com.precog.common.Path
-import scalaz.syntax.semigroup._
-import scalaz.syntax.order._
+import scalaz.syntax.copointed._
 
-case class ColumnRef(selector: CPath, ctype: CType)
+import blueeyes.json._
 
-object ColumnRef {
-  def identity(ctype: CType) = ColumnRef(CPath.Identity, ctype)
+trait ConcatSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specification {
+  def testConcat = {
+    val json1 = """{ "a": 1, "b": "x", "c": null }"""
+    val json2 = """[4, "foo", null, true]"""
 
-  implicit object order extends scalaz.Order[ColumnRef] {
-    def order(r1: ColumnRef, r2: ColumnRef): scalaz.Ordering = {
-      (r1.selector ?|? r2.selector) |+| (r1.ctype ?|? r2.ctype)
-    }
+    val data1: Stream[JValue] = Stream.fill(25)(JParser.parse(json1))
+    val data2: Stream[JValue] = Stream.fill(35)(JParser.parse(json2))
+    
+    val table1 = fromSample(SampleData(data1), Some(10))
+    val table2 = fromSample(SampleData(data2), Some(10))
+
+    val results = toJson(table1.concat(table2))
+    val expected = data1 ++ data2
+
+    results.copoint must_== expected
   }
-
-  implicit val ordering: scala.math.Ordering[ColumnRef] = order.toScalaOrdering
 }

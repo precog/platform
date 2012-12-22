@@ -184,6 +184,10 @@ trait TableModule[M[+_]] extends TransSpecModule {
     
     def distinct(spec: TransSpec1): Table
 
+    def concat(t2: Table): Table
+
+    def toArray[A](implicit tpe: CValueType[A]): Table
+
     /**
      * Sorts the KV table by ascending or descending order based on a seq of transformations
      * applied to the rows.
@@ -202,7 +206,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
     def takeRange(startIndex: Long, numberToTake: Long): Table
 
     def schemas: M[Set[JType]]
-    
+
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer]
     
     // for debugging only!!
