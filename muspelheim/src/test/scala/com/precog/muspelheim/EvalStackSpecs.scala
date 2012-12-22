@@ -2707,6 +2707,7 @@ trait EvalStackSpecs extends Specification {
         | """.stripMargin
 
       evalE(input) must not(throwAn[Exception])
+    }
     
     "return the non-empty set for a trivial cartesian" in {
       val input = """
