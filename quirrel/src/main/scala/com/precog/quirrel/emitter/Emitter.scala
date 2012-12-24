@@ -22,7 +22,7 @@ package quirrel
 package emitter
 
 import parser.AST
-import typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
+import typer.{Binder, ProvenanceChecker}
 import bytecode.Instructions
 
 import scalaz.{StateT, Id, Bind, Monoid}

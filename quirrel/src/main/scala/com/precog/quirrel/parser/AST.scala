@@ -808,8 +808,6 @@ trait AST extends Phases {
       def vars: Set[TicId] = _vars()
       private[quirrel] def vars_=(vars: Set[TicId]) = _vars() = vars
       
-      lazy val criticalConditions = findCriticalConditions(this)
-      
       lazy val criticalConstraints = constraints filter {
         case TicVar(_, _) => false
         case _ => true

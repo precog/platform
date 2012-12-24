@@ -32,11 +32,10 @@ import scalaz.syntax.apply._
 import scalaz.syntax.semigroup._
 import scalaz.syntax.order._
 
-trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFinder {
+trait ProvenanceChecker extends parser.AST with Binder {
   import Function._
   import Utils._
   import ast._
-  import condition._
 
   private val currentId = new AtomicInteger(0)
   private val commonIds = new AtomicReference[Map[ExprWrapper, Int]](Map())
