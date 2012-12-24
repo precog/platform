@@ -685,7 +685,7 @@ trait AST extends Phases {
     }
   }
   
-  case class ExprWrapper(expr: Expr) {
+  private[quirrel] case class ExprWrapper(expr: Expr) {
     override def equals(a: Any): Boolean = a match {
       case ExprWrapper(expr2) => expr equalsIgnoreLoc expr2
       case _ => false
