@@ -820,12 +820,12 @@ trait AST extends Phases {
       private[quirrel] def buckets_++=(spec: Map[Set[Dispatch], BucketSpec]) = _buckets ++= spec
     }
 
-    final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends PrecedenceUnaryNode {
+    final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends Expr with UnaryOp with PrecedenceUnaryNode {
       val sym = 'import
       val isPrefix = true
     }
     
-    final case class New(loc: LineStream, child: Expr) extends PrecedenceUnaryNode {
+    final case class New(loc: LineStream, child: Expr) extends Expr with PrecedenceUnaryNode {
       val sym = 'new
       val isPrefix = true
     }

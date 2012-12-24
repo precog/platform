@@ -74,7 +74,6 @@ trait GroupFinder extends parser.AST with Tracer {
       constrVars ++ findVars(solve, id)(child)
     }
     
-    case Import(_, _, child) => findVars(solve, id)(child)
     case New(_, child) => findVars(solve, id)(child)
     
     case Relate(_, from, to, in) =>

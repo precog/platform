@@ -33,16 +33,13 @@ trait Tracer extends parser.AST with typer.Binder {
       Tree.node((sigma, expr), nodes)
     }
     
-    case Import(_, _, child) =>
-      Tree.node((sigma, expr), buildTrace(sigma)(child) #:: SNil)
-    
     case New(_, child) =>
       Tree.node((sigma, expr), buildTrace(sigma)(child) #:: SNil)
     
     case Relate(_, from, to, in) =>
       Tree.node((sigma, expr), buildTrace(sigma)(from) #:: buildTrace(sigma)(to) #:: buildTrace(sigma)(in) #:: SNil)
     
-    case _: TicVar | _: Literal =>
+    case _: TicVar =>
       Tree.node((sigma, expr), SNil)
     
     case expr @ Dispatch(_, name, actuals) => {

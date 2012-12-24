@@ -207,9 +207,8 @@ trait Binder extends parser.AST with Library {
   private def listFreeVars(env: Env)(expr: Expr): Set[TicId] = expr match {
     case Let(_, _, _, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
     case Solve(_, _, _) => Set()
-    case Import(_, _, child) => listFreeVars(env)(child)
-    case New(_, child) => listFreeVars(env)(child)
     case Relate(_, from, to, in) => listFreeVars(env)(from) ++ listFreeVars(env)(to) ++ listFreeVars(env)(in)
+    case New(_, child) => listFreeVars(env)(child)
     case TicVar(_, name) if env.vars contains name => Set()
     case TicVar(_, name) if !(env.vars contains name) => Set(name)
     case NaryOp(_, values) => values map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()

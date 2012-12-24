@@ -97,8 +97,6 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         constrLoopErrors ++ childErrors ++ forestErrors2 ++ constrErrors ++ finalErrors
       }
       
-      case Import(_, _, child) => loop(dispatches)(child)
-      
       case New(_, child) => loop(dispatches)(child)
       
       case Relate(_, from, to, in) =>
@@ -352,8 +350,6 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       
       case Let(_, _, _, _, right) => isTranspecable(right, from, sigma)
       
-      case Import(_, _, child) => isTranspecable(child, from, sigma)
-      
       case Relate(_, _, _, in) => isTranspecable(in, from, sigma)
       
       case to @ Dispatch(_, id, actuals) => {
@@ -465,9 +461,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       case And(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       case Or(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       
-      case Comp(_, child) => isTranspecable(child, from, sigma)
-      case Neg(_, child) => isTranspecable(child, from, sigma)
-      case Paren(_, child) => isTranspecable(child, from, sigma)
+      case UnaryOp(_, child) => isTranspecable(child, from, sigma)
       
       case _ => false
     }
@@ -504,8 +498,6 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case Let(_, _, _, _, right) => isPrimitive(right, sigma)
     
-    case Import(_, _, child) => isPrimitive(child, sigma)
-    
     case Relate(_, _, _, in) => isPrimitive(in, sigma)
     
     case _: Union | _: Intersect | _: Difference | _: Cond => false
@@ -528,6 +520,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     }
     
     case New(_, child) => listTicVars(b, child, sigma)
+    
     case Relate(_, from, to, in) => listTicVars(b, from, sigma) ++ listTicVars(b, to, sigma) ++ listTicVars(b, in, sigma)
     
     case t @ TicVar(_, name) if b.isDefined && (t.binding == SolveBinding(b.get) || t.binding == FreeBinding(b.get)) => {
@@ -638,7 +631,6 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case _: Solve => (Set(), sigma)      // TODO will this do the right thing?
     
-    case Import(_, _, child) => (Set(child), sigma)
     case New(_, child) => (Set(child), sigma)
     
     case Relate(_, _, _, in) => (Set(in), sigma)
