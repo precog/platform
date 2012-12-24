@@ -638,7 +638,7 @@ trait Emitter extends AST
           emitExpr(child, dispatches) >> emitInstr(Map1(Neg))
         
         case ast.Paren(loc, child) => 
-          mzero[EmitterState]
+          emitExpr(child, dispatches)
       }) >> emitConstraints(expr, dispatches)
     }
     
