@@ -12,8 +12,6 @@ import com.codecommit.gll.{Failure, LineStream, Success}
 import jline.TerminalFactory
 import jline.console.ConsoleReader
 
-
-import com.precog.accounts.InMemoryAccountManager
 import com.precog.common.Path
 import com.precog.common.kafka._
 import com.precog.common.security._
@@ -254,7 +252,8 @@ object Console extends App {
     replConfig <- loadConfig(args.headOption) 
     fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, replConfig.archiveDir, FilesystemFileOps)
   } yield {
-      scalaz.Success[blueeyes.json.serialization.Extractor.Error, Lifecycle](new REPL 
+      scalaz.Success[blueeyes.json.serialization.Extractor.Error, Lifecycle] {
+        new REPL 
           with Lifecycle 
           with JDBMColumnarTableModule[Future]
           with JDBMProjectionModule
@@ -278,9 +277,12 @@ object Console extends App {
           def copoint[A](m: Future[A]) = Await.result(m, yggConfig.maxEvalDuration)
         }
 
-        class Storage extends SystemActorStorageLike(fileMetadataStorage) {
+        val metadataStorage = fileMetadataStorage
+        val accountFinder = None
+
+        class Storage extends SystemActorStorageLike {
           val accessControl = new UnrestrictedAccessControl[Future]()
-          val accountManager = new InMemoryAccountManager[Future]()
+          //val accountManager = new InMemoryAccountManager[Future]()
         }
 
         val storage = new Storage
@@ -298,8 +300,8 @@ object Console extends App {
           actorSystem.shutdown
           PrecogUnit
         }
-      })
-
+      }
+    }
   }
 
   val run = repl.flatMap[PrecogUnit] {

@@ -3,6 +3,7 @@ package com.precog.heimdall
 import com.precog.common.jobs._
 
 import akka.dispatch.Future
+import akka.dispatch.ExecutionContext
 
 import blueeyes._
 import blueeyes.core.data._
@@ -12,11 +13,12 @@ import blueeyes.core.service._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
-import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.health.metrics.{eternity}
 import blueeyes.util.Clock
 import ByteChunk._
+import DefaultBijections._
+
 
 import akka.util.Timeout
 
@@ -31,12 +33,7 @@ import scalaz._
 
 // Job service needs to shutdown whatever at the end.
 
-trait JobService
-    extends BlueEyesServiceBuilder
-    with AkkaDefaults
-    with HttpRequestHandlerCombinators {
-
-  import DefaultBijections._
+trait JobService extends BlueEyesServiceBuilder with HttpRequestHandlerCombinators {
 
   def clock: Clock
 
@@ -54,6 +51,8 @@ trait JobService
 
   // Ugh. Why do I need this?
   implicit def byteArray2chunk(r: Future[HttpResponse[Array[Byte]]]): Future[HttpResponse[ByteChunk]] = r map { resp => resp.copy(content = resp.content map (ByteChunk(_))) }
+
+  implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
   val jobService = this.service("jobs", "1.0") {
@@ -61,7 +60,7 @@ trait JobService
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
-          Future {
+          M.point {
             val (resource, jobs) = jobManager(config)
             JobServiceState(resource, jobs, authService(config), clock)
           }

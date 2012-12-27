@@ -1,5 +1,4 @@
-package com.precog
-package accounts
+package com.precog.accounts
 
 import scala.collection.mutable
 

@@ -83,8 +83,8 @@ trait ShardServiceCombinators extends EventServiceCombinators {
     }
   }
 
-  def query[A, B](next: HttpService[A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]]) = {
-    new DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]] {
+  def query[A, B](next: HttpService[A, (APIKey, Path, Query, QueryOptions) => Future[B]]) = {
+    new DelegatingService[A, (APIKey, Path) => Future[B], A, (APIKey, Path, Query, QueryOptions) => Future[B]] {
       val delegate = next
       val metadata = None
       val service = (request: HttpRequest[A]) => {
@@ -101,7 +101,7 @@ trait ShardServiceCombinators extends EventServiceCombinators {
           )
 
           query map { q =>
-            next.service(request) map { f => (apiKey: APIKeyRecord, path: Path) => f(apiKey, path, q, opts) }
+            next.service(request) map { f => (apiKey: APIKey, path: Path) => f(apiKey, path, q, opts) }
           } getOrElse {
             failure(inapplicable)
           }
@@ -123,6 +123,7 @@ trait ShardServiceCombinators extends EventServiceCombinators {
 
   implicit def stringToBB(s: String): ByteBuffer = ByteBuffer.wrap(s.getBytes("UTF-8"))
 
+/*
   def jsonpcb[A](delegate: HttpService[Future[JValue], Future[HttpResponse[A]]])
     (implicit bi: A => Future[ByteChunk], M: Monad[Future]) = {
 
@@ -130,4 +131,5 @@ trait ShardServiceCombinators extends EventServiceCombinators {
       response.content.map(bi).sequence.map(c0 => response.copy(content = c0))
     }))
   }
+  */
 }
