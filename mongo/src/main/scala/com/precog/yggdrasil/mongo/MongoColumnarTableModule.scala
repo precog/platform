@@ -177,7 +177,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
 
               // The objectId becomes identity for the slices, everything else is a value
               val transformedPath = if (jpath == JPath("._id")) {
-                Key \ "[0]"
+                Key \ 0
               } else {
                 Value \ CPath(jpath)
               }

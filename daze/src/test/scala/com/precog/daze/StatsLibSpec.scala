@@ -28,6 +28,7 @@ import scalaz._
 import scalaz.std.list._
 
 import com.precog.util.IdGen
+import com.precog.util.IOUtils
 
 case class Precision(p: Double)
 class AlmostEqual(d: Double) {
@@ -35,7 +36,7 @@ class AlmostEqual(d: Double) {
 }
 
 trait StatsLibSpec[M[+_]] extends Specification
-    with EvaluatorTestSupport[M]
+    with EvaluatorTestSupport[M] 
     with StatsLib[M]
     with InfixLib[M]
     with MemoryDatasetConsumer[M]{ self =>

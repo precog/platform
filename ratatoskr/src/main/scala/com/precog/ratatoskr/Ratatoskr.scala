@@ -335,6 +335,7 @@ object KafkaTools extends Command {
       })
       opt("l", "local", "<local kafka file>", "local kafka file", {s: String => config.dumpLocal = Some(s) })
       opt("c", "central", "<central kafka file>", "dump central kafka file", {s: String => config.dumpCentral = Some(s) })
+      opt("u", "unparsed", "<kafka file>", "dump raw JSON from kafka file", {s: String => config.dumpRaw = Some(s) })
       opt("c2l", "centralToLocal", "<central kafka file>", "convert central kafka file to local kafak", {s: String => config.convertCentral = Some(s) })
     }
     if (parser.parse(args)) {
@@ -348,6 +349,7 @@ object KafkaTools extends Command {
     import config._
     dumpLocal.foreach { f => dump(new File(f), range, LocalFormat) } 
     dumpCentral.foreach { f => dump(new File(f), range, CentralFormat) } 
+    dumpRaw.foreach { f => dump(new File(f), range, RawFormat) }
     convertCentral.foreach { convert(_) }
   }
 
@@ -388,6 +390,7 @@ object KafkaTools extends Command {
   class Config(var convertCentral: Option[String] = None, 
                var dumpLocal: Option[String] = None,
                var dumpCentral: Option[String] = None,
+               var dumpRaw: Option[String] = None,
                var range: MessageRange = MessageRange.ALL)
 
   case class MessageRange(start: Option[Int], finish: Option[Int]) {
@@ -433,6 +436,22 @@ object KafkaTools extends Command {
 
   sealed trait Format {
     def dump(i: Int, msg: MessageAndOffset)
+  }
+
+  case object RawFormat extends Format {
+    def dump(i: Int, msg: MessageAndOffset) {
+      val message = msg.message.payload
+      // Read past magic, type, and stop bytes
+      message.get()
+      val tpe = message.get()
+      message.get()
+
+      val bytes = new Array[Byte](message.remaining)
+
+      message.get(bytes)
+
+      println("Type: %d, payload: %s".format(tpe, new String(bytes, "UTF-8")))
+    }
   }
 
   case object LocalFormat extends Format {

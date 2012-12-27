@@ -223,10 +223,12 @@ abstract class KafkaShardIngestActor(shardId: String,
           }
         
         case (ar: ArchiveMessage, _) :: tail if batch.nonEmpty =>
+          logger.debug("Batch stopping on receipt of ArchiveMessage at offset/id %d/%d".format(offset, ar.archiveId.uid))
           (batch, checkpoint)
 
         case (ar @ ArchiveMessage(EventId(pid, sid), _), offset) :: tail =>
           // TODO: Where is the authorization checking credentials for the archive done?
+          logger.debug("Singleton batch of ArchiveMessage at offset/id %d/%d".format(offset, ar.archiveId.uid))
           (Vector(ar), checkpoint.update(offset, pid, sid))
       }
     }

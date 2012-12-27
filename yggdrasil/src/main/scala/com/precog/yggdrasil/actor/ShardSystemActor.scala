@@ -121,11 +121,18 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
 
           //TODO: This needs review; not sure why only archive paths are being considered.
           def processMessages(messages: Seq[EventMessage], batchCoordinator: ActorRef): Unit = {
+            logger.debug("Beginning processing of %d messages".format(messages.size))
             implicit val to = yggConfig.metadataTimeout
             implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
             
             //TODO: Make sure that authorization has been checked here.
             val archivePaths = messages.collect { case ArchiveMessage(_, Archive(_, path, jobId)) => path } 
+
+            if (archivePaths.nonEmpty) {
+              logger.debug("Processing archive paths: " + archivePaths)
+            } else {
+              logger.debug("No archive paths")
+            }
 
             Future.sequence {
               archivePaths map { path =>
@@ -144,7 +151,7 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
                 val grouped: collection.immutable.Map[Path, Seq[ProjectionDescriptor]] = projectionMap.groupBy(_._1).mapValues(_.map(_._2))
                 val updates = routingTable.batchMessages(messages, grouped)
 
-                logger.debug("Sending " + updates.size + " update messages")
+                logger.debug("Sending " + updates.size + " update message(s)")
                 batchCoordinator ! ProjectionUpdatesExpected(updates.size)
                 for (update <- updates) projectionsActor.tell(update, batchCoordinator)
             }
