@@ -22,11 +22,9 @@ package jdbm3
 
 import blueeyes.json._
 
-import com.precog.accounts.BasicAccountManager
-
 import com.precog.common.json._
 import com.precog.common.security._
-
+import com.precog.common.accounts._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.jdbm3._
@@ -35,10 +33,7 @@ import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.jdbm3._
 import com.precog.yggdrasil.util._
-
 import com.precog.daze._
-import com.precog.muspelheim.ParseEvalStack
-
 import com.precog.common._
 import com.precog.util.FilesystemFileOps
 
@@ -77,7 +72,7 @@ trait BaseJDBMQueryExecutorConfig
 
 trait JDBMQueryExecutorConfig extends BaseJDBMQueryExecutorConfig with ProductionShardSystemConfig with SystemActorStorageConfig
 
-trait JDBMQueryExecutorComponent {
+object JDBMQueryExecutor {
   import blueeyes.json.serialization.Extractor
 
   private def wrapConfig(wrappedConfig: Configuration) = {
@@ -95,12 +90,14 @@ trait JDBMQueryExecutorComponent {
     }
   }
     
-  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutor[Future] = {
+  def apply(config: Configuration, extAccessControl: AccessControl[Future], extAccountFinder: AccountFinder[Future])(implicit executor: ExecutionContext): QueryExecutor[Future] = {
     new JDBMQueryExecutor
         with JDBMColumnarTableModule[Future]
         with JDBMProjectionModule
         with ProductionShardSystemActorModule
         with SystemActorStorageModule {
+
+      override val executionContext = executor
 
       type YggConfig = JDBMQueryExecutorConfig
       val yggConfig = wrapConfig(config)
@@ -111,9 +108,11 @@ trait JDBMQueryExecutorComponent {
 
       implicit val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
 
-      class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
+      val accountFinder = Some(extAccountFinder)
+      val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
+
+      class Storage extends SystemActorStorageLike {
         val accessControl = extAccessControl
-        val accountManager = extAccountManager
       }
 
       val storage = new Storage

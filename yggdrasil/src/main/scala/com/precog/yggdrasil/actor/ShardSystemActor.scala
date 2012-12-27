@@ -64,12 +64,14 @@ trait ShardConfig extends BaseConfig {
 trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigComponent {
   type YggConfig <: ShardConfig
 
+  protected def metadataStorage: MetadataStorage
+  protected def accountFinder: Option[AccountFinder[Future]]
+
   protected def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountFinder: AccountFinder[Future]): Option[() => Actor]
 
   protected def checkpointCoordination: CheckpointCoordination
 
-  class ShardSystemActor(storage: MetadataStorage, accountFinder: AccountFinder[Future]) extends Actor with Logging {
-
+  class ShardSystemActor extends Actor with Logging {
     // The ingest system consists of the ingest supervisor and ingest actor(s)
     private[this] var ingestSystem: ActorRef            = _
     private[this] var metadataActor: ActorRef           = _
@@ -93,14 +95,18 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
     override def preStart() {
       val initialCheckpoint = loadCheckpoint()
 
-      logger.info("Initializing MetadataActor with storage = " + storage)
-      metadataActor = context.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint)), "metadata")
+      logger.info("Initializing MetadataActor with storage = " + metadataStorage)
+      metadataActor = context.actorOf(Props(new MetadataActor(yggConfig.shardId, metadataStorage, checkpointCoordination, initialCheckpoint)), "metadata")
 
       logger.debug("Initializing ProjectionsActor")
       projectionsActor = context.actorOf(Props(new ProjectionsActor(yggConfig.maxOpenProjections)), "projections")
 
-      val ingestActorInit: Option[() => Actor] = initialCheckpoint flatMap {
-        checkpoint: YggCheckpoint => initIngestActor(checkpoint, metadataActor, accountFinder)
+      val ingestActorInit: Option[() => Actor] = {
+        for {
+          checkpoint <- initialCheckpoint 
+          finder <- accountFinder
+          init <- initIngestActor(checkpoint, metadataActor, finder)
+        } yield init
       }
  
       ingestSystem     = { 

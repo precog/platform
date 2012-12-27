@@ -23,7 +23,7 @@ import com.precog.common.Path
 import com.precog.common.accounts._
 import com.precog.common.security._
 
-import akka.dispatch.{ Future, MessageDispatcher }
+import akka.dispatch.Future
 
 import blueeyes.core.http._
 import blueeyes.core.service._

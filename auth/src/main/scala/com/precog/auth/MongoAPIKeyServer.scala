@@ -27,9 +27,12 @@ import akka.dispatch.{ ExecutionContext, Future }
 import blueeyes.bkka._
 import blueeyes.BlueEyesServer
 
+import org.streum.configrity.Configuration
+
 import scalaz._
 
-object MongoAPIKeyServer extends BlueEyesServer with SecurityService with MongoAPIKeyManagerComponent {
-  implicit val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+object MongoAPIKeyServer extends BlueEyesServer with SecurityService with AkkaDefaults {
+  implicit val executor = defaultFutureDispatch
+  implicit val M: Monad[Future] = new FutureMonad(executor)
+  def APIKeyManager(config: Configuration): APIKeyManager[Future] = MongoAPIKeyManager(config)
 }

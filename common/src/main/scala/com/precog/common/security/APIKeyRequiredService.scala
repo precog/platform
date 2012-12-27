@@ -39,9 +39,8 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.std.option._
 
-class APIKeyRequiredService[A, B](keyFinder: APIKeyFinder[Future], val delegate: HttpService[A, APIKey => Future[B]], err: (HttpFailure, String) => B, executor: ExecutionContext) 
+class APIKeyRequiredService[A, B](keyFinder: APIKeyFinder[Future], val delegate: HttpService[A, APIKey => Future[B]], err: (HttpFailure, String) => B, M: Monad[Future]) 
 extends DelegatingService[A, Future[B], A, APIKey => Future[B]] with Logging {
-  implicit val executor0 = executor
   val service = (request: HttpRequest[A]) => {
     request.parameters.get('apiKey).
       toSuccess[NotServed](DispatchError(BadRequest, "An apiKey query parameter is required to access this URL")) flatMap { apiKey =>
@@ -50,7 +49,7 @@ extends DelegatingService[A, Future[B], A, APIKey => Future[B]] with Logging {
         keyFinder.findAPIKey(apiKey) flatMap {  
           case None =>
             logger.warn("Could not locate API key " + apiKey)
-            Future(err(BadRequest, "The specified API key does not exist: "+apiKey))
+            M.point(err(BadRequest, "The specified API key does not exist: "+apiKey))
             
           case Some(apiKeyRecord) =>
             logger.trace("Found API key " + apiKeyRecord)

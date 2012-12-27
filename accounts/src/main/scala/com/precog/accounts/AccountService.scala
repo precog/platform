@@ -31,7 +31,6 @@ import blueeyes.core.service._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
-import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.health.metrics.{eternity}
 import blueeyes.util.Clock
@@ -52,6 +51,7 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.std.option._
 
+@deprecated("TODO: This class needs badly to be replaced by a facade for the raw service.", since = "2012-12-26")
 case class SecurityService(protocol: String, host: String, port: Int, path: String, rootKey: String)(implicit executor: ExecutionContext) {
   def withClient[A](f: HttpClient[ByteChunk] => A): A = {
     val client = new HttpClientXLightWeb 
@@ -74,11 +74,13 @@ trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
 }
 
 
-trait AccountService extends BlueEyesServiceBuilder with AkkaDefaults with AuthenticationCombinators {
+trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinators {
   type AM <: AccountManager[Future]
   case class State(accountManagement: AM, stop: Stop[AM], clock: Clock, securityService: SecurityService, rootAccountId: String)
 
   implicit val timeout = akka.util.Timeout(120000) //for now
+
+  implicit def executor: ExecutionContext
   implicit def M: Monad[Future]
 
   def accountManager(config: Configuration): (AM, Stop[AM])

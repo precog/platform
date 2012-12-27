@@ -39,6 +39,9 @@ trait StorageModule[M[+_]] {
 
   trait StorageLike extends StorageMetadataSource[M] { self =>
     def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)]
+  }
+
+  trait StorageWritable extends StorageLike {
     def storeBatch(msgs: Seq[EventMessage]): M[PrecogUnit]
     def store(msg: EventMessage): M[PrecogUnit] = storeBatch(Vector(msg))
   }

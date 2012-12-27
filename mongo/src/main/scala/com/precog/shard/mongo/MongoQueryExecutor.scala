@@ -20,15 +20,10 @@
 package com.precog.shard
 package mongo
 
-import blueeyes.json._
-import blueeyes.json.serialization._
-import DefaultSerialization._
-
-import com.precog.accounts._
-
+import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
-
+import com.precog.common.accounts._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.jdbm3._
@@ -37,12 +32,13 @@ import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.mongo._
 import com.precog.yggdrasil.util._
-
 import com.precog.daze._
 import com.precog.muspelheim.ParseEvalStack
-
-import com.precog.common._
 import com.precog.util.FilesystemFileOps
+
+import blueeyes.json._
+import blueeyes.json.serialization._
+import DefaultSerialization._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -92,18 +88,7 @@ class MongoQueryExecutorConfig(val config: Configuration)
   def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
 }
 
-trait MongoQueryExecutorComponent {
-  val actorSystem = ActorSystem("mongoExecutorActorSystem")
-  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit val futureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
-  
-  def accountManagerFactory(config: Configuration) = new InMemoryAccountManager[Future]()
-  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutor[Future] = {
-    new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
-  }
-}
-
-class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future]) extends ShardQueryExecutor with MongoColumnarTableModule {
+class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit val asyncContext: ExecutionContext, val M: Monad[Future]) extends ShardQueryExecutor with MongoColumnarTableModule {
   type YggConfig = MongoQueryExecutorConfig
 
   trait TableCompanion extends MongoColumnarTableCompanion
@@ -115,10 +100,6 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
   val clock = blueeyes.util.Clock.System
 
   lazy val storage = new MongoStorageMetadataSource(Table.mongo)
-
-  // to satisfy abstract defines in parent traits
-  val asyncContext = extAsyncContext
-  val M = extM
 
   def startup() = Future {
     Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))

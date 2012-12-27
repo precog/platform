@@ -17,11 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package ragnarok
+package com.precog.ragnarok
 
 import com.precog.yggdrasil._
 import com.precog.common._
+import com.precog.common.ingest._
+import com.precog.common.accounts._
 import com.precog.util.PrecogUnit
 
 import java.util.zip.{ ZipFile, ZipEntry, ZipException }
@@ -33,6 +34,7 @@ import akka.dispatch.Await
 
 import scalaz._
 import scalaz.effect._
+import scalaz.syntax.copointed._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -41,7 +43,7 @@ import com.weiglewilczek.slf4s.Logging
  * Provides a simple interface for ingesting bulk JSON data.
  */
 trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
-  import scalaz.syntax.copointed._
+  type Storage <: StorageWritable
 
   implicit def coM: Copointed[M]
 
@@ -93,8 +95,7 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
 
     // Same as used by YggUtil's import command.
     val events = readRows(data) map { jval =>
-      EventMessage(EventId(pid, sid.getAndIncrement),
-        Event(apiKey, Path(db), Some(accountId), jval, Map.empty))
+      IngestMessage(apiKey, Path(db), accountId, Vector(IngestRecord(EventId(pid, sid.getAndIncrement), jval)), None)
     }
 
     events.grouped(batchSize).zipWithIndex foreach { case (batch, id) =>

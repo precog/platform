@@ -51,7 +51,7 @@ object ZookeeperSystemCoordination {
   val shardCheckpointBasePaths = List("shard", "checkpoint")
 
   def toNodeData(jval: JValue): Array[Byte] = jval.renderCompact.getBytes("UTF-8")
-  def fromNodeData(bytes: Array[Byte]): JValue = JParser.parse(new String(bytes, "UTF-8"))
+  def fromNodeData(bytes: Array[Byte]): JValue = JParser.parseUnsafe(new String(bytes, "UTF-8"))
 
   def apply(zkHosts: String, uid: ServiceUID, yggCheckpointsEnabled: Boolean) = {
     val zkc = new ZkClient(zkHosts)

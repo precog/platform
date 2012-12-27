@@ -33,13 +33,11 @@ import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.DefaultSerialization._
-import blueeyes.bkka.AkkaDefaults
 
 import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
+import akka.dispatch.ExecutionContext
 
-trait EventServiceCombinators extends APIKeyServiceCombinators with AccountServiceCombinators with AkkaDefaults {
-
+trait EventServiceCombinators extends APIKeyServiceCombinators with AccountServiceCombinators {
   import DefaultBijections._
 
   def left[A, B, C](h: HttpService[Either[A, B], C]): HttpService[A, C] = {

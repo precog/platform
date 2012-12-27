@@ -24,7 +24,7 @@ import org.joda.time.DateTime
 
 import com.weiglewilczek.slf4s.Logging
 
-import akka.dispatch.{ ExecutionContext, Future, MessageDispatcher }
+import akka.dispatch.{ ExecutionContext, Future }
 
 import blueeyes.bkka.AkkaTypeClasses._
 import blueeyes.core.http._
@@ -69,7 +69,7 @@ object WrappedGrantId {
   implicit val (decomposer, extractor) = IsoSerialization.serialization[WrappedGrantId](schema)
 }
 
-class GetAPIKeysHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class GetAPIKeysHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) => 
       apiKeyManagement.apiKeys(authAPIKey).map { apiKeys =>
@@ -80,7 +80,7 @@ class GetAPIKeysHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher:
   val metadata = None
 }
 
-class CreateAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class CreateAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service: HttpRequest[Future[JValue]] => Validation[NotServed, APIKey => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) => 
       request.content.map { _.flatMap { jvalue =>
@@ -115,7 +115,7 @@ class CreateAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit dispatche
   val metadata = None
 }
 
-class GetAPIKeyDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class GetAPIKeyDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) => 
       request.parameters.get('apikey).map { apiKey =>
@@ -134,7 +134,7 @@ class GetAPIKeyDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit dispa
   val metadata = None
 }
 
-class GetAPIKeyGrantsHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class GetAPIKeyGrantsHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) =>
       request.parameters.get('apikey).map { apiKey =>
@@ -153,7 +153,7 @@ class GetAPIKeyGrantsHandler(apiKeyManagement: APIKeyManagement)(implicit dispat
   val metadata = None
 }
 
-class AddAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class AddAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) => 
       (for {
@@ -184,7 +184,7 @@ class AddAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatc
   val metadata = None
 }
 
-class RemoveAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class RemoveAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) =>
       (for {
@@ -204,7 +204,7 @@ class RemoveAPIKeyGrantHandler(apiKeyManagement: APIKeyManagement)(implicit disp
   val metadata = None
 }
 
-class DeleteAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class DeleteAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) => 
       request.parameters.get('apikey).map { apiKey =>
@@ -220,7 +220,7 @@ class DeleteAPIKeyHandler(apiKeyManagement: APIKeyManagement)(implicit dispatche
   val metadata = None
 }
 
-class CreateGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class CreateGrantHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) =>
       (for {
@@ -250,7 +250,7 @@ class CreateGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher
   val metadata = None
 }
 
-class GetGrantDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class GetGrantDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) => 
       (for {
@@ -267,7 +267,7 @@ class GetGrantDetailsHandler(apiKeyManagement: APIKeyManagement)(implicit dispat
   val metadata = None
 }
 
-class GetGrantChildrenHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class GetGrantChildrenHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) =>
       (for {
@@ -282,7 +282,7 @@ class GetGrantChildrenHandler(apiKeyManagement: APIKeyManagement)(implicit dispa
   val metadata = None
 }
 
-class AddGrantChildHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class AddGrantChildHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) =>
       (for {
@@ -311,7 +311,7 @@ class AddGrantChildHandler(apiKeyManagement: APIKeyManagement)(implicit dispatch
   val metadata = None
 }
 
-class DeleteGrantHandler(apiKeyManagement: APIKeyManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class DeleteGrantHandler(apiKeyManagement: APIKeyManagement)(implicit executor: ExecutionContext) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (authAPIKey: APIKey) =>
       request.parameters.get('grantId).map { grantId =>

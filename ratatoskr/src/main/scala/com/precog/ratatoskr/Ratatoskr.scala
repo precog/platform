@@ -19,17 +19,26 @@
  */
 package com.precog.ratatoskr
 
-import com.precog.common.json._
-import actor._
-import jdbm3._
-import metadata.MetadataStorage
-import metadata.FileMetadataStorage
-
-import com.precog.accounts.InMemoryAccountManager
 import com.precog.common._
-import com.precog.util._
+import com.precog.common.json._
+import com.precog.common.accounts._
+import com.precog.common.ingest._
 import com.precog.common.kafka._
 import com.precog.common.security._
+import com.precog.auth._
+import com.precog.accounts._
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.jdbm3._
+import com.precog.yggdrasil.metadata._
+import com.precog.util._
+
+import blueeyes.json._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Extractor._
+import blueeyes.bkka.AkkaDefaults
+import blueeyes.persistence.mongo._
 
 import akka.actor.{ActorRef,ActorSystem,Props}
 import akka.dispatch.Await
@@ -39,44 +48,30 @@ import akka.util.Timeout
 import akka.util.Duration
 import akka.pattern.gracefulStop
 
-import org.joda.time._
-
-import java.io.File
-import java.nio.ByteBuffer
-
-import collection.mutable.{Buffer, ListBuffer}
-import collection.JavaConversions._
-
-import blueeyes.json._
-import blueeyes.json.serialization._
-import blueeyes.json.serialization.DefaultSerialization._
-import blueeyes.json.serialization.Extractor._
-import blueeyes.bkka.AkkaDefaults
-import blueeyes.persistence.mongo._
-
-import scopt.mutable.OptionParser
-
-import scala.collection.SortedSet
-import scala.collection.SortedMap
-
 import _root_.kafka.message._
 
+import au.com.bytecode.opencsv._
+import com.weiglewilczek.slf4s.Logging
+import org.joda.time._
+import org.streum.configrity._
 import org.I0Itec.zkclient._
 import org.apache.zookeeper.data.Stat
+import scopt.mutable.OptionParser
+
+import java.io._
+import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicInteger
 
 import scalaz.{Success, Failure}
 import scalaz.effect.IO
 import scalaz.syntax.std.boolean._
+import scalaz.syntax.bifunctor._
 
-import org.streum.configrity._
-
-import java.util.concurrent.atomic.AtomicInteger
+import scala.collection.SortedSet
+import scala.collection.SortedMap
+import scala.collection.JavaConverters._
+import scala.collection.mutable.{Buffer, ListBuffer}
 import scala.io.Source
-
-import au.com.bytecode.opencsv._
-import java.io._
-
-import com.weiglewilczek.slf4s.Logging
 
 trait RatatoskrCommon {
   def load(dataDir: String) = {
@@ -381,9 +376,6 @@ object KafkaTools extends Command {
   def convert(central: String): Unit = convert(new File(central), new File(central + ".local")) 
   
   def convert(source: File, destination: File) {
-    val eventCodec = LocalFormat.codec 
-    val ingestCodec = CentralFormat.codec 
-    
     val src = new FileMessageSet(source, false) 
     val dest = new FileMessageSet(destination, true) 
 
@@ -444,12 +436,10 @@ object KafkaTools extends Command {
   }
 
   case object LocalFormat extends Format {
-    val codec = new KafkaIngestMessageCodec
-
     def dump(i: Int, msg: MessageAndOffset) {
-      codec.toEvent(msg.message) match {
-        case IngestMessage(EventId(pid, sid), Event(apiKey, path, ownerAccountId, data, _)) =>
-          println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s Owner: %s".format(i+1, pid, sid, path, apiKey, ownerAccountId))
+      EventEncoding.read(msg.message.buffer) match {
+        case Success(Ingest(apiKey, path, ownerAccountId, data, _)) =>
+          println("Ingest-%06d Path: %s APIKey: %s Owner: %s --".format(i+1, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.renderPretty))
         case _ =>
       }
@@ -457,13 +447,11 @@ object KafkaTools extends Command {
   }
 
   case object CentralFormat extends Format {
-    val codec = new KafkaIngestMessageCodec
-
     def dump(i: Int, msg: MessageAndOffset) {
-      codec.toEvent(msg.message) match {
-        case IngestMessage(EventId(pid, sid), Event(apiKey, path, ownerAccountId, data, _)) =>
-          println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s Owner: %s".format(i+1, pid, sid, path, apiKey, ownerAccountId))
-          data.foreach(v => println(v.renderPretty))
+      EventMessageEncoding.read(msg.message.buffer) match {
+        case Success(IngestMessage(apiKey, path, ownerAccountId, data, _)) =>
+          println("IngestMessage-%06d Path: %s APIKey: %s Owner: %s".format(i+1, path, apiKey, ownerAccountId))
+          data.foreach(v => println(v.serialize.renderPretty))
         case _ =>
       }
     }
@@ -513,7 +501,7 @@ object ZookeeperTools extends Command {
         }
         
         println("Loading initial checkpoint: " + newCheckpoint)
-        JParser.parse(newCheckpoint).validated[YggCheckpoint] match {
+        ((Thrown.apply _) <-: JParser.parseFromString(newCheckpoint)).flatMap(_.validated[YggCheckpoint]) match {
           case Success(_) =>
             if (! client.exists(path)) {
               client.createPersistent(path, true)
@@ -529,7 +517,7 @@ object ZookeeperTools extends Command {
     }
     config.relayAgentUpdate.foreach { 
       case (path, data) =>
-        JParser.parse(data).validated[EventRelayState] match {
+        ((Thrown.apply _) <-: JParser.parseFromString(data)).flatMap(_.validated[EventRelayState]) match {
           case Success(_) =>
             if (! client.exists(path)) {
               client.createPersistent(path, true)
@@ -539,6 +527,7 @@ object ZookeeperTools extends Command {
               def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
             })  
             println("Agent updated: %s with %s".format(path, data))
+
           case Failure(e) => println("Invalid json for agent: %s".format(e))
       }
     }
@@ -562,7 +551,7 @@ object ZookeeperTools extends Command {
     if(children == null) {
       ListBuffer[(String, String)]()
     } else {
-      children.map{ child =>
+      children.asScala map { child =>
         val bytes = client.readData(path + "/" + child).asInstanceOf[Array[Byte]]
         (child, new String(bytes))
       }
@@ -682,11 +671,23 @@ object ImportTools extends Command with Logging {
   val name = "import"
   val description = "Bulk import of json/csv data directly to data columns"
   
+  val sid = new AtomicInteger(0)
+
+  class Config(
+    var input: Vector[(String, String)] = Vector.empty, 
+    val batchSize: Int = 10000,
+    var apiKey: APIKey = "root",     // FIXME
+    var accountId: AccountId = "",
+    var verbose: Boolean = false ,
+    var storageRoot: File = new File("./data"),
+    var archiveRoot: File = new File("./archive")
+  )
+
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
       opt("t", "token", "<api key>", "authorizing API key", { s: String => config.apiKey = s })
-      opt("o", "owner", "<account id>", "Owner account ID to insert data under", { s: String => config.accountId = Some(s) })
+      opt("o", "owner", "<account id>", "Owner account ID to insert data under", { s: String => config.accountId = s })
       opt("s", "storage", "<storage root>", "directory containing data files", { s: String => config.storageRoot = new File(s) })
       opt("a", "archive", "<archive root>", "directory containing archived data files", { s: String => config.archiveRoot = new File(s) })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
@@ -695,12 +696,9 @@ object ImportTools extends Command with Logging {
         config.input = config.input :+ t
       })
     }
+
     if (parser.parse(args)) {
-      try {
-        process(config)
-      } catch {
-        case e => logger.error("Failure during import", e); sys.exit(1)
-      }
+      process(config)
     } else { 
       parser
     }
@@ -733,9 +731,11 @@ object ImportTools extends Command with Logging {
           def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findArchiveRoot(descriptor)
         }
 
-        class Storage extends SystemActorStorageLike(ms) {
-          val accessControl = new UnrestrictedAccessControl()
-          val accountManager = new InMemoryAccountManager()
+        override def accountFinder = None
+        val metadataStorage = ms
+
+        class Storage extends SystemActorStorageLike {
+          override val accessControl = new UnrestrictedAccessControl()
         }
 
         val storage = new Storage
@@ -752,10 +752,10 @@ object ImportTools extends Command with Logging {
         case (db, input) =>
           logger.info("Inserting batch: %s:%s".format(db, input))
           val result = JParser.parseFromFile(new File(input))
-          val ingestRecords: Vector[IngestRecord] = result.valueOr(e => throw e).children map { jv => IngestRecord(pid, sid.getAndIncrement, jv) }
+          val ingestRecords: Vector[IngestRecord] = result.valueOr(e => throw e).children.map({ jv => IngestRecord(EventId(pid, sid.getAndIncrement), jv) })(collection.breakOut)
           val event = IngestMessage(config.apiKey, Path(db), config.accountId, ingestRecords, None)
           
-          logger.info(events.data.size + " total events to be inserted")
+          logger.info(ingestRecords.length + " total events to be inserted")
           Await.result(storage.storeBatch(List(event)), Duration(300, "seconds"))
           logger.info("Batch saved")
       }
@@ -769,18 +769,6 @@ object ImportTools extends Command with Logging {
 
     io.unsafePerformIO
   }
-
-  val sid = new AtomicInteger(0)
-
-  class Config(
-    var input: Vector[(String, String)] = Vector.empty, 
-    val batchSize: Int = 10000,
-    var apiKey: APIKey = "root",     // FIXME
-    var accountId: Option[AccountId] = None,
-    var verbose: Boolean = false ,
-    var storageRoot: File = new File("./data"),
-    var archiveRoot: File = new File("./archive")
-  )
 }
 
 object CSVTools extends Command {
@@ -982,7 +970,7 @@ object CSVToJSONConverter {
 
   def parse(s: String, ts: Boolean = false, verbose: Boolean = false): JValue = {
     try {
-      JParser.parse(s)
+      JParser.parseUnsafe(s)
     } catch {
       case ex =>
         s match {

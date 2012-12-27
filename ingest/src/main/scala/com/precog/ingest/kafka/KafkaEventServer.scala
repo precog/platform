@@ -21,41 +21,35 @@ package com.precog.ingest
 package kafka
 
 import com.precog.common._
+import com.precog.common.jobs._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.ingest.service._
+import WebJobManager._
 
-import blueeyes.bkka.{ AkkaDefaults, AkkaTypeClasses }
 import blueeyes.BlueEyesServer
+import blueeyes.bkka._
 import blueeyes.util.Clock
 
 import akka.util.Timeout
-import akka.dispatch.{ ExecutionContext, Future, MessageDispatcher }
+import akka.dispatch.{ ExecutionContext, Future }
 
-import java.util.Properties
-import java.net.InetAddress
-
-import com.weiglewilczek.slf4s.Logging
 import org.streum.configrity.Configuration
 
 import scalaz._
 
-object KafkaEventServer extends 
-    BlueEyesServer with 
-    EventService with 
-    WebAccountFinderComponent with
-    WebAPIKeyFinderComponent with
-    KafkaEventStoreComponent {
-
+object KafkaEventServer extends BlueEyesServer with KafkaEventStoreComponent with AkkaDefaults {
   val clock = Clock.System
-
-  implicit val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+  implicit val executionContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = new FutureMonad(defaultFutureDispatch)
 }
 
 
-trait KafkaEventStoreComponent extends WebAccountFinderComponent with AkkaDefaults with Logging {
+trait KafkaEventStoreComponent extends EventService {
+  def APIKeyFinder(config: Configuration) = WebAPIKeyFinder(config)
+  def AccountFinder(config: Configuration) = WebAccountFinder(config)
+  def JobManager(config: Configuration) = WebJobManager(config).withM[Future]
   def EventStore(config: Configuration): EventStore = {
     val centralZookeeperHosts = getConfig(config, "central.zk.connect")
 

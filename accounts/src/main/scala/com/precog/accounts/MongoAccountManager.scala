@@ -63,8 +63,7 @@ trait MongoAccountManagerSettings extends ZkAccountManagerSettings {
 trait ZkMongoAccountManagerComponent {
   private lazy val zkmLogger = LoggerFactory.getLogger("com.precog.accounts.ZkMongoAccountManagerComponent")
   
-  implicit def asyncContext: ExecutionContext
-  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+  implicit def M: Monad[Future] 
 
   class AM(val zkc: ZkClient, mongo: Mongo, database: String, val settings: MongoAccountManagerSettings) 
   extends MongoAccountManager(mongo, mongo.database(database), settings) 
@@ -89,12 +88,10 @@ trait ZkMongoAccountManagerComponent {
 
 
 trait ZkAccountIdSource extends AccountManager[Future] {
-  implicit def execContext: ExecutionContext
-
   def zkc: ZkClient
   def settings: ZkAccountManagerSettings
 
-  def newAccountId: Future[String] = Future {
+  def newAccountId: Future[String] = M.point {
     if (!zkc.exists(settings.zkAccountIdPath)) {
       zkc.createPersistent(settings.zkAccountIdPath, true)
     }
@@ -105,12 +102,10 @@ trait ZkAccountIdSource extends AccountManager[Future] {
 }
 
 
-abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val execContext: ExecutionContext)
-  extends AccountManager[Future] with ZkAccountIdSource {
+abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val M: Monad[Future])
+    extends AccountManager[Future] with ZkAccountIdSource {
   import Account._
 
-  implicit val M = AkkaTypeClasses.futureApplicative(execContext)
-  
   private lazy val mamLogger = LoggerFactory.getLogger("com.precog.accounts.MongoAccountManager")
 
   private implicit val impTimeout = settings.timeout
@@ -172,7 +167,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
         }
           
       case None => 
-        Future(false)
+        M.point(false)
     }
   }
 
@@ -181,13 +176,14 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
       case ot @ Some(account) =>
         for {
           _ <- database(insert(account.serialize.asInstanceOf[JObject]).into(settings.deletedAccounts))
-           _ <- database(remove.from(settings.accounts).where("accountId" === accountId))
+          _ <- database(remove.from(settings.accounts).where("accountId" === accountId))
         } yield { ot }
-      case None    => Future(None)
+      case None => 
+        M.point(None)
     } 
   }
 
-  def close() = database.disconnect.fallbackTo(Future(())).flatMap{_ => mongo.close}
+  def close() = database.disconnect.fallbackTo(M.point(())).flatMap{_ => mongo.close}
 }
 
 

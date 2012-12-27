@@ -42,12 +42,12 @@ trait SystemActorStorageModule extends ActorStorageModule with ShardSystemActorM
   type Storage <: SystemActorStorageLike
   type YggConfig <: SystemActorStorageConfig
 
-  abstract class SystemActorStorageLike(metadataStorage: MetadataStorage) extends ActorStorageLike {
+  abstract class SystemActorStorageLike extends ActorStorageWritable {
     private var shardSystemActor0: ActorRef = null
     def shardSystemActor = shardSystemActor0
     
     def start() = Future {
-      shardSystemActor0 = actorSystem.actorOf(Props(new ShardSystemActor(metadataStorage, accountManager)), "shardSystem")
+      shardSystemActor0 = actorSystem.actorOf(Props(new ShardSystemActor), "shardSystem")
       true
     }
 

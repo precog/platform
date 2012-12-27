@@ -26,15 +26,15 @@ import akka.dispatch.ExecutionContext
 import blueeyes.bkka._
 
 import org.streum.configrity.Configuration
+import scalaz._
 
-trait WebAPIKeyFinderComponent {
-  def APIKeyFinder(config: Configuration): APIKeyFinder[Future] = {
+object WebAPIKeyFinder {
+  def apply(config: Configuration)(implicit M: Monad[Future]): APIKeyFinder[Future] = {
     sys.error("todo")
   }
 }
 
-class WebAPIKeyFinder()(implicit executor: ExecutionContext) extends APIKeyFinder[Future] {
-  val M = new FutureMonad(executor)
+class WebAPIKeyFinder()(implicit val M: Monad[Future]) extends APIKeyFinder[Future] {
   def findAPIKey(apiKey: APIKey): Future[Option[APIKeyRecord]] = sys.error("todo")
   def findGrant(gid: GrantId): Future[Option[Grant]] = sys.error("todo")
 }

@@ -20,15 +20,19 @@
 package com.precog.shard
 package mongo
 
-import akka.dispatch.{ExecutionContext, Future, Promise}
-
+import com.precog.mongo._
 import com.precog.common.security._
+import com.precog.common.accounts._
+import com.precog.daze._
 
+import blueeyes.bkka._
 import blueeyes.BlueEyesServer
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
-import blueeyes.json.JValue
 import blueeyes.util.Clock
+
+import akka.actor.ActorSystem
+import akka.dispatch.{ExecutionContext, Future, Promise}
 
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 import org.eclipse.jetty.server.{Handler, Request, Server}
@@ -36,8 +40,17 @@ import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, Handle
 
 import org.streum.configrity.Configuration
 
-object MongoShardServer extends BlueEyesServer with ShardService with MongoQueryExecutorComponent with StaticAPIKeyManagerComponent {
-  
+object MongoShardServer extends BlueEyesServer with ShardService {
+  val actorSystem = ActorSystem("mongoExecutorActorSystem")
+  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit val M = new FutureMonad(executionContext)
+
+  def APIKeyFinder(config: Configuration) = new StaticAPIKeyFinder(config[String]("masterAccount.apiKey"))
+  def AccountFinder(config: Configuration) = WebAccountFinder(config)
+  def QueryExecutor(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: AccountFinder[Future]): QueryExecutor[Future] = {
+    new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
+  }
+
   val clock = Clock.System
 
   val jettyService = this.service("labcoat", "1.0") { context =>

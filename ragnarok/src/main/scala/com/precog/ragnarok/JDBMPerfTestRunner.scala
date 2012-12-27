@@ -20,8 +20,6 @@
 package com.precog
 package ragnarok
 
-import com.precog.accounts.InMemoryAccountManager
-
 import yggdrasil.{ ProjectionDescriptor, BaseConfig }
 import yggdrasil.jdbm3._
 import yggdrasil.actor._
@@ -56,9 +54,11 @@ trait StandalonePerfTestRunner[T] extends EvaluatingPerfTestRunner[Future, T]
   
   trait StandalonePerfTestRunnerConfig extends BaseConfig with EvaluatingPerfTestRunnerConfig with StandaloneShardSystemConfig
 
-  class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
+  val accountFinder = None
+  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
+
+  class Storage extends SystemActorStorageLike {
     val accessControl = new UnrestrictedAccessControl[Future]()
-    val accountManager = new InMemoryAccountManager[Future]()
   }
 
   val storage = new Storage

@@ -17,8 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package accounts
+package com.precog.accounts
 
 import scala.collection.mutable
 

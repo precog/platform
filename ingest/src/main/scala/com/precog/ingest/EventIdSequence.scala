@@ -25,7 +25,6 @@ import com.precog.util._
 import com.precog.util.PrecogUnit
 
 import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -35,10 +34,9 @@ trait EventIdSequence {
   def next(offset: Long): EventId
   def saveState(offset: Long): PrecogUnit
   def getLastOffset(): Long
-  def close(): Future[PrecogUnit]
 }
 
-class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blockSize: Int = 100000)(implicit dispatcher: MessageDispatcher) extends EventIdSequence {
+class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blockSize: Int = 100000)/*(implicit executor: ExecutionContext) */extends EventIdSequence {
 
   private case class InternalState(eventRelayState: EventRelayState) {
     private val nextSequenceId = new AtomicInteger(eventRelayState.nextSequenceId)
@@ -86,6 +84,7 @@ class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blo
       case Success(ers @ EventRelayState(_,_,_)) => InternalState(ers)
       case Failure(e)                            => sys.error("Error trying to save relay agent state: " + e)
     }
+
     PrecogUnit
   }
 

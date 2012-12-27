@@ -19,11 +19,10 @@
  */
 package com.precog.mongo
 
-import accounts.AccountId
+import com.precog.common._
+import com.precog.common.accounts._
+import com.precog.common.security._
 import org.joda.time.DateTime
-
-import akka.util.Timeout
-import akka.dispatch.{ ExecutionContext, Future }
 
 //import blueeyes.bkka._
 import blueeyes.json._
@@ -31,21 +30,15 @@ import blueeyes.persistence.mongo._
 import blueeyes.json.serialization.Extractor
 import blueeyes.json.serialization.DefaultSerialization._
 
+import akka.util.Timeout
+import akka.dispatch.{ ExecutionContext, Future }
+
 import com.weiglewilczek.slf4s.Logging
 
 import org.streum.configrity.Configuration
 
 import scalaz._
 import scalaz.std.option._
-
-trait StaticAPIKeyFinderComponent {
-  implicit def asyncContext: ExecutionContext
-  implicit def M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
-
-  def apiKeyFinderFactory(config: Configuration): APIKeyFinder[Future] = {
-    new StaticAPIKeyFinder(config[String]("masterAccount.apiKey"))
-  }
-}
 
 class StaticAPIKeyFinder(apiKey: APIKey)(implicit val M: Monad[Future]) extends APIKeyFinder[Future] with Logging {
   private val permissions = Set[Permission](

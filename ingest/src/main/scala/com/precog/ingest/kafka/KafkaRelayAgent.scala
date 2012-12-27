@@ -51,7 +51,7 @@ import scala.annotation.tailrec
 class KafkaRelayAgent(accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence, localConfig: Configuration, centralConfig: Configuration)(implicit executor: ExecutionContext) extends Logging {
   implicit val M: Monad[Future] = new FutureMonad(executor)
 
-  private class KafkaMessageConsumer(host: String, port: Int, topic: String, producer: Producer[String, Message], bufferSize: Int = 1024 * 1024) extends Runnable with Logging {
+  private final class KafkaMessageConsumer(host: String, port: Int, topic: String, producer: Producer[String, Message], bufferSize: Int = 1024 * 1024) extends Runnable with Logging {
     val retryDelay = 5000
     val maxDelay = 100.0
     val waitCountFactor = 25
@@ -177,6 +177,6 @@ class KafkaRelayAgent(accountFinder: AccountFinder[Future], eventIdSeq: EventIdS
     PrecogUnit
   }
 
-  def stop(): Future[PrecogUnit] = batchConsumer.stop map { _ => producer.close } flatMap { _ => eventIdSeq.close }
+  def stop(): Future[PrecogUnit] = batchConsumer.stop map { _.tap(_ => producer.close) } 
 }
 

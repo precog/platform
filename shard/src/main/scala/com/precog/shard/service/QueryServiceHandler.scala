@@ -20,6 +20,11 @@
 package com.precog.shard
 package service
 
+import com.precog.daze._
+import com.precog.common._
+import com.precog.common.security._
+
+import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
@@ -27,49 +32,44 @@ import blueeyes.json._
 import blueeyes.util.Clock
 
 import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
-
-import scalaz.{ Monad, Success, Failure }
-import scalaz.Validation._
+import akka.dispatch.ExecutionContext
 
 import com.weiglewilczek.slf4s.Logging
 
-import com.precog.daze._
-import com.precog.common._
-import com.precog.common.security._
+import scalaz.{ Monad, Success, Failure }
+import scalaz.Validation._
+import scalaz.syntax.monad._
 
 
-class QueryServiceHandler(queryExecutor: QueryExecutor[Future])(implicit dispatcher: MessageDispatcher, M: Monad[Future])
-extends CustomHttpService[Future[JValue], (APIKeyRecord, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
+class QueryServiceHandler[A](queryExecutor: QueryExecutor[Future])(implicit M: Monad[Future])
+extends CustomHttpService[A, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
 with Logging {
-  import scalaz.syntax.monad._
-
   val Command = """:(\w+)\s+(.+)""".r
 
-  val service = (request: HttpRequest[Future[JValue]]) => {
-    success((r: APIKeyRecord, p: Path, q: String, opts: QueryOptions) => q.trim match {
-      case Command("ls", arg) => list(r.apiKey, Path(arg.trim))
-      case Command("list", arg) => list(r.apiKey, Path(arg.trim))
-      case Command("ds", arg) => describe(r.apiKey, Path(arg.trim))
-      case Command("describe", arg) => describe(r.apiKey, Path(arg.trim))
+  val service = (request: HttpRequest[A]) => {
+    success((apiKey: APIKey, path: Path, query: String, opts: QueryOptions) => query.trim match {
+      case Command("ls", arg) => list(apiKey, Path(arg.trim))
+      case Command("list", arg) => list(apiKey, Path(arg.trim))
+      case Command("ds", arg) => describe(apiKey, Path(arg.trim))
+      case Command("describe", arg) => describe(apiKey, Path(arg.trim))
       case qt =>
-        queryExecutor.execute(r.apiKey, q, p, opts) match {
+        queryExecutor.execute(apiKey, query, path, opts) match {
           case Success(stream) =>
-            Future(HttpResponse[QueryResult](OK, content = Some(Right(stream))))
+            M.point(HttpResponse[QueryResult](OK, content = Some(Right(stream))))
           
           case Failure(UserError(errorData)) =>
-            Future(HttpResponse[QueryResult](UnprocessableEntity, content = Some(Left(errorData))))
+            M.point(HttpResponse[QueryResult](UnprocessableEntity, content = Some(Left(errorData))))
           
           case Failure(AccessDenied(reason)) =>
-            Future(HttpResponse[QueryResult](HttpStatus(Unauthorized, reason)))
+            M.point(HttpResponse[QueryResult](HttpStatus(Unauthorized, reason)))
           
           case Failure(TimeoutError) => 
-            Future(HttpResponse[QueryResult](RequestEntityTooLarge))
+            M.point(HttpResponse[QueryResult](RequestEntityTooLarge))
           
           case Failure(SystemError(error)) =>
             error.printStackTrace()
             logger.error("An error occurred processing the query: " + qt, error)
-            Future(HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")))
+            M.point(HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")))
         }
     })
   }

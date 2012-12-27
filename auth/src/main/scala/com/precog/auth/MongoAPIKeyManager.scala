@@ -57,11 +57,10 @@ object MongoAPIKeyManagerSettings {
   val defaults = MongoAPIKeyManagerSettings()
 }
 
-trait MongoAPIKeyManagerComponent extends Logging {
-  implicit def asyncContext: ExecutionContext
-  implicit val M: Monad[Future]
-
-  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future] = {
+object MongoAPIKeyManager extends Logging {
+  def apply(config: Configuration)(implicit executor: ExecutionContext): APIKeyManager[Future] = {
+    // TODO: should only require either the executor or M, not both.
+    implicit val M: Monad[Future] = new FutureMonad(executor)
     val mongo = RealMongo(config.detach("mongo"))
     
     val database = config[String]("mongo.database", "auth_v1")
@@ -87,9 +86,8 @@ trait MongoAPIKeyManagerComponent extends Logging {
       mongoAPIKeyManager
     }
   }
-}
 
-object MongoAPIKeyManager extends Logging {
+
   def findRootAPIKey(db: Database, keyCollection: String, grantCollection: String, createIfMissing: Boolean)(implicit context: ExecutionContext, timeout: Timeout): Future[APIKeyRecord] = {
     import Grant.Serialization._
     import APIKeyRecord.Serialization._

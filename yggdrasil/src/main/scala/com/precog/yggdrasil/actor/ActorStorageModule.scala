@@ -52,7 +52,6 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
 
   trait ActorStorageLike extends StorageLike with Logging {
     def accessControl: AccessControl[Future]
-    def accountManager: AccountFinder[Future]
     def shardSystemActor: ActorRef
 
     def start(): Future[Boolean]
@@ -63,11 +62,11 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
 
     private lazy val metadata: StorageMetadata[Future] = new ActorStorageMetadata(shardSystemActor, yggConfig.metadataTimeout)
     
-    def userMetadataView(apiKey: APIKey): StorageMetadata[Future] = {
+    override def userMetadataView(apiKey: APIKey): StorageMetadata[Future] = {
       new UserMetadataView(apiKey, accessControl, metadata)
     }
     
-    def projection(descriptor: ProjectionDescriptor): Future[(Projection, Release)] = {
+    override def projection(descriptor: ProjectionDescriptor): Future[(Projection, Release)] = {
       logger.debug("Obtain projection for " + descriptor)
       implicit val storageTimeout: Timeout = Timeout(300 seconds)
 
@@ -79,8 +78,10 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
         case e => logger.error("Error acquiring projection: " + descriptor, e)
       }
     }
-    
-    def storeBatch(msgs: Seq[IngestMessage]): Future[PrecogUnit] = {
+  }
+
+  trait ActorStorageWritable extends ActorStorageLike with StorageWritable {
+    override def storeBatch(msgs: Seq[EventMessage]): Future[PrecogUnit] = {
       implicit val storageTimeout: Timeout = Timeout(300 seconds)
 
       val result = Promise.apply[BatchComplete]

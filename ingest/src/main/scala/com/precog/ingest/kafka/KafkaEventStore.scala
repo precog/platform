@@ -27,7 +27,7 @@ import com.precog.util._
 
 import akka.util.Timeout
 import akka.dispatch.{Future, Promise}
-import akka.dispatch.MessageDispatcher
+import akka.dispatch.ExecutionContext
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
@@ -40,7 +40,7 @@ import com.weiglewilczek.slf4s._
 
 import scalaz._
 
-class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDispatcher) extends EventStore with Logging {
+class LocalKafkaEventStore(config: Configuration)(implicit executor: ExecutionContext) extends EventStore with Logging {
   private val localTopic = config[String]("topic")
   private val localProperties = {
     val props = JProperties.configurationToProperties(config)

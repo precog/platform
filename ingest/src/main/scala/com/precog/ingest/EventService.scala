@@ -25,10 +25,9 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 
 import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
+import akka.dispatch.ExecutionContext
 
 import blueeyes.BlueEyesServiceBuilder
-import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.core.data._
 import blueeyes.core.http._
@@ -51,11 +50,11 @@ import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExec
 
 case class EventServiceState(accessControl: APIKeyFinder[Future], ingestHandler: IngestServiceHandler, archiveHandler: ArchiveServiceHandler[ByteChunk], stop: Stoppable)
 
-trait EventService extends BlueEyesServiceBuilder with EventServiceCombinators
-with DecompressCombinators with AkkaDefaults { 
+trait EventService extends BlueEyesServiceBuilder with EventServiceCombinators with DecompressCombinators { 
+  implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
-  def ApiKeyFinder(config: Configuration): APIKeyFinder[Future]
+  def APIKeyFinder(config: Configuration): APIKeyFinder[Future]
   def AccountFinder(config: Configuration): AccountFinder[Future]
   def EventStore(config: Configuration): EventStore
   def JobManager(config: Configuration): JobManager[Future]
@@ -67,7 +66,7 @@ with DecompressCombinators with AkkaDefaults {
           import context._
 
           val eventStore = EventStore(config.detach("eventStore"))
-          val apiKeyFinder = ApiKeyFinder(config.detach("security"))
+          val apiKeyFinder = APIKeyFinder(config.detach("security"))
           val accountFinder = AccountFinder(config.detach("accounts"))
           val jobManager = JobManager(config.detach("jobs"))
 

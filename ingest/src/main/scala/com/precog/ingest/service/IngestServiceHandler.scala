@@ -71,12 +71,10 @@ class IngestServiceHandler(
     clock: Clock, 
     eventStore: EventStore, 
     ingestTimeout: Timeout, 
-    batchSize: Int)(implicit executor: ExecutionContext)
+    batchSize: Int)(implicit M: Monad[Future])
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]] 
     with Logging {
       
-  protected implicit val M = new FutureMonad(executor)
-
   sealed trait ParseDirective {
     def toMap: Map[String, String] // escape hatch for interacting with other systems
   }
@@ -98,7 +96,7 @@ class IngestServiceHandler(
   }
 
   class JSONBatchIngest(apiKey: APIKey, path: Path, accountId: AccountId) extends BatchIngest {
-    @tailrec def readBatch(reader: BufferedReader, batch: Vector[Validation[Throwable, JValue]]): Vector[Validation[Throwable, JValue]] = {
+    @tailrec final def readBatch(reader: BufferedReader, batch: Vector[Validation[Throwable, JValue]]): Vector[Validation[Throwable, JValue]] = {
       val line = reader.readLine()
       if (line == null || batch.size >= batchSize) batch 
       else readBatch(reader, batch :+ JParser.parseFromString(line))
@@ -110,7 +108,7 @@ class IngestServiceHandler(
         if (batch.isEmpty) {
           // the batch will only be empty if there's nothing left to read
           // TODO: Write out job completion information to the queue.
-          Promise.successful(SyncSuccess(total, ingested, errors))
+          M.point(SyncSuccess(total, ingested, errors))
         } else {
           val (_, values, errors0) = batch.foldLeft((0, Vector.empty[JValue], Vector.empty[(Int, Throwable)])) {
             case ((i, values, errors), Success(value)) => (i + 1, values :+ value, errors)
@@ -163,7 +161,7 @@ class IngestServiceHandler(
       }
     }
 
-    @tailrec def readBatch(reader: CSVReader, batch: Vector[Array[String]]): Vector[Array[String]] = {
+    @tailrec final def readBatch(reader: CSVReader, batch: Vector[Array[String]]): Vector[Array[String]] = {
       val nextRow = reader.readNext()
       if (nextRow == null || batch.size >= batchSize) batch else readBatch(reader, batch :+ nextRow)
     }
@@ -175,7 +173,7 @@ class IngestServiceHandler(
         if (batch.isEmpty) {
           // the batch will only be empty if there's nothing left to read
           // TODO: Write out job completion information to the queue.
-          Promise.successful(SyncSuccess(total, ingested, errors))
+          M.point(SyncSuccess(total, ingested, errors))
         } else {
           val types = CsvType.inferTypes(batch.iterator)
           val jvals = batch map { row =>
@@ -192,7 +190,7 @@ class IngestServiceHandler(
 
       val header = reader.readNext()
       if (header == null) {
-        Promise.successful(NotIngested("No CSV data was found in the request content."))
+        M.point(NotIngested("No CSV data was found in the request content."))
       } else {
         readBatches(header.map(JPath(_)), reader, 0, 0, Vector())
       }
@@ -214,7 +212,7 @@ class IngestServiceHandler(
           }
         }
       } valueOr { errors =>
-        Promise.successful(NotIngested(errors.list.mkString("; ")))      
+        M.point(NotIngested(errors.list.mkString("; ")))      
       }
     }
   }
@@ -264,7 +262,7 @@ class IngestServiceHandler(
           writeChannel(tail, written + written0)
 
         case None => 
-          Future { chan.close(); written }
+          M.point { chan.close(); written }
       }
     }
 
@@ -300,7 +298,7 @@ class IngestServiceHandler(
     mimeDirective.toSet ++ delimiter ++ quote ++ escape
   }
 
-  @tailrec def selectBatchIngest(from: List[BatchIngestSelector], partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[BatchIngest] = {
+  @tailrec final def selectBatchIngest(from: List[BatchIngestSelector], partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[BatchIngest] = {
     from match {
       case hd :: tl => 
         hd.select(partialData, parseDirectives) match { // not using map so as to get tailrec
@@ -324,7 +322,7 @@ class IngestServiceHandler(
 
     val futureBatchIngest = data match {
       case Left(buf) => 
-        Promise.successful(selectBatchIngest(selectors, array(buf), parseDirectives))
+        M.point(selectBatchIngest(selectors, array(buf), parseDirectives))
 
       case Right(stream) => 
         stream.uncons map { 
@@ -334,7 +332,7 @@ class IngestServiceHandler(
     
     futureBatchIngest flatMap {
       case Some(batchIngest) => batchIngest(data, parseDirectives, batchJob, sync)
-      case None => Promise.successful(NotIngested("Could not successfully determine a data type for your batch ingest. Please consider setting the Content-Type header."))
+      case None => M.point(NotIngested("Could not successfully determine a data type for your batch ingest. Please consider setting the Content-Type header."))
     }
   }
 
@@ -342,7 +340,7 @@ class IngestServiceHandler(
     sys.error("todo")
   }
 
-  val service = (request: HttpRequest[ByteChunk]) => {
+  val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[JValue]]] = (request: HttpRequest[ByteChunk]) => {
     Success { (apiKey: APIKey, path: Path) =>
       accountFinder.resolveForWrite(request.parameters.get('ownerAccountId), apiKey) flatMap {
         case Some(ownerAccountId) =>
@@ -373,32 +371,33 @@ class IngestServiceHandler(
                       HttpResponse[JValue](Accepted, content = Some(JObject(JField("content-length", JNum(contentLength)) :: Nil)))
                   
                     case SyncSuccess(total, ingested, errors) =>
-                      if (ingested == 0 && total > 0) {
-                      } else {
-                        val failed = errors.size
-                        val responseContent = JObject(
-                          JField("total", JNum(total)) :: 
-                          JField("ingested", JNum(ingested)) ::
-                          JField("failed", JNum(failed)) ::
-                          JField("skipped", JNum(total - ingested - failed)) ::
-                          JField("errors", JArray(errors map { case (line, msg) => JObject(JField("line", JNum(line)) :: JField("reason", JString(msg)) :: Nil) }: _*)) :: 
-                          Nil
-                        )
+                      val failed = errors.size
+                      val responseContent = JObject(
+                        JField("total", JNum(total)) :: 
+                        JField("ingested", JNum(ingested)) ::
+                        JField("failed", JNum(failed)) ::
+                        JField("skipped", JNum(total - ingested - failed)) ::
+                        JField("errors", JArray(errors map { case (line, msg) => JObject(JField("line", JNum(line)) :: JField("reason", JString(msg)) :: Nil) }: _*)) :: 
+                        Nil
+                      )
 
+                      if (ingested == 0 && total > 0) {
+                        HttpResponse[JValue](BadRequest, content = Some(responseContent))
+                      } else {
                         HttpResponse[JValue](OK, content = Some(responseContent))
                       }
                   }
                 }
               } getOrElse {
-                Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing event data."))))
+                M.point(HttpResponse[JValue](BadRequest, content = Some(JString("Missing event data."))))
               }
 
             case false =>
-              Future(HttpResponse[JValue](Unauthorized, content = Some(JString("Your API key does not have permissions to write at this location."))))
+              M.point(HttpResponse[JValue](Unauthorized, content = Some(JString("Your API key does not have permissions to write at this location."))))
           }
 
         case None =>
-          Future(HttpResponse[JValue](BadRequest, content = Some(JString("Either the ownerAccountId parameter you specified could not be resolved to a known account, or the API key specified was invalid."))))
+          M.point(HttpResponse[JValue](BadRequest, content = Some(JString("Either the ownerAccountId parameter you specified could not be resolved to a known account, or the API key specified was invalid."))))
       }
     }
   }

@@ -34,14 +34,14 @@ import com.weiglewilczek.slf4s.Logging
 import java.nio.ByteBuffer
 import scalaz._
 
-abstract class DecompressByteChunk(implicit executor: ExecutionContext) extends Logging {
-  protected implicit val M = new FutureMonad(executor)
+trait DecompressByteChunk extends Logging {
+  implicit val M: Monad[Future]
 
   protected def inChannel(in: InputStream): ReadableByteChannel
 
   def decompress(dataChunk: ByteChunk, chunkSize: Int = 8192): ByteChunk = {
     val stream: StreamT[Future, ByteBuffer] = dataChunk match {
-      case Left(bb) => StreamT(Future(StreamT.Yield(bb, StreamT(Future(StreamT.Done)))))
+      case Left(bb) => bb :: StreamT.empty[Future, ByteBuffer]
       case Right(stream) => stream
     }
 
@@ -54,21 +54,21 @@ abstract class DecompressByteChunk(implicit executor: ExecutionContext) extends 
 
     val result: StreamT[Future, ByteBuffer] = sfu flatMap { unit =>
       StreamT.unfoldM[Future, ByteBuffer, Option[ReadableByteChannel]](Some(inc)) {
-        case Some(in) => Future {
-          val buffer = ByteBuffer.allocate(chunkSize)
-          val read = in.read(buffer)
-          buffer.flip()
-          if (read == -1) {
-            in.close()
-            Some((buffer, None))
-          } else {
-            Some((buffer, Some(in)))
+        case Some(in) => 
+          M.point {
+            val buffer = ByteBuffer.allocate(chunkSize)
+            val read = in.read(buffer)
+            buffer.flip()
+            if (read == -1) {
+              in.close()
+              Some((buffer, None))
+            } else {
+              Some((buffer, Some(in)))
+            }
           }
-        }
           
-        case None => {
-          Promise.successful(None)
-        }
+        case None => 
+          M.point(None)
       }
     }
 
@@ -84,7 +84,7 @@ abstract class DecompressByteChunk(implicit executor: ExecutionContext) extends 
           c.write(buffer)
           writeChannel(tail)
         case None =>
-          Future(c.close())
+          M.point(c.close())
       }
     }
 
@@ -94,14 +94,12 @@ abstract class DecompressByteChunk(implicit executor: ExecutionContext) extends 
   def apply(byteStream: ByteChunk): ByteChunk = decompress(byteStream)
 }
 
-case class InflateByteChunk(implicit ctx: ExecutionContext)
-  extends DecompressByteChunk()(ctx) {
+class InflateByteChunk(implicit val M: Monad[Future]) extends DecompressByteChunk {
   protected def inChannel(in: InputStream): ReadableByteChannel =
     Channels.newChannel(new InflaterInputStream(in))
 }
 
-case class GunzipByteChunk(implicit ctx: ExecutionContext)
-  extends DecompressByteChunk()(ctx) {
+case class GunzipByteChunk(implicit val M: Monad[Future]) extends DecompressByteChunk {
   protected def inChannel(in: InputStream): ReadableByteChannel = {
     // work-around because GZIPInputStream needs to read the header
     // during the constructor.
@@ -115,8 +113,7 @@ case class GunzipByteChunk(implicit ctx: ExecutionContext)
   }
 }
 
-case class UnzipByteChunk(implicit ctx: ExecutionContext)
-  extends DecompressByteChunk()(ctx) {
+case class UnzipByteChunk(implicit val M: Monad[Future]) extends DecompressByteChunk {
   protected def inChannel(in: InputStream): ReadableByteChannel = {
     val zis = new InputStream {
       val z = new ZipInputStream(in)

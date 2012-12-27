@@ -23,9 +23,10 @@ package auth
 import common.security._
 
 import akka.dispatch.Future
+import akka.dispatch.ExecutionContext
 
 import blueeyes.BlueEyesServiceBuilder
-import blueeyes.bkka.{ AkkaDefaults, Stoppable }
+import blueeyes.bkka.Stoppable
 import blueeyes.core.data.{DefaultBijections, ByteChunk}
 import blueeyes.health.metrics.eternity
 import ByteChunk._
@@ -35,14 +36,16 @@ import scalaz._
 
 case class SecurityServiceState(apiKeyManagement: APIKeyManagement)
 
-trait SecurityService extends BlueEyesServiceBuilder with AkkaDefaults with APIKeyServiceCombinators {
+trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinators {
   import DefaultBijections._
 
   val insertTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now
+
+  implicit def executor: ExecutionContext
   implicit val M: Monad[Future]
 
-  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
+  def APIKeyManager(config: Configuration): APIKeyManager[Future]
 
   val securityService = service("security", "1.0") {
     requestLogging(timeout) {
@@ -50,8 +53,8 @@ trait SecurityService extends BlueEyesServiceBuilder with AkkaDefaults with APIK
         startup {
           import context._
           val securityConfig = config.detach("security")
-          val apiKeyManager = apiKeyManagerFactory(securityConfig)
-          Future(SecurityServiceState(new APIKeyManagement(apiKeyManager)))
+          val apiKeyManager = APIKeyManager(securityConfig)
+          M.point(SecurityServiceState(new APIKeyManagement(apiKeyManager)))
         } ->
         request { (state: SecurityServiceState) =>
           jsonp[ByteChunk] {
@@ -87,10 +90,8 @@ trait SecurityService extends BlueEyesServiceBuilder with AkkaDefaults with APIK
             }
           }
         } ->
-        shutdown { state => 
-          for {
-            _ <- state.apiKeyManagement.close()
-          } yield Option.empty[Stoppable]
+        stop { state => 
+          Stoppable.fromFuture(state.apiKeyManagement.close())
         }
       }
     }

@@ -48,14 +48,11 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.monad._
 
-trait WebAccountFinderComponent {
-  implicit def asyncContext: ExecutionContext
-  implicit val M: Monad[Future]
-
-  def AccountFinder(config: Configuration): AccountFinder[Future] = {
-    config.get[String]("service.hardcoded_account").map { accountId =>
+object WebAccountFinder {
+  def apply(config: Configuration)(implicit executor: ExecutionContext): AccountFinder[Future] = {
+    config.get[String]("service.hardcoded_account") map { accountId =>
       new ConstantAccountFinder(accountId)
-    }.getOrElse {
+    } getOrElse {
       val protocol = config[String]("service.protocol")
       val host = config[String]("service.host")
       val port = config[Int]("service.port")
@@ -70,9 +67,8 @@ trait WebAccountFinderComponent {
   }
 }
 
-class ConstantAccountFinder(accountId: AccountId) extends AccountFinder[Future] with AkkaDefaults with Logging {
-  val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = new FutureMonad(asyncContext)
+class ConstantAccountFinder(accountId: AccountId)(implicit executor: ExecutionContext) extends AccountFinder[Future] {
+  implicit val M: Monad[Future] = new FutureMonad(executor)
 
   def findAccountByAPIKey(apiKey: APIKey) : Future[Option[AccountId]] = Promise.successful(Some(accountId))
   def findAccountById(accountId: AccountId): Future[Option[Account]] = Promise.successful(None)
@@ -80,14 +76,12 @@ class ConstantAccountFinder(accountId: AccountId) extends AccountFinder[Future] 
 
 case class WebAccountFinderSettings(protocol: String, host: String, port: Int, path: String, user: String, password: String, cacheSize: Int)
 
-class WebAccountFinder(settings: WebAccountFinderSettings) extends AccountFinder[Future] with AkkaDefaults with Logging {
+class WebAccountFinder(settings: WebAccountFinderSettings)(implicit executor: ExecutionContext) extends AccountFinder[Future] with Logging {
   import settings._
+  implicit val M: Monad[Future] = new FutureMonad(executor)
 
   private[this] val apiKeyToAccountCache = Cache.simple[APIKey, AccountId](Cache.MaxSize(cacheSize))
 
-  val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-  
   def findAccountByAPIKey(apiKey: APIKey) : Future[Option[AccountId]] = {
     apiKeyToAccountCache.get(apiKey).map(id => Promise.successful(Some(id))).getOrElse {
       invoke { client =>
