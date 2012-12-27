@@ -20,6 +20,7 @@
 package com.precog.common
 package ingest
 
+import kafka._
 import java.nio.ByteBuffer
 
 import org.specs2.ScalaCheck
@@ -30,20 +31,16 @@ import org.scalacheck.Gen._
 
 import blueeyes.json._
 
+import scalaz._
+
 object EventMessageSerializationSpec extends Specification with ScalaCheck with ArbitraryEventMessage {
-  implicit val arbRandomIngestMessage = Arbitrary(genRandomIngestMessage)
+  implicit val arbMsg = Arbitrary(genRandomEventMessage)
   
   "Event message serialization " should {
-    "maintain event content" in { check { (in: IngestMessage) => 
-      val buf = ByteBuffer.allocate(1024 * 1024)
-      val ser = EventMessage
-
-      ser.write(buf, in)
-
-      buf.flip
-
-      ser.readMessage(buf).toOption must beLike {
-        case Some(out) => out must_== in
+    "maintain event content" in { check { (in: EventMessage) => 
+      val buf = EventMessageEncoding.toMessageBytes(in)
+      EventMessageEncoding.read(buf) must beLike {
+        case Success(out) => out must_== in
       }
     }}
   }
