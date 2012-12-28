@@ -59,6 +59,8 @@ class EventSpec extends Specification with ArbitraryEventMessage with ScalaCheck
                "data"    -> JObject("test" -> JNum(1)),
                "metadata" -> JArray())).validated[Ingest] must beLike {
         case Success(_) => ok
+        case Failure(Thrown(ex)) =>
+          throw ex
       }
     }
   }

@@ -35,6 +35,7 @@ import akka.dispatch.{ ExecutionContext, Future }
 import blueeyes.bkka._
 import blueeyes.json._
 import blueeyes.persistence.mongo._
+import blueeyes.persistence.mongo.dsl._
 import blueeyes.json.serialization.Extractor
 import blueeyes.json.serialization.DefaultSerialization._
 
@@ -176,8 +177,6 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
   }
 
   def listMessages(jobId: JobId, channel: String, since: Option[MessageId]): Future[Seq[Message]] = {
-    import MongoFilterImplicits._
-
     val filter0 = "jobId" === jobId && "channel" === channel
     val filter = since map { id => filter0 && MongoFieldFilter("id", MongoFilterOperators.$gt, id) } getOrElse filter0
     database {

@@ -31,6 +31,7 @@ import akka.dispatch.{ ExecutionContext, Future, Promise }
 import blueeyes.bkka._
 import blueeyes.json._
 import blueeyes.persistence.mongo._
+import blueeyes.persistence.mongo.dsl._
 import blueeyes.json.serialization.Extractor
 import blueeyes.json.serialization.DefaultSerialization._
 
