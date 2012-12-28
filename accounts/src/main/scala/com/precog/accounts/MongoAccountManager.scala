@@ -1,5 +1,4 @@
-package com.precog
-package accounts
+package com.precog.accounts
 
 import com.precog.common.Path
 import com.precog.common.accounts._
@@ -9,6 +8,7 @@ import blueeyes._
 import blueeyes.bkka._
 import blueeyes.json._
 import blueeyes.persistence.mongo._
+import blueeyes.persistence.mongo.dsl._
 
 import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
