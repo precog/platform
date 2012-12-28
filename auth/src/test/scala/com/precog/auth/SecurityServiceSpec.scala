@@ -17,8 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package auth
+package com.precog.auth
 
 import org.joda.time.DateTime
 
@@ -51,6 +50,7 @@ import scalaz._
 
 import com.precog.common.Path
 import com.precog.common.security._
+import com.precog.common.accounts._
 
 import APIKeyRecord.SafeSerialization._
 import Grant.SafeSerialization._
@@ -58,8 +58,7 @@ import Grant.SafeSerialization._
 
 trait TestAPIKeyService extends BlueEyesServiceSpecification
   with SecurityService
-  with AkkaDefaults
-  with MongoAPIKeyManagerComponent { self =>
+  with AkkaDefaults { self =>
 
   import DefaultBijections._
 
@@ -82,7 +81,7 @@ trait TestAPIKeyService extends BlueEyesServiceSpecification
   
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
 
-  override def apiKeyManagerFactory(config: Configuration) = apiKeyManager 
+  override def APIKeyManager(config: Configuration) = apiKeyManager 
 
   val mimeType = application/(MimeTypes.json)
 
@@ -200,13 +199,11 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   
   "Security service" should {
     "get existing API key" in {
-      getAPIKeyDetails(rootAPIKey, rootAPIKey) must whenDelivered { beLike {
+      Await.result(getAPIKeyDetails(rootAPIKey, rootAPIKey), to) must beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jtd), _) =>
-          val td = jtd.deserialize[APIKeyDetails]
-          td must beLike {
-            case APIKeyDetails(apiKey, _, _, grants) if (apiKey == rootAPIKey) && (grants sameElements rootGrants) => ok
-          }
-      }}
+          (jtd \ "apiKey").deserialize[APIKey] must_== rootAPIKey
+          ((jtd \ "grants") --> classOf[JArray]).elements.map(elem => (elem \ "grantId").deserialize[GrantId]).toSet must_== rootGrants.map(_.grantId)
+      }
     }
 
     "return error on get and API key not found" in {
@@ -243,12 +240,20 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
 
     "create derived non-root API key" in {
       val request = NewAPIKeyRequest(Some("non-root-2"), None, Set(mkNewGrantRequest(user1Grant)))
-      (for {
+      val result = for {
         HttpResponse(HttpStatus(OK, _), _, Some(jid), _)    <- createAPIKey(user1.apiKey, request)
         WrappedAPIKey(apiKey, _, _) = jid.deserialize[WrappedAPIKey]
         HttpResponse(HttpStatus(OK, _), _, Some(jtd), _)    <- getAPIKeyDetails(rootAPIKey, apiKey)
-        APIKeyDetails(`apiKey`, _, _, grants) = jtd.deserialize[APIKeyDetails]
-      } yield grants.flatMap(_.permissions) sameElements user1Grant.permissions) must whenDelivered { beTrue }
+      } yield {
+        val perms = ((jtd \\ "permissions") --> classOf[JArray]).elements map { elem => 
+          elem.deserialize[Set[Permission]]
+        }
+
+        (jtd \ "apiKey").deserialize[APIKey] must_== rootAPIKey
+        perms.flatten.toSet must haveTheSameElementsAs(user1Grant.permissions)
+      }
+
+      Await.result(result, to)
     }
 
     "don't create when new API key is invalid" in {
@@ -256,7 +261,10 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       createAPIKeyRaw(rootAPIKey, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(elems)), _) if elems.contains("error") && elems("error").startsWith("Invalid new API key request body") => ok
+            Some(JObject(elems)), _) if elems.contains("error") => 
+              elems("error") must beLike {
+                case JString(msg) => msg must startWith("Invalid new API key request body") 
+              }
       }}
     }
 
@@ -264,8 +272,10 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       val request = NewAPIKeyRequest(Some("expired-2"), None, Set(mkNewGrantRequest(expiredGrant)))
       createAPIKey(expired.apiKey, request) must whenDelivered { beLike {
         case
-          HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(elems)), _) if elems.contains("error") && elems("error") == JString("Unable to create API key with expired permission") => ok
+          HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(elems)), _) if elems.contains("error") =>
+            elems("error")  must beLike {
+              case JString("Unable to create API key with expired permission") => ok
+            }
       }}
     }
 
@@ -273,8 +283,10 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       val request = NewAPIKeyRequest(Some("unauthorized"), None, Set(mkNewGrantRequest(user1Grant)))
       createAPIKey(user2.apiKey, request) must whenDelivered { beLike {
         case
-          HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(elems)), _) if elems.contains("error") && elems("error").startsWith("Error creating new API key: Requestor lacks permissions to assign given grants to API key") => ok
+          HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(elems)), _) if elems.contains("error") =>
+            elems("error") must beLike {
+              case JString(msg) => msg must startWith("Error creating new API key: Requestor lacks permissions to assign given grants to API key") 
+            }
       }}
     }
 
@@ -295,6 +307,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     "get existing grant" in {
       getGrantDetails(user1.apiKey, user1Grant.grantId) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgd), _) =>
+          import Grant.Serialization._
           val g = jgd.deserialize[Grant]
           g must_== user1Grant.copy(issuerKey = None, parentIds = Set.empty[GrantId])
       }}
@@ -317,8 +330,10 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     "don't create a new grant if it can't be derived from the authorization API keys grants" in {
       createAPIKeyGrant(user1.apiKey, NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user2/secret"), Set("user2"))), None)) must whenDelivered { beLike {
         case
-          HttpResponse(HttpStatus(BadRequest, _), _,
-            Some(JObject(elems)), _) if elems.contains("error") && elems("error").startsWith("Error creating new grant: Requestor lacks permissions to create grant") => ok
+          HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(elems)), _) if elems.contains("error") =>
+            elems("error") must beLike {
+              case JString(msg) => msg must startWith("Error creating new grant: Requestor lacks permissions to create grant") 
+            }
       }}
     }
 
@@ -331,6 +346,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     "retrieve the child grants of the given grant" in {
       getGrantChildren(user4.apiKey, user4Grant.grantId) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgs), _) =>
+          import Grant.Serialization._
           val gs = jgs.deserialize[Set[Grant]]
           gs must_== Set(user4DerivedGrant.copy(issuerKey = None, parentIds = Set.empty[GrantId]))
       }}
@@ -345,6 +361,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "delete a grant" in {
+      import Grant.Serialization._
       (for {
         HttpResponse(HttpStatus(OK, _), _, Some(jid), _)      <- addGrantChild(user1.apiKey, user1Grant.grantId, NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/secret"), Set("user1"))), None))
         WrappedGrantId(id, _, _) = jid.deserialize[WrappedGrantId]

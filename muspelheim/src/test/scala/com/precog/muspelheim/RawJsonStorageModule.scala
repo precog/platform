@@ -21,26 +21,24 @@ package com.precog.muspelheim
 
 import com.precog.bytecode._
 import com.precog.common.json.CPath
+import com.precog.common._
+import com.precog.common.ingest._
+import com.precog.common.security._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.util._
+import com.precog.util._
+import SValue._
+
+import blueeyes.json._
 
 import akka.actor._
 import akka.dispatch._
 import akka.testkit.TestActorRef
 import akka.util.Timeout
 import akka.util.duration._
-
-import blueeyes.json._
-
-import com.precog.common._
-import com.precog.common.security._
-import com.precog.util._
-import com.precog.yggdrasil._
-import com.precog.yggdrasil.actor._
-import com.precog.yggdrasil.metadata._
-import com.precog.yggdrasil.util._
-import com.precog.util._
-import SValue._
 
 import java.io._
 import org.reflections._
@@ -66,61 +64,68 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 //  val Projection: ProjectionCompanion
   def projectionFor(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
 
-  abstract class Storage extends StorageLike {
-    implicit val ordering = IdentitiesOrder.toScalaOrdering
-    val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
+  private val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
+  private val identity = new java.util.concurrent.atomic.AtomicInteger(0)
+  private var projections: Map[ProjectionDescriptor, Vector[JValue]] = Map() 
 
-    private val identity = new java.util.concurrent.atomic.AtomicInteger(0)
-    private var projections: Map[ProjectionDescriptor, Vector[JValue]] = Map() 
+  private def load(path: Path) = {
+    val resourceName = ("/test_data" + path.toString.init + ".json").replaceAll("/+", "/")   
 
-    private def load(path: Path) = {
-      val resourceName = ("/test_data" + path.toString.init + ".json").replaceAll("/+", "/")   
-      using(getClass.getResourceAsStream(resourceName)) { in =>
-        // FIXME: Refactor as soon as JParser can parse from InputStreams
-        val reader = new InputStreamReader(in)
-        val buffer = new Array[Char](8192)
-        val builder = new java.lang.StringBuilder
-        var read = 0
-        do {
-          read = reader.read(buffer)
-          if (read >= 0) {
-            builder.append(buffer, 0, read)
-          }
-        } while (read >= 0)
-        
-        val json = JParser.parse(builder.toString) --> classOf[JArray]
-
-        projections = json.elements.foldLeft(projections) { 
-          case (acc, jobj) => 
-            val evID = EventId(0, identity.getAndIncrement)
-            routingTable.routeEvent(EventMessage(evID, Event("", path, None, jobj, Map()))).foldLeft(acc) {
-              case (acc, data) =>
-                acc + (data.descriptor -> (acc.getOrElse(data.descriptor, Vector.empty[JValue]) :+ data.toJValue))
-          }
+    using(getClass.getResourceAsStream(resourceName)) { in =>
+      // FIXME: Refactor as soon as JParser can parse from InputStreams
+      val reader = new InputStreamReader(in)
+      val buffer = new Array[Char](8192)
+      val builder = new java.lang.StringBuilder
+      var read = 0
+      do {
+        read = reader.read(buffer)
+        if (read >= 0) {
+          builder.append(buffer, 0, read)
         }
+      } while (read >= 0)
+      
+      val json = JParser.parse(builder.toString) --> classOf[JArray]
+
+      projections = json.elements.foldLeft(projections) { 
+        case (acc, jobj) => 
+          val evID = EventId(0, identity.getAndIncrement)
+          val ingestMessage = IngestMessage("", path, "acct", Vector(IngestRecord(evID, jobj)), None)
+
+          routingTable.routeIngest(ingestMessage).foldLeft(acc) {
+            case (acc, ProjectionInsert(descriptor, rows)) =>
+              // taking the head of row.values here is okay because projection stores
+              // only a single column
+              val projectionData = rows map { row => row.values.head.toJValue }
+              acc + (descriptor -> (acc.getOrElse(descriptor, Vector.empty[JValue]) ++ projectionData))
+          }
       }
     }
+  }
+
+  val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = {
+    import org.reflections.util._
+    import org.reflections.scanners._
+    import scala.collection.JavaConverters._
+    import java.util.regex.Pattern
+
+    val reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forPackage("test_data")).setScanners(new ResourcesScanner()))
+    val jsonFiles = reflections.getResources(Pattern.compile(".*\\.json"))
+    for (resource <- jsonFiles.asScala) load(Path(resource.replaceAll("test_data/", "").replaceAll("\\.json", "")))
+
+    projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
+  }
+
+  val metadataStorage = new TestMetadataStorage(projectionMetadata)
+
+  abstract class Storage extends StorageLike {
+    implicit val ordering = IdentitiesOrder.toScalaOrdering
 
     def storeBatch(ems: Seq[EventMessage]) = sys.error("Feature not implemented in test stub.")
 
-    val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = {
-      import org.reflections.util._
-      import org.reflections.scanners._
-      import scala.collection.JavaConverters._
-      import java.util.regex.Pattern
-
-      val reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forPackage("test_data")).setScanners(new ResourcesScanner()))
-      val jsonFiles = reflections.getResources(Pattern.compile(".*\\.json"))
-      for (resource <- jsonFiles.asScala) load(Path(resource.replaceAll("test_data/", "").replaceAll("\\.json", "")))
-
-      projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
-    }
-
     val metadata = new StorageMetadata[M] {
       val M = self.M
-      val source = new TestMetadataStorage(projectionMetadata)
-      def findChildren(path: Path) = M.point(source.findChildren(path))
-      def findSelectors(path: Path) = M.point(source.findSelectors(path))
+      def findChildren(path: Path) = M.point(metadataStorage.findChildren(path))
+      def findSelectors(path: Path) = M.point(metadataStorage.findSelectors(path))
       def findProjections(path: Path, selector: CPath) = M.point {
         projections.collect {
           case (descriptor, _) if descriptor.columns.exists { case ColumnDescriptor(p, s, _, _) => p == path && s == selector } => 
@@ -128,7 +133,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
         }
       }
 
-      def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
+      def findPathMetadata(path: Path, selector: CPath) = M.point(metadataStorage.findPathMetadata(path, selector).unsafePerformIO)
     }
 
     def userMetadataView(apiKey: APIKey) = new UserMetadataView(apiKey, new UnrestrictedAccessControl[M](), metadata)

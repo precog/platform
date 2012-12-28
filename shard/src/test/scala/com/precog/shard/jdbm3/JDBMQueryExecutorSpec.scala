@@ -45,24 +45,25 @@ trait TestJDBMQueryExecutor extends JDBMQueryExecutor
     with RawJsonColumnarTableStorageModule[Future]
     with StandaloneShardSystemActorModule {
 
-  type YggConfig = BaseJDBMQueryExecutorConfig with StandaloneShardSystemConfig
-
-  private val groupId = new java.util.concurrent.atomic.AtomicInteger
-  def newGroupId = groupId.getAndIncrement
-  val clock = blueeyes.util.Clock.System
-
-  val yggConfig = new BaseJDBMQueryExecutorConfig with StandaloneShardSystemConfig {
+  class YggConfig extends BaseJDBMQueryExecutorConfig with StandaloneShardSystemConfig {
     val config = Configuration(Map.empty[String, String])
     val maxSliceSize = 10000
     val idSource = new FreshAtomicIdSource
   }
 
-  val actorSystem = ActorSystem("yggdrasilQueryExecutorActorSystem")
-  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  val yggConfig = new YggConfig
 
+  private val actorSystem = ActorSystem("yggdrasilQueryExecutorActorSystem")
+  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
+
+  private val groupId = new java.util.concurrent.atomic.AtomicInteger
+  val accountFinder = None
+  val clock = blueeyes.util.Clock.System
+
+  def newGroupId = groupId.getAndIncrement
 
   def startup() = Promise.successful(true)
   def shutdown() = Future {
@@ -79,9 +80,7 @@ trait TestJDBMQueryExecutor extends JDBMQueryExecutor
   object Table extends TableCompanion
 }
 
-class JDBMQueryExecutorSpec extends Specification
-    with TestJDBMQueryExecutor {
-
+class JDBMQueryExecutorSpec extends Specification with TestJDBMQueryExecutor {
   val options = QueryOptions()
 
   "the executor" should {

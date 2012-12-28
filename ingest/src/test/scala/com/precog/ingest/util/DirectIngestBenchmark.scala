@@ -24,6 +24,8 @@ import kafka._
 
 import com.precog.common._
 import com.precog.common.kafka._
+import com.precog.common.accounts._
+import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.util._
 import com.precog.ingest.service._
@@ -47,8 +49,6 @@ object DirectKafkaConsumer extends App {
 
   val simpleConsumer = new SimpleConsumer("localhost", 9092, 5000, 64 * 1024)
 
-  val codec = new KafkaIngestMessageCodec
-
   var offset: Long = 0
   var batch = 0
   var msgs: Long = 0
@@ -64,7 +64,7 @@ object DirectKafkaConsumer extends App {
       offset = msg.offset
       msgs += 1
       if(msgs % 1000 == 0) {
-        System.out.println("consumed: " + codec.toEvent(msg.message));
+        System.out.println("consumed: " + EventMessageEncoding.read(msg.message.buffer));
         val now = System.nanoTime
         val secs = (now-start)/1000000000.0
         val throughput = msgs / secs
@@ -87,8 +87,7 @@ object DirectKafkaProducer extends App {
   val topic = "direct_test_topic"
  
   val sample = DistributedSampleSet(0, sampler = AdSamples.adCampaignSample)
-  val event = Event.fromJValue("test", Path("/test/"), None, sample.next._1)
-  val msg = EventMessage(0,0,event) 
+  val msg = IngestMessage("test", Path("/test/"), "", Vector(IngestRecord(EventId(0, 0), sample.next._1)), None)
 
   val total = 1000000
   val start = System.nanoTime
@@ -99,9 +98,12 @@ object DirectKafkaProducer extends App {
       val throughput = i / secs
       println("Message %d time %.02fs throughput %.01f msgs/s".format(i, secs, throughput))
     }
+
     val data = new ProducerData[String, IngestMessage](topic, msg)
     producer.send(data)
   }
 
   producer.close
 }
+
+// type DirectIngestBenchmark

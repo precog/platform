@@ -42,7 +42,7 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
   val insertTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now
 
-  implicit def executor: ExecutionContext
+  implicit def executionContext: ExecutionContext
   implicit val M: Monad[Future]
 
   def APIKeyManager(config: Configuration): APIKeyManager[Future]

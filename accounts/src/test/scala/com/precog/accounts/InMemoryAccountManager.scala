@@ -41,21 +41,9 @@ class InMemoryAccountManager[M[+_]](implicit val M: Monad[M]) extends AccountMan
     }
   }
 
-  def newAccountId() = java.util.UUID.randomUUID.toString.toUpperCase
-  
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId])(f: (AccountId, Path) => M[APIKey]): M[Account] = {
-    for {
-      accountId <- newAccountId().point[M]
-      path = Path(accountId)
-      apiKey <- f(accountId, path)
-    } yield {
-      val salt = randomSalt()
-      val account = Account(
-        accountId, email, 
-        saltAndHashSHA256(password, salt), salt,
-        creationDate,
-        apiKey, path, plan)
-      accounts.put(accountId, account)
+    TestAccounts.newAccount(email, password, creationDate, plan, parentId)(f) map { account =>
+      accounts.put(account.accountId, account)
       account
     }
   }

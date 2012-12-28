@@ -17,37 +17,33 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package pandora
+package com.precog.pandora
 
-import accounts.InMemoryAccountManager
-
-import common.VectorCase
-import common.kafka._
-import common.security._
-
-import daze._
-
-import pandora._
-
-import quirrel._
-import quirrel.emitter._
-import quirrel.parser._
-import quirrel.typer._
-
-import yggdrasil._
-import yggdrasil.actor._
-import yggdrasil.jdbm3._
-import yggdrasil.metadata._
-import yggdrasil.serialization._
-import yggdrasil.table._
-import yggdrasil.table.jdbm3._
-import yggdrasil.util._
-import yggdrasil.test.YId
-import muspelheim._
+import com.precog.common.Path
+import com.precog.common.VectorCase
+import com.precog.common.kafka._
+import com.precog.common.security._
 
 import com.precog.bytecode.JType
-import com.precog.common.Path
+
+import com.precog.daze._
+
+import com.precog.quirrel._
+import com.precog.quirrel.emitter._
+import com.precog.quirrel.parser._
+import com.precog.quirrel.typer._
+
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.jdbm3._
+import com.precog.yggdrasil.metadata._
+import com.precog.yggdrasil.serialization._
+import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.table.jdbm3._
+import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.test.YId
+
+import com.precog.muspelheim._
 import com.precog.util.FilesystemFileOps
 
 import org.specs2.mutable._
@@ -95,11 +91,12 @@ object PlatformSpecs extends ParseEvalStackSpecs[Future]
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
 
-  val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
+  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
-  class Storage extends SystemActorStorageLike(fileMetadataStorage) {
+  val accountFinder = None
+
+  class Storage extends SystemActorStorageLike {
     val accessControl = new UnrestrictedAccessControl[Future]
-    val accountManager = new InMemoryAccountManager[Future]()
   }
 
   val storage = new Storage
@@ -107,9 +104,9 @@ object PlatformSpecs extends ParseEvalStackSpecs[Future]
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
     def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
-      fileMetadataStorage.findDescriptorRoot(descriptor, false)
+      metadataStorage.findDescriptorRoot(descriptor, false)
     def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
-      fileMetadataStorage.findArchiveRoot(descriptor)
+      metadataStorage.findArchiveRoot(descriptor)
   }
 
   trait TableCompanion extends JDBMColumnarTableCompanion

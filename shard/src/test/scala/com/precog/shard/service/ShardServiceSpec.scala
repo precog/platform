@@ -22,9 +22,9 @@ package service
 
 import kafka._
 
-import com.precog.accounts.{BasicAccountManager, InMemoryAccountManager}
 import com.precog.daze._
 import com.precog.common.Path
+import com.precog.common.accounts._
 import com.precog.common.security._
 
 import org.specs2.mutable.Specification
@@ -46,9 +46,8 @@ import scalaz.Scalaz._
 import scalaz.Validation._
 
 import blueeyes.akka_testing._
-
 import blueeyes.core.data._
-import blueeyes.bkka.{ AkkaDefaults, AkkaTypeClasses }
+import blueeyes.bkka._
 import blueeyes.core.data._
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http._
@@ -56,10 +55,9 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 import blueeyes.core.service._
-
 import blueeyes.json._
-
 import blueeyes.util.Clock
+import DefaultBijections._
 
 import scalaz._
 
@@ -76,9 +74,6 @@ trait TestShardService extends
   ShardService with
   AkkaDefaults { self =>
   
-  import DefaultBijections._
-  import AkkaTypeClasses._
-
   val config = """ 
     security {
       test = true
@@ -90,30 +85,16 @@ trait TestShardService extends
   """
 
   override val configuration = "services { quirrel { v1 { " + config + " } } }"
+  val to = Duration(1, "seconds")
 
   val actorSystem = ActorSystem("ingestServiceSpec")
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-  
-  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]) = new TestQueryExecutor {
-    val actorSystem = self.actorSystem
-    val executionContext = self.asyncContext
-    
-    val accessControl = apiKeyManager
-    val accountManager = inMemAccountMgr
-    val ownerMap = Map(
-      Path("/")     ->             Set("root"),
-      Path("/test") ->             Set("test"),
-      Path("/test/foo") ->         Set("test"),
-      Path("/expired") ->          Set("expired"),
-      Path("/inaccessible") ->     Set("other"),
-      Path("/inaccessible/foo") -> Set("other")
-    )
+  implicit val M: Monad[Future] with Copointed[Future] = new FutureMonad(asyncContext) with Copointed[Future] {
+    def copoint[A](m: Future[A]) = Await.result(m, to)
   }
 
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
-  val inMemAccountMgr = new InMemoryAccountManager[Future]
-  val to = Duration(1, "seconds")
+  val accountFinder = new TestAccountFinder[Future](Map(), Map())
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   
   val testPath = Path("/test")
@@ -126,13 +107,30 @@ trait TestShardService extends
     DeletePermission(testPath, Set())
   )
   val expiredPath = Path("expired")
-  val expiredAPIKey = Await.result(apiKeyManager.newStandardAPIKeyRecord("expired", expiredPath).map(_.apiKey).flatMap { expiredAPIKey => 
+  val expiredAPIKey = apiKeyManager.newStandardAPIKeyRecord("expired", expiredPath).map(_.apiKey).flatMap { expiredAPIKey => 
     apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, accessTest, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
-  }, to)
+  } copoint
   
-  def apiKeyManagerFactory(config: Configuration) = apiKeyManager
+  def QueryExecutor(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: AccountFinder[Future]) = new TestQueryExecutor {
+    val actorSystem = self.actorSystem
+    val executionContext = self.asyncContext
+    
+    val accessControl = extAccessControl
+    val accountFinder = extAccountManager
 
-  def accountManagerFactory(config: Configuration) = inMemAccountMgr
+    val ownerMap = Map(
+      Path("/")     ->             Set("root"),
+      Path("/test") ->             Set("test"),
+      Path("/test/foo") ->         Set("test"),
+      Path("/expired") ->          Set("expired"),
+      Path("/inaccessible") ->     Set("other"),
+      Path("/inaccessible/foo") -> Set("other")
+    )
+  }
+  
+  def APIKeyFinder(config: Configuration) = apiKeyManager
+
+  def AccountFinder(config: Configuration) = accountFinder
 
   import java.nio.ByteBuffer
 
@@ -173,7 +171,6 @@ trait TestShardService extends
 }
 
 class ShardServiceSpec extends TestShardService with FutureMatchers {
-
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   def query(query: String, apiKey: Option[String] = Some(testAPIKey), path: String = ""): Future[HttpResponse[QueryResult]] = {

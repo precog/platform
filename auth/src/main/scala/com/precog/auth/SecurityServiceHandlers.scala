@@ -17,8 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package auth
+package com.precog.auth
 
 import org.joda.time.DateTime
 

@@ -83,7 +83,7 @@ class JobServiceSpec extends TestJobService {
   ))
 
   def startJob(ts: Option[DateTime] = None): JValue = JObject(
-    JField("state", "started") ::
+    JField("state", JString("started")) ::
     (ts map { dt => JField("timestamp", dt.serialize) :: Nil } getOrElse Nil)
   )
 
@@ -208,7 +208,7 @@ class JobServiceSpec extends TestJobService {
         job <- postJob(simpleJob)
         Some(JString(jobId)) = job.content map (_ \ "id")
         _ <- putState(jobId, startJob())
-        res <- putState(jobId, JObject(JField("state", "cancelled") :: Nil))
+        res <- putState(jobId, JObject(JField("state", JString("cancelled")) :: Nil))
       } yield res).copoint must beLike {
         case HttpResponse(HttpStatus(BadRequest, _), _, _, _) => ok
       }

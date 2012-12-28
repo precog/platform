@@ -21,6 +21,7 @@ package com.precog.ingest
 package util
 
 import kafka._ 
+import service._
 
 import scala.collection.mutable.ListBuffer
 
@@ -29,11 +30,10 @@ import java.io.{File, FileReader}
 
 import com.precog.common._
 import com.precog.util.IOUtils
+import com.precog.common.accounts._
+import com.precog.common.ingest._
 import com.precog.common.security._
-import com.precog.common.util.RealisticIngestMessage
-import com.precog.common.util.AdSamples
-import com.precog.common.util.DistributedSampleSet
-import com.precog.ingest.service._
+import com.precog.common.util._
 
 import akka.actor.ActorSystem
 import akka.dispatch.Future
@@ -59,7 +59,7 @@ import blueeyes.json._
 
 import scalaz.NonEmptyList
 
-abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessage with AkkaDefaults {
+abstract class IngestProducer(args: Array[String]) extends RealisticEventMessage with AkkaDefaults {
 
   lazy val config = loadConfig(args)
 
@@ -106,7 +106,8 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
       override def run() {
         samples.foreach {
           case (path, sample) =>
-            def event = Event.fromJValue("bogus", Path(path), None, sample.next._1)
+            val event = Ingest("bogus", Path(path), None, Vector(sample.next._1), None)
+
             0.until(messages).foreach { i =>
               if(i % 10 == 0 && verbose) println("Sending to [%s]: %d".format(path, i))
               try {
@@ -152,7 +153,7 @@ threads - number of producer threads (default: 1)
 repeats - number of of times to repeat test (default: 1)
     """
   
-  def send(event: Event, timeout: Timeout): Unit
+  def send(event: Ingest, timeout: Timeout): Unit
   def close(): Unit = ()
 }
 
@@ -223,12 +224,12 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
 
   implicit val M: scalaz.Monad[Future] = new blueeyes.bkka.FutureMonad(defaultFutureDispatch)
 
-  def send(event: Event, timeout: Timeout) {
-    
+  def send(event: Ingest, timeout: Timeout) {
+    // FIXME: expects ingest to be of a single value only.
     val f: Future[HttpResponse[JValue]] = client.path(base)
                                                 .query("apiKey", ingestAPIKey)
                                                 .contentType(application/MimeTypes.json)
-                                                .post[JValue](event.path.toString)(event.data)
+                                                .post[JValue](event.path.toString)(event.data.head)
     Await.ready(f, 10 seconds) 
     f.value match {
       case Some(Right(HttpResponse(status, _, _, _))) if status.code == OK => ()
@@ -247,3 +248,5 @@ serviceUrl - base url for web application (default: http://localhost:30050/vfs/)
 
   override def close(): Unit = AkkaDefaults.actorSystem.shutdown
 }
+
+// type WebappIngestBenchmark

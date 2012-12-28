@@ -32,7 +32,7 @@ import org.streum.configrity.Configuration
 import scalaz._
 
 object MongoAPIKeyServer extends BlueEyesServer with SecurityService with AkkaDefaults {
-  implicit val executor = defaultFutureDispatch
-  implicit val M: Monad[Future] = new FutureMonad(executor)
+  implicit val executionContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = new FutureMonad(executionContext)
   def APIKeyManager(config: Configuration): APIKeyManager[Future] = MongoAPIKeyManager(config)
 }

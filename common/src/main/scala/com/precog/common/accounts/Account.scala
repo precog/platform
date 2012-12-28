@@ -29,6 +29,9 @@ import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 
+import com.google.common.base.Charsets
+import com.google.common.hash.Hashing
+
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 
@@ -73,6 +76,33 @@ object Account {
 
   object SafeSerialization {
     implicit val Decomposer = safeDecomposerV1
+  }
+
+  private val randomSource = new java.security.SecureRandom
+
+  def randomSalt() = {
+    val saltBytes = new Array[Byte](256)
+    randomSource.nextBytes(saltBytes)
+    saltBytes.flatMap(byte => Integer.toHexString(0xFF & byte))(collection.breakOut) : String
+  }
+
+  // FIXME: Remove when there are no SHA1 hashes in the accounts db
+  def saltAndHashSHA1(password: String, salt: String): String = {
+    Hashing.sha1().hashString(password + salt, Charsets.UTF_8).toString
+  }
+
+  def saltAndHashSHA256(password: String, salt: String): String = {
+    Hashing.sha256().hashString(password + salt, Charsets.UTF_8).toString
+  }
+
+  // FIXME: Remove when there are no old-style SHA256 hashes in the accounts db
+  def saltAndHashLegacy(password: String, salt: String): String = {
+    val md = java.security.MessageDigest.getInstance("SHA-256");
+    val dataBytes = (password + salt).getBytes("UTF-8")
+    md.update(dataBytes, 0, dataBytes.length)
+    val hashBytes = md.digest()
+
+    hashBytes.flatMap(byte => Integer.toHexString(0xFF & byte))(collection.breakOut) : String
   }
 }
 

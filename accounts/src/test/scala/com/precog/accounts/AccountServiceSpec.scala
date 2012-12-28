@@ -19,10 +19,10 @@
  */
 package com.precog.accounts
 
-import com.precog.auth._
 import com.precog.common._
 import com.precog.common.Path
 import com.precog.common.security._
+import com.precog.common.accounts._
 
 import org.specs2.mutable._
 import org.scalacheck.Gen._
