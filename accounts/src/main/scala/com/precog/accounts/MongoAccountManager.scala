@@ -29,7 +29,7 @@ import blueeyes.json._
 import blueeyes.persistence.mongo._
 import blueeyes.persistence.mongo.dsl._
 
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 
