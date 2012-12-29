@@ -63,13 +63,8 @@ class Path private (val elements: String*) {
 }
 
 trait PathSerialization {
-    final implicit val PathDecomposer = new Decomposer[Path] {
-    def decompose(v: Path): JValue = JString(v.toString)
-  }
-
-  final implicit val PathExtractor = new Extractor[Path] {
-    def extract(v: JValue): Path = Path(v.deserialize[String])
-  }
+  final implicit val PathDecomposer = StringDecomposer contramap { (_:Path).toString }
+  final implicit val PathExtractor = StringExtractor map { Path(_) }
 }
 
 object Path extends PathSerialization {

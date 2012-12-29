@@ -38,7 +38,7 @@ import blueeyes.core.http.MimeTypes._
 import blueeyes.core.service._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.json._
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer, IsoSerialization }
+import blueeyes.json.serialization.{ Extractor, Decomposer, IsoSerialization }
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 import blueeyes.json.serialization.Extractor._
 

@@ -391,7 +391,7 @@ trait MetadataRecordSerialization {
     v.map { _.map( sm => Metadata.toTypedMap(sm) ).toList }
   }
 
-  def metadataRecordExtractor(desc: ProjectionDescriptor): Extractor[MetadataRecord] = new Extractor[MetadataRecord] with ValidatedExtraction[MetadataRecord] {
+  def metadataRecordExtractor(desc: ProjectionDescriptor): Extractor[MetadataRecord] = new Extractor[MetadataRecord] {
     override def validated(obj: JValue): Validation[Error, MetadataRecord] =
       (extractMetadata((obj \ "metadata").validated[List[Set[Metadata]]]) |@|
        (obj \ "checkpoint").validated[VectorClock]).apply {

@@ -190,7 +190,7 @@ trait CPathSerialization {
     def decompose(cpath: CPath): JValue = JString(cpath.toString)
   }
 
-  implicit val CPathExtractor: Extractor[CPath] = new Extractor[CPath] with ValidatedExtraction[CPath] {
+  implicit val CPathExtractor: Extractor[CPath] = new Extractor[CPath] {
     override def validated(obj: JValue): scalaz.Validation[Extractor.Error,CPath] =
       obj.validated[String].map(CPath(_))
   }

@@ -21,7 +21,7 @@ package com.precog.common
 package jobs
 
 import blueeyes.json._
-import blueeyes.json.serialization.{ Decomposer, Extractor, ValidatedExtraction }
+import blueeyes.json.serialization.{ Decomposer, Extractor }
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
 
 import com.precog.common.security._
@@ -98,7 +98,7 @@ trait JobStateSerialization {
     }
   }
 
-  implicit object JobStateExtractor extends Extractor[JobState] with ValidatedExtraction[JobState] {
+  implicit object JobStateExtractor extends Extractor[JobState] {
     def extractBase(obj: JValue): Validation[Error, (DateTime, JobState)] = {
       ((obj \ "timestamp").validated[DateTime] |@| (obj \ "previous").validated[JobState]).tupled
     }

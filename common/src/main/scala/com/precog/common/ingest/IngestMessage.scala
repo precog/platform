@@ -26,7 +26,7 @@ import jobs.JobId
 import json._
 
 import blueeyes.json.{ JValue, JParser }
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -98,7 +98,7 @@ object IngestMessage {
   val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.0"))
   val extractorV1: Extractor[IngestMessage] = extractorV[IngestMessage](schemaV1, Some("1.0"))
 
-  val extractorV0: Extractor[IngestMessage] = new Extractor[IngestMessage] with ValidatedExtraction[IngestMessage] {
+  val extractorV0: Extractor[IngestMessage] = new Extractor[IngestMessage] {
     override def validated(obj: JValue): Validation[Error, IngestMessage] = {
       ( (obj \ "producerId" ).validated[Int] |@|
         (obj \ "eventId").validated[Int] |@|
@@ -125,7 +125,7 @@ object ArchiveMessage {
 
   val decomposerV1: Decomposer[ArchiveMessage] = decomposerV[ArchiveMessage](schemaV1, Some("1.0"))
   val extractorV1: Extractor[ArchiveMessage] = extractorV[ArchiveMessage](schemaV1, Some("1.0"))
-  val extractorV0: Extractor[ArchiveMessage] = new Extractor[ArchiveMessage] with ValidatedExtraction[ArchiveMessage] {
+  val extractorV0: Extractor[ArchiveMessage] = new Extractor[ArchiveMessage] {
     override def validated(obj: JValue): Validation[Error, ArchiveMessage] = {
       ( (obj \ "producerId" ).validated[Int] |@|
         (obj \ "deletionId").validated[Int] |@|

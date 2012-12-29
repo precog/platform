@@ -172,8 +172,8 @@ trait CTypeSerialization {
     def decompose(ctype : CType) : JValue = JString(nameOf(ctype))
   }
 
-  implicit val CTypeExtractor : Extractor[CType] = new Extractor[CType] with ValidatedExtraction[CType] {
-    override def validated(obj : JValue) : Validation[Extractor.Error,CType] = 
+  implicit val CTypeExtractor : Extractor[CType] = new Extractor[CType] {
+    def validated(obj : JValue) : Validation[Extractor.Error,CType] = 
       obj.validated[String].map( fromName _ ) match {
         case Success(Some(t)) => Success(t)
         case Success(None)    => Failure(Extractor.Invalid("Unknown type."))

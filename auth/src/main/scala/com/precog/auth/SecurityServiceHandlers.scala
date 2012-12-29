@@ -30,7 +30,7 @@ import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.json._
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer, IsoSerialization }
+import blueeyes.json.serialization.{ Extractor, Decomposer, IsoSerialization }
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 import blueeyes.json.serialization.Extractor._
@@ -393,3 +393,5 @@ class APIKeyManagement(val apiKeyManager: APIKeyManager[Future])(implicit val ex
 
   def close() = apiKeyManager.close()
 }
+
+// type SecurityServiceHandlers

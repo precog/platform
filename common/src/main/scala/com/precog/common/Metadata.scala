@@ -28,7 +28,7 @@ import scala.math.Ordering
 import scala.collection.mutable
 
 import blueeyes.json.{JValue, JObject, JField }
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -75,10 +75,10 @@ object Metadata {
     }
   }
 
-  implicit val MetadataExtractor: Extractor[Metadata] = new Extractor[Metadata] with ValidatedExtraction[Metadata] {
+  implicit val MetadataExtractor: Extractor[Metadata] = new Extractor[Metadata] {
     override def validated(obj: JValue): Validation[Error, Metadata] = obj match {
       case metadata @ JObject(entries) if entries.size == 1 => {
-        val List((key, value)) = entries.toList
+        val (key, value) = entries.head
         MetadataType.fromName(key).map {
           case BooleanValueStats     => value.validated[BooleanValueStats] 
           case LongValueStats        => value.validated[LongValueStats] 

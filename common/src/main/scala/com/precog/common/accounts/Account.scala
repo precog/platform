@@ -24,7 +24,7 @@ import com.precog.common.json._
 import com.precog.common.Path
 
 import blueeyes.json._
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer, IsoSerialization }
+import blueeyes.json.serialization.{ Extractor, Decomposer, IsoSerialization }
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._

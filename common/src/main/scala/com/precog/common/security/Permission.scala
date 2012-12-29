@@ -23,7 +23,7 @@ package security
 import accounts.AccountId
 
 import blueeyes.json._
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 import blueeyes.json.serialization.Extractor.Invalid
 
@@ -80,7 +80,7 @@ object Permission {
     case _ : DeletePermission => "delete"  
   }
   
-  object accessTypeExtractor extends Extractor[(Path, Set[AccountId]) => Permission] with ValidatedExtraction[(Path, Set[AccountId]) => Permission] {
+  object accessTypeExtractor extends Extractor[(Path, Set[AccountId]) => Permission] {
     override def validated(label: JValue) =
       label.validated[String].flatMap {
         case "read" =>   Success(ReadPermission.apply) 
@@ -101,7 +101,7 @@ object Permission {
     }
   }
 
-  implicit val permissionExtractor: Extractor[Permission] = new Extractor[Permission] with ValidatedExtraction[Permission] {    
+  implicit val permissionExtractor: Extractor[Permission] = new Extractor[Permission] {    
     override def validated(obj: JValue) = 
       ((obj \ "accessType").validated(accessTypeExtractor) |@|
        (obj \ "path").validated[Path] |@|

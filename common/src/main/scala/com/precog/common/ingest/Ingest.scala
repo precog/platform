@@ -63,8 +63,8 @@ object Ingest {
   
   val (decomposerV1, extractorV1) = serializationV[Ingest](schemaV1, Some("1.0"))
 
-  val extractorV0 = new Extractor[Ingest] with ValidatedExtraction[Ingest] {
-    override def validated(obj: JValue): Validation[Error, Ingest] = {
+  val extractorV0 = new Extractor[Ingest] {
+    def validated(obj: JValue): Validation[Error, Ingest] = {
       ( (obj \ "tokenId").validated[String] |@| 
         (obj \ "path").validated[Path] ) { (apiKey, path) => 
         val jv = (obj \ "data")

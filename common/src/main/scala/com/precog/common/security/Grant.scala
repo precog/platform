@@ -77,7 +77,7 @@ object Grant extends Logging {
   val extractorV1: Extractor[Grant] = extractorV[Grant](schemaV1, Some("1.0"))
 
   @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")
-  val extractorV0: Extractor[Grant] = new Extractor[Grant] with ValidatedExtraction[Grant] {
+  val extractorV0: Extractor[Grant] = new Extractor[Grant] {
     override def validated(obj: JValue) = {
       ((obj \ "gid").validated[GrantId] |@|
        (obj \ "issuer").validated[Option[GrantId]] |@|

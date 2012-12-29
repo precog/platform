@@ -20,7 +20,7 @@
 package com.precog.common
 
 import blueeyes.json._
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization.{DateTimeDecomposer => _, DateTimeExtractor => _, _}
 import blueeyes.json.serialization.Extractor._
 
@@ -28,6 +28,7 @@ import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 
 import scalaz._
+import scalaz.syntax.bifunctor._
 
 package object security {
   type APIKey    = String
@@ -39,9 +40,9 @@ package object security {
     override def decompose(d: DateTime): JValue = JString(isoFormat.print(d))
   }
 
-  implicit val TZDateTimeExtractor: Extractor[DateTime] = new Extractor[DateTime] with ValidatedExtraction[DateTime] {    
+  implicit val TZDateTimeExtractor: Extractor[DateTime] = new Extractor[DateTime] {    
     override def validated(obj: JValue): Validation[Error, DateTime] = obj match {
-      case JString(dt) => Success(isoFormat.parseDateTime(dt))
+      case JString(dt) => (Thrown.apply _) <-: Validation.fromTryCatch(isoFormat.parseDateTime(dt))
       case _           => Failure(Invalid("Date time must be represented as JSON string"))
     }
   }
