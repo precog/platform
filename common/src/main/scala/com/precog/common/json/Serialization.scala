@@ -2,7 +2,7 @@ package com.precog.common.json
 
 import blueeyes.json.JPath
 import blueeyes.json._
-import blueeyes.json.serialization.{ Decomposer, Extractor, ValidatedExtraction }
+import blueeyes.json.serialization.{ Decomposer, Extractor }
 import blueeyes.json.serialization.IsoSerialization._
 import Extractor._
 
@@ -11,8 +11,8 @@ import scalaz._
 import scalaz.Validation._
 
 object Serialization {
-  def versioned[A](extractor: Extractor[A], version: Option[String]): Extractor[A] = new Extractor[A] with ValidatedExtraction[A] {
-    override def validated(jv: JValue) = {
+  def versioned[A](extractor: Extractor[A], version: Option[String]): Extractor[A] = new Extractor[A] {
+    def validated(jv: JValue) = {
       if (version.forall(v => (jv \ "schemaVersion") == JString(v))) {
         extractor.validated(jv)
       } else {

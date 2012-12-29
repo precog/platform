@@ -43,7 +43,7 @@ trait SortBySerialization {
     def decompose(sortBy: SortBy) : JValue = JString(toName(sortBy)) 
   }
 
-  implicit val SortByExtractor : Extractor[SortBy] = new Extractor[SortBy] with ValidatedExtraction[SortBy] {
+  implicit val SortByExtractor : Extractor[SortBy] = new Extractor[SortBy] {
     override def validated(obj : JValue) : Validation[Error,SortBy] = obj match {
       case JString(s) => fromName(s).map(Success(_)).getOrElse(Failure(Invalid("Unknown SortBy property: " + s))) 
       case _          => Failure(Invalid("Expected JString type for SortBy property"))
@@ -93,7 +93,7 @@ trait AuthoritiesSerialization {
     }
   }
 
-  implicit val AuthoritiesExtractor: Extractor[Authorities] = new Extractor[Authorities] with ValidatedExtraction[Authorities] {
+  implicit val AuthoritiesExtractor: Extractor[Authorities] = new Extractor[Authorities] {
     override def validated(obj: JValue): Validation[Error, Authorities] =
       (obj \ "uids").validated[Set[String]].map(Authorities(_))
   }
@@ -164,7 +164,7 @@ trait ProjectionDescriptorSerialization {
     )
   } 
   
-  implicit val ProjectionDescriptorExtractor : Extractor[ProjectionDescriptor] = new Extractor[ProjectionDescriptor] with ValidatedExtraction[ProjectionDescriptor] { 
+  implicit val ProjectionDescriptorExtractor : Extractor[ProjectionDescriptor] = new Extractor[ProjectionDescriptor] { 
     override def validated(obj : JValue) : Validation[Error,ProjectionDescriptor] = {
       (obj \ "columns") match {
         case JArray(elements) => 
