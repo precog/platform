@@ -22,12 +22,14 @@ import yggdrasil.util._
 import muspelheim._
 
 import org.specs2.mutable._
+import org.specs2.matcher.ThrownMessages
   
 import akka.dispatch.Future
 import akka.dispatch.Await
 import akka.util.Duration
 
 import java.io.File
+import java.util.concurrent.TimeoutException
 
 import scalaz._
 import scalaz.std.anyVal._
@@ -42,7 +44,8 @@ import org.slf4j.LoggerFactory
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
-trait ParseEvalStackSpecs[M[+_]] extends Specification 
+trait ParseEvalStackSpecs[M[+_]] extends Specification
+    with ThrownMessages 
     with ParseEvalStack[M]
     with StorageModule[M]
     with MemoryDatasetConsumer[M] 
@@ -97,11 +100,16 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
         val tree = forest.head
         
         val Right(dag) = decorate(emit(tree))
-        consumeEval("dummyAPIKey", dag, Path.Root) match {
-          case Success(result) => 
-            parseEvalLogger.debug("Evaluation complete for query: " + str)
-            result
-          case Failure(error) => throw error
+        
+        try {
+          consumeEval("dummyAPIKey", dag, Path.Root) match {
+            case Success(result) => 
+              parseEvalLogger.debug("Evaluation complete for query: " + str)
+              result
+            case Failure(error) => throw error
+          }
+        } catch {
+          case _: TimeoutException => skip("Timed out after " + controlTimeout)
         }
       }
     }
