@@ -76,8 +76,6 @@ trait Emitter extends AST
   private def reduce[A](xs: Iterable[A])(implicit m: Monoid[A]) = xs.foldLeft(mzero[A])(_ |+| _)
 
   def emit(expr: Expr): Vector[Instruction] = {
-    val trace = buildTrace(Map())(expr)
-    
     def insertInstrAtMulti(is: Seq[Instruction], _idx: Int): EmitterState = StateT.apply[Id, Emission, Unit] { e => 
       val idx = if (_idx < 0) (e.bytecode.length + 1 + _idx) else _idx
 
@@ -367,7 +365,7 @@ trait Emitter extends AST
         
           val btraces: Map[Expr, Set[List[(Map[Formal, Expr], Expr)]]] =
             spec.exprs.map({ expr =>
-              val btrace = buildBacktrace(trace)(expr)
+              val btrace = buildBacktrace(expr.trace)(expr)
               (expr -> btrace)
             })(collection.breakOut)
           
