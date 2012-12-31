@@ -205,7 +205,8 @@ trait StdLib[M[+_]] extends
       MathLib[M] with 
       StringLib[M] with 
       StatsLib[M] with 
-      RegressionLib[M] with
+      LogisticRegressionLib[M] with
+      LinearRegressionLib[M] with
       FSLib[M]
 
 object StdLib {

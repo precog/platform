@@ -105,6 +105,4 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
       results must haveSize(0)
     }
   }
-
 }
-

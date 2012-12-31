@@ -51,10 +51,8 @@ trait ReductionHelper {
   def reduceDouble(seq: Seq[ColumnValues]): Result
 }
 
-trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
+trait LogisticRegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with RegressionSupport {
   import trans._
-
-  val Stats2Namespace = Vector("std", "stats")
 
   override def _libMorphism2 = super._libMorphism2 ++ Set(LogisticRegression)
 
@@ -93,17 +91,6 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
       else
         value
     }
-
-    def dotProduct(xs: Array[Double], ys: Array[Double]): Double = {
-      assert(xs.length == ys.length)
-      var i = 0
-      var result = 0.0
-      while (i < xs.length) {
-        result += xs(i) * ys(i)
-        i += 1
-      }
-      result
-    }    
 
     def cost(seq: Seq[ColumnValues], theta: Theta): Double = {
       if (seq.isEmpty) {
@@ -260,7 +247,7 @@ trait RegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] {
         (table, jtype) => table.toArray[Double].reduce(reducer).map(res => extract(res, jtype))
 
       val reducedTables: M[Seq[Table]] = tablesWithType flatMap { 
-        _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map( _.toSeq)
+        _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map(_.toSeq)
       }
 
       reducedTables map { _ reduceOption { _ concat _ } getOrElse Table.empty }

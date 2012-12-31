@@ -619,6 +619,10 @@ trait ColumnarTableModule[M[+_]]
 
     case class SlicesInfo(previousSlice: Option[Slice], stream: StreamT[M, Slice], acc: Vector[Slice], done: Boolean = false)
 
+    /**
+     * Returns a table where each slice (except maybe the last) has slice size `length`.
+     * Also removes slices of size zero.
+     */
     def canonicalize(length: Int): Table = {
       def makeNewInfo(toConcat: Vector[Slice], stream: StreamT[M, Slice], acc: Vector[Slice], taken: Int): M[SlicesInfo] = {
         stream.uncons flatMap {
