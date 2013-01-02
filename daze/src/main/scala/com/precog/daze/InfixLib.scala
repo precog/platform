@@ -77,7 +77,7 @@ trait InfixLib[M[+_]] extends GenOpcode[M] with Instructions {
       numf: (BigDecimal, BigDecimal) => BigDecimal)
     extends Op2(InfixNamespace, name) {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::op2") {
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::op2::"+name) {
         case (c1: LongColumn, c2: LongColumn) =>
           new LongFrom.LL(c1, c2, longOk, longf)
 
