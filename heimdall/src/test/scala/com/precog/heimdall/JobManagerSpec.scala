@@ -58,7 +58,7 @@ class WebJobManagerSpec extends TestJobService { self =>
 
     implicit val executionContext = self.executionContext
 
-    lazy val M = AkkaTypeClasses.futureApplicative(executionContext)
+    implicit lazy val M = AkkaTypeClasses.futureApplicative(executionContext)
 
     lazy val coM = new Copointed[Future] {
       def map[A, B](m: Future[A])(f: A => B) = m map f
@@ -68,11 +68,14 @@ class WebJobManagerSpec extends TestJobService { self =>
     lazy val jobs = (new WebJobManager {
       val executionContext = self.executionContext
       protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = f(client)
-    }).withM[Future](WebJobManager.ResponseAsFuture(M))
+    }).withM[Future](WebJobManager.ResponseAsFuture(M), WebJobManager.FutureAsResponse(M),
+        Monad[WebJobManager.Response], M)
   })
 }
 
 class MongoJobManagerSpec extends Specification with RealMongoSpecSupport { self =>
+  import blueeyes.bkka.AkkaTypeClasses._
+
   var actorSystem: ActorSystem = _
   implicit def executionContext = actorSystem.dispatcher
 
@@ -82,7 +85,7 @@ class MongoJobManagerSpec extends Specification with RealMongoSpecSupport { self
 
   include(new JobManagerSpec[Future] {
     val validAPIKey = "Anything should work!"
-    lazy val jobs = new MongoJobManager(mongo.database("jobs"), MongoJobManagerSettings.default)
+    lazy val jobs = new MongoJobManager(mongo.database("jobs"), MongoJobManagerSettings.default, new InMemoryFileStorage[Future])
     lazy val M = AkkaTypeClasses.futureApplicative(executionContext)
     lazy val coM = new Copointed[Future] {
       def map[A, B](m: Future[A])(f: A => B) = m map f
@@ -317,12 +320,11 @@ trait JobManagerSpec[M[+_]] extends Specification {
       val job = jobs.createJob(validAPIKey, "b", "c", None, None).copoint
       jobs.start(job.id).copoint
       val result = JobResult(List(MimeTypes.text / plain), "Hello, world!".getBytes())
-      jobs.finish(job.id, Some(result)).copoint must beLike {
-        case Right(Job(_, _, _, _, _, Finished(Some(stored), _, _))) =>
-          stored must_== result
+      jobs.finish(job.id).copoint must beLike {
+        case Right(Job(_, _, _, _, _, Finished(_, _))) => ok
       }
       jobs.findJob(job.id).copoint must beLike {
-        case Some(Job(_, _, _, _, _, Finished(Some(`result`), _, _))) => ok
+        case Some(Job(_, _, _, _, _, Finished(_, _))) => ok
       }
     }
   }

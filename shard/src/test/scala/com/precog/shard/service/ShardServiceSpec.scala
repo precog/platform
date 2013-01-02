@@ -28,6 +28,8 @@ import com.precog.common.Path
 import com.precog.common.security._
 import com.precog.common.jobs._
 
+import java.nio.ByteBuffer
+
 import org.specs2.mutable.Specification
 import org.specs2.specification._
 import org.scalacheck.Gen._
@@ -102,7 +104,7 @@ trait TestShardService extends
     
     val accessControl = apiKeyManager
     val accountManager = inMemAccountMgr
-    val jobManager = inMemJobManager
+    val jobManager = self.jobManager
 
     val ownerMap = Map(
       Path("/")     ->             Set("root"),
@@ -116,7 +118,7 @@ trait TestShardService extends
 
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
   val inMemAccountMgr = new InMemoryAccountManager[Future]
-  val inMemJobManager = new InMemoryJobManager[Future]
+  val jobManager = new InMemoryJobManager[Future]
   val to = Duration(1, "seconds")
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   
@@ -138,7 +140,7 @@ trait TestShardService extends
 
   def accountManagerFactory(config: Configuration) = inMemAccountMgr
 
-  def jobManagerFactory(config: Configuration) = inMemJobManager
+  def jobManagerFactory(config: Configuration) = jobManager
 
   import java.nio.ByteBuffer
 
@@ -169,6 +171,9 @@ trait TestShardService extends
   lazy val metaService = client.contentType[QueryResult](application/(MimeTypes.json))
                                 .path("/meta/fs/")
 
+  lazy val asyncService = client.contentType[QueryResult](application/(MimeTypes.json))
+                                .path("/analytics/queries")
+
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(1, Duration(1, "second"))
   val shortFutureTimeouts = FutureTimeouts(1, Duration(50, "millis"))
   
@@ -180,10 +185,21 @@ trait TestShardService extends
 
 class ShardServiceSpec extends TestShardService with FutureMatchers {
 
-  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   def query(query: String, apiKey: Option[String] = Some(testAPIKey), path: String = ""): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query).get(path)
+  }
+
+  def asyncQuery(query: String, apiKey: Option[String] = Some(testAPIKey), path: String = ""): Future[HttpResponse[QueryResult]] = {
+    apiKey.map { asyncService.query("apiKey", _) }.getOrElse(asyncService)
+        .query("q", query).query("prefixPath", path).post[QueryResult]("") {
+      Right(StreamT.empty[Future, CharBuffer])
+    }
+  }
+
+  def asyncQueryResults(jobId: JobId, apiKey: Option[String] = Some(testAPIKey)): Future[HttpResponse[QueryResult]] = {
+    apiKey.map { asyncService.query("apiKey", _) }.getOrElse(asyncService).get(jobId)
   }
 
   val simpleQuery = "1 + 1"
@@ -191,10 +207,59 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   val accessibleAbsoluteQuery = "//test/foo"
   val inaccessibleAbsoluteQuery = "//inaccessible/foo"
 
+  def extractResult(data: StreamT[Future, CharBuffer]): Future[JValue] = {
+    data.foldLeft("") { _ + _.toString } map (JParser.parse(_))
+  }
+
+  def extractJobId(stream: StreamT[Future, CharBuffer]): Future[JobId] = {
+    extractResult(stream) map (_ \ "jobId") map {
+      case JString(jobId) => jobId
+      case _ => sys.error("This is not JSON! GIVE ME JSON!")
+    }
+  }
+
+  def waitForJobCompletion(jobId: JobId): Future[Either[String, (Option[MimeType], StreamT[Future, Array[Byte]])]] = {
+    import JobState._
+
+    jobManager.findJob(jobId) flatMap {
+      case Some(Job(_, _, _, _, _, NotStarted | Started(_, _))) =>
+        waitForJobCompletion(jobId)
+      case Some(_) =>
+        jobManager.getResult(jobId)
+      case None =>
+        Future(Left("The job doesn't even exist!!!"))
+    }
+  }
+
   "Shard query service" should {
     "handle absolute accessible query from root path" in {
       query(accessibleAbsoluteQuery) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(_), _) => ok
+      }}
+    }
+    "create a job when an async query is posted" in {
+      val res = for {
+        HttpResponse(HttpStatus(Accepted, _), _, Some(Right(res)), _) <- asyncQuery(simpleQuery)
+        jobId <- extractJobId(res)
+        job <- jobManager.findJob(jobId)
+      } yield job
+
+      res must whenDelivered { beLike {
+        case Some(Job(_, _, _, _, _, _)) => ok
+      }}
+    }
+    "results of an async job must eventually be made available" in {
+      val res = for {
+        HttpResponse(HttpStatus(Accepted, _), _, Some(Right(res)), _) <- asyncQuery(simpleQuery)
+        jobId <- extractJobId(res)
+        _ <- waitForJobCompletion(jobId)
+        HttpResponse(HttpStatus(OK, _), _, Some(Right(data)), _) <- asyncQueryResults(jobId)
+        result <- extractResult(data)
+      } yield result
+
+      val expected = JArray(JNum(2) :: Nil)
+      res must whenDelivered { beLike {
+        case `expected` => ok
       }}
     }
     "reject absolute inaccessible query from root path" in {

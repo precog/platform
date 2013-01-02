@@ -158,8 +158,6 @@ trait TestAsyncQueryExecutorFactory extends AsyncQueryExecutorFactory with Manag
   val jobManager: JobManager[Future]
   def tickDuration: Int
 
-  val tick = CharBuffer.wrap(".")
-
   type YggConfig = ManagedQueryModuleConfig
 
   object yggConfig extends ManagedQueryModuleConfig {
@@ -179,7 +177,7 @@ trait TestAsyncQueryExecutorFactory extends AsyncQueryExecutorFactory with Manag
             case i if i < numTicks =>
               shardQueryMonad.point {
                 Thread.sleep(tickDuration)
-                Some((tick, i + 1))
+                Some((CharBuffer.wrap("."), i + 1))
               }
 
             case _ =>

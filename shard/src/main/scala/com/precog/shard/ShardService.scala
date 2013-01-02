@@ -165,15 +165,17 @@ trait ShardService extends
         } ->
         request { case ShardState(queryExecutorFactory, apiKeyManager, jobManager) =>
           apiKey[ByteChunk, HttpResponse[ByteChunk]](apiKeyManager) {
-            path("analytics/queries") {
+            path("/analytics/queries") {
               path("'jobId") {
                 get(new AsyncQueryServiceHandler(jobManager))
               }
             }
           } ~
           apiKey(apiKeyManager) {
-            asyncQuery {
-              post(new QueryServiceHandler(queryExecutorFactory))
+            path("/analytics/queries") {
+              asyncQuery {
+                post(new QueryServiceHandler(queryExecutorFactory))
+              }
             }
           } ~
           jvalue[ByteChunk] {
