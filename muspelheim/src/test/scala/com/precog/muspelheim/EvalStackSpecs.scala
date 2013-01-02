@@ -67,6 +67,12 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "count the obnoxiously large dataset" >> {
+      "<root>" >> {
+        eval("count((//obnoxious).v)") mustEqual Set(SDecimal(100000))
+      }
+    }
+
     "reduce the obnoxiously large dataset" >> {
       "<root>" >> {
         eval("mean((//obnoxious).v)") mustEqual Set(SDecimal(50000.5))
