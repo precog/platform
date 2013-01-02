@@ -1,401 +1,100 @@
-[{
-  "date":1329487864520,
-  "recipients":["operations","engineering"],
-  "amount":5.0
-},{
-  "date":1329748296569,
-  "recipients":["marketing","operations"],
-  "amount":5.0
-},{
-  "date":1329183445027,
-  "recipients":["engineering","operations"],
-  "amount":290.84
-},{
-  "date":1329514518318,
-  "recipients":["marketing","operations"],
-  "amount":357.18
-},{
-  "date":1328884296570,
-  "recipients":["sales","research"],
-  "amount":242.34
-},{
-  "date":1328884296570,
-  "recipients":["marketing","marketing"],
-  "amount":236.35
-},{
-  "date":1329748296571,
-  "recipients":["operations","operations"],
-  "amount":500.0
-},{
-  "date":1329741127233,
-  "recipients":["research","marketing"],
-  "amount":5.0
-},{
-  "date":1329019437723,
-  "recipients":["marketing","research"],
-  "amount":500.0
-},{
-  "date":1329074126628,
-  "recipients":["manufacturing","operations"],
-  "amount":395.88
-},{
-  "date":1328884296572,
-  "recipients":["research","operations"],
-  "amount":500.0
-},{
-  "date":1329717373742,
-  "recipients":["research","research"],
-  "amount":500.0
-},{
-  "date":1328884296572,
-  "recipients":["sales","research"],
-  "amount":5.0
-},{
-  "date":1328884296572,
-  "recipients":["sales","marketing"],
-  "amount":169.55
-},{
-  "date":1329748296573,
-  "recipients":["marketing","marketing"],
-  "amount":500.0
-},{
-  "date":1328884296573,
-  "recipients":["research","engineering"],
-  "amount":500.0
-},{
-  "date":1329748296573,
-  "recipients":["marketing","marketing"],
-  "amount":235.28
-},{
-  "date":1329525568774,
-  "recipients":["research","engineering"],
-  "amount":278.42
-},{
-  "date":1329748296574,
-  "recipients":["operations","engineering"],
-  "amount":250.65
-},{
-  "date":1328884296574,
-  "recipients":["research","marketing"],
-  "amount":5.0
-},{
-  "date":1329724660234,
-  "recipients":["marketing","engineering"],
-  "amount":500.0
-},{
-  "date":1329453742214,
-  "recipients":["operations","marketing"],
-  "amount":5.0
-},{
-  "date":1329748296575,
-  "recipients":["sales","operations"],
-  "amount":322.64
-},{
-  "date":1328884296575,
-  "recipients":["operations","marketing"],
-  "amount":5.0
-},{
-  "date":1328884296575,
-  "recipients":["research","research"],
-  "amount":500.0
-},{
-  "date":1329033104866,
-  "recipients":["operations","operations"],
-  "amount":500.0
-},{
-  "date":1329645377843,
-  "recipients":["manufacturing","engineering"],
-  "amount":275.97
-},{
-  "date":1329118622128,
-  "recipients":["sales","research"],
-  "amount":258.84
-},{
-  "date":1329123467585,
-  "recipients":["operations","research"],
-  "amount":5.0
-},{
-  "date":1329185707590,
-  "recipients":["engineering","engineering"],
-  "amount":500.0
-},{
-  "date":1329453800903,
-  "recipients":["operations","research"],
-  "amount":395.17
-},{
-  "date":1329038517430,
-  "recipients":["sales","marketing"],
-  "amount":83.54
-},{
-  "date":1329530470600,
-  "recipients":["operations","manufacturing"],
-  "amount":368.21
-},{
-  "date":1329334105548,
-  "recipients":["operations","research"],
-  "amount":500.0
-},{
-  "date":1329269631260,
-  "recipients":["engineering","sales"],
-  "amount":119.64
-},{
-  "date":1329193108646,
-  "recipients":["marketing","manufacturing"],
-  "amount":500.0
-},{
-  "date":1329748296578,
-  "recipients":["operations","operations"],
-  "amount":5.0
-},{
-  "date":1328884296579,
-  "recipients":["operations","research"],
-  "amount":5.0
-},{
-  "date":1329322478382,
-  "recipients":["sales","sales"],
-  "amount":260.9
-},{
-  "date":1329748296579,
-  "recipients":["engineering","sales"],
-  "amount":5.0
-},{
-  "date":1329748296579,
-  "recipients":["marketing","engineering"],
-  "amount":282.77
-},{
-  "date":1328884296580,
-  "recipients":["sales","engineering"],
-  "amount":5.0
-},{
-  "date":1329272097763,
-  "recipients":["manufacturing","marketing"],
-  "amount":5.0
-},{
-  "date":1328884296580,
-  "recipients":["sales","research"],
-  "amount":293.06
-},{
-  "date":1328884296580,
-  "recipients":["engineering","sales"],
-  "amount":5.0
-},{
-  "date":1328884296581,
-  "recipients":["manufacturing","research"],
-  "amount":46.74
-},{
-  "date":1328884296581,
-  "recipients":["research","marketing"],
-  "amount":5.0
-},{
-  "date":1329173985823,
-  "recipients":["operations","sales"],
-  "amount":217.68
-},{
-  "date":1328884296581,
-  "recipients":["operations","sales"],
-  "amount":35.43
-},{
-  "date":1329576476020,
-  "recipients":["sales","operations"],
-  "amount":407.74
-},{
-  "date":1328884296582,
-  "recipients":["engineering","research"],
-  "amount":397.32
-},{
-  "date":1328965546610,
-  "recipients":["manufacturing","marketing"],
-  "amount":42.06
-},{
-  "date":1328884296582,
-  "recipients":["marketing","research"],
-  "amount":500.0
-},{
-  "date":1329748296582,
-  "recipients":["manufacturing","manufacturing"],
-  "amount":307.98
-},{
-  "date":1328884296583,
-  "recipients":["marketing","research"],
-  "amount":5.0
-},{
-  "date":1329713797343,
-  "recipients":["manufacturing","manufacturing"],
-  "amount":39.18
-},{
-  "date":1329748296583,
-  "recipients":["engineering","operations"],
-  "amount":354.31
-},{
-  "date":1328884296583,
-  "recipients":["manufacturing","research"],
-  "amount":278.51
-},{
-  "date":1329748296584,
-  "recipients":["sales","operations"],
-  "amount":5.0
-},{
-  "date":1328884296584,
-  "recipients":["marketing","sales"],
-  "amount":5.0
-},{
-  "date":1328884296584,
-  "recipients":["engineering","engineering"],
-  "amount":328.59
-},{
-  "date":1329645245979,
-  "recipients":["manufacturing","marketing"],
-  "amount":500.0
-},{
-  "date":1328884296585,
-  "recipients":["sales","engineering"],
-  "amount":5.0
-},{
-  "date":1329463593016,
-  "recipients":["engineering","operations"],
-  "amount":5.0
-},{
-  "date":1329101626050,
-  "recipients":["manufacturing","operations"],
-  "amount":22.62
-},{
-  "date":1329676591658,
-  "recipients":["operations","engineering"],
-  "amount":401.87
-},{
-  "date":1329152427880,
-  "recipients":["marketing","marketing"],
-  "amount":85.86
-},{
-  "date":1329748296586,
-  "recipients":["research","research"],
-  "amount":342.2
-},{
-  "date":1329748296586,
-  "recipients":["operations","sales"],
-  "amount":5.0
-},{
-  "date":1329019525309,
-  "recipients":["marketing","manufacturing"],
-  "amount":5.0
-},{
-  "date":1328884296587,
-  "recipients":["research","sales"],
-  "amount":235.15
-},{
-  "date":1329026655121,
-  "recipients":["research","operations"],
-  "amount":11.16
-},{
-  "date":1329394199170,
-  "recipients":["operations","operations"],
-  "amount":5.0
-},{
-  "date":1329418288184,
-  "recipients":["marketing","research"],
-  "amount":5.0
-},{
-  "date":1329736511509,
-  "recipients":["marketing","operations"],
-  "amount":5.0
-},{
-  "date":1328884296588,
-  "recipients":["sales","engineering"],
-  "amount":5.0
-},{
-  "date":1329267238673,
-  "recipients":["operations","manufacturing"],
-  "amount":126.37
-},{
-  "date":1329661746339,
-  "recipients":["marketing","operations"],
-  "amount":461.16
-},{
-  "date":1329687031741,
-  "recipients":["operations","marketing"],
-  "amount":255.05
-},{
-  "date":1328884296589,
-  "recipients":["engineering","marketing"],
-  "amount":341.99
-},{
-  "date":1328884296589,
-  "recipients":["operations","engineering"],
-  "amount":227.59
-},{
-  "date":1329085657546,
-  "recipients":["marketing","sales"],
-  "amount":160.55
-},{
-  "date":1329748296590,
-  "recipients":["manufacturing","marketing"],
-  "amount":5.0
-},{
-  "date":1329560891697,
-  "recipients":["sales","sales"],
-  "amount":500.0
-},{
-  "date":1329314771152,
-  "recipients":["research","engineering"],
-  "amount":500.0
-},{
-  "date":1328884296590,
-  "recipients":["engineering","engineering"],
-  "amount":500.0
-},{
-  "date":1329748296591,
-  "recipients":["research","operations"],
-  "amount":5.0
-},{
-  "date":1329726397442,
-  "recipients":["sales","sales"],
-  "amount":61.0
-},{
-  "date":1328884296591,
-  "recipients":["marketing","marketing"],
-  "amount":207.13
-},{
-  "date":1329748296591,
-  "recipients":["research","manufacturing"],
-  "amount":500.0
-},{
-  "date":1329748296592,
-  "recipients":["engineering","marketing"],
-  "amount":178.75
-},{
-  "date":1328884296592,
-  "recipients":["manufacturing","research"],
-  "amount":500.0
-},{
-  "date":1329435343535,
-  "recipients":["manufacturing","operations"],
-  "amount":500.0
-},{
-  "date":1328884296592,
-  "recipients":["operations","operations"],
-  "amount":5.0
-},{
-  "date":1328884296593,
-  "recipients":["research","research"],
-  "amount":5.0
-},{
-  "date":1329748296593,
-  "recipients":["sales","manufacturing"],
-  "amount":138.85
-},{
-  "date":1329748296593,
-  "recipients":["engineering","manufacturing"],
-  "amount":35.61
-},{
-  "date":1329385442266,
-  "recipients":["research","manufacturing"],
-  "amount":5.0
-},{
-  "date":1328884296594,
-  "recipients":["marketing","research"],
-  "amount":283.87
-},{
-  "date":1328884296594,
-  "recipients":["research","engineering"],
-  "amount":173.65
-}]
+{"date": 1329487864520, "amount": 5.0, "recipients": ["operations", "engineering"]}
+{"date": 1329748296569, "amount": 5.0, "recipients": ["marketing", "operations"]}
+{"date": 1329183445027, "amount": 290.84, "recipients": ["engineering", "operations"]}
+{"date": 1329514518318, "amount": 357.18, "recipients": ["marketing", "operations"]}
+{"date": 1328884296570, "amount": 242.34, "recipients": ["sales", "research"]}
+{"date": 1328884296570, "amount": 236.35, "recipients": ["marketing", "marketing"]}
+{"date": 1329748296571, "amount": 500.0, "recipients": ["operations", "operations"]}
+{"date": 1329741127233, "amount": 5.0, "recipients": ["research", "marketing"]}
+{"date": 1329019437723, "amount": 500.0, "recipients": ["marketing", "research"]}
+{"date": 1329074126628, "amount": 395.88, "recipients": ["manufacturing", "operations"]}
+{"date": 1328884296572, "amount": 500.0, "recipients": ["research", "operations"]}
+{"date": 1329717373742, "amount": 500.0, "recipients": ["research", "research"]}
+{"date": 1328884296572, "amount": 5.0, "recipients": ["sales", "research"]}
+{"date": 1328884296572, "amount": 169.55, "recipients": ["sales", "marketing"]}
+{"date": 1329748296573, "amount": 500.0, "recipients": ["marketing", "marketing"]}
+{"date": 1328884296573, "amount": 500.0, "recipients": ["research", "engineering"]}
+{"date": 1329748296573, "amount": 235.28, "recipients": ["marketing", "marketing"]}
+{"date": 1329525568774, "amount": 278.42, "recipients": ["research", "engineering"]}
+{"date": 1329748296574, "amount": 250.65, "recipients": ["operations", "engineering"]}
+{"date": 1328884296574, "amount": 5.0, "recipients": ["research", "marketing"]}
+{"date": 1329724660234, "amount": 500.0, "recipients": ["marketing", "engineering"]}
+{"date": 1329453742214, "amount": 5.0, "recipients": ["operations", "marketing"]}
+{"date": 1329748296575, "amount": 322.64, "recipients": ["sales", "operations"]}
+{"date": 1328884296575, "amount": 5.0, "recipients": ["operations", "marketing"]}
+{"date": 1328884296575, "amount": 500.0, "recipients": ["research", "research"]}
+{"date": 1329033104866, "amount": 500.0, "recipients": ["operations", "operations"]}
+{"date": 1329645377843, "amount": 275.97, "recipients": ["manufacturing", "engineering"]}
+{"date": 1329118622128, "amount": 258.84, "recipients": ["sales", "research"]}
+{"date": 1329123467585, "amount": 5.0, "recipients": ["operations", "research"]}
+{"date": 1329185707590, "amount": 500.0, "recipients": ["engineering", "engineering"]}
+{"date": 1329453800903, "amount": 395.17, "recipients": ["operations", "research"]}
+{"date": 1329038517430, "amount": 83.54, "recipients": ["sales", "marketing"]}
+{"date": 1329530470600, "amount": 368.21, "recipients": ["operations", "manufacturing"]}
+{"date": 1329334105548, "amount": 500.0, "recipients": ["operations", "research"]}
+{"date": 1329269631260, "amount": 119.64, "recipients": ["engineering", "sales"]}
+{"date": 1329193108646, "amount": 500.0, "recipients": ["marketing", "manufacturing"]}
+{"date": 1329748296578, "amount": 5.0, "recipients": ["operations", "operations"]}
+{"date": 1328884296579, "amount": 5.0, "recipients": ["operations", "research"]}
+{"date": 1329322478382, "amount": 260.9, "recipients": ["sales", "sales"]}
+{"date": 1329748296579, "amount": 5.0, "recipients": ["engineering", "sales"]}
+{"date": 1329748296579, "amount": 282.77, "recipients": ["marketing", "engineering"]}
+{"date": 1328884296580, "amount": 5.0, "recipients": ["sales", "engineering"]}
+{"date": 1329272097763, "amount": 5.0, "recipients": ["manufacturing", "marketing"]}
+{"date": 1328884296580, "amount": 293.06, "recipients": ["sales", "research"]}
+{"date": 1328884296580, "amount": 5.0, "recipients": ["engineering", "sales"]}
+{"date": 1328884296581, "amount": 46.74, "recipients": ["manufacturing", "research"]}
+{"date": 1328884296581, "amount": 5.0, "recipients": ["research", "marketing"]}
+{"date": 1329173985823, "amount": 217.68, "recipients": ["operations", "sales"]}
+{"date": 1328884296581, "amount": 35.43, "recipients": ["operations", "sales"]}
+{"date": 1329576476020, "amount": 407.74, "recipients": ["sales", "operations"]}
+{"date": 1328884296582, "amount": 397.32, "recipients": ["engineering", "research"]}
+{"date": 1328965546610, "amount": 42.06, "recipients": ["manufacturing", "marketing"]}
+{"date": 1328884296582, "amount": 500.0, "recipients": ["marketing", "research"]}
+{"date": 1329748296582, "amount": 307.98, "recipients": ["manufacturing", "manufacturing"]}
+{"date": 1328884296583, "amount": 5.0, "recipients": ["marketing", "research"]}
+{"date": 1329713797343, "amount": 39.18, "recipients": ["manufacturing", "manufacturing"]}
+{"date": 1329748296583, "amount": 354.31, "recipients": ["engineering", "operations"]}
+{"date": 1328884296583, "amount": 278.51, "recipients": ["manufacturing", "research"]}
+{"date": 1329748296584, "amount": 5.0, "recipients": ["sales", "operations"]}
+{"date": 1328884296584, "amount": 5.0, "recipients": ["marketing", "sales"]}
+{"date": 1328884296584, "amount": 328.59, "recipients": ["engineering", "engineering"]}
+{"date": 1329645245979, "amount": 500.0, "recipients": ["manufacturing", "marketing"]}
+{"date": 1328884296585, "amount": 5.0, "recipients": ["sales", "engineering"]}
+{"date": 1329463593016, "amount": 5.0, "recipients": ["engineering", "operations"]}
+{"date": 1329101626050, "amount": 22.62, "recipients": ["manufacturing", "operations"]}
+{"date": 1329676591658, "amount": 401.87, "recipients": ["operations", "engineering"]}
+{"date": 1329152427880, "amount": 85.86, "recipients": ["marketing", "marketing"]}
+{"date": 1329748296586, "amount": 342.2, "recipients": ["research", "research"]}
+{"date": 1329748296586, "amount": 5.0, "recipients": ["operations", "sales"]}
+{"date": 1329019525309, "amount": 5.0, "recipients": ["marketing", "manufacturing"]}
+{"date": 1328884296587, "amount": 235.15, "recipients": ["research", "sales"]}
+{"date": 1329026655121, "amount": 11.16, "recipients": ["research", "operations"]}
+{"date": 1329394199170, "amount": 5.0, "recipients": ["operations", "operations"]}
+{"date": 1329418288184, "amount": 5.0, "recipients": ["marketing", "research"]}
+{"date": 1329736511509, "amount": 5.0, "recipients": ["marketing", "operations"]}
+{"date": 1328884296588, "amount": 5.0, "recipients": ["sales", "engineering"]}
+{"date": 1329267238673, "amount": 126.37, "recipients": ["operations", "manufacturing"]}
+{"date": 1329661746339, "amount": 461.16, "recipients": ["marketing", "operations"]}
+{"date": 1329687031741, "amount": 255.05, "recipients": ["operations", "marketing"]}
+{"date": 1328884296589, "amount": 341.99, "recipients": ["engineering", "marketing"]}
+{"date": 1328884296589, "amount": 227.59, "recipients": ["operations", "engineering"]}
+{"date": 1329085657546, "amount": 160.55, "recipients": ["marketing", "sales"]}
+{"date": 1329748296590, "amount": 5.0, "recipients": ["manufacturing", "marketing"]}
+{"date": 1329560891697, "amount": 500.0, "recipients": ["sales", "sales"]}
+{"date": 1329314771152, "amount": 500.0, "recipients": ["research", "engineering"]}
+{"date": 1328884296590, "amount": 500.0, "recipients": ["engineering", "engineering"]}
+{"date": 1329748296591, "amount": 5.0, "recipients": ["research", "operations"]}
+{"date": 1329726397442, "amount": 61.0, "recipients": ["sales", "sales"]}
+{"date": 1328884296591, "amount": 207.13, "recipients": ["marketing", "marketing"]}
+{"date": 1329748296591, "amount": 500.0, "recipients": ["research", "manufacturing"]}
+{"date": 1329748296592, "amount": 178.75, "recipients": ["engineering", "marketing"]}
+{"date": 1328884296592, "amount": 500.0, "recipients": ["manufacturing", "research"]}
+{"date": 1329435343535, "amount": 500.0, "recipients": ["manufacturing", "operations"]}
+{"date": 1328884296592, "amount": 5.0, "recipients": ["operations", "operations"]}
+{"date": 1328884296593, "amount": 5.0, "recipients": ["research", "research"]}
+{"date": 1329748296593, "amount": 138.85, "recipients": ["sales", "manufacturing"]}
+{"date": 1329748296593, "amount": 35.61, "recipients": ["engineering", "manufacturing"]}
+{"date": 1329385442266, "amount": 5.0, "recipients": ["research", "manufacturing"]}
+{"date": 1328884296594, "amount": 283.87, "recipients": ["marketing", "research"]}
+{"date": 1328884296594, "amount": 173.65, "recipients": ["research", "engineering"]}

@@ -1,501 +1,100 @@
-[{
-  "employees":"25-100",
-  "revenue":"<500K",
-  "category":"electronics",
-  "campaign":"c11"
-},{
-  "employees":"100-250",
-  "revenue":"<500K",
-  "category":"travel",
-  "campaign":"c7"
-},{
-  "employees":"100-250",
-  "revenue":"250-500M",
-  "category":"media",
-  "campaign":"c14"
-},{
-  "employees":"10000+",
-  "revenue":"500M+",
-  "category":"magical",
-  "campaign":"c8"
-},{
-  "employees":"1000-5000",
-  "revenue":"5-50M",
-  "category":"media",
-  "campaign":"c17"
-},{
-  "employees":"0-25",
-  "revenue":"250-500M",
-  "category":"sundries",
-  "campaign":"c3"
-},{
-  "employees":"250-1000",
-  "revenue":"5-50M",
-  "category":"travel",
-  "campaign":"c19"
-},{
-  "employees":"1000-5000",
-  "revenue":"500K-5M",
-  "category":"electronics",
-  "campaign":"c23"
-},{
-  "employees":"25-100",
-  "revenue":"5-50M",
-  "category":"magical",
-  "campaign":"c16"
-},{
-  "employees":"250-1000",
-  "revenue":"5-50M",
-  "category":"electronics",
-  "campaign":"c15"
-},{
-  "employees":"25-100",
-  "revenue":"5-50M",
-  "category":"fashion",
-  "campaign":"c7"
-},{
-  "employees":"1000-5000",
-  "revenue":"250-500M",
-  "category":"travel",
-  "campaign":"c15"
-},{
-  "employees":"0-25",
-  "revenue":"500K-5M",
-  "category":"travel",
-  "campaign":"c15"
-},{
-  "employees":"25-100",
-  "revenue":"<500K",
-  "category":"fashion",
-  "campaign":"c18"
-},{
-  "employees":"1000-5000",
-  "revenue":"50-250M",
-  "category":"media",
-  "campaign":"c8"
-},{
-  "employees":"25-100",
-  "revenue":"5-50M",
-  "category":"magical",
-  "campaign":"c15"
-},{
-  "employees":"1000-5000",
-  "revenue":"500M+",
-  "category":"travel",
-  "campaign":"c13"
-},{
-  "employees":"0-25",
-  "revenue":"500M+",
-  "category":"electronics",
-  "campaign":"c15"
-},{
-  "employees":"1000-5000",
-  "revenue":"500M+",
-  "category":"magical",
-  "campaign":"c16"
-},{
-  "employees":"25-100",
-  "revenue":"<500K",
-  "category":"sundries",
-  "campaign":"c10"
-},{
-  "employees":"250-1000",
-  "revenue":"50-250M",
-  "category":"travel",
-  "campaign":"c18"
-},{
-  "employees":"100-250",
-  "revenue":"<500K",
-  "category":"travel",
-  "campaign":"c14"
-},{
-  "employees":"25-100",
-  "revenue":"250-500M",
-  "category":"fashion",
-  "campaign":"c13"
-},{
-  "employees":"10000+",
-  "revenue":"250-500M",
-  "category":"sundries",
-  "campaign":"c5"
-},{
-  "employees":"25-100",
-  "revenue":"5-50M",
-  "category":"fashion",
-  "campaign":"c13"
-},{
-  "employees":"25-100",
-  "revenue":"500K-5M",
-  "category":"travel",
-  "campaign":"c14"
-},{
-  "employees":"10000+",
-  "revenue":"<500K",
-  "category":"travel",
-  "campaign":"c19"
-},{
-  "employees":"250-1000",
-  "revenue":"50-250M",
-  "category":"electronics",
-  "campaign":"c11"
-},{
-  "employees":"1000-5000",
-  "revenue":"<500K",
-  "category":"fashion",
-  "campaign":"c24"
-},{
-  "employees":"1000-5000",
-  "revenue":"5-50M",
-  "category":"magical",
-  "campaign":"c17"
-},{
-  "employees":"250-1000",
-  "revenue":"500M+",
-  "category":"sundries",
-  "campaign":"c16"
-},{
-  "employees":"250-1000",
-  "revenue":"500M+",
-  "category":"travel",
-  "campaign":"c19"
-},{
-  "employees":"250-1000",
-  "revenue":"5-50M",
-  "category":"fashion",
-  "campaign":"c18"
-},{
-  "employees":"0-25",
-  "revenue":"500M+",
-  "category":"electronics",
-  "campaign":"c13"
-},{
-  "employees":"0-25",
-  "revenue":"500K-5M",
-  "category":"travel",
-  "campaign":"c5"
-},{
-  "employees":"25-100",
-  "revenue":"500M+",
-  "category":"electronics",
-  "campaign":"c1"
-},{
-  "employees":"5000-10000",
-  "revenue":"50-250M",
-  "category":"sundries",
-  "campaign":"c10"
-},{
-  "employees":"25-100",
-  "revenue":"500M+",
-  "category":"electronics",
-  "campaign":"c2"
-},{
-  "employees":"25-100",
-  "revenue":"500M+",
-  "category":"magical",
-  "campaign":"c19"
-},{
-  "employees":"1000-5000",
-  "revenue":"250-500M",
-  "category":"fashion",
-  "campaign":"c14"
-},{
-  "employees":"100-250",
-  "revenue":"5-50M",
-  "category":"sundries",
-  "campaign":"c19"
-},{
-  "employees":"5000-10000",
-  "revenue":"<500K",
-  "category":"travel",
-  "campaign":"c6"
-},{
-  "employees":"5000-10000",
-  "revenue":"50-250M",
-  "category":"media",
-  "campaign":"c18"
-},{
-  "employees":"1000-5000",
-  "revenue":"5-50M",
-  "category":"magical",
-  "campaign":"c15"
-},{
-  "employees":"100-250",
-  "revenue":"250-500M",
-  "category":"sundries",
-  "campaign":"c9"
-},{
-  "employees":"5000-10000",
-  "revenue":"250-500M",
-  "category":"travel",
-  "campaign":"c22"
-},{
-  "employees":"10000+",
-  "revenue":"50-250M",
-  "category":"media",
-  "campaign":"c15"
-},{
-  "employees":"10000+",
-  "revenue":"<500K",
-  "category":"magical",
-  "campaign":"c12"
-},{
-  "employees":"1000-5000",
-  "revenue":"250-500M",
-  "category":"media",
-  "campaign":"c13"
-},{
-  "employees":"250-1000",
-  "revenue":"500M+",
-  "category":"travel",
-  "campaign":"c2"
-},{
-  "employees":"5000-10000",
-  "revenue":"250-500M",
-  "category":"sundries",
-  "campaign":"c3"
-},{
-  "employees":"100-250",
-  "revenue":"250-500M",
-  "category":"media",
-  "campaign":"c11"
-},{
-  "employees":"0-25",
-  "revenue":"500M+",
-  "category":"travel",
-  "campaign":"c18"
-},{
-  "employees":"250-1000",
-  "revenue":"500M+",
-  "category":"sundries",
-  "campaign":"c15"
-},{
-  "employees":"10000+",
-  "revenue":"250-500M",
-  "category":"travel",
-  "campaign":"c20"
-},{
-  "employees":"0-25",
-  "revenue":"5-50M",
-  "category":"electronics",
-  "campaign":"c11"
-},{
-  "employees":"5000-10000",
-  "revenue":"500M+",
-  "category":"sundries",
-  "campaign":"c14"
-},{
-  "employees":"250-1000",
-  "revenue":"5-50M",
-  "category":"magical",
-  "campaign":"c6"
-},{
-  "employees":"1000-5000",
-  "revenue":"<500K",
-  "category":"sundries",
-  "campaign":"c11"
-},{
-  "employees":"250-1000",
-  "revenue":"50-250M",
-  "category":"media",
-  "campaign":"c7"
-},{
-  "employees":"250-1000",
-  "revenue":"250-500M",
-  "category":"magical",
-  "campaign":"c18"
-},{
-  "employees":"250-1000",
-  "revenue":"50-250M",
-  "category":"sundries",
-  "campaign":"c21"
-},{
-  "employees":"0-25",
-  "revenue":"5-50M",
-  "category":"magical",
-  "campaign":"c13"
-},{
-  "employees":"100-250",
-  "revenue":"50-250M",
-  "category":"travel",
-  "campaign":"c23"
-},{
-  "employees":"0-25",
-  "revenue":"5-50M",
-  "category":"magical",
-  "campaign":"c16"
-},{
-  "employees":"250-1000",
-  "revenue":"500M+",
-  "category":"media",
-  "campaign":"c24"
-},{
-  "employees":"0-25",
-  "revenue":"250-500M",
-  "category":"fashion",
-  "campaign":"c19"
-},{
-  "employees":"1000-5000",
-  "revenue":"500M+",
-  "category":"travel",
-  "campaign":"c12"
-},{
-  "employees":"250-1000",
-  "revenue":"500M+",
-  "category":"electronics",
-  "campaign":"c18"
-},{
-  "employees":"1000-5000",
-  "revenue":"5-50M",
-  "category":"fashion",
-  "campaign":"c8"
-},{
-  "employees":"0-25",
-  "revenue":"50-250M",
-  "category":"fashion",
-  "campaign":"c7"
-},{
-  "employees":"5000-10000",
-  "revenue":"250-500M",
-  "category":"electronics",
-  "campaign":"c16"
-},{
-  "employees":"100-250",
-  "revenue":"5-50M",
-  "category":"electronics",
-  "campaign":"c16"
-},{
-  "employees":"5000-10000",
-  "revenue":"500K-5M",
-  "category":"electronics",
-  "campaign":"c11"
-},{
-  "employees":"250-1000",
-  "revenue":"<500K",
-  "category":"fashion",
-  "campaign":"c19"
-},{
-  "employees":"25-100",
-  "revenue":"<500K",
-  "category":"magical",
-  "campaign":"c13"
-},{
-  "employees":"10000+",
-  "revenue":"50-250M",
-  "category":"travel",
-  "campaign":"c15"
-},{
-  "employees":"100-250",
-  "revenue":"5-50M",
-  "category":"sundries",
-  "campaign":"c25"
-},{
-  "employees":"25-100",
-  "revenue":"500M+",
-  "category":"magical",
-  "campaign":"c2"
-},{
-  "employees":"100-250",
-  "revenue":"5-50M",
-  "category":"electronics",
-  "campaign":"c9"
-},{
-  "employees":"100-250",
-  "revenue":"5-50M",
-  "category":"travel",
-  "campaign":"c21"
-},{
-  "employees":"100-250",
-  "revenue":"500K-5M",
-  "category":"media",
-  "campaign":"c9"
-},{
-  "employees":"250-1000",
-  "revenue":"<500K",
-  "category":"magical",
-  "campaign":"c18"
-},{
-  "employees":"100-250",
-  "revenue":"5-50M",
-  "category":"fashion",
-  "campaign":"c15"
-},{
-  "employees":"5000-10000",
-  "revenue":"5-50M",
-  "category":"travel",
-  "campaign":"c11"
-},{
-  "employees":"10000+",
-  "revenue":"250-500M",
-  "category":"travel",
-  "campaign":"c19"
-},{
-  "employees":"250-1000",
-  "revenue":"500K-5M",
-  "category":"sundries",
-  "campaign":"c13"
-},{
-  "employees":"0-25",
-  "revenue":"500M+",
-  "category":"sundries",
-  "campaign":"c10"
-},{
-  "employees":"10000+",
-  "revenue":"<500K",
-  "category":"sundries",
-  "campaign":"c5"
-},{
-  "employees":"0-25",
-  "revenue":"50-250M",
-  "category":"media",
-  "campaign":"c21"
-},{
-  "employees":"1000-5000",
-  "revenue":"500K-5M",
-  "category":"media",
-  "campaign":"c24"
-},{
-  "employees":"250-1000",
-  "revenue":"500M+",
-  "category":"electronics",
-  "campaign":"c19"
-},{
-  "employees":"10000+",
-  "revenue":"50-250M",
-  "category":"media",
-  "campaign":"c13"
-},{
-  "employees":"1000-5000",
-  "revenue":"500K-5M",
-  "category":"sundries",
-  "campaign":"c12"
-},{
-  "employees":"250-1000",
-  "revenue":"500M+",
-  "category":"fashion",
-  "campaign":"c9"
-},{
-  "employees":"5000-10000",
-  "revenue":"250-500M",
-  "category":"magical",
-  "campaign":"c13"
-},{
-  "employees":"25-100",
-  "revenue":"500M+",
-  "category":"travel",
-  "campaign":"c7"
-},{
-  "employees":"0-25",
-  "revenue":"500K-5M",
-  "category":"travel",
-  "campaign":"c10"
-},{
-  "employees":"100-250",
-  "revenue":"50-250M",
-  "category":"travel",
-  "campaign":"c11"
-},{
-  "employees":"100-250",
-  "revenue":"50-250M",
-  "category":"fashion",
-  "campaign":"c20"
-}]
+{"category": "electronics", "employees": "25-100", "campaign": "c11", "revenue": "<500K"}
+{"category": "travel", "employees": "100-250", "campaign": "c7", "revenue": "<500K"}
+{"category": "media", "employees": "100-250", "campaign": "c14", "revenue": "250-500M"}
+{"category": "magical", "employees": "10000+", "campaign": "c8", "revenue": "500M+"}
+{"category": "media", "employees": "1000-5000", "campaign": "c17", "revenue": "5-50M"}
+{"category": "sundries", "employees": "0-25", "campaign": "c3", "revenue": "250-500M"}
+{"category": "travel", "employees": "250-1000", "campaign": "c19", "revenue": "5-50M"}
+{"category": "electronics", "employees": "1000-5000", "campaign": "c23", "revenue": "500K-5M"}
+{"category": "magical", "employees": "25-100", "campaign": "c16", "revenue": "5-50M"}
+{"category": "electronics", "employees": "250-1000", "campaign": "c15", "revenue": "5-50M"}
+{"category": "fashion", "employees": "25-100", "campaign": "c7", "revenue": "5-50M"}
+{"category": "travel", "employees": "1000-5000", "campaign": "c15", "revenue": "250-500M"}
+{"category": "travel", "employees": "0-25", "campaign": "c15", "revenue": "500K-5M"}
+{"category": "fashion", "employees": "25-100", "campaign": "c18", "revenue": "<500K"}
+{"category": "media", "employees": "1000-5000", "campaign": "c8", "revenue": "50-250M"}
+{"category": "magical", "employees": "25-100", "campaign": "c15", "revenue": "5-50M"}
+{"category": "travel", "employees": "1000-5000", "campaign": "c13", "revenue": "500M+"}
+{"category": "electronics", "employees": "0-25", "campaign": "c15", "revenue": "500M+"}
+{"category": "magical", "employees": "1000-5000", "campaign": "c16", "revenue": "500M+"}
+{"category": "sundries", "employees": "25-100", "campaign": "c10", "revenue": "<500K"}
+{"category": "travel", "employees": "250-1000", "campaign": "c18", "revenue": "50-250M"}
+{"category": "travel", "employees": "100-250", "campaign": "c14", "revenue": "<500K"}
+{"category": "fashion", "employees": "25-100", "campaign": "c13", "revenue": "250-500M"}
+{"category": "sundries", "employees": "10000+", "campaign": "c5", "revenue": "250-500M"}
+{"category": "fashion", "employees": "25-100", "campaign": "c13", "revenue": "5-50M"}
+{"category": "travel", "employees": "25-100", "campaign": "c14", "revenue": "500K-5M"}
+{"category": "travel", "employees": "10000+", "campaign": "c19", "revenue": "<500K"}
+{"category": "electronics", "employees": "250-1000", "campaign": "c11", "revenue": "50-250M"}
+{"category": "fashion", "employees": "1000-5000", "campaign": "c24", "revenue": "<500K"}
+{"category": "magical", "employees": "1000-5000", "campaign": "c17", "revenue": "5-50M"}
+{"category": "sundries", "employees": "250-1000", "campaign": "c16", "revenue": "500M+"}
+{"category": "travel", "employees": "250-1000", "campaign": "c19", "revenue": "500M+"}
+{"category": "fashion", "employees": "250-1000", "campaign": "c18", "revenue": "5-50M"}
+{"category": "electronics", "employees": "0-25", "campaign": "c13", "revenue": "500M+"}
+{"category": "travel", "employees": "0-25", "campaign": "c5", "revenue": "500K-5M"}
+{"category": "electronics", "employees": "25-100", "campaign": "c1", "revenue": "500M+"}
+{"category": "sundries", "employees": "5000-10000", "campaign": "c10", "revenue": "50-250M"}
+{"category": "electronics", "employees": "25-100", "campaign": "c2", "revenue": "500M+"}
+{"category": "magical", "employees": "25-100", "campaign": "c19", "revenue": "500M+"}
+{"category": "fashion", "employees": "1000-5000", "campaign": "c14", "revenue": "250-500M"}
+{"category": "sundries", "employees": "100-250", "campaign": "c19", "revenue": "5-50M"}
+{"category": "travel", "employees": "5000-10000", "campaign": "c6", "revenue": "<500K"}
+{"category": "media", "employees": "5000-10000", "campaign": "c18", "revenue": "50-250M"}
+{"category": "magical", "employees": "1000-5000", "campaign": "c15", "revenue": "5-50M"}
+{"category": "sundries", "employees": "100-250", "campaign": "c9", "revenue": "250-500M"}
+{"category": "travel", "employees": "5000-10000", "campaign": "c22", "revenue": "250-500M"}
+{"category": "media", "employees": "10000+", "campaign": "c15", "revenue": "50-250M"}
+{"category": "magical", "employees": "10000+", "campaign": "c12", "revenue": "<500K"}
+{"category": "media", "employees": "1000-5000", "campaign": "c13", "revenue": "250-500M"}
+{"category": "travel", "employees": "250-1000", "campaign": "c2", "revenue": "500M+"}
+{"category": "sundries", "employees": "5000-10000", "campaign": "c3", "revenue": "250-500M"}
+{"category": "media", "employees": "100-250", "campaign": "c11", "revenue": "250-500M"}
+{"category": "travel", "employees": "0-25", "campaign": "c18", "revenue": "500M+"}
+{"category": "sundries", "employees": "250-1000", "campaign": "c15", "revenue": "500M+"}
+{"category": "travel", "employees": "10000+", "campaign": "c20", "revenue": "250-500M"}
+{"category": "electronics", "employees": "0-25", "campaign": "c11", "revenue": "5-50M"}
+{"category": "sundries", "employees": "5000-10000", "campaign": "c14", "revenue": "500M+"}
+{"category": "magical", "employees": "250-1000", "campaign": "c6", "revenue": "5-50M"}
+{"category": "sundries", "employees": "1000-5000", "campaign": "c11", "revenue": "<500K"}
+{"category": "media", "employees": "250-1000", "campaign": "c7", "revenue": "50-250M"}
+{"category": "magical", "employees": "250-1000", "campaign": "c18", "revenue": "250-500M"}
+{"category": "sundries", "employees": "250-1000", "campaign": "c21", "revenue": "50-250M"}
+{"category": "magical", "employees": "0-25", "campaign": "c13", "revenue": "5-50M"}
+{"category": "travel", "employees": "100-250", "campaign": "c23", "revenue": "50-250M"}
+{"category": "magical", "employees": "0-25", "campaign": "c16", "revenue": "5-50M"}
+{"category": "media", "employees": "250-1000", "campaign": "c24", "revenue": "500M+"}
+{"category": "fashion", "employees": "0-25", "campaign": "c19", "revenue": "250-500M"}
+{"category": "travel", "employees": "1000-5000", "campaign": "c12", "revenue": "500M+"}
+{"category": "electronics", "employees": "250-1000", "campaign": "c18", "revenue": "500M+"}
+{"category": "fashion", "employees": "1000-5000", "campaign": "c8", "revenue": "5-50M"}
+{"category": "fashion", "employees": "0-25", "campaign": "c7", "revenue": "50-250M"}
+{"category": "electronics", "employees": "5000-10000", "campaign": "c16", "revenue": "250-500M"}
+{"category": "electronics", "employees": "100-250", "campaign": "c16", "revenue": "5-50M"}
+{"category": "electronics", "employees": "5000-10000", "campaign": "c11", "revenue": "500K-5M"}
+{"category": "fashion", "employees": "250-1000", "campaign": "c19", "revenue": "<500K"}
+{"category": "magical", "employees": "25-100", "campaign": "c13", "revenue": "<500K"}
+{"category": "travel", "employees": "10000+", "campaign": "c15", "revenue": "50-250M"}
+{"category": "sundries", "employees": "100-250", "campaign": "c25", "revenue": "5-50M"}
+{"category": "magical", "employees": "25-100", "campaign": "c2", "revenue": "500M+"}
+{"category": "electronics", "employees": "100-250", "campaign": "c9", "revenue": "5-50M"}
+{"category": "travel", "employees": "100-250", "campaign": "c21", "revenue": "5-50M"}
+{"category": "media", "employees": "100-250", "campaign": "c9", "revenue": "500K-5M"}
+{"category": "magical", "employees": "250-1000", "campaign": "c18", "revenue": "<500K"}
+{"category": "fashion", "employees": "100-250", "campaign": "c15", "revenue": "5-50M"}
+{"category": "travel", "employees": "5000-10000", "campaign": "c11", "revenue": "5-50M"}
+{"category": "travel", "employees": "10000+", "campaign": "c19", "revenue": "250-500M"}
+{"category": "sundries", "employees": "250-1000", "campaign": "c13", "revenue": "500K-5M"}
+{"category": "sundries", "employees": "0-25", "campaign": "c10", "revenue": "500M+"}
+{"category": "sundries", "employees": "10000+", "campaign": "c5", "revenue": "<500K"}
+{"category": "media", "employees": "0-25", "campaign": "c21", "revenue": "50-250M"}
+{"category": "media", "employees": "1000-5000", "campaign": "c24", "revenue": "500K-5M"}
+{"category": "electronics", "employees": "250-1000", "campaign": "c19", "revenue": "500M+"}
+{"category": "media", "employees": "10000+", "campaign": "c13", "revenue": "50-250M"}
+{"category": "sundries", "employees": "1000-5000", "campaign": "c12", "revenue": "500K-5M"}
+{"category": "fashion", "employees": "250-1000", "campaign": "c9", "revenue": "500M+"}
+{"category": "magical", "employees": "5000-10000", "campaign": "c13", "revenue": "250-500M"}
+{"category": "travel", "employees": "25-100", "campaign": "c7", "revenue": "500M+"}
+{"category": "travel", "employees": "0-25", "campaign": "c10", "revenue": "500K-5M"}
+{"category": "travel", "employees": "100-250", "campaign": "c11", "revenue": "50-250M"}
+{"category": "fashion", "employees": "100-250", "campaign": "c20", "revenue": "50-250M"}
