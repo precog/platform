@@ -142,6 +142,8 @@ trait TestShardService extends
 
   def jobManagerFactory(config: Configuration) = jobManager
 
+  def clock = Clock.System
+
   import java.nio.ByteBuffer
 
   implicit val queryResultByteChunkTranscoder =

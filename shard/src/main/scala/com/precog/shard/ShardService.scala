@@ -31,6 +31,7 @@ import daze._
 
 import akka.dispatch.{Future, Promise}
 
+import blueeyes.util.Clock
 import blueeyes.json._
 import blueeyes.bkka.{AkkaDefaults, Stoppable}
 import blueeyes.core.data._
@@ -54,7 +55,7 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
 
-case class ShardState(queryExecutorFactory: AsyncQueryExecutorFactory, apiKeyManager: APIKeyManager[Future], jobManager: JobManager[Future])
+case class ShardState(queryExecutorFactory: AsyncQueryExecutorFactory, apiKeyManager: APIKeyManager[Future], jobManager: JobManager[Future], clock: Clock)
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
@@ -75,6 +76,8 @@ trait ShardService extends
   def accountManagerFactory(config: Configuration): BasicAccountManager[Future]
 
   def jobManagerFactory(config: Configuration): JobManager[Future]
+
+  def clock: Clock
 
   // TODO: maybe some of these implicits should be moved, but for now i
   // don't have the patience to figure out where.
@@ -159,15 +162,17 @@ trait ShardService extends
             ShardState(
               queryExecutorFactory,
               apiKeyManager,
-              jobManager
+              jobManager,
+              clock
             )
           }
         } ->
-        request { case ShardState(queryExecutorFactory, apiKeyManager, jobManager) =>
+        request { case ShardState(queryExecutorFactory, apiKeyManager, jobManager, clock) =>
           apiKey[ByteChunk, HttpResponse[ByteChunk]](apiKeyManager) {
             path("/analytics/queries") {
               path("'jobId") {
-                get(new AsyncQueryServiceHandler(jobManager))
+                get(new AsyncQueryServiceHandler(jobManager)) ~
+                delete(new QueryDeleteHandler(jobManager, clock))
               }
             }
           } ~
