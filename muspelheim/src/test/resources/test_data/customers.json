@@ -1,301 +1,100 @@
-[{
-  "userId":12351,
-  "income":116000
-},{
-  "userId":12445,
-  "income":10000
-},{
-  "userId":12543,
-  "income":220000
-},{
-  "userId":12352,
-  "income":250000
-},{
-  "userId":12345,
-  "income":250000
-},{
-  "userId":12492,
-  "income":10000
-},{
-  "userId":12545,
-  "income":42000
-},{
-  "userId":12386,
-  "income":201000
-},{
-  "userId":12349,
-  "income":10000
-},{
-  "userId":12515,
-  "income":250000
-},{
-  "userId":12349,
-  "income":181000
-},{
-  "userId":12345,
-  "income":10000
-},{
-  "userId":12354,
-  "income":250000
-},{
-  "userId":12422,
-  "income":250000
-},{
-  "userId":12532,
-  "income":95000
-},{
-  "userId":12345,
-  "income":250000
-},{
-  "userId":12473,
-  "income":211000
-},{
-  "userId":12371,
-  "income":10000
-},{
-  "userId":12545,
-  "income":120000
-},{
-  "userId":12345,
-  "income":10000
-},{
-  "userId":12513,
-  "income":250000
-},{
-  "userId":12345,
-  "income":165000
-},{
-  "userId":12452,
-  "income":147000
-},{
-  "userId":12345,
-  "income":130000
-},{
-  "userId":12367,
-  "income":226000
-},{
-  "userId":12545,
-  "income":46000
-},{
-  "userId":12476,
-  "income":250000
-},{
-  "userId":12545,
-  "income":204000
-},{
-  "userId":12462,
-  "income":10000
-},{
-  "userId":12545,
-  "income":10000
-},{
-  "userId":12545,
-  "income":10000
-},{
-  "userId":12545,
-  "income":153000
-},{
-  "userId":12345,
-  "income":231000
-},{
-  "userId":12525,
-  "income":112000
-},{
-  "userId":12345,
-  "income":110000
-},{
-  "userId":12472,
-  "income":128000
-},{
-  "userId":12345,
-  "income":250000
-},{
-  "userId":12345,
-  "income":214000
-},{
-  "userId":12505,
-  "income":204000
-},{
-  "userId":12545,
-  "income":250000
-},{
-  "userId":12345,
-  "income":10000
-},{
-  "userId":12417,
-  "income":245000
-},{
-  "userId":12545,
-  "income":250000
-},{
-  "userId":12491,
-  "income":250000
-},{
-  "userId":12371,
-  "income":10000
-},{
-  "userId":12345,
-  "income":70000
-},{
-  "userId":12345,
-  "income":15000
-},{
-  "userId":12545,
-  "income":142000
-},{
-  "userId":12345,
-  "income":226000
-},{
-  "userId":12345,
-  "income":10000
-},{
-  "userId":12545,
-  "income":250000
-},{
-  "userId":12545,
-  "income":78000
-},{
-  "userId":12528,
-  "income":245000
-},{
-  "userId":12515,
-  "income":53000
-},{
-  "userId":12371,
-  "income":250000
-},{
-  "userId":12513,
-  "income":93000
-},{
-  "userId":12451,
-  "income":250000
-},{
-  "userId":12345,
-  "income":250000
-},{
-  "userId":12345,
-  "income":250000
-},{
-  "userId":12345,
-  "income":115000
-},{
-  "userId":12345,
-  "income":190000
-},{
-  "userId":12396,
-  "income":10000
-},{
-  "userId":12519,
-  "income":10000
-},{
-  "userId":12345,
-  "income":82000
-},{
-  "userId":12368,
-  "income":95000
-},{
-  "userId":12434,
-  "income":158000
-},{
-  "userId":12345,
-  "income":248000
-},{
-  "userId":12345,
-  "income":126000
-},{
-  "userId":12345,
-  "income":166000
-},{
-  "userId":12362,
-  "income":250000
-},{
-  "userId":12345,
-  "income":10000
-},{
-  "userId":12543,
-  "income":10000
-},{
-  "userId":12345,
-  "income":79000
-},{
-  "userId":12463,
-  "income":105000
-},{
-  "userId":12345,
-  "income":247000
-},{
-  "userId":12375,
-  "income":250000
-},{
-  "userId":12399,
-  "income":186000
-},{
-  "userId":12545,
-  "income":129000
-},{
-  "userId":12407,
-  "income":250000
-},{
-  "userId":12345,
-  "income":30000
-},{
-  "userId":12484,
-  "income":184000
-},{
-  "userId":12345,
-  "income":40000
-},{
-  "userId":12545,
-  "income":250000
-},{
-  "userId":12345,
-  "income":250000
-},{
-  "userId":12345,
-  "income":151000
-},{
-  "userId":12545,
-  "income":85000
-},{
-  "userId":12374,
-  "income":98000
-},{
-  "userId":12545,
-  "income":73000
-},{
-  "userId":12345,
-  "income":124000
-},{
-  "userId":12545,
-  "income":168000
-},{
-  "userId":12469,
-  "income":224000
-},{
-  "userId":12345,
-  "income":10000
-},{
-  "userId":12345,
-  "income":218000
-},{
-  "userId":12545,
-  "income":123000
-},{
-  "userId":12545,
-  "income":47000
-},{
-  "userId":12403,
-  "income":250000
-},{
-  "userId":12345,
-  "income":64000
-},{
-  "userId":12463,
-  "income":10000
-},{
-  "userId":12348,
-  "income":250000
-},{
-  "userId":12491,
-  "income":24000
-}]
+{"userId": 12351, "income": 116000}
+{"userId": 12445, "income": 10000}
+{"userId": 12543, "income": 220000}
+{"userId": 12352, "income": 250000}
+{"userId": 12345, "income": 250000}
+{"userId": 12492, "income": 10000}
+{"userId": 12545, "income": 42000}
+{"userId": 12386, "income": 201000}
+{"userId": 12349, "income": 10000}
+{"userId": 12515, "income": 250000}
+{"userId": 12349, "income": 181000}
+{"userId": 12345, "income": 10000}
+{"userId": 12354, "income": 250000}
+{"userId": 12422, "income": 250000}
+{"userId": 12532, "income": 95000}
+{"userId": 12345, "income": 250000}
+{"userId": 12473, "income": 211000}
+{"userId": 12371, "income": 10000}
+{"userId": 12545, "income": 120000}
+{"userId": 12345, "income": 10000}
+{"userId": 12513, "income": 250000}
+{"userId": 12345, "income": 165000}
+{"userId": 12452, "income": 147000}
+{"userId": 12345, "income": 130000}
+{"userId": 12367, "income": 226000}
+{"userId": 12545, "income": 46000}
+{"userId": 12476, "income": 250000}
+{"userId": 12545, "income": 204000}
+{"userId": 12462, "income": 10000}
+{"userId": 12545, "income": 10000}
+{"userId": 12545, "income": 10000}
+{"userId": 12545, "income": 153000}
+{"userId": 12345, "income": 231000}
+{"userId": 12525, "income": 112000}
+{"userId": 12345, "income": 110000}
+{"userId": 12472, "income": 128000}
+{"userId": 12345, "income": 250000}
+{"userId": 12345, "income": 214000}
+{"userId": 12505, "income": 204000}
+{"userId": 12545, "income": 250000}
+{"userId": 12345, "income": 10000}
+{"userId": 12417, "income": 245000}
+{"userId": 12545, "income": 250000}
+{"userId": 12491, "income": 250000}
+{"userId": 12371, "income": 10000}
+{"userId": 12345, "income": 70000}
+{"userId": 12345, "income": 15000}
+{"userId": 12545, "income": 142000}
+{"userId": 12345, "income": 226000}
+{"userId": 12345, "income": 10000}
+{"userId": 12545, "income": 250000}
+{"userId": 12545, "income": 78000}
+{"userId": 12528, "income": 245000}
+{"userId": 12515, "income": 53000}
+{"userId": 12371, "income": 250000}
+{"userId": 12513, "income": 93000}
+{"userId": 12451, "income": 250000}
+{"userId": 12345, "income": 250000}
+{"userId": 12345, "income": 250000}
+{"userId": 12345, "income": 115000}
+{"userId": 12345, "income": 190000}
+{"userId": 12396, "income": 10000}
+{"userId": 12519, "income": 10000}
+{"userId": 12345, "income": 82000}
+{"userId": 12368, "income": 95000}
+{"userId": 12434, "income": 158000}
+{"userId": 12345, "income": 248000}
+{"userId": 12345, "income": 126000}
+{"userId": 12345, "income": 166000}
+{"userId": 12362, "income": 250000}
+{"userId": 12345, "income": 10000}
+{"userId": 12543, "income": 10000}
+{"userId": 12345, "income": 79000}
+{"userId": 12463, "income": 105000}
+{"userId": 12345, "income": 247000}
+{"userId": 12375, "income": 250000}
+{"userId": 12399, "income": 186000}
+{"userId": 12545, "income": 129000}
+{"userId": 12407, "income": 250000}
+{"userId": 12345, "income": 30000}
+{"userId": 12484, "income": 184000}
+{"userId": 12345, "income": 40000}
+{"userId": 12545, "income": 250000}
+{"userId": 12345, "income": 250000}
+{"userId": 12345, "income": 151000}
+{"userId": 12545, "income": 85000}
+{"userId": 12374, "income": 98000}
+{"userId": 12545, "income": 73000}
+{"userId": 12345, "income": 124000}
+{"userId": 12545, "income": 168000}
+{"userId": 12469, "income": 224000}
+{"userId": 12345, "income": 10000}
+{"userId": 12345, "income": 218000}
+{"userId": 12545, "income": 123000}
+{"userId": 12545, "income": 47000}
+{"userId": 12403, "income": 250000}
+{"userId": 12345, "income": 64000}
+{"userId": 12463, "income": 10000}
+{"userId": 12348, "income": 250000}
+{"userId": 12491, "income": 24000}
