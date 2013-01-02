@@ -130,7 +130,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
 trait EvaluatorSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
     with StdLib[M]
-    with MemoryDatasetConsumer[M] { self =>
+    with LongIdMemoryDatasetConsumer[M] { self =>
   
   import Function._
   

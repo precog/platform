@@ -22,6 +22,7 @@ package table
 package mongo
 
 import akka.dispatch.{Await, Future, Promise}
+import akka.util.Duration
 
 import blueeyes.json.{JArray, JObject, JParser}
 import blueeyes.persistence.mongo.RealMongoSpecSupport
@@ -33,6 +34,7 @@ import com.precog.bytecode._
 import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
+import com.precog.daze.StringIdMemoryDatasetConsumer
 import com.precog.muspelheim.ParseEvalStackSpecs
 import com.precog.yggdrasil.actor.StandaloneShardSystemConfig
 import com.precog.yggdrasil.util.IdSourceConfig
@@ -48,6 +50,7 @@ class MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
     with MongoColumnarTableModule
     with RealMongoSpecSupport
     with Logging
+    with StringIdMemoryDatasetConsumer[Future]
 { self =>
 
   class YggConfig extends ParseEvalStackSpecConfig
@@ -58,6 +61,8 @@ class MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   object yggConfig extends YggConfig
 
+  override def controlTimeout = Duration(10, "minutes")      // it's just unreasonable to run tests longer than this
+
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
@@ -67,8 +72,6 @@ class MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
   object Table extends TableCompanion {
     import trans._
 
-    val TruncatedSlashes = """^/(.*)/$""".r
-
     def dbAuthParams = Map.empty
     val mongo = self.realMongo
     override def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
@@ -76,9 +79,7 @@ class MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
       val pathFixTS = Map1(Leaf(Source), CF1P("fix_paths") {
         case orig: StrColumn => new StrColumn {
           def apply(row: Int): String = {
-            val newPath = orig(row) match {
-              case TruncatedSlashes(inner) => "/test/" + inner.replace('/', '_')
-            }
+            val newPath = "/test/" + orig(row).replaceAll("^/|/$", "").replace('/', '_')
             logger.debug("Fixed %s to %s".format(orig(row), newPath))
             newPath
           }

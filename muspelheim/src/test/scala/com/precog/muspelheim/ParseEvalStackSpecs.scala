@@ -97,32 +97,35 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val idSource = new FreshAtomicIdSource
   }
 
-  include(
-    new EvalStackSpecs {
-      def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
+  object EvalUtil {
+    def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
+      parseEvalLogger.debug("Beginning evaluation of query: " + str)
       
-      def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
-        parseEvalLogger.debug("Beginning evaluation of query: " + str)
-        
-        val preForest = compile(str)
-        val forest = preForest filter { _.errors.isEmpty }
-        
-        forest must haveSize(1) or {
-          forall(preForest) { tree =>
-            tree.errors must beEmpty
-          }
-        }
-        
-        val tree = forest.head
-        
-        val Right(dag) = decorate(emit(tree))
-        consumeEval("dummyAPIKey", dag, Path.Root) match {
-          case Success(result) => 
-            parseEvalLogger.debug("Evaluation complete for query: " + str)
-            result
-          case Failure(error) => throw error
+      val preForest = compile(str)
+      val forest = preForest filter { _.errors.isEmpty }
+      
+      forest must haveSize(1) or {
+        forall(preForest) { tree =>
+          tree.errors must beEmpty
         }
       }
+      
+      val tree = forest.head
+      
+      val Right(dag) = decorate(emit(tree))
+      consumeEval("dummyAPIKey", dag, Path.Root) match {
+        case Success(result) =>
+          parseEvalLogger.debug("Evaluation complete for query: " + str)
+          result
+        case Failure(error) => throw error
+      }
+    }
+  }
+
+  include(
+    new EvalStackSpecs[IdType] {
+      def eval(str: String, debug: Boolean = false): Set[SValue] = EvalUtil.evalE(str, debug) map { _._2 }
+      def evalE(str: String, debug: Boolean = false): Set[SEvent] = EvalUtil.evalE(str, debug)
     }
   )
   

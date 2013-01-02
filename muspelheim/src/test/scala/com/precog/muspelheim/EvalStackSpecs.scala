@@ -25,14 +25,38 @@ import blueeyes.json._
 import com.precog.common._
 import org.specs2.mutable._
 
-trait EvalStackSpecs extends Specification {
+trait EvalStackSpecs[IdType] extends Specification {
   def eval(str: String, debug: Boolean = false): Set[SValue]
-  def evalE(str: String, debug: Boolean = false): Set[(Vector[Long], SValue)]
+  def evalE(str: String, debug: Boolean = false): Set[(Vector[IdType], SValue)]
 
   implicit def add_~=(d: Double) = new AlmostEqual(d)
   implicit val precision = Precision(0.000000001)
 
   "the full stack" should {
+    "count all input datasets" >> {
+      "clicks" >> {
+        eval("count(//clicks)") mustEqual Set(SDecimal(100))
+      }
+
+      "views" >> {
+        eval("count(//views)") mustEqual Set(SDecimal(100))
+      }
+
+      "summer_games" >> {
+        "athletes" >> {
+          eval("count(//summer_games/athletes)") mustEqual Set(SDecimal(10886))
+        }
+
+        "historic_medals" >> {
+          eval("count(//summer_games/historic_medals)") mustEqual Set(SDecimal(13999))
+        }
+
+        "london_medals" >> {
+          eval("count(//summer_games/london_medals)") mustEqual Set(SDecimal(1019))
+        }
+      }
+    }
+
     "count a filtered clicks dataset" in {
       val input = """
         | clicks := //clicks
@@ -582,16 +606,15 @@ trait EvalStackSpecs extends Specification {
     // Regression test for #39652091
     "call union on two dispatches of the same function" in {
       val input = """
-        | medals := //summer_games/london_medals
+        | medals := //summer_games/london_medals   
         |
-        | f(x) :=
-        |   medals' := medals where medals.Country = x
-        |   medals'' := new medals'
+        | f(x) := 
+        |    medals' := medals where medals.Country = x
+        |    medals'' := new medals'                                                                           
+        |    medals'' ~ medals'
+        |    {a: medals'.Country , b: medals''.Country} where medals'.Total = medals''.Total  
         |
-        |   medals'' ~ medals'
-        |     {a: medals'.Country, b: medals''.Country} where medals'.Total = medals''.Total
-        |
-        | f("India") union f("Canada")
+        | f("India") union f("Canada")   
       """.stripMargin
 
       val results = evalE(input)
@@ -2440,30 +2463,6 @@ trait EvalStackSpecs extends Specification {
         eval(input) must haveSize(100)
       }
 
-      "handle query on empty array" >> {
-        val input = """
-          //test/empty_array
-        """.stripMargin
-
-        eval(input) mustEqual Set(SArray(Vector()), SObject(Map("foo" -> SArray(Vector()))))
-      }
-      
-      "handle query on empty object" >> {
-        val input = """
-          //test/empty_object
-        """.stripMargin
-
-        eval(input) mustEqual Set(SObject(Map()), SObject(Map("foo" -> SObject(Map()))))
-      }
-
-      "handle query on null" >> {
-        val input = """
-          //test/null
-        """.stripMargin
-
-        eval(input) mustEqual Set(SNull, SObject(Map("foo" -> SNull)))
-      }
-
       "handle filter on null" >> {
         val input = """
           //fastspring_nulls where (//fastspring_nulls).endDate = null
@@ -2695,6 +2694,37 @@ trait EvalStackSpecs extends Specification {
         | """.stripMargin
         
       evalE(input) must not(beEmpty)
+    }
+  }
+}
+
+trait NonObjectStackSpecs extends Specification {
+  def eval(str: String, debug: Boolean = false): Set[SValue]
+  def evalE(str: String, debug: Boolean = false): Set[(Vector[Long], SValue)]
+
+  "Non-object values" should {
+    "handle query on empty array" >> {
+      val input = """
+          //test/empty_array
+        """.stripMargin
+
+      eval(input) mustEqual Set(SArray(Vector()), SObject(Map("foo" -> SArray(Vector()))))
+    }
+    
+    "handle query on empty object" >> {
+      val input = """
+          //test/empty_object
+        """.stripMargin
+
+      eval(input) mustEqual Set(SObject(Map()), SObject(Map("foo" -> SObject(Map()))))
+    }
+
+    "handle query on null" >> {
+      val input = """
+          //test/null
+        """.stripMargin
+
+      eval(input) mustEqual Set(SNull, SObject(Map("foo" -> SNull)))
     }
   }
 }

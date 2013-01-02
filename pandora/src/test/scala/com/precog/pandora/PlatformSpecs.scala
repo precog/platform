@@ -72,7 +72,8 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-object PlatformSpecs extends ParseEvalStackSpecs[Future] 
+object PlatformSpecs extends ParseEvalStackSpecs[Future]
+    with LongIdMemoryDatasetConsumer[Future]
     with JDBMColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 
@@ -117,6 +118,14 @@ object PlatformSpecs extends ParseEvalStackSpecs[Future]
     //override def apply(slices: StreamT[M, Slice]) = super.apply(slices map { s => if (s.size != 96) s else sys.error("Slice size seen as 96 for the first time.") })
     implicit val geq: scalaz.Equal[Int] = intInstance
   }
+
+  include(
+    new NonObjectStackSpecs {
+      def eval(str: String, debug: Boolean = false): Set[SValue] = EvalUtil.evalE(str, debug) map { _._2 }
+      def evalE(str: String, debug: Boolean = false): Set[SEvent] = EvalUtil.evalE(str, debug)
+    }
+  )
+      
 
   def startup() {
     // start storage shard 
