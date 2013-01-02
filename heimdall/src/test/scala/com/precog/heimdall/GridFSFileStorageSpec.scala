@@ -31,6 +31,8 @@ import scalaz.syntax.monad._
 import scalaz.syntax.copointed._
 
 class GridFSFileStorageSpec extends Specification with RealMongoSpecSupport {
+  override def defaultPort = 47017
+
   include(new FileStorageSpec[Need] {
     val M: Monad[Need] with Copointed[Need] = Need.need
     lazy val fs = GridFSFileStorage(realMongo.getDB("gridFsFileStorageSpec"))(M)
