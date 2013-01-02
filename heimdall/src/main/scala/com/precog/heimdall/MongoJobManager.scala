@@ -31,6 +31,7 @@ trait ManagedMongoJobManagerModule {
   implicit def executionContext: ExecutionContext
 
   def jobManager(config: Configuration): (Mongo, JobManager[Future]) = {
+    import blueeyes.bkka.AkkaTypeClasses._
     import MongoJobManagerSettings.default
 
     val mongo = RealMongo(config.detach("mongo"))
@@ -43,7 +44,7 @@ trait ManagedMongoJobManagerModule {
 
     val settings = MongoJobManagerSettings(timeout, jobs, messages)
 
-    val fs = GridFSFileStorage(mongo.underlying.getDB(database))
+    val fs = GridFSFileStorage[Future](config.detach("mongo"))
 
     (mongo, new MongoJobManager(mongo.database(database), settings, fs))
   }
