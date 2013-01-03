@@ -72,7 +72,7 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-trait PlatformSpec extends ParseEvalStackSpecs[Future] 
+trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future] 
     with JDBMColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 

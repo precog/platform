@@ -20,9 +20,10 @@
 package com.precog
 package pandora
 
+import com.precog.muspelheim.EvalStackSpecs
 import com.precog.yggdrasil._
 
-class BasicValidationSpecs extends PlatformSpec {
+trait BasicValidationSpecs extends EvalStackSpecs {
   "Fundamental stack support" should {
     "count a filtered clicks dataset" in {
       val input = """
@@ -131,3 +132,5 @@ class BasicValidationSpecs extends PlatformSpec {
     }
   }
 }
+
+class JDBMBasicValidationSpecs extends BasicValidationSpecs with JDBMPlatformSpecs

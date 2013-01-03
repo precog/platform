@@ -20,9 +20,10 @@
 package com.precog
 package pandora
 
+import com.precog.muspelheim.EvalStackSpecs
 import com.precog.yggdrasil._
 
-class RankSpecs extends PlatformSpec {
+trait RankSpecs extends EvalStackSpecs {
   "Rank processing" should {
     "perform filter based on rank" >> {
       val input = """
@@ -409,3 +410,5 @@ class RankSpecs extends PlatformSpec {
     }
   }
 }
+
+class JDBMRankSpecs extends RankSpecs with JDBMPlatformSpecs

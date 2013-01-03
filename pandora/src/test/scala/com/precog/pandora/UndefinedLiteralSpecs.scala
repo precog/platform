@@ -20,7 +20,9 @@
 package com.precog
 package pandora
 
-class UndefinedLiteralSpecs extends PlatformSpec {
+import com.precog.muspelheim.EvalStackSpecs
+
+trait UndefinedLiteralSpecs extends EvalStackSpecs {
   "undefined literals be handled properly in" >> {
     "binary operation on load with undefined" >> {
       val input = """
@@ -83,3 +85,6 @@ class UndefinedLiteralSpecs extends PlatformSpec {
     }
   }
 }
+
+class JDBMUndefinedLiteralSpecs extends UndefinedLiteralSpecs with JDBMPlatformSpecs
+

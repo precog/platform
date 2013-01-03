@@ -65,7 +65,8 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
     with StorageModule[M]
     with MemoryDatasetConsumer[M] 
-    with IdSourceScannerModule[M] { self =>
+    with IdSourceScannerModule[M]
+    with EvalStackSpecs { self =>
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 
@@ -121,12 +122,6 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
       case Failure(error) => throw error
     }
   }
-
-//  include(
-//    new EvalStackSpecs {
-
-//    }
-//  )
 }
 
 // vim: set ts=4 sw=4 et:
