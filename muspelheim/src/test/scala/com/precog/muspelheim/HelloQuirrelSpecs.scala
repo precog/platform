@@ -216,6 +216,13 @@ trait HelloQuirrelSpecs extends EvalStackSpecs {
         eval("//fastspring_mixed_type") must haveSize(2)
       }
 
+      "count the obnoxiously large dataset" >> {
+        "<root>" >> {
+          eval("count((//obnoxious).v)") mustEqual Set(SDecimal(100000))
+        }
+      }
+
+
       // FIXME: This is no longer proper syntax.
 //      "handle chained characteristic functions" in {
 //        val input = """
