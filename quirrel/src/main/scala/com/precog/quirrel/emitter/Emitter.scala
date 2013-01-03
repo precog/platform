@@ -444,7 +444,10 @@ trait Emitter extends AST
             case (vector, (provenance, fields)) =>
               val singles = fields.map(field2ObjInstr)
 
-              val joinInstr = emitInstr(if (provenance == ValueProvenance) Map2Cross(JoinObject) else Map2Match(JoinObject))
+              val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
+                val resolved = e.subResolve(provenance)
+                emitInstr(if (resolved == ValueProvenance) Map2Cross(JoinObject) else Map2Match(JoinObject))(e)
+              }
 
               val joins = Vector.fill(singles.length - 1)(joinInstr)
 
@@ -467,7 +470,10 @@ trait Emitter extends AST
               val singles = elements.map { case (expr, idx) => emitExpr(expr, dispatches) >> emitInstr(Map1(WrapArray)) }
               val indices = elements.map(_._2)
 
-              val joinInstr = emitInstr(if (provenance == ValueProvenance) Map2Cross(JoinArray) else Map2Match(JoinArray))
+              val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
+                val resolved = e.subResolve(provenance)
+                emitInstr(if (resolved == ValueProvenance) Map2Cross(JoinArray) else Map2Match(JoinArray))(e)
+              }
 
               val joins = Vector.fill(singles.length - 1)(joinInstr)
 
