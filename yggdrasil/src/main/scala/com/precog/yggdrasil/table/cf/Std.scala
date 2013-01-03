@@ -78,7 +78,7 @@ object std {
       def apply(row: Int) = c1(row) && c2(row)
     }
   }
-
+  
   val Or = CF2P("builtin::ct::or") {
     case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
       def apply(row: Int) = c1(row) || c2(row)
