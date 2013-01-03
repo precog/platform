@@ -1,301 +1,100 @@
-[{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":48,
-  "userId":12345
-},{
-  "duration":300,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":137,
-  "userId":12345
-},{
-  "duration":292,
-  "userId":12345
-},{
-  "duration":4,
-  "userId":12348
-},{
-  "duration":1,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12348
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":95,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12346
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":300,
-  "userId":12352
-},{
-  "duration":7,
-  "userId":12345
-},{
-  "duration":13,
-  "userId":12358
-},{
-  "duration":1,
-  "userId":12346
-},{
-  "duration":225,
-  "userId":12355
-},{
-  "duration":300,
-  "userId":12345
-},{
-  "duration":115,
-  "userId":12345
-},{
-  "duration":153,
-  "userId":12360
-},{
-  "duration":161,
-  "userId":12345
-},{
-  "duration":57,
-  "userId":12345
-},{
-  "duration":300,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":1,
-  "userId":12356
-},{
-  "duration":260,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":300,
-  "userId":12345
-},{
-  "duration":300,
-  "userId":12360
-},{
-  "duration":300,
-  "userId":12345
-},{
-  "duration":65,
-  "userId":12358
-},{
-  "duration":300,
-  "userId":12345
-},{
-  "duration":165,
-  "userId":12359
-},{
-  "duration":120,
-  "userId":12345
-},{
-  "duration":34,
-  "userId":12360
-},{
-  "duration":1,
-  "userId":12345
-},{
-  "duration":156,
-  "userId":12355
-},{
-  "duration":299,
-  "userId":12345
-},{
-  "duration":52,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12358
-},{
-  "duration":171,
-  "userId":12346
-},{
-  "duration":117,
-  "userId":12345
-},{
-  "duration":47,
-  "userId":12360
-},{
-  "duration":142,
-  "userId":12355
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":1,
-  "userId":12345
-},{
-  "duration":168,
-  "userId":12345
-},{
-  "duration":6,
-  "userId":12360
-},{
-  "duration":1,
-  "userId":12345
-},{
-  "duration":297,
-  "userId":12349
-},{
-  "duration":1,
-  "userId":12345
-},{
-  "duration":300,
-  "userId":12350
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":252,
-  "userId":12345
-},{
-  "duration":300,
-  "userId":12360
-},{
-  "duration":129,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":38,
-  "userId":12357
-},{
-  "duration":27,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":1,
-  "userId":12349
-},{
-  "duration":63,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12357
-},{
-  "duration":1,
-  "userId":12345
-},{
-  "duration":300,
-  "userId":12346
-},{
-  "duration":41,
-  "userId":12360
-},{
-  "duration":1,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12345
-},{
-  "duration":103,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12356
-},{
-  "duration":1,
-  "userId":12360
-},{
-  "duration":43,
-  "userId":12360
-},{
-  "duration":51,
-  "userId":12345
-},{
-  "duration":274,
-  "userId":12360
-},{
-  "duration":138,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12356
-},{
-  "duration":42,
-  "userId":12347
-},{
-  "duration":68,
-  "userId":12358
-},{
-  "duration":42,
-  "userId":12352
-},{
-  "duration":300,
-  "userId":12354
-},{
-  "duration":234,
-  "userId":12358
-},{
-  "duration":300,
-  "userId":12345
-},{
-  "duration":300,
-  "userId":12352
-},{
-  "duration":1,
-  "userId":12353
-},{
-  "duration":1,
-  "userId":12345
-},{
-  "duration":10,
-  "userId":12355
-},{
-  "duration":300,
-  "userId":12353
-},{
-  "duration":50,
-  "userId":12345
-},{
-  "duration":22,
-  "userId":12357
-},{
-  "duration":20,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12353
-},{
-  "duration":73,
-  "userId":12354
-},{
-  "duration":210,
-  "userId":12351
-},{
-  "duration":1,
-  "userId":12345
-},{
-  "duration":1,
-  "userId":12359
-}]
+{"duration": 1, "userId": 12360}
+{"duration": 48, "userId": 12345}
+{"duration": 300, "userId": 12345}
+{"duration": 1, "userId": 12360}
+{"duration": 1, "userId": 12360}
+{"duration": 137, "userId": 12345}
+{"duration": 292, "userId": 12345}
+{"duration": 4, "userId": 12348}
+{"duration": 1, "userId": 12345}
+{"duration": 1, "userId": 12348}
+{"duration": 1, "userId": 12360}
+{"duration": 1, "userId": 12360}
+{"duration": 95, "userId": 12345}
+{"duration": 1, "userId": 12346}
+{"duration": 1, "userId": 12360}
+{"duration": 300, "userId": 12352}
+{"duration": 7, "userId": 12345}
+{"duration": 13, "userId": 12358}
+{"duration": 1, "userId": 12346}
+{"duration": 225, "userId": 12355}
+{"duration": 300, "userId": 12345}
+{"duration": 115, "userId": 12345}
+{"duration": 153, "userId": 12360}
+{"duration": 161, "userId": 12345}
+{"duration": 57, "userId": 12345}
+{"duration": 300, "userId": 12345}
+{"duration": 1, "userId": 12360}
+{"duration": 1, "userId": 12356}
+{"duration": 260, "userId": 12345}
+{"duration": 1, "userId": 12360}
+{"duration": 300, "userId": 12345}
+{"duration": 300, "userId": 12360}
+{"duration": 300, "userId": 12345}
+{"duration": 65, "userId": 12358}
+{"duration": 300, "userId": 12345}
+{"duration": 165, "userId": 12359}
+{"duration": 120, "userId": 12345}
+{"duration": 34, "userId": 12360}
+{"duration": 1, "userId": 12345}
+{"duration": 156, "userId": 12355}
+{"duration": 299, "userId": 12345}
+{"duration": 52, "userId": 12345}
+{"duration": 1, "userId": 12358}
+{"duration": 171, "userId": 12346}
+{"duration": 117, "userId": 12345}
+{"duration": 47, "userId": 12360}
+{"duration": 142, "userId": 12355}
+{"duration": 1, "userId": 12360}
+{"duration": 1, "userId": 12345}
+{"duration": 168, "userId": 12345}
+{"duration": 6, "userId": 12360}
+{"duration": 1, "userId": 12345}
+{"duration": 297, "userId": 12349}
+{"duration": 1, "userId": 12345}
+{"duration": 300, "userId": 12350}
+{"duration": 1, "userId": 12360}
+{"duration": 252, "userId": 12345}
+{"duration": 300, "userId": 12360}
+{"duration": 129, "userId": 12345}
+{"duration": 1, "userId": 12360}
+{"duration": 38, "userId": 12357}
+{"duration": 27, "userId": 12345}
+{"duration": 1, "userId": 12360}
+{"duration": 1, "userId": 12360}
+{"duration": 1, "userId": 12349}
+{"duration": 63, "userId": 12345}
+{"duration": 1, "userId": 12357}
+{"duration": 1, "userId": 12345}
+{"duration": 300, "userId": 12346}
+{"duration": 41, "userId": 12360}
+{"duration": 1, "userId": 12345}
+{"duration": 1, "userId": 12345}
+{"duration": 103, "userId": 12345}
+{"duration": 1, "userId": 12356}
+{"duration": 1, "userId": 12360}
+{"duration": 43, "userId": 12360}
+{"duration": 51, "userId": 12345}
+{"duration": 274, "userId": 12360}
+{"duration": 138, "userId": 12345}
+{"duration": 1, "userId": 12356}
+{"duration": 42, "userId": 12347}
+{"duration": 68, "userId": 12358}
+{"duration": 42, "userId": 12352}
+{"duration": 300, "userId": 12354}
+{"duration": 234, "userId": 12358}
+{"duration": 300, "userId": 12345}
+{"duration": 300, "userId": 12352}
+{"duration": 1, "userId": 12353}
+{"duration": 1, "userId": 12345}
+{"duration": 10, "userId": 12355}
+{"duration": 300, "userId": 12353}
+{"duration": 50, "userId": 12345}
+{"duration": 22, "userId": 12357}
+{"duration": 20, "userId": 12345}
+{"duration": 1, "userId": 12345}
+{"duration": 1, "userId": 12353}
+{"duration": 73, "userId": 12354}
+{"duration": 210, "userId": 12351}
+{"duration": 1, "userId": 12345}
+{"duration": 1, "userId": 12359}
