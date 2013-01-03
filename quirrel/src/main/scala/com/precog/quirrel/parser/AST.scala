@@ -406,6 +406,25 @@ trait AST extends Phases {
 
     def tree: Tree[Expr] = Tree.node(this, subForest)
     
+    /**
+     * Returns a trace for the ''entire'' tree from the root (not just
+     * this specific sub-expression).  Tracing is not really well-defined
+     * for sub-expressions sans-context, so this semantic makes some sense.
+     * It would arguably be better to build the trace from the root and then
+     * drill down to find this particular sub-expression.  That becomes
+     * problematic though as sub-expressions may appear multiple times in a
+     * single root trace.
+     */
+    lazy val trace: Tree[(Map[Formal, Expr], Expr)] = {
+      if (this eq root) {
+        buildTrace(Map())(root)
+      } else {
+        val back = root.trace
+        6 * 7         // SI-5455
+        back
+      }
+    }
+    
     override def toString: String = {
       val result = productIterator map {
         case ls: LineStream => "<%d:%d>".format(ls.lineNum, ls.colNum)

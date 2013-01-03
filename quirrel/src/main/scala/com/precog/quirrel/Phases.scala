@@ -19,8 +19,11 @@
  */
 package com.precog.quirrel
 
+import scalaz.Tree
+
 trait Phases {
   type Expr
+  type Formal
   type Error
 
   type ConditionTree
@@ -38,6 +41,8 @@ trait Phases {
   def bindNames(expr: Expr): Set[Error]
   def checkProvenance(expr: Expr): Set[Error]
   def inferBuckets(expr: Expr): Set[Error]
+  
+  def buildTrace(sigma: Map[Formal, Expr])(expr: Expr): Tree[(Map[Formal, Expr], Expr)]
   
   private[quirrel] def runPhasesInSequence(tree: Expr): Set[Error] =
     Phases.foldLeft(Set[Error]()) { _ ++ _(tree) }
