@@ -351,14 +351,36 @@ trait Slice { source =>
     })
   }
 
-  def deleteFields(prefixes: scala.collection.Set[CPathField]) = {
-    new Slice {
-      val size = source.size
-      val columns = source.columns filterNot {
-        case (ColumnRef(CPath(head @ CPathField(_), _ @ _*), _), _) => prefixes contains head
-        case _ => false
+  def deleteFields(prefixes: scala.collection.Set[CPathField]) = new Slice {
+    private val (removed, withoutPrefixes) = source.columns partition {
+      case (ColumnRef(CPath(head @ CPathField(_), _ @ _*), _), _) => prefixes contains head
+      case _ => false
+    }
+
+    private val becomeEmpty = BitSetUtil.filteredRange(0, source.size) {
+      i => Column.isDefinedAt(removed.values.toArray, i) && !Column.isDefinedAt(withoutPrefixes.values.toArray, i)
+    }
+
+    private val ref = ColumnRef(CPath.Identity, CEmptyObject)
+
+    // The object might have become empty. Make the
+    // EmptyObjectColumn defined at the row position.
+    private lazy val emptyObjectColumn = withoutPrefixes get ref map {
+      c => new EmptyObjectColumn {
+        def isDefinedAt(row: Int) = c.isDefinedAt(row) || becomeEmpty(row)
+      }
+    } getOrElse {
+      new EmptyObjectColumn {
+        def isDefinedAt(row: Int) = becomeEmpty(row)
       }
     }
+
+    val size = source.size
+    val columns =
+      if (becomeEmpty.isEmpty)
+        withoutPrefixes
+      else
+        withoutPrefixes + (ref -> emptyObjectColumn)
   }
 
   def typed(jtpe: JType): Slice = new Slice {
