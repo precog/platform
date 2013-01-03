@@ -685,7 +685,7 @@ trait AST extends Phases {
     }
   }
   
-  case class ExprWrapper(expr: Expr) {
+  private[quirrel] case class ExprWrapper(expr: Expr) {
     override def equals(a: Any): Boolean = a match {
       case ExprWrapper(expr2) => expr equalsIgnoreLoc expr2
       case _ => false
@@ -694,10 +694,16 @@ trait AST extends Phases {
     override def hashCode = expr.hashCodeIgnoreLoc
   }
   
-  object ast {    
-    sealed trait ExprLeafNode extends Expr with LeafNode
+  object ast {
+    /*
+     * The `Precedence*` traits exist only for the purpose of abstracting over
+     * various AST nodes in the precedence/associativity disambiguation framework.
+     * They should *not* be used for attributes mixed into multiple AST nodes.
+     */
+     
+    sealed trait PrecedenceLeafNode extends Expr with LeafNode
     
-    sealed trait ExprBinaryNode extends Expr with BinaryNode {
+    sealed trait PrecedenceBinaryNode extends Expr with BinaryNode {
       override def left: Expr
       override def right: Expr
       
@@ -706,15 +712,64 @@ trait AST extends Phases {
       override def children = List(left, right)
     }
     
-    sealed trait RelationExpr extends ExprBinaryNode
-    
-    sealed trait ExprUnaryNode extends Expr with UnaryNode {
+    sealed trait PrecedenceUnaryNode extends Expr with UnaryNode {
       override def child: Expr
 
       override def children = List(child)
     }
     
-    final case class Let(loc: LineStream, name: Identifier, params: Vector[String], left: Expr, right: Expr) extends ExprUnaryNode {
+    /*
+     * Overlapping ADT instances
+     */
+    
+    sealed trait NaryOp extends Expr {
+      def values: Vector[Expr]
+    }
+    
+    object NaryOp {
+      def unapply(op: NaryOp): Some[(LineStream, Vector[Expr])] =
+        Some((op.loc, op.values))
+    }
+     
+    sealed trait Literal extends Expr with NaryOp with PrecedenceLeafNode {
+      def values = Vector()
+    }
+    
+    object Literal {
+      def unapply(lit: Literal): Some[LineStream] = Some(lit.loc)
+    }
+    
+    sealed trait UnaryOp extends Expr with NaryOp {
+      def child: Expr
+      def values = Vector(child)
+    }
+    
+    object UnaryOp {
+      def unapply(un: UnaryOp): Some[(LineStream, Expr)] =
+        Some((un.loc, un.child))
+    }
+    
+    sealed trait BinaryOp extends Expr with NaryOp with PrecedenceBinaryNode {
+      def values = Vector(left, right)
+    }
+    
+    object BinaryOp {
+      def unapply(bin: BinaryOp): Some[(LineStream, Expr, Expr)] =
+        Some((bin.loc, bin.left, bin.right))
+    }
+    
+    sealed trait ComparisonOp extends BinaryOp
+    
+    object ComparisonOp {
+      def unapply(bin: ComparisonOp): Some[(LineStream, Expr, Expr)] =
+        Some((bin.loc, bin.left, bin.right))
+    }
+    
+    /*
+     * Raw AST nodes
+     */
+    
+    final case class Let(loc: LineStream, name: Identifier, params: Vector[String], left: Expr, right: Expr) extends PrecedenceUnaryNode {
       val sym = 'let
       
       val isPrefix = true
@@ -753,8 +808,6 @@ trait AST extends Phases {
       def vars: Set[TicId] = _vars()
       private[quirrel] def vars_=(vars: Set[TicId]) = _vars() = vars
       
-      lazy val criticalConditions = findCriticalConditions(this)
-      
       lazy val criticalConstraints = constraints filter {
         case TicVar(_, _) => false
         case _ => true
@@ -767,12 +820,12 @@ trait AST extends Phases {
       private[quirrel] def buckets_++=(spec: Map[Set[Dispatch], BucketSpec]) = _buckets ++= spec
     }
 
-    final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends ExprUnaryNode {
+    final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends Expr with UnaryOp with PrecedenceUnaryNode {
       val sym = 'import
       val isPrefix = true
     }
     
-    final case class New(loc: LineStream, child: Expr) extends ExprUnaryNode {
+    final case class New(loc: LineStream, child: Expr) extends Expr with PrecedenceUnaryNode {
       val sym = 'new
       val isPrefix = true
     }
@@ -785,7 +838,7 @@ trait AST extends Phases {
       override def children = List(in, to, from)
     }
     
-    final case class TicVar(loc: LineStream, name: TicId) extends ExprLeafNode {
+    final case class TicVar(loc: LineStream, name: TicId) extends PrecedenceLeafNode {
       val sym = 'ticvar
       
       private val _binding = attribute[VarBinding](bindNames)
@@ -793,28 +846,30 @@ trait AST extends Phases {
       private[quirrel] def binding_=(b: VarBinding) = _binding() = b
     }
     
-    final case class StrLit(loc: LineStream, value: String) extends ExprLeafNode {
+    final case class StrLit(loc: LineStream, value: String) extends Literal {
       val sym = 'str
     }
     
-    final case class NumLit(loc: LineStream, value: String) extends ExprLeafNode {
+    final case class NumLit(loc: LineStream, value: String) extends Literal {
       val sym = 'num
     }
     
-    final case class BoolLit(loc: LineStream, value: Boolean) extends ExprLeafNode {
+    final case class BoolLit(loc: LineStream, value: Boolean) extends Literal {
       val sym = 'bool
     }
     
-    final case class UndefinedLit(loc: LineStream) extends ExprLeafNode {
+    final case class UndefinedLit(loc: LineStream) extends Literal {
       val sym = 'undefined
     }
 
-    final case class NullLit(loc: LineStream) extends ExprLeafNode {
+    final case class NullLit(loc: LineStream) extends Literal {
       val sym = 'null
     }
     
-    final case class ObjectDef(loc: LineStream, props: Vector[(String, Expr)]) extends Expr {
+    final case class ObjectDef(loc: LineStream, props: Vector[(String, Expr)]) extends Expr with NaryOp {
       val sym = 'object
+      
+      def values = props map { _._2 }
       
       def form = {
         val opt = (props map { case (_, e) => 'name ~ e } reduceOption { _ ~ _ })
@@ -822,10 +877,10 @@ trait AST extends Phases {
         opt map { 'leftCurl ~ _ ~ 'rightCurl } getOrElse sym 
       }
       
-      def children = props map { _._2 } toList
+      def children = values.toList
     }
     
-    final case class ArrayDef(loc: LineStream, values: Vector[Expr]) extends Expr {
+    final case class ArrayDef(loc: LineStream, values: Vector[Expr]) extends Expr with NaryOp {
       val sym = 'array
       
       def form = {
@@ -837,26 +892,26 @@ trait AST extends Phases {
       def children = values.toList
     }
     
-    final case class Descent(loc: LineStream, child: Expr, property: String) extends ExprUnaryNode {
+    final case class Descent(loc: LineStream, child: Expr, property: String) extends Expr with UnaryOp with PrecedenceUnaryNode {
       val sym = 'descent
       val isPrefix = false
     }
     
-    final case class MetaDescent(loc: LineStream, child: Expr, property: String) extends ExprUnaryNode {
+    final case class MetaDescent(loc: LineStream, child: Expr, property: String) extends Expr with UnaryOp with PrecedenceUnaryNode {
       val sym = 'metaDescent
       val isPrefix = false
     }
     
-    final case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with Node {
+    final case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'deref
       
-      def form = left ~ 'leftBracket ~ right ~ 'rightBracket
-      
-      def children = left :: right :: Nil
+      override def form = left ~ 'leftBracket ~ right ~ 'rightBracket
     }
 
-    final case class Dispatch(loc: LineStream, name: Identifier, actuals: Vector[Expr]) extends Expr {
+    final case class Dispatch(loc: LineStream, name: Identifier, actuals: Vector[Expr]) extends Expr with NaryOp {
       val sym = 'dispatch
+      
+      def values = actuals
       
       private val _isReduction = attribute[Boolean](bindNames)
       def isReduction = _isReduction()
@@ -875,97 +930,99 @@ trait AST extends Phases {
       def children = actuals.toList
     }
     
-    final case class Cond(loc: LineStream, pred: Expr, left: Expr, right: Expr) extends Expr {
+    final case class Cond(loc: LineStream, pred: Expr, left: Expr, right: Expr) extends Expr with NaryOp {
       val sym = 'cond
+      
+      def values = Vector(pred, left, right)
 
       def form = 'if ~ pred ~ 'then ~ left ~ 'else ~ right
 
-      def children = pred :: left :: right :: Nil
+      def children = values.toList
     }
 
-    final case class Where(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Where(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'where
     }
 
-    final case class With(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class With(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'with
     }
     
-    final case class Union(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Union(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'union
     }
 
-    final case class Intersect(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Intersect(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'intersect
     }
 
-    final case class Difference(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Difference(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'difference
     }
 
-    final case class Add(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Add(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'add
     }
     
-    final case class Sub(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Sub(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'sub
     }
     
-    final case class Mul(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Mul(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'mul
     }
     
-    final case class Div(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Div(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'div
     }
     
-    final case class Mod(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Mod(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'mod
     }
     
-    final case class Lt(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
+    final case class Lt(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'lt
     }
     
-    final case class LtEq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
+    final case class LtEq(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'lteq
     }
     
-    final case class Gt(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
+    final case class Gt(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'gt
     }
     
-    final case class GtEq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
+    final case class GtEq(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'gteq
     }
     
-    final case class Eq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
+    final case class Eq(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'eq
     }
     
-    final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
+    final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'noteq
     }
     
-    final case class And(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class And(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'and
     }
     
-    final case class Or(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Or(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'or
     }
     
-    final case class Comp(loc: LineStream, child: Expr) extends ExprUnaryNode {
+    final case class Comp(loc: LineStream, child: Expr) extends Expr with UnaryOp with PrecedenceUnaryNode {
       val sym = 'comp
       val isPrefix = true
     }
     
-    final case class Neg(loc: LineStream, child: Expr) extends ExprUnaryNode {
+    final case class Neg(loc: LineStream, child: Expr) extends Expr with UnaryOp with PrecedenceUnaryNode {
       val sym = 'neg
       val isPrefix = true
     }
     
-    final case class Paren(loc: LineStream, child: Expr) extends Expr {
+    final case class Paren(loc: LineStream, child: Expr) extends Expr with UnaryOp {
       val sym = 'paren
       def form = 'leftParen ~ child ~ 'rightParen
       def children = child :: Nil

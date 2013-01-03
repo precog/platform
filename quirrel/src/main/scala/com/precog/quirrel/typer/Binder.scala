@@ -140,33 +140,6 @@ trait Binder extends parser.AST with Library {
           }
         }
       }
-        
-      case StrLit(_, _) => Set()
-      
-      case NumLit(_, _) => Set()
-      
-      case BoolLit(_, _) => Set()
-
-      case UndefinedLit(_) => Set()
-
-      case NullLit(_) => Set()
-      
-      case ObjectDef(_, props) => {
-        val results = for ((_, e) <- props)
-          yield loop(e, env)
-        
-        results.fold(Set()) { _ ++ _ }
-      }
-      
-      case ArrayDef(_, values) =>
-        (values map { loop(_, env) }).fold(Set()) { _ ++ _ }
-      
-      case Descent(_, child, _) => loop(child, env)
-      
-      case MetaDescent(_, child, _) => loop(child, env)
-      
-      case Deref(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
       
       case d @ Dispatch(_, name, actuals) => {
         val recursive = (actuals map { loop(_, env) }).fold(Set()) { _ ++ _ }
@@ -214,69 +187,9 @@ trait Binder extends parser.AST with Library {
           recursive + Error(d, UndefinedFunction(name))
         }
       }
-
-      case Cond(_, pred, left, right) =>
-        loop(pred, env) ++ loop(left, env) ++ loop(right, env)
       
-      case Where(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case With(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case Union(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case Intersect(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-            
-      case Difference(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case Add(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case Sub(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case Mul(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case Div(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case Mod(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case Lt(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case LtEq(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case Gt(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case GtEq(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case Eq(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case NotEq(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case And(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-      
-      case Or(_, left, right) =>
-        loop(left, env) ++ loop(right, env)
-     
-      case Comp(_, child) => loop(child, env)
-      
-      case Neg(_, child) => loop(child, env)
-      
-      case Paren(_, child) => loop(child, env)
+      case NaryOp(_, values) =>
+        (values map { loop(_, env) }).fold(Set()) { _ ++ _ }
     }
     
     val builtIns = lib1.map(Op1Binding) ++
@@ -294,41 +207,11 @@ trait Binder extends parser.AST with Library {
   private def listFreeVars(env: Env)(expr: Expr): Set[TicId] = expr match {
     case Let(_, _, _, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
     case Solve(_, _, _) => Set()
-    case Import(_, _, child) => listFreeVars(env)(child)
-    case New(_, child) => listFreeVars(env)(child)
     case Relate(_, from, to, in) => listFreeVars(env)(from) ++ listFreeVars(env)(to) ++ listFreeVars(env)(in)
+    case New(_, child) => listFreeVars(env)(child)
     case TicVar(_, name) if env.vars contains name => Set()
     case TicVar(_, name) if !(env.vars contains name) => Set(name)
-    case StrLit(_, _) => Set()
-    case NumLit(_, _) => Set()
-    case BoolLit(_, _) => Set()
-    case UndefinedLit(_) => Set()
-    case NullLit(_) => Set()
-    case ObjectDef(_, props) => props map { _._2 } map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()
-    case ArrayDef(_, values) => values map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()
-    case Descent(_, child, _) => listFreeVars(env)(child)
-    case Dispatch(_, _, actuals) => actuals map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()
-    case Where(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case With(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Union(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Intersect(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Difference(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Add(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Sub(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Mul(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Div(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Mod(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Lt(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case LtEq(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Gt(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case GtEq(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Eq(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case NotEq(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case And(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Or(_, left, right) => listFreeVars(env)(left) ++ listFreeVars(env)(right)
-    case Comp(_, child) => listFreeVars(env)(child)
-    case Neg(_, child) => listFreeVars(env)(child)
-    case Paren(_, child) => listFreeVars(env)(child)
+    case NaryOp(_, values) => values map listFreeVars(env) reduceOption { _ ++ _ } getOrElse Set()
   }
   
   
