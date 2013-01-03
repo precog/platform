@@ -13,11 +13,10 @@ import scalaz.syntax.apply._
 import scalaz.syntax.semigroup._
 import scalaz.syntax.order._
 
-trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFinder {
+trait ProvenanceChecker extends parser.AST with Binder {
   import Function._
   import Utils._
   import ast._
-  import condition._
 
   private val currentId = new AtomicInteger(0)
   private val commonIds = new AtomicReference[Map[ExprWrapper, Int]](Map())
@@ -202,12 +201,6 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           (errorSet, constrConstr ++ constr)
         }
         
-        case Import(_, _, child) => {
-          val (errors, constr) = loop(child, relations, constraints)
-          expr.provenance = child.provenance
-          (errors, constr)
-        }
-        
         case New(_, child) => {
           val (errors, constr) = loop(child, relations, constraints)
 
@@ -250,42 +243,16 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           (fromErrors ++ toErrors ++ inErrors ++ contribErrors, fromConstr ++ toConstr ++ inConstr ++ contribConstr)
         }
 
-        case UndefinedLit(_) =>
+        case UndefinedLit(_) => {
           expr.provenance = UndefinedProvenance
           (Set(), Set())
+        }
 
-        case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => {
+        case TicVar(_, _) | Literal(_) => {
           expr.provenance = ValueProvenance
           (Set(), Set())
         }
-        
-        case ObjectDef(_, props) =>
-            val (provenance, result) = handleNary(expr, props map { _._2 }, relations, constraints)
-            expr.provenance = provenance
-            result
 
-        case ArrayDef(_, values) =>
-            val (provenance, result) = handleNary(expr, values, relations, constraints)
-            expr.provenance = provenance
-            result
-        
-        case Descent(_, child, _) => {
-          val (errors, constr) = loop(child, relations, constraints)
-          expr.provenance = child.provenance
-          (errors, constr)
-        }
-      
-        case MetaDescent(_, child, _) => {
-          val (errors, constr) = loop(child, relations, constraints)
-          expr.provenance = child.provenance
-          (errors, constr)
-        }
-        
-        case Deref(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        
         case expr @ Dispatch(_, name, actuals) => {
           expr.binding match {
             case LetBinding(let) => {
@@ -477,12 +444,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           }
         }
 
-        case Where(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-
-        case Cond(_, pred, left, right) =>
+        case Cond(_, pred, left, right) => {
           val predResult = loop(pred, relations, constraints)
           val (provenance, result) = handleUnion(expr, left, right, relations, constraints)
 
@@ -496,21 +458,19 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             expr.provenance = NullProvenance
             (Set(Error(expr, OperationOnUnrelatedSets)), Set())
           }
+        }
 
-        case With(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        
-        case Union(_, left, right) =>
-            val (provenance, result) = handleUnion(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
+        case Union(_, left, right) => {
+          val (provenance, result) = handleUnion(expr, left, right, relations, constraints)
+          expr.provenance = provenance
+          result
+        }
 
-        case Intersect(_, left, right) =>
-            val (provenance, result) = handleIntersect(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
+        case Intersect(_, left, right) => {
+          val (provenance, result) = handleIntersect(expr, left, right, relations, constraints)
+          expr.provenance = provenance
+          result
+        }
         
         case Difference(_, left, right) => {
           val (leftErrors, leftConstr) = loop(left, relations, constraints)
@@ -565,75 +525,23 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           (leftErrors ++ rightErrors ++ errors, leftConstr ++ rightConstr ++ constr)
         }
         
-        case Add(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case Sub(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case Mul(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case Div(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case Mod(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case Lt(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case LtEq(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case Gt(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case GtEq(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case Eq(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case NotEq(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case And(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-        case Or(_, left, right) =>
-            val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
-            expr.provenance = provenance
-            result
-
-        case Comp(_, child) => {
+        case UnaryOp(_, child) => {
           val (errors, constr) = loop(child, relations, constraints)
           expr.provenance = child.provenance
           (errors, constr)
         }
         
-        case Neg(_, child) => {
-          val (errors, constr) = loop(child, relations, constraints)
-          expr.provenance = child.provenance
-          (errors, constr)
+        case BinaryOp(_, left, right) => {
+          val (provenance, result) = handleBinary(expr, left, right, relations, constraints)
+          expr.provenance = provenance
+          result
         }
         
-        case Paren(_, child) => {
-          val (errors, constr) = loop(child, relations, constraints)
-          expr.provenance = child.provenance
-          (errors, constr)
+        // TODO change to NaryOp(_, values) once scalac bugs are resolved
+        case expr: NaryOp => {
+          val (provenance, result) = handleNary(expr, expr.values, relations, constraints)
+          expr.provenance = provenance
+          result
         }
       }
       
@@ -643,7 +551,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       back
     }
     
-    loop(expr, Map(), Map())._1
+    val (errors, constraints) = loop(expr, Map(), Map())
+    
+    errors
   }
   
   private def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {

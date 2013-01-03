@@ -1,0 +1,6 @@
+package com.precog
+package pandora
+
+import com.precog.muspelheim.LogisticRegressionSpecs
+
+class JDBMLogisticRegressionSpecs extends LogisticRegressionSpecs with JDBMPlatformSpecs

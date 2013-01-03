@@ -12,7 +12,6 @@ import quirrel.typer._
 trait ParseEvalStack[M[+_]] extends Compiler
     with LineErrors
     with ProvenanceChecker
-    with CriticalConditionFinder
     with Emitter
     with Evaluator[M]
     with StdLib[M]
