@@ -42,6 +42,9 @@ object BitSetUtil {
     def |=(other: BitSet) = bs.or(other)
     def ++=(other: BitSet) = bs.or(other)
 
+    def isEmpty(): Boolean =
+      bs.nextSetBit(0) < 0
+
     def min(): Int = {
       val n = bs.nextSetBit(0)
       if (n < 0) sys.error("can't take min of empty set") else n

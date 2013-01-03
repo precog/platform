@@ -35,7 +35,7 @@ import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.daze.StringIdMemoryDatasetConsumer
-import com.precog.muspelheim.ParseEvalStackSpecs
+import com.precog.muspelheim._
 import com.precog.yggdrasil.actor.StandaloneShardSystemConfig
 import com.precog.yggdrasil.util.IdSourceConfig
 import com.precog.util.PrecogUnit
@@ -46,7 +46,7 @@ import java.io.File
 
 import scalaz._
 
-class MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
+trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
     with MongoColumnarTableModule
     with RealMongoSpecSupport
     with Logging
@@ -149,3 +149,18 @@ class MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
     }
   }
 }
+
+class MongoBasicValidationSpecs extends BasicValidationSpecs with MongoPlatformSpecs
+
+class MongoHelloQuirrelSpecs extends HelloQuirrelSpecs with MongoPlatformSpecs
+
+class MongoLogisticRegressionSpecs extends LogisticRegressionSpecs with MongoPlatformSpecs
+
+class MongoMiscStackSpecs extends MiscStackSpecs with MongoPlatformSpecs
+
+class MongoRankSpecs extends RankSpecs with MongoPlatformSpecs
+
+class MongoRenderStackSpecs extends RenderStackSpecs with MongoPlatformSpecs
+
+class MongoUndefinedLiteralSpecs extends UndefinedLiteralSpecs with MongoPlatformSpecs
+

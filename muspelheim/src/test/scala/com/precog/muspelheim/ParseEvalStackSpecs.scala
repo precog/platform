@@ -97,64 +97,30 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val idSource = new FreshAtomicIdSource
   }
 
-  object EvalUtil {
-    def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
-      parseEvalLogger.debug("Beginning evaluation of query: " + str)
-      
-      val preForest = compile(str)
-      val forest = preForest filter { _.errors.isEmpty }
-      
-      forest must haveSize(1) or {
-        forall(preForest) { tree =>
-          tree.errors must beEmpty
-        }
+  def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
+  
+  def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
+    parseEvalLogger.debug("Beginning evaluation of query: " + str)
+    
+    val preForest = compile(str)
+    val forest = preForest filter { _.errors.isEmpty }
+    
+    forest must haveSize(1) or {
+      forall(preForest) { tree =>
+        tree.errors must beEmpty
       }
-      
-      val tree = forest.head
-      
-      val Right(dag) = decorate(emit(tree))
-      consumeEval("dummyAPIKey", dag, Path.Root) match {
-        case Success(result) =>
-          parseEvalLogger.debug("Evaluation complete for query: " + str)
-          result
-        case Failure(error) => throw error
-      }
+    }
+    
+    val tree = forest.head
+    
+    val Right(dag) = decorate(emit(tree))
+    consumeEval("dummyAPIKey", dag, Path.Root) match {
+      case Success(result) =>
+        parseEvalLogger.debug("Evaluation complete for query: " + str)
+        result
+      case Failure(error) => throw error
     }
   }
-
-  include(
-    new EvalStackSpecs[IdType] {
-      def eval(str: String, debug: Boolean = false): Set[SValue] = EvalUtil.evalE(str, debug) map { _._2 }
-      def evalE(str: String, debug: Boolean = false): Set[SEvent] = EvalUtil.evalE(str, debug)
-    }
-  )
-  
-  include(
-    "full stack rendering" should {
-      def evalTable(str: String, debug: Boolean = false): Table = {
-        import trans._
-        
-        parseEvalLogger.debug("Beginning evaluation of query: " + str)
-        
-        val forest = compile(str) filter { _.errors.isEmpty }
-        forest must haveSize(1)
-        
-        val tree = forest.head
-        tree.errors must beEmpty
-        val Right(dag) = decorate(emit(tree))
-        val tableM = eval(dag, EvaluationContext("dummyAPIKey", Path.Root, new org.joda.time.DateTime()), true)
-        tableM map { _ transform DerefObjectStatic(Leaf(Source), CPathField("value")) } copoint
-      }
-      
-      "render a set of numbers interleaved by delimiters" in {
-        val stream = evalTable("(//tutorial/transactions).quantity") renderJson ','
-        val strings = stream map { _.toString }
-        val str = strings.foldLeft("") { _ + _ } copoint
-        
-        str must contain(",")
-      }
-    }
-  )
 }
 
 // vim: set ts=4 sw=4 et:

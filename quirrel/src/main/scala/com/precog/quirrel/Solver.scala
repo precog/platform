@@ -211,7 +211,7 @@ trait Solver extends parser.AST with typer.Binder {
    * Note that this really only works for `Eq` at present.  Will improve things
    * further in future.
    */
-  def solveRelation(re: RelationExpr, sigma: Map[Formal, Expr])(predicate: PartialFunction[Node, Boolean]): Option[Expr] = {
+  def solveRelation(re: ComparisonOp, sigma: Map[Formal, Expr])(predicate: PartialFunction[Node, Boolean]): Option[Expr] = {
     val leftRight: Option[(LineStream, Expr, Expr)] = re match {
       case Lt(_, _, _) => None
       case LtEq(_, _, _) => None

@@ -329,7 +329,7 @@ object SolverSpecs extends Specification
   def solveRelation(str: String, id: Symbol): Option[Expr] = {
     val expr = parseSingle(LineStream(str))
 
-    solveRelation(expr.asInstanceOf[RelationExpr], Map[Formal, Expr]()) { case TicVar(_, id2) => id.toString == id2; }
+    solveRelation(expr.asInstanceOf[ComparisonOp], Map[Formal, Expr]()) { case TicVar(_, id2) => id.toString == id2; }
   }
   
   private def parseSingle(str: LineStream): Expr = {

@@ -33,33 +33,14 @@ trait Tracer extends parser.AST with typer.Binder {
       Tree.node((sigma, expr), nodes)
     }
     
-    case Import(_, _, child) =>
-      Tree.node((sigma, expr), buildTrace(sigma)(child) #:: SNil)
-    
     case New(_, child) =>
       Tree.node((sigma, expr), buildTrace(sigma)(child) #:: SNil)
     
     case Relate(_, from, to, in) =>
       Tree.node((sigma, expr), buildTrace(sigma)(from) #:: buildTrace(sigma)(to) #:: buildTrace(sigma)(in) #:: SNil)
     
-    case _: TicVar | _: StrLit | _: NumLit | _: BoolLit | _: NullLit | _: UndefinedLit =>
+    case _: TicVar =>
       Tree.node((sigma, expr), SNil)
-    
-    
-    case ObjectDef(_, props) =>
-      Tree.node((sigma, expr), Stream(props map { _._2 } map buildTrace(sigma) toSeq: _*))
-    
-    case ArrayDef(_, values) =>
-      Tree.node((sigma, expr), Stream(values map buildTrace(sigma): _*))
-    
-    case Descent(_, child, _) =>
-      Tree.node((sigma, expr), buildTrace(sigma)(child) #:: SNil)
-    
-    case MetaDescent(_, child, _) =>
-      Tree.node((sigma, expr), buildTrace(sigma)(child) #:: SNil)
-    
-    case Deref(_, left, right) =>
-      Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
     
     case expr @ Dispatch(_, name, actuals) => {
       expr.binding match {
@@ -81,36 +62,9 @@ trait Tracer extends parser.AST with typer.Binder {
       }
     }
     
-    case Cond(_, pred, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(pred) #:: buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-
-    case Where(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case With(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case Union(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case Intersect(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case Difference(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    
-    case Add(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case Sub(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case Mul(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case Div(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case Mod(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    
-    case Lt(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case LtEq(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case Gt(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case GtEq(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    
-    case Eq(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case NotEq(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    
-    case And(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    case Or(_, left, right) => Tree.node((sigma, expr), buildTrace(sigma)(left) #:: buildTrace(sigma)(right) #:: SNil)
-    
-    case Comp(_, child) => Tree.node((sigma, expr), buildTrace(sigma)(child) #:: SNil)
-    case Neg(_, child) => Tree.node((sigma, expr), buildTrace(sigma)(child) #:: SNil)
-    case Paren(_, child) => Tree.node((sigma, expr), buildTrace(sigma)(child) #:: SNil)
+    case NaryOp(_, values) =>
+      Tree.node((sigma, expr), Stream(values map buildTrace(sigma): _*))
   }
-  
   
   /**
    * Returns a set of backtraces, where each backtrace is a stack of expressions

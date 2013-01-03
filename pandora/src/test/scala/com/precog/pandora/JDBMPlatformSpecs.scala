@@ -72,7 +72,7 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-object PlatformSpecs extends ParseEvalStackSpecs[Future]
+trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future] 
     with LongIdMemoryDatasetConsumer[Future]
     with JDBMColumnarTableModule[Future] 
     with SystemActorStorageModule 
@@ -89,7 +89,7 @@ object PlatformSpecs extends ParseEvalStackSpecs[Future]
       with JDBMProjectionModuleConfig
       
   object yggConfig  extends YggConfig
-  
+
   override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
       
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
@@ -119,14 +119,6 @@ object PlatformSpecs extends ParseEvalStackSpecs[Future]
     implicit val geq: scalaz.Equal[Int] = intInstance
   }
 
-  include(
-    new NonObjectStackSpecs {
-      def eval(str: String, debug: Boolean = false): Set[SValue] = EvalUtil.evalE(str, debug) map { _._2 }
-      def evalE(str: String, debug: Boolean = false): Set[SEvent] = EvalUtil.evalE(str, debug)
-    }
-  )
-      
-
   def startup() {
     // start storage shard 
     Await.result(storage.start(), controlTimeout)
@@ -142,3 +134,18 @@ object PlatformSpecs extends ParseEvalStackSpecs[Future]
   }
 }
 
+class JDBMBasicValidationSpecs extends BasicValidationSpecs with JDBMPlatformSpecs
+
+class JDBMHelloQuirrelSpecs extends HelloQuirrelSpecs with JDBMPlatformSpecs
+
+class JDBMLogisticRegressionSpecs extends LogisticRegressionSpecs with JDBMPlatformSpecs
+
+class JDBMMiscStackSpecs extends MiscStackSpecs with JDBMPlatformSpecs
+
+class JDBMNonObjectStackSpecs extends NonObjectStackSpecs with JDBMPlatformSpecs
+
+class JDBMRankSpecs extends RankSpecs with JDBMPlatformSpecs
+
+class JDBMRenderStackSpecs extends RenderStackSpecs with JDBMPlatformSpecs
+
+class JDBMUndefinedLiteralSpecs extends UndefinedLiteralSpecs with JDBMPlatformSpecs
