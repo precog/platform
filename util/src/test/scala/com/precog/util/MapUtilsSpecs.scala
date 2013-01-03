@@ -51,6 +51,7 @@ object MapUtilsSpecs extends Specification with ScalaCheck with MapUtils {
       result must containAllOf(leftContrib)
       result must containAllOf(rightContrib)
       result must containAllOf(middleContrib)
+      result must haveSize(leftContrib.length + rightContrib.length + middleContrib.length)
     }
   }
 }
