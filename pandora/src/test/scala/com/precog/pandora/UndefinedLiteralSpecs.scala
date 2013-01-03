@@ -18,16 +18,9 @@
  *
  */
 package com.precog
-package muspelheim
+package pandora
 
-import yggdrasil._
-import blueeyes.json._
-import com.precog.common._
-import org.specs2.mutable._
+import com.precog.muspelheim.UndefinedLiteralSpecs
 
-trait EvalStackSpecs extends Specification {
-  def eval(str: String, debug: Boolean = false): Set[SValue]
-  def evalE(str: String, debug: Boolean = false): Set[(Vector[Long], SValue)]
-}
+class JDBMUndefinedLiteralSpecs extends UndefinedLiteralSpecs with JDBMPlatformSpecs
 
-// vim: set ts=4 sw=4 et:

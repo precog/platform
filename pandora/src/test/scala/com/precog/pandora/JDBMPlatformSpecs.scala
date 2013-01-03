@@ -68,7 +68,7 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-object PlatformSpecs extends ParseEvalStackSpecs[Future] 
+trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future] 
     with JDBMColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 
@@ -84,7 +84,7 @@ object PlatformSpecs extends ParseEvalStackSpecs[Future]
       with JDBMProjectionModuleConfig
       
   object yggConfig  extends YggConfig
-  
+
   override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
       
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {

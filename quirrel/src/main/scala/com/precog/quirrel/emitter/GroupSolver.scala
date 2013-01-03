@@ -97,32 +97,12 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         constrLoopErrors ++ childErrors ++ forestErrors2 ++ constrErrors ++ finalErrors
       }
       
-      case Import(_, _, child) => loop(dispatches)(child)
-      
       case New(_, child) => loop(dispatches)(child)
       
       case Relate(_, from, to, in) =>
         loop(dispatches)(from) ++ loop(dispatches)(to) ++ loop(dispatches)(in)
       
       case TicVar(_, _) => Set()
-      case StrLit(_, _) => Set()
-      case NumLit(_, _) => Set()
-      case BoolLit(_, _) => Set()
-      case NullLit(_) => Set()
-      case UndefinedLit(_) => Set()
-      
-      case ObjectDef(_, props) =>
-        (props map { case (_, e) => loop(dispatches)(e) }).fold(Set[Error]()) { _ ++ _ }
-      
-      case ArrayDef(_, values) =>
-        (values map loop(dispatches)).fold(Set[Error]()) { _ ++ _ }
-      
-      case Descent(_, child, _) => loop(dispatches)(child)
-      
-      case MetaDescent(_, child, _) => loop(dispatches)(child)
-      
-      case Deref(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
       
       case d @ Dispatch(_, _, actuals) => {
         val actualErrors = (actuals map loop(dispatches)).fold(Set[Error]()) { _ ++ _ }
@@ -134,69 +114,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         
         actualErrors ++ originErrors
       }
-
-      case Cond(_, pred, left, right) =>
-        loop(dispatches)(pred) ++ loop(dispatches)(left) ++ loop(dispatches)(right)
       
-      case Where(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case With(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Union(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Intersect(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Difference(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Add(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Sub(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Mul(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Div(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Mod(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Lt(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case LtEq(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Gt(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case GtEq(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Eq(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case NotEq(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case And(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Or(_, left, right) =>
-        loop(dispatches)(left) ++ loop(dispatches)(right)
-      
-      case Comp(_, child) => loop(dispatches)(child)
-      
-      case Neg(_, child) => loop(dispatches)(child)
-      
-      case Paren(_, child) => loop(dispatches)(child)
+      case NaryOp(_, values) =>
+        (values map loop(dispatches)).fold(Set[Error]()) { _ ++ _ }
     }
     
     loop(Set())(tree)
@@ -326,7 +246,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       (andSpec orElse leftSpec orElse rightSpec, leftErrors ++ rightErrors)
     }
     
-    case expr: RelationExpr if !listTicVars(Some(b), expr, sigma).isEmpty => {
+    case expr: ComparisonOp if !listTicVars(Some(b), expr, sigma).isEmpty => {
       val vars = listTicVars(Some(b), expr, sigma)
       
       if (vars.size > 1) {
@@ -429,8 +349,6 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       case _ if to equalsIgnoreLoc from => true
       
       case Let(_, _, _, _, right) => isTranspecable(right, from, sigma)
-      
-      case Import(_, _, child) => isTranspecable(child, from, sigma)
       
       case Relate(_, _, _, in) => isTranspecable(in, from, sigma)
       
@@ -543,16 +461,14 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       case And(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       case Or(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       
-      case Comp(_, child) => isTranspecable(child, from, sigma)
-      case Neg(_, child) => isTranspecable(child, from, sigma)
-      case Paren(_, child) => isTranspecable(child, from, sigma)
+      case UnaryOp(_, child) => isTranspecable(child, from, sigma)
       
       case _ => false
     }
   }
   
   private def isPrimitive(expr: Expr, sigma: Map[Formal, Expr]): Boolean = expr match {
-    case _: StrLit | _: BoolLit | _: NumLit | _: NullLit => true
+    case Literal(_) => true
     
     case expr @ Dispatch(_, id, actuals) => {
       expr.binding match {
@@ -582,44 +498,13 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case Let(_, _, _, _, right) => isPrimitive(right, sigma)
     
-    case Import(_, _, child) => isPrimitive(child, sigma)
-    
     case Relate(_, _, _, in) => isPrimitive(in, sigma)
     
-    case ObjectDef(_, props) =>
-      props map { _._2 } forall { isPrimitive(_, sigma) }
+    case _: Union | _: Intersect | _: Difference | _: Cond => false
     
-    case ArrayDef(_, values) =>
-      values forall { isPrimitive(_, sigma) }
-    
-    case Descent(_, child, _) => isPrimitive(child, sigma)
-    case MetaDescent(_, child, _) => isPrimitive(child, sigma)
-    
-    case Deref(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    
-    case Where(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    case With(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    
-    case Add(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    case Sub(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    case Mul(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    case Div(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    case Mod(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    
-    case Lt(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    case LtEq(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    case Gt(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    case GtEq(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    
-    case Eq(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    case NotEq(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    
-    case And(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    case Or(_, left, right) => isPrimitive(left, sigma) && isPrimitive(right, sigma)
-    
-    case Comp(_, child) => isPrimitive(child, sigma)
-    case Neg(_, child) => isPrimitive(child, sigma)
-    case Paren(_, child) => isPrimitive(child, sigma)
+    // TODO replace with NaryOp(_, values) once scalac is actually fixed
+    case expr: NaryOp =>
+      expr.values forall { isPrimitive(_, sigma) }
     
     case _ => false
   }
@@ -635,6 +520,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     }
     
     case New(_, child) => listTicVars(b, child, sigma)
+    
     case Relate(_, from, to, in) => listTicVars(b, from, sigma) ++ listTicVars(b, to, sigma) ++ listTicVars(b, in, sigma)
     
     case t @ TicVar(_, name) if b.isDefined && (t.binding == SolveBinding(b.get) || t.binding == FreeBinding(b.get)) => {
@@ -654,16 +540,6 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     }
     
     case TicVar(_, _) => Set()
-    case StrLit(_, _) => Set()
-    case NumLit(_, _) => Set()
-    case BoolLit(_, _) => Set()
-    case NullLit(_) => Set()
-    case UndefinedLit(_) => Set()
-    case ObjectDef(_, props) => (props.unzip._2 map { listTicVars(b, _, sigma) }).fold(Set()) { _ ++ _ }
-    case ArrayDef(_, values) => (values map { listTicVars(b, _, sigma) }).fold(Set()) { _ ++ _ }
-    case Descent(_, child, _) => listTicVars(b, child, sigma)
-    case MetaDescent(_, child, _) => listTicVars(b, child, sigma)
-    case Deref(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
     
     case d @ Dispatch(_, id, actuals) => {
       val leftSet = d.binding match {
@@ -678,28 +554,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       }
       (actuals map { listTicVars(b, _, sigma) }).fold(leftSet) { _ ++ _ }
     }
-
-    case Cond(_, pred, left, right) => listTicVars(b, pred, sigma) ++ listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Where(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case With(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Union(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Intersect(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Add(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Sub(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Mul(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Div(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Mod(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Lt(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case LtEq(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Gt(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case GtEq(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Eq(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case NotEq(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case And(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Or(_, left, right) => listTicVars(b, left, sigma) ++ listTicVars(b, right, sigma)
-    case Comp(_, child) => listTicVars(b, child, sigma)
-    case Neg(_, child) => listTicVars(b, child, sigma)
-    case Paren(_, child) => listTicVars(b, child, sigma)
+    
+    case NaryOp(_, values) => (values map { listTicVars(b, _, sigma) }).fold(Set()) { _ ++ _ }
   }
   
   private def listSolvedVars(spec: BucketSpec): Set[TicId] = spec match {
@@ -775,20 +631,11 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case _: Solve => (Set(), sigma)      // TODO will this do the right thing?
     
-    case Import(_, _, child) => (Set(child), sigma)
     case New(_, child) => (Set(child), sigma)
     
     case Relate(_, _, _, in) => (Set(in), sigma)
     
-    case _: TicVar | _: StrLit | _: NumLit | _: BoolLit | _: NullLit | _: UndefinedLit => (Set(), sigma)
-    
-    case ObjectDef(_, props) => (Set(props map { _._2 }: _*), sigma)
-    case ArrayDef(_, values) => (Set(values: _*), sigma)
-    
-    case Descent(_, child, _) => (Set(child), sigma)
-    case MetaDescent(_, child, _) => (Set(child), sigma)
-    
-    case Deref(_, left, right) => (Set(left, right), sigma)
+    case _: TicVar => (Set(), sigma)
     
     case expr @ Dispatch(_, id, actuals) => {
       expr.binding match {
@@ -805,34 +652,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       }
     }
     
-    case Cond(_, pred, left, right) => (Set(pred, left, right), sigma)
-    case Where(_, left, right) => (Set(left, right), sigma)
-    case With(_, left, right) => (Set(left, right), sigma)
-    
-    case Union(_, left, right) => (Set(left, right), sigma)
-    case Intersect(_, left, right) => (Set(left, right), sigma)
-    case Difference(_, left, right) => (Set(left, right), sigma)
-    
-    case Add(_, left, right) => (Set(left, right), sigma)
-    case Sub(_, left, right) => (Set(left, right), sigma)
-    case Mul(_, left, right) => (Set(left, right), sigma)
-    case Div(_, left, right) => (Set(left, right), sigma)
-    case Mod(_, left, right) => (Set(left, right), sigma)
-    
-    case Lt(_, left, right) => (Set(left, right), sigma)
-    case LtEq(_, left, right) => (Set(left, right), sigma)
-    case Gt(_, left, right) => (Set(left, right), sigma)
-    case GtEq(_, left, right) => (Set(left, right), sigma)
-    
-    case Eq(_, left, right) => (Set(left, right), sigma)
-    case NotEq(_, left, right) => (Set(left, right), sigma)
-    
-    case And(_, left, right) => (Set(left, right), sigma)
-    case Or(_, left, right) => (Set(left, right), sigma)
-    
-    case Comp(_, child) => (Set(child), sigma)
-    case Neg(_, child) => (Set(child), sigma)
-    case Paren(_, child) => (Set(child), sigma)
+    case NaryOp(_, values) => (Set(values: _*), sigma)
   }
   
 
