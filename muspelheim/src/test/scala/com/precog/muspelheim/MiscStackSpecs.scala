@@ -1868,6 +1868,28 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
       evalE(input) must not(beEmpty)
     }
+
+    "produce a non-doubled result when counting the union of new sets" in {
+      val input = """
+        | clicks := //clicks
+        | clicks' := new clicks
+        |
+        | count(clicks' union clicks')
+        | """.stripMargin
+
+      eval(input) must contain(SDecimal(100))
+    }
+
+    "produce a non-doubled result when counting the union of new sets and a single set" in {
+      val input = """
+        | clicks := //clicks
+        | clicks' := new clicks
+        |
+        | [count(clicks' union clicks'), count(clicks')]
+        | """.stripMargin
+
+      eval(input) must contain(SArray(Vector(SDecimal(100), SDecimal(100))))
+    }
   }
 }
 

@@ -58,7 +58,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary with
             clicks,
             clicks))
             
-      val memoClicks = Memoize(clicks, 2)
+      val memoClicks = Memoize(clicks, 3)
       
       val expected =
         Join(line, Add, IdentitySort,
@@ -87,7 +87,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary with
             split,
             split))
             
-      val memoSplit = Memoize(split, 2)
+      val memoSplit = Memoize(split, 3)
       
       val expected =
         Join(line, Add, IdentitySort,
@@ -116,7 +116,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary with
         dag.Group(0, join, UnfixedSolution(1, join)),
         SplitParam(line, 1)(split))
             
-      val memoClicks = Memoize(clicks, 2)
+      val memoClicks = Memoize(clicks, 3)
       
       val expectedJoin =
         Join(line, Add, IdentitySort,
