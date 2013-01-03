@@ -37,15 +37,15 @@ object MapUtilsSpecs extends Specification with ScalaCheck with MapUtils {
       val middleKeys = left.keySet & right.keySet
       
       val leftContrib = leftKeys.toSeq flatMap { key =>
-        left(key) map { Either3.left3[Int, (List[Int], List[Int]), Int](_) }
+        left(key) map { key -> Either3.left3[Int, (List[Int], List[Int]), Int](_) }
       }
       
       val rightContrib = rightKeys.toSeq flatMap { key =>
-        right(key) map { Either3.right3[Int, (List[Int], List[Int]), Int](_) }
+        right(key) map { key -> Either3.right3[Int, (List[Int], List[Int]), Int](_) }
       }
       
       val middleContrib = middleKeys.toSeq map { key =>
-        Either3.middle3[Int, (List[Int], List[Int]), Int]((left(key), right(key)))
+        key -> Either3.middle3[Int, (List[Int], List[Int]), Int]((left(key), right(key)))
       }
       
       result must containAllOf(leftContrib)

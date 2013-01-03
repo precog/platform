@@ -33,15 +33,15 @@ trait MapUtils {
 }
 
 class MapPimp[A, B, CC[B] <: GenTraversable[B]](left: GenMap[A, CC[B]]) {
-  def cogroup[C, CC2[C] <: GenTraversable[C], Result](right: GenMap[A, CC2[C]])(implicit cbf: CanBuildFrom[GenMap[A, _], Either3[B, (CC[B], CC2[C]), C], Result], cbfLeft: CanBuildFrom[CC[B], B, CC[B]], cbfRight: CanBuildFrom[CC2[C], C, CC2[C]]): Result = {
+  def cogroup[C, CC2[C] <: GenTraversable[C], Result](right: GenMap[A, CC2[C]])(implicit cbf: CanBuildFrom[Nothing, (A, Either3[B, (CC[B], CC2[C]), C]), Result], cbfLeft: CanBuildFrom[CC[B], B, CC[B]], cbfRight: CanBuildFrom[CC2[C], C, CC2[C]]): Result = {
     val resultBuilder = cbf()
     
     left foreach {
       case (key, leftValues) => {
         right get key map { rightValues =>
-          resultBuilder += Either3.middle3[B, (CC[B], CC2[C]), C]((leftValues, rightValues))
+          resultBuilder += (key -> Either3.middle3[B, (CC[B], CC2[C]), C]((leftValues, rightValues)))
         } getOrElse {
-          leftValues foreach { b => resultBuilder += Either3.left3[B, (CC[B], CC2[C]), C](b) }
+          leftValues foreach { b => resultBuilder += (key -> Either3.left3[B, (CC[B], CC2[C]), C](b)) }
         }
       }
     }
@@ -49,7 +49,7 @@ class MapPimp[A, B, CC[B] <: GenTraversable[B]](left: GenMap[A, CC[B]]) {
     right foreach {
       case (key, rightValues) => {
         if (!(left get key isDefined)) {
-          rightValues foreach { c => resultBuilder += Either3.right3[B, (CC[B], CC2[C]), C](c) }
+          rightValues foreach { c => resultBuilder += (key -> Either3.right3[B, (CC[B], CC2[C]), C](c)) }
         }
       }
     }
