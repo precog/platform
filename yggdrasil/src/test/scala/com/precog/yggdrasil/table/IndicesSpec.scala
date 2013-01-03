@@ -92,14 +92,15 @@ trait IndicesSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 
   object Table extends TableCompanion
 
-  def accessor(s: String) = DerefObjectStatic(Leaf(Source), CPathField(s))
+  def groupkey(s: String) = DerefObjectStatic(Leaf(Source), CPathField(s))
+  def valuekey(s: String) = DerefObjectStatic(Leaf(Source), CPathField(s))
 
   "a table index" should {
     "handle empty tables" in {
       val table = fromJson(Stream.empty[JValue])
 
-      val keySpecs = Array(accessor("a"), accessor("b"))
-      val valSpec = accessor("c")
+      val keySpecs = Array(groupkey("a"), groupkey("b"))
+      val valSpec = valuekey("c")
 
       val index: TableIndex = TableIndex.createFromTable(table, keySpecs, valSpec).copoint
 
@@ -127,8 +128,8 @@ trait IndicesSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
 
     val table = fromJson(vs.toStream)
 
-    val keySpecs = Array(accessor("a"), accessor("b"))
-    val valSpec = accessor("c")
+    val keySpecs = Array(groupkey("a"), groupkey("b"))
+    val valSpec = valuekey("c")
 
     val index: TableIndex = TableIndex.createFromTable(table, keySpecs, valSpec).copoint
 
@@ -183,11 +184,11 @@ trait IndicesSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
     }
 
     val index1 = TableIndex.createFromTable(
-      table, Array(accessor("a")), accessor("c")
+      table, Array(groupkey("a")), valuekey("c")
     ).copoint
 
     val index2 = TableIndex.createFromTable(
-      table, Array(accessor("b")), accessor("c")
+      table, Array(groupkey("b")), valuekey("c")
     ).copoint
 
     "efficiently combine to produce unions" in {
@@ -244,7 +245,6 @@ trait IndicesSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
         (index2, Seq(0), Seq(JNum(1234567)))
       )()
     }
-
   }
 }
 
