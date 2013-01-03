@@ -72,18 +72,19 @@ class SerializationSpecs extends Specification {
 {"isRoot" : true, "name" : "root-apiKey", "description" : "The root API key", "apiKey" : "A09D8293-A28F-4422-B375-9C0CDF75DC68", "grants" : [ 	"c6ab82c1f69640de9e5211ebb2b96661e1bff7d8a4134f25ad1aaf1319fa7b3e182e6aa8eb1f4699b1303f0d03022213" ] }
 ]"""
 
-      (for {
+      val records = for {
         jv <- JParser.parseFromString(inputs)
         records <- jv.validated[List[APIKeyRecord]]
-      } yield {
-        records mustEqual List(
-          APIKeyRecord("17D42117-EF8E-4F43-B833-005F4EBB262C", Some("root-apiKey"), Some("The root API key"), None, Set("6f89110c953940cbbccc397f68c4cc9293af764c4d034719bf35b4736ee702daaef154314d5441ba8a69ed65e4ffa581"), true),
-          APIKeyRecord("01D60F6D-E8B6-480C-8D55-2986853D67A6", Some("root-apiKey"), Some("The root API key"), None, Set("e5fa39314ca748818e52c50d2d445a6f4d9f9a224ddb4e55bf7c03e2a21fb36ff2bbff861aec43a18cccf2ee7f38841e"), true),
-          APIKeyRecord("F2440B9B-D8CA-42AD-BF83-C693F0A5F018", None, None, Some("17D42117-EF8E-4F43-B833-005F4EBB262C"),  Set("75826da768b64748b8423cdd047d7e8f6361e5bb50d8428080feaf1c0c6269600982be9e1c9f4299bf521aac95065ace"), false),
-          APIKeyRecord("D9302C66-1F43-412E-B277-4E2EF675A304", Some("root-apiKey"), Some("The root API key"), None, Set("f0fcc670d19d44fd9f99bd5d03e569fbcab6b5a679fb48089944772d16a43eb73643dca2c885431db100fb3d650c342b"), true),
-          APIKeyRecord("A09D8293-A28F-4422-B375-9C0CDF75DC68", Some("root-apiKey"), Some("The root API key"), None, Set("c6ab82c1f69640de9e5211ebb2b96661e1bff7d8a4134f25ad1aaf1319fa7b3e182e6aa8eb1f4699b1303f0d03022213"), true)
-        )
-      }).fold({ error => throw new Exception(error.toString) }, _ => ok)
+      } yield records
+      
+      
+      records mustEqual Success(List(
+        APIKeyRecord("17D42117-EF8E-4F43-B833-005F4EBB262C", Some("root-apiKey"), Some("The root API key"), None, Set("6f89110c953940cbbccc397f68c4cc9293af764c4d034719bf35b4736ee702daaef154314d5441ba8a69ed65e4ffa581"), true),
+        APIKeyRecord("01D60F6D-E8B6-480C-8D55-2986853D67A6", Some("root-apiKey"), Some("The root API key"), None, Set("e5fa39314ca748818e52c50d2d445a6f4d9f9a224ddb4e55bf7c03e2a21fb36ff2bbff861aec43a18cccf2ee7f38841e"), true),
+        APIKeyRecord("F2440B9B-D8CA-42AD-BF83-C693F0A5F018", None, None, Some("17D42117-EF8E-4F43-B833-005F4EBB262C"),  Set("75826da768b64748b8423cdd047d7e8f6361e5bb50d8428080feaf1c0c6269600982be9e1c9f4299bf521aac95065ace"), false),
+        APIKeyRecord("D9302C66-1F43-412E-B277-4E2EF675A304", Some("root-apiKey"), Some("The root API key"), None, Set("f0fcc670d19d44fd9f99bd5d03e569fbcab6b5a679fb48089944772d16a43eb73643dca2c885431db100fb3d650c342b"), true),
+        APIKeyRecord("A09D8293-A28F-4422-B375-9C0CDF75DC68", Some("root-apiKey"), Some("The root API key"), None, Set("c6ab82c1f69640de9e5211ebb2b96661e1bff7d8a4134f25ad1aaf1319fa7b3e182e6aa8eb1f4699b1303f0d03022213"), true)
+      ))
     }
   }
 

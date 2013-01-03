@@ -49,12 +49,13 @@ object APIKeyRecord {
   val schemaV0 =       "tid"     :: "name" :: "description" :: "cid"       :: "gids"   :: ("isRoot" ||| false) :: HNil
   
   val decomposerV1: Decomposer[APIKeyRecord]= decomposerV[APIKeyRecord](schemaV1, Some("1.0"))
-  val extractorV1: Extractor[APIKeyRecord] = extractorV[APIKeyRecord](schemaV1, Some("1.0"))
+  val extractorV2: Extractor[APIKeyRecord] = extractorV[APIKeyRecord](schemaV1, Some("1.0"))
+  val extractorV1: Extractor[APIKeyRecord] = extractorV[APIKeyRecord](schemaV1, None)
   val extractorV0: Extractor[APIKeyRecord]  = extractorV[APIKeyRecord](schemaV0, None)
 
   object Serialization {
     implicit val APIKeyRecordDecomposer: Decomposer[APIKeyRecord] = decomposerV1
-    implicit val APIKeyRecordExtractor: Extractor[APIKeyRecord] = extractorV1 <+> extractorV0
+    implicit val APIKeyRecordExtractor: Extractor[APIKeyRecord] = extractorV2 <+> extractorV1 <+> extractorV0
   }
   
   object SafeSerialization {

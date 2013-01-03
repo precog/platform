@@ -112,6 +112,7 @@ object EventMessageEncoding extends EncodingFlags {
   def read(buffer: ByteBuffer): Validation[Error, EventMessage] = {
     for {
       msgType <- readHeader(buffer) 
+      //_ = println(java.nio.charset.Charset.forName("UTF-8").decode(buffer).toString)
       jv <- ((Error.thrown _) <-: JParser.parseFromByteBuffer(buffer)) 
       message <-  msgType match {
                     case `jsonIngestMessageFlag`  => jv.validated[IngestMessage]

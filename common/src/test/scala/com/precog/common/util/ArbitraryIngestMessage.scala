@@ -55,7 +55,7 @@ trait ArbitraryEventMessage extends ArbitraryJValue {
       apiKey <- alphaStr
       path <- genPath
       ownerAccountId <- alphaStr
-      content <- containerOf[List, JValue](genContentJValue).map(l => Vector(l: _*))
+      content <- containerOf[List, JValue](genContentJValue).map(l => Vector(l: _*)) if !content.isEmpty
       jobId <- oneOf(identifier.map(Option.apply), None)
     } yield Ingest(apiKey, path, Some(ownerAccountId), content, jobId)
   

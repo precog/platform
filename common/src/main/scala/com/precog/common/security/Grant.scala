@@ -74,7 +74,8 @@ object Grant extends Logging {
   val safeSchemaV1 = "grantId" :: "name" :: "description" :: Omit        :: Omit        :: "permissions" :: "expirationDate" :: HNil
   
   val decomposerV1: Decomposer[Grant] = decomposerV[Grant](schemaV1, Some("1.0"))
-  val extractorV1: Extractor[Grant] = extractorV[Grant](schemaV1, Some("1.0"))
+  val extractorV2: Extractor[Grant] = extractorV[Grant](schemaV1, Some("1.0"))
+  val extractorV1: Extractor[Grant] = extractorV[Grant](schemaV1, None)
 
   @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")
   val extractorV0: Extractor[Grant] = new Extractor[Grant] {
@@ -97,7 +98,7 @@ object Grant extends Logging {
 
   object Serialization {
     implicit val decomposer: Decomposer[Grant] = decomposerV1
-    implicit val extractor: Extractor[Grant] = extractorV1 <+> extractorV0
+    implicit val extractor: Extractor[Grant] = extractorV2 <+> extractorV1 <+> extractorV0
   }
   
   object SafeSerialization {
@@ -156,7 +157,7 @@ object NewGrantRequest {
   
   val schemaV1 = "name" :: "description" :: ("parentIds" ||| Set.empty[GrantId]) :: "permissions" :: "expirationDate" :: HNil
   
-  implicit val (decomposerV1, extractorV1) = serializationV[NewGrantRequest](schemaV1, Some("1.0"))
+  implicit val (decomposerV1, extractorV1) = serializationV[NewGrantRequest](schemaV1, None)
 
   def newAccount(accountId: AccountId, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantId], expiration: Option[DateTime]): NewGrantRequest = {
     // Path is "/" so that an account may read data it owns no matter what path it exists under. See AccessControlSpec, APIKeyManager.newAccountGrant

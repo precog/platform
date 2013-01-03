@@ -61,15 +61,27 @@ object Ingest {
   
   val schemaV1 = "apiKey" :: "path" :: "ownerAccountId" :: "data" :: "jobId" :: HNil
   
-  val (decomposerV1, extractorV1) = serializationV[Ingest](schemaV1, Some("1.0"))
+  val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.0"))
+  val extractorV1: Extractor[Ingest] = extractorV[Ingest](schemaV1, Some("1.0")) <+> extractorV1a
+
+  val extractorV1a = new Extractor[Ingest] {
+    def validated(obj: JValue): Validation[Error, Ingest] = {
+      ( obj.validated[APIKey]("apiKey") |@|
+        obj.validated[Path]("path") |@|
+        obj.validated[Option[AccountId]]("ownerAccountId") ) { (apiKey, path, ownerAccountId) =>
+          val jv = (obj \ "data")
+          Ingest(apiKey, path, ownerAccountId, if (jv == JUndefined) Vector() else Vector(jv), None) 
+        }
+    }
+  }
 
   val extractorV0 = new Extractor[Ingest] {
     def validated(obj: JValue): Validation[Error, Ingest] = {
-      ( (obj \ "tokenId").validated[String] |@| 
-        (obj \ "path").validated[Path] ) { (apiKey, path) => 
-        val jv = (obj \ "data")
-        Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None) 
-      }
+      ( obj.validated[String]("tokenId") |@| 
+        obj.validated[Path]("path") ) { (apiKey, path) => 
+          val jv = (obj \ "data")
+          Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None) 
+        }
     }
   }
 
@@ -88,7 +100,8 @@ object Archive {
   val schemaV0 = "tokenId" :: "path" :: Omit :: HNil
   
   val decomposerV1: Decomposer[Archive] = decomposerV[Archive](schemaV1, Some("1.0"))
-  val extractorV1: Extractor[Archive] = extractorV[Archive](schemaV1, Some("1.0"))
+  val extractorV1: Extractor[Archive] = extractorV[Archive](schemaV1, Some("1.0")) <+> extractorV[Archive](schemaV1, None) // Support un-versioned V1 schemas
+
   val extractorV0: Extractor[Archive] = extractorV[Archive](schemaV0, None) map {
     // FIXME: This is a complete hack to work around an accidental mis-ordering of fields for serialization
     case Archive(apiKey, path, jobId) if (apiKey.startsWith("/")) =>
