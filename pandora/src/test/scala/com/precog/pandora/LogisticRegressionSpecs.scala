@@ -1,9 +1,10 @@
 package com.precog
 package pandora
 
+import com.precog.muspelheim.EvalStackSpecs
 import com.precog.yggdrasil._
 
-class LogisticRegressionSpecs extends PlatformSpec {
+trait LogisticRegressionSpecs extends EvalStackSpecs {
   "logistic regression" should {
     "return correctly structured results in simple case of logistic regression" >> {
       val input = """
@@ -88,3 +89,5 @@ class LogisticRegressionSpecs extends PlatformSpec {
   }
 
 }
+
+class JDBMLogisticRegressionSpecs extends LogisticRegressionSpecs with JDBMPlatformSpecs

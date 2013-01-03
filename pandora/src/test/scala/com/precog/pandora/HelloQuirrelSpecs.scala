@@ -1,9 +1,10 @@
 package com.precog
 package pandora
 
+import com.precog.muspelheim.EvalStackSpecs
 import com.precog.yggdrasil._
 
-class HelloQuirrelSpecs extends PlatformSpec {
+trait HelloQuirrelSpecs extends EvalStackSpecs {
     "evaluate the 'hello, quirrel' examples" >> {
       "json" >> {
         "object" >> {
@@ -216,3 +217,5 @@ class HelloQuirrelSpecs extends PlatformSpec {
 //      } 
     }
 }
+
+class JDBMHelloQuirrelSpecs extends HelloQuirrelSpecs with JDBMPlatformSpecs
