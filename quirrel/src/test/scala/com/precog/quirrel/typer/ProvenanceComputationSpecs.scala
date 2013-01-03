@@ -1394,6 +1394,11 @@ object ProvenanceComputationSpecs extends Specification
         tree.errors must beEmpty
       }
       {
+        val tree = compileSingle("foo(x) := //baz union x union //qux foo(//bar)")
+        tree.provenance must beLike { case CoproductProvenance(CoproductProvenance(StaticProvenance("/baz"), StaticProvenance("/bar")), StaticProvenance("/qux")) => ok }
+        tree.errors must beEmpty
+      }
+      {
         val tree = compileSingle("foo := //baz intersect //bar foo")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
