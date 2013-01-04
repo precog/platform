@@ -20,10 +20,11 @@
 #!/bin/bash
 
 function usage {
-    echo "Usage: ./run.sh [-b] [-l] [-d] [-m <mongo port>] [-q directory] [ingest.json ...]" >&2
+    echo "Usage: ./run.sh [-b] [-l] [-d] [-q directory] [ingest.json ...]" >&2
     echo "  -b: Build any required artifacts for the run" >&2
-    echo "  -l: Don't clean work directory on completion" >&2
     echo "  -d: Print debug output" >&2
+    echo "  -l: Don't clean work directory on completion" >&2
+    echo "  -q: Read queries (any files not named *.pending) from the given query directory." >&2
     exit 1
 }
 
@@ -32,14 +33,10 @@ if [ $# -eq 0 ]; then
     usage
 fi
 
-while getopts ":q:m:bld" opt; do
+while getopts ":q:bld" opt; do
     case $opt in
         q)
             QUERYDIR=$OPTARG
-            ;;
-        m)
-            echo "Overriding mongo port to $OPTARG"
-            MONGOPORT="-m $OPTARG"
             ;;
         b)
             EXTRAFLAGS="$EXTRAFLAGS -b"
@@ -59,12 +56,9 @@ done
 
 shift $(( $OPTIND - 1 ))
 
-INGEST_PORT=30060
-QUERY_PORT=30070
-
 WORKDIR=$(mktemp -d -t standaloneShard.XXXXXX 2>&1)
 echo "Starting under $WORKDIR"
-./start-shard.sh -d $WORKDIR $EXTRAFLAGS $MONGOPORT 1> $WORKDIR/shard.stdout &
+./start-shard.sh -d $WORKDIR $EXTRAFLAGS 1> $WORKDIR/shard.stdout &
 RUN_LOCAL_PID=$!
 
 # Wait to make sure things haven't died
@@ -89,20 +83,35 @@ function finished {
 
 trap "finished; exit 1" TERM INT
 
-while ! netstat -an | grep $INGEST_PORT > /dev/null; do
+while [ ! -f $WORKDIR/ports.txt ] > /dev/null; do
     sleep 1
 done
 
 ROOTTOKEN="$(cat $WORKDIR/root_token.txt)"
 ACCOUNTID="$(cat $WORKDIR/account_id.txt)"
 TOKEN="$(cat $WORKDIR/account_token.txt)"
+
+# start-shard.sh records the port assignments as sh-style vars in ports.txt
+. $WORKDIR/ports.txt
+
 echo "Work dir:      $WORKDIR"
 echo "Root API key:  $ROOTTOKEN"
 echo "Account ID:    $ACCOUNTID"
 echo "Account token: $TOKEN"
+cat <<EOF
+MONGO_PORT:        $MONGO_PORT
+KAFKA_LOCAL_PORT:  $KAFKA_LOCAL_PORT
+KAFKA_GLOBAL_PORT: $KAFKA_GLOBAL_PORT
+ZOOKEEPER_PORT:    $ZOOKEEPER_PORT
+INGEST_PORT:       $INGEST_PORT
+AUTH_PORT:         $AUTH_PORT
+ACCOUNTS_PORT:     $ACCOUNTS_PORT
+JOBS_PORT:         $JOBS_PORT
+SHARD_PORT:        $SHARD_PORT
+EOF
 
 function query {
-    curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$QUERY_PORT/analytics/fs/$ACCOUNTID"
+    curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$SHARD_PORT/analytics/fs/$ACCOUNTID"
 }
 
 function repl {
