@@ -80,16 +80,13 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
               val prefix = "filesystem"
               val target = path.path.replaceAll("/$", ".json")
               
-              val src = {
-                if (pathStr startsWith prefix) {
-                  val (_, target1) = target.splitAt(prefix.length + 1)
-                  io.Source fromFile (new File(target1))
-              } else {
-                  io.Source fromInputStream getClass.getResourceAsStream(target)
-                }
-              }
+              val src = if (pathStr startsWith prefix) {
+                          io.Source.fromFile(new File(target.substring(prefix.length + 1)))
+                        } else {
+                          io.Source.fromInputStream(getClass.getResourceAsStream(target))
+                        }
 
-              val parsed: Stream[JValue] = src.getLines map JParser.parse toStream
+              val parsed: Stream[JValue] = src.getLines map JParser.parseUnsafe toStream
 
               currentIndex += parsed.length
               
