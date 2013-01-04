@@ -34,7 +34,7 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
   val StringNamespace = Vector("std", "string")
 
   override def _lib1 = super._lib1 ++ Set(length, trim, toUpperCase,
-    toLowerCase, isEmpty, intern)
+    toLowerCase, isEmpty, intern, parseNum)
 
   override def _lib2 = super._lib2 ++ Set(equalsIgnoreCase, codePointAt,
     startsWith, lastIndexOf, concat, endsWith, codePointBefore, substring,
