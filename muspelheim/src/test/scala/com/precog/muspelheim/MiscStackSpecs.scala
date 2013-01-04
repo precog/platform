@@ -1849,6 +1849,14 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
       evalE(input) must not(beEmpty)
     }
+
+    "parse numbers correctly" in {
+      val input = """
+        | std::string::parseNum("123")
+        | """.stripMargin
+
+      evalE(input) mustEqual(Set((Vector(), SDecimal(BigDecimal("123")))))
+    }
   }
 }
 
