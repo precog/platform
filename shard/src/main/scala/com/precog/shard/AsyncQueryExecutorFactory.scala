@@ -46,6 +46,19 @@ import scalaz._
  */
 trait AsyncQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] { self: ManagedQueryModule =>
 
+  /**
+   * Returns an `QueryExecutorFactory` whose execution returns a `JobId` rather
+   * than a `StreamT[Future, CharBuffer]`.
+   */
+  def asynchronous: QueryExecutorFactory[Future, JobId] = new QueryExecutorFactory[Future, JobId] {
+    def browse(apiKey: APIKey, path: Path) = self.browse(apiKey, path)
+    def structure(apiKey: APIKey, path: Path) = self.structure(apiKey, path)
+    def executorFor(apiKey: APIKey) = self.asyncExecutorFor(apiKey)
+    def status() = self.status()
+    def startup() = self.startup()
+    def shutdown() = self.shutdown()
+  }
+
   protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]]
 
   def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]]

@@ -36,14 +36,20 @@ import java.nio.CharBuffer
 import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
+import com.precog.common.jobs._
 
 import scalaz._
 import scalaz.Validation.{ success, failure }
 
-class QueryServiceHandler(queryExecutorFactory: AsyncQueryExecutorFactory)(implicit dispatcher: MessageDispatcher, M: Monad[Future])
-extends CustomHttpService[Future[JValue], (APIKeyRecord, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
+sealed trait QueryServiceHandler[A] extends CustomHttpService[Future[JValue], (APIKeyRecord, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
 with Logging {
   import scalaz.syntax.monad._
+
+  implicit def dispatcher: MessageDispatcher
+  implicit def M: Monad[Future]
+
+  def queryExecutorFactory: QueryExecutorFactory[Future, A]
+  def extractResponse(a: A): HttpResponse[QueryResult]
 
   val Command = """:(\w+)\s+(.+)""".r
 
@@ -73,34 +79,19 @@ with Logging {
       case Command("ds", arg) => describe(r.apiKey, Path(arg.trim))
       case Command("describe", arg) => describe(r.apiKey, Path(arg.trim))
       case qt =>
+        val executorV = queryExecutorFactory.executorFor(r.apiKey)
+        executorV flatMap {
+          case Success(executor) =>
+            executor.execute(r.apiKey, q, p, opts) map {
+              case Success(result) =>
+                extractResponse(result)
+              case Failure(error) =>
+                handleErrors(qt, error)
+            }
 
-        def executeWith[A](executorV: Future[Validation[String, QueryExecutor[Future, A]]])(f: A => HttpResponse[QueryResult]): Future[HttpResponse[QueryResult]] = {
-          executorV flatMap {
-            case Success(executor) =>
-              executor.execute(r.apiKey, q, p, opts) map {
-                case Success(result) =>
-                  f(result)
-                case Failure(error) =>
-                  handleErrors(qt, error)
-              }
-
-            case Failure(error) =>
-              logger.error("Failure during evaluator setup: " + error)
-              Future(HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")))
-          }
-        }
-
-        val async = request.parameters.get('sync) map (_ == "async") getOrElse false
-
-        if (async) {
-          executeWith(queryExecutorFactory.asyncExecutorFor(r.apiKey)) { jobId =>
-            val result = JObject(JField("jobId", JString(jobId)) :: Nil)
-            HttpResponse[QueryResult](Accepted, content = Some(Left(result)))
-          }
-        } else {
-          executeWith(queryExecutorFactory.executorFor(r.apiKey)) { stream =>
-            HttpResponse[QueryResult](OK, content = Some(Right(stream)))
-          }
+          case Failure(error) =>
+            logger.error("Failure during evaluator setup: " + error)
+            Future(HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")))
         }
     })
   }
@@ -126,3 +117,25 @@ Takes a quirrel query and returns the result of evaluating the query.
     }
   }
 }
+
+class SyncQueryServiceHandler(
+    val queryExecutorFactory: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]])(implicit
+    val dispatcher: MessageDispatcher,
+    val M: Monad[Future]) extends QueryServiceHandler[StreamT[Future, CharBuffer]] {
+
+  def extractResponse(stream: StreamT[Future, CharBuffer]): HttpResponse[QueryResult] = {
+    HttpResponse[QueryResult](OK, content = Some(Right(stream)))
+  }
+}
+
+class AsyncQueryServiceHandler(
+    val queryExecutorFactory: QueryExecutorFactory[Future, JobId])(implicit
+    val dispatcher: MessageDispatcher,
+    val M: Monad[Future]) extends QueryServiceHandler[JobId] {
+
+  def extractResponse(jobId: JobId): HttpResponse[QueryResult] = {
+    val result = JObject(JField("jobId", JString(jobId)) :: Nil)
+    HttpResponse[QueryResult](Accepted, content = Some(Left(result)))
+  }
+}
+

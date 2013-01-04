@@ -83,6 +83,21 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
     ()
   }
 
+  def waitForJobCompletion(jobId: JobId): Future[Job] = {
+    import JobState._
+
+    for {
+      _ <- waitFor(1)
+      Some(job) <- jobManager.findJob(jobId)
+      finalJob <- job.state match {
+        case NotStarted | Started(_, _) | Cancelled(_, _, _) =>
+          waitForJobCompletion(jobId)
+        case _ =>
+          Future(job)
+      }
+    } yield finalJob
+  }
+
   // Performs an incredibly intense compuation that requires numTicks ticks.
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[(JobId, AtomicInteger, Future[Int])] = {
     val timeout = ticksToTimeout map (tickDuration.toLong * _)
@@ -131,10 +146,9 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
     "be in a finished state if it completes successfully" in {
       (for {
         (jobId, _, _) <- execute(1)
-        _ <- waitFor(5)
-        job <- jobManager.findJob(jobId)
+        job <- waitForJobCompletion(jobId)
       } yield job).copoint must beLike {
-        case Some(Job(_, _, _, _, _, Finished(_, _))) => ok
+        case Job(_, _, _, _, _, Finished(_, _)) => ok
       }
     }
 

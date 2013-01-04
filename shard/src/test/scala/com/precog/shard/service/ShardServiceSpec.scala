@@ -76,7 +76,7 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
 
 trait TestShardService extends
   BlueEyesServiceSpecification with
-  ShardService with
+  AsyncShardService with
   AkkaDefaults { self =>
   
   import DefaultBijections._
@@ -119,7 +119,7 @@ trait TestShardService extends
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
   val inMemAccountMgr = new InMemoryAccountManager[Future]
   val jobManager = new InMemoryJobManager[Future]
-  val to = Duration(1, "seconds")
+  val to = Duration(3, "seconds")
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   
   val testPath = Path("/test")
@@ -176,12 +176,12 @@ trait TestShardService extends
   lazy val asyncService = client.contentType[QueryResult](application/(MimeTypes.json))
                                 .path("/analytics/queries")
 
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(1, Duration(1, "second"))
+  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(1, Duration(3, "second"))
   val shortFutureTimeouts = FutureTimeouts(1, Duration(50, "millis"))
   
   implicit def AwaitBijection(implicit bi: Bijection[QueryResult, Future[ByteChunk]]): Bijection[QueryResult, ByteChunk] = new Bijection[QueryResult, ByteChunk] {
     def unapply(chunk: ByteChunk): QueryResult = bi.unapply(Future(chunk))
-    def apply(res: QueryResult) = Await.result(bi(res), Duration(1, "second"))
+    def apply(res: QueryResult) = Await.result(bi(res), Duration(3, "second"))
   }
 }
 
@@ -337,7 +337,7 @@ trait TestQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQue
   
   def actorSystem: ActorSystem  
   implicit def executionContext: ExecutionContext
-  val to = Duration(1, "seconds")
+  val to = Duration(3, "seconds")
   
   val accessControl: AccessControl[Future]
   val ownerMap: Map[Path, Set[AccountId]]

@@ -34,7 +34,7 @@ import blueeyes.util.Clock
 import scalaz._
 
 object JDBMShardServer extends BlueEyesServer 
-    with ShardService 
+    with AsyncShardService 
     with JDBMQueryExecutorComponent 
     with MongoAPIKeyManagerComponent 
     with AccountManagerClientComponent

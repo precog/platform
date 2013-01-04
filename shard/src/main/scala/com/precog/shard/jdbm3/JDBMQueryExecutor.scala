@@ -68,8 +68,7 @@ import scalaz.syntax.std.either._
 import org.streum.configrity.Configuration
 
 trait BaseJDBMQueryExecutorConfig
-    extends BaseConfig
-    with ColumnarTableModuleConfig
+    extends ShardQueryExecutorConfig
     with BlockStoreColumnarTableModuleConfig 
     with JDBMProjectionModuleConfig
     with ManagedQueryModuleConfig
@@ -113,6 +112,8 @@ trait JDBMQueryExecutorComponent {
       type YggConfig = JDBMQueryExecutorConfig
       val yggConfig = wrapConfig(config)
       val clock = blueeyes.util.Clock.System
+
+      protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
       
       val actorSystem = ActorSystem("jdbmExecutorActorSystem")
       val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -209,12 +210,15 @@ trait JDBMQueryExecutorComponent {
 }
 
 trait JDBMQueryExecutorFactory
-    extends ShardQueryExecutorFactory[StreamT[Future, CharBuffer]]
+    extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]]
     with StorageModule[Future]
+    with PerAccountThreadPoolModule
     with ManagedQueryModule
     with AsyncQueryExecutorFactory { self =>
 
   type YggConfig <: BaseJDBMQueryExecutorConfig
+
+  def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
     storage.userMetadataView(userUID).findChildren(path) map {

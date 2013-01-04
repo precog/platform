@@ -72,6 +72,7 @@ class MongoQueryExecutorConfig(val config: Configuration)
   with ColumnarTableModuleConfig
   with MongoColumnarTableModuleConfig
   with BlockStoreColumnarTableModuleConfig
+  with ShardQueryExecutorConfig
   with IdSourceConfig
   with ShardConfig {
     
@@ -90,6 +91,8 @@ class MongoQueryExecutorConfig(val config: Configuration)
   def dbAuthParams = config.detach("mongo.dbAuth")
 
   def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
+
+  val clock = blueeyes.util.Clock.System
 }
 
 trait MongoQueryExecutorComponent {
@@ -98,12 +101,13 @@ trait MongoQueryExecutorComponent {
   implicit val futureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
   
   def accountManagerFactory(config: Configuration) = new InMemoryAccountManager[Future]()
-  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutor[Future] = {
+  def queryExecutorFactoryFactory(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] = {
     new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
   }
 }
 
-class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future]) extends ShardQueryExecutor with MongoColumnarTableModule {
+class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future])
+    extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] with ShardQueryExecutor[Future] with MongoColumnarTableModule {
   type YggConfig = MongoQueryExecutorConfig
 
   trait TableCompanion extends MongoColumnarTableCompanion
@@ -111,8 +115,6 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     var mongo: Mongo = _
     val dbAuthParams = yggConfig.dbAuthParams.data
   }
-
-  val clock = blueeyes.util.Clock.System
 
   lazy val storage = new MongoStorageMetadataSource(Table.mongo)
 
@@ -129,6 +131,12 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     Table.mongo.close()
     true
   }
+
+  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
+    Future(Success(this))
+  }
+
+  def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
     Future {

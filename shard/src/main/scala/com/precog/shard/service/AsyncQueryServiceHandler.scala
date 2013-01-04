@@ -36,7 +36,7 @@ import java.nio.ByteBuffer
 
 import scalaz._
 
-class AsyncQueryServiceHandler(jobManager: JobManager[Future])(implicit dispatcher: MessageDispatcher, M: Monad[Future])
+class AsyncQueryResultServiceHandler(jobManager: JobManager[Future])(implicit dispatcher: MessageDispatcher, M: Monad[Future])
 extends CustomHttpService[ByteChunk, APIKeyRecord => Future[HttpResponse[ByteChunk]]] {
   import JobState._
   import scalaz.syntax.monad._
