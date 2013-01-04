@@ -27,7 +27,7 @@ import scalaz.std.option._
 import scalaz.syntax.monad._
 import scalaz.syntax.copointed._
 
-class AsyncQueryexecutorSpec extends TestAsyncQueryExecutorFactory with Specification {
+class AsyncQueryExecutorSpec extends TestAsyncQueryExecutorFactory with Specification {
   import JobState._
 
   val JSON = MimeTypes.application / MimeTypes.json
@@ -35,7 +35,7 @@ class AsyncQueryexecutorSpec extends TestAsyncQueryExecutorFactory with Specific
   val actorSystem = ActorSystem("managedQueryModuleSpec")
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
-    def copoint[A](m: Future[A]) = Await.result(m, Duration(5, "seconds"))
+    def copoint[A](m: Future[A]) = Await.result(m, Duration(15, "seconds"))
   }
 
   val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
@@ -73,6 +73,21 @@ class AsyncQueryexecutorSpec extends TestAsyncQueryExecutorFactory with Specific
     }
   }
 
+  def waitForJobCompletion(jobId: JobId): Future[Job] = {
+    import JobState._
+
+    for {
+      _ <- waitFor(1)
+      Some(job) <- jobManager.findJob(jobId)
+      finalJob <- job.state match {
+        case NotStarted | Started(_, _) | Cancelled(_, _, _) =>
+          waitForJobCompletion(jobId)
+        case _ =>
+          Future(job)
+      }
+    } yield finalJob
+  }
+
   step {
     startup().copoint
   }
@@ -85,7 +100,8 @@ class AsyncQueryexecutorSpec extends TestAsyncQueryExecutorFactory with Specific
     "return the results of a completed job" in {
       val result = for {
         jobId <- execute(3)
-        _ <- waitFor(6)
+        _ <- waitForJobCompletion(jobId)
+        _ <- waitFor(3)
         result <- poll(jobId)
       } yield result
 
@@ -94,7 +110,7 @@ class AsyncQueryexecutorSpec extends TestAsyncQueryExecutorFactory with Specific
 
     "not return results if the job is still running" in {
       val results = for {
-        jobId <- execute(10)
+        jobId <- execute(20)
         _ <- waitFor(1)
         results <- poll(jobId)
       } yield results
@@ -105,12 +121,11 @@ class AsyncQueryexecutorSpec extends TestAsyncQueryExecutorFactory with Specific
     "be in the finished state if the job has finished" in {
       val result = for {
         jobId <- execute(1)
-        _ <- waitFor(5)
-        job <- jobManager.findJob(jobId)
+        job <- waitForJobCompletion(jobId)
       } yield job
 
       result.copoint must beLike {
-        case Some(Job(_, _, _, _, _, Finished(_, _))) => ok
+        case Job(_, _, _, _, _, Finished(_, _)) => ok
       }
     }
 
@@ -118,7 +133,7 @@ class AsyncQueryexecutorSpec extends TestAsyncQueryExecutorFactory with Specific
       val result = for {
         jobId <- execute(8)
         _ <- cancel(jobId, 1)
-        _ <- waitFor(15)
+        _ <- waitForJobCompletion(jobId)
         result <- poll(jobId)
       } yield result
 
