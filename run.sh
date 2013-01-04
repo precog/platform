@@ -121,7 +121,7 @@ for f in $@; do
     echo "Ingesting: $f"
     TABLE=$(basename "$f" ".json")
     ALLTABLES="$ALLTABLES $TABLE"
-    DATA=$(./muspelheim/src/test/python/newlinejson.py $f)
+    DATA=$(cat $f)
     COUNT=$(echo "$DATA" | wc -l)
     [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
     INGEST_RESULT=$(echo "$DATA" | curl -s -S -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
@@ -130,7 +130,7 @@ for f in $@; do
 
     COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
     while [ -z "$COUNT_RESULT" ] || [ "$COUNT_RESULT" -lt "$COUNT" ]; do
-        [ -n "$DEBUG" ] && echo "Count result for $TABLE = $COUNT_RESULT"
+        [ -n "$DEBUG" ] && echo "Count result for $TABLE = $COUNT_RESULT / $COUNT"
         sleep 2
         COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
     done
