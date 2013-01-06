@@ -38,7 +38,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
     with JoinOptimizer
     with PrettyPrinter
     with StdLib[M]
-    with MemoryDatasetConsumer[M] { self =>
+    with LongIdMemoryDatasetConsumer[M] { self =>
 
   import Function._
   

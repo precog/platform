@@ -39,7 +39,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     with EvaluatorTestSupport[M] 
     with StatsLib[M]
     with InfixLib[M]
-    with MemoryDatasetConsumer[M]{ self =>
+    with LongIdMemoryDatasetConsumer[M]{ self =>
       
   import Function._
   

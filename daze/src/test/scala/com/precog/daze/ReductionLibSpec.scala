@@ -33,7 +33,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     with ReductionLib[M]
     with StatsLib[M]
     with InfixLib[M]
-    with MemoryDatasetConsumer[M] { self =>
+    with LongIdMemoryDatasetConsumer[M] { self =>
       
   import Function._
   
