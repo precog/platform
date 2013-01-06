@@ -19,10 +19,8 @@
 ## 
 #!/bin/bash
 
-MONGOPORT=27017
-
 # Parse opts to determine settings
-while getopts ":d:lbm:" opt; do
+while getopts ":d:lb" opt; do
     case $opt in
         d) 
             WORKDIR=$(cd $OPTARG; pwd)
@@ -33,16 +31,10 @@ while getopts ":d:lbm:" opt; do
         b)
             BUILDMISSING=1
             ;;
-        m)
-            echo "Overriding default mongo port with $OPTARG"
-            MONGOPORT=$OPTARG
-            ;;
-
         \?)
-            echo "Usage: `basename $0` [-l] [-d <work directory>] [-m <mongo port>]"
+            echo "Usage: `basename $0` [-l] [-d <work directory>]"
             echo "  -l: If a temp workdir is used, don't clean up afterward"
             echo "  -d: Use the provided workdir"
-            echo "  -m: Use the specified port for mongo"
             echo "  -b: Build missing artifacts prior to run (depends on sbt in path)"
             exit 1
             ;;
@@ -53,6 +45,21 @@ done
 function path-canonical-simple() {
 local dst="${1}"
 cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")" | sed 's#/\.##'
+}
+
+function random_port() {
+    # We'll try 100 times until we find an unused port, at which point we give up
+    for tryseq in `seq 1 100`; do
+        TRYPORT=$((20000 + $RANDOM))
+        if ! port_is_open $TRYPORT; then
+            echo $TRYPORT
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "Failed to locate unused port for $1!" >&2
+    exit 1
 }
 
 function port_is_open() {
@@ -106,26 +113,6 @@ if [ -n "$MISSING_ARTIFACTS" ]; then
     done
     exit 1
 fi
-
-declare -a service_ports
-service_ports[9082]="Kafka Local"
-service_ports[9092]="Kafka Global"
-service_ports[$MONGOPORT]="MongoDB"
-service_ports[30060]="Ingest"
-service_ports[30062]="Auth"
-service_ports[30064]="Accounts"
-service_ports[30066]="Jobs"
-service_ports[30070]="Shard"
-
-for PORT in 9082 9092 $MONGOPORT 30060 30062 30064 30066 30070; do
-    if port_is_open $PORT; then
-        echo "You appear to already have a conflicting ${service_ports[$PORT]} service running on port $PORT" >&2
-        if [[ $PORT == $MONGOPORT ]]; then
-            echo "You can use the -m flag to override the mongo port" >&2
-        fi
-        exit 1
-    fi
-done
 
 # Make sure we have the tools we need on OSX
 if [ `uname` == "Darwin" ]; then
@@ -286,7 +273,6 @@ function on_exit() {
 
 trap on_exit EXIT
 
-
 # Get zookeeper up and running first
 pushd $ZKBASE > /dev/null
 tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-maven*' --exclude='contrib*' --exclude='recipes*' -xvzf "$ARTIFACTDIR"/zookeeper* > /dev/null 2>&1 || {
@@ -296,14 +282,18 @@ tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-mave
 popd > /dev/null
 
 # Copy in a simple config
+ZOOKEEPER_PORT=$(random_port "Zookeeper")
 echo "# the directory where the snapshot is stored." >> $ZKBASE/conf/zoo.cfg
 echo "dataDir=$ZKDATA" >> $ZKBASE/conf/zoo.cfg
 echo "# the port at which the clients will connect" >> $ZKBASE/conf/zoo.cfg
-echo "clientPort=2181" >> $ZKBASE/conf/zoo.cfg
+echo "clientPort=$ZOOKEEPER_PORT" >> $ZKBASE/conf/zoo.cfg
 
 # Start it up!
+echo "Starting zookeeper on port $ZOOKEEPER_PORT"
 cd $ZKBASE/bin
 ./zkServer.sh start
+
+wait_until_port_open $ZOOKEEPER_PORT
 
 # Now, start global and local kafkas
 cd "$WORKDIR"
@@ -312,37 +302,40 @@ unzip "$ARTIFACTDIR"/kafka* > /dev/null || {
     exit 3
 }
 
-# Transform the provided config into global and local configs
+# Transform the provided config into global and local configs, and start services
 cd "$WORKDIR"/kafka/config
-sed -e "s#log.dir=.*#log.dir=$KFGLOBALDATA#; s/port=.*/port=9092/" < server.properties > server-global.properties
-sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=9082/; s/enable.zookeeper=.*/enable.zookeeper=false/" < server.properties > server-local.properties
-
 chmod +x $KFBASE/bin/kafka-server-start.sh
 
-# Start up kafka instances using the global and local configs
+KAFKA_GLOBAL_PORT=$(random_port "Kafka global")
+sed -e "s#log.dir=.*#log.dir=$KFGLOBALDATA#; s/port=.*/port=$KAFKA_GLOBAL_PORT/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-global.properties
 $KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-global.properties &
 KFGLOBALPID=$!
 
+wait_until_port_open $KAFKA_GLOBAL_PORT
+
+KAFKA_LOCAL_PORT=$(random_port "Kafka local")
+sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=$KAFKA_LOCAL_PORT/; s/enable.zookeeper=.*/enable.zookeeper=false/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-local.properties
 $KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-local.properties &
 KFLOCALPID=$!
 
-wait_until_port_open 9092
-wait_until_port_open 9082
+wait_until_port_open $KAFKA_LOCAL_PORT
 
 echo "Kafka Global = $KFGLOBALPID"
 echo "Kafka Local = $KFLOCALPID"
 
+MONGO_PORT=$(random_port "Mongo")
+
 # Start up mongo and set test token
 cd $MONGOBASE
 tar --strip-components=1 -xvzf "$ARTIFACTDIR"/mongo* &> /dev/null
-$MONGOBASE/bin/mongod --port $MONGOPORT --dbpath $MONGODATA --nojournal --nounixsocket --noauth --noprealloc &
+$MONGOBASE/bin/mongod --port $MONGO_PORT --dbpath $MONGODATA --nojournal --nounixsocket --noauth --noprealloc &
 MONGOPID=$!
 
-wait_until_port_open $MONGOPORT
+wait_until_port_open $MONGO_PORT
 
 if [ ! -e "$WORKDIR"/root_token.txt ]; then
     echo "Retrieving new root token"
-    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" tokens -s "localhost:$MONGOPORT" -d dev_auth_v1 -c | tail -n 1 > "$WORKDIR"/root_token.txt || {
+    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" tokens -s "localhost:$MONGO_PORT" -d dev_auth_v1 -c | tail -n 1 > "$WORKDIR"/root_token.txt || {
         echo "Error retrieving new root token" >&2
         exit 3
     }
@@ -350,27 +343,37 @@ fi
 
 TOKENID=`cat "$WORKDIR"/root_token.txt`
 
+# FIXME: There's a potential for collisions here because we're
+# assigning before actually starting services, but proper ordering
+# would make things a bit more complicated and with bash's RNG this is
+# low-risk
+INGEST_PORT=$(random_port "Ingest")
+AUTH_PORT=$(random_port "Auth")
+ACCOUNTS_PORT=$(random_port "Accounts")
+JOBS_PORT=$(random_port "Jobs service")
+SHARD_PORT=$(random_port "Shard")
+
 # Set up ingest and shard services
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/accounts/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.conf > "$WORKDIR"/configs/ingest-v1.conf || echo "Failed to update ingest config"
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s#/accounts/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/port = 9082/port = $KAFKA_LOCAL_PORT/; s/port = 9092/port = $KAFKA_GLOBAL_PORT/; s/connect = localhost:2181/connect = localhost:$ZOOKEEPER_PORT/; s/port = 30060/port = $INGEST_PORT/" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.conf > "$WORKDIR"/configs/ingest-v1.conf || echo "Failed to update ingest config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.logging.xml > "$WORKDIR"/configs/ingest-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s#/opt/precog/shard#$WORKDIR/shard-data#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < "$BASEDIR"/shard/configs/dev/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s#/opt/precog/shard#$WORKDIR/shard-data#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/port = 9092/port = $KAFKA_GLOBAL_PORT/; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/" < "$BASEDIR"/shard/configs/dev/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/shard/configs/dev/shard-v1.logging.xml > "$WORKDIR"/configs/shard-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.conf > "$WORKDIR"/configs/auth-v1.conf || echo "Failed to update auth config"
+sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/port = 30062/port = $AUTH_PORT/" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.conf > "$WORKDIR"/configs/auth-v1.conf || echo "Failed to update auth config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.logging.xml > "$WORKDIR"/configs/auth-v1.logging.xml
 
-sed -e "s!/var/log!$WORKDIR/logs!; s#\[\"localhost\"\]#\[\"localhost:$MONGOPORT\"\]#; s/port = 80/port = 30062/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/" < "$BASEDIR"/accounts/configs/dev/accounts-v1.conf > "$WORKDIR"/configs/accounts-v1.conf || echo "Failed to update accounts config"
+sed -e "s!/var/log!$WORKDIR/logs!; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s/port = 80/port = $AUTH_PORT/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/" < "$BASEDIR"/accounts/configs/dev/accounts-v1.conf > "$WORKDIR"/configs/accounts-v1.conf || echo "Failed to update accounts config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/accounts/configs/dev/accounts-v1.logging.xml > "$WORKDIR"/configs/accounts-v1.logging.xml
 
-sed -e "s!/var/log!$WORKDIR/logs!; s/port = 80/port = 30062/; s!/security/v1/!/!; s!\[\"localhost\"\]!\[\"localhost:$MONGOPORT\"\]!" < "$BASEDIR"/heimdall/configs/dev/jobs-v1.conf > "$WORKDIR"/configs/jobs-v1.conf || echo "Failed to update jobs config"
+sed -e "s!/var/log!$WORKDIR/logs!; s/port = 80/port = $AUTH_PORT/; s!/security/v1/!/!; s!\[\"localhost\"\]!\[\"localhost:$MONGO_PORT\"\]!; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30066/port = $JOBS_PORT/" < "$BASEDIR"/heimdall/configs/dev/jobs-v1.conf > "$WORKDIR"/configs/jobs-v1.conf || echo "Failed to update jobs config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/heimdall/configs/dev/jobs-v1.logging.xml > "$WORKDIR"/configs/jobs-v1.logging.xml
 
 cd "$BASEDIR"
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
 if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
-    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" zk -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
+    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
         echo "Couldn't set initial checkpoint!" >&2
         exit 3
     }
@@ -389,24 +392,24 @@ echo "Starting jobs service"
 $JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/jobs-v1.logging.xml -jar "$JOBS_ASSEMBLY" --configFile "$WORKDIR"/configs/jobs-v1.conf &
 JOBSPID=$!
 
-wait_until_port_open 30062
-wait_until_port_open 30064
-wait_until_port_open 30066
+wait_until_port_open $AUTH_PORT
+wait_until_port_open $ACCOUNTS_PORT
+wait_until_port_open $JOBS_PORT
 
 # Now we need two accounts for testing: the root account and the test account
 if [ ! -e "$WORKDIR"/account_token.txt ]; then
     echo "Creating root account"
-    ROOTACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password":"1234"}' http://localhost:30064/accounts/ | sed 's/.*\([0-9]\{10\}\).*/\1/')
+    ROOTACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password":"1234"}' "http://localhost:$ACCOUNTS_PORT/accounts/" | sed 's/.*\([0-9]\{10\}\).*/\1/')
     echo "Created root account: $ROOTACCOUNTID"
     echo "Updating root account with prior root APIKey"
-    echo -e "db.accounts.update({\"accountId\":\"$ROOTACCOUNTID\"},{\$set:{\"apiKey\":\"$TOKENID\"}})" | "$WORKDIR"/mongo/bin/mongo --port $MONGOPORT accounts_v1
+    echo -e "db.accounts.update({\"accountId\":\"$ROOTACCOUNTID\"},{\$set:{\"apiKey\":\"$TOKENID\"}})" | "$WORKDIR"/mongo/bin/mongo --port $MONGO_PORT accounts_v1
     echo "Update of root account complete"
 
     echo "Creating test account"
-    ACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"test@precog.com","password":"fooble"}' http://localhost:30064/accounts/ | sed 's/.*\([0-9]\{10\}\).*/\1/')
+    ACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"test@precog.com","password":"fooble"}' "http://localhost:$ACCOUNTS_PORT/accounts/" | sed 's/.*\([0-9]\{10\}\).*/\1/')
     echo "Created test account: $ACCOUNTID"
     echo $ACCOUNTID > "$WORKDIR"/account_id.txt
-    ACCOUNTTOKEN=$(set -e; curl -S -s -u 'test@precog.com:fooble' -H 'Content-Type: application/json' -G "http://localhost:30064/accounts/$ACCOUNTID" | grep apiKey | sed 's/.*apiKey"[^"]*"\([^"]*\)".*/\1/')
+    ACCOUNTTOKEN=$(set -e; curl -S -s -u 'test@precog.com:fooble' -H 'Content-Type: application/json' -G "http://localhost:$ACCOUNTS_PORT/accounts/$ACCOUNTID" | grep apiKey | sed 's/.*apiKey"[^"]*"\([^"]*\)".*/\1/')
     echo "Account token is $ACCOUNTTOKEN"
     echo $ACCOUNTTOKEN > "$WORKDIR"/account_token.txt
 else
@@ -423,8 +426,20 @@ $JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.loggin
 SHARDPID=$!
 
 # Let the ingest/shard services startup in parallel
-wait_until_port_open 30060
-wait_until_port_open 30070
+wait_until_port_open $INGEST_PORT
+wait_until_port_open $SHARD_PORT
+
+cat > $WORKDIR/ports.txt <<EOF
+MONGO_PORT=$MONGO_PORT
+KAFKA_LOCAL_PORT=$KAFKA_LOCAL_PORT
+KAFKA_GLOBAL_PORT=$KAFKA_GLOBAL_PORT
+ZOOKEEPER_PORT=$ZOOKEEPER_PORT
+INGEST_PORT=$INGEST_PORT
+AUTH_PORT=$AUTH_PORT
+ACCOUNTS_PORT=$ACCOUNTS_PORT
+JOBS_PORT=$JOBS_PORT
+SHARD_PORT=$SHARD_PORT
+EOF
 
 echo "Startup complete, running in $WORKDIR"
 
@@ -434,6 +449,17 @@ echo "Root account ID: $ROOTACCOUNTID"
 echo "Test account ID: $ACCOUNTID"
 echo "Test account token: $ACCOUNTTOKEN"
 echo "Base path: $WORKDIR"
+cat <<EOF
+MONGO_PORT:        $MONGO_PORT
+KAFKA_LOCAL_PORT:  $KAFKA_LOCAL_PORT
+KAFKA_GLOBAL_PORT: $KAFKA_GLOBAL_PORT
+ZOOKEEPER_PORT:    $ZOOKEEPER_PORT
+INGEST_PORT:       $INGEST_PORT
+AUTH_PORT:         $AUTH_PORT
+ACCOUNTS_PORT:     $ACCOUNTS_PORT
+JOBS_PORT:         $JOBS_PORT
+SHARD_PORT:        $SHARD_PORT
+EOF
 echo "============================================================"
 
 # Wait forever until the user Ctrl-C's the system
