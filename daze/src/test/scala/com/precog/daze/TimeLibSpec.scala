@@ -15,7 +15,7 @@ import org.joda.time.format._
 trait TimeLibSpec[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
     with TimeLib[M] 
-    with MemoryDatasetConsumer[M] { self =>
+    with LongIdMemoryDatasetConsumer[M] { self =>
       
   import Function._
   
