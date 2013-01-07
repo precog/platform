@@ -154,8 +154,8 @@ trait LogisticRegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] wit
         val features = cols(JArrayHomogeneousT(JNumberT))
 
         val result: Set[Result] = features map {
-          case c: HomogeneousArrayColumn[Double] => 
-            val mapped = range filter { r => c.isDefinedAt(r) } map { i => 1.0 +: c(i) }
+          case c: HomogeneousArrayColumn[_] if c.tpe.manifest.erasure == classOf[Array[Double]] =>
+            val mapped = range filter { r => c.isDefinedAt(r) } map { i => 1.0 +: c.asInstanceOf[HomogeneousArrayColumn[Double]](i) }
             reduceDouble(mapped)
           case _ => None
         }

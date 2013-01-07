@@ -51,6 +51,19 @@ trait LinearRegressionLib[M[+_]] extends GenOpcode[M] with RegressionSupport {
     type Beta = Array[Double]
     type Result = Beta
 
+    /**
+     * http://adrem.ua.ac.be/sites/adrem.ua.ac.be/files/StreamFitter.pdf
+     *
+     * First slice size is made consistent. Then the slices are fed to the reducer, one by one.
+     * The reducer calculates the Ordinary Least Squares regression for each Slice. 
+     * The results of each of these regressions are then combined incrementally using `monoid`. 
+     * `alpha` (a value between 0 and 1) is the paramater which determines the weighting of the
+     * data in the stream. A value of 0.5 means that current values and past values
+     * are equally weighted. The paper above outlines how `alpha` relates to the half-life
+     * of the current window (i.e. the current Slice). In the future, we could let half-life,
+     * or something related, be an optional parameter in the regression model.
+     */
+
     val alpha = 0.5
 
     implicit def monoid = new Monoid[Result] {
@@ -83,10 +96,12 @@ trait LinearRegressionLib[M[+_]] extends GenOpcode[M] with RegressionSupport {
         val features = cols(JArrayHomogeneousT(JNumberT))
 
         val values: Set[Option[Array[Array[Double]]]] = features map {
-          case c: HomogeneousArrayColumn[Double] => 
-            val mapped = range.toArray filter { r => c.isDefinedAt(r) } map { i => 1.0 +: c(i) }
+          case c: HomogeneousArrayColumn[_] if c.tpe.manifest.erasure == classOf[Array[Double]] =>
+            val mapped = range.toArray filter { r => c.isDefinedAt(r) } map { i => 1.0 +: c.asInstanceOf[HomogeneousArrayColumn[Double]](i) }
             Some(mapped)
-          case _ => None
+          case other => 
+            logger.warn("Features were not correctly put into a homogeneous array of doubles; returning empty.")
+            None
         }
 
         val arrays = {
@@ -94,14 +109,19 @@ trait LinearRegressionLib[M[+_]] extends GenOpcode[M] with RegressionSupport {
           else values.suml(resultMonoid)
         }
 
-        val xs = arrays map { _ map { arr => arr.take(arr.length - 1) } }
+        val xs = arrays map { _ map { arr => java.util.Arrays.copyOf(arr, arr.length - 1) } }
         val y0 = arrays map { _ map { _.last } }
 
         val matrixX = xs map { case arr => new Matrix(arr) }
+
+        // FIXME ultimately we do not want to throw an IllegalArgumentException here
+        // once the framework is in place, we will return the empty set and issue a warning to the user
+        // this catches the case when the user runs regression on data when rows < (columns + 1)
         val inverseX = try {
           matrixX map { _.inverse() }
         } catch {
-          case _ => None
+          case ex: RuntimeException if ex.getMessage == "Matrix is rank deficient." => 
+            throw new IllegalArgumentException("More features than rows found in linear regression. Not enough information to determine model.", ex)
         }
 
         val matrixY = y0 map { case arr => new Matrix(Array(arr)) }
@@ -150,8 +170,9 @@ trait LinearRegressionLib[M[+_]] extends GenOpcode[M] with RegressionSupport {
         tbls zip jtypes
       }
   
-      // important note: regression will return empty set if there are more than 1000 columns due to rank-deficient matrix
+      // important note: regression will explode if there are more than 1000 columns due to rank-deficient matrix
       // this could be remedied in the future by smarter choice of `sliceSize`
+      // though do we really want to allow people to run regression on >1000 columns?
       val sliceSize = 1000
       val tableReducer: (Table, JType) => M[Table] =
         (table, jtype) => table.canonicalize(sliceSize).toArray[Double].normalize.reduce(reducer).map(res => extract(res, jtype))
