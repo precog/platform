@@ -218,12 +218,12 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
 
     "not expire queries that complete before expiration date" in {
       val ticks = for {
-        (jobId, _, query) <- execute(5, Some(8))
-        _ <- waitFor(10)
+        (jobId, _, query) <- execute(1, Some(10))
+        _ <- waitFor(20)
         ticks <- query
       } yield ticks
 
-      ticks.copoint must_== 5
+      ticks.copoint must_== 1
     }
   }
 
