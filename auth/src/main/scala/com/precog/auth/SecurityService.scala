@@ -15,7 +15,7 @@ import ByteChunk._
 import org.streum.configrity.Configuration
 import scalaz._
 
-case class SecurityServiceState(apiKeyManagement: APIKeyManagement)
+case class SecurityServiceState(apiKeyManagement: APIKeyManagement, stoppable: Stoppable)
 
 trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinators {
   import DefaultBijections._
@@ -26,7 +26,7 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
   implicit def executionContext: ExecutionContext
   implicit val M: Monad[Future]
 
-  def APIKeyManager(config: Configuration): APIKeyManager[Future]
+  def APIKeyManager(config: Configuration): (APIKeyManager[Future], Stoppable)
 
   val securityService = service("security", "1.0") {
     requestLogging(timeout) {
@@ -34,8 +34,8 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
         startup {
           import context._
           val securityConfig = config.detach("security")
-          val apiKeyManager = APIKeyManager(securityConfig)
-          M.point(SecurityServiceState(new APIKeyManagement(apiKeyManager)))
+          val (apiKeyManager, stoppable) = APIKeyManager(securityConfig)
+          M.point(SecurityServiceState(new APIKeyManagement(apiKeyManager), stoppable))
         } ->
         request { (state: SecurityServiceState) =>
           jsonp[ByteChunk] {
@@ -72,7 +72,7 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
           }
         } ->
         stop { state => 
-          Stoppable.fromFuture(state.apiKeyManagement.close())
+          state.stoppable
         }
       }
     }

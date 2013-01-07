@@ -1,6 +1,7 @@
 package com.precog.common
 package security
 
+import json._
 import accounts.AccountId
 
 import blueeyes.json._
@@ -11,6 +12,7 @@ import blueeyes.json.serialization.Extractor.Invalid
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.apply._
+import scalaz.syntax.plusEmpty._
 
 sealed trait Permission {
   def path: Path
@@ -61,7 +63,7 @@ object Permission {
     case _ : DeletePermission => "delete"  
   }
   
-  object accessTypeExtractor extends Extractor[(Path, Set[AccountId]) => Permission] {
+  implicit object accessTypeExtractor extends Extractor[(Path, Set[AccountId]) => Permission] {
     override def validated(label: JValue) =
       label.validated[String].flatMap {
         case "read" =>   Success(ReadPermission.apply) 
@@ -72,7 +74,7 @@ object Permission {
       }
   }
   
-  implicit val permissionDecomposer: Decomposer[Permission] = new Decomposer[Permission] {
+  val decomposerV1Base: Decomposer[Permission] = new Decomposer[Permission] {
     override def decompose(p: Permission): JValue = {
       JObject(List(
         some(jfield("accessType", accessType(p))),
@@ -82,12 +84,21 @@ object Permission {
     }
   }
 
-  implicit val permissionExtractor: Extractor[Permission] = new Extractor[Permission] {    
-    override def validated(obj: JValue) = 
-      ((obj \ "accessType").validated(accessTypeExtractor) |@|
-       (obj \ "path").validated[Path] |@|
-       (obj \? "ownerAccountIds").map(_.validated[Set[AccountId]]).getOrElse(Success(Set.empty[AccountId]))).apply((c, p, o) => c(p, o))
+  val extractorV1Base: Extractor[Permission] = new Extractor[Permission] {    
+    override def validated(obj: JValue) = {
+      val accessTypeV = obj.validated[(Path, Set[AccountId]) => Permission]("accessType") 
+      val pathV = obj.validated[Path]("path") 
+      println("owner: " + (obj \? "ownerAccountIds"))
+      val ownerV = (obj \? "ownerAccountIds") map { jv => println(jv); jv.validated[Set[AccountId]] } getOrElse { Success(Set.empty[AccountId]) }
+
+      (accessTypeV |@| pathV |@| ownerV) { (c, p, o) => 
+        c(p, o) 
+      }
+    }
   }
+
+  implicit val decomposer = Serialization.versioned(decomposerV1Base, Some("1.0")) 
+  implicit val extractor = Serialization.versioned(extractorV1Base, Some("1.0")) <+> extractorV1Base
   
   def unapply(perm: Permission): Option[(Path, Set[AccountId])] = Some((perm.path, perm.ownerAccountIds))
 }

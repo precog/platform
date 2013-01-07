@@ -62,7 +62,7 @@ trait TestAPIKeyService extends BlueEyesServiceSpecification
   
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
 
-  override def APIKeyManager(config: Configuration) = apiKeyManager 
+  override def APIKeyManager(config: Configuration) = (apiKeyManager, Stoppable.Noop)
 
   val mimeType = application/(MimeTypes.json)
 

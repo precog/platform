@@ -57,8 +57,8 @@ trait APIKeyManager[M[+_]] extends APIKeyFinder[M] with Logging {
     } yield nk
   }
   
-  def listAPIKeys(): M[Seq[APIKeyRecord]]
-  def listGrants(): M[Seq[Grant]]
+  def listAPIKeys: M[Seq[APIKeyRecord]]
+  def listGrants: M[Seq[Grant]]
   def findGrantChildren(gid: GrantId): M[Set[Grant]]
 
   def listDeletedAPIKeys(): M[Seq[APIKeyRecord]]
@@ -73,8 +73,6 @@ trait APIKeyManager[M[+_]] extends APIKeyFinder[M] with Logging {
 
   def deleteAPIKey(apiKey: APIKey): M[Option[APIKeyRecord]]
   def deleteGrant(apiKey: GrantId): M[Set[Grant]]
-
-  def close(): M[Unit]
 
   def deriveGrant(name: Option[String], description: Option[String], issuerKey: APIKey, perms: Set[Permission], expiration: Option[DateTime] = None): M[Option[GrantId]] = {
     validGrants(issuerKey, expiration).flatMap { grants =>
@@ -150,8 +148,6 @@ extends CachingAPIKeyFinder[M](manager, settings)(M) with APIKeyManager[M] {
     manager.deleteAPIKey(tid) map { _.map { _ tap remove } }
   def deleteGrant(gid: GrantId) =
     manager.deleteGrant(gid) map { _.map { _ tap remove } }
-
-  def close() = manager.close
 }
 
 // vim: set ts=4 sw=4 et:
