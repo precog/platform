@@ -161,12 +161,12 @@ object PlatformBuild extends Build {
 
   /// Services ///
 
-  lazy val accounts     = Project(id = "accounts", base = file("accounts")).
-    settings(commonAssemblySettings: _*) dependsOn (common % "compile->compile;test->test", common)
- 
   lazy val auth = Project(id = "auth", base = file("auth")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test")
 
+  lazy val accounts     = Project(id = "accounts", base = file("accounts")).
+    settings(commonAssemblySettings: _*) dependsOn (common % "compile->compile;test->test", auth)
+ 
   lazy val ingest = Project(id = "ingest", base = file("ingest")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil)
 

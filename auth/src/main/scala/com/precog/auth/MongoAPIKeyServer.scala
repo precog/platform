@@ -34,5 +34,5 @@ import scalaz._
 object MongoAPIKeyServer extends BlueEyesServer with SecurityService with AkkaDefaults {
   implicit val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
-  def APIKeyManager(config: Configuration): APIKeyManager[Future] = MongoAPIKeyManager(config)
+  def APIKeyManager(config: Configuration): (APIKeyManager[Future], Stoppable) = MongoAPIKeyManager(config)
 }

@@ -33,6 +33,7 @@ import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.metadata._
 import com.precog.util._
 
+import blueeyes.bkka._
 import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -856,34 +857,37 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
   }
   
   def process(config: Config) {
-    val tm = apiKeyManager(config)
-    val actions = (config.list).option(list(tm)).toSeq ++
-                  (config.showRoot).option(showRoot(tm)).toSeq ++
-//                  config.listChildren.map(listChildren(_, tm)) ++
-                  config.accountId.map(p => create(p, config.newAPIKeyName, tm)) ++
-                  config.delete.map(delete(_, tm))
+    val job = for {
+      (apiKeys, stoppable) <- apiKeyManager(config)
+      actions = (config.list).option(list(apiKeys)).toSeq ++
+                (config.showRoot).option(showRoot(apiKeys)).toSeq ++
+//              config.listChildren.map(listChildren(_, apiKeys)) ++
+                config.accountId.map(p => create(p, config.newAPIKeyName, apiKeys)) ++
+                config.delete.map(delete(_, apiKeys))
+      _ <- Future.sequence(actions) 
+      _ <- Stoppable.stop(stoppable)
+    } yield {
+      defaultActorSystem.shutdown
+    }
 
-    Await.result(Future.sequence(actions) onComplete {
-      _ => tm.close() onComplete {
-        _ => defaultActorSystem.shutdown
-      }
-    }, Duration(30, "seconds"))
+    Await.result(job, Duration(30, "seconds"))
   }
 
-  def apiKeyManager(config: Config): APIKeyManager[Future] = {
+  def apiKeyManager(config: Config): Future[(APIKeyManager[Future], Stoppable)] = {
     val mongo = RealMongo(config.mongoConfig)
     implicit val timeout = config.mongoSettings.timeout
-    val db = mongo.database(config.database)
+    val database = mongo.database(config.database)
 
-    val rootKey = Await.result(
-      MongoAPIKeyManager.findRootAPIKey(
-        db,
-        config.mongoSettings.apiKeys, 
-        config.mongoSettings.grants, 
-        config.createRoot
-      ), Duration(30, "seconds"))
+    val dbStop = Stoppable.fromFuture(database.disconnect.fallbackTo(Future(())) flatMap { _ => mongo.close })
 
-    new MongoAPIKeyManager(mongo, db, config.mongoSettings.copy(rootKeyId = rootKey.apiKey))
+    val rootKey = MongoAPIKeyManager.findRootAPIKey(
+      database,
+      config.mongoSettings.apiKeys, 
+      config.mongoSettings.grants, 
+      config.createRoot
+    )
+
+    rootKey map { k => (new MongoAPIKeyManager(mongo, database, config.mongoSettings.copy(rootKeyId = k.apiKey)), dbStop) }
   }
 
   def list(apiKeyManager: APIKeyManager[Future]) = {

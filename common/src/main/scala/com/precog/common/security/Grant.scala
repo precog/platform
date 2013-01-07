@@ -153,6 +153,7 @@ case class NewGrantRequest(name: Option[String], description: Option[String], pa
 }
 
 object NewGrantRequest {
+  private implicit val reqPermDecomposer = Permission.decomposerV1Base
   implicit val newGrantRequestIso = Iso.hlist(NewGrantRequest.apply _, NewGrantRequest.unapply _)
   
   val schemaV1 = "name" :: "description" :: ("parentIds" ||| Set.empty[GrantId]) :: "permissions" :: "expirationDate" :: HNil

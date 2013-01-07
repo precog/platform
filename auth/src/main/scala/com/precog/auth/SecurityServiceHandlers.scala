@@ -390,8 +390,6 @@ class APIKeyManagement(val apiKeyManager: APIKeyManager[Future])(implicit val ex
   def deleteGrant(grantId: GrantId): Future[Boolean] = {
     apiKeyManager.deleteGrant(grantId).map(!_.isEmpty)
   } 
-
-  def close() = apiKeyManager.close()
 }
 
 // type SecurityServiceHandlers

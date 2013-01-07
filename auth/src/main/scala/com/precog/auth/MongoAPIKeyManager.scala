@@ -59,12 +59,11 @@ object MongoAPIKeyManagerSettings {
 }
 
 object MongoAPIKeyManager extends Logging {
-  def apply(config: Configuration)(implicit executor: ExecutionContext): APIKeyManager[Future] = {
+  def apply(config: Configuration)(implicit executor: ExecutionContext): (APIKeyManager[Future], Stoppable) = {
     // TODO: should only require either the executor or M, not both.
     implicit val M: Monad[Future] = new FutureMonad(executor)
-    val mongo = RealMongo(config.detach("mongo"))
-    
-    val database = config[String]("mongo.database", "auth_v1")
+
+    val dbName = config[String]("mongo.database", "auth_v1")
     val apiKeys = config[String]("mongo.tokens", "tokens")
     val grants = config[String]("mongo.grants", "grants")
     val deletedAPIKeys = config[String]("mongo.deleted_tokens", apiKeys + "_deleted")
@@ -76,16 +75,15 @@ object MongoAPIKeyManager extends Logging {
       apiKeys, grants, deletedAPIKeys, deletedGrants, timeoutMillis, rootKeyId
     )
 
-    val mongoAPIKeyManager = 
-      new MongoAPIKeyManager(mongo, mongo.database(database), settings)
+    val mongo = RealMongo(config.detach("mongo"))
+    val database = mongo.database(dbName)
+    val mongoAPIKeyManager = new MongoAPIKeyManager(mongo, database, settings)
 
     val cached = config[Boolean]("cached", false)
 
-    if(cached) {
-      new CachingAPIKeyManager(mongoAPIKeyManager)
-    } else {
-      mongoAPIKeyManager
-    }
+    val dbStop = Stoppable.fromFuture(database.disconnect.fallbackTo(Future(())) flatMap { _ => mongo.close })
+
+    (if (cached) new CachingAPIKeyManager(mongoAPIKeyManager) else mongoAPIKeyManager, dbStop)
   }
 
 
@@ -261,6 +259,4 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
       }
     }
   }
-  
-  def close() = database.disconnect.fallbackTo(Future(())).flatMap{_ => mongo.close}
 }

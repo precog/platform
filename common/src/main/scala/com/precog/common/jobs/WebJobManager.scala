@@ -48,7 +48,7 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 
-object WebJobManager {
+object WebJobManager extends client.BaseClient {
   def apply(config: Configuration)(implicit ec: ExecutionContext): JobManager[Response] = {
     RealWebJobManager(
       config[String]("service.protocol", "http"),
@@ -56,35 +56,6 @@ object WebJobManager {
       config[Int]("service.port", 80),
       config[String]("service.path", "/jobs/v1/")
     )
-  }
-
-  /**
-   * A WebJobManager's monad is, essentially, a future. However, there is a
-   * chance that the server could be doing wonky things, so we create a side
-   * channel, the left side of the EitherT, for reporting errors related
-   * strictly to unexpected communication issues with the server.
-   */
-  type Response[+A] = EitherT[Future, String, A]
-
-  def Response[A](a: Future[A])(implicit F: Functor[Future]): Response[A] = EitherT.right(a)
-  def BadResponse(msg: String)(implicit F: Pointed[Future]): Response[Nothing] = EitherT.left(F.point(msg))
-
-  case class WebJobManagerException(message: String) extends Exception(message)
-
-  /**
-   * A natural transformation from Response to Future that maps the left side
-   * to exceptions thrown inside the future.
-   */
- implicit def ResponseAsFuture(implicit F: Functor[Future]) = new (Response ~> Future) {
-    def apply[A](res: Response[A]): Future[A] = res.fold({ error =>
-      throw WebJobManagerException(error)
-    }, identity)
-  }
-
-  implicit def FutureAsResponse(implicit F: Pointed[Future]) = new (Future ~> Response) {
-    def apply[A](fa: Future[A]): Response[A] = EitherT.eitherT(fa.map(\/.right).recoverWith {
-      case WebJobManagerException(msg) => F.point(\/.left[String, A](msg))
-    })
   }
 }
 
