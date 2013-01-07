@@ -38,5 +38,5 @@ object ColumnRef {
     }
   }
 
-  implicit val ordering: scala.math.Ordering[ColumnRef]  = order.toScalaOrdering
+  implicit val ordering: scala.math.Ordering[ColumnRef] = order.toScalaOrdering
 }

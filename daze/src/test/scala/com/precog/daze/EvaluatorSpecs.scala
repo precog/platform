@@ -71,30 +71,40 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
           events.toStream flatMap {
             case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
               val path = Path(pathStr)
-                  
+
               val index = initialIndices get path getOrElse {
                 initialIndices += (path -> currentIndex)
                 currentIndex
               }
-                  
+              
+              val prefix = "filesystem"
               val target = path.path.replaceAll("/$", ".json")
+              
+              val src = {
+                if (pathStr startsWith prefix) {
+                  val (_, target1) = target.splitAt(prefix.length + 1)
+                  io.Source fromFile (new File(target1))
+              } else {
+                  io.Source fromInputStream getClass.getResourceAsStream(target)
+                }
+              }
 
-              val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-              val parsed = src.getLines map JParser.parse toStream
-                  
+              val parsed: Stream[JValue] = src.getLines map JParser.parse toStream
+
               currentIndex += parsed.length
-                  
+              
               parsed zip (Stream from index) map {
                 case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
               }
             }
+
             case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
           }
         }
       }
     }
   }
-  
+
   object Table extends TableCompanion
 
   private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
@@ -113,14 +123,14 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
     val idSource = new FreshAtomicIdSource
   }
 
-  object yggConfig extends YggConfig
-}
+  object yggConfig extends YggConfig 
 
+}
 
 trait EvaluatorSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
     with StdLib[M]
-    with MemoryDatasetConsumer[M] { self =>
+    with LongIdMemoryDatasetConsumer[M] { self =>
   
   import Function._
   
@@ -925,6 +935,54 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
 
         result2 must contain(100)
+      }
+    }
+    
+    "produce a non-doubled result when counting the union of new sets" in {
+      /*
+       * clicks := //clicks
+       * clicks' := new clicks
+       * 
+       * count(clicks' union clicks')
+       */
+      
+      val line = Line(0, "")
+      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
+      
+      val clicksP = dag.New(line, clicks)
+      val input = dag.Reduce(line, Count,
+        dag.IUI(line, true, clicksP, clicksP))
+        
+      testEval(input) { resultE =>
+        val result = resultE collect {
+          case (ids, SDecimal(d)) => d
+        }
+        
+        result must contain(100)
+      }
+    }
+    
+    "produce a non-zero result when counting the intersect of new sets" in {
+      /*
+       * clicks := //clicks
+       * clicks' := new clicks
+       * 
+       * count(clicks' intersect clicks')
+       */
+      
+      val line = Line(0, "")
+      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
+      
+      val clicksP = dag.New(line, clicks)
+      val input = dag.Reduce(line, Count,
+        dag.IUI(line, false, clicksP, clicksP))
+        
+      testEval(input) { resultE =>
+        val result = resultE collect {
+          case (ids, SDecimal(d)) => d
+        }
+        
+        result must contain(100)
       }
     }
 

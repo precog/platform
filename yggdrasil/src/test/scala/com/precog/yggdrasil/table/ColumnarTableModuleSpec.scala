@@ -60,6 +60,9 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with TransformSpec[M]
     with CompactSpec[M] 
     with TakeRangeSpec[M]
+    with ToArraySpec[M]
+    with ConcatSpec[M]
+    with SampleSpec[M]
     with PartitionMergeSpec[M]
     with DistinctSpec[M] 
     with SchemasSpec[M]
@@ -317,6 +320,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
       "perform a trivial map1" in testMap1IntLeaf
+      "perform deepmap1 using numeric coercion" in testDeepMap1CoerceToDouble
+      "perform map1 using numeric coercion" in testMap1CoerceToDouble
       "fail to map1 into array and object" in testMap1ArrayObject
       "perform a less trvial map1" in checkMap1
       //"give the identity transform for the trivial filter" in checkTrivialFilter
@@ -358,7 +363,33 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "outer concatenate arrays with empty arrays" in testOuterArrayConcatEmptyArray
       "inner array concatenate when one side is not an array" in testInnerArrayConcatLeftEmpty
       "outer array concatenate when one side is not an array" in testOuterArrayConcatLeftEmpty
-      "delete elements according to a JType" in checkObjectDelete //.set(minTestsOk -> 5000) TODO: saw an error here once
+
+      "delete elements according to a JType" in checkObjectDelete
+      "delete only field in object without removing from array" in {
+        val JArray(elements) = JParser.parse("""[
+          {"foo": 4, "bar": 12},
+          {"foo": 5},
+          {"bar": 45},
+          {},
+          {"foo": 7, "bar" :23, "baz": 24}
+        ]""")
+
+        val sample = SampleData(elements.toStream)
+        val table = fromSample(sample)
+
+        val spec = ObjectDelete(Leaf(Source), Set(CPathField("foo")))
+        val results = toJson(table.transform(spec))
+        val JArray(expected) = JParser.parse("""[
+          {"bar": 12},
+          {},
+          {"bar": 45},
+          {},
+          {"bar" :23, "baz": 24}
+        ]""")
+
+        results.copoint mustEqual expected.toStream
+      }
+
       "perform a trivial type-based filter" in checkTypedTrivial
       "perform a less trivial type-based filter" in checkTyped
       "perform a type-based filter across slice boundaries" in testTypedAtSliceBoundary
@@ -411,12 +442,30 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "select the correct rows using scalacheck" in checkTakeRange
     }
 
+    "in toArray" >> {
+      "create a single column given two single columns" in testToArrayHomogeneous
+      "create a single column given heterogeneous data" in testToArrayHeterogeneous
+    }
+
+    "in concat" >> {
+      "concat two tables" in testConcat
+    }
+
     "in schemas" >> {
       "find a schema in single-schema table" in testSingleSchema
+      "find a schema in homogeneous array table" in testHomogeneousArraySchema
       "find schemas separated by slice boundary" in testCrossSliceSchema
       "extract intervleaved schemas" in testIntervleavedSchema
       "don't include undefineds in schema" in testUndefinedsInSchema
       "deal with most expected types" in testAllTypesInSchema
+    }
+
+    "in sample" >> {
+       "sample from a dataset" in testSample
+       "return no samples given empty sequence of transspecs" in testSampleEmpty
+       "sample from a dataset given non-identity transspecs" in testSampleTransSpecs
+       "return full set when sample size larger than dataset" in testLargeSampleSize
+       "resurn empty table when sample size is 0" in test0SampleSize
     }
   }
 

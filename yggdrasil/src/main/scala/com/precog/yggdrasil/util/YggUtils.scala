@@ -344,6 +344,7 @@ object KafkaTools extends Command {
       })
       opt("l", "local", "<local kafka file>", "local kafka file", {s: String => config.dumpLocal = Some(s) })
       opt("c", "central", "<central kafka file>", "dump central kafka file", {s: String => config.dumpCentral = Some(s) })
+      opt("u", "unparsed", "<kafka file>", "dump raw JSON from kafka file", {s: String => config.dumpRaw = Some(s) })
       opt("c2l", "centralToLocal", "<central kafka file>", "convert central kafka file to local kafak", {s: String => config.convertCentral = Some(s) })
     }
     if (parser.parse(args)) {
@@ -357,6 +358,7 @@ object KafkaTools extends Command {
     import config._
     dumpLocal.foreach { f => dump(new File(f), range, LocalFormat) } 
     dumpCentral.foreach { f => dump(new File(f), range, CentralFormat) } 
+    dumpRaw.foreach { f => dump(new File(f), range, RawFormat) }
     convertCentral.foreach { convert(_) }
   }
 
@@ -400,6 +402,7 @@ object KafkaTools extends Command {
   class Config(var convertCentral: Option[String] = None, 
                var dumpLocal: Option[String] = None,
                var dumpCentral: Option[String] = None,
+               var dumpRaw: Option[String] = None,
                var range: MessageRange = MessageRange.ALL)
 
   case class MessageRange(start: Option[Int], finish: Option[Int]) {
@@ -445,6 +448,22 @@ object KafkaTools extends Command {
 
   sealed trait Format {
     def dump(i: Int, msg: MessageAndOffset)
+  }
+
+  case object RawFormat extends Format {
+    def dump(i: Int, msg: MessageAndOffset) {
+      val message = msg.message.payload
+      // Read past magic, type, and stop bytes
+      message.get()
+      val tpe = message.get()
+      message.get()
+
+      val bytes = new Array[Byte](message.remaining)
+
+      message.get(bytes)
+
+      println("Type: %d, payload: %s".format(tpe, new String(bytes, "UTF-8")))
+    }
   }
 
   case object LocalFormat extends Format {
@@ -508,43 +527,36 @@ object ZookeeperTools extends Command {
     config.showAgents.foreach { path =>
       showChildren("agents", path, pathsAt(path, client))
     }
-    config.checkpointUpdate.foreach {
-      case (path, data) =>
-        val newCheckpoint = if (data == "initial") {
-          """{"offset":0,"messageClock":[[0,0]]}"""
-        } else {
-          data
-        }
-        
-        println("Loading initial checkpoint: " + newCheckpoint)
-        JParser.parse(newCheckpoint).validated[YggCheckpoint] match {
-          case Success(_) =>
-            if (! client.exists(path)) {
-              client.createPersistent(path, true)
-            }
 
-            client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
-              def update(cur: Array[Byte]): Array[Byte] = newCheckpoint.getBytes 
-            })  
+    def xyz(path: String, data: String) {
+      JParser.parseFromString(data).flatMap(_.validated[YggCheckpoint]) match {
+        case Success(_) =>
+          if (!client.exists(path)) client.createPersistent(path, true)
 
-            println("Checkpoint updated: %s with %s".format(path, newCheckpoint))
-          case Failure(e) => println("Invalid json for checkpoint: %s".format(e))
+          val updater = new DataUpdater[Array[Byte]] {
+            def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
+          }
+
+          client.updateDataSerialized(path, updater)
+          println("Checkpoint updated: %s with %s".format(path, data))
+
+        case Failure(e) =>
+          println("Invalid json for checkpoint: %s".format(e))
       }
     }
-    config.relayAgentUpdate.foreach { 
-      case (path, data) =>
-        JParser.parse(data).validated[EventRelayState] match {
-          case Success(_) =>
-            if (! client.exists(path)) {
-              client.createPersistent(path, true)
-            }
 
-            client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
-              def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
-            })  
-            println("Agent updated: %s with %s".format(path, data))
-          case Failure(e) => println("Invalid json for agent: %s".format(e))
-      }
+    config.checkpointUpdate.foreach {
+      case (path, data) =>
+        val newCheckpoint = data match {
+          case "initial" => """{"offset":0,"messageClock":[[0,0]]}"""
+          case s => s
+        }
+        println("Loading initial checkpoint: " + newCheckpoint)
+        xyz(path, newCheckpoint)
+    }
+
+    config.relayAgentUpdate.foreach { 
+      case (path, data) => xyz(path, data)
     }
   }
 
@@ -663,11 +675,10 @@ object IngestTools extends Command {
 
   def getJsonAt(path: String, client: ZkClient): Option[JValue] = {
     val bytes = client.readData(path).asInstanceOf[Array[Byte]]
-    if(bytes != null && bytes.length != 0) {
-      Some(JParser.parse(new String(bytes)))
-    } else {
+    if (bytes == null || bytes.length == 0)
       None
-    }
+    else
+      JParser.parseFromByteBuffer(ByteBuffer.wrap(bytes)).toOption
   }
 
   def getStatAt(path: String, conn: ZkConnection): Option[Stat] = {
@@ -755,12 +766,14 @@ object ImportTools extends Command with Logging {
       config.input.foreach {
         case (db, input) =>
           logger.info("Inserting batch: %s:%s".format(db, input))
-          val result = JParser.parseFromFile(new File(input))
-          val events = result.valueOr(e => throw e).children.map { child =>
-            EventMessage(EventId(pid, sid.getAndIncrement), Event(config.apiKey, Path(db), config.accountId, child, Map.empty))
+          val rows = JParser.parseManyFromFile(new File(input)).valueOr(throw _)
+          val events = rows.map { child =>
+            val id = EventId(pid, sid.getAndIncrement)
+            val event = Event(config.apiKey, Path(db), config.accountId, child, Map.empty)
+            EventMessage(id, event)
           }
           
-          logger.info(events.size + " total inserts")
+          logger.info("%d total inserts" format events.size)
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
               logger.info("Saving batch " + id + " of size " + batch.size)
@@ -990,15 +1003,13 @@ object CSVToJSONConverter {
 
   private val Timestamp = """^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}\.\d{3})\d{0,3}$""".r
 
-  def parse(s: String, ts: Boolean = false, verbose: Boolean = false): JValue = {
-    try {
-      JParser.parse(s)
-    } catch {
-      case ex =>
-        s match {
-          case Timestamp(d, t) if (ts) => JString("%sT%sZ".format(d,t))
-          case s                       => JString(s)
-        }
+  def parse(s: String, ts: Boolean = false, verbose: Boolean = false): JValue =
+    JParser.parseFromString(s).getOrElse {
+      s match {
+        case Timestamp(d, t) if (ts) =>
+          JString("%sT%sZ".format(d,t))
+        case s =>
+          JString(s)
+      }
     }
-  }
 }

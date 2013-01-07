@@ -1,6 +1,16 @@
 Precog for MongoDB Changelog
 ==========
 
+Nightly
+-------------
+* Fix a bug resulting in concurrent usage of Mongo cursors
+	
+Version 1.1.1
+-------------
+
+* Fix a bug in table loads that caused join queries to return
+empty sets
+
 Version 1.1
 ----------
 * Add support for database authentication for MongoDB (see

@@ -49,19 +49,22 @@ trait IdSourceScannerModule[M[+_]] extends TableModule[M] with YggConfigComponen
 
   def freshIdScanner = new CScanner {
     private val blockSize: Int = 10000
+    
+    @volatile
     private var idBlocks: Array[Long] = new Array[Long](0)
+    private val blockLock = new AnyRef
 
     @tailrec
     private final def fillArrayWithIds(ids: Array[Long], idsOffset: Int, from: Long) {
       val idx = (from / blockSize).toInt
 
       if (idx >= idBlocks.length) {
-        idBlocks.synchronized {
+        blockLock synchronized {
           if (idx >= idBlocks.length) {
             val tmp = new Array[Long](idx + 1)
             System.arraycopy(idBlocks, 0, tmp, 0, idBlocks.length)
+            tmp(idx) = yggConfig.idSource.nextIdBlock(blockSize)
             idBlocks = tmp
-            idBlocks(idx) = yggConfig.idSource.nextIdBlock(blockSize)
           }
         }
         fillArrayWithIds(ids, idsOffset, from)

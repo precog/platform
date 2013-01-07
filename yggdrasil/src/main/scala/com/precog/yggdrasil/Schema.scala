@@ -24,7 +24,7 @@ import com.precog.common.json._
 import com.precog.bytecode._
 
 object Schema {
-  def ctypes(jtype : JType): Set[CType] = jtype match {
+  def ctypes(jtype: JType): Set[CType] = jtype match {
     case JArrayFixedT(indices) if indices.isEmpty => Set(CEmptyArray)
     case JObjectFixedT(fields) if fields.isEmpty => Set(CEmptyObject)
     case JArrayFixedT(indices) => indices.values.toSet.flatMap { tpe: JType => ctypes(tpe) }
@@ -37,6 +37,18 @@ object Schema {
     case JBooleanT => Set(CBoolean)
     case JNullT => Set(CNull)
     case _ => Set.empty
+  }
+
+  def cpath(jtype: JType): Seq[CPath] = {
+    val cpaths = jtype match {
+      case JArrayFixedT(indices) => indices flatMap { case (idx, tpe) => CPath(CPathIndex(idx)) combine cpath(tpe) } toSeq
+      case JObjectFixedT(fields) => fields flatMap { case (name, tpe) => CPath(CPathField(name)) combine cpath(tpe) } toSeq
+      case JArrayHomogeneousT(elemType) => Seq(CPath(CPathArray))
+      case JNumberT | JTextT | JBooleanT | JNullT => Nil
+      case _ => Nil
+    }
+
+    cpaths sorted
   }
 
   private def fromCValueType(t: CValueType[_]): Option[JType] = t match {
@@ -131,7 +143,7 @@ object Schema {
     case (JArrayFixedT(elements), (CPath(CPathIndex(i), tail @ _*), ctpe)) =>
       elements.get(i).map(includes(_, CPath(tail: _*), ctpe)).getOrElse(false)
     case (JArrayHomogeneousT(jElemType), (CPath(CPathArray, _*), CArrayType(cElemType))) =>
-      fromCValueType(cElemType) == jElemType
+      fromCValueType(cElemType) == Some(jElemType)
 
     // TODO This is a bit contentious, as this situation will need to be dealt
     // with at a higher level if we let parts of a heterogeneous array fall

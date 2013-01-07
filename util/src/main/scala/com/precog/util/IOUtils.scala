@@ -30,6 +30,8 @@ import org.apache.commons.io.FileUtils
 import scalaz._
 import scalaz.effect.IO
 
+import scala.collection.JavaConversions.{seqAsJavaList}
+ 
 object IOUtils {
   final val UTF8 = "UTF-8"
 
@@ -56,6 +58,11 @@ object IOUtils {
   def writeToFile(s: String, f: File): IO[PrecogUnit] = IO {
     FileUtils.writeStringToFile(f, s, UTF8)
     PrecogUnit
+  }
+
+  def writeSeqToFile[A](s0: Seq[A], f: File): IO[Unit] = IO {
+    val s = seqAsJavaList(s0)
+    FileUtils.writeLines(f, s)
   }
   
   /** Performs a safe write to the file. Returns true

@@ -89,6 +89,7 @@ trait ColumnarTableModule[M[+_]]
     with ColumnarTableTypes
     with IdSourceScannerModule[M]
     with SliceTransforms[M]
+    with SamplableColumnarTableModule[M]
     with IndicesModule[M]
     with YggConfigComponent {
       
@@ -158,7 +159,7 @@ trait ColumnarTableModule[M[+_]]
 
     def constArray[A: CValueType](v: collection.Set[CArray[A]]): Table = {
       val column = ArrayHomogeneousArrayColumn(v.map(_.value).toArray(CValueType[A].manifest.arrayManifest))
-      Table(Slice(Map(ColumnRef(CPath.Identity, CArrayType(CValueType[A])) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
+      Table(Slice(Map(ColumnRef(CPathArray, CArrayType(CValueType[A])) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
     def constNull: Table = 
@@ -312,7 +313,7 @@ trait ColumnarTableModule[M[+_]]
       (for {
         source <- grouping.sources
         groupKeyProjections <- mkProjections(source.groupKeySpec)
-        disjunctGroupKeyTransSpecs = groupKeyProjections.map { case (key, spec) => WrapObject(spec, key.toString) }
+        disjunctGroupKeyTransSpecs = groupKeyProjections.map { case (key, spec) => spec }
       } yield {
         TableIndex.createFromTable(source.table, disjunctGroupKeyTransSpecs, source.targetTrans.getOrElse(TransSpec1.Id)).map { index =>
           IndexedSource(source.groupId, index, groupKeyProjections.map(_._1))
@@ -377,26 +378,11 @@ trait ColumnarTableModule[M[+_]]
               }
           }
         }
-        
-        def tableFromGroupKey(key: Seq[JValue], cpaths: Seq[CPathField]): Table = {
-          val slice = new Slice {
-            val size = 1
-            val columns: Map[ColumnRef, Column] = key.zip(cpaths).map {
-              case (jv, cpath) =>
-                // TODO: if CType.toCValue learns how to handle CUndefined
-                // we can remove this pattern match.
-                val cvalue = jv match {
-                  case JUndefined => CUndefined
-                  case _ => CType.toCValue(jv)
-                }
-                val ref = ColumnRef(cpath, cvalue.cType)
-                val column = Column.const(cvalue)
-                (ref, column)
-            }.toMap
-          }
 
-          // should be sorted by groupkeyspecsoure
-          Table(slice :: StreamT.empty[M, Slice], ExactSize(1))
+        def tableFromGroupKey(key: Seq[JValue], cpaths: Seq[CPathField]): Table = {
+          val items = (cpaths zip key).map(t => (t._1.name, t._2))
+          val row = JObject(items.toMap)
+          Table.fromJson(row #:: Stream.empty)
         }
 
         val groupKeys = unionOfIntersections(indicesGroupedBySource)
@@ -448,9 +434,119 @@ trait ColumnarTableModule[M[+_]]
         }
       }
     }
+
+    /**
+     * Given a JValue, an existing map of columnrefs to column data,
+     * a sliceIndex, and a sliceSize, return an updated map.
+     */
+    def withIdsAndValues(jv: JValue, into: Map[ColumnRef, (BitSet, Array[_])],
+      sliceIndex: Int, sliceSize: Int): Map[ColumnRef, (BitSet, Array[_])] = {
+
+      jv.flattenWithPath.foldLeft(into) {
+        case (acc, (jpath, JUndefined)) => acc
+        case (acc, (jpath, v)) =>
+          val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
+          val ref = ColumnRef(CPath(jpath), ctype)
+          
+          val pair: (BitSet, Array[_]) = v match {
+            case JBool(b) =>
+              val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Boolean](sliceSize))).asInstanceOf[(BitSet, Array[Boolean])]
+              col(sliceIndex) = b
+              (defined + sliceIndex, col)
+              
+            case JNum(d) => {
+              val isLong = ctype == CLong
+              val isDouble = ctype == CDouble
+              
+              val (defined, col) = if (isLong) {
+                val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Long](sliceSize))).asInstanceOf[(BitSet, Array[Long])]
+                col(sliceIndex) = d.toLong
+                (defined, col)
+              } else if (isDouble) {
+                val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Double](sliceSize))).asInstanceOf[(BitSet, Array[Double])]
+                col(sliceIndex) = d.toDouble
+                (defined, col)
+              } else {
+                val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
+                col(sliceIndex) = d
+                (defined, col)
+              }
+              
+              (defined + sliceIndex, col)
+            }
+              
+            case JString(s) =>
+              val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[String](sliceSize))).asInstanceOf[(BitSet, Array[String])]
+              col(sliceIndex) = s
+              (defined + sliceIndex, col)
+              
+            case JArray(Nil) =>
+              val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
+              (defined + sliceIndex, col)
+              
+            case JObject(_) =>
+              val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
+              (defined + sliceIndex, col)
+              
+            case JNull        =>
+              val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
+              (defined + sliceIndex, col)
+          }
+          
+          acc + (ref -> pair)
+      }
+    }
+
+    def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
+      val sliceSize = maxSliceSize.getOrElse(yggConfig.maxSliceSize)
+  
+      def makeSlice(sampleData: Stream[JValue]): (Slice, Stream[JValue]) = {
+        val (prefix, suffix) = sampleData.splitAt(sliceSize)
+  
+        @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
+          from match {
+            case jv #:: xs =>
+              val refs = withIdsAndValues(jv, into, sliceIndex, sliceSize)
+              buildColArrays(xs, refs, sliceIndex + 1)
+            case _ =>
+              (into, sliceIndex)
+          }
+        }
+    
+        // FIXME: If prefix is empty (eg. because sampleData.data is empty) the generated
+        // columns won't satisfy sampleData.schema. This will cause the subsumption test in
+        // Slice#typed to fail unless it allows for vacuous success
+        val slice = new Slice {
+          val (cols, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, (BitSet, Array[_])], 0) 
+          val columns = cols map {
+            case (ref @ ColumnRef(_, CBoolean), (defined, values))     => (ref, ArrayBoolColumn(defined, values.asInstanceOf[Array[Boolean]]))
+            case (ref @ ColumnRef(_, CLong), (defined, values))        => (ref, ArrayLongColumn(defined, values.asInstanceOf[Array[Long]]))
+            case (ref @ ColumnRef(_, CDouble), (defined, values))      => (ref, ArrayDoubleColumn(defined, values.asInstanceOf[Array[Double]]))
+            case (ref @ ColumnRef(_, CNum), (defined, values))         => (ref, ArrayNumColumn(defined, values.asInstanceOf[Array[BigDecimal]]))
+            case (ref @ ColumnRef(_, CString), (defined, values))      => (ref, ArrayStrColumn(defined, values.asInstanceOf[Array[String]]))
+            case (ref @ ColumnRef(_, CEmptyArray), (defined, values))  => (ref, new BitsetColumn(defined) with EmptyArrayColumn)
+            case (ref @ ColumnRef(_, CEmptyObject), (defined, values)) => (ref, new BitsetColumn(defined) with EmptyObjectColumn)
+            case (ref @ ColumnRef(_, CNull), (defined, values))        => (ref, new BitsetColumn(defined) with NullColumn)
+          }
+        }
+    
+        (slice, suffix)
+      }
+      
+      Table(
+        StreamT.unfoldM(values) { events =>
+          M.point {
+            (!events.isEmpty) option {
+              makeSlice(events.toStream)
+            }
+          }
+        },
+        ExactSize(values.length)
+      )
+    }
   }
 
-  abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: TableSize) extends TableLike { self: Table =>
+  abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: TableSize) extends TableLike with SamplableColumnarTable { self: Table =>
     import SliceTransform._
 
     private final val readStarts = new java.util.concurrent.atomic.AtomicInteger
@@ -507,6 +603,17 @@ trait ColumnarTableModule[M[+_]]
         }
       }
       
+      Table(slices2, size)
+    }
+
+    def concat(t2: Table): Table = {
+      val resultSize = TableSize(size.maxSize + t2.size.maxSize)
+      val resultSlices = slices ++ t2.slices
+      Table(resultSlices, resultSize)
+    }
+
+    def toArray[A](implicit tpe: CValueType[A]): Table = {
+      val slices2 = slices map { _.toArray[A] }
       Table(slices2, size)
     }
 
@@ -1211,7 +1318,7 @@ trait ColumnarTableModule[M[+_]]
           case CLong | CDouble | CNum => JNumberT
           case CString => JTextT
           case CDate => JTextT
-          case CArrayType(elemType) => JArrayHomogeneousT(leafType(elemType))
+          case CArrayType(elemType) => leafType(elemType)
           case CEmptyObject => JObjectFixedT(Map.empty)
           case CEmptyArray => JArrayFixedT(Map.empty)
           case CNull => JNullT
@@ -1281,7 +1388,7 @@ trait ColumnarTableModule[M[+_]]
 
       collectSchemas(Set.empty, slices)
     }
-    
+
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
       def delimiterBuffer = {
         val back = CharBuffer.allocate(1)

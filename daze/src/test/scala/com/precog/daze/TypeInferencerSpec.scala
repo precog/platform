@@ -37,7 +37,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
   with StatsLib[M]
   with MathLib[M]
   with InfixLib[M]
-  with MemoryDatasetConsumer[M] {
+  with LongIdMemoryDatasetConsumer[M] {
 
   import dag._
   import instructions.{

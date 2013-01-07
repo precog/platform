@@ -22,7 +22,7 @@ package quirrel
 package emitter
 
 import parser.AST
-import typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
+import typer.{Binder, ProvenanceChecker}
 import bytecode.Instructions
 
 import scalaz.{StateT, Id, Bind, Monoid}
@@ -76,7 +76,7 @@ trait Emitter extends AST
   private def reduce[A](xs: Iterable[A])(implicit m: Monoid[A]) = xs.foldLeft(mzero[A])(_ |+| _)
 
   def emit(expr: Expr): Vector[Instruction] = {
-    val trace = buildTrace(Map())(expr)
+    lazy val trace = expr.trace
     
     def insertInstrAtMulti(is: Seq[Instruction], _idx: Int): EmitterState = StateT.apply[Id, Emission, Unit] { e => 
       val idx = if (_idx < 0) (e.bytecode.length + 1 + _idx) else _idx
@@ -444,7 +444,10 @@ trait Emitter extends AST
             case (vector, (provenance, fields)) =>
               val singles = fields.map(field2ObjInstr)
 
-              val joinInstr = emitInstr(if (provenance == ValueProvenance) Map2Cross(JoinObject) else Map2Match(JoinObject))
+              val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
+                val resolved = e.subResolve(provenance)
+                emitInstr(if (resolved == ValueProvenance) Map2Cross(JoinObject) else Map2Match(JoinObject))(e)
+              }
 
               val joins = Vector.fill(singles.length - 1)(joinInstr)
 
@@ -467,7 +470,10 @@ trait Emitter extends AST
               val singles = elements.map { case (expr, idx) => emitExpr(expr, dispatches) >> emitInstr(Map1(WrapArray)) }
               val indices = elements.map(_._2)
 
-              val joinInstr = emitInstr(if (provenance == ValueProvenance) Map2Cross(JoinArray) else Map2Match(JoinArray))
+              val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
+                val resolved = e.subResolve(provenance)
+                emitInstr(if (resolved == ValueProvenance) Map2Cross(JoinArray) else Map2Match(JoinArray))(e)
+              }
 
               val joins = Vector.fill(singles.length - 1)(joinInstr)
 
@@ -638,7 +644,7 @@ trait Emitter extends AST
           emitExpr(child, dispatches) >> emitInstr(Map1(Neg))
         
         case ast.Paren(loc, child) => 
-          mzero[EmitterState]
+          emitExpr(child, dispatches)
       }) >> emitConstraints(expr, dispatches)
     }
     

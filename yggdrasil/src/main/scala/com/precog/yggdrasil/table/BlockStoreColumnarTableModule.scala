@@ -303,18 +303,17 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
     private[BlockStoreColumnarTableModule] object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
 
-    private[BlockStoreColumnarTableModule] def addGlobalId(spec: TransSpec1) = {
-      Scan(
-        WrapArray(spec), 
-        new CScanner {
-          type A = Long
-          val init = 0l
-          def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-            val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
-            (a + range.end + 1, cols + (ColumnRef(CPath(CPathIndex(1)), CLong) -> globalIdColumn))
-          }
-        }
-      )
+    object addGlobalIdScanner extends CScanner {
+      type A = Long
+      val init = 0l
+      def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+        val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
+        (a + range.end + 1, cols + (ColumnRef(CPath(CPathIndex(1)), CLong) -> globalIdColumn))
+      }
+    }
+    
+    def addGlobalId(spec: TransSpec1) = {
+      Scan(WrapArray(spec), addGlobalIdScanner)
     }
 
     def apply(slices: StreamT[M, Slice], size: TableSize) = {
