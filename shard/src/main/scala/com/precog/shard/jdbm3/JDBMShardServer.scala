@@ -31,6 +31,8 @@ import blueeyes.BlueEyesServer
 import blueeyes.bkka._
 import blueeyes.util.Clock
 
+import org.streum.configrity.Configuration
+
 import scalaz._
 
 object JDBMShardServer extends BlueEyesServer 
@@ -38,11 +40,13 @@ object JDBMShardServer extends BlueEyesServer
     with JDBMQueryExecutorComponent 
     with MongoAPIKeyManagerComponent 
     with AccountManagerClientComponent
-    with JobManagerClientComponent
 {
+  import WebJobManager._
   
   val clock = Clock.System
 
-  val asyncContext = defaultFutureDispatch
+  implicit val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+
+  def jobManagerFactory(config: Configuration): JobManager[Future] = WebJobManager(config).withM[Future]
 }
