@@ -30,9 +30,8 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
         std::stats::linearRegression(4, 0)
       """.stripMargin
 
-      val results = evalE(input)
+      evalE(input) must throwA[IllegalArgumentException]
 
-      results must haveSize(0)  
     }
 
     "return empty set when the dependent variable is not at the root path" >> {
@@ -42,9 +41,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
         std::stats::linearRegression({height: medals.HeightIncm}, {weight: medals.Weight})
       """.stripMargin
 
-      val results = evalE(input)
-
-      results must haveSize(0)  
+      evalE(input) must beEmpty
     }
 
     "return empty set when given feature values of wrong type" in {
@@ -54,9 +51,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
         std::stats::linearRegression(medals.Country, medals.WeightIncm)
       """.stripMargin
 
-      val results = evalE(input)
-
-      results must haveSize(0)  
+      evalE(input) must beEmpty
     }
 
     "return empty set when given dependent values of wrong type" in {
@@ -66,9 +61,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
         std::stats::linearRegression(medals.WeightIncm, medals.Country)
       """.stripMargin
 
-      val results = evalE(input)
-
-      results must haveSize(0)  
+      evalE(input) must beEmpty
     }
   }
 }
