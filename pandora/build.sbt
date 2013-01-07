@@ -1,7 +1,7 @@
-import sbt._
 import Keys._
 import AssemblyKeys._
 import java.io.File
+import scala.sys.process.{Process => SProcess, _}
 
 name := "pandora"
 
@@ -41,7 +41,7 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
   val dataTarget = new File(target, "data")
   def performExtract = {
     s.log.info("Extracting sample projection data into " + target.getCanonicalPath())
-    if (Process("./regen-jdbm-data.sh", Seq(dataTarget.getCanonicalPath)).! != 0) {
+    if (SProcess("./regen-jdbm-data.sh", Seq(dataTarget.getCanonicalPath)).!(new FileProcessLogger(new File("./target/test-gendata.log"))) != 0) {
       error("Failed to extract data")
     } else {
       s.log.info("Extraction complete.")
@@ -66,7 +66,7 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
   back
 }
 
-test <<= test dependsOn extractData
+testOptions in Test <<= testOptions dependsOn extractData
 
 parallelExecution in Test := false
 
