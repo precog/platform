@@ -105,7 +105,7 @@ if [ $SUCCESS -eq 0 -a -z "$SKIPTEST" ]; then
     echo "Running full shard test"
     wait_until_port_open $MONGOPORT
 	
-    shard/test.sh -m $MONGOPORT
+    shard/test.sh #-m $MONGOPORT
     SUCCESS=$(($SUCCESS || $?))
 fi
 
