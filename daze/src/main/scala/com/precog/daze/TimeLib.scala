@@ -111,13 +111,6 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           ISO.toString()
         }
       }
-
-    //val operandType = (Some(SString), Some(SString))
-    //val operation: PartialFunction[(SValue, SValue), SValue] = {
-    //  case (SString(time), SString(fmt)) if (isValidFormat(time, fmt)) =>
-    //    val format = DateTimeFormat.forPattern(fmt).withOffsetParsed()
-    //    val ISO = format.parseDateTime(time)
-    //    SString(ISO.toString())
     }
   }
 
@@ -139,15 +132,6 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
-    
-    /* val operandType = (Some(SString), Some(SString))
-    val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SString(time), SString(tz)) if (isValidISO(time) && isValidTimeZone(tz)) => 
-        val format = ISODateTimeFormat.dateTime()
-        val timeZone = DateTimeZone.forID(tz)
-        val dateTime = new DateTime(time, timeZone)
-        SString(format.print(dateTime))
-    } */
   }
 
   trait TimePlus extends Op2 {
@@ -190,14 +174,6 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
-
-    //val operandType = (Some(SString), Some(SDecimal)) 
-
-    //val operation: PartialFunction[(SValue, SValue), SValue] = {
-    //  case (SString(time), SDecimal(incr)) if isValidISO(time) => 
-    //    val newTime = parseDateTime(time, true)
-    //    SString(plus(newTime, incr.toInt))
-    //}
 
     def plus(d: DateTime, i: Int): String
   }
@@ -254,16 +230,6 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
     }
 
     def between(d1: DateTime, d2: DateTime): Long
-    /* val operandType = (Some(SString), Some(SString)) 
-
-    val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => 
-        val newTime1 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time1)
-        val newTime2 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time2)
-        SDecimal(between(newTime1, newTime2))
-    }
-
-    def between(d1: DateTime, d2: DateTime): Long */
   }
 
   object YearsBetween extends Op2(TimeNamespace, "yearsBetween") with TimeBetween{
@@ -341,15 +307,6 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
-    
-    /* val operandType = (Some(SDecimal), Some(SString))
-    val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SDecimal(time), SString(tz)) if (time >= Long.MinValue && time <= Long.MaxValue && isValidTimeZone(tz)) =>  
-        val format = ISODateTimeFormat.dateTime()
-        val timeZone = DateTimeZone.forID(tz)
-        val dateTime = new DateTime(time.toLong, timeZone)
-        SString(format.print(dateTime))
-    } */
   }
 
   object GetMillis extends Op1(TimeNamespace, "getMillis") {
@@ -366,13 +323,6 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
-    
-    /* val operandType = Some(SString)
-    val operation: PartialFunction[SValue, SValue] = {
-      case SString(time) if isValidISO(time) => 
-        val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-        SDecimal(newTime.getMillis)
-    } */    
   }
 
   object TimeZone extends Op1(TimeNamespace, "timeZone") {
@@ -390,14 +340,6 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
-    
-    /* val operandType = Some(SString)
-    val operation: PartialFunction[SValue, SValue] = {
-      case SString(time) if isValidISO(time) => 
-        val format = DateTimeFormat.forPattern("ZZ")
-        val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-        SString(format.print(newTime))
-    } */
   }
 
   object Season extends Op1(TimeNamespace, "season") {
@@ -419,19 +361,6 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
-    
-    /* val operandType = Some(SString)
-    val operation: PartialFunction[SValue, SValue] = {
-      case SString(time) if isValidISO(time) => 
-        val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-        val day = newTime.dayOfYear.get
-        SString(
-          if (day >= 79 & day < 171) "spring"
-          else if (day >= 171 & day < 265) "summer"
-          else if (day >= 265 & day < 355) "fall"
-          else "winter"
-        )
-    } */
   } 
 
   trait TimeFraction extends Op1 {
@@ -450,14 +379,6 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
     }
 
     def fraction(d: DateTime): Int
-    /* val operandType = Some(SString)
-    val operation: PartialFunction[SValue, SValue] = {
-      case SString(time) if isValidISO(time) => 
-        val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-        SDecimal(fraction(newTime))
-    }
-
-    def fraction(d: DateTime): Int */
   }
 
   object Year extends Op1(TimeNamespace, "year") with TimeFraction {
@@ -530,15 +451,6 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
     }
 
     def fmt: DateTimeFormatter
-
-    /* val operandType = Some(SString)
-    val operation: PartialFunction[SValue, SValue] = {
-      case SString(time) if isValidISO(time) => 
-        val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-        SString(fmt.print(newTime))
-    }
-
-    def fmt: DateTimeFormatter */
   }
 
   object Date extends Op1(TimeNamespace, "date") with TimeTruncation {
