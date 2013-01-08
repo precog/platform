@@ -29,7 +29,7 @@ import java.nio.CharBuffer
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.actor.ActorSystem
+import akka.actor._
 import akka.dispatch._
 import akka.util.Duration
 
@@ -61,12 +61,6 @@ class AsyncQueryExecutorSpec extends TestAsyncQueryExecutorFactory with Specific
   val apiKey = "O.o"
   val tickDuration = 50 // ms
 
-  // Waits for `numTicks` ticks before returning, well, nothing useful.
-  def waitFor(numTicks: Int): Future[Unit] = Future {
-    Thread.sleep(tickDuration * numTicks)
-    ()
-  }
-
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[JobId] = {
     val timeout = ticksToTimeout map (tickDuration.toLong * _)
     for {
@@ -77,10 +71,8 @@ class AsyncQueryExecutorSpec extends TestAsyncQueryExecutorFactory with Specific
     }
   }
 
-  def cancel(jobId: JobId, ticks: Int): Future[Boolean] = {
-    Future { Thread.sleep(ticks * tickDuration) } flatMap { _ =>
-      jobManager.cancel(jobId, "Yarrrr", yggConfig.clock.now()) map (_.fold(_ => false, _ => true))
-    }
+  def cancel(jobId: JobId, ticks: Int): Future[Boolean] = schedule(ticks) {
+    jobManager.cancel(jobId, "Yarrrr", yggConfig.clock.now()).map (_.fold(_ => false, _ => true)).copoint
   }
 
   def poll(jobId: JobId): Future[Option[(Option[MimeType], String)]] = {
@@ -107,7 +99,12 @@ class AsyncQueryExecutorSpec extends TestAsyncQueryExecutorFactory with Specific
     } yield finalJob
   }
 
+  val ticker = actorSystem.actorOf(Props(new Ticker(ticks)))
+
   step {
+    actorSystem.scheduler.schedule(Duration(0, "milliseconds"), Duration(clock.duration, "milliseconds")) {
+        ticker ! Tick
+    }
     startup().copoint
   }
 
@@ -167,7 +164,7 @@ class AsyncQueryExecutorSpec extends TestAsyncQueryExecutorFactory with Specific
   }
 }
 
-trait TestAsyncQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQueryModule { self =>
+trait TestAsyncQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQueryModule with SchedulableFuturesModule { self =>
   def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
@@ -179,7 +176,7 @@ trait TestAsyncQueryExecutorFactory extends AsyncQueryExecutorFactory with Manag
 
   object yggConfig extends ManagedQueryModuleConfig {
     val jobPollFrequency: Duration = Duration(10, "milliseconds")
-    val clock = Clock.System
+    val clock = self.clock
   }
 
   protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
@@ -189,18 +186,17 @@ trait TestAsyncQueryExecutorFactory extends AsyncQueryExecutorFactory with Manag
 
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
         val numTicks = query.toInt
-        shardQueryMonad.point {
+        schedule(0) {
           Success(StreamT.unfoldM[ShardQuery, CharBuffer, Int](0) {
             case i if i < numTicks =>
-              shardQueryMonad.point {
-                Thread.sleep(tickDuration)
+              schedule(1) {
                 Some((CharBuffer.wrap("."), i + 1))
-              }
+              }.liftM[JobQueryT]
 
             case _ =>
               shardQueryMonad.point { None }
           })
-        }
+        }.liftM[JobQueryT]
       }
     }
   }

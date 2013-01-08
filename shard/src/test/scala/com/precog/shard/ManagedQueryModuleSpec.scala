@@ -123,13 +123,11 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
   }
 
   var ticker: ActorRef = actorSystem.actorOf(Props(new Ticker(ticks)))
-  var tickCancellable: Option[Cancellable] = None
 
   step {
-    val tickCancellable = Some(actorSystem.scheduler.schedule(Duration(0, "milliseconds"),
-      Duration(clock.duration, "milliseconds")) {
+    actorSystem.scheduler.schedule(Duration(0, "milliseconds"), Duration(clock.duration, "milliseconds")) {
         ticker ! Tick
-      })
+    }
     startup().copoint
   }
 
