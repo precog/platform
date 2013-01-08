@@ -215,6 +215,30 @@ object StdLib {
   def doubleIsDefined(n: Double) = !(isNaN(n) || isInfinite(n))
 
   object StrFrom {
+    class L(c: LongColumn, defined: Long => Boolean, f: Long => String)
+    extends Map1Column(c) with StrColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
+    class D(c: DoubleColumn, defined: Double => Boolean, f: Double => String)
+    extends Map1Column(c) with StrColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
+    class N(c: NumColumn, defined: BigDecimal => Boolean, f: BigDecimal => String)
+    extends Map1Column(c) with StrColumn {
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
     class S(c: StrColumn, defined: String => Boolean, f: String => String)
     extends Map1Column(c) with StrColumn {
       override def isDefinedAt(row: Int) =

@@ -177,7 +177,13 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
         if (sliceIndex < yggConfig.maxSliceSize && from.hasNext) {
           // horribly inefficient, but a place to start
           val Success(jv) = MongoToJson(from.next())
-          val refs = withIdsAndValues(jv, into, sliceIndex, yggConfig.maxSliceSize)
+          val refs = withIdsAndValues(jv, into, sliceIndex, yggConfig.maxSliceSize, Some({
+            jpath => if (jpath == JPath("._id")) {
+              Key \ 0
+            } else {
+              Value \ CPath(jpath)
+            }
+          }))
           buildColArrays(from, refs, sliceIndex + 1)
         } else {
           (into, sliceIndex)

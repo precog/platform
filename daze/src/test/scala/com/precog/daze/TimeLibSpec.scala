@@ -194,6 +194,21 @@ trait TimeLibSpec[M[+_]] extends Specification
       result must contain("2010-06-04T05:14:01.000+05:00")
     }
 
+    "Plus function with space instead of T" in {
+      val line = Line(0, "")
+
+      val input = Join(line, BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
+          Const(line, CString("2010-06-04 05:04:01")),
+          Const(line, CLong(10)))
+        
+      val result = testEval(input) collect {
+        case (ids, SString(d)) if ids.length == 0 => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("2010-06-04T05:14:01.000Z")
+    }
     "Between function with not fully formed string without tz" in {
       val line = Line(0, "")
 

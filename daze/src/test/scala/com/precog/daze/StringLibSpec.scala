@@ -821,6 +821,34 @@ trait StringLibSpec[M[+_]] extends Specification
       )
     }
   }
+
+  "toString" should {
+    "convert values to strings" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(numToString),
+        dag.LoadLocal(line, Const(line, CString("/het/random"))))
+
+      val result = testEval(input)
+
+      result must haveSize(6)
+
+      val ss = result.map {
+        case (Vector(i:Long), SString(s)) => (i, s)
+      }.toList.sorted.map {
+        case (i, n) => n
+      }
+
+      ss must contain(
+        "4",
+        "3",
+        "4",
+        "4",
+        "3",
+        "4"
+      ).only
+    }
+  }
 }
 
 object StringLibSpec extends StringLibSpec[test.YId] with test.YIdInstances
