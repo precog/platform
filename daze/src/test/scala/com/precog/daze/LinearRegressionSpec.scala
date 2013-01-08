@@ -63,7 +63,7 @@ trait LinearRegressionTestSupport[M[+_]] extends LinearRegressionLib[M] with Reg
 trait LinearRegressionSpec[M[+_]] extends Specification 
     with EvaluatorTestSupport[M]
     with LinearRegressionTestSupport[M]
-    with MemoryDatasetConsumer[M] { self =>
+    with LongIdMemoryDatasetConsumer[M] { self =>
 
   import dag._
   import instructions._

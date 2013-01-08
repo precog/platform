@@ -73,6 +73,7 @@ import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
 trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future] 
+    with LongIdMemoryDatasetConsumer[Future]
     with JDBMColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 
@@ -133,3 +134,18 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
   }
 }
 
+class JDBMBasicValidationSpecs extends BasicValidationSpecs with JDBMPlatformSpecs
+
+class JDBMHelloQuirrelSpecs extends HelloQuirrelSpecs with JDBMPlatformSpecs
+
+class JDBMLogisticRegressionSpecs extends LogisticRegressionSpecs with JDBMPlatformSpecs
+
+class JDBMMiscStackSpecs extends MiscStackSpecs with JDBMPlatformSpecs
+
+class JDBMNonObjectStackSpecs extends NonObjectStackSpecs with JDBMPlatformSpecs
+
+class JDBMRankSpecs extends RankSpecs with JDBMPlatformSpecs
+
+class JDBMRenderStackSpecs extends RenderStackSpecs with JDBMPlatformSpecs
+
+class JDBMUndefinedLiteralSpecs extends UndefinedLiteralSpecs with JDBMPlatformSpecs
