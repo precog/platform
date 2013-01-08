@@ -56,6 +56,34 @@ trait MiscStackSpecs extends EvalStackSpecs {
       actual must contain(true).only
     }
 
+    "recognize the datetime parse function" in {
+      val input = """
+        | std::time::parse("2011-02-21 01:09:59", "yyyy-MM-dd HH:mm:ss")
+      """.stripMargin
+
+      val result = evalE(input)
+
+      val actual = result collect {
+        case (ids, SString(time)) if ids.length == 0 => time
+      }
+
+      actual mustEqual Set("2011-02-21T01:09:59.000Z")
+    }
+
+    "timelib functions should accept ISO8601 with a space instead of a T" in {
+      val input = """
+        | std::time::year("2011-02-21 01:09:59")
+      """.stripMargin
+
+      val result = evalE(input)
+
+      val actual = result collect {
+        case (ids, SDecimal(year)) if ids.length == 0 => year
+      }
+
+      actual mustEqual Set(2011)
+    }
+
     "return the left size of a true if/else operation" in {
       val input1 = """
         | if true then //clicks else //campaigns
