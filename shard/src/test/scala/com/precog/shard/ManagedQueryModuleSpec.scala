@@ -27,9 +27,9 @@ import com.precog.daze._
 
 import java.nio.CharBuffer
 
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic._
 
-import akka.actor.ActorSystem
+import akka.actor._
 import akka.dispatch._
 import akka.util.Duration
 
@@ -39,6 +39,8 @@ import blueeyes.bkka._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
 
 import org.specs2.mutable.Specification
+
+import org.joda.time._
 
 import scalaz._
 import scalaz.std.option._
@@ -71,17 +73,10 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
 
   val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
   val apiKey = "O.o"
-  val tickDuration = 50 // ms
 
   val dropStreamToFuture = implicitly[Hoist[StreamT]].hoist[TestFuture, Future](new (TestFuture ~> Future) {
     def apply[A](fa: TestFuture[A]): Future[A] = fa.value
   })
-
-  // Waits for `numTicks` ticks before returning, well, nothing useful.
-  def waitFor(numTicks: Int): Future[Unit] = Future {
-    Thread.sleep(tickDuration * numTicks)
-    ()
-  }
 
   def waitForJobCompletion(jobId: JobId): Future[Job] = {
     import JobState._
@@ -100,7 +95,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
 
   // Performs an incredibly intense compuation that requires numTicks ticks.
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[(JobId, AtomicInteger, Future[Int])] = {
-    val timeout = ticksToTimeout map (tickDuration.toLong * _)
+    val timeout = ticksToTimeout map (clock.duration * _)
     val result = for {
       executor <- executorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
       result0 <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout)) mapValue {
@@ -122,12 +117,19 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
 
   // Cancels the job after `ticks` ticks.
   def cancel(jobId: JobId, ticks: Int): Future[Boolean] = {
-    Future { Thread.sleep(ticks * tickDuration) } flatMap { _ =>
-      jobManager.cancel(jobId, "Yarrrr", yggConfig.clock.now()) map (_.fold(_ => false, _ => true))
+    schedule(ticks) {
+      jobManager.cancel(jobId, "Yarrrr", yggConfig.clock.now()).map { _.fold(_ => false, _ => true) }.copoint
     }
   }
 
+  var ticker: ActorRef = actorSystem.actorOf(Props(new Ticker(ticks)))
+  var tickCancellable: Option[Cancellable] = None
+
   step {
+    val tickCancellable = Some(actorSystem.scheduler.schedule(Duration(0, "milliseconds"),
+      Duration(clock.duration, "milliseconds")) {
+        ticker ! Tick
+      })
     startup().copoint
   }
 
@@ -228,25 +230,27 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
   }
 
   step {
+    ticker ! Tick
     shutdown().copoint
+    actorSystem.shutdown()
+    actorSystem.awaitTermination()
   }
 }
 
-trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[TestFuture, StreamT[TestFuture, CharBuffer]] with ManagedQueryModule {
+trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[TestFuture, StreamT[TestFuture, CharBuffer]]
+    with ManagedQueryModule with SchedulableFuturesModule { self =>
+
   def actorSystem: ActorSystem  
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
   
   val jobManager: JobManager[Future]
-  def tickDuration: Int
-
-  val tick = CharBuffer.wrap(".")
 
   type YggConfig = ManagedQueryModuleConfig
 
   object yggConfig extends ManagedQueryModuleConfig {
-    val jobPollFrequency: Duration = Duration(10, "milliseconds")
-    val clock = Clock.System
+    val jobPollFrequency: Duration = Duration(20, "milliseconds")
+    val clock = self.clock
   }
 
   def executorFor(apiKey: APIKey): TestFuture[Validation[String, QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]]]] = {
@@ -257,22 +261,22 @@ trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[TestFuture, S
         val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
         val numTicks = query.toInt
         val expiration = opts.timeout map (yggConfig.clock.now().plus(_))
-        WriterT(createJob(apiKey, Some(userQuery.serialize), expiration) map { implicit M =>
+        WriterT(createJob(apiKey, Some(userQuery.serialize), expiration) map { implicit M0 =>
           val ticks = new AtomicInteger()
+          // val tickFutures: Vector[Future] = ((1 to numTicks) map (ticker.wait(_))).toVector
+
           val result = StreamT.unfoldM[ShardQuery, CharBuffer, Int](0) {
             case i if i < numTicks =>
-              M.point {
-                // Super crazy computation.
+              schedule(1) {
                 ticks.getAndIncrement()
-                Thread.sleep(tickDuration)
-                Some((tick, i + 1))
-              }
+                Some((CharBuffer.wrap("."), i + 1))
+              }.liftM[JobQueryT]
 
             case _ =>
-              M.point { None }
+              M0.point { None }
           }
 
-          (Tag(M.jobId map (_ -> ticks)), Success(completeJob(result)))
+          (Tag(M0.jobId map (_ -> ticks)), Success(completeJob(result)))
         })
       }
     }))
@@ -283,5 +287,5 @@ trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[TestFuture, S
   def status() = sys.error("The lowliest of the low :(")
 
   def startup = Pointed[TestFuture].point { true }
-  def shutdown = Pointed[TestFuture].point { actorSystem.shutdown; true }
+  def shutdown = Pointed[TestFuture].point { true }
 }
