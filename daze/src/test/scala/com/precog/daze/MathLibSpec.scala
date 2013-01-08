@@ -13,7 +13,7 @@ import com.precog.util.IdGen
 trait MathLibSpec[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
     with MathLib[M] 
-    with MemoryDatasetConsumer[M] { self =>
+    with LongIdMemoryDatasetConsumer[M] { self =>
       
   import Function._
   
