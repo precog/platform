@@ -1911,6 +1911,18 @@ trait MiscStackSpecs extends EvalStackSpecs {
       results must contain(SBoolean(true))
       results must not(contain(SBoolean(false)))
     }
+    
+    "produce a non-empty set for a ternary join-optimized cartesian" in {
+      val input = """
+        | clicks := //clicks
+        | 
+        | clicks' := new clicks
+        | clicks ~ clicks'
+        |   { a: clicks, b: clicks', c: clicks } where clicks'.pageId = clicks.pageId
+        | """.stripMargin
+        
+      evalE(input) must not(beEmpty)
+    }
   }
 }
 

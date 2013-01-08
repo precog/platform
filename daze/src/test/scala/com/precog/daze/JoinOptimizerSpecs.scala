@@ -348,6 +348,104 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
             
       result mustEqual expected
     }
+    
+    "produce a valid dag for a ternary object-literal cartesian" in {
+      /*
+       * clicks := //clicks
+       * 
+       * clicks' := new clicks
+       * clicks ~ clicks'
+       *   { a: clicks, b: clicks', c: clicks } where clicks'.pageId = clicks.pageId
+       */
+      
+      val line = Line(0, "")
+      
+      lazy val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
+      lazy val clicksP = dag.New(line, clicks)
+      
+      lazy val input =
+        Filter(line, IdentitySort,
+          Join(line, JoinObject, CrossLeftSort,
+            Join(line, JoinObject, IdentitySort,
+              Join(line, WrapObject, CrossLeftSort,
+                Const(line, CString("a")),
+                clicks
+              ),
+              Join(line, WrapObject, CrossLeftSort,
+                Const(line, CString("c")),
+                clicks
+              )
+            ),
+            Join(line, WrapObject, CrossLeftSort,
+              Const(line, CString("b")),
+              clicksP
+            )
+          ),
+          Join(line, Eq, CrossLeftSort,
+            Join(line, DerefObject, CrossLeftSort,
+              clicks,
+              Const(line, CString("pageId"))
+            ),
+            Join(line, DerefObject, CrossLeftSort,
+              clicksP,
+              Const(line, CString("pageId"))
+            )
+          )
+        )
+
+        lazy val clickPages =
+          SortBy(
+            Join(line, JoinObject, IdentitySort,
+              Join(line, WrapObject, CrossLeftSort,
+                Const(line, CString("key")),
+                Join(line, DerefObject, CrossLeftSort,
+                  clicks,
+                  Const(line, CString("pageId"))
+                )
+              ),
+              Join(line, WrapObject, CrossLeftSort,
+                Const(line, CString("value")),
+                clicks
+              )
+            ),
+            "key", "value", 0
+          )
+        
+        lazy val expected =
+          Join(line, JoinObject, ValueSort(0),
+            Join(line, JoinObject, ValueSort(0),
+              Join(line, WrapObject, CrossLeftSort,
+                Const(line, CString("a")),
+                clickPages
+              ),
+              Join(line, WrapObject, CrossLeftSort,
+                Const(line, CString("c")),
+                clickPages
+              )
+            ),
+            Join(line, WrapObject, CrossLeftSort,
+              Const(line, CString("b")),
+              SortBy(
+                Join(line, JoinObject, IdentitySort,
+                  Join(line, WrapObject, CrossLeftSort,
+                    Const(line, CString("key")),
+                    Join(line, DerefObject, CrossLeftSort,
+                      clicksP,
+                      Const(line, CString("pageId"))
+                    )
+                  ),
+                  Join(line, WrapObject, CrossLeftSort,
+                    Const(line, CString("value")),
+                    clicksP
+                  )
+                ),
+                "key", "value", 0
+              )
+            )
+          )
+        
+      optimizeJoins(input, new IdGen) mustEqual expected
+    }
   }
 }
 
