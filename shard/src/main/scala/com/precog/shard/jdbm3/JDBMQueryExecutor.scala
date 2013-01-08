@@ -128,14 +128,14 @@ trait JDBMQueryExecutorComponent {
 
         def baseDir(descriptor: ProjectionDescriptor) = {
           logger.trace("Finding base dir for " + descriptor)
-          val base = (storage.shardSystemActor ? FindDescriptorRoot(descriptor, true)).mapTo[IO[Option[File]]]
-          Await.result(base, yggConfig.maxEvalDuration)
+          val base = (storage.shardSystemActor ? FindDescriptorRoot(descriptor, true)).mapTo[Option[File]]
+          IO { Await.result(base, yggConfig.maxEvalDuration) }
         }
 
         def archiveDir(descriptor: ProjectionDescriptor) = {
           logger.trace("Finding archive dir for " + descriptor)
-          val archive = (storage.shardSystemActor ? FindDescriptorArchive(descriptor)).mapTo[IO[Option[File]]]
-          Await.result(archive, yggConfig.maxEvalDuration)
+          val archive = (storage.shardSystemActor ? FindDescriptorArchive(descriptor)).mapTo[Option[File]]
+          IO { Await.result(archive, yggConfig.maxEvalDuration) }
         }
       }
 

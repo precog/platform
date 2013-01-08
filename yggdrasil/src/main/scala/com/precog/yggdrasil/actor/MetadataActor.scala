@@ -88,10 +88,11 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
   private val ingestBatchId = new java.util.concurrent.atomic.AtomicInteger()
 
   def receive = {
-    case Status => logger.trace(Status.toString); sender ! status
+    case Status => 
+      logger.trace(Status.toString)
+      sender ! status
 
     case msg @ IngestBatchMetadata(updates, batchClock, batchOffset) => {
-      //logger.trace(msg.toString)
       MDC.put("metadata_batch", ingestBatchId.getAndIncrement().toString)
       for(update <- updates) update match {
         case (descriptor, Some(metadata)) =>
@@ -131,11 +132,11 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ FindDescriptorRoot(descriptor, createOk) => 
       logger.trace(msg.toString)
-      sender ! storage.findDescriptorRoot(descriptor, createOk)
+      sender ! storage.findDescriptorRoot(descriptor, createOk).unsafePerformIO
     
     case msg @ FindDescriptorArchive(descriptor) => 
       logger.trace(msg.toString)
-      sender ! storage.findArchiveRoot(descriptor)
+      sender ! storage.findArchiveRoot(descriptor).unsafePerformIO
     
     case msg @ FlushMetadata => 
       flush(Some(sender)).unsafePerformIO
