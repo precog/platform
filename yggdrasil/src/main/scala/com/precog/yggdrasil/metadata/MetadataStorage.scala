@@ -38,6 +38,7 @@ trait MetadataStorage {
 
   def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]]
   def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]]
+
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] 
@@ -221,7 +222,7 @@ object FileMetadataStorage extends Logging {
   }
 }
 
-class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, private var metadataLocations: Map[ProjectionDescriptor, File]) extends MetadataStorage with Logging {
+class FileMetadataStorage private (baseDir: File, archiveDir: File, fileOps: FileOps, private var metadataLocations: Map[ProjectionDescriptor, File]) extends MetadataStorage with Logging {
   import FileMetadataStorage._
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = {
     metadataLocations.keySet.filter(f)
