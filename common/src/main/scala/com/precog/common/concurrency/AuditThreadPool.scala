@@ -28,6 +28,24 @@ import java.util.concurrent.locks.ReentrantLock
 import scala.annotation.tailrec
 
 class AuditExecutor(val name: String, minThreads: Int, maxThreads: Int, maxQueueDepth: Option[Int], idleTimeout: Long) extends Executor {
+  private[this] val workQueue : BlockingQueue[Runnable] = maxQueueDepth.map { depth =>
+    new ArrayBlockingQueue[Runnable](depth)
+  }.getOrElse (new LinkedBlockingQueue[Runnable]())
+
+  private[this] val threadCount = new AtomicInteger(minThreads)
+  private[this] val activeThreadCount = new AtomicInteger(0)
+  private[this] val cumulativeCpuTime = new AtomicLong(0)
+
+  private[this] final val threadUpdateLock = new AnyRef()
+
+  private[this] var workers = (1 to minThreads).map { i => new WorkerThread(i) }.toSet
+  workers.foreach(_.start())
+
+  private val threadMXBean = ManagementFactory.getThreadMXBean
+
+  def size = threadCount.get
+  def activeSize = activeThreadCount.get
+
   def execute(task: Runnable): Unit = {
     if (! workQueue.offer(task)) {
       throw new RejectedExecutionException()
@@ -61,22 +79,6 @@ class AuditExecutor(val name: String, minThreads: Int, maxThreads: Int, maxQueue
     }
   }
 
-  private[this] val workQueue : BlockingQueue[Runnable] = maxQueueDepth.map { depth =>
-    new ArrayBlockingQueue[Runnable](depth)
-  }.getOrElse (new LinkedBlockingQueue[Runnable]())
-
-  def size = threadCount.get
-  def activeSize = activeThreadCount.get
-
-  private[this] val threadCount = new AtomicInteger(minThreads)
-  private[this] val activeThreadCount = new AtomicInteger(0)
-  private[this] val cumulativeCpuTime = new AtomicLong(0)
-
-  private[this] final val threadUpdateLock = new AnyRef()
-
-  private[this] var workers = (1 to minThreads).map { i => new WorkerThread(i) }.toSet
-  workers.foreach(_.start())
-
   /**
     Called by threads to determine if they should continue waiting when the queue has no work for them
     */
@@ -97,8 +99,6 @@ class AuditExecutor(val name: String, minThreads: Int, maxThreads: Int, maxQueue
       true
     }
   }
-
-  private val threadMXBean = ManagementFactory.getThreadMXBean
 
   private class WorkerThread(id: Int) extends Thread(name + "-" + id) {
     private[this] var lastCpuTime = 0l
