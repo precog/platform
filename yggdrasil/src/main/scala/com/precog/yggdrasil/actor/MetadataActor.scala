@@ -122,21 +122,25 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ FindDescriptors(path, selector) => 
       logger.trace(msg.toString)
-      val result = findDescriptors(path, selector).unsafePerformIO
+      val result = runIO(findDescriptors(path, selector), "FindDescriptors")
       logger.trace("Found descriptors: " + result)
       sender ! result
 
     case msg @ FindPathMetadata(path, selector) => 
       logger.trace(msg.toString)
-      sender ! storage.findPathMetadata(path, selector, columnMetadataFor).unsafePerformIO
+      sender ! runIO(storage.findPathMetadata(path, selector, columnMetadataFor), "FindPathMetadata")
 
-    case msg @ FindDescriptorRoot(descriptor, createOk) => 
+    case msg @ InitDescriptorRoot(descriptor) =>
       logger.trace(msg.toString)
-      sender ! storage.findDescriptorRoot(descriptor, createOk).unsafePerformIO
+      sender ! runIO(storage.ensureDescriptorRoot(descriptor), "InitDescriptorRoot")
+
+    case msg @ FindDescriptorRoot(descriptor) => 
+      logger.trace(msg.toString)
+      sender ! storage.findDescriptorRoot(descriptor)
     
     case msg @ FindDescriptorArchive(descriptor) => 
       logger.trace(msg.toString)
-      sender ! storage.findArchiveRoot(descriptor).unsafePerformIO
+      sender ! runIO(storage.findArchiveRoot(descriptor), "FindDescriptorArchive")
     
     case msg @ FlushMetadata => 
       flush(Some(sender)).unsafePerformIO
@@ -145,6 +149,8 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       logger.trace(msg.toString)
       sender ! kafkaOffset.map(YggCheckpoint(_, messageClock)) 
   }
+
+  private def runIO[A](io: IO[A], msg: String): A = io.except({ case ex => logger.error(msg, ex); throw ex }).unsafePerformIO
 
   private def flush(replyTo: Option[ActorRef]): IO[PrecogUnit] = {
     flushRequests += 1
@@ -259,7 +265,8 @@ case class FindChildren(path: Path) extends ShardMetadataAction
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: CPath) extends ShardMetadataAction
 case class FindPathMetadata(path: Path, selector: CPath) extends ShardMetadataAction
-case class FindDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean) extends ShardMetadataAction
+case class InitDescriptorRoot(desc: ProjectionDescriptor) extends ShardMetadataAction
+case class FindDescriptorRoot(desc: ProjectionDescriptor) extends ShardMetadataAction
 case class FindDescriptorArchive(desc: ProjectionDescriptor) extends ShardMetadataAction
 case class MetadataSaved(saved: Set[ProjectionDescriptor]) extends ShardMetadataAction
 case object GetCurrentCheckpoint

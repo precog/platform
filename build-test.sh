@@ -81,10 +81,12 @@ if [ -z "$SKIPSETUP" ]; then
     run_sbt compile
 
     run_sbt test:compile
-
-    run_sbt yggdrasil/assembly
 else
     echo "Skipping clean/compile"
+fi
+
+if [ ! -f "yggdrasil/target/yggdrasil-assembly-$(git describe).jar" ]; then
+    run_sbt yggdrasil/assembly
 fi
 
 # For the runs, we don't want to terminate early if a particular project fails

@@ -150,11 +150,11 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
     def receive = {
       // Route subordinate messages
       case pMsg: ShardProjectionAction => 
-        logger.trace("Forwarding message " + pMsg + " to ingestSystem")
+        logger.trace("Forwarding message " + pMsg + " to projectionsActor")
         projectionsActor.tell(pMsg, sender)
 
       case mMsg: ShardMetadataAction   => 
-        logger.trace("Forwarding message " + mMsg + " to ingestSystem")
+        logger.trace("Forwarding message " + mMsg + " to metadataActor")
         metadataActor.tell(mMsg, sender)
 
       case iMsg: ShardIngestAction     => 
@@ -162,6 +162,7 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
         ingestSystem.tell(iMsg, sender)
 
       case Status => 
+        implicit val to = Timeout(yggConfig.statusTimeout)
         implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
         (for (statusResponses <- Future.sequence { actorsWithStatus map { actor => (actor ? Status).mapTo[JValue] } }) yield JArray(statusResponses)) onSuccess {
           case status => 

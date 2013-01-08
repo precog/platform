@@ -55,7 +55,8 @@ object MetadataStorage {
 trait MetadataStorage {
   import MetadataStorage._
 
-  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]]
+  def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[File]
+  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File]
   def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]]
 
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
@@ -247,9 +248,9 @@ class FileMetadataStorage private (baseDir: File, archiveDir: File, fileOps: Fil
     metadataLocations.keySet.filter(f)
   }
 
-  def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[PrecogUnit] = {
+  def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[File] = {
     if (metadataLocations.contains(desc)) {
-      IO(PrecogUnit)
+      IO(metadataLocations(desc))
     } else {
       for {
         newRoot <- descriptorDir(baseDir, desc)
@@ -258,18 +259,12 @@ class FileMetadataStorage private (baseDir: File, archiveDir: File, fileOps: Fil
       } yield {
         logger.info("Created new projection for " + desc)
         metadataLocations += (desc -> newRoot) 
-        PrecogUnit
+        newRoot
       }
     }
   }
 
-  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]] = {
-    if (createOk) {
-      for (_ <- ensureDescriptorRoot(desc)) yield metadataLocations.get(desc)
-    } else {
-      IO(metadataLocations.get(desc))
-    }
-  }
+  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File] = metadataLocations.get(desc)
 
   def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]] = {
     metadataLocations.get(desc).map(_ => descriptorDir(archiveDir, desc).map { d => d.mkdirs(); d }).sequence
