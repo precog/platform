@@ -59,10 +59,9 @@ class AsyncQueryExecutorSpec extends TestAsyncQueryExecutorFactory with Specific
 
   val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
   val apiKey = "O.o"
-  val tickDuration = 50 // ms
 
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[JobId] = {
-    val timeout = ticksToTimeout map (tickDuration.toLong * _)
+    val timeout = ticksToTimeout map (clock.duration * _)
     for {
       executor <- asyncExecutorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
       result <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout))
@@ -170,7 +169,6 @@ trait TestAsyncQueryExecutorFactory extends AsyncQueryExecutorFactory with Manag
   implicit def M: Monad[Future]
   
   val jobManager: JobManager[Future]
-  def tickDuration: Int
 
   type YggConfig = ManagedQueryModuleConfig
 
