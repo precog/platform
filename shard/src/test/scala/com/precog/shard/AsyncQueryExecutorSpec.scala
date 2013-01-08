@@ -143,6 +143,8 @@ class AsyncQueryExecutorSpec extends TestAsyncQueryExecutorFactory with Specific
 
   step {
     shutdown().copoint
+    actorSystem.shutdown()
+    actorSystem.awaitTermination()
   }
 }
 
