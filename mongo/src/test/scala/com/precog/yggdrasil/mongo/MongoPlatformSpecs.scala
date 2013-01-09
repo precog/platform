@@ -178,7 +178,7 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
     }
   }
 
-  class Storage extends StorageLike {
+  class Storage extends StorageLike[Future, Projection] {
     def projection(descriptor: ProjectionDescriptor) = Promise.successful(null) // FIXME: Just to get it compiling...
     def storeBatch(msgs: Seq[EventMessage]) = Promise.successful(PrecogUnit)
     def userMetadataView(apiKey: APIKey) = null
