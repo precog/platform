@@ -59,8 +59,6 @@ import scalaz.syntax.monad._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.std.either._
 
-import org.streum.configrity.Configuration
-
 trait ShardQueryExecutor 
     extends QueryExecutor[Future]
     with ParseEvalStack[Future]
