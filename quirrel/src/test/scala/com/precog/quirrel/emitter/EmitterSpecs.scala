@@ -95,6 +95,16 @@ object EmitterSpecs extends Specification
         Vector(
           PushUndefined))
     }
+    
+    "emit child of import" in {
+      testEmit("import std 42")(
+        Vector(PushNum("42")))
+    }
+    
+    "emit assert" in {
+      testEmit("assert true 42")(
+        Vector())
+    }.pendingUntilFixed
 
     "emit filter of two where'd loads with value provenance" >> {
       "which are numerics" >> {

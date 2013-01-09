@@ -81,6 +81,8 @@ trait Parser extends RegexParsers with Filters with AST {
     
     | """import\b""".r ~ importSpec ~ expr ^# { (loc, _, s, e) => Import(loc, s, e) }
     
+    | """assert\b""".r ~ expr ~ expr ^# { (loc, _, e1, e2) => Assert(loc, e1, e2) }
+    
     | """new\b""".r ~ expr ^# { (loc, _, e) => New(loc, e) }
     | relations ~ expr     ^# { (loc, es, e) => buildDeepRelate(loc, es, e) }
     
@@ -206,7 +208,7 @@ trait Parser extends RegexParsers with Filters with AST {
   
   private lazy val nullLiteral = """null\b""".r
 
-  private lazy val keywords = "new|true|false|where|with|union|intersect|difference|neg|undefined|null|import|solve|if|then|else".r
+  private lazy val keywords = "new|true|false|where|with|union|intersect|difference|neg|undefined|null|import|solve|if|then|else|assert".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-+\))+""".r
   override val skipWhitespace = true
@@ -227,10 +229,7 @@ trait Parser extends RegexParsers with Filters with AST {
       With,
       New,
       Where,
-      Relate,
-      Let,
-      Solve,
-      Import)
+      (Relate, Let, Solve, Import, Assert))
       
   private def arrayDefDeref = new com.codecommit.gll.ast.Filter[Node] {
     def apply(n: Node): Boolean = n match {

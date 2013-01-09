@@ -148,6 +148,18 @@ object ProvenanceComputationSpecs extends Specification
       tree.errors must beEmpty
     }
     
+    "identify import according to its child expression" in {
+      val tree = compileSingle("import std //foo")
+      tree.provenance mustEqual StaticProvenance("/foo")
+      tree.errors must beEmpty
+    }
+    
+    "identify assert according to its right expression" in {
+      val tree = compileSingle("assert //bar //foo")
+      tree.provenance mustEqual StaticProvenance("/foo")
+      tree.errors must beEmpty
+    }
+    
     "identify new as dynamic" in {
       val tree = compileSingle("new 1")
       tree.provenance must beLike {
