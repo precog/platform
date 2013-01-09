@@ -1,601 +1,100 @@
-[{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c12",
-  "cpm":40,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c17",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c23",
-  "cpm":54,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c12",
-  "cpm":1,
-  "ageRange":[61,75]
-},{
-  "gender":"male",
-  "platform":"iphone",
-  "campaign":"c14",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c15",
-  "cpm":100,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c12",
-  "cpm":100,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"other",
-  "campaign":"c15",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"iphone",
-  "campaign":"c16",
-  "cpm":69,
-  "ageRange":[18,24]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c16",
-  "cpm":31,
-  "ageRange":[0,17]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c17",
-  "cpm":82,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c12",
-  "cpm":100,
-  "ageRange":[49,60]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c24",
-  "cpm":31,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c12",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c28",
-  "cpm":100,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c15",
-  "cpm":6,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c16",
-  "cpm":10,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"web",
-  "campaign":"c26",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c18",
-  "cpm":65,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c17",
-  "cpm":100,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"iphone",
-  "campaign":"c14",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"iphone",
-  "campaign":"c20",
-  "cpm":17,
-  "ageRange":[18,24]
-},{
-  "gender":"female",
-  "platform":"web",
-  "campaign":"c16",
-  "cpm":20,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c20",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c24",
-  "cpm":22,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c16",
-  "cpm":51,
-  "ageRange":[49,60]
-},{
-  "gender":"male",
-  "platform":"web",
-  "campaign":"c15",
-  "cpm":100,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c7",
-  "cpm":100,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"iphone",
-  "campaign":"c17",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c15",
-  "cpm":100,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"blackberry",
-  "campaign":"c11",
-  "cpm":42,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c17",
-  "cpm":1,
-  "ageRange":[49,60]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c15",
-  "cpm":100,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c14",
-  "cpm":99,
-  "ageRange":[49,60]
-},{
-  "gender":"female",
-  "platform":"iphone",
-  "campaign":"c11",
-  "cpm":33,
-  "ageRange":[49,60]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c11",
-  "cpm":23,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c17",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c14",
-  "cpm":1,
-  "ageRange":[18,24]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c10",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"blackberry",
-  "campaign":"c19",
-  "cpm":100,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c18",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c10",
-  "cpm":12,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c23",
-  "cpm":1,
-  "ageRange":[49,60]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c18",
-  "cpm":22,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"other",
-  "campaign":"c17",
-  "cpm":90,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c9",
-  "cpm":52,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c10",
-  "cpm":100,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c23",
-  "cpm":100,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c16",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"other",
-  "campaign":"c19",
-  "cpm":1,
-  "ageRange":[49,60]
-},{
-  "gender":"male",
-  "platform":"blackberry",
-  "campaign":"c7",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c28",
-  "cpm":6,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"iphone",
-  "campaign":"c5",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c20",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"blackberry",
-  "campaign":"c20",
-  "cpm":58,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c9",
-  "cpm":100,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c20",
-  "cpm":94,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c13",
-  "cpm":4,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c22",
-  "cpm":100,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c9",
-  "cpm":89,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c12",
-  "cpm":100,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c21",
-  "cpm":72,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"iphone",
-  "campaign":"c15",
-  "cpm":100,
-  "ageRange":[49,60]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c21",
-  "cpm":100,
-  "ageRange":[18,24]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c7",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c17",
-  "cpm":67,
-  "ageRange":[18,24]
-},{
-  "gender":"male",
-  "platform":"iphone",
-  "campaign":"c6",
-  "cpm":39,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c23",
-  "cpm":21,
-  "ageRange":[18,24]
-},{
-  "gender":"male",
-  "platform":"blackberry",
-  "campaign":"c22",
-  "cpm":16,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c9",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c15",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c9",
-  "cpm":70,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"iphone",
-  "campaign":"c20",
-  "cpm":38,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c19",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"blackberry",
-  "campaign":"c20",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c22",
-  "cpm":62,
-  "ageRange":[61,75]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c4",
-  "cpm":45,
-  "ageRange":[49,60]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c17",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c13",
-  "cpm":100,
-  "ageRange":[18,24]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c23",
-  "cpm":91,
-  "ageRange":[49,60]
-},{
-  "gender":"male",
-  "platform":"web",
-  "campaign":"c19",
-  "cpm":48,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c17",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c11",
-  "cpm":5,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"other",
-  "campaign":"c20",
-  "cpm":80,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c10",
-  "cpm":1,
-  "ageRange":[49,60]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c6",
-  "cpm":1,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c16",
-  "cpm":28,
-  "ageRange":[37,48]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c19",
-  "cpm":1,
-  "ageRange":[49,60]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c24",
-  "cpm":1,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c16",
-  "cpm":43,
-  "ageRange":[18,24]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c14",
-  "cpm":1,
-  "ageRange":[61,75]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c19",
-  "cpm":1,
-  "ageRange":[18,24]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c17",
-  "cpm":67,
-  "ageRange":[49,60]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c12",
-  "cpm":96,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"android",
-  "campaign":"c10",
-  "cpm":77,
-  "ageRange":[25,36]
-},{
-  "gender":"female",
-  "platform":"iphone",
-  "campaign":"c21",
-  "cpm":1,
-  "ageRange":[49,60]
-},{
-  "gender":"male",
-  "platform":"web",
-  "campaign":"c13",
-  "cpm":31,
-  "ageRange":[25,36]
-},{
-  "gender":"male",
-  "platform":"android",
-  "campaign":"c22",
-  "cpm":76,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"iphone",
-  "campaign":"c19",
-  "cpm":9,
-  "ageRange":[37,48]
-},{
-  "gender":"male",
-  "platform":"web",
-  "campaign":"c24",
-  "cpm":49,
-  "ageRange":[37,48]
-}]
+{"ageRange": [25, 36], "gender": "female", "cpm": 40, "campaign": "c12", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 1, "campaign": "c17", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 54, "campaign": "c23", "platform": "android"}
+{"ageRange": [61, 75], "gender": "male", "cpm": 1, "campaign": "c12", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 1, "campaign": "c14", "platform": "iphone"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 100, "campaign": "c15", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 100, "campaign": "c12", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 1, "campaign": "c15", "platform": "other"}
+{"ageRange": [18, 24], "gender": "male", "cpm": 69, "campaign": "c16", "platform": "iphone"}
+{"ageRange": [0, 17], "gender": "male", "cpm": 31, "campaign": "c16", "platform": "android"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 82, "campaign": "c17", "platform": "android"}
+{"ageRange": [49, 60], "gender": "female", "cpm": 100, "campaign": "c12", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 31, "campaign": "c24", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 1, "campaign": "c12", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 100, "campaign": "c28", "platform": "android"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 6, "campaign": "c15", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 10, "campaign": "c16", "platform": "android"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 1, "campaign": "c26", "platform": "web"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 65, "campaign": "c18", "platform": "android"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 100, "campaign": "c17", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 1, "campaign": "c14", "platform": "iphone"}
+{"ageRange": [18, 24], "gender": "female", "cpm": 17, "campaign": "c20", "platform": "iphone"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 20, "campaign": "c16", "platform": "web"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 1, "campaign": "c20", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 22, "campaign": "c24", "platform": "android"}
+{"ageRange": [49, 60], "gender": "female", "cpm": 51, "campaign": "c16", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 100, "campaign": "c15", "platform": "web"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 100, "campaign": "c7", "platform": "android"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 1, "campaign": "c17", "platform": "iphone"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 100, "campaign": "c15", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 42, "campaign": "c11", "platform": "blackberry"}
+{"ageRange": [49, 60], "gender": "male", "cpm": 1, "campaign": "c17", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 100, "campaign": "c15", "platform": "android"}
+{"ageRange": [49, 60], "gender": "male", "cpm": 99, "campaign": "c14", "platform": "android"}
+{"ageRange": [49, 60], "gender": "female", "cpm": 33, "campaign": "c11", "platform": "iphone"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 23, "campaign": "c11", "platform": "android"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 1, "campaign": "c17", "platform": "android"}
+{"ageRange": [18, 24], "gender": "female", "cpm": 1, "campaign": "c14", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 1, "campaign": "c10", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 100, "campaign": "c19", "platform": "blackberry"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 1, "campaign": "c18", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 12, "campaign": "c10", "platform": "android"}
+{"ageRange": [49, 60], "gender": "male", "cpm": 1, "campaign": "c23", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 22, "campaign": "c18", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 90, "campaign": "c17", "platform": "other"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 52, "campaign": "c9", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 100, "campaign": "c10", "platform": "android"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 100, "campaign": "c23", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 1, "campaign": "c16", "platform": "android"}
+{"ageRange": [49, 60], "gender": "male", "cpm": 1, "campaign": "c19", "platform": "other"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 1, "campaign": "c7", "platform": "blackberry"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 6, "campaign": "c28", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 1, "campaign": "c5", "platform": "iphone"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 1, "campaign": "c20", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 58, "campaign": "c20", "platform": "blackberry"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 100, "campaign": "c9", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 94, "campaign": "c20", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 4, "campaign": "c13", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 100, "campaign": "c22", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 89, "campaign": "c9", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 100, "campaign": "c12", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 72, "campaign": "c21", "platform": "android"}
+{"ageRange": [49, 60], "gender": "female", "cpm": 100, "campaign": "c15", "platform": "iphone"}
+{"ageRange": [18, 24], "gender": "female", "cpm": 100, "campaign": "c21", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 1, "campaign": "c7", "platform": "android"}
+{"ageRange": [18, 24], "gender": "male", "cpm": 67, "campaign": "c17", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 39, "campaign": "c6", "platform": "iphone"}
+{"ageRange": [18, 24], "gender": "male", "cpm": 21, "campaign": "c23", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 16, "campaign": "c22", "platform": "blackberry"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 1, "campaign": "c9", "platform": "android"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 1, "campaign": "c15", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 70, "campaign": "c9", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 38, "campaign": "c20", "platform": "iphone"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 1, "campaign": "c19", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 1, "campaign": "c20", "platform": "blackberry"}
+{"ageRange": [61, 75], "gender": "female", "cpm": 62, "campaign": "c22", "platform": "android"}
+{"ageRange": [49, 60], "gender": "male", "cpm": 45, "campaign": "c4", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 1, "campaign": "c17", "platform": "android"}
+{"ageRange": [18, 24], "gender": "female", "cpm": 100, "campaign": "c13", "platform": "android"}
+{"ageRange": [49, 60], "gender": "female", "cpm": 91, "campaign": "c23", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 48, "campaign": "c19", "platform": "web"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 1, "campaign": "c17", "platform": "android"}
+{"ageRange": [37, 48], "gender": "female", "cpm": 5, "campaign": "c11", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 80, "campaign": "c20", "platform": "other"}
+{"ageRange": [49, 60], "gender": "male", "cpm": 1, "campaign": "c10", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 1, "campaign": "c6", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 28, "campaign": "c16", "platform": "android"}
+{"ageRange": [49, 60], "gender": "female", "cpm": 1, "campaign": "c19", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 1, "campaign": "c24", "platform": "android"}
+{"ageRange": [18, 24], "gender": "male", "cpm": 43, "campaign": "c16", "platform": "android"}
+{"ageRange": [61, 75], "gender": "male", "cpm": 1, "campaign": "c14", "platform": "android"}
+{"ageRange": [18, 24], "gender": "female", "cpm": 1, "campaign": "c19", "platform": "android"}
+{"ageRange": [49, 60], "gender": "female", "cpm": 67, "campaign": "c17", "platform": "android"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 96, "campaign": "c12", "platform": "android"}
+{"ageRange": [25, 36], "gender": "female", "cpm": 77, "campaign": "c10", "platform": "android"}
+{"ageRange": [49, 60], "gender": "female", "cpm": 1, "campaign": "c21", "platform": "iphone"}
+{"ageRange": [25, 36], "gender": "male", "cpm": 31, "campaign": "c13", "platform": "web"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 76, "campaign": "c22", "platform": "android"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 9, "campaign": "c19", "platform": "iphone"}
+{"ageRange": [37, 48], "gender": "male", "cpm": 49, "campaign": "c24", "platform": "web"}

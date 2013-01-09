@@ -36,8 +36,8 @@ if ! monit monitor -g shard-v1-beta; then
     echo "Monit unhappy on remonitor of shard-v1-beta"
 fi
 
-# Wait 30 seconds for startup, then test the health URLs
-sleep 30
+# Wait 60 seconds for startup, then test the health URLs
+sleep 60
 
 echo "Running health checks"
 curl -v -f -G "http://localhost:30070/blueeyes/services/quirrel/v1/health"

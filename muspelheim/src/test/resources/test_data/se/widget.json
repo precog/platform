@@ -1,1 +1,921 @@
-[{"weekday":"Thursday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-04T00:57:43"},{"weekday":"Thursday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-04T01:33:02"},{"weekday":"Thursday","action":"Online","agentId":"Blake","timeStamp":"2012-10-04T01:33:02"},{"weekday":"Thursday","action":"Online","agentId":"Erica","timeStamp":"2012-10-04T01:33:02"},{"weekday":"Thursday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-04T01:44:52"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T01:44:52"},{"weekday":"Thursday","action":"Online","agentId":"Jan","timeStamp":"2012-10-04T01:44:52"},{"weekday":"Thursday","action":"Online","agentId":"Erica","timeStamp":"2012-10-04T01:55:12"},{"weekday":"Thursday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-04T01:55:12"},{"weekday":"Thursday","action":"Online","agentId":"Blake","timeStamp":"2012-10-04T02:51:26"},{"weekday":"Thursday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-04T02:51:26"},{"weekday":"Thursday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-04T03:01:54"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T03:01:54"},{"weekday":"Thursday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-04T03:01:54"},{"weekday":"Thursday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-04T03:58:54"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T03:58:54"},{"weekday":"Thursday","action":"Online","agentId":"Erica","timeStamp":"2012-10-04T03:58:54"},{"weekday":"Thursday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-04T03:59:36"},{"weekday":"Thursday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-04T03:59:36"},{"weekday":"Thursday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-04T03:59:36"},{"weekday":"Thursday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-04T04:08:39"},{"weekday":"Thursday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-04T04:08:39"},{"weekday":"Thursday","action":"Online","agentId":"Blake","timeStamp":"2012-10-04T06:19:42"},{"weekday":"Thursday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-04T06:19:42"},{"weekday":"Thursday","action":"Online","agentId":"Jan","timeStamp":"2012-10-04T07:39:38"},{"weekday":"Thursday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-04T07:39:38"},{"weekday":"Thursday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-04T07:39:38"},{"weekday":"Thursday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-04T07:49:33"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T07:49:33"},{"weekday":"Thursday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-04T07:49:33"},{"weekday":"Thursday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-04T07:49:33"},{"weekday":"Thursday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-04T08:04:48"},{"weekday":"Thursday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-04T08:04:48"},{"weekday":"Thursday","action":"Online","agentId":"Chris","timeStamp":"2012-10-04T08:07:31"},{"weekday":"Thursday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-04T08:07:31"},{"weekday":"Thursday","action":"Online","agentId":"Jan","timeStamp":"2012-10-04T08:07:31"},{"weekday":"Thursday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-04T08:13:18"},{"weekday":"Thursday","action":"Online","agentId":"Blake","timeStamp":"2012-10-04T08:13:18"},{"weekday":"Thursday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-04T09:27:02"},{"weekday":"Thursday","action":"Online","agentId":"Blake","timeStamp":"2012-10-04T09:54:23"},{"weekday":"Thursday","action":"Online","agentId":"Jan","timeStamp":"2012-10-04T09:54:23"},{"weekday":"Thursday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-04T09:55:49"},{"weekday":"Thursday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-04T09:55:49"},{"weekday":"Thursday","action":"Online","agentId":"Chris","timeStamp":"2012-10-04T09:55:49"},{"weekday":"Thursday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-04T10:11:31"},{"weekday":"Thursday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-04T10:11:31"},{"weekday":"Thursday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-04T10:12:46"},{"weekday":"Thursday","action":"Online","agentId":"Erica","timeStamp":"2012-10-04T10:12:46"},{"weekday":"Thursday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-04T10:17:14"},{"weekday":"Thursday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-04T10:17:14"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T10:31:33"},{"weekday":"Thursday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-04T10:31:33"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T10:50:32"},{"weekday":"Thursday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-04T10:50:32"},{"weekday":"Thursday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-04T11:31:11"},{"weekday":"Thursday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-04T11:31:11"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T11:45:29"},{"weekday":"Thursday","action":"Online","agentId":"Blake","timeStamp":"2012-10-04T11:48:48"},{"weekday":"Thursday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-04T11:48:48"},{"weekday":"Thursday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-04T11:56:41"},{"weekday":"Thursday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-04T11:56:41"},{"weekday":"Thursday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-04T12:37:38"},{"weekday":"Thursday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-04T12:37:38"},{"weekday":"Thursday","action":"Chatting","agentId":"Ryan","timeStamp":"2012-10-04T12:37:38"},{"weekday":"Thursday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-04T12:48:40"},{"weekday":"Thursday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-04T13:08:00"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T13:08:00"},{"weekday":"Thursday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-04T13:08:00"},{"weekday":"Thursday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-04T13:08:00"},{"weekday":"Thursday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-04T13:15:13"},{"weekday":"Thursday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-04T13:15:40"},{"weekday":"Thursday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-04T13:15:40"},{"weekday":"Thursday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-04T13:17:07"},{"weekday":"Thursday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-04T13:17:07"},{"weekday":"Thursday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-04T13:17:07"},{"weekday":"Thursday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-04T13:30:33"},{"weekday":"Thursday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-04T13:30:33"},{"weekday":"Thursday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-04T13:33:23"},{"weekday":"Thursday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-04T13:33:55"},{"weekday":"Thursday","action":"Chatting","agentId":"Jerome M","timeStamp":"2012-10-04T13:33:55"},{"weekday":"Thursday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-04T14:08:31"},{"weekday":"Thursday","action":"Online","agentId":"Erica","timeStamp":"2012-10-04T14:08:31"},{"weekday":"Thursday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-04T14:08:31"},{"weekday":"Thursday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-04T14:23:12"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T14:24:54"},{"weekday":"Thursday","action":"Online","agentId":"Erica","timeStamp":"2012-10-04T14:24:54"},{"weekday":"Thursday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-04T14:27:08"},{"weekday":"Thursday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-04T14:27:08"},{"weekday":"Thursday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-04T14:34:17"},{"weekday":"Thursday","action":"Online","agentId":"Erica","timeStamp":"2012-10-04T14:34:17"},{"weekday":"Thursday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-04T14:34:17"},{"weekday":"Thursday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-04T14:36:39"},{"weekday":"Thursday","action":"Online","agentId":"Blake","timeStamp":"2012-10-04T14:36:39"},{"weekday":"Thursday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-04T14:36:39"},{"weekday":"Thursday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-04T14:36:39"},{"weekday":"Thursday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-04T14:39:12"},{"weekday":"Thursday","action":"Online","agentId":"Erica","timeStamp":"2012-10-04T14:39:12"},{"weekday":"Thursday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-04T14:39:12"},{"weekday":"Thursday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-04T15:14:01"},{"weekday":"Thursday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-04T15:14:01"},{"weekday":"Thursday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-04T15:14:01"},{"weekday":"Thursday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-04T15:35:06"},{"weekday":"Thursday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-04T15:35:06"},{"weekday":"Thursday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-04T15:35:06"},{"weekday":"Thursday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-04T16:00:18"},{"weekday":"Thursday","action":"Online","agentId":"Blake","timeStamp":"2012-10-04T16:15:52"},{"weekday":"Thursday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-04T16:15:52"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T16:17:24"},{"weekday":"Thursday","action":"Online","agentId":"Erica","timeStamp":"2012-10-04T16:17:24"},{"weekday":"Thursday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-04T16:17:24"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T16:44:27"},{"weekday":"Thursday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-04T17:08:16"},{"weekday":"Thursday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-04T17:20:06"},{"weekday":"Thursday","action":"Online","agentId":"Blake","timeStamp":"2012-10-04T17:20:06"},{"weekday":"Thursday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-04T17:20:06"},{"weekday":"Thursday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-04T17:46:24"},{"weekday":"Thursday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-04T17:46:24"},{"weekday":"Thursday","action":"Online","agentId":"Blake","timeStamp":"2012-10-04T18:05:52"},{"weekday":"Thursday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-04T18:05:52"},{"weekday":"Thursday","action":"Online","agentId":"Erica","timeStamp":"2012-10-04T18:05:52"},{"weekday":"Thursday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-04T18:21:35"},{"weekday":"Thursday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-04T19:05:00"},{"weekday":"Thursday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-04T19:05:00"},{"weekday":"Thursday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-04T19:05:00"},{"weekday":"Thursday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-04T19:05:00"},{"weekday":"Thursday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-04T19:12:56"},{"weekday":"Thursday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-04T19:12:56"},{"weekday":"Thursday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-04T19:12:56"},{"weekday":"Thursday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-04T19:26:00"},{"weekday":"Thursday","action":"Online","agentId":"Erica","timeStamp":"2012-10-04T19:32:29"},{"weekday":"Thursday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-04T19:32:29"},{"weekday":"Thursday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-04T20:22:52"},{"weekday":"Thursday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-04T20:22:52"},{"weekday":"Thursday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-04T20:22:52"},{"weekday":"Thursday","action":"Online","agentId":"Chris","timeStamp":"2012-10-04T22:49:24"},{"weekday":"Thursday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-04T22:49:24"},{"weekday":"Friday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-05T02:57:20"},{"weekday":"Friday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-05T02:57:20"},{"weekday":"Friday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-05T04:19:14"},{"weekday":"Friday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-05T04:19:14"},{"weekday":"Friday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-05T04:19:14"},{"weekday":"Friday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-05T04:19:14"},{"weekday":"Friday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-05T04:22:22"},{"weekday":"Friday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-05T04:22:22"},{"weekday":"Friday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-05T04:22:22"},{"weekday":"Friday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-05T04:22:22"},{"weekday":"Friday","action":"Chatting","agentId":"Ryan","timeStamp":"2012-10-05T04:22:22"},{"weekday":"Friday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-05T05:21:02"},{"weekday":"Friday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-05T05:54:31"},{"weekday":"Friday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-05T05:54:31"},{"weekday":"Friday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-05T05:58:44"},{"weekday":"Friday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-05T05:58:44"},{"weekday":"Friday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-05T05:58:44"},{"weekday":"Friday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-05T05:58:44"},{"weekday":"Friday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-05T06:01:37"},{"weekday":"Friday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-05T06:01:37"},{"weekday":"Friday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-05T06:11:44"},{"weekday":"Friday","action":"Online","agentId":"Jan","timeStamp":"2012-10-05T06:11:44"},{"weekday":"Friday","action":"Online","agentId":"Erica","timeStamp":"2012-10-05T06:24:08"},{"weekday":"Friday","action":"Online","agentId":"Blake","timeStamp":"2012-10-05T08:17:02"},{"weekday":"Friday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-05T08:17:02"},{"weekday":"Friday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-05T08:52:05"},{"weekday":"Friday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-05T08:52:05"},{"weekday":"Friday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-05T08:53:01"},{"weekday":"Friday","action":"Online","agentId":"Blake","timeStamp":"2012-10-05T08:53:01"},{"weekday":"Friday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-05T08:53:01"},{"weekday":"Friday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-05T09:04:24"},{"weekday":"Friday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-05T09:14:57"},{"weekday":"Friday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-05T09:14:57"},{"weekday":"Friday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-05T09:14:57"},{"weekday":"Friday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-05T09:15:32"},{"weekday":"Friday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-05T09:15:32"},{"weekday":"Friday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-05T09:31:45"},{"weekday":"Friday","action":"Online","agentId":"Erica","timeStamp":"2012-10-05T09:31:45"},{"weekday":"Friday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-05T09:31:45"},{"weekday":"Friday","action":"Online","agentId":"Blake","timeStamp":"2012-10-05T09:37:55"},{"weekday":"Friday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-05T09:37:55"},{"weekday":"Friday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-05T10:03:20"},{"weekday":"Friday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-05T10:03:20"},{"weekday":"Friday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-05T10:03:20"},{"weekday":"Friday","action":"Online","agentId":"Blake","timeStamp":"2012-10-05T10:35:04"},{"weekday":"Friday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-05T10:35:04"},{"weekday":"Friday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-05T10:35:53"},{"weekday":"Friday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-05T10:42:28"},{"weekday":"Friday","action":"Online","agentId":"Chris","timeStamp":"2012-10-05T10:48:26"},{"weekday":"Friday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-05T10:49:50"},{"weekday":"Friday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-05T10:49:50"},{"weekday":"Friday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-05T10:49:50"},{"weekday":"Friday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-05T10:49:50"},{"weekday":"Friday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-05T11:20:13"},{"weekday":"Friday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-05T11:20:13"},{"weekday":"Friday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-05T11:20:13"},{"weekday":"Friday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-05T11:28:11"},{"weekday":"Friday","action":"Online","agentId":"Erica","timeStamp":"2012-10-05T11:28:11"},{"weekday":"Friday","action":"Online","agentId":"Jan","timeStamp":"2012-10-05T11:28:11"},{"weekday":"Friday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-05T11:39:04"},{"weekday":"Friday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-05T11:39:04"},{"weekday":"Friday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-05T11:39:04"},{"weekday":"Friday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-05T11:48:13"},{"weekday":"Friday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-05T11:48:13"},{"weekday":"Friday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-05T11:52:33"},{"weekday":"Friday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-05T12:03:46"},{"weekday":"Friday","action":"Online","agentId":"Blake","timeStamp":"2012-10-05T12:03:46"},{"weekday":"Friday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-05T12:30:17"},{"weekday":"Friday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-05T12:30:17"},{"weekday":"Friday","action":"Online","agentId":"Erica","timeStamp":"2012-10-05T12:30:17"},{"weekday":"Friday","action":"Online","agentId":"Erica","timeStamp":"2012-10-05T12:51:36"},{"weekday":"Friday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-05T13:14:40"},{"weekday":"Friday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-05T13:14:40"},{"weekday":"Friday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-05T13:14:40"},{"weekday":"Friday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-05T13:17:19"},{"weekday":"Friday","action":"Online","agentId":"Blake","timeStamp":"2012-10-05T13:17:19"},{"weekday":"Friday","action":"Online","agentId":"Erica","timeStamp":"2012-10-05T13:17:19"},{"weekday":"Friday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-05T13:17:19"},{"weekday":"Friday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-05T13:28:31"},{"weekday":"Friday","action":"Online","agentId":"Blake","timeStamp":"2012-10-05T13:28:31"},{"weekday":"Friday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-05T13:28:31"},{"weekday":"Friday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-05T13:32:30"},{"weekday":"Friday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-05T13:43:26"},{"weekday":"Friday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-05T13:49:17"},{"weekday":"Friday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-05T13:49:17"},{"weekday":"Friday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-05T14:00:23"},{"weekday":"Friday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-05T14:00:23"},{"weekday":"Friday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-05T14:00:23"},{"weekday":"Friday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-05T14:02:51"},{"weekday":"Friday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-05T14:02:51"},{"weekday":"Friday","action":"Online","agentId":"Blake","timeStamp":"2012-10-05T14:31:40"},{"weekday":"Friday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-05T14:31:40"},{"weekday":"Friday","action":"Online","agentId":"Chris","timeStamp":"2012-10-05T14:50:28"},{"weekday":"Friday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-05T14:50:28"},{"weekday":"Friday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-05T14:54:35"},{"weekday":"Friday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-05T14:54:35"},{"weekday":"Friday","action":"Online","agentId":"Erica","timeStamp":"2012-10-05T15:03:12"},{"weekday":"Friday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-05T15:30:56"},{"weekday":"Friday","action":"Online","agentId":"Blake","timeStamp":"2012-10-05T15:30:56"},{"weekday":"Friday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-05T15:30:56"},{"weekday":"Friday","action":"Online","agentId":"Blake","timeStamp":"2012-10-05T15:37:04"},{"weekday":"Friday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-05T15:37:04"},{"weekday":"Friday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-05T15:55:02"},{"weekday":"Friday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-05T16:02:13"},{"weekday":"Friday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-05T16:02:13"},{"weekday":"Friday","action":"Online","agentId":"Erica","timeStamp":"2012-10-05T16:25:34"},{"weekday":"Friday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-05T16:25:34"},{"weekday":"Friday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-05T16:30:01"},{"weekday":"Friday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-05T16:30:01"},{"weekday":"Friday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-05T16:30:01"},{"weekday":"Friday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-05T17:04:54"},{"weekday":"Friday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-05T17:21:04"},{"weekday":"Friday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-05T17:21:35"},{"weekday":"Friday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-05T17:21:35"},{"weekday":"Friday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-05T17:23:06"},{"weekday":"Friday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-05T18:28:00"},{"weekday":"Friday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-05T18:32:36"},{"weekday":"Friday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-05T18:32:36"},{"weekday":"Friday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-05T19:27:31"},{"weekday":"Friday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-05T19:27:31"},{"weekday":"Friday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-05T19:27:31"},{"weekday":"Friday","action":"Online","agentId":"Jan","timeStamp":"2012-10-05T19:40:51"},{"weekday":"Friday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-05T20:47:07"},{"weekday":"Friday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-05T20:47:07"},{"weekday":"Friday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-05T21:39:21"},{"weekday":"Friday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-05T21:39:21"},{"weekday":"Friday","action":"Online","agentId":"Jan","timeStamp":"2012-10-05T21:39:21"},{"weekday":"Friday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-05T21:50:36"},{"weekday":"Friday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-05T21:50:36"},{"weekday":"Friday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-05T22:29:35"},{"weekday":"Friday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-05T22:29:35"},{"weekday":"Friday","action":"Online","agentId":"Jan","timeStamp":"2012-10-05T22:29:35"},{"weekday":"Friday","action":"Chatting","agentId":"Ryan","timeStamp":"2012-10-05T22:29:35"},{"weekday":"Friday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-05T23:10:10"},{"weekday":"Friday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-05T23:10:10"},{"weekday":"Saturday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-06T02:21:18"},{"weekday":"Saturday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-06T02:24:28"},{"weekday":"Saturday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-06T02:24:28"},{"weekday":"Saturday","action":"Online","agentId":"Erica","timeStamp":"2012-10-06T03:05:45"},{"weekday":"Saturday","action":"Online","agentId":"Erica","timeStamp":"2012-10-06T04:06:00"},{"weekday":"Saturday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-06T04:09:56"},{"weekday":"Saturday","action":"Online","agentId":"Erica","timeStamp":"2012-10-06T04:38:55"},{"weekday":"Saturday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-06T04:38:55"},{"weekday":"Saturday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-06T04:44:44"},{"weekday":"Saturday","action":"Online","agentId":"Jan","timeStamp":"2012-10-06T05:32:42"},{"weekday":"Saturday","action":"Online","agentId":"Blake","timeStamp":"2012-10-06T05:35:17"},{"weekday":"Saturday","action":"Online","agentId":"Erica","timeStamp":"2012-10-06T05:35:17"},{"weekday":"Saturday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-06T05:35:17"},{"weekday":"Saturday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-06T05:43:44"},{"weekday":"Saturday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-06T05:43:44"},{"weekday":"Saturday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-06T05:43:44"},{"weekday":"Saturday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-06T06:03:24"},{"weekday":"Saturday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-06T06:03:24"},{"weekday":"Saturday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-06T06:10:16"},{"weekday":"Saturday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-06T06:10:16"},{"weekday":"Saturday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-06T06:10:16"},{"weekday":"Saturday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-06T06:17:12"},{"weekday":"Saturday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-06T06:17:12"},{"weekday":"Saturday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-06T07:18:36"},{"weekday":"Saturday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-06T07:18:36"},{"weekday":"Saturday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-06T07:18:36"},{"weekday":"Saturday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-06T07:50:37"},{"weekday":"Saturday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-06T08:03:53"},{"weekday":"Saturday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-06T08:03:53"},{"weekday":"Saturday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-06T08:37:19"},{"weekday":"Saturday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-06T09:08:04"},{"weekday":"Saturday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-06T09:08:04"},{"weekday":"Saturday","action":"Online","agentId":"Chris","timeStamp":"2012-10-06T09:08:04"},{"weekday":"Saturday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-06T09:28:10"},{"weekday":"Saturday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-06T09:28:10"},{"weekday":"Saturday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-06T09:49:50"},{"weekday":"Saturday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-06T09:49:50"},{"weekday":"Saturday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-06T10:18:48"},{"weekday":"Saturday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-06T10:18:48"},{"weekday":"Saturday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-06T10:29:24"},{"weekday":"Saturday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-06T10:29:24"},{"weekday":"Saturday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-06T11:28:12"},{"weekday":"Saturday","action":"Online","agentId":"Erica","timeStamp":"2012-10-06T11:28:12"},{"weekday":"Saturday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-06T11:28:12"},{"weekday":"Saturday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-06T11:30:56"},{"weekday":"Saturday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-06T11:30:56"},{"weekday":"Saturday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-06T11:30:56"},{"weekday":"Saturday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-06T11:35:41"},{"weekday":"Saturday","action":"Online","agentId":"Jan","timeStamp":"2012-10-06T11:36:04"},{"weekday":"Saturday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-06T11:41:41"},{"weekday":"Saturday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-06T11:54:32"},{"weekday":"Saturday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-06T12:05:47"},{"weekday":"Saturday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-06T12:05:47"},{"weekday":"Saturday","action":"Online","agentId":"Chris","timeStamp":"2012-10-06T12:11:01"},{"weekday":"Saturday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-06T12:11:01"},{"weekday":"Saturday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-06T12:11:01"},{"weekday":"Saturday","action":"Chatting","agentId":"Ryan","timeStamp":"2012-10-06T12:11:01"},{"weekday":"Saturday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-06T12:23:08"},{"weekday":"Saturday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-06T12:44:01"},{"weekday":"Saturday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-06T12:44:01"},{"weekday":"Saturday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-06T13:00:31"},{"weekday":"Saturday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-06T13:00:31"},{"weekday":"Saturday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-06T13:02:59"},{"weekday":"Saturday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-06T13:02:59"},{"weekday":"Saturday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-06T13:02:59"},{"weekday":"Saturday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-06T13:05:58"},{"weekday":"Saturday","action":"Online","agentId":"Chris","timeStamp":"2012-10-06T13:13:32"},{"weekday":"Saturday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-06T13:13:32"},{"weekday":"Saturday","action":"Paused","agentId":"Jerome M","timeStamp":"2012-10-06T13:13:32"},{"weekday":"Saturday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-06T13:23:59"},{"weekday":"Saturday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-06T13:23:59"},{"weekday":"Saturday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-06T13:35:15"},{"weekday":"Saturday","action":"Online","agentId":"Jan","timeStamp":"2012-10-06T14:49:30"},{"weekday":"Saturday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-06T14:49:30"},{"weekday":"Saturday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-06T14:52:16"},{"weekday":"Saturday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-06T14:53:56"},{"weekday":"Saturday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-06T14:53:56"},{"weekday":"Saturday","action":"Online","agentId":"Chris","timeStamp":"2012-10-06T15:16:25"},{"weekday":"Saturday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-06T15:16:25"},{"weekday":"Saturday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-06T15:16:25"},{"weekday":"Saturday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-06T15:51:35"},{"weekday":"Saturday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-06T15:51:35"},{"weekday":"Saturday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-06T15:55:53"},{"weekday":"Saturday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-06T15:55:53"},{"weekday":"Saturday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-06T15:55:53"},{"weekday":"Saturday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-06T15:58:29"},{"weekday":"Saturday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-06T15:58:29"},{"weekday":"Saturday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-06T15:58:29"},{"weekday":"Saturday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-06T15:58:29"},{"weekday":"Saturday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-06T17:07:50"},{"weekday":"Saturday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-06T17:07:50"},{"weekday":"Saturday","action":"Online","agentId":"Erica","timeStamp":"2012-10-06T17:07:50"},{"weekday":"Saturday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-06T17:07:50"},{"weekday":"Saturday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-06T17:11:18"},{"weekday":"Saturday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-06T17:11:18"},{"weekday":"Saturday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-06T17:11:18"},{"weekday":"Saturday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-06T17:18:20"},{"weekday":"Saturday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-06T17:20:58"},{"weekday":"Saturday","action":"Online","agentId":"Erica","timeStamp":"2012-10-06T17:24:49"},{"weekday":"Saturday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-06T17:24:49"},{"weekday":"Saturday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-06T17:24:49"},{"weekday":"Saturday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-06T17:34:11"},{"weekday":"Saturday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-06T19:43:23"},{"weekday":"Saturday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-06T19:43:23"},{"weekday":"Saturday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-06T19:59:02"},{"weekday":"Saturday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-06T19:59:02"},{"weekday":"Saturday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-06T21:11:19"},{"weekday":"Saturday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-06T21:11:19"},{"weekday":"Saturday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-06T21:20:15"},{"weekday":"Saturday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-06T22:36:32"},{"weekday":"Sunday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-07T00:24:31"},{"weekday":"Sunday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-07T03:12:34"},{"weekday":"Sunday","action":"Chatting","agentId":"Ryan","timeStamp":"2012-10-07T03:12:34"},{"weekday":"Sunday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-07T03:16:57"},{"weekday":"Sunday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-07T04:25:41"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T07:12:27"},{"weekday":"Sunday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-07T07:12:27"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T07:42:49"},{"weekday":"Sunday","action":"Online","agentId":"Jan","timeStamp":"2012-10-07T07:44:26"},{"weekday":"Sunday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-07T07:44:26"},{"weekday":"Sunday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-07T07:44:47"},{"weekday":"Sunday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-07T08:04:27"},{"weekday":"Sunday","action":"Online","agentId":"Blake","timeStamp":"2012-10-07T08:04:27"},{"weekday":"Sunday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-07T08:23:31"},{"weekday":"Sunday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-07T08:25:20"},{"weekday":"Sunday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-07T08:25:20"},{"weekday":"Sunday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-07T08:38:44"},{"weekday":"Sunday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-07T09:18:11"},{"weekday":"Sunday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-07T09:18:11"},{"weekday":"Sunday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-07T09:28:05"},{"weekday":"Sunday","action":"Online","agentId":"Chris","timeStamp":"2012-10-07T09:28:05"},{"weekday":"Sunday","action":"Online","agentId":"Jan","timeStamp":"2012-10-07T09:28:05"},{"weekday":"Sunday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-07T09:34:03"},{"weekday":"Sunday","action":"Chatting","agentId":"Ryan","timeStamp":"2012-10-07T09:34:03"},{"weekday":"Sunday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-07T09:46:46"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-07T09:48:56"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T10:00:09"},{"weekday":"Sunday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-07T10:00:09"},{"weekday":"Sunday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-07T10:18:11"},{"weekday":"Sunday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-07T10:18:11"},{"weekday":"Sunday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-07T10:18:53"},{"weekday":"Sunday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-07T10:18:53"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T10:32:39"},{"weekday":"Sunday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-07T10:32:39"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T11:01:53"},{"weekday":"Sunday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-07T11:15:50"},{"weekday":"Sunday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-07T11:15:52"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T11:18:22"},{"weekday":"Sunday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-07T11:18:22"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T11:22:02"},{"weekday":"Sunday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-07T11:22:02"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-07T11:22:02"},{"weekday":"Sunday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-07T11:45:57"},{"weekday":"Sunday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-07T12:14:33"},{"weekday":"Sunday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-07T12:14:33"},{"weekday":"Sunday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-07T12:35:31"},{"weekday":"Sunday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-07T12:35:31"},{"weekday":"Sunday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-07T12:37:56"},{"weekday":"Sunday","action":"Online","agentId":"Erica","timeStamp":"2012-10-07T12:37:56"},{"weekday":"Sunday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-07T12:46:27"},{"weekday":"Sunday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-07T12:46:27"},{"weekday":"Sunday","action":"Online","agentId":"Chris","timeStamp":"2012-10-07T12:48:18"},{"weekday":"Sunday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-07T12:48:18"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-07T12:48:18"},{"weekday":"Sunday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-07T13:26:39"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T14:07:24"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-07T14:07:24"},{"weekday":"Sunday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-07T14:08:25"},{"weekday":"Sunday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-07T14:15:31"},{"weekday":"Sunday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-07T14:15:31"},{"weekday":"Sunday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-07T14:20:18"},{"weekday":"Sunday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-07T14:20:18"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-07T14:20:18"},{"weekday":"Sunday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-07T14:23:48"},{"weekday":"Sunday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-07T14:30:08"},{"weekday":"Sunday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-07T14:30:08"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-07T14:30:30"},{"weekday":"Sunday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-07T14:40:13"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T14:51:29"},{"weekday":"Sunday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-07T14:51:29"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T14:59:09"},{"weekday":"Sunday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-07T14:59:09"},{"weekday":"Sunday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-07T15:02:03"},{"weekday":"Sunday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-07T15:07:01"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T15:16:58"},{"weekday":"Sunday","action":"Online","agentId":"Jan","timeStamp":"2012-10-07T15:16:58"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-07T15:16:58"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-07T15:16:58"},{"weekday":"Sunday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-07T15:27:15"},{"weekday":"Sunday","action":"Online","agentId":"Chris","timeStamp":"2012-10-07T15:27:15"},{"weekday":"Sunday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-07T15:42:14"},{"weekday":"Sunday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-07T15:42:14"},{"weekday":"Sunday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-07T15:46:04"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T15:46:13"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-07T15:46:13"},{"weekday":"Sunday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-07T15:50:32"},{"weekday":"Sunday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-07T15:50:32"},{"weekday":"Sunday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-07T16:07:59"},{"weekday":"Sunday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-07T16:07:59"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-07T17:03:39"},{"weekday":"Sunday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-07T17:10:29"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-07T17:10:29"},{"weekday":"Sunday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-07T17:20:10"},{"weekday":"Sunday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-07T17:36:37"},{"weekday":"Sunday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-07T17:36:37"},{"weekday":"Sunday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-07T17:52:04"},{"weekday":"Sunday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-07T18:28:01"},{"weekday":"Sunday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-07T18:58:51"},{"weekday":"Sunday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-07T19:02:40"},{"weekday":"Sunday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-07T19:29:30"},{"weekday":"Sunday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-07T20:29:26"},{"weekday":"Sunday","action":"Online","agentId":"Erica","timeStamp":"2012-10-07T20:29:26"},{"weekday":"Sunday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-07T21:14:37"},{"weekday":"Sunday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-07T21:14:37"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T01:06:08"},{"weekday":"Monday","action":"Online","agentId":"Blake","timeStamp":"2012-10-08T01:06:08"},{"weekday":"Monday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-08T01:06:08"},{"weekday":"Monday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-08T01:06:08"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T02:48:50"},{"weekday":"Monday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-08T02:48:50"},{"weekday":"Monday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-08T03:30:39"},{"weekday":"Monday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-08T03:30:39"},{"weekday":"Monday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-08T03:30:39"},{"weekday":"Monday","action":"Online","agentId":"Erica","timeStamp":"2012-10-08T04:21:14"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T04:58:52"},{"weekday":"Monday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-08T04:58:52"},{"weekday":"Monday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-08T05:09:16"},{"weekday":"Monday","action":"Online","agentId":"Erica","timeStamp":"2012-10-08T05:09:16"},{"weekday":"Monday","action":"Online","agentId":"Jan","timeStamp":"2012-10-08T05:09:16"},{"weekday":"Monday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-08T05:09:16"},{"weekday":"Monday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-08T05:47:07"},{"weekday":"Monday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-08T05:47:07"},{"weekday":"Monday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-08T05:47:07"},{"weekday":"Monday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-08T06:23:09"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T06:51:45"},{"weekday":"Monday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-08T06:51:45"},{"weekday":"Monday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-08T06:51:45"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T07:06:03"},{"weekday":"Monday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-08T07:06:03"},{"weekday":"Monday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-08T07:28:22"},{"weekday":"Monday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-08T07:28:22"},{"weekday":"Monday","action":"Online","agentId":"Erica","timeStamp":"2012-10-08T08:08:47"},{"weekday":"Monday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-08T08:25:09"},{"weekday":"Monday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-08T08:25:09"},{"weekday":"Monday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-08T08:25:09"},{"weekday":"Monday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-08T08:25:09"},{"weekday":"Monday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-08T08:45:42"},{"weekday":"Monday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-08T08:48:25"},{"weekday":"Monday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-08T09:05:41"},{"weekday":"Monday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-08T09:05:41"},{"weekday":"Monday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-08T09:10:09"},{"weekday":"Monday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-08T09:11:54"},{"weekday":"Monday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-08T09:27:53"},{"weekday":"Monday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-08T09:27:53"},{"weekday":"Monday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-08T09:27:53"},{"weekday":"Monday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-08T09:33:44"},{"weekday":"Monday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-08T09:33:44"},{"weekday":"Monday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-08T09:33:44"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T09:41:29"},{"weekday":"Monday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-08T09:41:29"},{"weekday":"Monday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-08T09:41:29"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T09:41:53"},{"weekday":"Monday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-08T09:41:53"},{"weekday":"Monday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-08T09:41:53"},{"weekday":"Monday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-08T09:45:46"},{"weekday":"Monday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-08T09:50:19"},{"weekday":"Monday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-08T09:50:19"},{"weekday":"Monday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-08T10:06:04"},{"weekday":"Monday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-08T10:06:04"},{"weekday":"Monday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-08T10:06:04"},{"weekday":"Monday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-08T10:06:04"},{"weekday":"Monday","action":"Online","agentId":"Blake","timeStamp":"2012-10-08T10:08:57"},{"weekday":"Monday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-08T10:08:57"},{"weekday":"Monday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-08T10:10:28"},{"weekday":"Monday","action":"Online","agentId":"Chris","timeStamp":"2012-10-08T10:10:28"},{"weekday":"Monday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-08T10:20:59"},{"weekday":"Monday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-08T10:20:59"},{"weekday":"Monday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-08T10:28:16"},{"weekday":"Monday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-08T10:28:16"},{"weekday":"Monday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-08T10:28:16"},{"weekday":"Monday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-08T10:28:16"},{"weekday":"Monday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-08T10:35:14"},{"weekday":"Monday","action":"Online","agentId":"Jan","timeStamp":"2012-10-08T10:35:14"},{"weekday":"Monday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-08T11:00:09"},{"weekday":"Monday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-08T11:03:43"},{"weekday":"Monday","action":"Online","agentId":"Jan","timeStamp":"2012-10-08T11:03:43"},{"weekday":"Monday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-08T11:30:07"},{"weekday":"Monday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-08T11:30:07"},{"weekday":"Monday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-08T11:30:07"},{"weekday":"Monday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-08T11:35:11"},{"weekday":"Monday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-08T11:45:41"},{"weekday":"Monday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-08T11:45:41"},{"weekday":"Monday","action":"Online","agentId":"Jan","timeStamp":"2012-10-08T11:45:41"},{"weekday":"Monday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-08T11:45:41"},{"weekday":"Monday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-08T11:50:09"},{"weekday":"Monday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-08T11:50:09"},{"weekday":"Monday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-08T11:51:42"},{"weekday":"Monday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-08T11:51:42"},{"weekday":"Monday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-08T12:06:48"},{"weekday":"Monday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-08T12:06:48"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T12:08:10"},{"weekday":"Monday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-08T12:08:10"},{"weekday":"Monday","action":"Chatting","agentId":"Jerome M","timeStamp":"2012-10-08T12:08:10"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T12:15:22"},{"weekday":"Monday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-08T12:15:22"},{"weekday":"Monday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-08T12:39:52"},{"weekday":"Monday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-08T12:39:52"},{"weekday":"Monday","action":"Online","agentId":"Jan","timeStamp":"2012-10-08T12:39:52"},{"weekday":"Monday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-08T12:45:17"},{"weekday":"Monday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-08T12:45:17"},{"weekday":"Monday","action":"Online","agentId":"Erica","timeStamp":"2012-10-08T12:45:17"},{"weekday":"Monday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-08T12:45:17"},{"weekday":"Monday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-08T12:48:16"},{"weekday":"Monday","action":"Online","agentId":"Blake","timeStamp":"2012-10-08T12:59:39"},{"weekday":"Monday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-08T12:59:39"},{"weekday":"Monday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-08T13:02:47"},{"weekday":"Monday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-08T13:02:47"},{"weekday":"Monday","action":"Online","agentId":"Blake","timeStamp":"2012-10-08T13:34:04"},{"weekday":"Monday","action":"Online","agentId":"Chris","timeStamp":"2012-10-08T13:34:04"},{"weekday":"Monday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-08T13:34:04"},{"weekday":"Monday","action":"Chatting","agentId":"Ryan","timeStamp":"2012-10-08T13:34:04"},{"weekday":"Monday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-08T13:59:51"},{"weekday":"Monday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-08T13:59:51"},{"weekday":"Monday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-08T14:09:36"},{"weekday":"Monday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-08T14:31:12"},{"weekday":"Monday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-08T14:32:36"},{"weekday":"Monday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-08T14:36:18"},{"weekday":"Monday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-08T14:36:18"},{"weekday":"Monday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-08T14:53:11"},{"weekday":"Monday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-08T14:53:11"},{"weekday":"Monday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-08T14:53:11"},{"weekday":"Monday","action":"Online","agentId":"Chris","timeStamp":"2012-10-08T15:01:49"},{"weekday":"Monday","action":"Chatting","agentId":"Jerome M","timeStamp":"2012-10-08T15:11:52"},{"weekday":"Monday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-08T16:04:57"},{"weekday":"Monday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-08T16:04:57"},{"weekday":"Monday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-08T16:04:57"},{"weekday":"Monday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-08T16:04:57"},{"weekday":"Monday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-08T16:11:31"},{"weekday":"Monday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-08T16:40:00"},{"weekday":"Monday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-08T16:40:00"},{"weekday":"Monday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-08T16:40:00"},{"weekday":"Monday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-08T17:44:46"},{"weekday":"Monday","action":"Online","agentId":"Blake","timeStamp":"2012-10-08T17:51:47"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T17:57:16"},{"weekday":"Monday","action":"Online","agentId":"Erica","timeStamp":"2012-10-08T17:57:16"},{"weekday":"Monday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-08T17:57:16"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T18:01:18"},{"weekday":"Monday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-08T18:01:18"},{"weekday":"Monday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-08T18:01:18"},{"weekday":"Monday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-08T18:01:18"},{"weekday":"Monday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-08T18:01:18"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T18:05:33"},{"weekday":"Monday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-08T18:05:33"},{"weekday":"Monday","action":"Chatting","agentId":"Jerome M","timeStamp":"2012-10-08T18:05:33"},{"weekday":"Monday","action":"Online","agentId":"Erica","timeStamp":"2012-10-08T18:12:26"},{"weekday":"Monday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-08T18:12:26"},{"weekday":"Monday","action":"Online","agentId":"Erica","timeStamp":"2012-10-08T18:23:20"},{"weekday":"Monday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-08T18:23:20"},{"weekday":"Monday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-08T18:36:59"},{"weekday":"Monday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-08T19:26:12"},{"weekday":"Monday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-08T19:26:12"},{"weekday":"Monday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-08T19:55:58"},{"weekday":"Monday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-08T19:59:18"},{"weekday":"Monday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-08T20:24:11"},{"weekday":"Monday","action":"Online","agentId":"Chris","timeStamp":"2012-10-08T20:24:11"},{"weekday":"Monday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-08T20:24:11"},{"weekday":"Monday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-08T20:24:11"},{"weekday":"Monday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-08T21:13:11"},{"weekday":"Monday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-08T21:13:11"},{"weekday":"Monday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-08T21:13:11"},{"weekday":"Monday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-08T21:46:12"},{"weekday":"Monday","action":"Online","agentId":"Blake","timeStamp":"2012-10-08T21:46:12"},{"weekday":"Monday","action":"Online","agentId":"Jan","timeStamp":"2012-10-08T21:46:12"},{"weekday":"Monday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-08T21:46:12"},{"weekday":"Monday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-08T23:58:34"},{"weekday":"Monday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-08T23:58:34"},{"weekday":"Monday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-08T23:58:34"},{"weekday":"Monday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-08T23:58:34"},{"weekday":"Tuesday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-09T02:01:30"},{"weekday":"Tuesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-09T05:14:04"},{"weekday":"Tuesday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-09T05:14:04"},{"weekday":"Tuesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-09T05:56:47"},{"weekday":"Tuesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-09T05:56:47"},{"weekday":"Tuesday","action":"Paused","agentId":"Jerome M","timeStamp":"2012-10-09T06:29:23"},{"weekday":"Tuesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-09T06:52:16"},{"weekday":"Tuesday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-09T06:52:16"},{"weekday":"Tuesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-09T06:55:39"},{"weekday":"Tuesday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-09T06:55:39"},{"weekday":"Tuesday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-09T07:06:21"},{"weekday":"Tuesday","action":"Online","agentId":"Jan","timeStamp":"2012-10-09T07:06:21"},{"weekday":"Tuesday","action":"Online","agentId":"Jan","timeStamp":"2012-10-09T07:23:24"},{"weekday":"Tuesday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-09T07:23:24"},{"weekday":"Tuesday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-09T07:51:46"},{"weekday":"Tuesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-09T07:51:46"},{"weekday":"Tuesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-09T07:57:59"},{"weekday":"Tuesday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-09T07:57:59"},{"weekday":"Tuesday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-09T07:57:59"},{"weekday":"Tuesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-09T08:05:06"},{"weekday":"Tuesday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-09T08:05:06"},{"weekday":"Tuesday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-09T08:05:06"},{"weekday":"Tuesday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-09T08:06:03"},{"weekday":"Tuesday","action":"Online","agentId":"Jan","timeStamp":"2012-10-09T08:06:03"},{"weekday":"Tuesday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-09T08:13:29"},{"weekday":"Tuesday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-09T08:13:29"},{"weekday":"Tuesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-09T08:23:13"},{"weekday":"Tuesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-09T08:23:13"},{"weekday":"Tuesday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-09T08:36:20"},{"weekday":"Tuesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-09T09:30:42"},{"weekday":"Tuesday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-09T09:31:09"},{"weekday":"Tuesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-09T09:34:14"},{"weekday":"Tuesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-09T09:34:14"},{"weekday":"Tuesday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-09T09:34:14"},{"weekday":"Tuesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-09T09:34:33"},{"weekday":"Tuesday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-09T09:34:33"},{"weekday":"Tuesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-09T09:34:33"},{"weekday":"Tuesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-09T10:04:33"},{"weekday":"Tuesday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-09T10:48:30"},{"weekday":"Tuesday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-09T10:48:30"},{"weekday":"Tuesday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-09T10:48:30"},{"weekday":"Tuesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-09T10:52:45"},{"weekday":"Tuesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-09T10:56:25"},{"weekday":"Tuesday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-09T10:56:25"},{"weekday":"Tuesday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-09T10:56:25"},{"weekday":"Tuesday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-09T10:57:52"},{"weekday":"Tuesday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-09T10:57:52"},{"weekday":"Tuesday","action":"Online","agentId":"Erica","timeStamp":"2012-10-09T10:57:52"},{"weekday":"Tuesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-09T11:30:16"},{"weekday":"Tuesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-09T12:42:03"},{"weekday":"Tuesday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-09T12:42:03"},{"weekday":"Tuesday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-09T12:42:03"},{"weekday":"Tuesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-09T12:45:17"},{"weekday":"Tuesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-09T12:45:17"},{"weekday":"Tuesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-09T12:48:31"},{"weekday":"Tuesday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-09T13:35:17"},{"weekday":"Tuesday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-09T13:54:25"},{"weekday":"Tuesday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-09T13:54:25"},{"weekday":"Tuesday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-09T13:54:25"},{"weekday":"Tuesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-09T13:55:19"},{"weekday":"Tuesday","action":"Chatting","agentId":"Jerome M","timeStamp":"2012-10-09T13:55:19"},{"weekday":"Tuesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-09T14:07:00"},{"weekday":"Tuesday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-09T14:07:00"},{"weekday":"Tuesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-09T14:09:23"},{"weekday":"Tuesday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-09T14:09:23"},{"weekday":"Tuesday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-09T14:11:34"},{"weekday":"Tuesday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-09T14:11:37"},{"weekday":"Tuesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-09T14:11:37"},{"weekday":"Tuesday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-09T14:11:37"},{"weekday":"Tuesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-09T14:13:18"},{"weekday":"Tuesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-09T14:13:18"},{"weekday":"Tuesday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-09T14:30:36"},{"weekday":"Tuesday","action":"Chatting","agentId":"Ryan","timeStamp":"2012-10-09T14:30:43"},{"weekday":"Tuesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-09T14:37:18"},{"weekday":"Tuesday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-09T14:37:18"},{"weekday":"Tuesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-09T14:37:18"},{"weekday":"Tuesday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-09T14:38:22"},{"weekday":"Tuesday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-09T14:54:00"},{"weekday":"Tuesday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-09T14:59:02"},{"weekday":"Tuesday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-09T14:59:02"},{"weekday":"Tuesday","action":"Chatting","agentId":"Jerome M","timeStamp":"2012-10-09T15:06:38"},{"weekday":"Tuesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-09T15:07:05"},{"weekday":"Tuesday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-09T15:07:05"},{"weekday":"Tuesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-09T15:07:05"},{"weekday":"Tuesday","action":"Online","agentId":"Jan","timeStamp":"2012-10-09T15:07:05"},{"weekday":"Tuesday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-09T15:07:05"},{"weekday":"Tuesday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-09T15:17:03"},{"weekday":"Tuesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-09T15:17:03"},{"weekday":"Tuesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-09T15:17:03"},{"weekday":"Tuesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-09T15:25:56"},{"weekday":"Tuesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-09T15:25:56"},{"weekday":"Tuesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-09T16:12:25"},{"weekday":"Tuesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-09T16:12:25"},{"weekday":"Tuesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-09T16:22:14"},{"weekday":"Tuesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-09T16:22:14"},{"weekday":"Tuesday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-09T16:22:14"},{"weekday":"Tuesday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-09T16:22:14"},{"weekday":"Tuesday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-09T16:22:16"},{"weekday":"Tuesday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-09T16:48:42"},{"weekday":"Tuesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-09T16:48:42"},{"weekday":"Tuesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-09T16:55:58"},{"weekday":"Tuesday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-09T16:58:22"},{"weekday":"Tuesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-09T17:09:41"},{"weekday":"Tuesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-09T17:09:41"},{"weekday":"Tuesday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-09T17:48:51"},{"weekday":"Tuesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-09T18:00:15"},{"weekday":"Tuesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-09T18:58:05"},{"weekday":"Tuesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-09T18:58:05"},{"weekday":"Tuesday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-09T18:58:05"},{"weekday":"Tuesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-09T19:05:51"},{"weekday":"Tuesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-09T19:24:40"},{"weekday":"Tuesday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-09T19:24:40"},{"weekday":"Tuesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-09T19:25:16"},{"weekday":"Tuesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-09T19:25:16"},{"weekday":"Tuesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-09T19:51:13"},{"weekday":"Tuesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-09T19:54:33"},{"weekday":"Tuesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-09T19:54:33"},{"weekday":"Tuesday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-09T20:00:14"},{"weekday":"Tuesday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-09T20:32:19"},{"weekday":"Tuesday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-09T20:32:19"},{"weekday":"Tuesday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-09T20:38:56"},{"weekday":"Tuesday","action":"Online","agentId":"Jan","timeStamp":"2012-10-09T20:38:56"},{"weekday":"Tuesday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-09T21:21:04"},{"weekday":"Tuesday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-09T21:21:04"},{"weekday":"Tuesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-09T21:47:22"},{"weekday":"Tuesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-09T21:47:22"},{"weekday":"Tuesday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-09T21:56:09"},{"weekday":"Tuesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-09T21:56:09"},{"weekday":"Tuesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-09T23:41:55"},{"weekday":"Wednesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-10T01:10:13"},{"weekday":"Wednesday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-10T01:10:13"},{"weekday":"Wednesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-10T03:35:35"},{"weekday":"Wednesday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-10T03:35:35"},{"weekday":"Wednesday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-10T03:35:35"},{"weekday":"Wednesday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-10T03:35:35"},{"weekday":"Wednesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-10T03:43:21"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T03:43:21"},{"weekday":"Wednesday","action":"Online","agentId":"Erica","timeStamp":"2012-10-10T03:43:21"},{"weekday":"Wednesday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-10T03:43:21"},{"weekday":"Wednesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-10T03:47:21"},{"weekday":"Wednesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-10T03:47:21"},{"weekday":"Wednesday","action":"Chatting","agentId":"Jerome M","timeStamp":"2012-10-10T04:16:40"},{"weekday":"Wednesday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-10T04:40:30"},{"weekday":"Wednesday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-10T04:40:30"},{"weekday":"Wednesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-10T06:21:00"},{"weekday":"Wednesday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-10T06:21:00"},{"weekday":"Wednesday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-10T06:56:14"},{"weekday":"Wednesday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-10T06:56:14"},{"weekday":"Wednesday","action":"Chatting","agentId":"Jan","timeStamp":"2012-10-10T06:56:14"},{"weekday":"Wednesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-10T07:21:16"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T07:21:16"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T07:25:40"},{"weekday":"Wednesday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-10T07:25:40"},{"weekday":"Wednesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-10T07:32:26"},{"weekday":"Wednesday","action":"Paused","agentId":"Chris","timeStamp":"2012-10-10T07:32:26"},{"weekday":"Wednesday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-10T07:32:26"},{"weekday":"Wednesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-10T07:58:51"},{"weekday":"Wednesday","action":"Online","agentId":"Erica","timeStamp":"2012-10-10T07:58:51"},{"weekday":"Wednesday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-10T08:04:00"},{"weekday":"Wednesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-10T08:34:56"},{"weekday":"Wednesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-10T08:34:56"},{"weekday":"Wednesday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-10T09:11:03"},{"weekday":"Wednesday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-10T09:11:03"},{"weekday":"Wednesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-10T09:47:52"},{"weekday":"Wednesday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-10T09:50:01"},{"weekday":"Wednesday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-10T09:50:01"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T10:14:26"},{"weekday":"Wednesday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-10T10:14:26"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T10:30:13"},{"weekday":"Wednesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-10T10:34:43"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T10:34:49"},{"weekday":"Wednesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-10T10:34:49"},{"weekday":"Wednesday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-10T10:34:49"},{"weekday":"Wednesday","action":"Online","agentId":"Jan","timeStamp":"2012-10-10T11:06:59"},{"weekday":"Wednesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-10T11:07:15"},{"weekday":"Wednesday","action":"Online","agentId":"Erica","timeStamp":"2012-10-10T11:07:15"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T11:11:36"},{"weekday":"Wednesday","action":"Online","agentId":"Erica","timeStamp":"2012-10-10T11:11:36"},{"weekday":"Wednesday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-10T11:12:35"},{"weekday":"Wednesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-10T11:27:37"},{"weekday":"Wednesday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-10T11:27:37"},{"weekday":"Wednesday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-10T11:27:37"},{"weekday":"Wednesday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-10T12:18:04"},{"weekday":"Wednesday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-10T12:18:04"},{"weekday":"Wednesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-10T12:18:04"},{"weekday":"Wednesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-10T12:18:04"},{"weekday":"Wednesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-10T12:22:48"},{"weekday":"Wednesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-10T12:22:48"},{"weekday":"Wednesday","action":"Online","agentId":"Jan","timeStamp":"2012-10-10T12:22:48"},{"weekday":"Wednesday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-10T12:22:48"},{"weekday":"Wednesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-10T12:45:22"},{"weekday":"Wednesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-10T12:45:22"},{"weekday":"Wednesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-10T12:45:22"},{"weekday":"Wednesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-10T12:53:41"},{"weekday":"Wednesday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-10T12:53:41"},{"weekday":"Wednesday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-10T12:53:41"},{"weekday":"Wednesday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-10T12:53:41"},{"weekday":"Wednesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-10T13:03:54"},{"weekday":"Wednesday","action":"Chatting","agentId":"Jerome M","timeStamp":"2012-10-10T13:03:54"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T13:05:27"},{"weekday":"Wednesday","action":"Online","agentId":"Erica","timeStamp":"2012-10-10T13:05:27"},{"weekday":"Wednesday","action":"Paused","agentId":"Jan","timeStamp":"2012-10-10T13:05:27"},{"weekday":"Wednesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-10T13:13:18"},{"weekday":"Wednesday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-10T13:13:18"},{"weekday":"Wednesday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-10T13:16:50"},{"weekday":"Wednesday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-10T13:16:50"},{"weekday":"Wednesday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-10T13:17:18"},{"weekday":"Wednesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-10T13:17:18"},{"weekday":"Wednesday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-10T13:17:18"},{"weekday":"Wednesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-10T13:28:58"},{"weekday":"Wednesday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-10T13:28:58"},{"weekday":"Wednesday","action":"Offline","agentId":"Jerome M","timeStamp":"2012-10-10T13:28:58"},{"weekday":"Wednesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-10T13:44:48"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T13:44:48"},{"weekday":"Wednesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-10T13:44:48"},{"weekday":"Wednesday","action":"Online","agentId":"Jerome B","timeStamp":"2012-10-10T13:44:48"},{"weekday":"Wednesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-10T13:45:15"},{"weekday":"Wednesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-10T13:45:15"},{"weekday":"Wednesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-10T14:07:41"},{"weekday":"Wednesday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-10T14:07:41"},{"weekday":"Wednesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-10T14:16:18"},{"weekday":"Wednesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-10T14:16:18"},{"weekday":"Wednesday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-10T15:10:38"},{"weekday":"Wednesday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-10T15:10:38"},{"weekday":"Wednesday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-10T15:10:38"},{"weekday":"Wednesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-10T15:18:36"},{"weekday":"Wednesday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-10T15:18:36"},{"weekday":"Wednesday","action":"Offline","agentId":"Jan","timeStamp":"2012-10-10T15:18:36"},{"weekday":"Wednesday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-10T15:24:48"},{"weekday":"Wednesday","action":"Chatting","agentId":"Blake","timeStamp":"2012-10-10T15:28:06"},{"weekday":"Wednesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-10T15:28:06"},{"weekday":"Wednesday","action":"Offline","agentId":"Chris","timeStamp":"2012-10-10T15:40:17"},{"weekday":"Wednesday","action":"Offline","agentId":"Aaron","timeStamp":"2012-10-10T15:44:35"},{"weekday":"Wednesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-10T15:44:35"},{"weekday":"Wednesday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-10T15:44:35"},{"weekday":"Wednesday","action":"Offline","agentId":"Jerome B","timeStamp":"2012-10-10T15:47:57"},{"weekday":"Wednesday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-10T15:47:57"},{"weekday":"Wednesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-10T15:53:09"},{"weekday":"Wednesday","action":"Online","agentId":"Erica","timeStamp":"2012-10-10T15:53:09"},{"weekday":"Wednesday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-10T16:10:59"},{"weekday":"Wednesday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-10T16:16:45"},{"weekday":"Wednesday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-10T16:16:45"},{"weekday":"Wednesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-10T16:17:04"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T16:29:44"},{"weekday":"Wednesday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-10T16:29:44"},{"weekday":"Wednesday","action":"Online","agentId":"Chris","timeStamp":"2012-10-10T16:43:55"},{"weekday":"Wednesday","action":"Offline","agentId":"Erica","timeStamp":"2012-10-10T16:43:55"},{"weekday":"Wednesday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-10T16:59:12"},{"weekday":"Wednesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-10T17:02:43"},{"weekday":"Wednesday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-10T17:02:43"},{"weekday":"Wednesday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-10T17:16:28"},{"weekday":"Wednesday","action":"Chatting","agentId":"Jerome B","timeStamp":"2012-10-10T17:36:26"},{"weekday":"Wednesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-10T17:56:02"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T17:59:00"},{"weekday":"Wednesday","action":"Paused","agentId":"Jerome B","timeStamp":"2012-10-10T17:59:00"},{"weekday":"Wednesday","action":"Online","agentId":"Jerome M","timeStamp":"2012-10-10T17:59:00"},{"weekday":"Wednesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-10T18:08:09"},{"weekday":"Wednesday","action":"Chatting","agentId":"Chris","timeStamp":"2012-10-10T18:08:09"},{"weekday":"Wednesday","action":"Paused","agentId":"Erica","timeStamp":"2012-10-10T18:08:09"},{"weekday":"Wednesday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-10T18:19:34"},{"weekday":"Wednesday","action":"Chatting","agentId":"Aaron","timeStamp":"2012-10-10T18:25:41"},{"weekday":"Wednesday","action":"Offline","agentId":"Blake","timeStamp":"2012-10-10T18:25:41"},{"weekday":"Wednesday","action":"Chatting","agentId":"Erica","timeStamp":"2012-10-10T18:25:41"},{"weekday":"Wednesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-10T18:28:27"},{"weekday":"Wednesday","action":"Paused","agentId":"Blake","timeStamp":"2012-10-10T18:34:06"},{"weekday":"Wednesday","action":"Online","agentId":"Aaron","timeStamp":"2012-10-10T19:44:54"},{"weekday":"Wednesday","action":"Online","agentId":"Erica","timeStamp":"2012-10-10T19:44:54"},{"weekday":"Wednesday","action":"Online","agentId":"Ryan","timeStamp":"2012-10-10T19:44:54"},{"weekday":"Wednesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-10T21:16:07"},{"weekday":"Wednesday","action":"Offline","agentId":"Ryan","timeStamp":"2012-10-10T21:16:07"},{"weekday":"Wednesday","action":"Paused","agentId":"Aaron","timeStamp":"2012-10-10T22:28:19"},{"weekday":"Wednesday","action":"Online","agentId":"Blake","timeStamp":"2012-10-10T22:28:19"}]
+{"action": "Offline", "timeStamp": "2012-10-04T00:57:43", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T01:33:02", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T01:33:02", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T01:33:02", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T01:44:52", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T01:44:52", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T01:44:52", "agentId": "Jan", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T01:55:12", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T01:55:12", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T02:51:26", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T02:51:26", "agentId": "Jerome M", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T03:01:54", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T03:01:54", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T03:01:54", "agentId": "Jan", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T03:58:54", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T03:58:54", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T03:58:54", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Paused", "timeStamp": "2012-10-04T03:59:36", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T03:59:36", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T03:59:36", "agentId": "Jan", "weekday": "Thursday"}
+{"action": "Paused", "timeStamp": "2012-10-04T04:08:39", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T04:08:39", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T06:19:42", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T06:19:42", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T07:39:38", "agentId": "Jan", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T07:39:38", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T07:39:38", "agentId": "Ryan", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T07:49:33", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T07:49:33", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T07:49:33", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T07:49:33", "agentId": "Ryan", "weekday": "Thursday"}
+{"action": "Paused", "timeStamp": "2012-10-04T08:04:48", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T08:04:48", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T08:07:31", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T08:07:31", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T08:07:31", "agentId": "Jan", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T08:13:18", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T08:13:18", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Paused", "timeStamp": "2012-10-04T09:27:02", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T09:54:23", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T09:54:23", "agentId": "Jan", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T09:55:49", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T09:55:49", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T09:55:49", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Paused", "timeStamp": "2012-10-04T10:11:31", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T10:11:31", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T10:12:46", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T10:12:46", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T10:17:14", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Paused", "timeStamp": "2012-10-04T10:17:14", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T10:31:33", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T10:31:33", "agentId": "Jerome M", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T10:50:32", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T10:50:32", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Paused", "timeStamp": "2012-10-04T11:31:11", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T11:31:11", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T11:45:29", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T11:48:48", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T11:48:48", "agentId": "Jerome M", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T11:56:41", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T11:56:41", "agentId": "Jan", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T12:37:38", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T12:37:38", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T12:37:38", "agentId": "Ryan", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T12:48:40", "agentId": "Jerome M", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T13:08:00", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T13:08:00", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T13:08:00", "agentId": "Jan", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T13:08:00", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T13:15:13", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T13:15:40", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T13:15:40", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T13:17:07", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T13:17:07", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T13:17:07", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T13:30:33", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Paused", "timeStamp": "2012-10-04T13:30:33", "agentId": "Jan", "weekday": "Thursday"}
+{"action": "Paused", "timeStamp": "2012-10-04T13:33:23", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T13:33:55", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T13:33:55", "agentId": "Jerome M", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T14:08:31", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T14:08:31", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T14:08:31", "agentId": "Ryan", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T14:23:12", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T14:24:54", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T14:24:54", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T14:27:08", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T14:27:08", "agentId": "Ryan", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T14:34:17", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T14:34:17", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T14:34:17", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T14:36:39", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T14:36:39", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T14:36:39", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T14:36:39", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T14:39:12", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T14:39:12", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T14:39:12", "agentId": "Jerome M", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T15:14:01", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T15:14:01", "agentId": "Jan", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T15:14:01", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T15:35:06", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T15:35:06", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T15:35:06", "agentId": "Ryan", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T16:00:18", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T16:15:52", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T16:15:52", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T16:17:24", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T16:17:24", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T16:17:24", "agentId": "Ryan", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T16:44:27", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T17:08:16", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T17:20:06", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T17:20:06", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T17:20:06", "agentId": "Jan", "weekday": "Thursday"}
+{"action": "Paused", "timeStamp": "2012-10-04T17:46:24", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T17:46:24", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T18:05:52", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Paused", "timeStamp": "2012-10-04T18:05:52", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T18:05:52", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T18:21:35", "agentId": "Ryan", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T19:05:00", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T19:05:00", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T19:05:00", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T19:05:00", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T19:12:56", "agentId": "Blake", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T19:12:56", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T19:12:56", "agentId": "Ryan", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T19:26:00", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T19:32:29", "agentId": "Erica", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T19:32:29", "agentId": "Ryan", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T20:22:52", "agentId": "Aaron", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T20:22:52", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Offline", "timeStamp": "2012-10-04T20:22:52", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-04T22:49:24", "agentId": "Chris", "weekday": "Thursday"}
+{"action": "Chatting", "timeStamp": "2012-10-04T22:49:24", "agentId": "Jerome B", "weekday": "Thursday"}
+{"action": "Online", "timeStamp": "2012-10-05T02:57:20", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T02:57:20", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T04:19:14", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T04:19:14", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T04:19:14", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T04:19:14", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T04:22:22", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T04:22:22", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T04:22:22", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T04:22:22", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T04:22:22", "agentId": "Ryan", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T05:21:02", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T05:54:31", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T05:54:31", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T05:58:44", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T05:58:44", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T05:58:44", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T05:58:44", "agentId": "Jerome B", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T06:01:37", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T06:01:37", "agentId": "Jerome B", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T06:11:44", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T06:11:44", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T06:24:08", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T08:17:02", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T08:17:02", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T08:52:05", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T08:52:05", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T08:53:01", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T08:53:01", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T08:53:01", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T09:04:24", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T09:14:57", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T09:14:57", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T09:14:57", "agentId": "Jerome B", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T09:15:32", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T09:15:32", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T09:31:45", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T09:31:45", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T09:31:45", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T09:37:55", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T09:37:55", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T10:03:20", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T10:03:20", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T10:03:20", "agentId": "Jerome B", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T10:35:04", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T10:35:04", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T10:35:53", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T10:42:28", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T10:48:26", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T10:49:50", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T10:49:50", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T10:49:50", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T10:49:50", "agentId": "Jerome B", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T11:20:13", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T11:20:13", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T11:20:13", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T11:28:11", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T11:28:11", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T11:28:11", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T11:39:04", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T11:39:04", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T11:39:04", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T11:48:13", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T11:48:13", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T11:52:33", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T12:03:46", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T12:03:46", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T12:30:17", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T12:30:17", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T12:30:17", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T12:51:36", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T13:14:40", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T13:14:40", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T13:14:40", "agentId": "Ryan", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T13:17:19", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T13:17:19", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T13:17:19", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T13:17:19", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T13:28:31", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T13:28:31", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T13:28:31", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T13:32:30", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T13:43:26", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T13:49:17", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T13:49:17", "agentId": "Ryan", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T14:00:23", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T14:00:23", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T14:00:23", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T14:02:51", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T14:02:51", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T14:31:40", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T14:31:40", "agentId": "Jerome B", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T14:50:28", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T14:50:28", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T14:54:35", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T14:54:35", "agentId": "Jerome B", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T15:03:12", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T15:30:56", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T15:30:56", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T15:30:56", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T15:37:04", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T15:37:04", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T15:55:02", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T16:02:13", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T16:02:13", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T16:25:34", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T16:25:34", "agentId": "Jerome B", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T16:30:01", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T16:30:01", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T16:30:01", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T17:04:54", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T17:21:04", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T17:21:35", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T17:21:35", "agentId": "Jerome B", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T17:23:06", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T18:28:00", "agentId": "Ryan", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T18:32:36", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T18:32:36", "agentId": "Jerome B", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T19:27:31", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T19:27:31", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T19:27:31", "agentId": "Jerome B", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T19:40:51", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T20:47:07", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T20:47:07", "agentId": "Chris", "weekday": "Friday"}
+{"action": "Paused", "timeStamp": "2012-10-05T21:39:21", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T21:39:21", "agentId": "Erica", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T21:39:21", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T21:50:36", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T21:50:36", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T22:29:35", "agentId": "Aaron", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T22:29:35", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Online", "timeStamp": "2012-10-05T22:29:35", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-05T22:29:35", "agentId": "Ryan", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T23:10:10", "agentId": "Blake", "weekday": "Friday"}
+{"action": "Offline", "timeStamp": "2012-10-05T23:10:10", "agentId": "Jan", "weekday": "Friday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T02:21:18", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T02:24:28", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T02:24:28", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T03:05:45", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T04:06:00", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T04:09:56", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T04:38:55", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T04:38:55", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T04:44:44", "agentId": "Blake", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T05:32:42", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T05:35:17", "agentId": "Blake", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T05:35:17", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T05:35:17", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T05:43:44", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T05:43:44", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T05:43:44", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T06:03:24", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T06:03:24", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T06:10:16", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T06:10:16", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T06:10:16", "agentId": "Ryan", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T06:17:12", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T06:17:12", "agentId": "Ryan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T07:18:36", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T07:18:36", "agentId": "Blake", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T07:18:36", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T07:50:37", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T08:03:53", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T08:03:53", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T08:37:19", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T09:08:04", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T09:08:04", "agentId": "Blake", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T09:08:04", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T09:28:10", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T09:28:10", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T09:49:50", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T09:49:50", "agentId": "Ryan", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T10:18:48", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T10:18:48", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T10:29:24", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T10:29:24", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T11:28:12", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T11:28:12", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T11:28:12", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T11:30:56", "agentId": "Blake", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T11:30:56", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T11:30:56", "agentId": "Ryan", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T11:35:41", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T11:36:04", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T11:41:41", "agentId": "Ryan", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T11:54:32", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T12:05:47", "agentId": "Blake", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T12:05:47", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T12:11:01", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T12:11:01", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T12:11:01", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T12:11:01", "agentId": "Ryan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T12:23:08", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T12:44:01", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T12:44:01", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T13:00:31", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T13:00:31", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T13:02:59", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T13:02:59", "agentId": "Blake", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T13:02:59", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T13:05:58", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T13:13:32", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T13:13:32", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T13:13:32", "agentId": "Jerome M", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T13:23:59", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T13:23:59", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T13:35:15", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T14:49:30", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T14:49:30", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T14:52:16", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T14:53:56", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T14:53:56", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T15:16:25", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T15:16:25", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T15:16:25", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T15:51:35", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T15:51:35", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T15:55:53", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T15:55:53", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T15:55:53", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T15:58:29", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T15:58:29", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T15:58:29", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T15:58:29", "agentId": "Ryan", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T17:07:50", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T17:07:50", "agentId": "Chris", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T17:07:50", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T17:07:50", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T17:11:18", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T17:11:18", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T17:11:18", "agentId": "Jerome M", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T17:18:20", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T17:20:58", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T17:24:49", "agentId": "Erica", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T17:24:49", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T17:24:49", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T17:34:11", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T19:43:23", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Paused", "timeStamp": "2012-10-06T19:43:23", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T19:59:02", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T19:59:02", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-06T21:11:19", "agentId": "Aaron", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T21:11:19", "agentId": "Jan", "weekday": "Saturday"}
+{"action": "Chatting", "timeStamp": "2012-10-06T21:20:15", "agentId": "Jerome B", "weekday": "Saturday"}
+{"action": "Offline", "timeStamp": "2012-10-06T22:36:32", "agentId": "Blake", "weekday": "Saturday"}
+{"action": "Online", "timeStamp": "2012-10-07T00:24:31", "agentId": "Ryan", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T03:12:34", "agentId": "Blake", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T03:12:34", "agentId": "Ryan", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T03:16:57", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T04:25:41", "agentId": "Ryan", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T07:12:27", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T07:12:27", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T07:42:49", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T07:44:26", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T07:44:26", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T07:44:47", "agentId": "Erica", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T08:04:27", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T08:04:27", "agentId": "Blake", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T08:23:31", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T08:25:20", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T08:25:20", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T08:38:44", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T09:18:11", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T09:18:11", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T09:28:05", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T09:28:05", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T09:28:05", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T09:34:03", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T09:34:03", "agentId": "Ryan", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T09:46:46", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T09:48:56", "agentId": "Jerome M", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T10:00:09", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T10:00:09", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T10:18:11", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T10:18:11", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T10:18:53", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T10:18:53", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T10:32:39", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T10:32:39", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T11:01:53", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T11:15:50", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T11:15:52", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T11:18:22", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T11:18:22", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T11:22:02", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T11:22:02", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T11:22:02", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T11:45:57", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T12:14:33", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T12:14:33", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T12:35:31", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T12:35:31", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T12:37:56", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T12:37:56", "agentId": "Erica", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T12:46:27", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T12:46:27", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T12:48:18", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T12:48:18", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T12:48:18", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T13:26:39", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T14:07:24", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T14:07:24", "agentId": "Jerome M", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T14:08:25", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T14:15:31", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T14:15:31", "agentId": "Ryan", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T14:20:18", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T14:20:18", "agentId": "Erica", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T14:20:18", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T14:23:48", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T14:30:08", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T14:30:08", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T14:30:30", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T14:40:13", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T14:51:29", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T14:51:29", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T14:59:09", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T14:59:09", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T15:02:03", "agentId": "Blake", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T15:07:01", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T15:16:58", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T15:16:58", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T15:16:58", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T15:16:58", "agentId": "Jerome M", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T15:27:15", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T15:27:15", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T15:42:14", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T15:42:14", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T15:46:04", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T15:46:13", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T15:46:13", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T15:50:32", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T15:50:32", "agentId": "Erica", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T16:07:59", "agentId": "Aaron", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T16:07:59", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T17:03:39", "agentId": "Jerome M", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T17:10:29", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T17:10:29", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T17:20:10", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T17:36:37", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T17:36:37", "agentId": "Ryan", "weekday": "Sunday"}
+{"action": "Paused", "timeStamp": "2012-10-07T17:52:04", "agentId": "Jerome B", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T18:28:01", "agentId": "Jerome M", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T18:58:51", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T19:02:40", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Chatting", "timeStamp": "2012-10-07T19:29:30", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T20:29:26", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Online", "timeStamp": "2012-10-07T20:29:26", "agentId": "Erica", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T21:14:37", "agentId": "Chris", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-07T21:14:37", "agentId": "Jan", "weekday": "Sunday"}
+{"action": "Offline", "timeStamp": "2012-10-08T01:06:08", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T01:06:08", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T01:06:08", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T01:06:08", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T02:48:50", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T02:48:50", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T03:30:39", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T03:30:39", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T03:30:39", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T04:21:14", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T04:58:52", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T04:58:52", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T05:09:16", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T05:09:16", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T05:09:16", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T05:09:16", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T05:47:07", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T05:47:07", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T05:47:07", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T06:23:09", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T06:51:45", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T06:51:45", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T06:51:45", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T07:06:03", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T07:06:03", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T07:28:22", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T07:28:22", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T08:08:47", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T08:25:09", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T08:25:09", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T08:25:09", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T08:25:09", "agentId": "Ryan", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T08:45:42", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T08:48:25", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T09:05:41", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T09:05:41", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T09:10:09", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T09:11:54", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T09:27:53", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T09:27:53", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T09:27:53", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T09:33:44", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T09:33:44", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T09:33:44", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T09:41:29", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T09:41:29", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T09:41:29", "agentId": "Ryan", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T09:41:53", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T09:41:53", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T09:41:53", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T09:45:46", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T09:50:19", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T09:50:19", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T10:06:04", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T10:06:04", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T10:06:04", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T10:06:04", "agentId": "Ryan", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T10:08:57", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T10:08:57", "agentId": "Ryan", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T10:10:28", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T10:10:28", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T10:20:59", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T10:20:59", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T10:28:16", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T10:28:16", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T10:28:16", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T10:28:16", "agentId": "Ryan", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T10:35:14", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T10:35:14", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T11:00:09", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T11:03:43", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T11:03:43", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T11:30:07", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T11:30:07", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T11:30:07", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T11:35:11", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T11:45:41", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T11:45:41", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T11:45:41", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T11:45:41", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T11:50:09", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T11:50:09", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T11:51:42", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T11:51:42", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T12:06:48", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T12:06:48", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T12:08:10", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T12:08:10", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T12:08:10", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T12:15:22", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T12:15:22", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T12:39:52", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T12:39:52", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T12:39:52", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T12:45:17", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T12:45:17", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T12:45:17", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T12:45:17", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T12:48:16", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T12:59:39", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T12:59:39", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T13:02:47", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T13:02:47", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T13:34:04", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T13:34:04", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T13:34:04", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T13:34:04", "agentId": "Ryan", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T13:59:51", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T13:59:51", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T14:09:36", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T14:31:12", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T14:32:36", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T14:36:18", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T14:36:18", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T14:53:11", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T14:53:11", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T14:53:11", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T15:01:49", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T15:11:52", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T16:04:57", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T16:04:57", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T16:04:57", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T16:04:57", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T16:11:31", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T16:40:00", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T16:40:00", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T16:40:00", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T17:44:46", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T17:51:47", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T17:57:16", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T17:57:16", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T17:57:16", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T18:01:18", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T18:01:18", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T18:01:18", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T18:01:18", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T18:01:18", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T18:05:33", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T18:05:33", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T18:05:33", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T18:12:26", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T18:12:26", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T18:23:20", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T18:23:20", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T18:36:59", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T19:26:12", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T19:26:12", "agentId": "Ryan", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T19:55:58", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T19:59:18", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T20:24:11", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T20:24:11", "agentId": "Chris", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T20:24:11", "agentId": "Erica", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T20:24:11", "agentId": "Ryan", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T21:13:11", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T21:13:11", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T21:13:11", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T21:46:12", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T21:46:12", "agentId": "Blake", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T21:46:12", "agentId": "Jan", "weekday": "Monday"}
+{"action": "Chatting", "timeStamp": "2012-10-08T21:46:12", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T23:58:34", "agentId": "Aaron", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-08T23:58:34", "agentId": "Jerome B", "weekday": "Monday"}
+{"action": "Offline", "timeStamp": "2012-10-08T23:58:34", "agentId": "Jerome M", "weekday": "Monday"}
+{"action": "Online", "timeStamp": "2012-10-08T23:58:34", "agentId": "Ryan", "weekday": "Monday"}
+{"action": "Paused", "timeStamp": "2012-10-09T02:01:30", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T05:14:04", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T05:14:04", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T05:56:47", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T05:56:47", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T06:29:23", "agentId": "Jerome M", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T06:52:16", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T06:52:16", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T06:55:39", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T06:55:39", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T07:06:21", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T07:06:21", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T07:23:24", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T07:23:24", "agentId": "Jerome M", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T07:51:46", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T07:51:46", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T07:57:59", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T07:57:59", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T07:57:59", "agentId": "Jerome B", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T08:05:06", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T08:05:06", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T08:05:06", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T08:06:03", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T08:06:03", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T08:13:29", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T08:13:29", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T08:23:13", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T08:23:13", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T08:36:20", "agentId": "Jerome M", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T09:30:42", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T09:31:09", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T09:34:14", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T09:34:14", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T09:34:14", "agentId": "Jerome B", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T09:34:33", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T09:34:33", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T09:34:33", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T10:04:33", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T10:48:30", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T10:48:30", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T10:48:30", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T10:52:45", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T10:56:25", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T10:56:25", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T10:56:25", "agentId": "Jerome B", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T10:57:52", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T10:57:52", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T10:57:52", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T11:30:16", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T12:42:03", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T12:42:03", "agentId": "Jerome B", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T12:42:03", "agentId": "Ryan", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T12:45:17", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T12:45:17", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T12:48:31", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T13:35:17", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T13:54:25", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T13:54:25", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T13:54:25", "agentId": "Jerome B", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T13:55:19", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T13:55:19", "agentId": "Jerome M", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T14:07:00", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T14:07:00", "agentId": "Jerome M", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T14:09:23", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T14:09:23", "agentId": "Jerome B", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T14:11:34", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T14:11:37", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T14:11:37", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T14:11:37", "agentId": "Jerome B", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T14:13:18", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T14:13:18", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T14:30:36", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T14:30:43", "agentId": "Ryan", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T14:37:18", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T14:37:18", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T14:37:18", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T14:38:22", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T14:54:00", "agentId": "Jerome M", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T14:59:02", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T14:59:02", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T15:06:38", "agentId": "Jerome M", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T15:07:05", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T15:07:05", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T15:07:05", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T15:07:05", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T15:07:05", "agentId": "Ryan", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T15:17:03", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T15:17:03", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T15:17:03", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T15:25:56", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T15:25:56", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T16:12:25", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T16:12:25", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T16:22:14", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T16:22:14", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T16:22:14", "agentId": "Jerome B", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T16:22:14", "agentId": "Jerome M", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T16:22:16", "agentId": "Jerome B", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T16:48:42", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T16:48:42", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T16:55:58", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T16:58:22", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T17:09:41", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T17:09:41", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T17:48:51", "agentId": "Jerome M", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T18:00:15", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T18:58:05", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T18:58:05", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T18:58:05", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T19:05:51", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T19:24:40", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T19:24:40", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T19:25:16", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T19:25:16", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T19:51:13", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T19:54:33", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T19:54:33", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T20:00:14", "agentId": "Jerome M", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T20:32:19", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T20:32:19", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T20:38:56", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T20:38:56", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Chatting", "timeStamp": "2012-10-09T21:21:04", "agentId": "Jan", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T21:21:04", "agentId": "Jerome B", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T21:47:22", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-09T21:47:22", "agentId": "Chris", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T21:56:09", "agentId": "Blake", "weekday": "Tuesday"}
+{"action": "Offline", "timeStamp": "2012-10-09T21:56:09", "agentId": "Erica", "weekday": "Tuesday"}
+{"action": "Paused", "timeStamp": "2012-10-09T23:41:55", "agentId": "Aaron", "weekday": "Tuesday"}
+{"action": "Online", "timeStamp": "2012-10-10T01:10:13", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T01:10:13", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T03:35:35", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T03:35:35", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T03:35:35", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T03:35:35", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T03:43:21", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T03:43:21", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T03:43:21", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T03:43:21", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T03:47:21", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T03:47:21", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T04:16:40", "agentId": "Jerome M", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T04:40:30", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T04:40:30", "agentId": "Jerome M", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T06:21:00", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T06:21:00", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T06:56:14", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T06:56:14", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T06:56:14", "agentId": "Jan", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T07:21:16", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T07:21:16", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T07:25:40", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T07:25:40", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T07:32:26", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T07:32:26", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T07:32:26", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T07:58:51", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T07:58:51", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T08:04:00", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T08:34:56", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T08:34:56", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T09:11:03", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T09:11:03", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T09:47:52", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T09:50:01", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T09:50:01", "agentId": "Ryan", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T10:14:26", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T10:14:26", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T10:30:13", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T10:34:43", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T10:34:49", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T10:34:49", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T10:34:49", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T11:06:59", "agentId": "Jan", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T11:07:15", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T11:07:15", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T11:11:36", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T11:11:36", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T11:12:35", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T11:27:37", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T11:27:37", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T11:27:37", "agentId": "Jan", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T12:18:04", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T12:18:04", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T12:18:04", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T12:18:04", "agentId": "Jan", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T12:22:48", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T12:22:48", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T12:22:48", "agentId": "Jan", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T12:22:48", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T12:45:22", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T12:45:22", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T12:45:22", "agentId": "Jan", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T12:53:41", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T12:53:41", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T12:53:41", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T12:53:41", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T13:03:54", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T13:03:54", "agentId": "Jerome M", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T13:05:27", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T13:05:27", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T13:05:27", "agentId": "Jan", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T13:13:18", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T13:13:18", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T13:16:50", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T13:16:50", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T13:17:18", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T13:17:18", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T13:17:18", "agentId": "Ryan", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T13:28:58", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T13:28:58", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T13:28:58", "agentId": "Jerome M", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T13:44:48", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T13:44:48", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T13:44:48", "agentId": "Jan", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T13:44:48", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T13:45:15", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T13:45:15", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T14:07:41", "agentId": "Jan", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T14:07:41", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T14:16:18", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T14:16:18", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T15:10:38", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T15:10:38", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T15:10:38", "agentId": "Jerome M", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T15:18:36", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T15:18:36", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T15:18:36", "agentId": "Jan", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T15:24:48", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T15:28:06", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T15:28:06", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T15:40:17", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T15:44:35", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T15:44:35", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T15:44:35", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T15:47:57", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T15:47:57", "agentId": "Jerome M", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T15:53:09", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T15:53:09", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T16:10:59", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T16:16:45", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T16:16:45", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T16:17:04", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T16:29:44", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T16:29:44", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T16:43:55", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T16:43:55", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T16:59:12", "agentId": "Ryan", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T17:02:43", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T17:02:43", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T17:16:28", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T17:36:26", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T17:56:02", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T17:59:00", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T17:59:00", "agentId": "Jerome B", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T17:59:00", "agentId": "Jerome M", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T18:08:09", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T18:08:09", "agentId": "Chris", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T18:08:09", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T18:19:34", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T18:25:41", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T18:25:41", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Chatting", "timeStamp": "2012-10-10T18:25:41", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T18:28:27", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T18:34:06", "agentId": "Blake", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T19:44:54", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T19:44:54", "agentId": "Erica", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T19:44:54", "agentId": "Ryan", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T21:16:07", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Offline", "timeStamp": "2012-10-10T21:16:07", "agentId": "Ryan", "weekday": "Wednesday"}
+{"action": "Paused", "timeStamp": "2012-10-10T22:28:19", "agentId": "Aaron", "weekday": "Wednesday"}
+{"action": "Online", "timeStamp": "2012-10-10T22:28:19", "agentId": "Blake", "weekday": "Wednesday"}
