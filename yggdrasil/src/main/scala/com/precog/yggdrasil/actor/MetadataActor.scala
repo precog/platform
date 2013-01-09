@@ -92,7 +92,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       logger.trace(Status.toString)
       sender ! status
 
-    case msg @ IngestBatchMetadata(updates, batchClock, batchOffset) => {
+    case msg @ IngestBatchMetadata(updates, batchClock, batchOffset) =>
       MDC.put("metadata_batch", ingestBatchId.getAndIncrement().toString)
       for(update <- updates) update match {
         case (descriptor, Some(metadata)) =>
@@ -110,37 +110,43 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       
       messageClock = messageClock |+| batchClock
       kafkaOffset = batchOffset orElse kafkaOffset
-    }
    
     case msg @ FindChildren(path) => 
       logger.trace(msg.toString)
       sender ! storage.findChildren(path)
+      logger.trace("Completed " + msg.toString)
     
     case msg @ FindSelectors(path) => 
       logger.trace(msg.toString)
       sender ! storage.findSelectors(path)
+      logger.trace("Completed " + msg.toString)
 
     case msg @ FindDescriptors(path, selector) => 
       logger.trace(msg.toString)
       val result = runIO(findDescriptors(path, selector), "FindDescriptors")
       logger.trace("Found descriptors: " + result)
       sender ! result
+      logger.trace("Completed " + msg.toString)
 
     case msg @ FindPathMetadata(path, selector) => 
       logger.trace(msg.toString)
       sender ! runIO(storage.findPathMetadata(path, selector, columnMetadataFor), "FindPathMetadata")
+      logger.trace("Completed " + msg.toString)
 
     case msg @ InitDescriptorRoot(descriptor) =>
       logger.trace(msg.toString)
       sender ! runIO(storage.ensureDescriptorRoot(descriptor), "InitDescriptorRoot")
+      logger.trace("Completed " + msg.toString)
 
     case msg @ FindDescriptorRoot(descriptor) => 
       logger.trace(msg.toString)
       sender ! storage.findDescriptorRoot(descriptor)
+      logger.trace("Completed " + msg.toString)
     
     case msg @ FindDescriptorArchive(descriptor) => 
       logger.trace(msg.toString)
       sender ! runIO(storage.findArchiveRoot(descriptor), "FindDescriptorArchive")
+      logger.trace("Completed " + msg.toString)
     
     case msg @ FlushMetadata => 
       flush(Some(sender)).unsafePerformIO
@@ -148,6 +154,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
     case msg @ GetCurrentCheckpoint => 
       logger.trace(msg.toString)
       sender ! kafkaOffset.map(YggCheckpoint(_, messageClock)) 
+      logger.trace("Completed " + msg.toString)
   }
 
   private def runIO[A](io: IO[A], msg: String): A = io.except({ case ex => logger.error(msg, ex); throw ex }).unsafePerformIO

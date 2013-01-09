@@ -252,8 +252,8 @@ class FileMetadataStorage private (baseDir: File, archiveDir: File, fileOps: Fil
     if (metadataLocations.contains(desc)) {
       IO(metadataLocations(desc))
     } else {
+      val newRoot = descriptorDir(baseDir, desc)
       for {
-        newRoot <- descriptorDir(baseDir, desc)
         _       <- IO { newRoot.mkdirs() }
         _       <- writeDescriptor(desc, newRoot) 
       } yield {
@@ -266,8 +266,12 @@ class FileMetadataStorage private (baseDir: File, archiveDir: File, fileOps: Fil
 
   def findDescriptorRoot(desc: ProjectionDescriptor): Option[File] = metadataLocations.get(desc)
 
-  def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]] = {
-    metadataLocations.get(desc).map(_ => descriptorDir(archiveDir, desc).map { d => d.mkdirs(); d }).sequence
+  def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]] = IO {
+    metadataLocations.get(desc) map { _ => 
+      val dir = descriptorDir(archiveDir, desc)
+      dir.mkdirs()
+      dir
+    }
   }
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = {
@@ -319,7 +323,7 @@ class FileMetadataStorage private (baseDir: File, archiveDir: File, fileOps: Fil
   /**
    * Computes the stable path for a given descriptor relative to the given base dir
    */
-  private def descriptorDir(baseDir: File, descriptor: ProjectionDescriptor): IO[File] = IO {
+  private def descriptorDir(baseDir: File, descriptor: ProjectionDescriptor): File = {
     // The path component maps directly to the FS, with a hash on the columnrefs as the final dir
     val prefix = descriptor.commonPrefix.filterNot(disallowedPathComponents.contains)
 
