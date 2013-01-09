@@ -1959,6 +1959,20 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
       evalE(input) must not(beEmpty)
     }
+
+    "not produce out-of-order identities for simple cartesian and join with a reduction" in {
+      val input = """
+        athletes := load("/summer_games/athletes")
+        medals := load("/summer_games/london_medals")
+
+        medals~athletes
+        medalsWithPopulation := medals with {population: athletes.Population}
+        results := medalsWithPopulation where athletes.Countryname = medals.Country
+        count(results where results.Country = "Argentina")
+        """
+
+      eval(input) must not(throwA[Exception])
+    }
   }
 }
 
