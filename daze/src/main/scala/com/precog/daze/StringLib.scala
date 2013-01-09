@@ -34,7 +34,7 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
   val StringNamespace = Vector("std", "string")
 
   override def _lib1 = super._lib1 ++ Set(length, trim, toUpperCase,
-    toLowerCase, isEmpty, intern, parseNum)
+    toLowerCase, isEmpty, intern, parseNum, numToString)
 
   override def _lib2 = super._lib2 ++ Set(equalsIgnoreCase, codePointAt,
     startsWith, lastIndexOf, concat, endsWith, codePointBefore, substring,
@@ -191,6 +191,15 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
 
         def apply(row: Int) = BigDecimal(c(row))
       }
+    }
+  }
+
+  object numToString extends Op1(StringNamespace, "numToString") {
+    val tpe = UnaryOperationType(JNumberT, JTextT)
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::numToString") {
+      case c: LongColumn => new StrFrom.L(c, _ => true, _.toString)
+      case c: DoubleColumn => new StrFrom.D(c, _ => true, _.toString)
+      case c: NumColumn => new StrFrom.N(c, _ => true, _.toString)
     }
   }
 }

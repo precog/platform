@@ -439,14 +439,13 @@ trait ColumnarTableModule[M[+_]]
      * Given a JValue, an existing map of columnrefs to column data,
      * a sliceIndex, and a sliceSize, return an updated map.
      */
-    def withIdsAndValues(jv: JValue, into: Map[ColumnRef, (BitSet, Array[_])],
-      sliceIndex: Int, sliceSize: Int): Map[ColumnRef, (BitSet, Array[_])] = {
+    def withIdsAndValues(jv: JValue, into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int, sliceSize: Int, remapPath: Option[JPath => CPath] = None): Map[ColumnRef, (BitSet, Array[_])] = {
 
       jv.flattenWithPath.foldLeft(into) {
         case (acc, (jpath, JUndefined)) => acc
         case (acc, (jpath, v)) =>
           val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
-          val ref = ColumnRef(CPath(jpath), ctype)
+          val ref = ColumnRef(remapPath.map(_(jpath)).getOrElse(CPath(jpath)), ctype)
           
           val pair: (BitSet, Array[_]) = v match {
             case JBool(b) =>
@@ -615,6 +614,58 @@ trait ColumnarTableModule[M[+_]]
     def toArray[A](implicit tpe: CValueType[A]): Table = {
       val slices2 = slices map { _.toArray[A] }
       Table(slices2, size)
+    }
+
+    case class SlicesInfo(previousSlice: Option[Slice], stream: StreamT[M, Slice], acc: Vector[Slice], done: Boolean = false)
+
+    /**
+     * Returns a table where each slice (except maybe the last) has slice size `length`.
+     * Also removes slices of size zero.
+     */
+    def canonicalize(length: Int): Table = {
+      def makeNewInfo(toConcat: Vector[Slice], stream: StreamT[M, Slice], acc: Vector[Slice], taken: Int): M[SlicesInfo] = {
+        stream.uncons flatMap {
+          case Some((head, tail)) =>
+            if (length - taken <= head.size) {
+              val sameSlice = toConcat :+ head.take(length - taken)
+              val concatted = Slice.concat(sameSlice)
+              inner(M.point(SlicesInfo(Some(head.drop(length - taken)), tail, acc :+ concatted)))
+            } else {
+              makeNewInfo(toConcat :+ head, tail, acc, taken + head.size)
+            }
+          case None =>
+            val newSlices = if (toConcat.isEmpty) acc else acc :+ Slice.concat(toConcat)
+            M.point(SlicesInfo(None, stream, newSlices, true))
+        }
+      }
+
+      def inner(slicesInfo0: M[SlicesInfo]): M[SlicesInfo] = {
+        slicesInfo0 flatMap { slicesInfo =>
+          if (slicesInfo.done) {
+            slicesInfo0
+          } else {
+            slicesInfo.previousSlice match {
+              case Some(slice) =>
+                val info = {
+                  if (length <= slice.size) {
+                    M.point(SlicesInfo(Some(slice.drop(length)), slicesInfo.stream, slicesInfo.acc :+ slice.take(length)))
+                  } else {
+                    makeNewInfo(Vector(slice), slicesInfo.stream, slicesInfo.acc, slice.size)
+                  }
+                }
+                inner(info)
+              case None =>
+                makeNewInfo(Vector.empty[Slice], slicesInfo.stream, slicesInfo.acc, 0)
+            }
+          }
+        }
+      }
+
+      val result =
+        if (length <= 0) M.point(SlicesInfo(None, StreamT.empty[M, Slice], Vector.empty[Slice]))
+        else inner(M.point(SlicesInfo(None, slices, Vector.empty[Slice])))
+
+      Table(StreamT.fromStream(result map { case slicesInfo => slicesInfo.acc.toStream }), size)
     }
 
     /**

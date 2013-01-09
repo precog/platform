@@ -17,15 +17,9 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "daze"
+package com.precog
+package pandora
 
-scalacOptions += "-Ydependent-method-types"
+import com.precog.muspelheim.LinearRegressionSpecs
 
-libraryDependencies ++= Seq(
-  "com.eed3si9n"      % "treehugger_2.9.1"   % "0.1.2",
-  "gov.nist.math"     % "jama"               % "1.0.2"
-)
-  
-logBuffered := false       // gives us incremental output from Specs2
-
-parallelExecution in Test := false
+class JDBMLinearRegressionSpecs extends LinearRegressionSpecs with JDBMPlatformSpecs

@@ -63,6 +63,7 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M]
     with ToArraySpec[M]
     with ConcatSpec[M]
     with SampleSpec[M]
+    with CanonicalizeSpec[M]
     with PartitionMergeSpec[M]
     with DistinctSpec[M] 
     with SchemasSpec[M]
@@ -101,6 +102,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     with TransformSpec[M]
     with CompactSpec[M] 
     with TakeRangeSpec[M]
+    with CanonicalizeSpec[M]
     with PartitionMergeSpec[M]
     with DistinctSpec[M] 
     with SchemasSpec[M]
@@ -450,6 +452,16 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
     "in concat" >> {
       "concat two tables" in testConcat
+    }
+
+    "in canonicalize" >> {
+      "return the correct slice sizes using scalacheck" in checkCanonicalize
+      "return the correct slice sizes in a trivial case" in testCanonicalize
+      "return the correct slice sizes given length zero" in testCanonicalizeZero
+      "return the correct slice sizes along slice boundaries" in testCanonicalizeBoundary
+      "return the correct slice sizes greater than slice boundaries" in testCanonicalizeOverBoundary
+      "return empty table when given empty table" in testCanonicalizeEmpty
+      "remove slices of size zero" in testCanonicalizeEmptySlices
     }
 
     "in schemas" >> {

@@ -1449,7 +1449,7 @@ object Slice {
    * Concatenate multiple slices into 1 big slice. The slices will be
    * concatenated in the order they appear in `slices`.
    */
-  def concat(slices: List[Slice]): Slice = {
+  def concat(slices: Seq[Slice]): Slice = {
     val (_columns, _size) = slices.foldLeft((Map.empty[ColumnRef, List[(Int, Column)]], 0)) {
       case ((cols, offset), slice) if slice.size > 0 =>
         (slice.columns.foldLeft(cols) { case (acc, (ref, col)) =>

@@ -26,7 +26,9 @@ object DateTimeUtil {
   private val fullParser = ISODateTimeFormat.dateTimeParser
   private val basicParser = ISODateTimeFormat.basicDateTime
 
-  def parseDateTime(value: String, withOffset: Boolean): DateTime = {
+  def parseDateTime(value0: String, withOffset: Boolean): DateTime = {
+    val value = value0.trim.replace(" ", "T")
+
     val parser = if (value.contains("-") || value.contains(":")) {
       fullParser
     } else {

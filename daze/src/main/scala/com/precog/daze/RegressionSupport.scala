@@ -17,15 +17,32 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "daze"
+package com.precog
+package daze
 
-scalacOptions += "-Ydependent-method-types"
+trait RegressionSupport {
+  val Stats2Namespace = Vector("std", "stats")
 
-libraryDependencies ++= Seq(
-  "com.eed3si9n"      % "treehugger_2.9.1"   % "0.1.2",
-  "gov.nist.math"     % "jama"               % "1.0.2"
-)
-  
-logBuffered := false       // gives us incremental output from Specs2
+  def dotProduct(xs: Array[Double], ys: Array[Double]): Double = {
+    assert(xs.length == ys.length)
+    var i = 0
+    var result = 0.0
+    while (i < xs.length) {
+      result += xs(i) * ys(i)
+      i += 1
+    }
+    result
+  }    
 
-parallelExecution in Test := false
+  def arraySum(xs: Array[Double], ys: Array[Double]): Array[Double] = {
+    assert(xs.length == ys.length)
+    var i = 0
+    var result = new Array[Double](xs.length)
+    while (i < xs.length) {
+      result(i) = xs(i) + ys(i)
+      i += 1
+    }
+    result
+  }    
+}
+
