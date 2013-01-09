@@ -803,10 +803,8 @@ trait StringLibSpec[M[+_]] extends Specification
 
       result must haveSize(8)
 
-      val ns = result.map {
-        case (Vector(i:Long), SDecimal(n)) => (i, n)
-      }.toList.sorted.map {
-        case (i, n) => n
+      val ns = result.toList.collect {
+        case (_, SDecimal(n)) => n
       }
 
       ns must contain(
@@ -818,7 +816,7 @@ trait StringLibSpec[M[+_]] extends Specification
         BigDecimal("0e9"),
         BigDecimal("2.23532235235235353252352343636953295923"),
         BigDecimal("1.2e3")
-      )
+      ).only
     }
   }
 
@@ -833,10 +831,8 @@ trait StringLibSpec[M[+_]] extends Specification
 
       result must haveSize(6)
 
-      val ss = result.map {
-        case (Vector(i:Long), SString(s)) => (i, s)
-      }.toList.sorted.map {
-        case (i, n) => n
+      val ss = result.toList.collect {
+        case (_, SString(s)) => s
       }
 
       ss must contain(
