@@ -1304,6 +1304,18 @@ object ProvenanceComputationSpecs extends Specification
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(ProductProvenanceDifferentLength)
         }
+        {
+          val tree = compileSingle("""
+            | billing := //billing
+            | billing' := new billing
+            | billing'' := new billing
+            |
+            | billing union billing' union billing''
+            | """.stripMargin)
+
+          tree.provenance must beLike { case CoproductProvenance(CoproductProvenance(StaticProvenance("/billing"), _), _) => ok }
+          tree.errors must beEmpty
+        }
       }
 
       "Add/Sub/Mul/Div" >> {
@@ -1379,6 +1391,11 @@ object ProvenanceComputationSpecs extends Specification
       {
         val tree = compileSingle("foo := //baz union //bar foo")
         tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/baz"), StaticProvenance("/bar")) => ok }
+        tree.errors must beEmpty
+      }
+      {
+        val tree = compileSingle("foo(x) := //baz union x union //qux foo(//bar)")
+        tree.provenance must beLike { case CoproductProvenance(CoproductProvenance(StaticProvenance("/baz"), StaticProvenance("/bar")), StaticProvenance("/qux")) => ok }
         tree.errors must beEmpty
       }
       {

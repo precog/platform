@@ -12,6 +12,7 @@
 package com.precog.util;
 
 import javolution.util.*;
+import javolution.util.FastCollection.Record;
 
 import java.lang.UnsupportedOperationException;
 import java.util.Set;

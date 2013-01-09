@@ -28,6 +28,8 @@ import emitter._
 import parser._
 import typer._
 
+import scalaz.Tree
+
 object QuirrelConsole {
   trait EmptyLibrary extends Library {
     type Morphism1 = Morphism1Like
@@ -69,6 +71,8 @@ object QuirrelConsole {
     def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = Map()
     def findGroups(expr: Expr): Set[GroupTree] = Set()
     def inferBuckets(expr: Expr) = Set()
+    def buildTrace(sigma: Map[Formal, Expr])(expr: Expr): Tree[(Map[Formal, Expr], Expr)] =
+      Tree.node((sigma, expr), Stream.empty)
   }
 }
 

@@ -50,9 +50,9 @@ trait FSLibSpec[M[+_]] extends Specification
     val idSource = new FreshAtomicIdSource
   }
 
-  val yggConfig = new YggConfig
+  lazy val yggConfig = new YggConfig
 
-  val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = Map(
+  lazy val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = Map(
     ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
     ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar2/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
     ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar2/baz/quux2"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
@@ -104,4 +104,4 @@ trait FSLibSpec[M[+_]] extends Specification
   }
 }
 
-object FSLibSpec extends FSLibSpec[test.YId] with test.YIdInstances
+class FSLibSpecX extends FSLibSpec[test.YId] with test.YIdInstances

@@ -63,9 +63,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
                std::stats::logisticRegression({height: medals'.HeightIncm}, {gender: medals'.gender})
                """.stripMargin
 
-      val results = evalE(input)
-
-      results must haveSize(0)
+      evalE(input) must beEmpty
     }
 
     "return empty set when none of the classification values are 0 or 1" >> {
@@ -76,9 +74,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
                std::stats::logisticRegression({height: medals'.HeightIncm}, 5)
                """.stripMargin
 
-      val results = evalE(input)
-
-      results must haveSize(0)
+      evalE(input) must beEmpty
     }
 
     "return empty set when given feature values of wrong type" in {
@@ -88,9 +84,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
           std::stats::logisticRegression(medals.Country, medals.WeightIncm)
         """.stripMargin
 
-      val results = evalE(input)
-
-      results must haveSize(0)
+      evalE(input) must beEmpty
     }
 
     "return empty set when given classication values of wrong type" in {
@@ -100,11 +94,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
           std::stats::logisticRegression(medals.WeightIncm, medals.Country)
         """.stripMargin
 
-      val results = evalE(input)
-
-      results must haveSize(0)
+      evalE(input) must beEmpty
     }
   }
-
 }
-
