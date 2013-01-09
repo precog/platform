@@ -56,7 +56,9 @@ trait BaseJDBMQueryExecutorConfig
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
 }
 
-trait JDBMQueryExecutorConfig extends BaseJDBMQueryExecutorConfig with ProductionShardSystemConfig with SystemActorStorageConfig
+trait JDBMQueryExecutorConfig extends BaseJDBMQueryExecutorConfig with ProductionShardSystemConfig with SystemActorStorageConfig {
+  def ingestFailureLogRoot: File
+}
 
 trait JDBMQueryExecutorComponent {
   import blueeyes.json.serialization.Extractor
@@ -70,6 +72,7 @@ trait JDBMQueryExecutorComponent {
 
       val clock = blueeyes.util.Clock.System
       val maxSliceSize = config[Int]("jdbm.max_slice_size", 10000)
+      val ingestFailureLogRoot = new File(config[String]("jdbm.ingest_failure_log_root"))
 
       //TODO: Get a producer ID
       val idSource = new FreshAtomicIdSource
@@ -99,6 +102,8 @@ trait JDBMQueryExecutorComponent {
 
       val storage = new Storage
       def storageMetadataSource = storage
+
+      def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog = FilesystemIngestFailureLog(yggConfig.ingestFailureLogRoot, checkpoint)
 
       object Projection extends JDBMProjectionCompanion {
         private lazy val logger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.JDBMQueryExecutor.Projection")
