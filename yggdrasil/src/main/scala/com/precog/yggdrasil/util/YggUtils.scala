@@ -462,7 +462,7 @@ object KafkaTools extends Command {
 
       message.get(bytes)
 
-      println("Type: %d, payload: %s".format(tpe, new String(bytes, "UTF-8")))
+      println("Type: %d, offset: %d, payload: %s".format(tpe, msg.offset, new String(bytes, "UTF-8")))
     }
   }
 
@@ -472,7 +472,7 @@ object KafkaTools extends Command {
     def dump(i: Int, msg: MessageAndOffset) {
       codec.toEvent(msg.message) match {
         case EventMessage(EventId(pid, sid), Event(apiKey, path, ownerAccountId, data, _)) =>
-          println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s Owner: %s".format(i+1, pid, sid, path, apiKey, ownerAccountId))
+          println("Event-%06d Offset: %d Id: (%d/%d) Path: %s APIKey: %s Owner: %s".format(i+1, msg.offset, pid, sid, path, apiKey, ownerAccountId))
           println(data.renderPretty)
         case _ =>
       }
@@ -485,7 +485,7 @@ object KafkaTools extends Command {
     def dump(i: Int, msg: MessageAndOffset) {
       codec.toEvent(msg.message) match {
         case EventMessage(EventId(pid, sid), Event(apiKey, path, ownerAccountId, data, _)) =>
-          println("Event-%06d Id: (%d/%d) Path: %s APIKey: %s Owner: %s".format(i+1, pid, sid, path, apiKey, ownerAccountId))
+          println("Event-%06d Offset: %d Id: (%d/%d) Path: %s APIKey: %s Owner: %s".format(i+1, msg.offset, pid, sid, path, apiKey, ownerAccountId))
           println(data.renderPretty)
         case _ =>
       }
