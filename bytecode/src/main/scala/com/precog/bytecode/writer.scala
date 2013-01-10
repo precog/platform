@@ -151,6 +151,8 @@ trait BytecodeWriter extends Writer with Version {
         case Morph1(m1) => (0x09, 0.toShort, morph1Num(m1))
         case Morph2(m2) => (0x19, 0.toShort, morph2Num(m2))
         
+        case Assert => (0x10, 0.toShort, 0)
+        
         case IUnion => (0x12, 0.toShort, 0)
         case IIntersect => (0x13, 0.toShort, 0)
 

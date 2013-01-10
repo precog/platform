@@ -36,6 +36,8 @@ trait Instructions extends Library {
       case Morph1(_) => (1, 1)
       case Morph2(_) => (2, 1)
       
+      case Assert => (2, 1)
+      
       case IUnion => (2, 1)
       case IIntersect => (2, 1)
       case SetDifference => (2, 1)
@@ -96,6 +98,8 @@ trait Instructions extends Library {
     case class Reduce(red: BuiltInReduction) extends Instruction
     case class Morph1(m1: BuiltInMorphism1) extends Instruction
     case class Morph2(m2: BuiltInMorphism2) extends Instruction
+    
+    case object Assert extends Instruction with JoinInstr
     
     case object IUnion extends Instruction with JoinInstr
     case object IIntersect extends Instruction with JoinInstr

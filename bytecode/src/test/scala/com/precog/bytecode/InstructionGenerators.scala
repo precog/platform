@@ -46,6 +46,8 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genMorph1,
     genMorph2,
     
+    genAssert,
+    
     genIUnion,
     genIIntersect,
     
@@ -92,6 +94,8 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genReduce = genReduction map Reduce
   private lazy val genMorph1 = genMorphism1 map Morph1
   private lazy val genMorph2 = genMorphism2 map Morph2
+  
+  private lazy val genAssert = Assert
   
   private lazy val genIUnion = IUnion
   private lazy val genIIntersect = IIntersect
