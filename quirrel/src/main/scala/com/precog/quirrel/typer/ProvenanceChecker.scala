@@ -744,22 +744,25 @@ trait ProvenanceChecker extends parser.AST with Binder {
     def possibilities = Set(this)
     
     // TODO DynamicDerivedProvenance?
-    def cardinality: Option[Int] = {
-      if (isParametric || this == NullProvenance) {
-        None
-      } else {
-        val back = possibilities filter {
-          case ValueProvenance => false
-          case _: ProductProvenance => false
-          case _: CoproductProvenance => false
-          
-          // should probably remove UnifiedProvenance, but it's never going to happen
-          
-          case _ => true
-        } size
-        
-        Some(back)
-      }
+    def cardinality: Option[Int] = this match {
+      case NullProvenance => None
+      case CoproductProvenance(left, right) => left.cardinality
+      case _ =>
+        if (isParametric) {
+          None
+        } else {
+          val back = possibilities filter {
+            case ValueProvenance => false
+            case _: ProductProvenance => false
+            case _: CoproductProvenance => false
+
+            // should probably remove UnifiedProvenance, but it's never going to happen
+
+            case _ => true
+          } size
+
+          Some(back)
+        }
     }
 
 

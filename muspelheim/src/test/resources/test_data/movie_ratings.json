@@ -1,509 +1,127 @@
-[{
-  "user":334,
-  "movie":481,
-  "rating":5
-},{
-  "user":365,
-  "movie":301,
-  "rating":5
-},{
-  "user":375,
-  "movie":583,
-  "rating":2
-},{
-  "user":360,
-  "movie":303,
-  "rating":3
-},{
-  "user":334,
-  "movie":316,
-  "rating":4
-},{
-  "user":379,
-  "movie":452,
-  "rating":3
-},{
-  "user":357,
-  "movie":326,
-  "rating":5
-},{
-  "user":362,
-  "movie":336,
-  "rating":2
-},{
-  "user":365,
-  "movie":321,
-  "rating":5
-},{
-  "user":405,
-  "movie":583,
-  "rating":1
-},{
-  "user":400,
-  "movie":300,
-  "rating":4
-},{
-  "user":334,
-  "movie":326,
-  "rating":1
-},{
-  "user":382,
-  "movie":508,
-  "rating":3
-},{
-  "user":379,
-  "movie":300,
-  "rating":3
-},{
-  "user":334,
-  "movie":300,
-  "rating":3
-},{
-  "user":387,
-  "movie":431,
-  "rating":3
-},{
-  "user":405,
-  "movie":350,
-  "rating":1
-},{
-  "user":435,
-  "movie":299,
-  "rating":4
-},{
-  "user":435,
-  "movie":431,
-  "rating":3
-},{
-  "user":353,
-  "movie":300,
-  "rating":3
-},{
-  "user":353,
-  "movie":316,
-  "rating":5
-},{
-  "user":397,
-  "movie":324,
-  "rating":2
-},{
-  "user":375,
-  "movie":300,
-  "rating":4
-},{
-  "user":342,
-  "movie":508,
-  "rating":3
-},{
-  "user":382,
-  "movie":481,
-  "rating":5
-},{
-  "user":388,
-  "movie":326,
-  "rating":5
-},{
-  "user":399,
-  "movie":413,
-  "rating":2
-},{
-  "user":334,
-  "movie":429,
-  "rating":4
-},{
-  "user":365,
-  "movie":315,
-  "rating":4
-},{
-  "user":405,
-  "movie":452,
-  "rating":5
-},{
-  "user":484,
-  "movie":300,
-  "rating":4
-},{
-  "user":400,
-  "movie":321,
-  "rating":4
-},{
-  "user":435,
-  "movie":300,
-  "rating":2
-},{
-  "user":405,
-  "movie":431,
-  "rating":3
-},{
-  "user":493,
-  "movie":431,
-  "rating":5
-},{
-  "user":435,
-  "movie":367,
-  "rating":3
-},{
-  "user":414,
-  "movie":300,
-  "rating":4
-},{
-  "user":448,
-  "movie":303,
-  "rating":4
-},{
-  "user":342,
-  "movie":301,
-  "rating":5
-},{
-  "user":399,
-  "movie":452,
-  "rating":3
-},{
-  "user":388,
-  "movie":301,
-  "rating":4
-},{
-  "user":399,
-  "movie":431,
-  "rating":2
-},{
-  "user":360,
-  "movie":326,
-  "rating":3
-},{
-  "user":448,
-  "movie":316,
-  "rating":1
-},{
-  "user":493,
-  "movie":298,
-  "rating":3
-},{
-  "user":388,
-  "movie":298,
-  "rating":5
-},{
-  "user":342,
-  "movie":367,
-  "rating":5
-},{
-  "user":353,
-  "movie":326,
-  "rating":2
-},{
-  "user":399,
-  "movie":384,
-  "rating":2
-},{
-  "user":399,
-  "movie":420,
-  "rating":3
-},{
-  "user":480,
-  "movie":298,
-  "rating":2
-},{
-  "user":435,
-  "movie":413,
-  "rating":2
-},{
-  "user":342,
-  "movie":298,
-  "rating":3
-},{
-  "user":399,
-  "movie":301,
-  "rating":4
-},{
-  "user":448,
-  "movie":321,
-  "rating":4
-},{
-  "user":342,
-  "movie":326,
-  "rating":1
-},{
-  "user":405,
-  "movie":509,
-  "rating":1
-},{
-  "user":334,
-  "movie":485,
-  "rating":3
-},{
-  "user":382,
-  "movie":507,
-  "rating":4
-},{
-  "user":358,
-  "movie":324,
-  "rating":4
-},{
-  "user":342,
-  "movie":478,
-  "rating":3
-},{
-  "user":334,
-  "movie":324,
-  "rating":4
-},{
-  "user":362,
-  "movie":350,
-  "rating":5
-},{
-  "user":490,
-  "movie":298,
-  "rating":3
-},{
-  "user":334,
-  "movie":315,
-  "rating":4
-},{
-  "user":399,
-  "movie":508,
-  "rating":3
-},{
-  "user":435,
-  "movie":392,
-  "rating":3
-},{
-  "user":387,
-  "movie":508,
-  "rating":4
-},{
-  "user":334,
-  "movie":303,
-  "rating":4
-},{
-  "user":414,
-  "movie":301,
-  "rating":3
-},{
-  "user":484,
-  "movie":431,
-  "rating":4
-},{
-  "user":388,
-  "movie":508,
-  "rating":3
-},{
-  "user":387,
-  "movie":321,
-  "rating":3
-},{
-  "user":353,
-  "movie":331,
-  "rating":4
-},{
-  "user":518,
-  "movie":300,
-  "rating":3
-},{
-  "user":448,
-  "movie":344,
-  "rating":4
-},{
-  "user":435,
-  "movie":394,
-  "rating":4
-},{
-  "user":342,
-  "movie":378,
-  "rating":4
-},{
-  "user":353,
-  "movie":315,
-  "rating":4
-},{
-  "user":400,
-  "movie":301,
-  "rating":4
-},{
-  "user":387,
-  "movie":429,
-  "rating":3
-},{
-  "user":484,
-  "movie":392,
-  "rating":4
-},{
-  "user":334,
-  "movie":508,
-  "rating":3
-},{
-  "user":388,
-  "movie":300,
-  "rating":4
-},{
-  "user":405,
-  "movie":420,
-  "rating":5
-},{
-  "user":448,
-  "movie":301,
-  "rating":1
-},{
-  "user":365,
-  "movie":326,
-  "rating":2
-},{
-  "user":405,
-  "movie":367,
-  "rating":1
-},{
-  "user":405,
-  "movie":384,
-  "rating":3
-},{
-  "user":435,
-  "movie":331,
-  "rating":5
-},{
-  "user":360,
-  "movie":321,
-  "rating":3
-},{
-  "user":388,
-  "movie":315,
-  "rating":3
-},{
-  "user":540,
-  "movie":508,
-  "rating":4
-},{
-  "user":493,
-  "movie":300,
-  "rating":4
-},{
-  "user":435,
-  "movie":384,
-  "rating":3
-},{
-  "user":334,
-  "movie":301,
-  "rating":2
-},{
-  "user":484,
-  "movie":315,
-  "rating":3
-},{
-  "user":540,
-  "movie":300,
-  "rating":3
-},{
-  "user":387,
-  "movie":298,
-  "rating":3
-},{
-  "user":435,
-  "movie":321,
-  "rating":3
-},{
-  "user":405,
-  "movie":365,
-  "rating":1
-},{
-  "user":397,
-  "movie":390,
-  "rating":3
-},{
-  "user":353,
-  "movie":301,
-  "rating":3
-},{
-  "user":399,
-  "movie":378,
-  "rating":3
-},{
-  "user":685,
-  "movie":299,
-  "rating":2
-},{
-  "user":379,
-  "movie":331,
-  "rating":4
-},{
-  "user":365,
-  "movie":316,
-  "rating":4
-},{
-  "user":387,
-  "movie":583,
-  "rating":4
-},{
-  "user":362,
-  "movie":300,
-  "rating":5
-},{
-  "user":397,
-  "movie":298,
-  "rating":4
-},{
-  "user":435,
-  "movie":298,
-  "rating":4
-},{
-  "user":685,
-  "movie":324,
-  "rating":3
-},{
-  "user":405,
-  "movie":392,
-  "rating":5
-},{
-  "user":435,
-  "movie":420,
-  "rating":4
-},{
-  "user":414,
-  "movie":324,
-  "rating":4
-},{
-  "user":480,
-  "movie":485,
-  "rating":4
-},{
-  "user":405,
-  "movie":303,
-  "rating":1
-},{
-  "user":405,
-  "movie":429,
-  "rating":5
-},{
-  "user":387,
-  "movie":367,
-  "rating":3
-},{
-  "user":387,
-  "movie":324,
-  "rating":4
-},{
-  "user":405,
-  "movie":378,
-  "rating":4
-},{
-  "user":342,
-  "movie":324,
-  "rating":1
-},{
-  "user":518,
-  "movie":508,
-  "rating":3
-},{
-  "user":368,
-  "movie":413,
-  "rating":1
-},{
-  "user":362,
-  "movie":321,
-  "rating":2
-},{
-  "user":342,
-  "movie":507,
-  "rating":4
-},{
-  "user":357,
-  "movie":508,
-  "rating":5
-}]
+{"movie": 481, "user": 334, "rating": 5}
+{"movie": 301, "user": 365, "rating": 5}
+{"movie": 583, "user": 375, "rating": 2}
+{"movie": 303, "user": 360, "rating": 3}
+{"movie": 316, "user": 334, "rating": 4}
+{"movie": 452, "user": 379, "rating": 3}
+{"movie": 326, "user": 357, "rating": 5}
+{"movie": 336, "user": 362, "rating": 2}
+{"movie": 321, "user": 365, "rating": 5}
+{"movie": 583, "user": 405, "rating": 1}
+{"movie": 300, "user": 400, "rating": 4}
+{"movie": 326, "user": 334, "rating": 1}
+{"movie": 508, "user": 382, "rating": 3}
+{"movie": 300, "user": 379, "rating": 3}
+{"movie": 300, "user": 334, "rating": 3}
+{"movie": 431, "user": 387, "rating": 3}
+{"movie": 350, "user": 405, "rating": 1}
+{"movie": 299, "user": 435, "rating": 4}
+{"movie": 431, "user": 435, "rating": 3}
+{"movie": 300, "user": 353, "rating": 3}
+{"movie": 316, "user": 353, "rating": 5}
+{"movie": 324, "user": 397, "rating": 2}
+{"movie": 300, "user": 375, "rating": 4}
+{"movie": 508, "user": 342, "rating": 3}
+{"movie": 481, "user": 382, "rating": 5}
+{"movie": 326, "user": 388, "rating": 5}
+{"movie": 413, "user": 399, "rating": 2}
+{"movie": 429, "user": 334, "rating": 4}
+{"movie": 315, "user": 365, "rating": 4}
+{"movie": 452, "user": 405, "rating": 5}
+{"movie": 300, "user": 484, "rating": 4}
+{"movie": 321, "user": 400, "rating": 4}
+{"movie": 300, "user": 435, "rating": 2}
+{"movie": 431, "user": 405, "rating": 3}
+{"movie": 431, "user": 493, "rating": 5}
+{"movie": 367, "user": 435, "rating": 3}
+{"movie": 300, "user": 414, "rating": 4}
+{"movie": 303, "user": 448, "rating": 4}
+{"movie": 301, "user": 342, "rating": 5}
+{"movie": 452, "user": 399, "rating": 3}
+{"movie": 301, "user": 388, "rating": 4}
+{"movie": 431, "user": 399, "rating": 2}
+{"movie": 326, "user": 360, "rating": 3}
+{"movie": 316, "user": 448, "rating": 1}
+{"movie": 298, "user": 493, "rating": 3}
+{"movie": 298, "user": 388, "rating": 5}
+{"movie": 367, "user": 342, "rating": 5}
+{"movie": 326, "user": 353, "rating": 2}
+{"movie": 384, "user": 399, "rating": 2}
+{"movie": 420, "user": 399, "rating": 3}
+{"movie": 298, "user": 480, "rating": 2}
+{"movie": 413, "user": 435, "rating": 2}
+{"movie": 298, "user": 342, "rating": 3}
+{"movie": 301, "user": 399, "rating": 4}
+{"movie": 321, "user": 448, "rating": 4}
+{"movie": 326, "user": 342, "rating": 1}
+{"movie": 509, "user": 405, "rating": 1}
+{"movie": 485, "user": 334, "rating": 3}
+{"movie": 507, "user": 382, "rating": 4}
+{"movie": 324, "user": 358, "rating": 4}
+{"movie": 478, "user": 342, "rating": 3}
+{"movie": 324, "user": 334, "rating": 4}
+{"movie": 350, "user": 362, "rating": 5}
+{"movie": 298, "user": 490, "rating": 3}
+{"movie": 315, "user": 334, "rating": 4}
+{"movie": 508, "user": 399, "rating": 3}
+{"movie": 392, "user": 435, "rating": 3}
+{"movie": 508, "user": 387, "rating": 4}
+{"movie": 303, "user": 334, "rating": 4}
+{"movie": 301, "user": 414, "rating": 3}
+{"movie": 431, "user": 484, "rating": 4}
+{"movie": 508, "user": 388, "rating": 3}
+{"movie": 321, "user": 387, "rating": 3}
+{"movie": 331, "user": 353, "rating": 4}
+{"movie": 300, "user": 518, "rating": 3}
+{"movie": 344, "user": 448, "rating": 4}
+{"movie": 394, "user": 435, "rating": 4}
+{"movie": 378, "user": 342, "rating": 4}
+{"movie": 315, "user": 353, "rating": 4}
+{"movie": 301, "user": 400, "rating": 4}
+{"movie": 429, "user": 387, "rating": 3}
+{"movie": 392, "user": 484, "rating": 4}
+{"movie": 508, "user": 334, "rating": 3}
+{"movie": 300, "user": 388, "rating": 4}
+{"movie": 420, "user": 405, "rating": 5}
+{"movie": 301, "user": 448, "rating": 1}
+{"movie": 326, "user": 365, "rating": 2}
+{"movie": 367, "user": 405, "rating": 1}
+{"movie": 384, "user": 405, "rating": 3}
+{"movie": 331, "user": 435, "rating": 5}
+{"movie": 321, "user": 360, "rating": 3}
+{"movie": 315, "user": 388, "rating": 3}
+{"movie": 508, "user": 540, "rating": 4}
+{"movie": 300, "user": 493, "rating": 4}
+{"movie": 384, "user": 435, "rating": 3}
+{"movie": 301, "user": 334, "rating": 2}
+{"movie": 315, "user": 484, "rating": 3}
+{"movie": 300, "user": 540, "rating": 3}
+{"movie": 298, "user": 387, "rating": 3}
+{"movie": 321, "user": 435, "rating": 3}
+{"movie": 365, "user": 405, "rating": 1}
+{"movie": 390, "user": 397, "rating": 3}
+{"movie": 301, "user": 353, "rating": 3}
+{"movie": 378, "user": 399, "rating": 3}
+{"movie": 299, "user": 685, "rating": 2}
+{"movie": 331, "user": 379, "rating": 4}
+{"movie": 316, "user": 365, "rating": 4}
+{"movie": 583, "user": 387, "rating": 4}
+{"movie": 300, "user": 362, "rating": 5}
+{"movie": 298, "user": 397, "rating": 4}
+{"movie": 298, "user": 435, "rating": 4}
+{"movie": 324, "user": 685, "rating": 3}
+{"movie": 392, "user": 405, "rating": 5}
+{"movie": 420, "user": 435, "rating": 4}
+{"movie": 324, "user": 414, "rating": 4}
+{"movie": 485, "user": 480, "rating": 4}
+{"movie": 303, "user": 405, "rating": 1}
+{"movie": 429, "user": 405, "rating": 5}
+{"movie": 367, "user": 387, "rating": 3}
+{"movie": 324, "user": 387, "rating": 4}
+{"movie": 378, "user": 405, "rating": 4}
+{"movie": 324, "user": 342, "rating": 1}
+{"movie": 508, "user": 518, "rating": 3}
+{"movie": 413, "user": 368, "rating": 1}
+{"movie": 321, "user": 362, "rating": 2}
+{"movie": 507, "user": 342, "rating": 4}
+{"movie": 508, "user": 357, "rating": 5}

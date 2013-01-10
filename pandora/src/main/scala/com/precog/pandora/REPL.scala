@@ -71,7 +71,7 @@ trait Lifecycle {
 trait REPL
     extends muspelheim.ParseEvalStack[Future] 
     with IdSourceScannerModule[Future]
-    with MemoryDatasetConsumer[Future] {
+    with LongIdMemoryDatasetConsumer[Future] {
 
   val dummyAPIKey = "dummyAPIKey"
 

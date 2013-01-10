@@ -110,7 +110,7 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
   abstract class Op2DDD(name: String, defined:(Double, Double) => Boolean,
     f:(Double, Double) => Double) extends Op2(MathNamespace, name) {
     val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
-    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::math::op2dd::name") {
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::math::op2dd::" + name) {
       case (c1: DoubleColumn, c2: DoubleColumn) =>
           new DoubleFrom.DD(c1, c2, defined, f)
 

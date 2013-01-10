@@ -26,8 +26,10 @@ import com.precog.common._
 import org.specs2.mutable._
 
 trait EvalStackSpecs extends Specification {
+  type IdType
+
   def eval(str: String, debug: Boolean = false): Set[SValue]
-  def evalE(str: String, debug: Boolean = false): Set[(Vector[Long], SValue)]
+  def evalE(str: String, debug: Boolean = false): Set[(Vector[IdType], SValue)]
 }
 
 // vim: set ts=4 sw=4 et:

@@ -1,6 +1,11 @@
 Precog for MongoDB Changelog
 ==========
 
+Version 1.1.2
+-------------
+* Fix a bug resulting in concurrent usage of Mongo cursors
+* Miscellaneous evaluator bugfixes
+	
 Version 1.1.1
 -------------
 

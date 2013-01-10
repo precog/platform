@@ -127,7 +127,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
 trait EvaluatorSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
     with StdLib[M]
-    with MemoryDatasetConsumer[M] { self =>
+    with LongIdMemoryDatasetConsumer[M] { self =>
   
   import Function._
   
@@ -932,6 +932,54 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
 
         result2 must contain(100)
+      }
+    }
+    
+    "produce a non-doubled result when counting the union of new sets" in {
+      /*
+       * clicks := //clicks
+       * clicks' := new clicks
+       * 
+       * count(clicks' union clicks')
+       */
+      
+      val line = Line(0, "")
+      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
+      
+      val clicksP = dag.New(line, clicks)
+      val input = dag.Reduce(line, Count,
+        dag.IUI(line, true, clicksP, clicksP))
+        
+      testEval(input) { resultE =>
+        val result = resultE collect {
+          case (ids, SDecimal(d)) => d
+        }
+        
+        result must contain(100)
+      }
+    }
+    
+    "produce a non-zero result when counting the intersect of new sets" in {
+      /*
+       * clicks := //clicks
+       * clicks' := new clicks
+       * 
+       * count(clicks' intersect clicks')
+       */
+      
+      val line = Line(0, "")
+      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
+      
+      val clicksP = dag.New(line, clicks)
+      val input = dag.Reduce(line, Count,
+        dag.IUI(line, false, clicksP, clicksP))
+        
+      testEval(input) { resultE =>
+        val result = resultE collect {
+          case (ids, SDecimal(d)) => d
+        }
+        
+        result must contain(100)
       }
     }
 

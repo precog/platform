@@ -512,44 +512,36 @@ object ZookeeperTools extends Command {
     config.showAgents.foreach { path =>
       showChildren("agents", path, pathsAt(path, client))
     }
-    config.checkpointUpdate.foreach {
-      case (path, data) =>
-        val newCheckpoint = if (data == "initial") {
-          """{"offset":0,"messageClock":[[0,0]]}"""
-        } else {
-          data
-        }
-        
-        println("Loading initial checkpoint: " + newCheckpoint)
-        ((Thrown.apply _) <-: JParser.parseFromString(newCheckpoint)).flatMap(_.validated[YggCheckpoint]) match {
-          case Success(_) =>
-            if (! client.exists(path)) {
-              client.createPersistent(path, true)
-            }
 
-            client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
-              def update(cur: Array[Byte]): Array[Byte] = newCheckpoint.getBytes 
-            })  
+    def xyz(path: String, data: String) {
+      JParser.parseFromString(data).flatMap(_.validated[YggCheckpoint]) match {
+        case Success(_) =>
+          if (!client.exists(path)) client.createPersistent(path, true)
 
-            println("Checkpoint updated: %s with %s".format(path, newCheckpoint))
-          case Failure(e) => println("Invalid json for checkpoint: %s".format(e))
+          val updater = new DataUpdater[Array[Byte]] {
+            def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
+          }
+
+          client.updateDataSerialized(path, updater)
+          println("Checkpoint updated: %s with %s".format(path, data))
+
+        case Failure(e) =>
+          println("Invalid json for checkpoint: %s".format(e))
       }
     }
-    config.relayAgentUpdate.foreach { 
+
+    config.checkpointUpdate.foreach {
       case (path, data) =>
-        ((Thrown.apply _) <-: JParser.parseFromString(data)).flatMap(_.validated[EventRelayState]) match {
-          case Success(_) =>
-            if (! client.exists(path)) {
-              client.createPersistent(path, true)
-            }
+        val newCheckpoint = data match {
+          case "initial" => """{"offset":0,"messageClock":[[0,0]]}"""
+          case s => s
+        }
+        println("Loading initial checkpoint: " + newCheckpoint)
+        xyz(path, newCheckpoint)
+    }
 
-            client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
-              def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
-            })  
-            println("Agent updated: %s with %s".format(path, data))
-
-          case Failure(e) => println("Invalid json for agent: %s".format(e))
-      }
+    config.relayAgentUpdate.foreach { 
+      case (path, data) => xyz(path, data)
     }
   }
 
@@ -668,11 +660,10 @@ object IngestTools extends Command {
 
   def getJsonAt(path: String, client: ZkClient): Option[JValue] = {
     val bytes = client.readData(path).asInstanceOf[Array[Byte]]
-    if(bytes != null && bytes.length != 0) {
-      Some(JParser.parse(new String(bytes)))
-    } else {
+    if (bytes == null || bytes.length == 0)
       None
-    }
+    else
+      JParser.parseFromByteBuffer(ByteBuffer.wrap(bytes)).toOption
   }
 
   def getStatAt(path: String, conn: ZkConnection): Option[Stat] = {
@@ -771,8 +762,8 @@ object ImportTools extends Command with Logging {
       config.input.foreach {
         case (db, input) =>
           logger.info("Inserting batch: %s:%s".format(db, input))
-          val result = JParser.parseFromFile(new File(input))
-          val ingestRecords: Vector[IngestRecord] = result.valueOr(e => throw e).children.map({ jv => IngestRecord(EventId(pid, sid.getAndIncrement), jv) })(collection.breakOut)
+          val rows = JParser.parseManyFromFile(new File(input)).valueOr(throw _)
+          val ingestRecords: Vector[IngestRecord] = rows.map({ jv => IngestRecord(EventId(pid, sid.getAndIncrement), jv) })(collection.breakOut)
           val event = IngestMessage(config.apiKey, Path(db), config.accountId, ingestRecords, None)
           
           logger.info(ingestRecords.length + " total events to be inserted")
@@ -992,14 +983,11 @@ object CSVToJSONConverter {
   private val Timestamp = """^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}\.\d{3})\d{0,3}$""".r
 
   def parse(s: String, ts: Boolean = false, verbose: Boolean = false): JValue = {
-    try {
-      JParser.parseUnsafe(s)
-    } catch {
-      case ex =>
-        s match {
-          case Timestamp(d, t) if (ts) => JString("%sT%sZ".format(d,t))
-          case s                       => JString(s)
-        }
+    JParser.parseFromString(s) getOrElse {
+      s match {
+        case Timestamp(d, t) if (ts) => JString("%sT%sZ".format(d,t))
+        case s => JString(s)
+      }
     }
   }
 }

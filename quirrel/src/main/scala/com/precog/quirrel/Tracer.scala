@@ -25,7 +25,7 @@ trait Tracer extends parser.AST with typer.Binder {
   import ast._
   import Stream.{empty => SNil}
   
-  def buildTrace(sigma: Map[Formal, Expr])(expr: Expr): Tree[(Map[Formal, Expr], Expr)] = expr match {
+  override def buildTrace(sigma: Map[Formal, Expr])(expr: Expr): Tree[(Map[Formal, Expr], Expr)] = expr match {
     case Let(_, _, _, _, right) => buildTrace(sigma)(right)
     
     case Solve(_, constraints, child) => {

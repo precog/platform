@@ -104,19 +104,23 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
       case _                                          => current
     }
 
+    sealed trait LoadState
+    case class InitialLoad(paths: List[Path]) extends LoadState
+    case class InLoad(cursorGen: () => DBCursor, skip: Int, remainingPaths: List[Path]) extends LoadState
+
     def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
       for {
         paths <- pathsM(table)
       } yield {
         Table(
-          StreamT.unfoldM[Future, Slice, (List[Path], Option[DBCursor])]((paths.toList, None)) { 
-            case (paths, Some(cursor)) => 
+          StreamT.unfoldM[Future, Slice, LoadState](InitialLoad(paths.toList)) { 
+            case InLoad(cursorGen, skip, remaining) => 
               M.point {
-                val (slice, remainder) = makeSlice(cursor)
-                Some(slice, (paths, remainder))
+                val (slice, nextSkip) = makeSlice(cursorGen, skip)
+                Some(slice, nextSkip.map(InLoad(cursorGen, _, remaining)).getOrElse(InitialLoad(remaining)))
               }
 
-            case (path :: xs, None) => 
+            case InitialLoad(path :: xs) => 
               path.elements.toList match {
                 case dbName :: collectionName :: Nil =>
                   M.point {
@@ -138,10 +142,10 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
                         case (obj, path) => obj.append(path, 1)
                       }
 
-                      val cursor = coll.find(new BasicDBObject(), selector)
+                      val cursorGen = () => coll.find(new BasicDBObject(), selector)
 
-                      val (slice, remainder) = makeSlice(cursor)
-                      Some((slice, (xs, remainder)))
+                      val (slice, nextSkip) = makeSlice(cursorGen, 0)
+                      Some(slice, nextSkip.map(InLoad(cursorGen, _, xs)).getOrElse(InitialLoad(xs)))
                     } catch {
                       case t => 
                         logger.error("Failure during Mongo query: " + t.getMessage)
@@ -155,7 +159,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
                   sys.error("MongoDB path " + path.path + " does not have the form /dbName/collectionName; rollups not yet supported.")
               }
 
-            case (Nil, None) => 
+            case InitialLoad(Nil) =>
               M.point(None)
           },
           UnknownSize
@@ -163,78 +167,24 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
       }
     }
 
-    def makeSlice(cursor: DBCursor): (Slice, Option[DBCursor]) = {
+    def makeSlice(cursorGen: () => DBCursor, skip: Int): (Slice, Option[Int]) = {
       import TransSpecModule.paths._
 
+      // Sort by _id always to mimic JDBM
+      val cursor = cursorGen().sort(new BasicDBObject("_id", 1))skip(skip)
+
       @tailrec def buildColArrays(from: DBCursor, into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
-        if (from.hasNext && sliceIndex < yggConfig.maxSliceSize) {
+        if (sliceIndex < yggConfig.maxSliceSize && from.hasNext) {
           // horribly inefficient, but a place to start
           val Success(jv) = MongoToJson(from.next())
-          val withIdsAndValues = jv.flattenWithPath.foldLeft(into) {
-            case (acc, (jpath, JUndefined)) => acc
-            case (acc, (jpath, v)) =>
-              val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
-
-              // The objectId becomes identity for the slices, everything else is a value
-              val transformedPath = if (jpath == JPath("._id")) {
-                Key \ 0
-              } else {
-                Value \ CPath(jpath)
-              }
-
-              val ref = ColumnRef(transformedPath, ctype)
-
-              val pair: (BitSet, Array[_]) = v match {
-                case JBool(b) => 
-                  val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Boolean](yggConfig.maxSliceSize))).asInstanceOf[(BitSet, Array[Boolean])]
-                  col(sliceIndex) = b
-                  (defined + sliceIndex, col)
-                  
-                case JNum(d) => {
-                  val isLong = ctype == CLong
-                  val isDouble = ctype == CDouble
-                  
-                  val (defined, col) = if (isLong) {
-                    val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Long](yggConfig.maxSliceSize))).asInstanceOf[(BitSet, Array[Long])]
-                    col(sliceIndex) = d.toLong
-                    (defined, col)
-                  } else if (isDouble) {
-                    val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Double](yggConfig.maxSliceSize))).asInstanceOf[(BitSet, Array[Double])]
-                    col(sliceIndex) = d.toDouble
-                    (defined, col)
-                  } else {
-                    val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[BigDecimal](yggConfig.maxSliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
-                    col(sliceIndex) = d
-                    (defined, col)
-                  }
-                  
-                  (defined + sliceIndex, col)
-                }
-
-                case JString(s) => 
-                  val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[String](yggConfig.maxSliceSize))).asInstanceOf[(BitSet, Array[String])]
-                  col(sliceIndex) = s
-                  (defined + sliceIndex, col)
-                
-                case JArray(Nil)  => 
-                  val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-                  (defined + sliceIndex, col)
-
-                case JObject(values) if values.isEmpty => 
-                  val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-                  (defined + sliceIndex, col)
-
-                case JNull        => 
-                  val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-                  (defined + sliceIndex, col)
-              }
-
-              acc + (ref -> pair)
-          }
-
-          //println("Computed " + withIdsAndValues)
-
-          buildColArrays(from, withIdsAndValues, sliceIndex + 1)
+          val refs = withIdsAndValues(jv, into, sliceIndex, yggConfig.maxSliceSize, Some({
+            jpath => if (jpath == JPath("._id")) {
+              Key \ 0
+            } else {
+              Value \ CPath(jpath)
+            }
+          }))
+          buildColArrays(from, refs, sliceIndex + 1)
         } else {
           (into, sliceIndex)
         }
@@ -256,8 +206,16 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
           case (ref @ ColumnRef(_, CNull), (defined, values))        => (ref, new BitsetColumn(defined) with NullColumn)
         }
       }
-  
-      (slice, if (cursor.hasNext) Some(cursor) else { cursor.close(); None })
+
+      val nextSkip = if (cursor.hasNext) {
+        Some(skip + slice.size)
+      } else {
+        None
+      }
+
+      cursor.close()
+
+      (slice, nextSkip)
     }
   }
 }

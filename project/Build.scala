@@ -61,6 +61,8 @@ object PlatformBuild extends Build {
   val commonSettings = Seq(
     organization := "com.precog",
     version := "2.3.0-SNAPSHOT",
+    addCompilerPlugin("org.scala-tools.sxr" % "sxr_2.9.0" % "0.2.7"),
+    scalacOptions <+= scalaSource in Compile map { "-P:sxr:base-directory:" + _.getAbsolutePath },
     scalacOptions ++= {
       Seq("-deprecation", "-unchecked", "-g:none") ++ 
       Option(System.getProperty("com.precog.build.optimize")).map { _ => Seq("-optimize") }.getOrElse(Seq())
@@ -177,7 +179,7 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, heimdall, pandora, muspelheim % "test->test")
 
   lazy val mongo = Project(id = "mongo", base = file("mongo")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard)
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test")
 
   /// Tooling ///
 

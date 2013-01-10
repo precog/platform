@@ -57,7 +57,7 @@ object SBTConsole {
       extends muspelheim.ParseEvalStack[Future] 
       with IdSourceScannerModule[Future] 
       with PrettyPrinter
-      with MemoryDatasetConsumer[Future]
+      with LongIdMemoryDatasetConsumer[Future]
       with JDBMColumnarTableModule[Future]
       with JDBMProjectionModule
       with SystemActorStorageModule

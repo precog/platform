@@ -65,8 +65,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
     with StorageModule[M]
     with MemoryDatasetConsumer[M] 
-    with IdSourceScannerModule[M]
-    with EvalStackSpecs { self =>
+    with IdSourceScannerModule[M] { self =>
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 

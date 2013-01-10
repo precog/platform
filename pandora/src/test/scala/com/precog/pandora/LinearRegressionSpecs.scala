@@ -20,6 +20,6 @@
 package com.precog
 package pandora
 
-import com.precog.muspelheim.RankSpecs
+import com.precog.muspelheim.LinearRegressionSpecs
 
-class JDBMRankSpecs extends RankSpecs with JDBMPlatformSpecs
+class JDBMLinearRegressionSpecs extends LinearRegressionSpecs with JDBMPlatformSpecs
