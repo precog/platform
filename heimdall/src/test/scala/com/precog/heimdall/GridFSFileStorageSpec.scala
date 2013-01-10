@@ -17,36 +17,24 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
-package jdbm3
+package com.precog.heimdall
 
-import com.precog.auth.MongoAPIKeyManagerComponent
-import com.precog.accounts.AccountManagerClientComponent
-import com.precog.common.security._
+import com.precog.common._
 import com.precog.common.jobs._
 
-import akka.dispatch.Future
+import org.specs2.mutable._
 
-import blueeyes.BlueEyesServer
-import blueeyes.bkka._
-import blueeyes.util.Clock
-
-import org.streum.configrity.Configuration
+import blueeyes.persistence.mongo._
 
 import scalaz._
+import scalaz.syntax.monad._
+import scalaz.syntax.copointed._
 
-object JDBMShardServer extends BlueEyesServer 
-    with AsyncShardService 
-    with JDBMQueryExecutorComponent 
-    with MongoAPIKeyManagerComponent 
-    with AccountManagerClientComponent
-{
-  import WebJobManager._
-  
-  val clock = Clock.System
+class GridFSFileStorageSpec extends Specification with RealMongoSpecSupport {
+  override def defaultPort = 47017
 
-  implicit val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-
-  def jobManagerFactory(config: Configuration): JobManager[Future] = WebJobManager(config).withM[Future]
+  include(new FileStorageSpec[Need] {
+    val M: Monad[Need] with Copointed[Need] = Need.need
+    lazy val fs = GridFSFileStorage(realMongo.getDB("gridFsFileStorageSpec"))(M)
+  })
 }

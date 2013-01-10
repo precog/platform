@@ -50,6 +50,7 @@ trait ManagedMongoJobManagerModule {
   implicit def executionContext: ExecutionContext
 
   def jobManager(config: Configuration): (Mongo, JobManager[Future]) = {
+    import blueeyes.bkka.AkkaTypeClasses._
     import MongoJobManagerSettings.default
 
     val mongo = RealMongo(config.detach("mongo"))
@@ -62,7 +63,9 @@ trait ManagedMongoJobManagerModule {
 
     val settings = MongoJobManagerSettings(timeout, jobs, messages)
 
-    (mongo, new MongoJobManager(mongo.database(database), settings))
+    val fs = GridFSFileStorage[Future](config.detach("mongo"))
+
+    (mongo, new MongoJobManager(mongo.database(database), settings, fs))
   }
 }
 
@@ -71,20 +74,22 @@ object MongoJobManagerSettings {
   val default: MongoJobManagerSettings = MongoJobManagerSettings(5000, "jobs", "jog_messages")
 }
 
-final class MongoJobManager(database: Database, settings: MongoJobManagerSettings)
-    (implicit executionContext: ExecutionContext) extends JobManager[Future] with JobStateManager[Future] {
+final class MongoJobManager(database: Database, settings: MongoJobManagerSettings, fs0: FileStorage[Future])
+    (implicit executionContext: ExecutionContext)
+    extends JobManager[Future] with JobStateManager[Future] with JobResultManager[Future] {
 
   import JobState._
 
+  protected val fs = fs0
   implicit val M = AkkaTypeClasses.futureApplicative(executionContext)
   implicit val queryTimeout = settings.queryTimeout
 
   private def newJobId(): String = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
-  def createJob(apiKey: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): Future[Job] = {
+  def createJob(apiKey: APIKey, name: String, jobType: String, data: Option[JValue], started: Option[DateTime]): Future[Job] = {
     val id = newJobId()
     val state = started map (Started(_, NotStarted)) getOrElse NotStarted
-    val job = Job(id, apiKey, name, jobType, state, expires)
+    val job = Job(id, apiKey, name, jobType, data, state)
     database(insert(job.serialize.asInstanceOf[JObject]).into(settings.jobs)) map { _ =>
       job
     }

@@ -17,36 +17,21 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
-package jdbm3
+package com.precog.common
+package jobs
 
-import com.precog.auth.MongoAPIKeyManagerComponent
-import com.precog.accounts.AccountManagerClientComponent
-import com.precog.common.security._
-import com.precog.common.jobs._
+import blueeyes.core.http.{ MimeType, MimeTypes }
 
-import akka.dispatch.Future
+import scalaz.StreamT
 
-import blueeyes.BlueEyesServer
-import blueeyes.bkka._
-import blueeyes.util.Clock
+case class FileData[M[+_]](mimeType: Option[MimeType], data: StreamT[M, Array[Byte]])
 
-import org.streum.configrity.Configuration
-
-import scalaz._
-
-object JDBMShardServer extends BlueEyesServer 
-    with AsyncShardService 
-    with JDBMQueryExecutorComponent 
-    with MongoAPIKeyManagerComponent 
-    with AccountManagerClientComponent
-{
-  import WebJobManager._
-  
-  val clock = Clock.System
-
-  implicit val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-
-  def jobManagerFactory(config: Configuration): JobManager[Future] = WebJobManager(config).withM[Future]
+/**
+ * An abstraction for storing/manipulating/retrieving files.
+ */
+trait FileStorage[M[+_]] {
+  def exists(file: String): M[Boolean]
+  def save(file: String, data: FileData[M]): M[Unit]
+  def load(file: String): M[Option[FileData[M]]]
+  def remove(file: String): M[Unit]
 }

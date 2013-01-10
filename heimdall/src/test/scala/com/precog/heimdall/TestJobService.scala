@@ -44,7 +44,7 @@ import scalaz._
 trait TestJobService extends BlueEyesServiceSpecification with JobService with AkkaDefaults {
   val executionContext = defaultFutureDispatch
 
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
+  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(5, "second"))
 
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 
@@ -81,6 +81,13 @@ class JobServiceSpec extends TestJobService {
     JField("name", JString("abc")),
     JField("type", JString("cba"))
   ))
+
+  val jobWithData: JValue = JObject(List(
+    JField("name", JString("xyz")),
+    JField("type", JString("zyx")),
+    JField("data", JObject(JField("x", JNum(1))))
+  ))
+
 
   def startJob(ts: Option[DateTime] = None): JValue = JObject(
     JField("state", "started") ::
@@ -164,13 +171,16 @@ class JobServiceSpec extends TestJobService {
 
     "fetch created jobs" in {
       val obj = (for {
-        res <- postJob(simpleJob, validAPIKey)
+        res <- postJob(jobWithData, validAPIKey)
         Some(JString(jobId)) = res.content map (_ \ "id")
         HttpResponse(HttpStatus(OK, _), _, Some(obj), _) <- getJob(jobId)
       } yield obj).copoint
 
-      (obj \ "name", obj \ "type") must beLike {
-        case (JString("abc"), JString("cba")) => ok
+      
+      val data = JObject(JField("x", JNum(1)) :: Nil)
+
+      (obj \ "name", obj \ "type", obj \ "data") must beLike {
+        case (JString("xyz"), JString("zyx"), `data`) => ok
       }
     }
 

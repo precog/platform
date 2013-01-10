@@ -32,7 +32,7 @@ trait IdSourceConfig {
   def idSource: IdSource
 }
 
-trait IdSourceScannerModule[M[+_]] extends TableModule[M] with YggConfigComponent {
+trait IdSourceScannerModule[M[+_]] extends YggConfigComponent {
   type YggConfig <: IdSourceConfig
   
   // FIXME: This is less than ideal. Basically, we reserve IDs in blocks. The freshIdScanner
