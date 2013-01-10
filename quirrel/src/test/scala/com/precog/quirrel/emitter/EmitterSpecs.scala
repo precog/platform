@@ -103,8 +103,11 @@ object EmitterSpecs extends Specification
     
     "emit assert" in {
       testEmit("assert true 42")(
-        Vector())
-    }.pendingUntilFixed
+        Vector(
+          PushTrue,
+          PushNum("42"),
+          Assert))
+    }
 
     "emit filter of two where'd loads with value provenance" >> {
       "which are numerics" >> {

@@ -390,9 +390,11 @@ trait Emitter extends AST
             emitExpr(body, dispatches) >>
             emitInstr(Merge)
                   
-        
         case ast.Import(_, _, child) =>
           emitExpr(child, dispatches)
+        
+        case ast.Assert(_, pred, child) =>
+          emitExpr(pred, dispatches) >> emitExpr(child, dispatches) >> emitInstr(Assert)
 
         case ast.New(loc, child) => 
           emitExpr(child, dispatches) >> emitInstr(Map1(New))
