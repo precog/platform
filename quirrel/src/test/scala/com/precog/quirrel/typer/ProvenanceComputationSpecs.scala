@@ -1316,6 +1316,20 @@ object ProvenanceComputationSpecs extends Specification
           tree.provenance must beLike { case CoproductProvenance(CoproductProvenance(StaticProvenance("/billing"), _), _) => ok }
           tree.errors must beEmpty
         }
+        // Regression test for Pivotal #37558157
+        {
+          val tree = compileSingle("""
+            | athletes := //summer_games/athletes
+            | 
+            | firstHalf := athletes.Name where athletes.Population < 1000
+            | secondHalf := athletes.Name where athletes.Population > 1000
+            | 
+            | {name: (firstHalf union secondHalf)} with {country: athletes.Countryname}
+            | """.stripMargin)
+
+          tree.provenance mustEqual StaticProvenance("/summer_games/athletes")
+          tree.errors must beEmpty
+        }
       }
 
       "Add/Sub/Mul/Div" >> {
