@@ -1,701 +1,100 @@
-[{
-  "userId":12353,
-  "total":23.2095,
-  "taxRate":0.11,
-  "subTotal":111.45,
-  "shipping":10.95,
-  "handling":0.0
-},{
-  "userId":12345,
-  "total":34.2125,
-  "taxRate":0.11,
-  "subTotal":38.75,
-  "shipping":24.95,
-  "handling":5.0
-},{
-  "userId":12345,
-  "total":12.706800000000001,
-  "taxRate":0.08,
-  "subTotal":9.46,
-  "shipping":6.95,
-  "handling":5.0
-},{
-  "userId":12487,
-  "total":15.20035,
-  "taxRate":0.083,
-  "subTotal":111.45,
-  "shipping":5.95,
-  "handling":0.0
-},{
-  "userId":12345,
-  "total":25.0398,
-  "taxRate":0.11,
-  "subTotal":37.18,
-  "shipping":10.95,
-  "handling":10.0
-},{
-  "userId":12518,
-  "total":21.551,
-  "taxRate":0.11,
-  "subTotal":69.1,
-  "shipping":6.95,
-  "handling":7.0
-},{
-  "userId":12372,
-  "total":19.862949999999998,
-  "taxRate":0.071,
-  "subTotal":111.45,
-  "shipping":6.95,
-  "handling":5.0
-},{
-  "userId":12518,
-  "total":35.0361,
-  "taxRate":0.07,
-  "subTotal":1.23,
-  "shipping":24.95,
-  "handling":10.0
-},{
-  "userId":12506,
-  "total":28.7515,
-  "taxRate":0.07,
-  "subTotal":111.45,
-  "shipping":10.95,
-  "handling":10.0
-},{
-  "userId":12545,
-  "total":28.65225,
-  "taxRate":0.105,
-  "subTotal":111.45,
-  "shipping":6.95,
-  "handling":10.0
-},{
-  "userId":12471,
-  "total":16.0361,
-  "taxRate":0.07,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":10.0
-},{
-  "userId":12545,
-  "total":24.6554,
-  "taxRate":0.11,
-  "subTotal":79.14,
-  "shipping":10.95,
-  "handling":5.0
-},{
-  "userId":12345,
-  "total":22.536939999999998,
-  "taxRate":0.102,
-  "subTotal":44.97,
-  "shipping":10.95,
-  "handling":7.0
-},{
-  "userId":12388,
-  "total":13.0853,
-  "taxRate":0.11,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":7.0
-},{
-  "userId":12351,
-  "total":25.036099999999998,
-  "taxRate":0.07,
-  "subTotal":1.23,
-  "shipping":24.95,
-  "handling":0.0
-},{
-  "userId":12384,
-  "total":21.426299999999998,
-  "taxRate":0.094,
-  "subTotal":111.45,
-  "shipping":10.95,
-  "handling":0.0
-},{
-  "userId":12520,
-  "total":16.912419999999997,
-  "taxRate":0.094,
-  "subTotal":63.43,
-  "shipping":10.95,
-  "handling":0.0
-},{
-  "userId":12505,
-  "total":16.3027,
-  "taxRate":0.07,
-  "subTotal":33.61,
-  "shipping":6.95,
-  "handling":7.0
-},{
-  "userId":12390,
-  "total":37.4861,
-  "taxRate":0.11,
-  "subTotal":68.51,
-  "shipping":24.95,
-  "handling":5.0
-},{
-  "userId":12345,
-  "total":16.06439,
-  "taxRate":0.093,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":10.0
-},{
-  "userId":12480,
-  "total":27.337419999999998,
-  "taxRate":0.078,
-  "subTotal":81.89,
-  "shipping":10.95,
-  "handling":10.0
-},{
-  "userId":12446,
-  "total":30.0607,
-  "taxRate":0.09,
-  "subTotal":1.23,
-  "shipping":24.95,
-  "handling":5.0
-},{
-  "userId":12545,
-  "total":22.341389999999997,
-  "taxRate":0.091,
-  "subTotal":15.29,
-  "shipping":10.95,
-  "handling":10.0
-},{
-  "userId":12543,
-  "total":12.036100000000001,
-  "taxRate":0.07,
-  "subTotal":1.23,
-  "shipping":6.95,
-  "handling":5.0
-},{
-  "userId":12545,
-  "total":26.209500000000002,
-  "taxRate":0.11,
-  "subTotal":111.45,
-  "shipping":6.95,
-  "handling":7.0
-},{
-  "userId":12456,
-  "total":6.07177,
-  "taxRate":0.099,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":0.0
-},{
-  "userId":12385,
-  "total":25.0853,
-  "taxRate":0.11,
-  "subTotal":1.23,
-  "shipping":24.95,
-  "handling":0.0
-},{
-  "userId":12418,
-  "total":6.05455,
-  "taxRate":0.085,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":0.0
-},{
-  "userId":12375,
-  "total":21.0853,
-  "taxRate":0.11,
-  "subTotal":1.23,
-  "shipping":10.95,
-  "handling":10.0
-},{
-  "userId":12534,
-  "total":29.154429999999998,
-  "taxRate":0.109,
-  "subTotal":75.27,
-  "shipping":10.95,
-  "handling":10.0
-},{
-  "userId":12345,
-  "total":29.1689,
-  "taxRate":0.082,
-  "subTotal":51.45,
-  "shipping":24.95,
-  "handling":0.0
-},{
-  "userId":12504,
-  "total":30.0853,
-  "taxRate":0.11,
-  "subTotal":1.23,
-  "shipping":24.95,
-  "handling":5.0
-},{
-  "userId":12345,
-  "total":39.6036,
-  "taxRate":0.07,
-  "subTotal":66.48,
-  "shipping":24.95,
-  "handling":10.0
-},{
-  "userId":12439,
-  "total":16.04717,
-  "taxRate":0.079,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":10.0
-},{
-  "userId":12407,
-  "total":19.1973,
-  "taxRate":0.074,
-  "subTotal":111.45,
-  "shipping":10.95,
-  "handling":0.0
-},{
-  "userId":12505,
-  "total":13.5856,
-  "taxRate":0.07,
-  "subTotal":9.08,
-  "shipping":5.95,
-  "handling":7.0
-},{
-  "userId":12345,
-  "total":19.821550000000002,
-  "taxRate":0.097,
-  "subTotal":81.15,
-  "shipping":6.95,
-  "handling":5.0
-},{
-  "userId":12545,
-  "total":27.996100000000002,
-  "taxRate":0.11,
-  "subTotal":109.51,
-  "shipping":5.95,
-  "handling":10.0
-},{
-  "userId":12453,
-  "total":20.97745,
-  "taxRate":0.081,
-  "subTotal":111.45,
-  "shipping":6.95,
-  "handling":5.0
-},{
-  "userId":12545,
-  "total":43.623,
-  "taxRate":0.098,
-  "subTotal":88.5,
-  "shipping":24.95,
-  "handling":10.0
-},{
-  "userId":12545,
-  "total":37.2095,
-  "taxRate":0.11,
-  "subTotal":111.45,
-  "shipping":24.95,
-  "handling":0.0
-},{
-  "userId":12492,
-  "total":21.0853,
-  "taxRate":0.11,
-  "subTotal":1.23,
-  "shipping":10.95,
-  "handling":10.0
-},{
-  "userId":12540,
-  "total":18.07669,
-  "taxRate":0.103,
-  "subTotal":1.23,
-  "shipping":10.95,
-  "handling":7.0
-},{
-  "userId":12490,
-  "total":23.7515,
-  "taxRate":0.07,
-  "subTotal":111.45,
-  "shipping":5.95,
-  "handling":10.0
-},{
-  "userId":12545,
-  "total":22.04222,
-  "taxRate":0.097,
-  "subTotal":11.26,
-  "shipping":10.95,
-  "handling":10.0
-},{
-  "userId":12507,
-  "total":13.0853,
-  "taxRate":0.11,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":7.0
-},{
-  "userId":12345,
-  "total":22.875149999999998,
-  "taxRate":0.107,
-  "subTotal":111.45,
-  "shipping":10.95,
-  "handling":0.0
-},{
-  "userId":12345,
-  "total":13.036100000000001,
-  "taxRate":0.07,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":7.0
-},{
-  "userId":12463,
-  "total":23.479219999999998,
-  "taxRate":0.073,
-  "subTotal":103.14,
-  "shipping":10.95,
-  "handling":5.0
-},{
-  "userId":12345,
-  "total":18.724149999999998,
-  "taxRate":0.089,
-  "subTotal":87.35,
-  "shipping":10.95,
-  "handling":0.0
-},{
-  "userId":12545,
-  "total":14.0853,
-  "taxRate":0.11,
-  "subTotal":1.23,
-  "shipping":6.95,
-  "handling":7.0
-},{
-  "userId":12345,
-  "total":24.74504,
-  "taxRate":0.086,
-  "subTotal":90.64,
-  "shipping":6.95,
-  "handling":10.0
-},{
-  "userId":12379,
-  "total":20.37108,
-  "taxRate":0.086,
-  "subTotal":39.78,
-  "shipping":6.95,
-  "handling":10.0
-},{
-  "userId":12545,
-  "total":11.0853,
-  "taxRate":0.11,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":5.0
-},{
-  "userId":12545,
-  "total":13.7515,
-  "taxRate":0.07,
-  "subTotal":111.45,
-  "shipping":5.95,
-  "handling":0.0
-},{
-  "userId":12378,
-  "total":30.07669,
-  "taxRate":0.103,
-  "subTotal":1.23,
-  "shipping":24.95,
-  "handling":5.0
-},{
-  "userId":12530,
-  "total":13.04471,
-  "taxRate":0.077,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":7.0
-},{
-  "userId":12545,
-  "total":12.04594,
-  "taxRate":0.078,
-  "subTotal":1.23,
-  "shipping":6.95,
-  "handling":5.0
-},{
-  "userId":12345,
-  "total":33.2095,
-  "taxRate":0.11,
-  "subTotal":111.45,
-  "shipping":10.95,
-  "handling":10.0
-},{
-  "userId":12345,
-  "total":16.3259,
-  "taxRate":0.11,
-  "subTotal":30.69,
-  "shipping":5.95,
-  "handling":7.0
-},{
-  "userId":12480,
-  "total":38.3674,
-  "taxRate":0.11,
-  "subTotal":58.34,
-  "shipping":24.95,
-  "handling":7.0
-},{
-  "userId":12545,
-  "total":27.36627,
-  "taxRate":0.071,
-  "subTotal":90.37,
-  "shipping":10.95,
-  "handling":10.0
-},{
-  "userId":12407,
-  "total":21.4244,
-  "taxRate":0.07,
-  "subTotal":63.92,
-  "shipping":6.95,
-  "handling":10.0
-},{
-  "userId":12345,
-  "total":39.2478,
-  "taxRate":0.078,
-  "subTotal":55.1,
-  "shipping":24.95,
-  "handling":10.0
-},{
-  "userId":12372,
-  "total":16.0853,
-  "taxRate":0.11,
-  "subTotal":1.23,
-  "shipping":10.95,
-  "handling":5.0
-},{
-  "userId":12442,
-  "total":11.3222,
-  "taxRate":0.07,
-  "subTotal":62.46,
-  "shipping":6.95,
-  "handling":0.0
-},{
-  "userId":12345,
-  "total":24.1908,
-  "taxRate":0.11,
-  "subTotal":111.28,
-  "shipping":6.95,
-  "handling":5.0
-},{
-  "userId":12484,
-  "total":44.64615,
-  "taxRate":0.087,
-  "subTotal":111.45,
-  "shipping":24.95,
-  "handling":10.0
-},{
-  "userId":12346,
-  "total":15.311800000000002,
-  "taxRate":0.084,
-  "subTotal":111.45,
-  "shipping":5.95,
-  "handling":0.0
-},{
-  "userId":12545,
-  "total":21.426299999999998,
-  "taxRate":0.094,
-  "subTotal":111.45,
-  "shipping":10.95,
-  "handling":0.0
-},{
-  "userId":12345,
-  "total":35.53775,
-  "taxRate":0.095,
-  "subTotal":111.45,
-  "shipping":24.95,
-  "handling":0.0
-},{
-  "userId":12482,
-  "total":17.073,
-  "taxRate":0.1,
-  "subTotal":1.23,
-  "shipping":6.95,
-  "handling":10.0
-},{
-  "userId":12517,
-  "total":41.8555,
-  "taxRate":0.11,
-  "subTotal":90.05,
-  "shipping":24.95,
-  "handling":7.0
-},{
-  "userId":12345,
-  "total":42.09805,
-  "taxRate":0.109,
-  "subTotal":111.45,
-  "shipping":24.95,
-  "handling":5.0
-},{
-  "userId":12417,
-  "total":47.2095,
-  "taxRate":0.11,
-  "subTotal":111.45,
-  "shipping":24.95,
-  "handling":10.0
-},{
-  "userId":12545,
-  "total":33.5837,
-  "taxRate":0.07,
-  "subTotal":51.91,
-  "shipping":24.95,
-  "handling":5.0
-},{
-  "userId":12345,
-  "total":24.203400000000002,
-  "taxRate":0.092,
-  "subTotal":111.45,
-  "shipping":6.95,
-  "handling":7.0
-},{
-  "userId":12345,
-  "total":17.6299,
-  "taxRate":0.098,
-  "subTotal":37.55,
-  "shipping":6.95,
-  "handling":7.0
-},{
-  "userId":12545,
-  "total":6.0853,
-  "taxRate":0.11,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":0.0
-},{
-  "userId":12441,
-  "total":22.86905,
-  "taxRate":0.089,
-  "subTotal":111.45,
-  "shipping":5.95,
-  "handling":7.0
-},{
-  "userId":12545,
-  "total":44.4012,
-  "taxRate":0.11,
-  "subTotal":85.92,
-  "shipping":24.95,
-  "handling":10.0
-},{
-  "userId":12345,
-  "total":25.754550000000002,
-  "taxRate":0.079,
-  "subTotal":111.45,
-  "shipping":6.95,
-  "handling":10.0
-},{
-  "userId":12478,
-  "total":35.0361,
-  "taxRate":0.07,
-  "subTotal":1.23,
-  "shipping":24.95,
-  "handling":10.0
-},{
-  "userId":12545,
-  "total":27.68252,
-  "taxRate":0.084,
-  "subTotal":32.53,
-  "shipping":24.95,
-  "handling":0.0
-},{
-  "userId":12499,
-  "total":7.0361,
-  "taxRate":0.07,
-  "subTotal":1.23,
-  "shipping":6.95,
-  "handling":0.0
-},{
-  "userId":12399,
-  "total":41.5741,
-  "taxRate":0.07,
-  "subTotal":94.63,
-  "shipping":24.95,
-  "handling":10.0
-},{
-  "userId":12345,
-  "total":25.05209,
-  "taxRate":0.083,
-  "subTotal":1.23,
-  "shipping":24.95,
-  "handling":0.0
-},{
-  "userId":12405,
-  "total":21.46667,
-  "taxRate":0.077,
-  "subTotal":6.71,
-  "shipping":10.95,
-  "handling":10.0
-},{
-  "userId":12393,
-  "total":45.71218,
-  "taxRate":0.106,
-  "subTotal":101.53,
-  "shipping":24.95,
-  "handling":10.0
-},{
-  "userId":12379,
-  "total":13.036100000000001,
-  "taxRate":0.07,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":7.0
-},{
-  "userId":12545,
-  "total":14.036100000000001,
-  "taxRate":0.07,
-  "subTotal":1.23,
-  "shipping":6.95,
-  "handling":7.0
-},{
-  "userId":12533,
-  "total":35.62611,
-  "taxRate":0.093,
-  "subTotal":7.27,
-  "shipping":24.95,
-  "handling":10.0
-},{
-  "userId":12381,
-  "total":20.33365,
-  "taxRate":0.073,
-  "subTotal":60.05,
-  "shipping":10.95,
-  "handling":5.0
-},{
-  "userId":12514,
-  "total":24.4263,
-  "taxRate":0.094,
-  "subTotal":111.45,
-  "shipping":6.95,
-  "handling":7.0
-},{
-  "userId":12506,
-  "total":7.08038,
-  "taxRate":0.106,
-  "subTotal":1.23,
-  "shipping":6.95,
-  "handling":0.0
-},{
-  "userId":12545,
-  "total":11.4855,
-  "taxRate":0.07,
-  "subTotal":7.65,
-  "shipping":5.95,
-  "handling":5.0
-},{
-  "userId":12545,
-  "total":41.3118,
-  "taxRate":0.084,
-  "subTotal":111.45,
-  "shipping":24.95,
-  "handling":7.0
-},{
-  "userId":12345,
-  "total":16.04155,
-  "taxRate":0.073,
-  "subTotal":42.35,
-  "shipping":5.95,
-  "handling":7.0
-},{
-  "userId":12388,
-  "total":35.17745,
-  "taxRate":0.085,
-  "subTotal":37.97,
-  "shipping":24.95,
-  "handling":7.0
-},{
-  "userId":12545,
-  "total":11.036100000000001,
-  "taxRate":0.07,
-  "subTotal":1.23,
-  "shipping":5.95,
-  "handling":5.0
-}]
+{"taxRate": 0.11, "handling": 0.0, "userId": 12353, "shipping": 10.95, "total": 23.2095, "subTotal": 111.45}
+{"taxRate": 0.11, "handling": 5.0, "userId": 12345, "shipping": 24.95, "total": 34.2125, "subTotal": 38.75}
+{"taxRate": 0.08, "handling": 5.0, "userId": 12345, "shipping": 6.95, "total": 12.706800000000001, "subTotal": 9.46}
+{"taxRate": 0.083, "handling": 0.0, "userId": 12487, "shipping": 5.95, "total": 15.20035, "subTotal": 111.45}
+{"taxRate": 0.11, "handling": 10.0, "userId": 12345, "shipping": 10.95, "total": 25.0398, "subTotal": 37.18}
+{"taxRate": 0.11, "handling": 7.0, "userId": 12518, "shipping": 6.95, "total": 21.551, "subTotal": 69.1}
+{"taxRate": 0.071, "handling": 5.0, "userId": 12372, "shipping": 6.95, "total": 19.862949999999998, "subTotal": 111.45}
+{"taxRate": 0.07, "handling": 10.0, "userId": 12518, "shipping": 24.95, "total": 35.0361, "subTotal": 1.23}
+{"taxRate": 0.07, "handling": 10.0, "userId": 12506, "shipping": 10.95, "total": 28.7515, "subTotal": 111.45}
+{"taxRate": 0.105, "handling": 10.0, "userId": 12545, "shipping": 6.95, "total": 28.65225, "subTotal": 111.45}
+{"taxRate": 0.07, "handling": 10.0, "userId": 12471, "shipping": 5.95, "total": 16.0361, "subTotal": 1.23}
+{"taxRate": 0.11, "handling": 5.0, "userId": 12545, "shipping": 10.95, "total": 24.6554, "subTotal": 79.14}
+{"taxRate": 0.102, "handling": 7.0, "userId": 12345, "shipping": 10.95, "total": 22.536939999999998, "subTotal": 44.97}
+{"taxRate": 0.11, "handling": 7.0, "userId": 12388, "shipping": 5.95, "total": 13.0853, "subTotal": 1.23}
+{"taxRate": 0.07, "handling": 0.0, "userId": 12351, "shipping": 24.95, "total": 25.036099999999998, "subTotal": 1.23}
+{"taxRate": 0.094, "handling": 0.0, "userId": 12384, "shipping": 10.95, "total": 21.426299999999998, "subTotal": 111.45}
+{"taxRate": 0.094, "handling": 0.0, "userId": 12520, "shipping": 10.95, "total": 16.912419999999997, "subTotal": 63.43}
+{"taxRate": 0.07, "handling": 7.0, "userId": 12505, "shipping": 6.95, "total": 16.3027, "subTotal": 33.61}
+{"taxRate": 0.11, "handling": 5.0, "userId": 12390, "shipping": 24.95, "total": 37.4861, "subTotal": 68.51}
+{"taxRate": 0.093, "handling": 10.0, "userId": 12345, "shipping": 5.95, "total": 16.06439, "subTotal": 1.23}
+{"taxRate": 0.078, "handling": 10.0, "userId": 12480, "shipping": 10.95, "total": 27.337419999999998, "subTotal": 81.89}
+{"taxRate": 0.09, "handling": 5.0, "userId": 12446, "shipping": 24.95, "total": 30.0607, "subTotal": 1.23}
+{"taxRate": 0.091, "handling": 10.0, "userId": 12545, "shipping": 10.95, "total": 22.341389999999997, "subTotal": 15.29}
+{"taxRate": 0.07, "handling": 5.0, "userId": 12543, "shipping": 6.95, "total": 12.036100000000001, "subTotal": 1.23}
+{"taxRate": 0.11, "handling": 7.0, "userId": 12545, "shipping": 6.95, "total": 26.209500000000002, "subTotal": 111.45}
+{"taxRate": 0.099, "handling": 0.0, "userId": 12456, "shipping": 5.95, "total": 6.07177, "subTotal": 1.23}
+{"taxRate": 0.11, "handling": 0.0, "userId": 12385, "shipping": 24.95, "total": 25.0853, "subTotal": 1.23}
+{"taxRate": 0.085, "handling": 0.0, "userId": 12418, "shipping": 5.95, "total": 6.05455, "subTotal": 1.23}
+{"taxRate": 0.11, "handling": 10.0, "userId": 12375, "shipping": 10.95, "total": 21.0853, "subTotal": 1.23}
+{"taxRate": 0.109, "handling": 10.0, "userId": 12534, "shipping": 10.95, "total": 29.154429999999998, "subTotal": 75.27}
+{"taxRate": 0.082, "handling": 0.0, "userId": 12345, "shipping": 24.95, "total": 29.1689, "subTotal": 51.45}
+{"taxRate": 0.11, "handling": 5.0, "userId": 12504, "shipping": 24.95, "total": 30.0853, "subTotal": 1.23}
+{"taxRate": 0.07, "handling": 10.0, "userId": 12345, "shipping": 24.95, "total": 39.6036, "subTotal": 66.48}
+{"taxRate": 0.079, "handling": 10.0, "userId": 12439, "shipping": 5.95, "total": 16.04717, "subTotal": 1.23}
+{"taxRate": 0.074, "handling": 0.0, "userId": 12407, "shipping": 10.95, "total": 19.1973, "subTotal": 111.45}
+{"taxRate": 0.07, "handling": 7.0, "userId": 12505, "shipping": 5.95, "total": 13.5856, "subTotal": 9.08}
+{"taxRate": 0.097, "handling": 5.0, "userId": 12345, "shipping": 6.95, "total": 19.821550000000002, "subTotal": 81.15}
+{"taxRate": 0.11, "handling": 10.0, "userId": 12545, "shipping": 5.95, "total": 27.996100000000002, "subTotal": 109.51}
+{"taxRate": 0.081, "handling": 5.0, "userId": 12453, "shipping": 6.95, "total": 20.97745, "subTotal": 111.45}
+{"taxRate": 0.098, "handling": 10.0, "userId": 12545, "shipping": 24.95, "total": 43.623, "subTotal": 88.5}
+{"taxRate": 0.11, "handling": 0.0, "userId": 12545, "shipping": 24.95, "total": 37.2095, "subTotal": 111.45}
+{"taxRate": 0.11, "handling": 10.0, "userId": 12492, "shipping": 10.95, "total": 21.0853, "subTotal": 1.23}
+{"taxRate": 0.103, "handling": 7.0, "userId": 12540, "shipping": 10.95, "total": 18.07669, "subTotal": 1.23}
+{"taxRate": 0.07, "handling": 10.0, "userId": 12490, "shipping": 5.95, "total": 23.7515, "subTotal": 111.45}
+{"taxRate": 0.097, "handling": 10.0, "userId": 12545, "shipping": 10.95, "total": 22.04222, "subTotal": 11.26}
+{"taxRate": 0.11, "handling": 7.0, "userId": 12507, "shipping": 5.95, "total": 13.0853, "subTotal": 1.23}
+{"taxRate": 0.107, "handling": 0.0, "userId": 12345, "shipping": 10.95, "total": 22.875149999999998, "subTotal": 111.45}
+{"taxRate": 0.07, "handling": 7.0, "userId": 12345, "shipping": 5.95, "total": 13.036100000000001, "subTotal": 1.23}
+{"taxRate": 0.073, "handling": 5.0, "userId": 12463, "shipping": 10.95, "total": 23.479219999999998, "subTotal": 103.14}
+{"taxRate": 0.089, "handling": 0.0, "userId": 12345, "shipping": 10.95, "total": 18.724149999999998, "subTotal": 87.35}
+{"taxRate": 0.11, "handling": 7.0, "userId": 12545, "shipping": 6.95, "total": 14.0853, "subTotal": 1.23}
+{"taxRate": 0.086, "handling": 10.0, "userId": 12345, "shipping": 6.95, "total": 24.74504, "subTotal": 90.64}
+{"taxRate": 0.086, "handling": 10.0, "userId": 12379, "shipping": 6.95, "total": 20.37108, "subTotal": 39.78}
+{"taxRate": 0.11, "handling": 5.0, "userId": 12545, "shipping": 5.95, "total": 11.0853, "subTotal": 1.23}
+{"taxRate": 0.07, "handling": 0.0, "userId": 12545, "shipping": 5.95, "total": 13.7515, "subTotal": 111.45}
+{"taxRate": 0.103, "handling": 5.0, "userId": 12378, "shipping": 24.95, "total": 30.07669, "subTotal": 1.23}
+{"taxRate": 0.077, "handling": 7.0, "userId": 12530, "shipping": 5.95, "total": 13.04471, "subTotal": 1.23}
+{"taxRate": 0.078, "handling": 5.0, "userId": 12545, "shipping": 6.95, "total": 12.04594, "subTotal": 1.23}
+{"taxRate": 0.11, "handling": 10.0, "userId": 12345, "shipping": 10.95, "total": 33.2095, "subTotal": 111.45}
+{"taxRate": 0.11, "handling": 7.0, "userId": 12345, "shipping": 5.95, "total": 16.3259, "subTotal": 30.69}
+{"taxRate": 0.11, "handling": 7.0, "userId": 12480, "shipping": 24.95, "total": 38.3674, "subTotal": 58.34}
+{"taxRate": 0.071, "handling": 10.0, "userId": 12545, "shipping": 10.95, "total": 27.36627, "subTotal": 90.37}
+{"taxRate": 0.07, "handling": 10.0, "userId": 12407, "shipping": 6.95, "total": 21.4244, "subTotal": 63.92}
+{"taxRate": 0.078, "handling": 10.0, "userId": 12345, "shipping": 24.95, "total": 39.2478, "subTotal": 55.1}
+{"taxRate": 0.11, "handling": 5.0, "userId": 12372, "shipping": 10.95, "total": 16.0853, "subTotal": 1.23}
+{"taxRate": 0.07, "handling": 0.0, "userId": 12442, "shipping": 6.95, "total": 11.3222, "subTotal": 62.46}
+{"taxRate": 0.11, "handling": 5.0, "userId": 12345, "shipping": 6.95, "total": 24.1908, "subTotal": 111.28}
+{"taxRate": 0.087, "handling": 10.0, "userId": 12484, "shipping": 24.95, "total": 44.64615, "subTotal": 111.45}
+{"taxRate": 0.084, "handling": 0.0, "userId": 12346, "shipping": 5.95, "total": 15.311800000000002, "subTotal": 111.45}
+{"taxRate": 0.094, "handling": 0.0, "userId": 12545, "shipping": 10.95, "total": 21.426299999999998, "subTotal": 111.45}
+{"taxRate": 0.095, "handling": 0.0, "userId": 12345, "shipping": 24.95, "total": 35.53775, "subTotal": 111.45}
+{"taxRate": 0.1, "handling": 10.0, "userId": 12482, "shipping": 6.95, "total": 17.073, "subTotal": 1.23}
+{"taxRate": 0.11, "handling": 7.0, "userId": 12517, "shipping": 24.95, "total": 41.8555, "subTotal": 90.05}
+{"taxRate": 0.109, "handling": 5.0, "userId": 12345, "shipping": 24.95, "total": 42.09805, "subTotal": 111.45}
+{"taxRate": 0.11, "handling": 10.0, "userId": 12417, "shipping": 24.95, "total": 47.2095, "subTotal": 111.45}
+{"taxRate": 0.07, "handling": 5.0, "userId": 12545, "shipping": 24.95, "total": 33.5837, "subTotal": 51.91}
+{"taxRate": 0.092, "handling": 7.0, "userId": 12345, "shipping": 6.95, "total": 24.203400000000002, "subTotal": 111.45}
+{"taxRate": 0.098, "handling": 7.0, "userId": 12345, "shipping": 6.95, "total": 17.6299, "subTotal": 37.55}
+{"taxRate": 0.11, "handling": 0.0, "userId": 12545, "shipping": 5.95, "total": 6.0853, "subTotal": 1.23}
+{"taxRate": 0.089, "handling": 7.0, "userId": 12441, "shipping": 5.95, "total": 22.86905, "subTotal": 111.45}
+{"taxRate": 0.11, "handling": 10.0, "userId": 12545, "shipping": 24.95, "total": 44.4012, "subTotal": 85.92}
+{"taxRate": 0.079, "handling": 10.0, "userId": 12345, "shipping": 6.95, "total": 25.754550000000002, "subTotal": 111.45}
+{"taxRate": 0.07, "handling": 10.0, "userId": 12478, "shipping": 24.95, "total": 35.0361, "subTotal": 1.23}
+{"taxRate": 0.084, "handling": 0.0, "userId": 12545, "shipping": 24.95, "total": 27.68252, "subTotal": 32.53}
+{"taxRate": 0.07, "handling": 0.0, "userId": 12499, "shipping": 6.95, "total": 7.0361, "subTotal": 1.23}
+{"taxRate": 0.07, "handling": 10.0, "userId": 12399, "shipping": 24.95, "total": 41.5741, "subTotal": 94.63}
+{"taxRate": 0.083, "handling": 0.0, "userId": 12345, "shipping": 24.95, "total": 25.05209, "subTotal": 1.23}
+{"taxRate": 0.077, "handling": 10.0, "userId": 12405, "shipping": 10.95, "total": 21.46667, "subTotal": 6.71}
+{"taxRate": 0.106, "handling": 10.0, "userId": 12393, "shipping": 24.95, "total": 45.71218, "subTotal": 101.53}
+{"taxRate": 0.07, "handling": 7.0, "userId": 12379, "shipping": 5.95, "total": 13.036100000000001, "subTotal": 1.23}
+{"taxRate": 0.07, "handling": 7.0, "userId": 12545, "shipping": 6.95, "total": 14.036100000000001, "subTotal": 1.23}
+{"taxRate": 0.093, "handling": 10.0, "userId": 12533, "shipping": 24.95, "total": 35.62611, "subTotal": 7.27}
+{"taxRate": 0.073, "handling": 5.0, "userId": 12381, "shipping": 10.95, "total": 20.33365, "subTotal": 60.05}
+{"taxRate": 0.094, "handling": 7.0, "userId": 12514, "shipping": 6.95, "total": 24.4263, "subTotal": 111.45}
+{"taxRate": 0.106, "handling": 0.0, "userId": 12506, "shipping": 6.95, "total": 7.08038, "subTotal": 1.23}
+{"taxRate": 0.07, "handling": 5.0, "userId": 12545, "shipping": 5.95, "total": 11.4855, "subTotal": 7.65}
+{"taxRate": 0.084, "handling": 7.0, "userId": 12545, "shipping": 24.95, "total": 41.3118, "subTotal": 111.45}
+{"taxRate": 0.073, "handling": 7.0, "userId": 12345, "shipping": 5.95, "total": 16.04155, "subTotal": 42.35}
+{"taxRate": 0.085, "handling": 7.0, "userId": 12388, "shipping": 24.95, "total": 35.17745, "subTotal": 37.97}
+{"taxRate": 0.07, "handling": 5.0, "userId": 12545, "shipping": 5.95, "total": 11.036100000000001, "subTotal": 1.23}

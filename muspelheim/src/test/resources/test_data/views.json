@@ -1,401 +1,100 @@
-[{
-  "time":1330538322612,
-  "pageId":"page-4",
-  "userId":"user-1008"
-},{
-  "time":1330489607003,
-  "pageId":"page-4",
-  "userId":"user-1010"
-},{
-  "time":1330481958718,
-  "pageId":"page-1",
-  "userId":"user-1011"
-},{
-  "time":1330404518864,
-  "pageId":"page-3",
-  "userId":"user-1006"
-},{
-  "time":1330404518864,
-  "pageId":"page-3",
-  "userId":"user-1012"
-},{
-  "time":1330577318864,
-  "pageId":"page-4",
-  "userId":"user-1007"
-},{
-  "time":1330404518865,
-  "pageId":"page-1",
-  "userId":"user-1006"
-},{
-  "time":1330577318865,
-  "pageId":"page-2",
-  "userId":"user-1009"
-},{
-  "time":1330404518865,
-  "pageId":"page-4",
-  "userId":"user-1016"
-},{
-  "time":1330404518865,
-  "pageId":"page-3",
-  "userId":"user-1008"
-},{
-  "time":1330444092937,
-  "pageId":"page-4",
-  "userId":"user-1005"
-},{
-  "time":1330570094276,
-  "pageId":"page-0",
-  "userId":"user-1012"
-},{
-  "time":1330548695833,
-  "pageId":"page-0",
-  "userId":"user-1011"
-},{
-  "time":1330577318866,
-  "pageId":"page-2",
-  "userId":"user-1003"
-},{
-  "time":1330577318866,
-  "pageId":"page-3",
-  "userId":"user-1006"
-},{
-  "time":1330497596127,
-  "pageId":"page-0",
-  "userId":"user-1014"
-},{
-  "time":1330423515794,
-  "pageId":"page-3",
-  "userId":"user-1013"
-},{
-  "time":1330404518866,
-  "pageId":"page-2",
-  "userId":"user-1006"
-},{
-  "time":1330577318866,
-  "pageId":"page-2",
-  "userId":"user-1019"
-},{
-  "time":1330563406793,
-  "pageId":"page-3",
-  "userId":"user-1000"
-},{
-  "time":1330527466882,
-  "pageId":"page-3",
-  "userId":"user-1006"
-},{
-  "time":1330529912909,
-  "pageId":"page-1",
-  "userId":"user-1013"
-},{
-  "time":1330404518867,
-  "pageId":"page-1",
-  "userId":"user-1004"
-},{
-  "time":1330404518867,
-  "pageId":"page-0",
-  "userId":"user-1010"
-},{
-  "time":1330507767032,
-  "pageId":"page-0",
-  "userId":"user-1010"
-},{
-  "time":1330404518867,
-  "pageId":"page-4",
-  "userId":"user-1003"
-},{
-  "time":1330437596944,
-  "pageId":"page-2",
-  "userId":"user-1014"
-},{
-  "time":1330577318867,
-  "pageId":"page-4",
-  "userId":"user-1000"
-},{
-  "time":1330577318868,
-  "pageId":"page-2",
-  "userId":"user-1005"
-},{
-  "time":1330577318868,
-  "pageId":"page-0",
-  "userId":"user-1006"
-},{
-  "time":1330531200099,
-  "pageId":"page-2",
-  "userId":"user-1009"
-},{
-  "time":1330404518868,
-  "pageId":"page-0",
-  "userId":"user-1015"
-},{
-  "time":1330404518868,
-  "pageId":"page-4",
-  "userId":"user-1008"
-},{
-  "time":1330404518868,
-  "pageId":"page-0",
-  "userId":"user-1006"
-},{
-  "time":1330477059237,
-  "pageId":"page-0",
-  "userId":"user-1013"
-},{
-  "time":1330577318869,
-  "pageId":"page-4",
-  "userId":"user-1006"
-},{
-  "time":1330577318869,
-  "pageId":"page-2",
-  "userId":"user-1020"
-},{
-  "time":1330404518869,
-  "pageId":"page-2",
-  "userId":"user-1009"
-},{
-  "time":1330577318869,
-  "pageId":"page-0",
-  "userId":"user-1003"
-},{
-  "time":1330472220893,
-  "pageId":"page-4",
-  "userId":"user-1003"
-},{
-  "time":1330577318869,
-  "pageId":"page-1",
-  "userId":"user-1005"
-},{
-  "time":1330404518869,
-  "pageId":"page-4",
-  "userId":"user-1010"
-},{
-  "time":1330512917756,
-  "pageId":"page-3",
-  "userId":"user-1011"
-},{
-  "time":1330572673447,
-  "pageId":"page-0",
-  "userId":"user-1014"
-},{
-  "time":1330577318870,
-  "pageId":"page-0",
-  "userId":"user-1015"
-},{
-  "time":1330577318870,
-  "pageId":"page-2",
-  "userId":"user-1010"
-},{
-  "time":1330493814918,
-  "pageId":"page-3",
-  "userId":"user-1014"
-},{
-  "time":1330548645820,
-  "pageId":"page-3",
-  "userId":"user-1001"
-},{
-  "time":1330574454182,
-  "pageId":"page-3",
-  "userId":"user-1014"
-},{
-  "time":1330455633827,
-  "pageId":"page-0",
-  "userId":"user-1013"
-},{
-  "time":1330404518871,
-  "pageId":"page-0",
-  "userId":"user-1015"
-},{
-  "time":1330560951950,
-  "pageId":"page-2",
-  "userId":"user-1010"
-},{
-  "time":1330525631727,
-  "pageId":"page-1",
-  "userId":"user-1018"
-},{
-  "time":1330502691721,
-  "pageId":"page-1",
-  "userId":"user-1003"
-},{
-  "time":1330577318871,
-  "pageId":"page-4",
-  "userId":"user-1016"
-},{
-  "time":1330522426930,
-  "pageId":"page-1",
-  "userId":"user-1002"
-},{
-  "time":1330463682412,
-  "pageId":"page-0",
-  "userId":"user-1016"
-},{
-  "time":1330404518872,
-  "pageId":"page-4",
-  "userId":"user-1006"
-},{
-  "time":1330404518872,
-  "pageId":"page-0",
-  "userId":"user-1020"
-},{
-  "time":1330577318872,
-  "pageId":"page-4",
-  "userId":"user-1005"
-},{
-  "time":1330404518872,
-  "pageId":"page-3",
-  "userId":"user-1001"
-},{
-  "time":1330447920005,
-  "pageId":"page-4",
-  "userId":"user-1013"
-},{
-  "time":1330577318872,
-  "pageId":"page-3",
-  "userId":"user-1013"
-},{
-  "time":1330577318872,
-  "pageId":"page-3",
-  "userId":"user-1007"
-},{
-  "time":1330577318873,
-  "pageId":"page-2",
-  "userId":"user-1017"
-},{
-  "time":1330577318873,
-  "pageId":"page-3",
-  "userId":"user-1006"
-},{
-  "time":1330577318873,
-  "pageId":"page-4",
-  "userId":"user-1009"
-},{
-  "time":1330404518873,
-  "pageId":"page-4",
-  "userId":"user-1003"
-},{
-  "time":1330530798997,
-  "pageId":"page-1",
-  "userId":"user-1009"
-},{
-  "time":1330577318873,
-  "pageId":"page-3",
-  "userId":"user-1000"
-},{
-  "time":1330510714036,
-  "pageId":"page-4",
-  "userId":"user-1000"
-},{
-  "time":1330577318873,
-  "pageId":"page-2",
-  "userId":"user-1015"
-},{
-  "time":1330573477507,
-  "pageId":"page-4",
-  "userId":"user-1014"
-},{
-  "time":1330414456751,
-  "pageId":"page-1",
-  "userId":"user-1014"
-},{
-  "time":1330447281458,
-  "pageId":"page-2",
-  "userId":"user-1008"
-},{
-  "time":1330577318874,
-  "pageId":"page-1",
-  "userId":"user-1007"
-},{
-  "time":1330525799111,
-  "pageId":"page-1",
-  "userId":"user-1006"
-},{
-  "time":1330520806891,
-  "pageId":"page-4",
-  "userId":"user-1015"
-},{
-  "time":1330467949212,
-  "pageId":"page-3",
-  "userId":"user-1008"
-},{
-  "time":1330437237794,
-  "pageId":"page-1",
-  "userId":"user-1019"
-},{
-  "time":1330458016591,
-  "pageId":"page-3",
-  "userId":"user-1005"
-},{
-  "time":1330571329925,
-  "pageId":"page-4",
-  "userId":"user-1002"
-},{
-  "time":1330404518875,
-  "pageId":"page-4",
-  "userId":"user-1001"
-},{
-  "time":1330404518875,
-  "pageId":"page-3",
-  "userId":"user-1015"
-},{
-  "time":1330577318875,
-  "pageId":"page-3",
-  "userId":"user-1005"
-},{
-  "time":1330436417296,
-  "pageId":"page-3",
-  "userId":"user-1017"
-},{
-  "time":1330436492258,
-  "pageId":"page-3",
-  "userId":"user-1011"
-},{
-  "time":1330577318876,
-  "pageId":"page-2",
-  "userId":"user-1003"
-},{
-  "time":1330469405777,
-  "pageId":"page-2",
-  "userId":"user-1003"
-},{
-  "time":1330404518876,
-  "pageId":"page-0",
-  "userId":"user-1007"
-},{
-  "time":1330484071687,
-  "pageId":"page-0",
-  "userId":"user-1002"
-},{
-  "time":1330577318876,
-  "pageId":"page-4",
-  "userId":"user-1009"
-},{
-  "time":1330404518876,
-  "pageId":"page-4",
-  "userId":"user-1011"
-},{
-  "time":1330404518876,
-  "pageId":"page-4",
-  "userId":"user-1008"
-},{
-  "time":1330577318877,
-  "pageId":"page-3",
-  "userId":"user-1012"
-},{
-  "time":1330435661835,
-  "pageId":"page-4",
-  "userId":"user-1006"
-},{
-  "time":1330404518877,
-  "pageId":"page-4",
-  "userId":"user-1010"
-},{
-  "time":1330554087871,
-  "pageId":"page-2",
-  "userId":"user-1002"
-},{
-  "time":1330449106724,
-  "pageId":"page-3",
-  "userId":"user-1007"
-},{
-  "time":1330577318877,
-  "pageId":"page-3",
-  "userId":"user-1002"
-}]
+{"userId": "user-1008", "pageId": "page-4", "time": 1330538322612}
+{"userId": "user-1010", "pageId": "page-4", "time": 1330489607003}
+{"userId": "user-1011", "pageId": "page-1", "time": 1330481958718}
+{"userId": "user-1006", "pageId": "page-3", "time": 1330404518864}
+{"userId": "user-1012", "pageId": "page-3", "time": 1330404518864}
+{"userId": "user-1007", "pageId": "page-4", "time": 1330577318864}
+{"userId": "user-1006", "pageId": "page-1", "time": 1330404518865}
+{"userId": "user-1009", "pageId": "page-2", "time": 1330577318865}
+{"userId": "user-1016", "pageId": "page-4", "time": 1330404518865}
+{"userId": "user-1008", "pageId": "page-3", "time": 1330404518865}
+{"userId": "user-1005", "pageId": "page-4", "time": 1330444092937}
+{"userId": "user-1012", "pageId": "page-0", "time": 1330570094276}
+{"userId": "user-1011", "pageId": "page-0", "time": 1330548695833}
+{"userId": "user-1003", "pageId": "page-2", "time": 1330577318866}
+{"userId": "user-1006", "pageId": "page-3", "time": 1330577318866}
+{"userId": "user-1014", "pageId": "page-0", "time": 1330497596127}
+{"userId": "user-1013", "pageId": "page-3", "time": 1330423515794}
+{"userId": "user-1006", "pageId": "page-2", "time": 1330404518866}
+{"userId": "user-1019", "pageId": "page-2", "time": 1330577318866}
+{"userId": "user-1000", "pageId": "page-3", "time": 1330563406793}
+{"userId": "user-1006", "pageId": "page-3", "time": 1330527466882}
+{"userId": "user-1013", "pageId": "page-1", "time": 1330529912909}
+{"userId": "user-1004", "pageId": "page-1", "time": 1330404518867}
+{"userId": "user-1010", "pageId": "page-0", "time": 1330404518867}
+{"userId": "user-1010", "pageId": "page-0", "time": 1330507767032}
+{"userId": "user-1003", "pageId": "page-4", "time": 1330404518867}
+{"userId": "user-1014", "pageId": "page-2", "time": 1330437596944}
+{"userId": "user-1000", "pageId": "page-4", "time": 1330577318867}
+{"userId": "user-1005", "pageId": "page-2", "time": 1330577318868}
+{"userId": "user-1006", "pageId": "page-0", "time": 1330577318868}
+{"userId": "user-1009", "pageId": "page-2", "time": 1330531200099}
+{"userId": "user-1015", "pageId": "page-0", "time": 1330404518868}
+{"userId": "user-1008", "pageId": "page-4", "time": 1330404518868}
+{"userId": "user-1006", "pageId": "page-0", "time": 1330404518868}
+{"userId": "user-1013", "pageId": "page-0", "time": 1330477059237}
+{"userId": "user-1006", "pageId": "page-4", "time": 1330577318869}
+{"userId": "user-1020", "pageId": "page-2", "time": 1330577318869}
+{"userId": "user-1009", "pageId": "page-2", "time": 1330404518869}
+{"userId": "user-1003", "pageId": "page-0", "time": 1330577318869}
+{"userId": "user-1003", "pageId": "page-4", "time": 1330472220893}
+{"userId": "user-1005", "pageId": "page-1", "time": 1330577318869}
+{"userId": "user-1010", "pageId": "page-4", "time": 1330404518869}
+{"userId": "user-1011", "pageId": "page-3", "time": 1330512917756}
+{"userId": "user-1014", "pageId": "page-0", "time": 1330572673447}
+{"userId": "user-1015", "pageId": "page-0", "time": 1330577318870}
+{"userId": "user-1010", "pageId": "page-2", "time": 1330577318870}
+{"userId": "user-1014", "pageId": "page-3", "time": 1330493814918}
+{"userId": "user-1001", "pageId": "page-3", "time": 1330548645820}
+{"userId": "user-1014", "pageId": "page-3", "time": 1330574454182}
+{"userId": "user-1013", "pageId": "page-0", "time": 1330455633827}
+{"userId": "user-1015", "pageId": "page-0", "time": 1330404518871}
+{"userId": "user-1010", "pageId": "page-2", "time": 1330560951950}
+{"userId": "user-1018", "pageId": "page-1", "time": 1330525631727}
+{"userId": "user-1003", "pageId": "page-1", "time": 1330502691721}
+{"userId": "user-1016", "pageId": "page-4", "time": 1330577318871}
+{"userId": "user-1002", "pageId": "page-1", "time": 1330522426930}
+{"userId": "user-1016", "pageId": "page-0", "time": 1330463682412}
+{"userId": "user-1006", "pageId": "page-4", "time": 1330404518872}
+{"userId": "user-1020", "pageId": "page-0", "time": 1330404518872}
+{"userId": "user-1005", "pageId": "page-4", "time": 1330577318872}
+{"userId": "user-1001", "pageId": "page-3", "time": 1330404518872}
+{"userId": "user-1013", "pageId": "page-4", "time": 1330447920005}
+{"userId": "user-1013", "pageId": "page-3", "time": 1330577318872}
+{"userId": "user-1007", "pageId": "page-3", "time": 1330577318872}
+{"userId": "user-1017", "pageId": "page-2", "time": 1330577318873}
+{"userId": "user-1006", "pageId": "page-3", "time": 1330577318873}
+{"userId": "user-1009", "pageId": "page-4", "time": 1330577318873}
+{"userId": "user-1003", "pageId": "page-4", "time": 1330404518873}
+{"userId": "user-1009", "pageId": "page-1", "time": 1330530798997}
+{"userId": "user-1000", "pageId": "page-3", "time": 1330577318873}
+{"userId": "user-1000", "pageId": "page-4", "time": 1330510714036}
+{"userId": "user-1015", "pageId": "page-2", "time": 1330577318873}
+{"userId": "user-1014", "pageId": "page-4", "time": 1330573477507}
+{"userId": "user-1014", "pageId": "page-1", "time": 1330414456751}
+{"userId": "user-1008", "pageId": "page-2", "time": 1330447281458}
+{"userId": "user-1007", "pageId": "page-1", "time": 1330577318874}
+{"userId": "user-1006", "pageId": "page-1", "time": 1330525799111}
+{"userId": "user-1015", "pageId": "page-4", "time": 1330520806891}
+{"userId": "user-1008", "pageId": "page-3", "time": 1330467949212}
+{"userId": "user-1019", "pageId": "page-1", "time": 1330437237794}
+{"userId": "user-1005", "pageId": "page-3", "time": 1330458016591}
+{"userId": "user-1002", "pageId": "page-4", "time": 1330571329925}
+{"userId": "user-1001", "pageId": "page-4", "time": 1330404518875}
+{"userId": "user-1015", "pageId": "page-3", "time": 1330404518875}
+{"userId": "user-1005", "pageId": "page-3", "time": 1330577318875}
+{"userId": "user-1017", "pageId": "page-3", "time": 1330436417296}
+{"userId": "user-1011", "pageId": "page-3", "time": 1330436492258}
+{"userId": "user-1003", "pageId": "page-2", "time": 1330577318876}
+{"userId": "user-1003", "pageId": "page-2", "time": 1330469405777}
+{"userId": "user-1007", "pageId": "page-0", "time": 1330404518876}
+{"userId": "user-1002", "pageId": "page-0", "time": 1330484071687}
+{"userId": "user-1009", "pageId": "page-4", "time": 1330577318876}
+{"userId": "user-1011", "pageId": "page-4", "time": 1330404518876}
+{"userId": "user-1008", "pageId": "page-4", "time": 1330404518876}
+{"userId": "user-1012", "pageId": "page-3", "time": 1330577318877}
+{"userId": "user-1006", "pageId": "page-4", "time": 1330435661835}
+{"userId": "user-1010", "pageId": "page-4", "time": 1330404518877}
+{"userId": "user-1002", "pageId": "page-2", "time": 1330554087871}
+{"userId": "user-1007", "pageId": "page-3", "time": 1330449106724}
+{"userId": "user-1002", "pageId": "page-3", "time": 1330577318877}

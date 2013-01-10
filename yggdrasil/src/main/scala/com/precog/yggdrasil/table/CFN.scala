@@ -20,6 +20,10 @@ trait CF {
     case cf: CF => identity == cf.identity 
     case _ => false
   }
+  
+  override final def hashCode: Int = identity.hashCode
+  
+  override def toString() = identity.toString  
 }
 
 trait CF1 extends CF { self =>
