@@ -72,6 +72,13 @@ trait DAG extends Instructions with TransSpecModule {
         }
         
         val eitherRootsAbom = Some(instr) collect {
+          case instr @ instructions.Assert => 
+            continue {
+              case Right(child) :: Right(pred) :: tl => Right(Right(Assert(loc, pred, child)) :: tl)
+              case Left(_) :: _ | _ :: Left(_) :: _ => Left(OperationOnBucket(instr))
+              case _ => Left(StackUnderflow(instr))
+            }
+          
           case instr @ (instructions.IIntersect | instructions.IUnion) => 
             continue {
               case Right(right) :: Right(left) :: tl => Right(Right(IUI(loc, instr == instructions.IUnion, left, right)) :: tl)
@@ -476,7 +483,9 @@ trait DAG extends Instructions with TransSpecModule {
             lazy val result: dag.Split = dag.Split(loc, spec2, child2)
             result
           }
-            
+          
+          case dag.Assert(loc, pred, child) => dag.Assert(loc, memoized(splits)(pred), memoized(splits)(child))
+          
           case dag.IUI(loc, union, left, right) => dag.IUI(loc, union, memoized(splits)(left), memoized(splits)(right))
 
           case dag.Diff(loc, left, right) => dag.Diff(loc, memoized(splits)(left), memoized(splits)(right))
@@ -571,6 +580,10 @@ trait DAG extends Instructions with TransSpecModule {
             foldDown0(child, specsAcc |+| f(child))
           else
             specsAcc
+          
+        case dag.Assert(_, pred, child) =>
+          val acc2 = foldDown0(pred, acc |+| f(pred))
+          foldDown0(child, acc2 |+| f(child))
 
         case dag.IUI(_, _, left, right) =>
           val acc2 = foldDown0(left, acc |+| f(left))
@@ -780,6 +793,16 @@ trait DAG extends Instructions with TransSpecModule {
         
         loop(spec)
       }
+    }
+    
+    case class Assert(loc: Line, pred: DepGraph, child: DepGraph) extends DepGraph {
+      lazy val identities = child.identities
+      
+      val sorting = child.sorting
+      
+      lazy val isSingleton = child.isSingleton
+      
+      lazy val containsSplitArg = pred.containsSplitArg || child.containsSplitArg
     }
     
     case class IUI(loc: Line, union: Boolean, left: DepGraph, right: DepGraph) extends DepGraph with StagingPoint {

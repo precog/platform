@@ -488,6 +488,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyMo
         result mustEqual Right(Join(line, Add, CrossLeftSort, Const(line, CBoolean(true)), Const(line, CBoolean(false))))
       }
       
+      "assert" >> {
+        val line = Line(0, "")
+        val result = decorate(Vector(line, PushTrue, PushNum("42"), instructions.Assert))
+        result mustEqual Right(dag.Assert(line, Const(line, CBoolean(true)), Const(line, CLong(42))))
+      }
+      
       "iunion" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, IUnion))
