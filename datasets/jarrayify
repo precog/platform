@@ -1,6 +1,0 @@
-#!/usr/bin/env sed -n -f
-1 i\
-[
-s/.*/&,/p
-$ a\
-]

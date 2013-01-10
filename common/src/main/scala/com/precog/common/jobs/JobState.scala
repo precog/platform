@@ -20,11 +20,13 @@
 package com.precog.common
 package jobs
 
+import com.precog.common.json._
+import com.precog.common.security._
+
 import blueeyes.json._
 import blueeyes.json.serialization.{ Decomposer, Extractor, ValidatedExtraction }
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
 
-import com.precog.common.security._
 
 import org.joda.time.DateTime
 
@@ -46,7 +48,7 @@ object JobState extends JobStateSerialization {
   case class Cancelled(reason: String, timestamp: DateTime, prev: JobState) extends JobState(false)
   case class Aborted(reason: String, timestamp: DateTime, prev: JobState) extends JobState(true)
   case class Expired(timestamp: DateTime, prev: JobState) extends JobState(true)
-  case class Finished(result: Option[JobResult], timestamp: DateTime, prev: JobState) extends JobState(true)
+  case class Finished(timestamp: DateTime, prev: JobState) extends JobState(true)
 
   def describe(state: JobState): String = state match {
     case NotStarted => "The job has not yet been started."
@@ -54,7 +56,7 @@ object JobState extends JobStateSerialization {
     case Cancelled(reason, _, _) => "The job has been cancelled due to '%s'." format reason
     case Aborted(reason, _, _) => "The job was aborted early due to '%s'." format reason
     case Expired(expiration, _) => "The job expired at %s." format expiration
-    case Finished(_, _, _) => "The job has finished successfully."
+    case Finished(_, _) => "The job has finished successfully."
   }
 }
 
@@ -90,11 +92,8 @@ trait JobStateSerialization {
       case Expired(ts, prev) =>
         base("expired", ts, prev)
 
-      case Finished(None, ts, prev) =>
+      case Finished(ts, prev) =>
         base("finished", ts, prev)
-
-      case Finished(Some(result), ts, prev) =>
-        base("finished", ts, prev).unsafeInsert(JPath("result"), result.serialize)
     }
   }
 
@@ -126,12 +125,7 @@ trait JobStateSerialization {
 
         case "finished" =>
           extractBase(obj) flatMap { case (timestamp, previous) =>
-            (obj \? "result") match {
-              case Some(result) =>
-                result.validated[JobResult] map { result => Finished(Some(result), timestamp, previous) }
-              case None =>
-                success(Finished(None, timestamp, previous))
-            }
+            success(Finished(timestamp, previous))
           }
       }
     }

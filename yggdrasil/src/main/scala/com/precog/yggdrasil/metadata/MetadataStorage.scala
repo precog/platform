@@ -55,8 +55,10 @@ object MetadataStorage {
 trait MetadataStorage {
   import MetadataStorage._
 
-  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]]
+  def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[File]
+  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File]
   def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]]
+
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] 
@@ -240,38 +242,36 @@ object FileMetadataStorage extends Logging {
   }
 }
 
-class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, private var metadataLocations: Map[ProjectionDescriptor, File]) extends MetadataStorage with Logging {
+class FileMetadataStorage private (baseDir: File, archiveDir: File, fileOps: FileOps, private var metadataLocations: Map[ProjectionDescriptor, File]) extends MetadataStorage with Logging {
   import FileMetadataStorage._
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = {
     metadataLocations.keySet.filter(f)
   }
 
-  def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[PrecogUnit] = {
+  def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[File] = {
     if (metadataLocations.contains(desc)) {
-      IO(PrecogUnit)
+      IO(metadataLocations(desc))
     } else {
+      val newRoot = descriptorDir(baseDir, desc)
       for {
-        newRoot <- descriptorDir(baseDir, desc)
         _       <- IO { newRoot.mkdirs() }
         _       <- writeDescriptor(desc, newRoot) 
       } yield {
         logger.info("Created new projection for " + desc)
         metadataLocations += (desc -> newRoot) 
-        PrecogUnit
+        newRoot
       }
     }
   }
 
-  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]] = {
-    if (createOk) {
-      for (_ <- ensureDescriptorRoot(desc)) yield metadataLocations.get(desc)
-    } else {
-      IO(metadataLocations.get(desc))
-    }
-  }
+  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File] = metadataLocations.get(desc)
 
-  def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]] = {
-    metadataLocations.get(desc).map(_ => descriptorDir(archiveDir, desc).map { d => d.mkdirs(); d }).sequence
+  def findArchiveRoot(desc: ProjectionDescriptor): IO[Option[File]] = IO {
+    metadataLocations.get(desc) map { _ => 
+      val dir = descriptorDir(archiveDir, desc)
+      dir.mkdirs()
+      dir
+    }
   }
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = {
@@ -323,7 +323,7 @@ class FileMetadataStorage(baseDir: File, archiveDir: File, fileOps: FileOps, pri
   /**
    * Computes the stable path for a given descriptor relative to the given base dir
    */
-  private def descriptorDir(baseDir: File, descriptor: ProjectionDescriptor): IO[File] = IO {
+  private def descriptorDir(baseDir: File, descriptor: ProjectionDescriptor): File = {
     // The path component maps directly to the FS, with a hash on the columnrefs as the final dir
     val prefix = descriptor.commonPrefix.filterNot(disallowedPathComponents.contains)
 

@@ -79,19 +79,14 @@ class MetadataStorageSpec extends Specification {
     "safely update metadata" in new metadataStore {
       // First write to add initial data
       val io = for {
-        _    <- ms.ensureDescriptorRoot(desc)
-        _    <- ms.updateMetadata(desc, testRecord)
-        _    <- ms.updateMetadata(desc, testRecord) // Second write to force an update
-        root <- ms.findDescriptorRoot(desc, true) 
+        descBase <- ms.ensureDescriptorRoot(desc)
+        _        <- ms.updateMetadata(desc, testRecord)
+        _        <- ms.updateMetadata(desc, testRecord) // Second write to force an update
       } yield {
-        root map { descBase =>
-          // Our first write would have added offsets 0-1
-          fileOps.confirmWrite(2, new File(descBase, nextFilename), output) aka "write next" must beTrue
-          fileOps.confirmCopy(3, new File(descBase, curFilename), new File(descBase, prevFilename)) aka "copy cur to prev" must beTrue 
-          fileOps.confirmRename(4, new File(descBase, nextFilename), new File(descBase, curFilename)) aka "move next to cur" must beTrue
-        } getOrElse {
-          failure("Could not locate the descriptor base")
-        }
+        // Our first write would have added offsets 0-1
+        fileOps.confirmWrite(2, new File(descBase, nextFilename), output) aka "write next" must beTrue
+        fileOps.confirmCopy(3, new File(descBase, curFilename), new File(descBase, prevFilename)) aka "copy cur to prev" must beTrue
+        fileOps.confirmRename(4, new File(descBase, nextFilename), new File(descBase, curFilename)) aka "move next to cur" must beTrue
       }
 
       io.unsafePerformIO
@@ -100,16 +95,11 @@ class MetadataStorageSpec extends Specification {
     "safely update metadata not current" in new metadataStore {
 
       val io = for {
-        _    <- ms.ensureDescriptorRoot(desc)
-        _    <- ms.updateMetadata(desc, testRecord)
-        root <- ms.findDescriptorRoot(desc, true) 
+        descBase <- ms.ensureDescriptorRoot(desc)
+        _        <- ms.updateMetadata(desc, testRecord)
       } yield {
-        root map { descBase =>
-          fileOps.confirmWrite(0, new File(descBase, nextFilename), output) aka "write next" must beTrue
-          fileOps.confirmRename(1, new File(descBase, nextFilename), new File(descBase, curFilename)) aka "move next to cur" must beTrue
-        } getOrElse {
-          failure("Could not locate the descriptor base")
-        }
+        fileOps.confirmWrite(0, new File(descBase, nextFilename), output) aka "write next" must beTrue
+        fileOps.confirmRename(1, new File(descBase, nextFilename), new File(descBase, curFilename)) aka "move next to cur" must beTrue
       }
 
       io.unsafePerformIO
@@ -117,7 +107,7 @@ class MetadataStorageSpec extends Specification {
 
     "correctly read metadata" in new metadataStore {
       val io = for {
-        _ <- ms.findDescriptorRoot(desc, true)
+        _ <- ms.ensureDescriptorRoot(desc)
         _ <- ms.updateMetadata(desc, testRecord)
         result <- ms.getMetadata(desc)
       } yield {

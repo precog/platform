@@ -39,10 +39,10 @@ import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
 
-class ActorStatusHandler(queryExecutor: QueryExecutor[Future])(implicit dispatcher: MessageDispatcher)
+class ActorStatusHandler(queryExecutorFactory: QueryExecutorFactory[Future, _])(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    success(queryExecutor.status() map {
+    success(queryExecutorFactory.status() map {
       case Success(result) => HttpResponse[JValue](OK, content = Some(result))
       case Failure(error) => HttpResponse[JValue](HttpStatus(BadRequest, error))
     })

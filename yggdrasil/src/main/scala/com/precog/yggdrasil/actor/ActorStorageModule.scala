@@ -49,7 +49,7 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
 
   protected implicit def actorSystem: ActorSystem
 
-  trait ActorStorageLike extends StorageLike with Logging {
+  trait ActorStorageLike extends StorageLike[Future, Projection] with Logging {
     def accessControl: AccessControl[Future]
     def accountManager: BasicAccountManager[Future]
     def shardSystemActor: ActorRef

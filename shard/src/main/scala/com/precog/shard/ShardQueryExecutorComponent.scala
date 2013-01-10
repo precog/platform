@@ -31,62 +31,49 @@ import com.precog.muspelheim.ParseEvalStack
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
-import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.jdbm3._
 import com.precog.yggdrasil.util._
 
-import com.precog.util.FilesystemFileOps
+import org.slf4j.{ Logger, LoggerFactory }
 
-import akka.actor.ActorSystem
-import akka.dispatch._
-import akka.pattern.ask
-import akka.util.duration._
-import akka.util.Duration
-import akka.util.Timeout
-
-import org.slf4j.{LoggerFactory, MDC}
-
-import java.io.File
 import java.nio.CharBuffer
 
 import scalaz._
 import scalaz.Validation._
-import scalaz.effect.IO
 import scalaz.syntax.monad._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.std.either._
 
-import org.streum.configrity.Configuration
+trait ShardQueryExecutorConfig
+    extends BaseConfig
+    with ColumnarTableModuleConfig
+    with IdSourceConfig {
+  def clock: Clock
+  val queryId = new java.util.concurrent.atomic.AtomicLong()
+}
 
-trait ShardQueryExecutor 
-    extends QueryExecutor[Future]
-    with ParseEvalStack[Future]
-    with IdSourceScannerModule[Future] { self =>
+trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
+  import scalaz.syntax.monad._
 
-  implicit def asyncContext: ExecutionContext
+  type YggConfig <: ShardQueryExecutorConfig
 
   protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
-  private lazy val queryId = new java.util.concurrent.atomic.AtomicLong
 
   case class StackException(error: StackError) extends Exception(error.toString)
 
-  def clock: Clock
-
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[Future, CharBuffer]] = {
-    val evaluationContext = EvaluationContext(apiKey, prefix, clock.now())
-    val qid = queryId.getAndIncrement
+  def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, StreamT[M, CharBuffer]]] = {
+    val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
+    val qid = yggConfig.queryId.getAndIncrement()
     queryLogger.info("Executing query %d for %s: %s, prefix: %s".format(qid, apiKey, query,prefix))
 
     import EvaluationError._
 
-    val solution: Validation[Throwable, Validation[EvaluationError, StreamT[Future, CharBuffer]]] = Validation.fromTryCatch {
+    val solution: Validation[Throwable, Validation[EvaluationError, StreamT[M, CharBuffer]]] = Validation.fromTryCatch {
       asBytecode(query) flatMap { bytecode =>
         ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
-          /*(systemError _) <-: */
-          // TODO: How can jsonChunks return a Validation... or report evaluation error to user....
           Validation.success(jsonChunks {
             applyQueryOptions(opts) {
               if (queryLogger.isDebugEnabled) {
@@ -103,18 +90,16 @@ trait ShardQueryExecutor
         }
       }
     }
-
-    ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[Future, CharBuffer]]])
+    
+    M.point {
+      ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[M, CharBuffer]]])
+    }
   }
 
-  def status(): Future[Validation[String, JValue]] = {
-    Future(Failure("Status not supported yet"))
-  }
-
-  private def applyQueryOptions(opts: QueryOptions)(table: Future[Table]): Future[Table] = {
+  private def applyQueryOptions(opts: QueryOptions)(table: M[Table]): M[Table] = {
     import trans._
 
-    def sort(table: Future[Table]): Future[Table] = if (!opts.sortOn.isEmpty) {
+    def sort(table: M[Table]): M[Table] = if (!opts.sortOn.isEmpty) {
       val sortKey = InnerArrayConcat(opts.sortOn map { cpath =>
         WrapArray(cpath.nodes.foldLeft(constants.SourceValue.Single: TransSpec1) {
           case (inner, f @ CPathField(_)) =>
@@ -129,8 +114,8 @@ trait ShardQueryExecutor
       table
     }
 
-    def page(table: Future[Table]): Future[Table] = opts.page map { case (offset, limit) =>
-      table map (_.takeRange(offset, limit))
+    def page(table: M[Table]): M[Table] = opts.page map { case (offset, limit) =>
+        table map (_.takeRange(offset, limit))
     } getOrElse table
 
     page(sort(table map (_.compact(constants.SourceValue.Single))))
@@ -157,12 +142,12 @@ trait ShardQueryExecutor
               val tp = err.tp
 
               JObject(
-                JField("message", JString("Errors occurred compiling your query.")) 
-                :: JField("line", JString(loc.line))
-                :: JField("lineNum", JNum(loc.lineNum))
-                :: JField("colNum", JNum(loc.colNum))
-                :: JField("detail", JString(tp.toString))
-                :: Nil)
+                JField("message", JString("Errors occurred compiling your query."))
+                  :: JField("line", JString(loc.line))
+                  :: JField("lineNum", JNum(loc.lineNum))
+                  :: JField("colNum", JNum(loc.colNum))
+                  :: JField("detail", JString(tp.toString))
+                  :: Nil)
             } toList)
         }
         
@@ -174,11 +159,11 @@ trait ShardQueryExecutor
           JArray(
             JObject(
               JField("message", JString("An error occurred parsing your query."))
-              :: JField("line", JString(ex.failures.head.tail.line))
-              :: JField("lineNum", JNum(ex.failures.head.tail.lineNum))
-              :: JField("colNum", JNum(ex.failures.head.tail.colNum))
-              :: JField("detail", JString(ex.mkString))
-              :: Nil
+                :: JField("line", JString(ex.failures.head.tail.line))
+                :: JField("lineNum", JNum(ex.failures.head.tail.lineNum))
+                :: JField("colNum", JNum(ex.failures.head.tail.colNum))
+                :: JField("detail", JString(ex.mkString))
+                :: Nil
             ) :: Nil
           )
         )
@@ -186,7 +171,7 @@ trait ShardQueryExecutor
     }
   }
 
-  private def jsonChunks(tableM: Future[Table]): StreamT[Future, CharBuffer] = {
+  private def jsonChunks(tableM: M[Table]): StreamT[M, CharBuffer] = {
     import trans._
 
     StreamT.wrapEffect(
@@ -196,34 +181,7 @@ trait ShardQueryExecutor
     )
   }
 
-  /* def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] = {
-    import JsonDSL._
-    table.slices.uncons map { unconsed =>
-      if (unconsed.isDefined) {
-        val rendered = StreamT.unfoldM[Future, CharBuffer, Option[(Slice, StreamT[Future, Slice])]](unconsed) { 
-          case Some((head, tail)) =>
-            tail.uncons map { next =>
-              if (next.isDefined) {
-                Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",") + ","), next))
-              } else {            
-                Some((CharBuffer.wrap(head.toJsonElements.map(jv => compact(render(jv))).mkString(",")), None))
-              }
-            }
-
-          case None => 
-            M.point(None)
-        }
-        
-        rendered
-        //(CharBuffer.wrap("[") :: rendered) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer])
-      } else {
-        StreamT.empty[Future, CharBuffer]
-        //CharBuffer.wrap("[]") :: StreamT.empty[Future, CharBuffer]
-      }
-    }
-  } */
-  
-  private def renderStream(table: Table): Future[StreamT[Future, CharBuffer]] =
-    M.point((CharBuffer.wrap("[") :: (table renderJson ',')) ++ (CharBuffer.wrap("]") :: StreamT.empty[Future, CharBuffer]))
+  private def renderStream(table: Table): M[StreamT[M, CharBuffer]] =
+    M.point((CharBuffer.wrap("[") :: (table renderJson ',')) ++ (CharBuffer.wrap("]") :: StreamT.empty[M, CharBuffer]))    
 }
 // vim: set ts=4 sw=4 et:

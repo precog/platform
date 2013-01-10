@@ -107,8 +107,12 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
-    def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
-      fileMetadataStorage.findDescriptorRoot(descriptor, false)
+    def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] =
+      fileMetadataStorage.ensureDescriptorRoot(descriptor)
+
+    def findBaseDir(descriptor: ProjectionDescriptor): Option[File] =
+      fileMetadataStorage.findDescriptorRoot(descriptor)
+
     def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
       fileMetadataStorage.findArchiveRoot(descriptor)
   }

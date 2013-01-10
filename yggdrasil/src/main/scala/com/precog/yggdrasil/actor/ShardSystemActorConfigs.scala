@@ -70,6 +70,8 @@ trait ProductionShardSystemConfig extends ShardConfig {
 trait ProductionShardSystemActorModule extends ShardSystemActorModule {
   type YggConfig <: ProductionShardSystemConfig
 
+  def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog
+
   def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
     Some(() => new KafkaShardIngestActor(shardId = yggConfig.shardId, 
@@ -78,6 +80,7 @@ trait ProductionShardSystemActorModule extends ShardSystemActorModule {
                                          topic = yggConfig.kafkaTopic, 
                                          ingestEnabled = yggConfig.ingestEnabled,
                                          accountManager = accountManager,
+                                         ingestFailureLog = ingestFailureLog(checkpoint),
                                          fetchBufferSize = yggConfig.ingestBufferSize,
                                          ingestTimeout = yggConfig.ingestTimeout,
                                          maxCacheSize = yggConfig.ingestMaxParallel,
