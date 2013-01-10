@@ -15,7 +15,6 @@ wait_until_port_open() {
 
 SUCCESS=0
 FAILEDTARGETS=""
-MONGOPORT=27117
 
 function run_sbt() {
     sbt -mem 2048 $OPTIMIZE -J-Dsbt.log.noformat=true $@
@@ -29,10 +28,6 @@ function run_sbt() {
 
 while getopts ":m:sao" opt; do
     case $opt in
-        m)
-            echo "Overriding default mongo port with $OPTARG"
-            MONGOPORT=$OPTARG
-            ;;
         s)
             SKIPSETUP=1
             ;;
@@ -47,7 +42,6 @@ while getopts ":m:sao" opt; do
             echo "  -a: Build assemdblies only"
             echo "  -o: Optimized build"
             echo "  -s: Skip clean/compile setup steps"
-            echo "  -m: Use the specified port for mongo"
             exit 1
             ;;
     esac
@@ -74,7 +68,7 @@ fi
 set +e
 
 if [ -z "$SKIPTEST" ]; then
-    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil shard pandora; do
+    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil shard pandora mongo; do
         run_sbt "$PROJECT/test"
     done
 fi
@@ -86,9 +80,7 @@ fi
 
 if [ $SUCCESS -eq 0 -a -z "$SKIPTEST" ]; then
     echo "Running full shard test"
-    wait_until_port_open $MONGOPORT
-	
-    shard/test.sh #-m $MONGOPORT
+    shard/test.sh 
     SUCCESS=$(($SUCCESS || $?))
 fi
 
