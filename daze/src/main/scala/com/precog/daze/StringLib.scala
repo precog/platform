@@ -28,7 +28,10 @@ import java.lang.String
 import yggdrasil._
 import yggdrasil.table._
 
+import TransSpecModule._
+
 trait StringLib[M[+_]] extends GenOpcode[M] {
+  import trans._
   import StdLib.{BoolFrom, DoubleFrom, LongFrom, NumFrom, StrFrom}
 
   val StringNamespace = Vector("std", "string")
@@ -49,11 +52,13 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
   }
 
   class Op1SS(name: String, f: String => String)
-  extends Op1(StringNamespace, name) {
+  extends Op1F1(StringNamespace, name) {
     val tpe = UnaryOperationType(JTextT, JNumberT)
     def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::op1ss::" + name) {
       case c: StrColumn => new StrFrom.S(c, _ != null, f)
     }
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
   }
 
   object trim extends Op1SS("trim", _.trim)
@@ -64,20 +69,24 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
 
   object intern extends Op1SS("intern", _.intern)
 
-  object isEmpty extends Op1(StringNamespace, "isEmpty") {
+  object isEmpty extends Op1F1(StringNamespace, "isEmpty") {
     val tpe = UnaryOperationType(JTextT, JBooleanT)
     def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::isEmpty") {
       case c: StrColumn => new BoolFrom.S(c, _ != null, _.isEmpty)
     }
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
   }
 
   def neitherNull(x: String, y: String) = x != null && y != null
 
-  object length extends Op1(StringNamespace, "length") {
+  object length extends Op1F1(StringNamespace, "length") {
     val tpe = UnaryOperationType(JTextT, JNumberT)
     def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::length") {
       case c: StrColumn => new LongFrom.S(c, _ != null, _.length)
     }
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
   }
 
   class Op2SSB(name: String, f: (String, String) => Boolean)
@@ -174,7 +183,7 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
 
   object lastIndexOf extends Op2SSL("lastIndexOf", _ lastIndexOf _)
 
-  object parseNum extends Op1(StringNamespace, "parseNum") {
+  object parseNum extends Op1F1(StringNamespace, "parseNum") {
     import java.util.regex.Pattern
 
     val intPattern = Pattern.compile("^-?(?:0|[1-9][0-9]*)$")
@@ -192,14 +201,18 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
         def apply(row: Int) = BigDecimal(c(row))
       }
     }
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
   }
 
-  object numToString extends Op1(StringNamespace, "numToString") {
+  object numToString extends Op1F1(StringNamespace, "numToString") {
     val tpe = UnaryOperationType(JNumberT, JTextT)
     def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::numToString") {
       case c: LongColumn => new StrFrom.L(c, _ => true, _.toString)
       case c: DoubleColumn => new StrFrom.D(c, _ => true, _.toString)
       case c: NumColumn => new StrFrom.N(c, _ => true, _.toString)
     }
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
   }
 }

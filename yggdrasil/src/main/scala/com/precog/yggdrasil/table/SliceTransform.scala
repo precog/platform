@@ -512,6 +512,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
             _ typed tpe
           }
 
+        case IsType(source, tpe) =>
+          composeSliceTransform2(source) map {
+            _ isType tpe
+          }
+
         case Scan(source, scanner) => 
           composeSliceTransform2(source) andThen {
             SliceTransform1[scanner.A](
