@@ -82,8 +82,13 @@ abstract class IngestSupervisor(ingestActorInit: Option[() => Actor], //projecti
   override def preStart() = {
     ingestActor = ingestActorInit.map { actorInit => context.actorOf(Props(actorInit, "ingestActor")) }
     logger.info("Starting IngestSupervisor against IngestActor " + ingestActor)
-    scheduleIngestRequest(Duration.Zero)
-    logger.info("Initial ingest request scheduled")
+    ingestActor.foreach { actor =>
+      scheduler.schedule(idleDelay, idleDelay) {
+        initiated += 1
+        actor ! GetMessages(self)
+      }
+      logger.info("Recurring ingest request scheduled")
+    }
   }
 
   override def postStop() = {
@@ -99,13 +104,10 @@ abstract class IngestSupervisor(ingestActorInit: Option[() => Actor], //projecti
     case IngestErrors(messages) => 
       errors += 1
       messages.foreach(logger.error(_))
-      scheduleIngestRequest(idleDelay)
 
     case IngestData(messages)   => 
       processed += 1
-      if (messages.isEmpty) {
-        scheduleIngestRequest(idleDelay)
-      } else {
+      if (messages.nonEmpty) {
         logger.info("Ingesting " + messages.size + " messages")
         processMessages(messages, sender)
         scheduleIngestRequest(Duration.Zero)
