@@ -151,22 +151,37 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
 
     def receive = {
       // Route subordinate messages
-      case pMsg: ShardProjectionAction => projectionsActor.tell(pMsg, sender)
-      case mMsg: ShardMetadataAction   => metadataActor.tell(mMsg, sender)
-      case iMsg: ShardIngestAction     => ingestSystem.tell(iMsg, sender)
+      case pMsg: ShardProjectionAction => 
+        logger.trace("Forwarding message " + pMsg + " to projectionsActor")
+        projectionsActor.tell(pMsg, sender)
+        logger.trace("Forwarding complete: " + pMsg)
 
-      case Status => {
+      case mMsg: ShardMetadataAction   => 
+        logger.trace("Forwarding message " + mMsg + " to metadataActor")
+        metadataActor.tell(mMsg, sender)
+        logger.trace("Forwarding complete: " + mMsg)
+
+      case iMsg: ShardIngestAction     => 
+        logger.trace("Forwarding message " + iMsg + " to ingestSystem")
+        ingestSystem.tell(iMsg, sender)
+        logger.trace("Forwarding complete: " + iMsg)
+
+      case Status => 
+        logger.trace("Processing status request")
         implicit val to = Timeout(yggConfig.statusTimeout)
         implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
-        
-        sender ! (for (statusResponses <- Future.sequence { actorsWithStatus map { actor => (actor ? Status).mapTo[JValue] } }) yield JArray(statusResponses))
-      }
+        (for (statusResponses <- Future.sequence { actorsWithStatus map { actor => (actor ? Status).mapTo[JValue] } }) yield JArray(statusResponses)) onSuccess {
+          case status => 
+            sender ! status
+        }
+        logger.trace("Status request complete")
 
-      case ShutdownSystem => {
+      case ShutdownSystem => 
+        logger.info("Initiating shutdown")
         onShutdown()
         sender ! ShutdownComplete
         self ! PoisonPill
-      }
+        logger.info("Shutdown complete")
     }
 
     protected def actorsWithStatus = ingestSystem :: metadataActor :: projectionsActor :: Nil

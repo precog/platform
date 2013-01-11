@@ -25,6 +25,7 @@ import kafka._
 import com.precog.daze._
 import com.precog.common.{ Path, Event }
 import com.precog.common.security._
+import com.precog.common.util._
 
 import org.specs2.mutable.Specification
 import org.specs2.specification._
@@ -61,7 +62,7 @@ import blueeyes.json._
 
 import blueeyes.util.Clock
 
-class EventServiceSpec extends TestEventService with FutureMatchers {
+class EventServiceSpec extends TestEventService with FutureMatchers with ArbitraryJValue {
 
   implicit def executionContext = defaultFutureDispatch
 
@@ -145,6 +146,18 @@ class EventServiceSpec extends TestEventService with FutureMatchers {
       track(JSON, Some(testAPIKey), Path("/"), Some(testAccountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
       }}
+    }
+
+    "reject track request for json values that flatten to more than 250 primitive values" in {
+      track(JSON, Some(testAPIKey), testPath, Some(testAccountId), sync = true) { genObject(251).sample.get: JValue } must whenDelivered {
+        beLike {
+          case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), _) =>
+            msg \ "total" must_== JNum(1)
+            msg \ "ingested" must_== JNum(0)
+            msg \ "failed" must_== JNum(1)
+            msg \ "skipped" must_== JNum(0)
+        }
+      }
     }
     "cap errors at 100" in {
       val data = chunk(List.fill(500)("!@#$") mkString "\n")
