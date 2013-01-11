@@ -284,7 +284,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     "in cross" >> {
       "perform a simple cartesian" in testSimpleCross
       
-      "split a cross that would exceed slice boundaries" in {
+      "split a cross that would exceed maxSliceSize boundaries" in {
         val sample: List[JValue] = List(
           JObject(
             JField("key", JArray(JNum(-1L) :: JNum(0L) :: Nil)) ::
@@ -302,6 +302,14 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
           JObject(
             JField("key", JArray(JNum(-3918416808128018609l) :: JNum(-1L) :: Nil)) ::
             JField("value", JNum(-1.0)) :: Nil
+          ),
+          JObject(
+            JField("key", JArray(JNum(-3918416898128018609l) :: JNum(-2L) :: Nil)) ::
+            JField("value", JNum(-1.0)) :: Nil
+          ),
+          JObject(
+            JField("key", JArray(JNum(-3918426808128018609l) :: JNum(-3L) :: Nil)) ::
+            JField("value", JNum(-1.0)) :: Nil
           )
         )
         
@@ -309,7 +317,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
         val dataset2 = fromJson(sample.toStream, Some(3))
         
         dataset1.cross(dataset1)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight))).slices.uncons.copoint must beLike {
-          case Some((head, _)) => head.size must beLessThanOrEqualTo(3)
+          case Some((head, _)) => head.size must beLessThanOrEqualTo(yggConfig.maxSliceSize)
         }
       }
       
