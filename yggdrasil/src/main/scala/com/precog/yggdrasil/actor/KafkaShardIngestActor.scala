@@ -107,6 +107,10 @@ case class FilesystemIngestFailureLog(failureLog: Map[EventId, FilesystemIngestF
 object FilesystemIngestFailureLog {
   val FilePrefix = "ingest_failure_log-"
   def apply(persistDir: File, initialCheckpoint: YggCheckpoint): FilesystemIngestFailureLog = {
+    if (!persistDir.isDirectory) {
+      throw new IllegalArgumentException(persistDir + " is not a directory usable for failure logs!")
+    }
+
     def readAll(reader: BufferedReader, into: Map[EventId, LogRecord]): Map[EventId, LogRecord] = {
       val line = reader.readLine()
       if (line == null) into else {
