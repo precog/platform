@@ -119,10 +119,17 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       logger.trace(msg.toString)
       sender ! storage.findSelectors(path)
 
+      // Locate just the ProjectionDescriptors that are children of the given path and match the selector
     case msg @ FindDescriptors(path, selector) => 
       logger.trace(msg.toString)
-      val result = findDescriptors(path, selector).unsafePerformIO
-      logger.trace("Found descriptors: " + result)
+      val result: Set[ProjectionDescriptor] = findDescriptors(path, selector)
+      //logger.trace("Found descriptors: " + result)
+      sender ! result
+
+    case msg @ FindProjections(path, selector) => 
+      logger.trace(msg.toString)
+      val result: Map[ProjectionDescriptor, ColumnMetadata] = fullDataFor(findDescriptors(path, selector)).unsafePerformIO
+      //logger.trace("Found descriptors: " + result)
       sender ! result
 
     case msg @ FindPathMetadata(path, selector) => 
@@ -170,12 +177,12 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
   def status: JValue = JObject(JField("Metadata", JObject(JField("state", JString("Ice cream!")) :: Nil)) :: Nil) // TODO: no, really...
 
-  def findDescriptors(path: Path, selector: CPath): IO[Map[ProjectionDescriptor, ColumnMetadata]] = {
+  def findDescriptors(path: Path, selector: CPath): Set[ProjectionDescriptor] = {
     @inline def matches(path: Path, selector: CPath) = {
       (col: ColumnDescriptor) => col.path == path && (col.selector.nodes startsWith selector.nodes)
     }
 
-    fullDataFor(storage.findDescriptors(_.columns.exists(matches(path, selector))))
+    storage.findDescriptors(_.columns.exists(matches(path, selector)))
   } 
 
   def ensureMetadataCached(descriptor: ProjectionDescriptor): IO[PrecogUnit] = {
@@ -257,6 +264,7 @@ case class ExpectedEventActions(eventId: EventId, count: Int) extends ShardMetad
 case class FindChildren(path: Path) extends ShardMetadataAction
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: CPath) extends ShardMetadataAction
+case class FindProjections(path: Path, selector: CPath) extends ShardMetadataAction
 case class FindPathMetadata(path: Path, selector: CPath) extends ShardMetadataAction
 case class FindDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean) extends ShardMetadataAction
 case class FindDescriptorArchive(desc: ProjectionDescriptor) extends ShardMetadataAction

@@ -126,13 +126,13 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
 
             Future.sequence {
               archivePaths map { path =>
-                (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]]
+                (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Set[ProjectionDescriptor]]
               }
             }.onSuccess {
-              case descMaps : Seq[Map[ProjectionDescriptor, ColumnMetadata]] => ()
+              case descMaps : Seq[Set[ProjectionDescriptor]] => ()
                 val projectionMap = (for {
                   descMap <- descMaps
-                  desc    <- descMap.keys
+                  desc    <- descMap
                   column  <- desc.columns
                 } yield (column.path, desc)).groupBy(_._1).mapValues(_.map(_._2))
               
