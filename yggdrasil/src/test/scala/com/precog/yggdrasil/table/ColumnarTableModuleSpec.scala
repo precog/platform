@@ -455,6 +455,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
     "in canonicalize" >> {
       "return the correct slice sizes using scalacheck" in checkCanonicalize
+      "return the slice size in correct bound using scalacheck with range" in checkBoundedCanonicalize
       "return the correct slice sizes in a trivial case" in testCanonicalize
       "return the correct slice sizes given length zero" in testCanonicalizeZero
       "return the correct slice sizes along slice boundaries" in testCanonicalizeBoundary

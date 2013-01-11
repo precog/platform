@@ -616,56 +616,59 @@ trait ColumnarTableModule[M[+_]]
       Table(slices2, size)
     }
 
-    case class SlicesInfo(previousSlice: Option[Slice], stream: StreamT[M, Slice], acc: Vector[Slice], done: Boolean = false)
-
     /**
      * Returns a table where each slice (except maybe the last) has slice size `length`.
-     * Also removes slices of size zero.
+     * Also removes slices of size zero. If an optional `maxLength0` size is provided,
+     * then the slices need only land in the range between `length` and `maxLength0`.
+     * For slices being loaded from ingest, it is often the case that we are missing a
+     * few rows at the end, so we shouldn't be too strict.
      */
-    def canonicalize(length: Int): Table = {
-      def makeNewInfo(toConcat: Vector[Slice], stream: StreamT[M, Slice], acc: Vector[Slice], taken: Int): M[SlicesInfo] = {
+    def canonicalize(length: Int, maxLength0: Option[Int] = None): Table = {
+      val minLength = length
+      val maxLength = maxLength0 getOrElse length
+
+      require(maxLength > 0 && minLength >= 0 && maxLength >= minLength, "length bounds must be positive and ordered")
+
+      def concat(slices: List[Slice]): Slice = slices match {
+        case Nil => Slice(Map.empty, 0)
+        case slice :: Nil => slice
+        case slices => Slice.concat(slices.reverse)
+      }
+
+      def step(sliceSize: Int, acc: List[Slice], stream: StreamT[M, Slice]): M[StreamT.Step[Slice, StreamT[M, Slice]]] = {
         stream.uncons flatMap {
           case Some((head, tail)) =>
-            if (length - taken <= head.size) {
-              val sameSlice = toConcat :+ head.take(length - taken)
-              val concatted = Slice.concat(sameSlice)
-              inner(M.point(SlicesInfo(Some(head.drop(length - taken)), tail, acc :+ concatted)))
+            if (head.size == 0) {
+              // Skip empty slices.
+              step(sliceSize, acc, tail)
+
+            } else if (sliceSize + head.size >= minLength) {
+              // We emit a slice, but the last slice added may fall on a stream boundary.
+              val splitAt = math.min(head.size, maxLength - sliceSize)
+              if (splitAt < head.size) {
+                val (prefix, suffix) = head.split(splitAt)
+                val slice = concat(prefix :: acc)
+                M.point(StreamT.Yield(slice, StreamT(step(0, Nil, suffix :: tail))))
+              } else {
+                val slice = concat(head :: acc)
+                M.point(StreamT.Yield(slice, StreamT(step(0, Nil, tail))))
+              }
+
             } else {
-              makeNewInfo(toConcat :+ head, tail, acc, taken + head.size)
+              // Just keep swimming (aka accumulating).
+              step(sliceSize + head.size, head :: acc, tail)
             }
+
           case None =>
-            val newSlices = if (toConcat.isEmpty) acc else acc :+ Slice.concat(toConcat)
-            M.point(SlicesInfo(None, stream, newSlices, true))
-        }
-      }
-
-      def inner(slicesInfo0: M[SlicesInfo]): M[SlicesInfo] = {
-        slicesInfo0 flatMap { slicesInfo =>
-          if (slicesInfo.done) {
-            slicesInfo0
-          } else {
-            slicesInfo.previousSlice match {
-              case Some(slice) =>
-                val info = {
-                  if (length <= slice.size) {
-                    M.point(SlicesInfo(Some(slice.drop(length)), slicesInfo.stream, slicesInfo.acc :+ slice.take(length)))
-                  } else {
-                    makeNewInfo(Vector(slice), slicesInfo.stream, slicesInfo.acc, slice.size)
-                  }
-                }
-                inner(info)
-              case None =>
-                makeNewInfo(Vector.empty[Slice], slicesInfo.stream, slicesInfo.acc, 0)
+            if (sliceSize > 0) {
+              M.point(StreamT.Yield(concat(acc), StreamT.empty[M, Slice]))
+            } else {
+              M.point(StreamT.Done)
             }
-          }
         }
       }
 
-      val result =
-        if (length <= 0) M.point(SlicesInfo(None, StreamT.empty[M, Slice], Vector.empty[Slice]))
-        else inner(M.point(SlicesInfo(None, slices, Vector.empty[Slice])))
-
-      Table(StreamT.fromStream(result map { case slicesInfo => slicesInfo.acc.toStream }), size)
+      Table(StreamT(step(0, Nil, slices)), size)
     }
 
     /**
