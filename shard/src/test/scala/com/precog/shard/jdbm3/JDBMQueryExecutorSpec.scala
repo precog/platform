@@ -54,6 +54,7 @@ trait TestJDBMQueryExecutor extends JDBMQueryExecutor
   val yggConfig = new BaseJDBMQueryExecutorConfig with StandaloneShardSystemConfig {
     val config = Configuration(Map.empty[String, String])
     val maxSliceSize = 10000
+    val smallSliceSize = 8
     val idSource = new FreshAtomicIdSource
   }
 

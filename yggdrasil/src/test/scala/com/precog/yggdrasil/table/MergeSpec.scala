@@ -316,6 +316,7 @@ object MergeSpec extends MergeSpec[Free.Trampoline] {
 
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
+    val smallSliceSize = 3
     
     val idSource = new FreshAtomicIdSource
   }

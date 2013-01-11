@@ -89,6 +89,7 @@ trait JDBMQueryExecutorComponent {
 
       val clock = blueeyes.util.Clock.System
       val maxSliceSize = config[Int]("jdbm.max_slice_size", 10000)
+      val smallSliceSize = config[Int]("jdbm.small_slice_size", 8)
 
       //TODO: Get a producer ID
       val idSource = new FreshAtomicIdSource

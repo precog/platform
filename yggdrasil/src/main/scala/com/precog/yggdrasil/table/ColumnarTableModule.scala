@@ -83,6 +83,10 @@ trait ColumnarTableModuleConfig {
 
   // This is a slice size that we'd like our slices to be at least as large as.
   def minIdealSliceSize: Int = maxSliceSize / 4
+
+  // This is what we consider a "small" slice. This may affect points where
+  // we take proactive measures to prevent problems caused by small slices.
+  def smallSliceSize: Int
   
   def maxSaneCrossSize: Long = 2400000000L    // 2.4 billion
 }
@@ -632,10 +636,17 @@ trait ColumnarTableModule[M[+_]]
 
       require(maxLength > 0 && minLength >= 0 && maxLength >= minLength, "length bounds must be positive and ordered")
 
-      def concat(slices: List[Slice]): Slice = slices match {
+
+      def concat(rslices: List[Slice]): Slice = rslices.reverse match {
         case Nil => Slice(Map.empty, 0)
         case slice :: Nil => slice
-        case slices => Slice.concat(slices.reverse)
+        case slices =>
+          val slice = Slice.concat(slices)
+          if (slices.size > (slice.size / yggConfig.smallSliceSize)) {
+            slice.materialized // Deal w/ lots of small slices by materializing them.
+          } else {
+            slice
+          }
       }
 
       def step(sliceSize: Int, acc: List[Slice], stream: StreamT[M, Slice]): M[StreamT.Step[Slice, StreamT[M, Slice]]] = {
