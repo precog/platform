@@ -77,11 +77,12 @@ function finished {
     if [ -z "$DONTCLEAN" ]; then
         echo "Cleaning"
         rm -rf $WORKDIR
-        rm results.json 2>/dev/null
+        rm -f results.json 2>/dev/null
     fi
 }
 
 trap "finished; exit 1" TERM INT
+trap "finished" EXIT
 
 while [ ! -f $WORKDIR/ports.txt ] > /dev/null; do
     sleep 1
@@ -137,14 +138,22 @@ for f in $@; do
 
     [ -n "$DEBUG" ] && echo $INGEST_RESULT
 
+    TRIES_LEFT=15
+
     COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
-    while [ -z "$COUNT_RESULT" ] || [ "$COUNT_RESULT" -lt "$COUNT" ]; do
-        [ -n "$DEBUG" ] && echo "Count result for $TABLE = $COUNT_RESULT / $COUNT"
+    while [[ $TRIES_LEFT != 0 && ( -z "$COUNT_RESULT" || ${COUNT_RESULT:-0} -lt $COUNT ) ]] ; do
+        [ -n "$DEBUG" ] && echo "Count result for $TABLE = ${COUNT_RESULT:-0} / $COUNT on try $TRIES_LEFT"
         sleep 2
         COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
+        TRIES_LEFT=$(( $TRIES_LEFT - 1 ))
     done
 
-    [ -n "$DEBUG" ] && echo "Good count for $TABLE"
+    [ "$TRIES_LEFT" != "0" ] || {
+        echo "Exceeded maximum ingest count attempts for $TABLE. Failure!"
+        exit 1
+    }
+
+    [ -n "$DEBUG" ] && echo "Good count for $TABLE: $COUNT_RESULT"
 
     echo ""
 done
@@ -172,6 +181,8 @@ else
         fi
     done
 
+    [ "$EXIT_CODE" != "0" ] && echo "Queries failed!" || echo "Queries succeeded"
+
     # Test archive to make sure it works by actually removing all of our ingested data
     echo "Deleting ingested data"
     for TABLE in $ALLTABLES; do
@@ -182,7 +193,7 @@ else
     done
 
     # Give the shard some time to actually process the archives
-    TRIES=10
+    TRIES=18
     while [ "$TRIES" -gt "0" ] && find $WORKDIR/shard-data/data -name projection_descriptor.json > /dev/null ; do
         [ -n "$DEBUG" ] && echo "Archived data still found, sleeping"
         TRIES=$(( $TRIES - 1 ))
@@ -192,9 +203,9 @@ else
     if [ $(find $WORKDIR/shard-data/data -name projection_descriptor.json | wc -l) -gt "0" ]; then
         echo "Archive of datasets failed. Projections still found in data directory!" 1>&2
         EXIT_CODE=1
+    else
+        echo "Archive completed"
     fi
-
 fi
 
-finished
 exit $EXIT_CODE
