@@ -2,7 +2,7 @@ package com.precog.yggdrasil
 package actor
 
 import com.precog.accounts.BasicAccountManager
-import com.precog.common.{ Archive, ArchiveMessage, CheckpointCoordination, IngestMessage, YggCheckpoint }
+import com.precog.common.{ Archive, ArchiveMessage, CheckpointCoordination, IngestMessage, Path, YggCheckpoint }
 import com.precog.common.json._
 import com.precog.util.FilesystemFileOps
 import com.precog.yggdrasil.metadata.{ ColumnMetadata, FileMetadataStorage, MetadataStorage }
@@ -56,6 +56,10 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
     private[this] var projectionsActor: ActorRef        = _
     private[this] var metadataSync: Option[Cancellable] = None
 
+    private[this] val metadataActorSystem = ActorSystem("Metadata")
+    private[this] val projectionActorSystem = ActorSystem("Projections")
+    private[this] val ingestActorSystem = ActorSystem("Ingest")
+
     private def loadCheckpoint() : Option[YggCheckpoint] = 
       if (yggConfig.ingestEnabled) {
         checkpointCoordination.loadYggCheckpoint(yggConfig.shardId) match {
@@ -74,10 +78,10 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
       val initialCheckpoint = loadCheckpoint()
 
       logger.info("Initializing MetadataActor with storage = " + storage)
-      metadataActor = context.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint)), "metadata")
+      metadataActor = metadataActorSystem.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint)), "metadata")
 
       logger.debug("Initializing ProjectionsActor")
-      projectionsActor = context.actorOf(Props(new ProjectionsActor(yggConfig.maxOpenProjections)), "projections")
+      projectionsActor = projectionActorSystem.actorOf(Props(new ProjectionsActor(yggConfig.maxOpenProjections)), "projections")
 
       val ingestActorInit: Option[() => Actor] = initialCheckpoint flatMap {
         checkpoint: YggCheckpoint => initIngestActor(checkpoint, metadataActor, accountManager)
@@ -86,16 +90,16 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
       ingestSystem     = { 
         logger.debug("Initializing ingest system")
         // Ingest implies a metadata sync
-        metadataSync = Some(context.system.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata))
+        metadataSync = Some(metadataActorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata))
 
         val routingTable = new SingleColumnProjectionRoutingTable
 
-        context.actorOf(Props(new IngestSupervisor(ingestActorInit,
-                                                   yggConfig.batchStoreDelay, context.system.scheduler, yggConfig.batchShutdownCheckInterval) {
+        ingestActorSystem.actorOf(Props(new IngestSupervisor(ingestActorInit,
+                                                             yggConfig.batchStoreDelay, ingestActorSystem.scheduler, yggConfig.batchShutdownCheckInterval) {
           def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
             logger.debug("Beginning processing of %d messages".format(messages.size))
             implicit val to = yggConfig.metadataTimeout
-            implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
+            implicit val execContext = ExecutionContext.defaultExecutionContext(ingestActorSystem)
             
             val archivePaths = messages.collect { case ArchiveMessage(_, Archive(path, _)) => path } 
 
@@ -107,15 +111,17 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
 
             Future.sequence {
               archivePaths map { path =>
-                (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]]
+                (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Set[ProjectionDescriptor]]
               }
             }.onSuccess {
-              case descMaps : Seq[Map[ProjectionDescriptor, ColumnMetadata]] => ()
-                val projectionMap = (for {
+              case descMaps : Seq[Set[ProjectionDescriptor]] => 
+                val projectionMap: Map[Path, Seq[ProjectionDescriptor]] = (for {
                   descMap <- descMaps
-                  desc    <- descMap.keys
+                  desc    <- descMap
                   column  <- desc.columns
                 } yield (column.path, desc)).groupBy(_._1).mapValues(_.map(_._2))
+
+                projectionMap.foreach { case (p,d) => logger.debug("Archiving %d projections on path %s".format(d.size, p)) }
               
                 val updates = routingTable.batchMessages(messages, projectionMap)
 
@@ -130,22 +136,40 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
 
     def receive = {
       // Route subordinate messages
-      case pMsg: ShardProjectionAction => projectionsActor.tell(pMsg, sender)
-      case mMsg: ShardMetadataAction   => metadataActor.tell(mMsg, sender)
-      case iMsg: ShardIngestAction     => ingestSystem.tell(iMsg, sender)
+      case pMsg: ShardProjectionAction => 
+        logger.trace("Forwarding message " + pMsg + " to projectionsActor")
+        projectionsActor.tell(pMsg, sender)
+        logger.trace("Forwarding complete: " + pMsg)
 
-      case Status => {
+      case mMsg: ShardMetadataAction   => 
+        logger.trace("Forwarding message " + mMsg + " to metadataActor")
+        metadataActor.tell(mMsg, sender)
+        logger.trace("Forwarding complete: " + mMsg)
+
+      case iMsg: ShardIngestAction     => 
+        logger.trace("Forwarding message " + iMsg + " to ingestSystem")
+        ingestSystem.tell(iMsg, sender)
+        logger.trace("Forwarding complete: " + iMsg)
+
+      case Status => 
+        logger.trace("Processing status request")
         implicit val to = Timeout(yggConfig.statusTimeout)
         implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
-        
-        sender ! (for (statusResponses <- Future.sequence { actorsWithStatus map { actor => (actor ? Status).mapTo[JValue] } }) yield JArray(statusResponses))
-      }
+        (for (statusResponses <- Future.sequence { actorsWithStatus map { actor => (actor ? Status).mapTo[JValue] } }) yield JArray(statusResponses)) onSuccess {
+          case status => 
+            sender ! status
+        }
+        logger.trace("Status request complete")
 
-      case ShutdownSystem => {
+      case ShutdownSystem => 
+        logger.info("Initiating shutdown")
         onShutdown()
         sender ! ShutdownComplete
         self ! PoisonPill
-      }
+        logger.info("Shutdown complete")
+
+      case bad =>
+        logger.error("Unknown message received: " + bad)
     }
 
     protected def actorsWithStatus = ingestSystem :: metadataActor :: projectionsActor :: Nil
