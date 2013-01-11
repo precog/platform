@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package actor
 
 import com.precog.accounts.BasicAccountManager
-import com.precog.common.{ Archive, ArchiveMessage, CheckpointCoordination, IngestMessage, YggCheckpoint }
+import com.precog.common.{ Archive, ArchiveMessage, CheckpointCoordination, IngestMessage, Path, YggCheckpoint }
 import com.precog.common.json._
 import com.precog.util.FilesystemFileOps
 import com.precog.yggdrasil.metadata.{ ColumnMetadata, FileMetadataStorage, MetadataStorage }
@@ -129,12 +129,14 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
                 (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Set[ProjectionDescriptor]]
               }
             }.onSuccess {
-              case descMaps : Seq[Set[ProjectionDescriptor]] => ()
-                val projectionMap = (for {
+              case descMaps : Seq[Set[ProjectionDescriptor]] => 
+                val projectionMap: Map[Path, Seq[ProjectionDescriptor]] = (for {
                   descMap <- descMaps
                   desc    <- descMap
                   column  <- desc.columns
                 } yield (column.path, desc)).groupBy(_._1).mapValues(_.map(_._2))
+
+                projectionMap.foreach { case (p,d) => logger.debug("Archiving %d projections on path %s".format(d.size, p)) }
               
                 val updates = routingTable.batchMessages(messages, projectionMap)
 
