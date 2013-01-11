@@ -1915,6 +1915,19 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       evalE(input) mustEqual(Set((Vector(), SString("123"))))
     }
+
+    "correctly evaluate tautology on a filtered set" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | 
+        | medals' := medals where medals.Country = "India"
+        | medals'.Total = medals'.Total
+        | """.stripMargin
+        
+      val results = eval(input)
+      results must contain(SBoolean(true))
+      results must not(contain(SBoolean(false)))
+    }
   }
 }
 
