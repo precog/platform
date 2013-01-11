@@ -112,7 +112,7 @@ trait ShardService extends
           jsonp[ByteChunk] {
             {
               apiKey(state.apiKeyFinder) {
-                dataPath("analytics/fs") {
+                dataPath("/analytics/fs") {
                   query {
                     get(new QueryServiceHandler[ByteChunk](state.queryExecutor)) ~
                     // Handle OPTIONS requests internally to simplify the standalone service
@@ -123,7 +123,7 @@ trait ShardService extends
                     }
                   }
                 } ~
-                dataPath("meta/fs") {
+                dataPath("/meta/fs") {
                   get(new BrowseServiceHandler[ByteChunk](state.queryExecutor, state.apiKeyFinder)) ~
                   // Handle OPTIONS requests internally to simplify the standalone service
                   options {

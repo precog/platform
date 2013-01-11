@@ -34,8 +34,6 @@ import ByteChunk._
 import org.streum.configrity.Configuration
 import scalaz._
 
-case class SecurityServiceState(apiKeyManagement: APIKeyManagement, stoppable: Stoppable)
-
 trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinators {
   import DefaultBijections._
 
@@ -54,35 +52,37 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
           import context._
           val securityConfig = config.detach("security")
           val (apiKeyManager, stoppable) = APIKeyManager(securityConfig)
-          M.point(SecurityServiceState(new APIKeyManagement(apiKeyManager), stoppable))
+          M.point((new SecurityServiceHandlers(apiKeyManager), stoppable))
         } ->
-        request { (state: SecurityServiceState) =>
+        request { case (handlers, stoppable) =>
+          import handlers._
           jsonp[ByteChunk] {
             transcode {
               apiKey(state.apiKeyManagement.apiKeyManager) {
                 path("/apikeys/") {
-                  get(new GetAPIKeysHandler(state.apiKeyManagement)) ~
-                  post(new CreateAPIKeyHandler(state.apiKeyManagement)) ~
+                  get(ReadAPIKeysHandler) ~
+                  post(CreateAPIKeyHandler) ~
                   path("'apikey") {
-                    get(new GetAPIKeyDetailsHandler(state.apiKeyManagement)) ~
-                    delete(new DeleteAPIKeyHandler(state.apiKeyManagement)) ~
+                    get(ReadAPIKeyDetailsHandler) ~
+                    delete(DeleteAPIKeyHandler) ~
                     path("/grants/") {
-                      get(new GetAPIKeyGrantsHandler(state.apiKeyManagement)) ~
-                      post(new AddAPIKeyGrantHandler(state.apiKeyManagement)) ~
+                      get(ReadAPIKeyGrantsHandler) ~
+                      post(CreateAPIKeyGrantHandler) ~
                       path("'grantId") {
-                        delete(new RemoveAPIKeyGrantHandler(state.apiKeyManagement))
+                        delete(DeleteAPIKeyGrantHandler)
                       }
-                    }
+                    } ~
                   }
                 } ~
                 path("/grants/") {
-                  post(new CreateGrantHandler(state.apiKeyManagement)) ~
+                  get(ReadGrantsHandler) ~
+                  post(CreateGrantHandler) ~
                   path("'grantId") {
-                    get(new GetGrantDetailsHandler(state.apiKeyManagement)) ~
-                    delete(new DeleteGrantHandler(state.apiKeyManagement)) ~
+                    get(ReadGrantDetailsHandler) ~
+                    delete(DeleteGrantHandler) ~
                     path("/children/") {
-                      get(new GetGrantChildrenHandler(state.apiKeyManagement)) ~
-                      post(new AddGrantChildHandler(state.apiKeyManagement))
+                      get(ReadGrantChildrenHandler) ~
+                      post(CreateGrantChildHandler)
                     }
                   }
                 }
@@ -90,8 +90,8 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
             }
           }
         } ->
-        stop { state => 
-          state.stoppable
+        stop { case (_, stoppable) =>
+          stoppable
         }
       }
     }

@@ -20,16 +20,16 @@
 package com.precog.common
 package security
 
+import service.v1
 import com.precog.common.cache.Cache
+
+import akka.util.Duration
 
 import java.util.concurrent.TimeUnit._
 import org.joda.time.DateTime
 
-import akka.util.Duration
-
-import blueeyes._
-
 import scalaz._
+import scalaz.syntax.id._
 import scalaz.syntax.monad._
 
 case class CachingAPIKeyFinderSettings(
@@ -46,21 +46,16 @@ object CachingAPIKeyFinderSettings {
 
 class CachingAPIKeyFinder[M[+_]](manager: APIKeyFinder[M], settings: CachingAPIKeyFinderSettings = CachingAPIKeyFinderSettings.Default)(implicit val M: Monad[M]) extends APIKeyFinder[M] {
 
-  private val apiKeyCache = Cache.simple[APIKey, APIKeyRecord](settings.apiKeyCacheSettings: _*)
-  private val grantCache = Cache.simple[GrantId, Grant](settings.grantCacheSettings: _*)
+  private val apiKeyCache = Cache.simple[APIKey, v1.APIKeyDetails](settings.apiKeyCacheSettings: _*)
 
   def findAPIKey(tid: APIKey) = apiKeyCache.get(tid) match {
-    case None => manager.findAPIKey(tid).map { _.map { _ ->- add } }
+    case None => manager.findAPIKey(tid).map { _.map { _ tap add } }
     case t    => M.point(t)
   }
-  def findGrant(gid: GrantId) = grantCache.get(gid) match {
-    case None        => manager.findGrant(gid).map { _.map { _ ->- add } }
-    case s @ Some(_) => M.point(s)
-  }
 
-  protected def add(r: APIKeyRecord) = apiKeyCache.put(r.apiKey, r)
-  protected def add(g: Grant) = grantCache.put(g.grantId, g)
+  protected def add(r: v1.APIKeyDetails) = apiKeyCache.put(r.apiKey, r)
 
-  protected def remove(r: APIKeyRecord) = apiKeyCache.remove(r.apiKey)
-  protected def remove(g: Grant) = grantCache.remove(g.grantId)
+  protected def remove(r: v1.APIKeyDetails) = apiKeyCache.remove(r.apiKey)
+
+  def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): M[Boolean] = manager.hasCapability(apiKey, perms, at)
 }

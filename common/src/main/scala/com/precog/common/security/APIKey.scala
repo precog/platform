@@ -62,37 +62,4 @@ object APIKeyRecord {
     implicit val decomposer: Decomposer[APIKeyRecord] = decomposerV[APIKeyRecord](safeSchemaV1, None)
   }
 }
-
-
-case class WrappedAPIKey(apiKey: APIKey, name: Option[String], description: Option[String])
-
-object WrappedAPIKey {
-  implicit val wrappedAPIKeyIso = Iso.hlist(WrappedAPIKey.apply _, WrappedAPIKey.unapply _)
-  
-  val schema = "apiKey" :: "name" :: "description" :: HNil
-
-  implicit val decomposerV1: Decomposer[WrappedAPIKey]= decomposer[WrappedAPIKey](schema)
-  implicit val extractorV1: Extractor[WrappedAPIKey] = extractor[WrappedAPIKey](schema)
-}
-
-
-case class NewAPIKeyRequest(name: Option[String], description: Option[String], grants: Set[NewGrantRequest])
-
-object NewAPIKeyRequest {
-  implicit val newAPIKeyRequestIso = Iso.hlist(NewAPIKeyRequest.apply _, NewAPIKeyRequest.unapply _)
-  
-  val schemaV1 = "name" :: "description" :: "grants" :: HNil
-
-  val decomposerV1: Decomposer[NewAPIKeyRequest]= decomposerV[NewAPIKeyRequest](schemaV1, Some("1.0"))
-  val extractorV1: Extractor[NewAPIKeyRequest] = extractorV[NewAPIKeyRequest](schemaV1, Some("1.0"))
-
-  implicit val decomposer: Decomposer[NewAPIKeyRequest] = decomposerV1
-  implicit val dxtractor: Extractor[NewAPIKeyRequest] = extractorV1
-  
-  def newAccount(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None) = {
-    val grants = NewGrantRequest.newAccount(accountId, path, name.map(_+"-grant"), description.map(_+" standard account grant"), Set.empty[GrantId], None)
-    NewAPIKeyRequest(name, description, Set(grants))
-  }
-}
-
 // vim: set ts=4 sw=4 et:

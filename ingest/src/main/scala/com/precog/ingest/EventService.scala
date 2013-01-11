@@ -88,7 +88,7 @@ trait EventService extends BlueEyesServiceBuilder with EventServiceCombinators w
               produce[ByteChunk, JValue, ByteChunk](application / json) {
                 apiKey(state.accessControl) {
                   path("/(?<sync>a?sync)") {
-                    dataPath("fs") {
+                    dataPath("/fs") {
                       post(state.ingestHandler) ~ 
                       delete(state.archiveHandler)
                     }

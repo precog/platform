@@ -19,25 +19,29 @@
  */
 package com.precog.common
 package security 
+package service
 
-import blueeyes._
 import blueeyes.core.service._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
-import blueeyes.core.service.RestPathPattern._
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
-import blueeyes.json.serialization.DefaultSerialization._
-import blueeyes.util.Clock
 
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
 
-import org.joda.time.DateTime
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.syntax.std.option._
+
+trait APIKeyServiceCombinators extends HttpRequestHandlerCombinators {
+  implicit val jsonErrorTransform = (failure: HttpFailure, s: String) => HttpResponse(failure, content = Some(s.serialize))
+
+  def apiKey[A, B](apiKeyManager: APIKeyFinder[Future])(service: HttpService[A, APIKey => Future[B]])(implicit err: (HttpFailure, String) => B, M: Monad[Future]) = {
+    new APIKeyRequiredService[A, B](apiKeyManager, service, err, M)
+  }
+}
 
 class APIKeyRequiredService[A, B](keyFinder: APIKeyFinder[Future], val delegate: HttpService[A, APIKey => Future[B]], err: (HttpFailure, String) => B, M: Monad[Future]) 
 extends DelegatingService[A, Future[B], A, APIKey => Future[B]] with Logging {

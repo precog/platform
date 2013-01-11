@@ -144,26 +144,3 @@ object Grant extends Logging {
   }
 }
 
-case class NewGrantRequest(name: Option[String], description: Option[String], parentIds: Set[GrantId], permissions: Set[Permission], expirationDate: Option[DateTime]) {
-  def isExpired(at: Option[DateTime]) = (expirationDate, at) match {
-    case (None, _) => false
-    case (_, None) => true
-    case (Some(expiry), Some(ref)) => expiry.isBefore(ref) 
-  } 
-}
-
-object NewGrantRequest {
-  private implicit val reqPermDecomposer = Permission.decomposerV1Base
-  implicit val newGrantRequestIso = Iso.hlist(NewGrantRequest.apply _, NewGrantRequest.unapply _)
-  
-  val schemaV1 = "name" :: "description" :: ("parentIds" ||| Set.empty[GrantId]) :: "permissions" :: "expirationDate" :: HNil
-  
-  implicit val (decomposerV1, extractorV1) = serializationV[NewGrantRequest](schemaV1, None)
-
-  def newAccount(accountId: AccountId, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantId], expiration: Option[DateTime]): NewGrantRequest = {
-    // Path is "/" so that an account may read data it owns no matter what path it exists under. See AccessControlSpec, APIKeyManager.newAccountGrant
-    val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path("/"), Set(accountId)) : Permission)
-    val writePerms = Set(WritePermission, DeletePermission).map(_(path, Set()) : Permission)
-    NewGrantRequest(name, description, parentIds, readPerms ++ writePerms, expiration)
-  }
-}
