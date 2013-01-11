@@ -202,7 +202,7 @@ abstract class KafkaShardIngestActor(shardId: String,
         //self ! PoisonPill
       }
 
-    case GetMessages(requestor) => 
+    case GetMessages(requestor) => try {
       logger.trace("Responding to GetMessages starting from checkpoint: " + lastCheckpoint)
       if (ingestEnabled) {
         if (ingestCache.size < maxCacheSize) {
@@ -235,6 +235,11 @@ abstract class KafkaShardIngestActor(shardId: String,
       } else {
         logger.warn("Ingest disabled, skipping Getmessages request")
       }
+    } catch {
+      case t: Throwable => 
+        logger.error("Exception caught during ingest poll", t)
+        requestor ! IngestErrors(List("Exception during poll: " + t.getMessage))
+    }
   }
 
   /**
