@@ -113,7 +113,6 @@ object Schema {
     case (JObjectFixedT(fields), (CPath.Identity, CEmptyObject)) if fields.isEmpty => true
 
     case (JObjectFixedT(fields), (CPath(CPathField(head), tail @ _*), ctpe)) => {
-      val fieldHead = fields.get(head)
       fields.get(head).map(includes(_, CPath(tail: _*), ctpe)).getOrElse(false)
     }
 
@@ -159,6 +158,7 @@ object Schema {
       case (CPath(CPathField(_), _*), _) => true
       case _ => false
     }
+    case JObjectFixedT(fields) if fields.isEmpty => ctpes.contains(CPath.Identity, CEmptyObject)
     case JObjectFixedT(fields) => {
       val keys = fields.keySet
       keys.forall { key =>
@@ -174,6 +174,7 @@ object Schema {
       case (CPath(CPathIndex(_), _*), _) => true
       case _ => false
     }
+    case JArrayFixedT(elements) if elements.isEmpty => ctpes.contains(CPath.Identity, CEmptyArray)
     case JArrayFixedT(elements) => {
       val indices = elements.keySet
       indices.forall { i =>
