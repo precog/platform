@@ -17,10 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package auth
+package com.precog.auth
 
-import common.security._
+import com.precog.common.security._
+import com.precog.common.security.service._
 
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
@@ -41,9 +41,12 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
   implicit val timeout = akka.util.Timeout(120000) //for now
 
   implicit def executionContext: ExecutionContext
-  implicit val M: Monad[Future]
+  implicit def M: Monad[Future]
 
   def APIKeyManager(config: Configuration): (APIKeyManager[Future], Stoppable)
+  def clock: blueeyes.util.Clock
+
+  case class State(handlers: SecurityServiceHandlers, stoppable: Stoppable)
 
   val securityService = service("security", "1.0") {
     requestLogging(timeout) {
@@ -52,27 +55,27 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
           import context._
           val securityConfig = config.detach("security")
           val (apiKeyManager, stoppable) = APIKeyManager(securityConfig)
-          M.point((new SecurityServiceHandlers(apiKeyManager), stoppable))
+          M.point(State(new SecurityServiceHandlers(apiKeyManager, clock), stoppable))
         } ->
-        request { case (handlers, stoppable) =>
+        request { case State(handlers, stoppable) =>
           import handlers._
           jsonp[ByteChunk] {
             transcode {
-              apiKey(state.apiKeyManagement.apiKeyManager) {
+              path("/apikeys/'apikey") {
+                get(ReadAPIKeyDetailsHandler) ~
+                delete(DeleteAPIKeyHandler) ~
+                path("/grants/") {
+                  get(ReadAPIKeyGrantsHandler) ~
+                  post(CreateAPIKeyGrantHandler) ~
+                  path("'grantId") {
+                    delete(DeleteAPIKeyGrantHandler)
+                  }
+                } 
+              } ~ 
+              apiKey(handlers.apiKeyManager.apiKeyFinder) {
                 path("/apikeys/") {
                   get(ReadAPIKeysHandler) ~
-                  post(CreateAPIKeyHandler) ~
-                  path("'apikey") {
-                    get(ReadAPIKeyDetailsHandler) ~
-                    delete(DeleteAPIKeyHandler) ~
-                    path("/grants/") {
-                      get(ReadAPIKeyGrantsHandler) ~
-                      post(CreateAPIKeyGrantHandler) ~
-                      path("'grantId") {
-                        delete(DeleteAPIKeyGrantHandler)
-                      }
-                    } ~
-                  }
+                  post(CreateAPIKeyHandler) 
                 } ~
                 path("/grants/") {
                   get(ReadGrantsHandler) ~
@@ -90,7 +93,7 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
             }
           }
         } ->
-        stop { case (_, stoppable) =>
+        stop[State] { case State(_, stoppable) =>
           stoppable
         }
       }

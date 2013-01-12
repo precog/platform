@@ -36,5 +36,7 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging {
   implicit def M : Monad[M]
 
   def findAPIKey(apiKey: APIKey): M[Option[v1.APIKeyDetails]]
+
+  def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]]
 }
  

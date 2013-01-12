@@ -53,6 +53,10 @@ class CachingAPIKeyFinder[M[+_]](manager: APIKeyFinder[M], settings: CachingAPIK
     case t    => M.point(t)
   }
 
+  def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]] = {
+    sys.error("todo")
+  }
+
   protected def add(r: v1.APIKeyDetails) = apiKeyCache.put(r.apiKey, r)
 
   protected def remove(r: v1.APIKeyDetails) = apiKeyCache.remove(r.apiKey)

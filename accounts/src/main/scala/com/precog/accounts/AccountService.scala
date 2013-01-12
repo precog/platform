@@ -21,6 +21,7 @@ package com.precog.accounts
 
 import com.precog.util._
 import com.precog.common.accounts._
+import com.precog.common.security.service._
 
 import blueeyes._
 import blueeyes.bkka._

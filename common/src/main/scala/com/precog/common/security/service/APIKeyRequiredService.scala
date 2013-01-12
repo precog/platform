@@ -46,8 +46,9 @@ trait APIKeyServiceCombinators extends HttpRequestHandlerCombinators {
 class APIKeyRequiredService[A, B](keyFinder: APIKeyFinder[Future], val delegate: HttpService[A, APIKey => Future[B]], err: (HttpFailure, String) => B, M: Monad[Future]) 
 extends DelegatingService[A, Future[B], A, APIKey => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
-    request.parameters.get('apiKey).
-      toSuccess[NotServed](DispatchError(BadRequest, "An apiKey query parameter is required to access this URL")) flatMap { apiKey =>
+    request.parameters.get('apiKey).toSuccess[NotServed] {
+      DispatchError(BadRequest, "An apiKey query parameter is required to access this URL")
+    } flatMap { apiKey =>
       delegate.service(request) map { (f: APIKey => Future[B]) =>
         logger.trace("Locating API key: " + apiKey)
         keyFinder.findAPIKey(apiKey) flatMap {  

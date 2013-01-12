@@ -67,6 +67,10 @@ class WebAPIKeyFinder(protocol: String, host: String, port: Int, path: String)(i
     }
   }
 
+  def findAllAPIKeys(fromRoot: APIKey): Future[Set[v1.APIKeyDetails]] = {
+    sys.error("todo")
+  }
+
   def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): Future[Boolean] = {
     sys.error("todo")
   }
