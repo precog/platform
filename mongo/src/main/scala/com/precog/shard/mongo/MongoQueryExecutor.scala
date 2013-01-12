@@ -81,9 +81,6 @@ class MongoQueryExecutorConfig(val config: Configuration)
   val shardId = "standalone"
   val logPrefix = "mongo"
 
-  // Ingest for mongo is handled via mongo
-  override val ingestEnabled = false
-
   val idSource = new FreshAtomicIdSource
 
   def mongoServer: String = config[String]("mongo.server", "localhost:27017")
@@ -93,6 +90,8 @@ class MongoQueryExecutorConfig(val config: Configuration)
   def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
 
   val clock = blueeyes.util.Clock.System
+
+  val ingestConfig = None
 }
 
 trait MongoQueryExecutorComponent {

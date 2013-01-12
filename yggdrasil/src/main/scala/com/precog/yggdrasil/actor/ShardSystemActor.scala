@@ -36,18 +36,23 @@ import akka.pattern.gracefulStop
 import blueeyes.json._
 
 import com.weiglewilczek.slf4s.Logging
+import org.streum.configrity.converter.Extra._
 
 import scalaz.{Failure,Success}
+import scalaz.syntax.applicative._
 import scalaz.syntax.std.boolean._
+import scalaz.std.option._
 
 case object ShutdownSystem
 case object ShutdownComplete
 
 trait ShardConfig extends BaseConfig {
+  type IngestConfig
+
   def shardId: String
   def logPrefix: String
 
-  def ingestEnabled: Boolean = config[Boolean]("ingest_enabled", true)
+  def ingestConfig: Option[IngestConfig]  
 
   def statusTimeout: Long = config[Long]("actors.status.timeout", 30000)
   def metadataTimeout: Timeout = config[Long]("actors.metadata.timeout", 30) seconds
@@ -75,19 +80,16 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
     private[this] var projectionsActor: ActorRef        = _
     private[this] var metadataSync: Option[Cancellable] = None
 
-    private def loadCheckpoint() : Option[YggCheckpoint] = 
-      if (yggConfig.ingestEnabled) {
-        checkpointCoordination.loadYggCheckpoint(yggConfig.shardId) match {
-          case Some(Failure(errors)) =>
-            logger.error("Unable to load Kafka checkpoint: " + errors)
-            sys.error("Unable to load Kafka checkpoint: " + errors)
+    private def loadCheckpoint() : Option[YggCheckpoint] = yggConfig.ingestConfig flatMap { _ =>
+      checkpointCoordination.loadYggCheckpoint(yggConfig.shardId) match {
+        case Some(Failure(errors)) =>
+          logger.error("Unable to load Kafka checkpoint: " + errors)
+          sys.error("Unable to load Kafka checkpoint: " + errors)
 
-          case Some(Success(checkpoint)) => Some(checkpoint)
-          case None => None
-        }
-      } else {
-        None
+        case Some(Success(checkpoint)) => Some(checkpoint)
+        case None => None
       }
+    } 
 
     override def preStart() {
       val initialCheckpoint = loadCheckpoint()
@@ -98,11 +100,13 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
       logger.debug("Initializing ProjectionsActor")
       projectionsActor = context.actorOf(Props(new ProjectionsActor(yggConfig.maxOpenProjections)), "projections")
 
-      val ingestActorInit: Option[() => Actor] = initialCheckpoint flatMap {
-        checkpoint: YggCheckpoint => initIngestActor(checkpoint, metadataActor, accountManager)
-      }
+      val ingestActorInit: Option[() => Actor] = 
+        for {
+          checkpoint <- initialCheckpoint
+          init <-  initIngestActor(checkpoint, metadataActor, accountManager)
+        } yield init
  
-      ingestSystem     = { 
+      ingestSystem = { 
         logger.debug("Initializing ingest system")
         // Ingest implies a metadata sync
         metadataSync = Some(context.system.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata))

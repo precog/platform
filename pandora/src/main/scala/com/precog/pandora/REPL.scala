@@ -253,6 +253,7 @@ object Console extends App {
     val sortWorkDir = scratchDir
     val memoizationBufferSize = sortBufferSize
     val memoizationWorkDir = scratchDir
+    val ingestConfig = None
 
     val flatMapTimeout = controlTimeout
     val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)

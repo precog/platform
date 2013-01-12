@@ -81,14 +81,16 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
       
   lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
-  class YggConfig extends ParseEvalStackSpecConfig
+  abstract class YggConfig extends ParseEvalStackSpecConfig
       with StandaloneShardSystemConfig
       with IdSourceConfig
       with ColumnarTableModuleConfig
       with BlockStoreColumnarTableModuleConfig
       with JDBMProjectionModuleConfig
       
-  object yggConfig  extends YggConfig
+  object yggConfig extends YggConfig {
+    val ingestConfig = None
+  }
 
   override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
       

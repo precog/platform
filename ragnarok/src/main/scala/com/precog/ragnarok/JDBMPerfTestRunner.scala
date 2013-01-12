@@ -90,6 +90,7 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
     val commandLineConfig = Configuration.parse(_rootDir map ("precog.storage.root = " + _) getOrElse "")
     override val config = (Configuration parse {
       Option(System.getProperty("precog.storage.root")) map ("precog.storage.root = " + _) getOrElse "" }) ++ commandLineConfig
+    val ingestConfig = None
   }
 
   trait TableCompanion extends JDBMColumnarTableCompanion

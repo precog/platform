@@ -107,6 +107,8 @@ case class FilesystemIngestFailureLog(failureLog: Map[EventId, FilesystemIngestF
 object FilesystemIngestFailureLog {
   val FilePrefix = "ingest_failure_log-"
   def apply(persistDir: File, initialCheckpoint: YggCheckpoint): FilesystemIngestFailureLog = {
+    persistDir.mkdirs()
+    
     def readAll(reader: BufferedReader, into: Map[EventId, LogRecord]): Map[EventId, LogRecord] = {
       val line = reader.readLine()
       if (line == null) into else {
@@ -157,7 +159,6 @@ abstract class KafkaShardIngestActor(shardId: String,
                                      initialCheckpoint: YggCheckpoint,
                                      consumer: SimpleConsumer,
                                      topic: String,
-                                     ingestEnabled: Boolean,
                                      accountManager: BasicAccountManager[Future],
                                      ingestFailureLog: IngestFailureLog,
                                      fetchBufferSize: Int = 1024 * 1024,
@@ -223,36 +224,32 @@ abstract class KafkaShardIngestActor(shardId: String,
 
     case GetMessages(requestor) => try {
       logger.trace("Responding to GetMessages starting from checkpoint: " + lastCheckpoint)
-      if (ingestEnabled) {
-        if (ingestCache.size < maxCacheSize) {
-          readRemote(lastCheckpoint).foreach {
-            case Success((messages, checkpoint)) =>
-              if (messages.size > 0) {
-                logger.debug("Sending " + messages.size + " events to batch ingest handler.")
+      if (ingestCache.size < maxCacheSize) {
+        readRemote(lastCheckpoint).foreach {
+          case Success((messages, checkpoint)) =>
+            if (messages.size > 0) {
+              logger.debug("Sending " + messages.size + " events to batch ingest handler.")
 
-                // update the cache
-                lastCheckpoint = checkpoint
-                ingestCache += (checkpoint -> messages)
-  
-                // create a handler for the batch, then reply to the sender with the message set
-                // using that handler reference as the sender to which the ingest system will reply
-                val batchHandler = context.actorOf(Props(new BatchHandler(self, sender, checkpoint, ingestTimeout))) 
-                requestor.tell(IngestData(messages.map(_._2)), batchHandler)
-              } else {
-                logger.trace("No new data found after checkpoint: " + checkpoint)
-                requestor ! IngestData(Nil)
-              }
-  
-            case Failure(error)    => 
-              logger.error("An error occurred retrieving data from Kafka.", error)
-              requestor ! IngestErrors(List("An error occurred retrieving data from Kafka: " + error.getMessage))
-          }
-        } else {
-          logger.warn("Concurrent ingest window full (%d). Cannot start new ingest batch".format(ingestCache.size))
-          requestor ! IngestData(Nil)
+              // update the cache
+              lastCheckpoint = checkpoint
+              ingestCache += (checkpoint -> messages)
+
+              // create a handler for the batch, then reply to the sender with the message set
+              // using that handler reference as the sender to which the ingest system will reply
+              val batchHandler = context.actorOf(Props(new BatchHandler(self, sender, checkpoint, ingestTimeout))) 
+              requestor.tell(IngestData(messages.map(_._2)), batchHandler)
+            } else {
+              logger.trace("No new data found after checkpoint: " + checkpoint)
+              requestor ! IngestData(Nil)
+            }
+
+          case Failure(error)    => 
+            logger.error("An error occurred retrieving data from Kafka.", error)
+            requestor ! IngestErrors(List("An error occurred retrieving data from Kafka: " + error.getMessage))
         }
       } else {
-        logger.warn("Ingest disabled, skipping Getmessages request")
+        logger.warn("Concurrent ingest window full (%d). Cannot start new ingest batch".format(ingestCache.size))
+        requestor ! IngestData(Nil)
       }
     } catch {
       case t: Throwable => 
