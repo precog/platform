@@ -92,6 +92,7 @@ object SBTConsole {
       val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
       val maxEvalDuration = controlTimeout
       val clock = blueeyes.util.Clock.System
+      val ingestConfig = None
       
       val maxSliceSize = 10000
 
