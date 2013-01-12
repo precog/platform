@@ -153,9 +153,11 @@ trait MetadataStorage {
       oval ++ oidx ++ ofld
     }
 
-    val matching: Set[IO[ResolvedSelector]] = findDescriptors(_ => true) flatMap { descriptor => 
+    val matching: Set[IO[ResolvedSelector]] = findDescriptors {
+      descriptor => descriptor.columns.exists { _.isChildOf(path, selector) }
+    } flatMap { descriptor => 
       descriptor.columns.collect {
-        case ColumnDescriptor(cpath, csel, _, auth) if cpath == path && (csel.nodes startsWith selector.nodes) =>
+        case cd @ ColumnDescriptor(cpath, csel, _, auth) if cd.isChildOf(path, selector) =>
           columnMetadata(descriptor) map { cm => ResolvedSelector(csel, auth, descriptor, cm) }
       }
     }

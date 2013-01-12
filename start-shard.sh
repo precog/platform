@@ -198,7 +198,7 @@ MONGOBASE="$WORKDIR"/mongo
 MONGODATA="$WORKDIR"/mongodata
 
 rm -rf $ZKBASE $KFBASE
-mkdir -p $ZKBASE $KFBASE $ZKDATA $MONGOBASE $MONGODATA "$WORKDIR"/{configs,logs,shard-data/data,shard-data/archive,shard-data/scratch}
+mkdir -p $ZKBASE $KFBASE $ZKDATA $MONGOBASE $MONGODATA "$WORKDIR"/{configs,logs,shard-data/data,shard-data/archive,shard-data/scratch,shard-data/ingest_failures}
   
 echo "Running standalone shard under $WORKDIR"
 

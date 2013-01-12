@@ -191,7 +191,7 @@ class ActorStorageMetadata(actor: ActorRef, serviceTimeout0: Timeout)(implicit v
   }
 
   def findProjections(path: Path, selector: CPath) = 
-    (actor ? FindDescriptors(path, selector)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]] onFailure { 
+    (actor ? FindProjections(path, selector)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]] onFailure { 
       case e => logger.error("Error finding projections for " + (path, selector), e) 
     }
   

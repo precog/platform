@@ -121,10 +121,18 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       sender ! storage.findSelectors(path)
       logger.trace("Completed " + msg.toString)
 
+      // Locate just the ProjectionDescriptors that are children of the given path and match the selector
     case msg @ FindDescriptors(path, selector) => 
       logger.trace(msg.toString)
-      val result = runIO(findDescriptors(path, selector), "FindDescriptors")
+      val result: Set[ProjectionDescriptor] = findDescriptors(path, selector)
       logger.trace("Found descriptors: " + result)
+      sender ! result
+      logger.trace("Completed " + msg.toString)
+
+    case msg @ FindProjections(path, selector) => 
+      logger.trace(msg.toString)
+      val result: Map[ProjectionDescriptor, ColumnMetadata] = runIO(fullDataFor(findDescriptors(path, selector)), "FindProjections")
+      logger.trace("Found projections: " + result)
       sender ! result
       logger.trace("Completed " + msg.toString)
 
@@ -155,6 +163,9 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       logger.trace(msg.toString)
       sender ! kafkaOffset.map(YggCheckpoint(_, messageClock)) 
       logger.trace("Completed " + msg.toString)
+
+    case bad =>
+      logger.error("Unknown message: " + bad)
   }
 
   private def runIO[A](io: IO[A], msg: String): A = io.except({ case ex => logger.error(msg, ex); throw ex }).unsafePerformIO
@@ -184,12 +195,12 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
   def status: JValue = JObject(JField("Metadata", JObject(JField("state", JString("Ice cream!")) :: Nil)) :: Nil) // TODO: no, really...
 
-  def findDescriptors(path: Path, selector: CPath): IO[Map[ProjectionDescriptor, ColumnMetadata]] = {
+  def findDescriptors(path: Path, selector: CPath): Set[ProjectionDescriptor] = {
     @inline def matches(path: Path, selector: CPath) = {
       (col: ColumnDescriptor) => col.path == path && (col.selector.nodes startsWith selector.nodes)
     }
 
-    fullDataFor(storage.findDescriptors(_.columns.exists(matches(path, selector))))
+    storage.findDescriptors(_.columns.exists(matches(path, selector)))
   } 
 
   def ensureMetadataCached(descriptor: ProjectionDescriptor): IO[PrecogUnit] = {
@@ -271,6 +282,7 @@ case class ExpectedEventActions(eventId: EventId, count: Int) extends ShardMetad
 case class FindChildren(path: Path) extends ShardMetadataAction
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: CPath) extends ShardMetadataAction
+case class FindProjections(path: Path, selector: CPath) extends ShardMetadataAction
 case class FindPathMetadata(path: Path, selector: CPath) extends ShardMetadataAction
 case class InitDescriptorRoot(desc: ProjectionDescriptor) extends ShardMetadataAction
 case class FindDescriptorRoot(desc: ProjectionDescriptor) extends ShardMetadataAction
