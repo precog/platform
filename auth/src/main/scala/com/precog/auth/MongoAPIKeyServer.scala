@@ -35,4 +35,5 @@ object MongoAPIKeyServer extends BlueEyesServer with SecurityService with AkkaDe
   implicit val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
   def APIKeyManager(config: Configuration): (APIKeyManager[Future], Stoppable) = MongoAPIKeyManager(config)
+  val clock = blueeyes.util.Clock.System
 }

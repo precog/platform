@@ -28,14 +28,18 @@ import akka.dispatch.ExecutionContext
 import blueeyes.BlueEyesServiceBuilder
 import blueeyes.bkka.Stoppable
 import blueeyes.core.data.{DefaultBijections, ByteChunk}
+import blueeyes.core.http._
+import blueeyes.json._
 import blueeyes.health.metrics.eternity
 import ByteChunk._
+import DefaultBijections._
 
 import org.streum.configrity.Configuration
 import scalaz._
 
 trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinators {
-  import DefaultBijections._
+  case class State(handlers: SecurityServiceHandlers, stoppable: Stoppable)
+
 
   val insertTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now
@@ -46,9 +50,7 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
   def APIKeyManager(config: Configuration): (APIKeyManager[Future], Stoppable)
   def clock: blueeyes.util.Clock
 
-  case class State(handlers: SecurityServiceHandlers, stoppable: Stoppable)
-
-  val securityService = service("security", "1.0") {
+  def securityService = service("security", "1.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
@@ -72,6 +74,12 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
                   }
                 } 
               } ~ 
+              path("/grants/'grantId") {
+                get(ReadGrantDetailsHandler) ~
+                path("/children/") {
+                  get(ReadGrantChildrenHandler) 
+                }
+              } ~
               apiKey(handlers.apiKeyManager.apiKeyFinder) {
                 path("/apikeys/") {
                   get(ReadAPIKeysHandler) ~
@@ -81,10 +89,8 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
                   get(ReadGrantsHandler) ~
                   post(CreateGrantHandler) ~
                   path("'grantId") {
-                    get(ReadGrantDetailsHandler) ~
                     delete(DeleteGrantHandler) ~
                     path("/children/") {
-                      get(ReadGrantChildrenHandler) ~
                       post(CreateGrantChildHandler)
                     }
                   }
