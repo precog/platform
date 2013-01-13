@@ -33,10 +33,9 @@ import shapeless._
 
 class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val clock: Clock)(implicit executor: ExecutionContext) {
   import com.precog.common.security.service.v1
-
-  private implicit val M: Monad[Future] = new FutureMonad(executor)
-
   type R = HttpResponse[JValue]
+
+  private implicit val M0: Monad[Future] = new FutureMonad(executor)
 
   private def badRequest(message: String, details: Option[String] = None) = 
     HttpResponse[JValue](HttpStatus(BadRequest, message), content = Some(jobject(jfield("error", details getOrElse message))))
@@ -53,7 +52,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
   private def noContent =
     HttpResponse[JValue](HttpStatus(NoContent))
 
-  object ReadAPIKeysHandler extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+  object ReadAPIKeysHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey) => 
       apiKeyManager.apiKeyFinder.findAllAPIKeys(authAPIKey) map { keySet =>
         ok(keySet.nonEmpty.option(keySet))
@@ -63,23 +62,25 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     val metadata = None
   }
 
-  trait CreateHandler extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
-    protected def create(authAPIKey: APIKey, requestBody: JValue): Future[HttpResponse[JValue]]
+  trait CreateHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
+    protected def create(authAPIKey: APIKey, requestBody: JValue): Future[R]
 
     protected def missingContentMessage: String
 
-    val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey) => 
+    def service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey) => 
       for {
-        content  <- request.content.toSuccess(Promise successful badRequest(missingContentMessage)).sequence[Future, JValue]
-        response <- content.map(create(authAPIKey, _)).sequence 
-      } yield response.toEither.merge
+        content  <- request.content.toSuccess(badRequest(missingContentMessage)).sequence[Future, JValue]
+        response <- content.map(create(authAPIKey, _)).sequence[Future, R]
+      } yield {
+        response.toEither.merge
+      }
     }
 
     val metadata = None
   }
 
   object CreateAPIKeyHandler extends CreateHandler {
-    protected def create(authAPIKey: APIKey, requestBody: JValue): Future[HttpResponse[JValue]] = {
+    protected def create(authAPIKey: APIKey, requestBody: JValue): Future[R] = {
       requestBody.validated[v1.NewAPIKeyRequest] match {
         case Success(request) =>
           if (request.grants.exists(_.isExpired(some(clock.now())))) {
@@ -103,7 +104,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     protected val missingContentMessage = "Missing new API key request body."
   }
 
-  object ReadAPIKeyDetailsHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
+  object ReadAPIKeyDetailsHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
       // since having an api key means you can see the details, we don't check perms.
       request.parameters.get('apikey) map { apiKey =>
@@ -111,28 +112,28 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
           if (k.isDefined) ok(k) else notFound("Unable to find API key "+apiKey)
         }
       } getOrElse {
-        badRequest("Missing API key from request URI.")
+        Promise successful badRequest("Missing API key from request URI.")
       }
     }
 
     val metadata = None
   }
 
-  object DeleteAPIKeyHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
+  object DeleteAPIKeyHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
       request.parameters.get('apikey) map { apiKey =>
         apiKeyManager.deleteAPIKey(apiKey) map { k =>
           if (k.isDefined) noContent else notFound("Unable to find API key "+apiKey)
         }
       } getOrElse {
-        badRequest("Missing API key from request URI.")
+        Promise successful badRequest("Missing API key from request URI.")
       }
     }
 
     val metadata = None
   }
 
-  object ReadAPIKeyGrantsHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
+  object ReadAPIKeyGrantsHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
       request.parameters.get('apikey).map { apiKey =>
         apiKeyManager.apiKeyFinder.findAPIKey(apiKey) map {
@@ -140,15 +141,15 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
           case None => notFound("The specified API key does not exist")
         }
       } getOrElse {
-        badRequest("Missing API key from request URI.")
+        Promise successful badRequest("Missing API key from request URI.")
       }
     }
 
     val metadata = None
   }
 
-  object CreateAPIKeyGrantHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
-    private def create(apiKey: APIKey, requestBody: JValue): Future[HttpResponse[JValue]] = {
+  object CreateAPIKeyGrantHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
+    private def create(apiKey: APIKey, requestBody: JValue): Future[R] = {
       requestBody.validated[GrantId]("grantId") match {
         case Success(grantId) =>
           apiKeyManager.addGrants(apiKey, Set(grantId)) map { g =>
@@ -162,9 +163,9 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     }
 
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
+      val apiKeyV = request.parameters.get('apikey).toSuccess(badRequest("Missing API key from request URI"))
       for {
-        apiKeyV  <- Promise successful request.parameters.get('apikey).toSuccess(badRequest("Missing API key from request URI"))
-        contentV <- request.content.toSuccess(Promise successful badRequest("Missing body content for grant creation.")).sequence[Future, JValue]
+        contentV <- request.content.toSuccess(badRequest("Missing body content for grant creation.")).sequence[Future, JValue]
         response <- (for (apiKey <- apiKeyV; content <- contentV) yield create(apiKey, content)).sequence[Future, R]
       } yield response.toEither.merge
     }
@@ -172,7 +173,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     val metadata = None
   }
 
-  object DeleteAPIKeyGrantHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
+  object DeleteAPIKeyGrantHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
       Apply[Option].apply2(request.parameters.get('apikey), request.parameters.get('grantId)) { (apiKey, grantId) =>
         apiKeyManager.removeGrants(apiKey, Set(grantId)) map { k =>
@@ -187,7 +188,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     val metadata = None
   }
 
-  object ReadGrantsHandler extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+  object ReadGrantsHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey) =>
       apiKeyManager.apiKeyFinder.findAllAPIKeys(authAPIKey) map { allKeys =>
         ok(Some(allKeys.flatMap(_.grants)))
@@ -198,7 +199,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
   }
 
   object CreateGrantHandler extends CreateHandler {
-    protected def create(authAPIKey: APIKey, requestBody: JValue): Future[HttpResponse[JValue]] = {
+    protected def create(authAPIKey: APIKey, requestBody: JValue): Future[R] = {
       requestBody.validated[v1.NewGrantRequest] match {
         case Success(request) => 
           apiKeyManager.deriveGrant(request.name, request.description, authAPIKey, request.permissions, request.expirationDate) map { g =>
@@ -215,7 +216,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     protected val missingContentMessage = "Missing grant request body."
   }
 
-  object ReadGrantDetailsHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
+  object ReadGrantDetailsHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
       request.parameters.get('grantId) map { grantId =>
         apiKeyManager.findGrant(grantId) map { g =>
@@ -223,14 +224,14 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
           else notFound("Unable to find grant " + grantId)
         }
       } getOrElse {
-        badRequest("Missing grant ID from request URI.")
+        Promise successful badRequest("Missing grant ID from request URI.")
       }
     }
 
     val metadata = None
   }
 
-  object ReadGrantChildrenHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
+  object ReadGrantChildrenHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
       request.parameters.get('grantId) map { grantId =>
         apiKeyManager.findGrantChildren(grantId) map { 
@@ -244,8 +245,8 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     val metadata = None
   }
 
-  object CreateGrantChildHandler extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
-    def create(issuerKey: APIKey, parentId: GrantId, requestBody: JValue): Future[HttpResponse[JValue]] = {
+  object CreateGrantChildHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
+    def create(issuerKey: APIKey, parentId: GrantId, requestBody: JValue): Future[R] = {
       requestBody.validated[v1.NewGrantRequest] match {
         case Success(r) => 
           apiKeyManager.deriveSingleParentGrant(None, None, issuerKey, parentId, r.permissions, r.expirationDate) map { g =>
@@ -259,9 +260,9 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     }
 
     val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey) =>
+      val parentIdV = request.parameters.get('grantId).toSuccess(badRequest("Missing grant ID from request URI"))
       for {
-        parentIdV  <- Promise successful request.parameters.get('grantId).toSuccess(badRequest("Missing grant ID from request URI"))
-        contentV <- request.content.toSuccess(Promise successful badRequest("Missing body content for grant creation.")).sequence[Future, JValue]
+        contentV <- request.content.toSuccess(badRequest("Missing body content for grant creation.")).sequence[Future, JValue]
         response <- (for (parentId <- parentIdV; content <- contentV) yield create(authAPIKey, parentId, content)).sequence[Future, R]
       } yield response.toEither.merge
     }
@@ -269,7 +270,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     val metadata = None
   }
 
-  object DeleteGrantHandler extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+  object DeleteGrantHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey) =>
       //FIXME: simply having the grant ID doesn't give you power to delete it!
       sys.error("fixme")
