@@ -257,5 +257,35 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
       
       orderCrosses(input) mustEqual input
     }
+    
+    "refrain from resorting by identity when cogrouping after an ordered cross" in {
+      val line = Line(0, "")
+      
+      val foo = dag.LoadLocal(line, Const(line, CString("/foo")), JTextT)
+      
+      val input =
+        Join(line, Add, IdentitySort,
+          Join(line, Add, CrossLeftSort,
+            foo,
+            Const(line, CLong(42))),
+          foo)
+          
+      orderCrosses(input) mustEqual input
+    }
+    
+    "refrain from resorting by value when cogrouping after an ordered cross" in {
+      val line = Line(0, "")
+      
+      val foo = dag.LoadLocal(line, Const(line, CString("/foo")), JTextT)
+      
+      val input =
+        Join(line, Add, ValueSort(0),
+          Join(line, Add, CrossLeftSort,
+            SortBy(foo, "a", "b", 0),
+            Const(line, CLong(42))),
+          SortBy(foo, "a", "b", 0))
+          
+      orderCrosses(input) mustEqual input
+    }
   }
 }

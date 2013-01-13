@@ -45,6 +45,16 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
       }
     }
 
+    "return correct number of results in more complex case of logistic regression" >> {
+      val input = """
+          medals := //summer_games/london_medals
+          
+          std::stats::logisticRegression(medals, medals.S)
+        """.stripMargin
+
+      evalE(input) must haveSize(4)
+    }
+
     "return something when fed constants" >> {
       val input = """
           std::stats::logisticRegression(4, 0)

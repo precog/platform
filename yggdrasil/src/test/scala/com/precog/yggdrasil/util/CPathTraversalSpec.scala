@@ -71,7 +71,6 @@ class CPathTraversalSpec extends Specification {
       )))
     }
   }
-
   def col[@spec(Boolean, Long, Double) A](defined: Int*)(values: A*)(implicit builder: ColBuilder[A], m: Manifest[A]) = {
     val max = defined.max + 1
     val column = m.newArray(max)
@@ -80,15 +79,6 @@ class CPathTraversalSpec extends Specification {
     }
     builder(BitSetUtil.create(defined), column)
   }
-
-  // [0, 1, 2]
-  // [0, "b"]
-  // ["abc", "c"]
-  val nonIntersectingHet: Map[CPath, Set[Column]] = Map(
-    CPath("[*]") -> Set(col(0)(Array(0L, 01L, 02L))),
-    CPath("[0]") -> Set(col(1)(0L), col(2)("abc")),
-    CPath("[1]") -> Set(col(1, 2)("b", "c"))
-  )
 
   "rowOrder" should {
     "order columns without arrays" in {
@@ -142,6 +132,32 @@ class CPathTraversalSpec extends Specification {
       order.gt(0, 1) must beTrue
     }
 
+    // false
+    // { foo: 5 }
+    
+    // . = undefined, .foo = 5
+    // . = false, .foo = undefined
+    val valueAndObject: Map[CPath, Set[Column]] = Map(
+      CPath.Identity -> Set(col(0)(false)),
+      CPath("foo") -> Set(col(1)(5L))
+    )
+
+    "order value and object" in {
+      val paths = valueAndObject.keys.toList
+      val t = CPathTraversal(paths)
+      val order = t.rowOrder(paths, valueAndObject)
+      order.gt(0, 1) must beTrue
+    }
+
+    // [0, 1, 2]
+    // [0, "b"]
+    // ["abc", "c"]
+    val nonIntersectingHet: Map[CPath, Set[Column]] = Map(
+      CPath("[*]") -> Set(col(0)(Array(0L, 01L, 02L))),
+      CPath("[0]") -> Set(col(1)(0L), col(2)("abc")),
+      CPath("[1]") -> Set(col(1, 2)("b", "c"))
+    )
+
     "order non-intersecting heterogeneous arrays" in {
       
       val paths = nonIntersectingHet.keys.toList
@@ -171,16 +187,16 @@ class CPathTraversalSpec extends Specification {
       order.lt(2, 0)
     }
 
-      val intersectingHom: Map[CPath, Set[Column]] = Map(
-        CPath("[*][0]") -> Set(ArrayHomogeneousArrayColumn(Array(
-          Array(0L, 1L, 2L),
-          Array(0L, 1L, 1L),
-          Array(0L, 1L, 2L)))),
-        CPath("[*][1]") -> Set(ArrayHomogeneousArrayColumn(Array(
-          Array("a", "b", "c"),
-          Array("a", "c", "c"),
-          Array("a", "b", "c"))))
-      )
+    val intersectingHom: Map[CPath, Set[Column]] = Map(
+      CPath("[*][0]") -> Set(ArrayHomogeneousArrayColumn(Array(
+        Array(0L, 1L, 2L),
+        Array(0L, 1L, 1L),
+        Array(0L, 1L, 2L)))),
+      CPath("[*][1]") -> Set(ArrayHomogeneousArrayColumn(Array(
+        Array("a", "b", "c"),
+        Array("a", "c", "c"),
+        Array("a", "b", "c"))))
+    )
 
     "order simple intersecting arrays" in {
       // [0, "a"], [1, "b"], [2, "c"]

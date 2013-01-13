@@ -30,7 +30,9 @@ import blueeyes.json.serialization.Extractor._
 import scalaz._
 import scalaz.syntax.apply._
 
-sealed trait IngestMessage
+sealed trait IngestMessage {
+  def eventId: EventId
+}
 
 class IngestMessageSerialization {
   implicit val IngestMessageDecomposer: Decomposer[IngestMessage] = new Decomposer[IngestMessage] {
@@ -38,6 +40,15 @@ class IngestMessageSerialization {
       //case sm @ SyncMessage(_, _, _)  => SyncMessage.SyncMessageDecomposer.apply(sm)
       case em @ EventMessage(_, _) => EventMessage.EventMessageDecomposer.apply(em)
       case dm @ ArchiveMessage(_, _) => ArchiveMessage.ArchiveMessageDecomposer.apply(dm)
+    }
+  }
+
+  implicit val IngestMessageExtractor: Extractor[IngestMessage] = new Extractor[IngestMessage] {
+    def extract(jv: JValue): IngestMessage = {
+      (jv \ "deletion") match {
+        case JUndefined => jv.deserialize[EventMessage]
+        case _ => jv.deserialize[ArchiveMessage]
+      }
     }
   }
 }
@@ -80,7 +91,9 @@ case class ArchiveId(producerId: ProducerId, sequenceId: SequenceId) {
   val uid = (producerId.toLong << 32) | (sequenceId.toLong & 0xFFFFFFFFL)
 }
 
-case class ArchiveMessage(archiveId: ArchiveId, archive: Archive) extends IngestMessage
+case class ArchiveMessage(archiveId: ArchiveId, archive: Archive) extends IngestMessage {
+  def eventId = EventId(archiveId.producerId, archiveId.sequenceId)
+}
 
 trait ArchiveMessageSerialization {
   implicit val ArchiveMessageDecomposer: Decomposer[ArchiveMessage] = new Decomposer[ArchiveMessage] {

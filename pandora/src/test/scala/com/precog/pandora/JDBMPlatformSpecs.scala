@@ -81,14 +81,16 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
       
   lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
-  class YggConfig extends ParseEvalStackSpecConfig
+  abstract class YggConfig extends ParseEvalStackSpecConfig
       with StandaloneShardSystemConfig
       with IdSourceConfig
       with ColumnarTableModuleConfig
       with BlockStoreColumnarTableModuleConfig
       with JDBMProjectionModuleConfig
       
-  object yggConfig  extends YggConfig
+  object yggConfig extends YggConfig {
+    val ingestConfig = None
+  }
 
   override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
       
@@ -107,8 +109,12 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
-    def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
-      fileMetadataStorage.findDescriptorRoot(descriptor, false)
+    def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] =
+      fileMetadataStorage.ensureDescriptorRoot(descriptor)
+
+    def findBaseDir(descriptor: ProjectionDescriptor): Option[File] =
+      fileMetadataStorage.findDescriptorRoot(descriptor)
+
     def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
       fileMetadataStorage.findArchiveRoot(descriptor)
   }

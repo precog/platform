@@ -90,6 +90,7 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
     val commandLineConfig = Configuration.parse(_rootDir map ("precog.storage.root = " + _) getOrElse "")
     override val config = (Configuration parse {
       Option(System.getProperty("precog.storage.root")) map ("precog.storage.root = " + _) getOrElse "" }) ++ commandLineConfig
+    val ingestConfig = None
   }
 
   trait TableCompanion extends JDBMColumnarTableCompanion
@@ -101,14 +102,9 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
   val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
   object Projection extends JDBMProjectionCompanion {
-    val fileOps = FilesystemFileOps
-
-    def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
-      fileMetadataStorage.findDescriptorRoot(descriptor, true)
-    // map (_ getOrElse sys.error("Cannot find base dir. for descriptor: " + descriptor))
-
-    def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
-      fileMetadataStorage.findArchiveRoot(descriptor)
-    //map (_ getOrElse sys.error("Cannot find base dir. for descriptor: " + descriptor))
+    def fileOps = FilesystemFileOps
+    def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = fileMetadataStorage.ensureDescriptorRoot(descriptor)
+    def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = fileMetadataStorage.findDescriptorRoot(descriptor)
+    def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = fileMetadataStorage.findArchiveRoot(descriptor)
   }
 }
