@@ -194,13 +194,18 @@ else
 
     # Give the shard some time to actually process the archives
     TRIES=18
-    while [ "$TRIES" -gt "0" ] && find $WORKDIR/shard-data/data -name projection_descriptor.json > /dev/null ; do
-        [ -n "$DEBUG" ] && echo "Archived data still found, sleeping"
-        TRIES=$(( $TRIES - 1 ))
-        sleep 10
+    while [[ $TRIES -gt 0 ]]; do
+        if [[ $(find $WORKDIR/shard-data/data -name projection_descriptor.json | wc -l) -gt 0 ]]  ; then 
+            [ -n "$DEBUG" ] && echo "Archived data still found, sleeping"
+            [ -n "$DEBUG" ] && find $WORKDIR/shard-data/data -name projection_descriptor.json
+            TRIES=$(( $TRIES - 1 ))
+            sleep 10
+        else
+            break
+        fi
     done
 
-    if [ $(find $WORKDIR/shard-data/data -name projection_descriptor.json | wc -l) -gt "0" ]; then
+    if [[ $(find $WORKDIR/shard-data/data -name projection_descriptor.json | wc -l) -gt 0 ]]; then
         echo "Archive of datasets failed. Projections still found in data directory!" 1>&2
         EXIT_CODE=1
     else
