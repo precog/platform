@@ -189,13 +189,13 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
 
     "cannot be cancelled after it has successfully completed" in {
       val ticks = for {
-        (jobId, _, query) <- execute(10)
-        cancelled <- cancel(jobId, 11)
-        _ <- waitFor(12)
+        (jobId, _, query) <- execute(3)
+        cancelled <- cancel(jobId, 5)
+        _ <- waitFor(1)
         ticks <- query
       } yield ticks
 
-      ticks.copoint must_== 10
+      ticks.copoint must_== 3
     }
 
     "be expireable" in {

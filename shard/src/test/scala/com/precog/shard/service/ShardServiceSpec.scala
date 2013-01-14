@@ -210,7 +210,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   val inaccessibleAbsoluteQuery = "//inaccessible/foo"
 
   def extractResult(data: StreamT[Future, CharBuffer]): Future[JValue] = {
-    data.foldLeft("") { _ + _.toString } map (JParser.parse(_))
+    data.foldLeft("") { _ + _.toString } map (JParser.parseUnsafe(_))
   }
 
   def extractJobId(stream: StreamT[Future, CharBuffer]): Future[JobId] = {
@@ -259,7 +259,12 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
         result <- extractResult(data)
       } yield result
 
-      val expected = JArray(JNum(2) :: Nil)
+      val expected = JObject(
+        JField("warnings", JArray(Nil)) ::
+        JField("errors", JArray(Nil)) ::
+        JField("data", JArray(JNum(2) :: Nil)) ::
+        Nil)
+
       res must whenDelivered { beLike {
         case `expected` => ok
       }}
