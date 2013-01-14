@@ -288,10 +288,21 @@ echo "dataDir=$ZKDATA" >> $ZKBASE/conf/zoo.cfg
 echo "# the port at which the clients will connect" >> $ZKBASE/conf/zoo.cfg
 echo "clientPort=$ZOOKEEPER_PORT" >> $ZKBASE/conf/zoo.cfg
 
+# Set up logging for zookeeper
+cat > $ZKBASE/bin/log4j.properties <<EOF
+log4j.rootLogger=INFO, file
+log4j.appender.file=org.apache.log4j.RollingFileAppender
+log4j.appender.file.File=$WORKDIR/logs/zookeeper.log
+log4j.appender.file.MaxFileSize=1MB
+log4j.appender.file.MaxBackupIndex=1
+log4j.appender.file.layout=org.apache.log4j.PatternLayout
+log4j.appender.file.layout.ConversionPattern=%d{ABSOLUTE} %5p %c{1}:%L - %m%n
+EOF
+
 # Start it up!
 echo "Starting zookeeper on port $ZOOKEEPER_PORT"
 cd $ZKBASE/bin
-./zkServer.sh start
+./zkServer.sh start &> $WORKDIR/logs/zookeeper.stdout
 
 wait_until_port_open $ZOOKEEPER_PORT
 
@@ -308,14 +319,14 @@ chmod +x $KFBASE/bin/kafka-server-start.sh
 
 KAFKA_GLOBAL_PORT=$(random_port "Kafka global")
 sed -e "s#log.dir=.*#log.dir=$KFGLOBALDATA#; s/port=.*/port=$KAFKA_GLOBAL_PORT/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-global.properties
-$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-global.properties &
+$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-global.properties &> $WORKDIR/logs/kafka-global.stdout &
 KFGLOBALPID=$!
 
 wait_until_port_open $KAFKA_GLOBAL_PORT
 
 KAFKA_LOCAL_PORT=$(random_port "Kafka local")
 sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=$KAFKA_LOCAL_PORT/; s/enable.zookeeper=.*/enable.zookeeper=false/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-local.properties
-$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-local.properties &
+$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-local.properties &> $WORKDIR/logs/kafka-local.stdout &
 KFLOCALPID=$!
 
 wait_until_port_open $KAFKA_LOCAL_PORT
@@ -328,7 +339,7 @@ MONGO_PORT=$(random_port "Mongo")
 # Start up mongo and set test token
 cd $MONGOBASE
 tar --strip-components=1 -xvzf "$ARTIFACTDIR"/mongo* &> /dev/null
-$MONGOBASE/bin/mongod --port $MONGO_PORT --dbpath $MONGODATA --nojournal --nounixsocket --noauth --noprealloc &
+$MONGOBASE/bin/mongod --port $MONGO_PORT --dbpath $MONGODATA --nojournal --nounixsocket --noauth --noprealloc &> $WORKDIR/logs/mongo.stdout &
 MONGOPID=$!
 
 wait_until_port_open $MONGO_PORT
@@ -381,15 +392,15 @@ if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
 fi
 
 echo "Starting auth service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/auth-v1.logging.xml -jar "$AUTH_ASSEMBLY" --configFile "$WORKDIR"/configs/auth-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/auth-v1.logging.xml -jar "$AUTH_ASSEMBLY" --configFile "$WORKDIR"/configs/auth-v1.conf &> $WORKDIR/logs/auth-v1.stdout &
 AUTHPID=$!
 
 echo "Starting accounts service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/accounts-v1.logging.xml -jar "$ACCOUNTS_ASSEMBLY" --configFile "$WORKDIR"/configs/accounts-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/accounts-v1.logging.xml -jar "$ACCOUNTS_ASSEMBLY" --configFile "$WORKDIR"/configs/accounts-v1.conf &> $WORKDIR/logs/accounts-v1.stdout &
 ACCOUNTSPID=$!
 
 echo "Starting jobs service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/jobs-v1.logging.xml -jar "$JOBS_ASSEMBLY" --configFile "$WORKDIR"/configs/jobs-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/jobs-v1.logging.xml -jar "$JOBS_ASSEMBLY" --configFile "$WORKDIR"/configs/jobs-v1.conf &> $WORKDIR/logs/jobs-v1.stdout &
 JOBSPID=$!
 
 wait_until_port_open $AUTH_PORT
@@ -418,11 +429,11 @@ else
 fi
 
 echo "Starting ingest service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/ingest-v1.logging.xml -jar "$INGEST_ASSEMBLY" --configFile "$WORKDIR"/configs/ingest-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/ingest-v1.logging.xml -jar "$INGEST_ASSEMBLY" --configFile "$WORKDIR"/configs/ingest-v1.conf &> $WORKDIR/logs/ingest-v1.stdout &
 INGESTPID=$!
 
 echo "Starting shard service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/shard-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/shard-v1.conf &> $WORKDIR/logs/shard-v1.stdout &
 SHARDPID=$!
 
 # Let the ingest/shard services startup in parallel
