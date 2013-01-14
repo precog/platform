@@ -54,7 +54,7 @@ import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
 
-trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestModule[M] with IdSourceScannerModule[M] {
+trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestModule[M] with IdSourceScannerModule[M] { outer =>
   val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
@@ -64,7 +64,9 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
 
   val projections = Map.empty[ProjectionDescriptor, Projection]
 
-  val report = LoggingQueryLogger[M]
+  val report = new LoggingQueryLogger[M] with ExceptionQueryLogger[M] {
+    implicit def M = outer.M
+  }
 
   trait TableCompanion extends BaseBlockStoreTestTableCompanion {
     override def load(table: Table, apiKey: APIKey, jtpe: JType) = {
