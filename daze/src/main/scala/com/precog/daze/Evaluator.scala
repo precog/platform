@@ -80,7 +80,7 @@ trait Evaluator[M[+_]] extends DAG
   
   def freshIdScanner: Scanner
 
-  def report: ErrorReport[M]
+  def report: QueryLogger[M]
 
   def rewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph = {
     (if (optimize) inlineStatics(_: DepGraph, ctx) else identity[DepGraph] _) andThen

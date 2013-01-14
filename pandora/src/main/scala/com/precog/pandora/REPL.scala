@@ -61,7 +61,7 @@ trait REPL
   val Prompt = "quirrel> "
   val Follow = "       | "
 
-  val report = new LoggingErrorReport[Future]
+  val report = LoggingQueryLogger[Future]
 
   def run = IO {
     val terminal = TerminalFactory.getFlavor(TerminalFactory.Flavor.UNIX)
