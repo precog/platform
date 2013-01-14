@@ -788,7 +788,7 @@ trait DAG extends Instructions with TransSpecModule {
         case _ => Identities.Undefined
       }
 
-      val sorting = IdentitySort
+      val sorting = IdentitySort    // TODO not correct!
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
@@ -798,7 +798,7 @@ trait DAG extends Instructions with TransSpecModule {
     case class Diff(loc: Line, left: DepGraph, right: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = left.identities
       
-      val sorting = IdentitySort
+      val sorting = IdentitySort    // TODO not correct!
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
@@ -816,7 +816,8 @@ trait DAG extends Instructions with TransSpecModule {
       
       lazy val sorting = joinSort match {
         case tbl: TableSort => tbl
-        case _ => IdentitySort
+        case CrossLeftSort => left.sorting
+        case CrossRightSort => right.sorting
       }
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
@@ -833,7 +834,8 @@ trait DAG extends Instructions with TransSpecModule {
       
       lazy val sorting = joinSort match {
         case tbl: TableSort => tbl
-        case _ => IdentitySort
+        case CrossLeftSort => target.sorting
+        case CrossRightSort => boolean.sorting
       }
       
       lazy val isSingleton = target.isSingleton

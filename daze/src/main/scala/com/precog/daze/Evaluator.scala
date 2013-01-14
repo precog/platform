@@ -667,7 +667,8 @@ trait Evaluator[M[+_]] extends DAG
             pendingTableRight <- prepareEval(right, splits)
           } yield {
             if (pendingTableLeft.graph == pendingTableRight.graph) {
-              PendingTable(pendingTableLeft.table, pendingTableLeft.graph, transFromBinOp(op, ctx)(pendingTableLeft.trans, pendingTableRight.trans))
+              val trans2 = transFromBinOp(op, ctx)(pendingTableLeft.trans, pendingTableRight.trans)
+              PendingTable(pendingTableLeft.table, pendingTableLeft.graph, trans2)
             } else {
               (left.identities, right.identities) match {
                 case (Identities.Specs(_), Identities.Specs(_)) =>
@@ -740,11 +741,10 @@ trait Evaluator[M[+_]] extends DAG
                 
                 case _ => sys.error("unreachable code")
               }
-
+              
               val spec = buildWrappedJoinSpec(prefixLength, target.identities.length, boolean.identities.length) { (srcLeft, srcRight) =>
                 trans.Filter(srcLeft, srcRight)
               }
-
               val parentTargetTable = pendingTableTarget.table
               val targetResult = parentTargetTable.transform(liftToValues(pendingTableTarget.trans))
               val parentBooleanTable = pendingTableBoolean.table

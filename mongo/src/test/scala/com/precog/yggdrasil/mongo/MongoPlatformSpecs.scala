@@ -69,6 +69,8 @@ object MongoPlatformSpecEngine extends Logging {
       logger.debug("Mongo engine startup complete")
     }
 
+    logger.debug("Mongo acquired, refcount = " + refcount)
+
     engine
   }
 
@@ -77,10 +79,13 @@ object MongoPlatformSpecEngine extends Logging {
 
     if (refcount == 0) {
       logger.debug("Running shutdown after final Mongo release")
-      engine.shutdown()
+      val current = engine
       engine = null
+      current.shutdown()
       logger.debug("Mongo shutdown complete")
     }
+
+    logger.debug("Mongo released, refcount = " + refcount)
   }
 
   def runLoads(): Unit = {

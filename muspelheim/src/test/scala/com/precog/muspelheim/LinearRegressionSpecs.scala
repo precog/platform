@@ -44,13 +44,23 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       }
     }
 
+    "return correct number of results in more complex case of linear regression" >> {
+      val input = """
+          medals := //summer_games/london_medals
+          
+          std::stats::linearRegression(medals, medals.S)
+        """.stripMargin
+
+      evalE(input) must haveSize(4)
+    }
+
+
     "return empty set when fed rank deficient data" >> {
       val input = """
         std::stats::linearRegression(4, 0)
       """.stripMargin
 
       evalE(input) must throwA[IllegalArgumentException]
-
     }
 
     "return empty set when the dependent variable is not at the root path" >> {

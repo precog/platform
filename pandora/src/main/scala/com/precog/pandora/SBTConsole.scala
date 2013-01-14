@@ -111,6 +111,7 @@ object SBTConsole {
       val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
       val maxEvalDuration = controlTimeout
       val clock = blueeyes.util.Clock.System
+      val ingestConfig = None
       
       val maxSliceSize = 10000
 
@@ -131,7 +132,8 @@ object SBTConsole {
 
     object Projection extends JDBMProjectionCompanion {
       val fileOps = FilesystemFileOps
-      def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+      def ensureBaseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+      def findBaseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
       def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
     }
 
