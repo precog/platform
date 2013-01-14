@@ -1519,9 +1519,100 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
     results.copoint must_== expected
   }
 
+  def testIsTypeUnionTrivial = {
+    val JArray(elements) = JParser.parse("""[
+      {"key":[1], "value": "value1"},
+      45,
+      true,
+      {"value":"foobaz"},
+      [234],
+      233.4,
+      29292.3,
+      null,
+      [{"bar": 12}],
+      {"baz": 34.3},
+      23
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JUnionT(JNumberT, JNullT)
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JFalse, JTrue, JFalse, JFalse, JFalse, JTrue, JTrue, JTrue, JFalse, JFalse, JTrue)
+
+    results.copoint must_== expected
+  }
+
+  def testIsTypeUnion = {
+    val JArray(elements) = JParser.parse("""[
+      {"key":[1], "value": 23},
+      {"key":[1, "bax"], "value": {"foo":4, "bar":{}}},
+      {"key":[null, "bax", 4], "value": {"foo":4.4, "bar":{"a": false}}},
+      {"key":[], "value": {"foo":34, "bar":{"a": null}}},
+      {"key":[2], "value": {"foo": "dd"}},
+      {"key":[3]},
+      {"key":[2], "value": {"foo": -1.1, "bar": {"a": 4, "b": 5}}},
+      {"key":[2], "value": {"foo": "dd", "bar": [{"a":6}]}},
+      {"key":[44], "value": {"foo": "x", "bar": {"a": 4, "b": 5}}},
+      {"value":"foobaz"},
+      {}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JObjectFixedT(Map(
+      "value" -> JObjectFixedT(Map(
+        "foo" -> JUnionT(JNumberT, JTextT), 
+        "bar" -> JObjectUnfixedT)),
+      "key" -> JArrayUnfixedT))   
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JFalse, JTrue, JTrue, JTrue, JFalse, JFalse, JTrue, JFalse, JTrue, JFalse, JFalse)
+
+    results.copoint must_== expected
+  }
+
+  def testIsTypeUnfixed = {
+    val JArray(elements) = JParser.parse("""[
+      {"key":[1], "value": 23},
+      {"key":[1, "bax"], "value": {"foo":4, "bar":{}}},
+      {"key":[null, "bax", 4], "value": {"foo":4.4, "bar":{"a": false}}},
+      {"key":[], "value": {"foo":34, "bar":{"a": null}}},
+      {"key":[2], "value": {"foo": "dd"}},
+      {"key":[3]},
+      {"key":[2], "value": {"foo": -1.1, "bar": {"a": 4, "b": 5}}},
+      {"key":[2], "value": {"foo": "dd", "bar": [{"a":6}]}},
+      {"key":[44], "value": {"foo": "x", "bar": {"a": 4, "b": 5}}},
+      {"value":"foobaz"},
+      {}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JObjectFixedT(Map(
+      "value" -> JObjectFixedT(Map("foo" -> JNumberT, "bar" -> JObjectUnfixedT)), 
+      "key" -> JArrayUnfixedT))
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JFalse, JTrue, JTrue, JTrue, JFalse, JFalse, JTrue, JFalse, JFalse, JFalse, JFalse)
+
+    results.copoint must_== expected
+  }
+
   def testIsTypeObject = {
     val JArray(elements) = JParser.parse("""[
       {"key":[1], "value": 23},
+      {"key":[1, "bax"], "value": 24},
       {"key":[2], "value": "foo"},
       15,
       {"key":[3]},
@@ -1529,7 +1620,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       {"notkey":[3]},
       {"key":[3], "value": 18, "baz": true},
       {"key":["foo"], "value": 18.6, "baz": true},
-      {"key":[3], "value": [34], "baz": 33}
+      {"key":[3, 5], "value": [34], "baz": 33}
     ]""")
 
     val sample = SampleData(elements.toStream)
@@ -1540,7 +1631,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       IsType(Leaf(Source), jtpe)
     })
 
-    val expected = Stream(JTrue, JFalse, JFalse, JFalse, JFalse, JFalse, JTrue, JTrue, JFalse)
+    val expected = Stream(JTrue, JTrue, JFalse, JFalse, JFalse, JFalse, JFalse, JTrue, JTrue, JFalse)
 
     results.copoint must_== expected
   }

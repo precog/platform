@@ -403,6 +403,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
       "perform a basic IsType transformation" in testIsTypeTrivial
       "perform an IsType transformation on numerics" in testIsTypeNumeric
+      "perform an IsType transformation on trivial union" in testIsTypeUnionTrivial
+      "perform an IsType transformation on union" in testIsTypeUnion
+      "perform an IsType transformation on nested unfixed types" in testIsTypeUnfixed
       "perform an IsType transformation on objects" in testIsTypeObject
       "perform an IsType transformation on unfixed objects" in testIsTypeObjectUnfixed
       "perform an IsType transformation on unfixed arrays" in testIsTypeArrayUnfixed

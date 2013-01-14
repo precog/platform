@@ -405,18 +405,10 @@ trait Slice { source =>
     val definedBits = (source.columns).values.map(_.definedAt(0, size)).reduceOption(_ | _) getOrElse new BitSet
 
     val columns = if (subsumes) {
-      val includedCols = source.columns filter { 
-        case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe)
-      }
+      val cols = source.columns filter { case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe) }
 
-      val includedBits = if (jtpe == JObjectUnfixedT || jtpe == JArrayUnfixedT) {
-        includedCols.values.map(_.definedAt(0, size)).reduceOption(_ | _) getOrElse new BitSet
-      } else { 
-        val includedColsByPath = includedCols groupBy { case (ColumnRef(cpath, _), _) => cpath }
-        val includedBitsByPath = includedColsByPath.values map { _.values.map(_.definedAt(0, size)).reduceOption(_ | _) getOrElse new BitSet }
-
-        includedBitsByPath.reduceOption(_ & _) getOrElse new BitSet
-      }
+      val included = Schema.findTypes(jtpe, CPath.Identity, cols, size)
+      val includedBits = BitSetUtil.filteredRange(0, size)(included)
 
       Map(ColumnRef(CPath.Identity, CBoolean) -> BoolColumn.Either(definedBits, includedBits))
     } else {
