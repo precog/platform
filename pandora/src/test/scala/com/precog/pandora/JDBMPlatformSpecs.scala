@@ -107,7 +107,7 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   val storage = new Storage
 
-  val report = new LoggingErrorReport[Future]
+  val report = LoggingQueryLogger[Future]
 
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps

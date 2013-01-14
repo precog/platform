@@ -59,7 +59,7 @@ trait AsyncQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Fut
     def shutdown() = self.shutdown()
   }
 
-  def errorReport(implicit shardQueryMonad: ShardQueryMonad): ErrorReport[ShardQuery] = {
+  def errorReport(implicit shardQueryMonad: ShardQueryMonad): QueryLogger[ShardQuery] = {
     import scalaz.syntax.monad._
 
     implicit val M0 = shardQueryMonad.M
@@ -69,14 +69,14 @@ trait AsyncQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Fut
         def apply[A](fa: Future[A]) = fa.liftM[JobQueryT]
       }
 
-      new JobErrorReport[ShardQuery] {
+      new JobQueryLogger[ShardQuery] {
         val M = shardQueryMonad
         val jobManager = self.jobManager.withM[ShardQuery](lift, implicitly, shardQueryMonad.M, shardQueryMonad)
         val jobId = jobId0
         val clock = yggConfig.clock
       }
     } getOrElse {
-      new LoggingErrorReport[ShardQuery]
+      LoggingQueryLogger[ShardQuery]
     }
   }
 

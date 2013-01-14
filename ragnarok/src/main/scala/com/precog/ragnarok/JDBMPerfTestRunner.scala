@@ -109,5 +109,5 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
     def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = fileMetadataStorage.findArchiveRoot(descriptor)
   }
 
-  val report = new LoggingErrorReport[Future]
+  val report = LoggingQueryLogger[Future]
 }

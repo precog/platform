@@ -27,12 +27,12 @@ import blueeyes.json.{ serialization => _, _ }
 import blueeyes.json.serialization.SerializationImplicits._
 import blueeyes.util.Clock
 
-import org.slf4j.LoggerFactory
+import org.slf4j.{ LoggerFactory, Logger }
 
 import scalaz._
 import scalaz.syntax.monad._
 
-trait ErrorReport[M[+_]] {
+trait QueryLogger[M[+_]] {
 
   /**
    * This reports a fatal error user. Depending on the implementation, this may
@@ -54,7 +54,7 @@ trait ErrorReport[M[+_]] {
 /**
  * Reports errors to a job's channel.
  */
-trait JobErrorReport[M[+_]] extends ErrorReport[M] {
+trait JobQueryLogger[M[+_]] extends QueryLogger[M] {
   import JobManager._
 
   implicit def M: Monad[M]
@@ -83,8 +83,10 @@ trait JobErrorReport[M[+_]] extends ErrorReport[M] {
   def info(msg: => String): M[Unit] = send(channels.Info, msg)
 }
 
-final class LoggingErrorReport[M[+_]](implicit M: Applicative[M]) extends ErrorReport[M] {
-  private val logger = LoggerFactory.getLogger("com.precog.daze.ErrorReport")
+trait LoggingQueryLogger[M[+_]] extends QueryLogger[M] {
+  implicit def M: Applicative[M]
+
+  protected val logger = LoggerFactory.getLogger("com.precog.daze.QueryLogger")
 
   def fatal(msg: => String): M[Unit] = M.point {
     logger.error(msg)
@@ -96,5 +98,13 @@ final class LoggingErrorReport[M[+_]](implicit M: Applicative[M]) extends ErrorR
 
   def info(msg: => String): M[Unit] = M.point {
     logger.info(msg)
+  }
+}
+
+object LoggingQueryLogger {
+  def apply[M[+_]](implicit M0: Applicative[M]): QueryLogger[M] = {
+    new LoggingQueryLogger[M] {
+      val M = M0
+    }
   }
 }

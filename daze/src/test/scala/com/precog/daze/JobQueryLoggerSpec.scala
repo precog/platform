@@ -30,12 +30,12 @@ import scalaz._
 import scalaz.syntax.monad._
 import scalaz.syntax.copointed._
 
-class JobErrorReportSpec extends Specification {
+class JobQueryLoggerSpec extends Specification {
   import JobManager._
   import JobState._
 
-  def withReport[A](f: JobErrorReport[Need] => A): A = {
-    f(new JobErrorReport[Need] {
+  def withReport[A](f: JobQueryLogger[Need] => A): A = {
+    f(new JobQueryLogger[Need] {
       val M = Need.need
       val clock = Clock.System
       val jobManager = new InMemoryJobManager[Need]
@@ -43,7 +43,7 @@ class JobErrorReportSpec extends Specification {
     })
   }
 
-  def testChannel(channel: String)(f: (ErrorReport[Need], String) => Need[Unit]) = {
+  def testChannel(channel: String)(f: (QueryLogger[Need], String) => Need[Unit]) = {
     withReport { report =>
       val messages = (for {
         _ <- f(report, "Hi there!")
