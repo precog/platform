@@ -393,7 +393,7 @@ trait Slice { source =>
     * determine if the supplied jtype subsumes all the columns
     * if false, return a BoolColumn with all falses, defined by union
     * if true, collect just those columns that the jtype specifies
-    * to determine the apply method, take the value of defined by intersect based on path
+    * then on a row-by-row basis, using a BitSet, we use `Schema.findTypes(...)` to determine the Boolean values
     */
   def isType(jtpe: JType): Slice = new Slice {
     val size = source.size
