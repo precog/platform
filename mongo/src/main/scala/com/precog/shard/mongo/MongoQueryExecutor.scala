@@ -121,6 +121,8 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
   val asyncContext = extAsyncContext
   val M = extM
 
+  val report = new LoggingErrorReport[Future]
+
   def startup() = Future {
     Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
     true

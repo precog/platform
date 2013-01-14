@@ -82,7 +82,7 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M])
 
     status get jobId match {
       case Some(curStatus) if curStatus.id == prevStatus.getOrElse(curStatus.id) =>
-        for (m <- addMessage(jobId, Message.channels.Status, jval)) yield {
+        for (m <- addMessage(jobId, JobManager.channels.Status, jval)) yield {
           val Some(s) = Status.fromMessage(m)
           status.put(jobId, s)
           Right(s)
@@ -95,7 +95,7 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M])
         M.point(Left("Job has not yet started, yet a status was expected."))
 
       case None =>
-        for (m <- addMessage(jobId, Message.channels.Status, jval)) yield {
+        for (m <- addMessage(jobId, JobManager.channels.Status, jval)) yield {
           val Some(s) = Status.fromMessage(m)
           status.put(jobId, s)
           Right(s)

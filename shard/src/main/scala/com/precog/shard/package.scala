@@ -32,4 +32,3 @@ package object shard {
 
   type JobQueryT[M[+_], +A] = QueryT[JobQueryState, M, A]
 }
-

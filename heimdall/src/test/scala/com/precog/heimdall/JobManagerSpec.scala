@@ -193,8 +193,8 @@ trait JobManagerSpec[M[+_]] extends Specification {
       val job = jobs.createJob(validAPIKey, "b", "c", None, Some(new DateTime)).copoint
       val status1 = Status.toMessage(jobs.updateStatus(job.id, None, "1", 0.0, "%", None).copoint.right getOrElse sys.error("..."))
       val status2 = Status.toMessage(jobs.updateStatus(job.id, None, "2", 5.0, "%", Some(JString("..."))).copoint.right getOrElse sys.error("..."))
-      jobs.listChannels(job.id).copoint must contain(Message.channels.Status)
-      val statuses = jobs.listMessages(job.id, Message.channels.Status, None).copoint
+      jobs.listChannels(job.id).copoint must contain(JobManager.channels.Status)
+      val statuses = jobs.listMessages(job.id, JobManager.channels.Status, None).copoint
       statuses must contain(status1, status2).inOrder
     }
 
