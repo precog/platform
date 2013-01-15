@@ -183,7 +183,7 @@ trait ShardService extends BaseShardService {
   )
 
   def queryExecutorFactoryFactory(config: Configuration,
-    accessControl: AccessControl[Future],
+    accessControl: APIKeyManager[Future], //FIXME! This is awful
     accountManager: BasicAccountManager[Future]): SyncQueryExecutorFactory
 
   val analyticsService = this.service("quirrel", "1.0") {
@@ -240,7 +240,7 @@ trait AsyncShardService extends BaseShardService {
   def jobManagerFactory(config: Configuration): JobManager[Future] 
 
   def queryExecutorFactoryFactory(config: Configuration,
-    accessControl: AccessControl[Future],
+    accessControl: APIKeyManager[Future], //FIXME! THIS IS AWFUL
     accountManager: BasicAccountManager[Future],
     jobManager: JobManager[Future]): AsyncQueryExecutorFactory
 

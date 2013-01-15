@@ -38,6 +38,7 @@ import scalaz._
 trait PerAccountThreadPoolModule { self =>
 
   def accountManager: BasicAccountManager[Future]
+  def apiKeyManager: APIKeyManager[Future]
 
   implicit def defaultAsyncContext: ExecutionContext
 
@@ -53,12 +54,15 @@ trait PerAccountThreadPoolModule { self =>
   }
 
   def getAccountExecutionContext(apiKey: APIKey): EitherT[Future, String, ExecutionContext] = {
-    EitherT.eitherT(accountManager.listAccountIds(apiKey) map { accounts =>
-      if (accounts.size < 1) {
-        \/.left("Could not locate accountId for apiKey " + apiKey)
-      } else {
-        \/.right(asyncContextFor(accounts.head)) // FIXME: Which account should we use if there's more than one?
+    EitherT.eitherT(
+      apiKeyManager.rootPath(apiKey) flatMap { keyPath =>
+        accountManager.findControllingAccount(keyPath) map { 
+          case Some(accountId) =>
+            \/.right(asyncContextFor(accountId))
+          case None =>
+            \/.left("Could not locate accountId for apiKey " + apiKey)
+        }
       }
-    })
+    )
   }
 }

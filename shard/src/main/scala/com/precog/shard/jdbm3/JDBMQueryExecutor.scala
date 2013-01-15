@@ -104,7 +104,7 @@ trait JDBMQueryExecutorComponent {
   }
 
   def queryExecutorFactoryFactory(config: Configuration,
-      extAccessControl: AccessControl[Future],
+      extAccessControl: APIKeyManager[Future],
       extAccountManager: BasicAccountManager[Future],
       extJobManager: JobManager[Future]): AsyncQueryExecutorFactory = {
     new JDBMQueryExecutorFactory
@@ -132,6 +132,7 @@ trait JDBMQueryExecutorComponent {
       val storage = new Storage
       def storageMetadataSource = storage
 
+      val apiKeyManager = extAccessControl
       def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog = FilesystemIngestFailureLog(yggConfig.ingestFailureLogRoot, checkpoint)
 
       object Projection extends JDBMProjectionCompanion {

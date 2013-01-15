@@ -100,7 +100,7 @@ trait MongoQueryExecutorComponent {
   implicit val futureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
   
   def accountManagerFactory(config: Configuration) = new InMemoryAccountManager[Future]()
-  def queryExecutorFactoryFactory(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] = {
+  def queryExecutorFactoryFactory(config: Configuration, extAccessControl: APIKeyManager[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] = {
     new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
   }
 }

@@ -99,6 +99,18 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
 
   def close(): M[Unit]
 
+  def rootPath(apiKey: APIKey): M[Seq[APIKey]] = {
+    findAPIKey(apiKey) flatMap {
+      case Some(record) =>
+        record.issuerKey map { rootPath } getOrElse { M.point(Vector()) } map {
+          _ :+ apiKey
+        }
+
+      case None => 
+        M.point(Vector())
+    }
+  }
+
   def isValidGrant(grantId: GrantId, at: Option[DateTime] = None): M[Option[Grant]] =
     findGrant(grantId).flatMap { grantOpt =>
       grantOpt.map { grant =>
