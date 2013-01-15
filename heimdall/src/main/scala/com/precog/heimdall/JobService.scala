@@ -25,7 +25,6 @@ import akka.util.Timeout
 import org.streum.configrity.Configuration
 import scalaz._
 
-
 // Mongo-backed job manager that doesn't manage its mongo client.
 // Mongo-backed job manager that does manage its mongo client.
 // In-memory job manager that doesn't do anything.
@@ -69,7 +68,7 @@ trait JobService extends BlueEyesServiceBuilder with HttpRequestHandlerCombinato
           path("/jobs/") {
             path("'jobId") {
               path("/result") {
-                put(new CreateResultHandler(jobs, clock)) ~
+                put(new CreateResultHandler(jobs)) ~
                 get(new GetResultHandler(jobs))
               }
             }

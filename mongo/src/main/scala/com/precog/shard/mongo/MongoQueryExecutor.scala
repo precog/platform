@@ -49,6 +49,7 @@ class MongoQueryExecutorConfig(val config: Configuration)
   with ColumnarTableModuleConfig
   with MongoColumnarTableModuleConfig
   with BlockStoreColumnarTableModuleConfig
+  with ShardQueryExecutorConfig
   with IdSourceConfig
   with ShardConfig {
     
@@ -57,9 +58,6 @@ class MongoQueryExecutorConfig(val config: Configuration)
   val shardId = "standalone"
   val logPrefix = "mongo"
 
-  // Ingest for mongo is handled via mongo
-  override val ingestEnabled = false
-
   val idSource = new FreshAtomicIdSource
 
   def mongoServer: String = config[String]("mongo.server", "localhost:27017")
@@ -67,9 +65,14 @@ class MongoQueryExecutorConfig(val config: Configuration)
   def dbAuthParams = config.detach("mongo.dbAuth")
 
   def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
+
+  val clock = blueeyes.util.Clock.System
+
+  val ingestConfig = None
 }
 
-class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit val asyncContext: ExecutionContext, val M: Monad[Future]) extends ShardQueryExecutor with MongoColumnarTableModule {
+class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit val asyncContext: ExecutionContext, val M: Monad[Future]) 
+    extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] with ShardQueryExecutor[Future] with MongoColumnarTableModule {
   type YggConfig = MongoQueryExecutorConfig
 
   trait TableCompanion extends MongoColumnarTableCompanion
@@ -77,8 +80,6 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit val a
     var mongo: Mongo = _
     val dbAuthParams = yggConfig.dbAuthParams.data
   }
-
-  val clock = blueeyes.util.Clock.System
 
   lazy val storage = new MongoStorageMetadataSource(Table.mongo)
 
@@ -91,6 +92,12 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit val a
     Table.mongo.close()
     true
   }
+
+  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
+    Future(Success(this))
+  }
+
+  def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
     Future {
