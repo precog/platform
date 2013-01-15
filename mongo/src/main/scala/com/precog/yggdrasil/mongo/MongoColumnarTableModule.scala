@@ -148,7 +148,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
                       Some(slice, nextSkip.map(InLoad(cursorGen, _, xs)).getOrElse(InitialLoad(xs)))
                     } catch {
                       case t => 
-                        logger.error("Failure during Mongo query: " + t.getMessage)
+                        logger.error("Fatal error during Mongo query.", t)
                         // FIXME: We should be able to throw here and terminate the query, but something in BlueEyes is hanging when we do so
                         //throw new Exception("Failure during Mongo query: " + t.getMessage)
                         None
