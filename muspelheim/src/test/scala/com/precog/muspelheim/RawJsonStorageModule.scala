@@ -64,7 +64,9 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 //  val Projection: ProjectionCompanion
   def projectionFor(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
 
+  implicit val ordering = IdentitiesOrder.toScalaOrdering
   private val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
+
   private val identity = new java.util.concurrent.atomic.AtomicInteger(0)
   private var projections: Map[ProjectionDescriptor, Vector[JValue]] = Map() 
 

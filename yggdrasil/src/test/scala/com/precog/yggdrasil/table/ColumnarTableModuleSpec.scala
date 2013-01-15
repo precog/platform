@@ -334,6 +334,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "perform a simple equality check" in testSimpleEqual
       "perform another simple equality check" in testAnotherSimpleEqual
       "perform yet another simple equality check" in testYetAnotherSimpleEqual
+      "perform a simple not-equal check" in testASimpleNonEqual
       "perform a equal-literal check" in checkEqualLiteral
       "perform a not-equal-literal check" in checkNotEqualLiteral
       "wrap the results of a transform in an object as the specified field" in checkWrapObject

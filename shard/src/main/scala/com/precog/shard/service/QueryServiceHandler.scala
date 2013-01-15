@@ -23,6 +23,7 @@ package service
 import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
+import com.precog.common.jobs._
 
 import blueeyes.core.data._
 import blueeyes.core.http._
@@ -36,15 +37,39 @@ import akka.dispatch.ExecutionContext
 
 import com.weiglewilczek.slf4s.Logging
 
-import scalaz.{ Monad, Success, Failure }
-import scalaz.Validation._
+import java.nio.CharBuffer
+
+import scalaz._
+import scalaz.Validation.{ success, failure }
 import scalaz.syntax.monad._
 
-
+<<<<<<< HEAD
 class QueryServiceHandler[A](queryExecutor: QueryExecutor[Future])(implicit M: Monad[Future])
 extends CustomHttpService[A, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
 with Logging {
+  def queryExecutorFactory: QueryExecutorFactory[Future, A]
+  def extractResponse(a: A): HttpResponse[QueryResult]
+
   val Command = """:(\w+)\s+(.+)""".r
+
+  private def handleErrors[A](qt: String, result: EvaluationError): HttpResponse[QueryResult] = result match {
+    case UserError(errorData) =>
+      HttpResponse[QueryResult](UnprocessableEntity, content = Some(Left(errorData)))
+  
+    case AccessDenied(reason) =>
+      HttpResponse[QueryResult](HttpStatus(Unauthorized, reason))
+  
+    case TimeoutError =>
+      HttpResponse[QueryResult](RequestEntityTooLarge)
+  
+    case SystemError(error) =>
+      error.printStackTrace()
+      logger.error("An error occurred processing the query: " + qt, error)
+      HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
+
+    case InvalidStateError(error) =>
+      HttpResponse[QueryResult](HttpStatus(PreconditionFailed, error))
+  }
 
   val service = (request: HttpRequest[A]) => {
     success((apiKey: APIKey, path: Path, query: String, opts: QueryOptions) => query.trim match {
@@ -53,23 +78,19 @@ with Logging {
       case Command("ds", arg) => describe(apiKey, Path(arg.trim))
       case Command("describe", arg) => describe(apiKey, Path(arg.trim))
       case qt =>
-        queryExecutor.execute(apiKey, query, path, opts) match {
-          case Success(stream) =>
-            M.point(HttpResponse[QueryResult](OK, content = Some(Right(stream))))
-          
-          case Failure(UserError(errorData)) =>
-            M.point(HttpResponse[QueryResult](UnprocessableEntity, content = Some(Left(errorData))))
-          
-          case Failure(AccessDenied(reason)) =>
-            M.point(HttpResponse[QueryResult](HttpStatus(Unauthorized, reason)))
-          
-          case Failure(TimeoutError) => 
-            M.point(HttpResponse[QueryResult](RequestEntityTooLarge))
-          
-          case Failure(SystemError(error)) =>
-            error.printStackTrace()
-            logger.error("An error occurred processing the query: " + qt, error)
-            M.point(HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")))
+        val executorV = queryExecutorFactory.executorFor(apiKey)
+        executorV flatMap {
+          case Success(executor) =>
+            executor.execute(r.apiKey, q, p, opts) map {
+              case Success(result) =>
+                extractResponse(result)
+              case Failure(error) =>
+                handleErrors(qt, error)
+            }
+
+          case Failure(error) =>
+            logger.error("Failure during evaluator setup: " + error)
+            Future(HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")))
         }
     })
   }
@@ -82,16 +103,38 @@ Takes a quirrel query and returns the result of evaluating the query.
 
   
   def list(apiKey: APIKey, p: Path) = {
-    queryExecutor.browse(apiKey, p).map {
+    queryExecutorFactory.browse(apiKey, p).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error listing path: " + p))))
     }
   }
 
   def describe(apiKey: APIKey, p: Path) = {
-    queryExecutor.structure(apiKey, p).map {
+    queryExecutorFactory.structure(apiKey, p).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error describing path: " + p))))
     }
   }
 }
+
+class SyncQueryServiceHandler(
+    val queryExecutorFactory: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]])(implicit
+    val dispatcher: MessageDispatcher,
+    val M: Monad[Future]) extends QueryServiceHandler[StreamT[Future, CharBuffer]] {
+
+  def extractResponse(stream: StreamT[Future, CharBuffer]): HttpResponse[QueryResult] = {
+    HttpResponse[QueryResult](OK, content = Some(Right(stream)))
+  }
+}
+
+class AsyncQueryServiceHandler(
+    val queryExecutorFactory: QueryExecutorFactory[Future, JobId])(implicit
+    val dispatcher: MessageDispatcher,
+    val M: Monad[Future]) extends QueryServiceHandler[JobId] {
+
+  def extractResponse(jobId: JobId): HttpResponse[QueryResult] = {
+    val result = JObject(JField("jobId", JString(jobId)) :: Nil)
+    HttpResponse[QueryResult](Accepted, content = Some(Left(result)))
+  }
+}
+

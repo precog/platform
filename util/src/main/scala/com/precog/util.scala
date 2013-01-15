@@ -21,7 +21,9 @@ package com.precog
 
 import scalaz.Order
 import scalaz.Monoid
+
 import java.util.Comparator
+import java.nio.ByteBuffer
 
 import scala.collection.mutable
 
@@ -50,6 +52,13 @@ package object util {
   @inline
   final def isValidLong(i: BigInt): Boolean = {
     MIN_LONG <= i && i <= MAX_LONG
+  }
+
+  final def flipBytes(buffer: ByteBuffer): Array[Byte] = {
+    val bytes = new Array[Byte](buffer.remaining())
+    buffer.get(bytes)
+    buffer.flip()
+    bytes
   }
 
   implicit def vectorMonoid[A]: Monoid[Vector[A]] = new Monoid[Vector[A]] {

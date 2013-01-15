@@ -64,6 +64,9 @@ trait BaseClient {
     })
   }
   
+  implicit def FutureStreamAsResponseStream = implicitly[Hoist[StreamT]].hoist(FutureAsResponse)
+  implicit def ResponseStreamAsFutureStream(implicit M: Monad[Response]) = implicitly[Hoist[StreamT]].hoist(ResponseAsFuture)
+
   protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A 
   protected def withJsonClient[A](f: HttpClient[ByteChunk] => A): A 
 }

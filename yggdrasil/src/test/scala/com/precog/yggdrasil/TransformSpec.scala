@@ -442,7 +442,8 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
     val expected = data flatMap { jv =>
       ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-        case (JUndefined, JUndefined) => None
+        case (_, JUndefined) => None
+        case (JUndefined, _) => None
         case (x, y) => Some(JBool(x == y))
       }
     }
@@ -480,7 +481,8 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
     val expected = data flatMap { jv =>
       ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-        case (JUndefined, JUndefined) => None
+        case (_, JUndefined) => None
+        case (JUndefined, _) => None
         case (x, y) => Some(JBool(x == y))
       }
     }
@@ -521,7 +523,44 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
     val expected = data flatMap { jv =>
       ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-        case (JUndefined, JUndefined) => None
+        case (_, JUndefined) => None
+        case (JUndefined, _) => None
+        case (x, y) => Some(JBool(x == y))
+      }
+    }
+
+    results.copoint mustEqual expected
+  }
+  
+  def testASimpleNonEqual = {
+    val array: JValue = JParser.parse("""
+      [{
+        "value":{
+          "value1":-1380814338912438254,
+          "value2":1380814338912438254
+        },
+        "key":[2.0,1.0]
+      }]""")
+    
+    val data: Stream[JValue] = (array match {
+      case JArray(li) => li
+      case _ => sys.error("Expected JArray")
+    }).toStream
+
+    val sample = SampleData(data)
+    val table = fromSample(sample)
+
+    val results = toJson(table.transform {
+        Equal(
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value1")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("value2"))
+        )
+    })
+
+    val expected = data flatMap { jv =>
+      ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
+        case (_, JUndefined) => None
+        case (JUndefined, _) => None
         case (x, y) => Some(JBool(x == y))
       }
     }

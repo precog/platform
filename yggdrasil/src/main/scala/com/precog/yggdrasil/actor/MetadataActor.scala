@@ -89,10 +89,11 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
   private val ingestBatchId = new java.util.concurrent.atomic.AtomicInteger()
 
   def receive = {
-    case Status => logger.trace(Status.toString); sender ! status
+    case Status => 
+      logger.trace(Status.toString)
+      sender ! status
 
-    case msg @ IngestBatchMetadata(updates, batchClock, batchOffset) => {
-      //logger.trace(msg.toString)
+    case msg @ IngestBatchMetadata(updates, batchClock, batchOffset) =>
       MDC.put("metadata_batch", ingestBatchId.getAndIncrement().toString)
       for(update <- updates) update match {
         case (descriptor, Some(metadata)) =>
@@ -110,33 +111,51 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       
       messageClock = messageClock |+| batchClock
       kafkaOffset = batchOffset orElse kafkaOffset
-    }
    
     case msg @ FindChildren(path) => 
       logger.trace(msg.toString)
       sender ! storage.findChildren(path)
+      logger.trace("Completed " + msg.toString)
     
     case msg @ FindSelectors(path) => 
       logger.trace(msg.toString)
       sender ! storage.findSelectors(path)
+      logger.trace("Completed " + msg.toString)
 
+      // Locate just the ProjectionDescriptors that are children of the given path and match the selector
     case msg @ FindDescriptors(path, selector) => 
       logger.trace(msg.toString)
-      val result = findDescriptors(path, selector).unsafePerformIO
+      val result: Set[ProjectionDescriptor] = findDescriptors(path, selector)
       logger.trace("Found descriptors: " + result)
       sender ! result
+      logger.trace("Completed " + msg.toString)
+
+    case msg @ FindProjections(path, selector) => 
+      logger.trace(msg.toString)
+      val result: Map[ProjectionDescriptor, ColumnMetadata] = runIO(fullDataFor(findDescriptors(path, selector)), "FindProjections")
+      logger.trace("Found projections: " + result)
+      sender ! result
+      logger.trace("Completed " + msg.toString)
 
     case msg @ FindPathMetadata(path, selector) => 
       logger.trace(msg.toString)
-      sender ! storage.findPathMetadata(path, selector, columnMetadataFor).unsafePerformIO
+      sender ! runIO(storage.findPathMetadata(path, selector, columnMetadataFor), "FindPathMetadata")
+      logger.trace("Completed " + msg.toString)
 
-    case msg @ FindDescriptorRoot(descriptor, createOk) => 
+    case msg @ InitDescriptorRoot(descriptor) =>
       logger.trace(msg.toString)
-      sender ! storage.findDescriptorRoot(descriptor, createOk)
+      sender ! runIO(storage.ensureDescriptorRoot(descriptor), "InitDescriptorRoot")
+      logger.trace("Completed " + msg.toString)
+
+    case msg @ FindDescriptorRoot(descriptor) => 
+      logger.trace(msg.toString)
+      sender ! storage.findDescriptorRoot(descriptor)
+      logger.trace("Completed " + msg.toString)
     
     case msg @ FindDescriptorArchive(descriptor) => 
       logger.trace(msg.toString)
-      sender ! storage.findArchiveRoot(descriptor)
+      sender ! runIO(storage.findArchiveRoot(descriptor), "FindDescriptorArchive")
+      logger.trace("Completed " + msg.toString)
     
     case msg @ FlushMetadata => 
       flush(Some(sender)).unsafePerformIO
@@ -144,7 +163,13 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
     case msg @ GetCurrentCheckpoint => 
       logger.trace(msg.toString)
       sender ! kafkaOffset.map(YggCheckpoint(_, messageClock)) 
+      logger.trace("Completed " + msg.toString)
+
+    case bad =>
+      logger.error("Unknown message: " + bad)
   }
+
+  private def runIO[A](io: IO[A], msg: String): A = io.except({ case ex => logger.error(msg, ex); throw ex }).unsafePerformIO
 
   private def flush(replyTo: Option[ActorRef]): IO[PrecogUnit] = {
     flushRequests += 1
@@ -171,12 +196,12 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
   def status: JValue = JObject(JField("Metadata", JObject(JField("state", JString("Ice cream!")) :: Nil)) :: Nil) // TODO: no, really...
 
-  def findDescriptors(path: Path, selector: CPath): IO[Map[ProjectionDescriptor, ColumnMetadata]] = {
+  def findDescriptors(path: Path, selector: CPath): Set[ProjectionDescriptor] = {
     @inline def matches(path: Path, selector: CPath) = {
       (col: ColumnDescriptor) => col.path == path && (col.selector.nodes startsWith selector.nodes)
     }
 
-    fullDataFor(storage.findDescriptors(_.columns.exists(matches(path, selector))))
+    storage.findDescriptors(_.columns.exists(matches(path, selector)))
   } 
 
   def ensureMetadataCached(descriptor: ProjectionDescriptor): IO[PrecogUnit] = {
@@ -258,8 +283,10 @@ case class ExpectedEventActions(eventId: EventId, count: Int) extends ShardMetad
 case class FindChildren(path: Path) extends ShardMetadataAction
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: CPath) extends ShardMetadataAction
+case class FindProjections(path: Path, selector: CPath) extends ShardMetadataAction
 case class FindPathMetadata(path: Path, selector: CPath) extends ShardMetadataAction
-case class FindDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean) extends ShardMetadataAction
+case class InitDescriptorRoot(desc: ProjectionDescriptor) extends ShardMetadataAction
+case class FindDescriptorRoot(desc: ProjectionDescriptor) extends ShardMetadataAction
 case class FindDescriptorArchive(desc: ProjectionDescriptor) extends ShardMetadataAction
 case class MetadataSaved(saved: Set[ProjectionDescriptor]) extends ShardMetadataAction
 case object GetCurrentCheckpoint

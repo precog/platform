@@ -21,6 +21,7 @@ package com.precog.common
 package jobs
 
 import blueeyes.json._
+import blueeyes.core.http.MimeType
 
 import com.precog.common.security._
 
@@ -33,9 +34,12 @@ import scala.collection.mutable
 import scalaz._
 
 
-final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManager[M] with JobStateManager[M] {
+final class InMemoryJobManager[M[+_]](implicit val M: Monad[M])
+    extends JobManager[M] with JobStateManager[M] with JobResultManager[M] {
   import scalaz.syntax.monad._
   import JobState._
+
+  val fs = new InMemoryFileStorage[M]
 
   val jobs: mutable.Map[JobId, Job] = new mutable.HashMap[JobId, Job] with mutable.SynchronizedMap[JobId, Job]
 
@@ -45,12 +49,15 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
 
   val status: mutable.Map[JobId, Status] = new mutable.HashMap[JobId, Status] with mutable.SynchronizedMap[JobId, Status]
 
+  val result: mutable.Map[JobId, (List[MimeType], StreamT[M, Array[Byte]])] =
+    new mutable.HashMap[JobId, (List[MimeType], StreamT[M, Array[Byte]])] with mutable.SynchronizedMap[JobId, (List[MimeType], StreamT[M, Array[Byte]])]
+
   private def newJobId: JobId = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
-  def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): M[Job] = {
+  def createJob(auth: APIKey, name: String, jobType: String, data: Option[JValue], started: Option[DateTime]): M[Job] = {
     M.point {
       val state = started map (Started(_, NotStarted)) getOrElse NotStarted
-      val job = Job(newJobId, auth, name, jobType, state, expires)
+      val job = Job(newJobId, auth, name, jobType, data, state)
       jobs(job.id) = job
       statuses(job.id) = Nil
       job
@@ -142,4 +149,3 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends JobManag
     }
   }
 }
-

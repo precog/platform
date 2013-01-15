@@ -26,6 +26,9 @@ import com.precog.daze._
 import com.precog.common.Path
 import com.precog.common.accounts._
 import com.precog.common.security._
+import com.precog.common.jobs._
+
+import java.nio.ByteBuffer
 
 import org.specs2.mutable.Specification
 import org.specs2.specification._
@@ -71,7 +74,7 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
 
 trait TestShardService extends
   BlueEyesServiceSpecification with
-  ShardService with
+  AsyncShardService with
   AkkaDefaults { self =>
   
   val config = """ 
@@ -89,12 +92,34 @@ trait TestShardService extends
 
   val actorSystem = ActorSystem("ingestServiceSpec")
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
   implicit val M: Monad[Future] with Copointed[Future] = new FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](m: Future[A]) = Await.result(m, to)
   }
 
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
-  val accountFinder = new TestAccountFinder[Future](Map(), Map())
+  val accountFinder0 = new TestAccountFinder[Future](Map(), Map())
+  val jobManager = new InMemoryJobManager[Future]
+  val to = Duration(3, "seconds")
+  
+  def queryExecutorFactoryFactory(config: Configuration, accessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future], extJobManager: JobManager[Future]) = new TestQueryExecutorFactory {
+    val actorSystem = self.actorSystem
+    val executionContext = self.asyncContext
+    
+    val accessControl = apiKeyManager
+    val apiKeyFinder = apiKeyFinder0
+    val jobManager = self.jobManager
+
+    val ownerMap = Map(
+      Path("/")     ->             Set("root"),
+      Path("/test") ->             Set("test"),
+      Path("/test/foo") ->         Set("test"),
+      Path("/expired") ->          Set("expired"),
+      Path("/inaccessible") ->     Set("other"),
+      Path("/inaccessible/foo") -> Set("other")
+    )
+  }
+
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   
   val testPath = Path("/test")
@@ -132,6 +157,10 @@ trait TestShardService extends
 
   def AccountFinder(config: Configuration) = accountFinder
 
+  def jobManagerFactory(config: Configuration) = jobManager
+
+  def clock = Clock.System
+
   import java.nio.ByteBuffer
 
   implicit val queryResultByteChunkTranscoder =
@@ -161,12 +190,15 @@ trait TestShardService extends
   lazy val metaService = client.contentType[QueryResult](application/(MimeTypes.json))
                                 .path("/meta/fs/")
 
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(1, Duration(1, "second"))
+  lazy val asyncService = client.contentType[QueryResult](application/(MimeTypes.json))
+                                .path("/analytics/queries")
+
+  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(1, Duration(3, "second"))
   val shortFutureTimeouts = FutureTimeouts(1, Duration(50, "millis"))
   
   implicit def AwaitBijection(implicit bi: Bijection[QueryResult, Future[ByteChunk]]): Bijection[QueryResult, ByteChunk] = new Bijection[QueryResult, ByteChunk] {
     def unapply(chunk: ByteChunk): QueryResult = bi.unapply(Future(chunk))
-    def apply(res: QueryResult) = Await.result(bi(res), Duration(1, "second"))
+    def apply(res: QueryResult) = Await.result(bi(res), Duration(3, "second"))
   }
 }
 
@@ -177,15 +209,75 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query).get(path)
   }
 
+  def asyncQuery(query: String, apiKey: Option[String] = Some(testAPIKey), path: String = ""): Future[HttpResponse[QueryResult]] = {
+    apiKey.map { asyncService.query("apiKey", _) }.getOrElse(asyncService)
+        .query("q", query).query("prefixPath", path).post[QueryResult]("") {
+      Right(StreamT.empty[Future, CharBuffer])
+    }
+  }
+
+  def asyncQueryResults(jobId: JobId, apiKey: Option[String] = Some(testAPIKey)): Future[HttpResponse[QueryResult]] = {
+    apiKey.map { asyncService.query("apiKey", _) }.getOrElse(asyncService).get(jobId)
+  }
+
   val simpleQuery = "1 + 1"
   val relativeQuery = "//foo"
   val accessibleAbsoluteQuery = "//test/foo"
   val inaccessibleAbsoluteQuery = "//inaccessible/foo"
 
+  def extractResult(data: StreamT[Future, CharBuffer]): Future[JValue] = {
+    data.foldLeft("") { _ + _.toString } map (JParser.parse(_))
+  }
+
+  def extractJobId(stream: StreamT[Future, CharBuffer]): Future[JobId] = {
+    extractResult(stream) map (_ \ "jobId") map {
+      case JString(jobId) => jobId
+      case _ => sys.error("This is not JSON! GIVE ME JSON!")
+    }
+  }
+
+  def waitForJobCompletion(jobId: JobId): Future[Either[String, (Option[MimeType], StreamT[Future, Array[Byte]])]] = {
+    import JobState._
+
+    jobManager.findJob(jobId) flatMap {
+      case Some(Job(_, _, _, _, _, NotStarted | Started(_, _))) =>
+        waitForJobCompletion(jobId)
+      case Some(_) =>
+        jobManager.getResult(jobId)
+      case None =>
+        Future(Left("The job doesn't even exist!!!"))
+    }
+  }
+
   "Shard query service" should {
     "handle absolute accessible query from root path" in {
       query(accessibleAbsoluteQuery) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(_), _) => ok
+      }}
+    }
+    "create a job when an async query is posted" in {
+      val res = for {
+        HttpResponse(HttpStatus(Accepted, _), _, Some(Right(res)), _) <- asyncQuery(simpleQuery)
+        jobId <- extractJobId(res)
+        job <- jobManager.findJob(jobId)
+      } yield job
+
+      res must whenDelivered { beLike {
+        case Some(Job(_, _, _, _, _, _)) => ok
+      }}
+    }
+    "results of an async job must eventually be made available" in {
+      val res = for {
+        HttpResponse(HttpStatus(Accepted, _), _, Some(Right(res)), _) <- asyncQuery(simpleQuery)
+        jobId <- extractJobId(res)
+        _ <- waitForJobCompletion(jobId)
+        HttpResponse(HttpStatus(OK, _), _, Some(Right(data)), _) <- asyncQueryResults(jobId)
+        result <- extractResult(data)
+      } yield result
+
+      val expected = JArray(JNum(2) :: Nil)
+      res must whenDelivered { beLike {
+        case `expected` => ok
       }}
     }
     "reject absolute inaccessible query from root path" in {
@@ -254,27 +346,49 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   }
 }
 
-trait TestQueryExecutor extends QueryExecutor[Future] {
+trait TestQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQueryModule { self =>
   import scalaz.syntax.monad._
   import scalaz.syntax.traverse._
   import AkkaTypeClasses._
   
   def actorSystem: ActorSystem  
   implicit def executionContext: ExecutionContext
-  val to = Duration(1, "seconds")
+  val to = Duration(3, "seconds")
   
   val accessControl: AccessControl[Future]
   val ownerMap: Map[Path, Set[AccountId]]
 
-  private def wrap(a: JArray): StreamT[Future, CharBuffer] = {
+  private def wrap[M[+_]: Monad](a: JArray): StreamT[M, CharBuffer] = {
     val str = a.toString
     val buffer = CharBuffer.allocate(str.length)
     buffer.put(str)
     buffer.flip()
     
-    StreamT.fromStream(Stream(buffer).point[Future])
+    StreamT.fromStream(Stream(buffer).point[M])
   }
 
+  type YggConfig = ManagedQueryModuleConfig
+  object yggConfig extends YggConfig {
+    val jobPollFrequency = Duration(2, "seconds")
+    val clock = Clock.System
+  }
+
+  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
+    Future(Success(new AsyncQueryExecutor {
+      val executionContext = self.executionContext
+    }))
+  }
+
+  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
+    Future(Success(new SyncQueryExecutor {
+      val executionContext = self.executionContext
+    }))
+  }
+
+
+  // def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = Future {
+  protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
+    new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
     val requiredPaths = if(query startsWith "//") Set(prefix / Path(query.substring(1))) else Set.empty[Path]
     val allowed = Await.result(Future.sequence(requiredPaths.map {
@@ -282,9 +396,11 @@ trait TestQueryExecutor extends QueryExecutor[Future] {
     }).map(_.forall(identity)), to)
     
     if(allowed)
-      success(wrap(JArray(List(JNum(2)))))
+          shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
     else
-      failure(AccessDenied("No data accessable at the specified path"))
+          shardQueryMonad.point(failure(AccessDenied("No data accessable at the specified path")))
+      }
+    }
   }
 
   def browse(apiKey: APIKey, path: Path) = {

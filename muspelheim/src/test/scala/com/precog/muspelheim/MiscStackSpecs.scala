@@ -1934,6 +1934,45 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       evalE(input) mustEqual(Set((Vector(), SString("123"))))
     }
+
+    "correctly evaluate tautology on a filtered set" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | 
+        | medals' := medals where medals.Country = "India"
+        | medals'.Total = medals'.Total
+        | """.stripMargin
+        
+      val results = eval(input)
+      results must contain(SBoolean(true))
+      results must not(contain(SBoolean(false)))
+    }
+    
+    "produce a non-empty set for a ternary join-optimized cartesian" in {
+      val input = """
+        | clicks := //clicks
+        | 
+        | clicks' := new clicks
+        | clicks ~ clicks'
+        |   { a: clicks, b: clicks', c: clicks } where clicks'.pageId = clicks.pageId
+        | """.stripMargin
+        
+      evalE(input) must not(beEmpty)
+    }
+
+    "not produce out-of-order identities for simple cartesian and join with a reduction" in {
+      val input = """
+        athletes := load("/summer_games/athletes")
+        medals := load("/summer_games/london_medals")
+
+        medals~athletes
+        medalsWithPopulation := medals with {population: athletes.Population}
+        results := medalsWithPopulation where athletes.Countryname = medals.Country
+        count(results where results.Country = "Argentina")
+        """
+
+      eval(input) must not(throwA[Exception])
+    }
   }
 }
 

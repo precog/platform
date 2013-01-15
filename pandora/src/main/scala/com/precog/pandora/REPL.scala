@@ -251,6 +251,7 @@ object Console extends App {
     val sortWorkDir = scratchDir
     val memoizationBufferSize = sortBufferSize
     val memoizationWorkDir = scratchDir
+    val ingestConfig = None
 
     val flatMapTimeout = controlTimeout
     val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
@@ -308,7 +309,8 @@ object Console extends App {
 
         object Projection extends JDBMProjectionCompanion {
           val fileOps = FilesystemFileOps
-          def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+          def ensureBaseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+          def findBaseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
           def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
         }
 

@@ -451,7 +451,7 @@ object KafkaTools extends Command {
 
       message.get(bytes)
 
-      println("Type: %d, payload: %s".format(tpe, new String(bytes, "UTF-8")))
+      println("Type: %d, offset: %d, payload: %s".format(tpe, msg.offset, new String(bytes, "UTF-8")))
     }
   }
 
@@ -459,9 +459,11 @@ object KafkaTools extends Command {
     def dump(i: Int, msg: MessageAndOffset) {
       EventEncoding.read(msg.message.buffer) match {
         case Success(Ingest(apiKey, path, ownerAccountId, data, _)) =>
-          println("Ingest-%06d Path: %s APIKey: %s Owner: %s --".format(i+1, path, apiKey, ownerAccountId))
+          println("Ingest-%06d Offset: %d Path: %s APIKey: %s Owner: %s --".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.renderPretty))
-        case _ =>
+
+        case other =>
+          println("Message %d: %s was not an ingest request.".format(i+1, other.toString)
       }
     }
   }
@@ -470,9 +472,11 @@ object KafkaTools extends Command {
     def dump(i: Int, msg: MessageAndOffset) {
       EventMessageEncoding.read(msg.message.buffer) match {
         case Success(IngestMessage(apiKey, path, ownerAccountId, data, _)) =>
-          println("IngestMessage-%06d Path: %s APIKey: %s Owner: %s".format(i+1, path, apiKey, ownerAccountId))
+          println("IngestMessage-%06d Offset: %d, Path: %s APIKey: %s Owner: %s".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.serialize.renderPretty))
-        case _ =>
+
+        case other =>
+          println("Message %d: %s was not an ingest request.".format(i+1, other.toString)
       }
     }
   }
@@ -729,6 +733,7 @@ object ImportTools extends Command with Logging {
 
         class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig with JDBMProjectionModuleConfig {
           val maxSliceSize = config[Int]("precog.jdbm.maxSliceSize", 50000)
+          val ingestConfig = None
         }
 
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
@@ -738,7 +743,8 @@ object ImportTools extends Command with Logging {
 
         object Projection extends JDBMProjectionCompanion {
           def fileOps = FilesystemFileOps
-          def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findDescriptorRoot(descriptor, true)
+          def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = ms.ensureDescriptorRoot(descriptor)
+          def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = ms.findDescriptorRoot(descriptor)
           def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findArchiveRoot(descriptor)
         }
 

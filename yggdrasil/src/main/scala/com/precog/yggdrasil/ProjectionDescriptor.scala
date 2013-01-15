@@ -138,6 +138,12 @@ case class ColumnDescriptor(path: Path, selector: CPath, valueType: CType, autho
       path == p && selector == s && valueType == vt && authorities == a 
     case _ => false
   }
+
+  def isChildOf(parentPath: Path, parentSelector: CPath): Boolean = 
+    path == parentPath && (selector.nodes startsWith parentSelector.nodes)
+
+  def isChildOf(parentPath: Path): Boolean =
+    path isChildOf parentPath
 }
 
 object ColumnDescriptor extends ((Path, CPath, CType, Authorities) => ColumnDescriptor) {

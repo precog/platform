@@ -37,6 +37,7 @@ import Validation._
 
 sealed trait EvaluationError
 case class UserError(errorData: JArray) extends EvaluationError
+case class InvalidStateError(message: String) extends EvaluationError
 case class AccessDenied(reason: String) extends EvaluationError
 case object TimeoutError extends EvaluationError
 case class SystemError(error: Throwable) extends EvaluationError
@@ -48,23 +49,28 @@ object EvaluationError {
 }
 
 case class QueryOptions(
-  page: Option[(Int, Int)] = None,
+  page: Option[(Long, Long)] = None,
   sortOn: List[CPath] = Nil,
-  sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending)
+  sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending,
+  timeout: Option[Long] = None)
 
 trait MetadataClient[M[+_]] {
   def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]]
   def structure(apiKey: APIKey, path: Path): M[Validation[String, JObject]]
 }
 
-trait QueryExecutor[M[+_]] extends MetadataClient[M] {
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): Validation[EvaluationError, StreamT[M, CharBuffer]]
+trait QueryExecutor[M[+_], +A] {
+  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, A]]
+}
+
+trait QueryExecutorFactory[M[+_], +A] extends MetadataClient[M] {
+  def executorFor(apiKey: APIKey): M[Validation[String, QueryExecutor[M, A]]]
   def status(): M[Validation[String, JValue]]
   def startup(): M[Boolean]
   def shutdown(): M[Boolean]
 }
 
-trait NullQueryExecutor extends QueryExecutor[Id.Id] {
+trait NullQueryExecutor extends QueryExecutor[Id.Id, Nothing] {
   def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
 

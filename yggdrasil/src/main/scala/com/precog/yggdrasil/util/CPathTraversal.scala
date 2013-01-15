@@ -49,13 +49,14 @@ sealed trait CPathTraversal { self =>
       case Done =>
         val validPaths = paths map { case (_, nodes) => CPath(nodes.reverse) }
 
-        val lCols: Array[(CPath, Column)] = validPaths.flatMap({ path =>
-          left.getOrElse(path, Set.empty).toList map ((path, _))
-        })(collection.breakOut)
+        def makeCols(pathToCol: Map[CPath, Set[Column]]): Array[(CPath, Column)] = {
+          validPaths.flatMap({ path =>
+            pathToCol.getOrElse(path, Set.empty).toList map ((path, _))
+          })(collection.breakOut)
+        }
 
-        val rCols: Array[(CPath, Column)] = validPaths.flatMap({ path =>
-          right.getOrElse(path, Set.empty).toList map ((path, _))
-        })(collection.breakOut)
+        val lCols = makeCols(left)
+        val rCols = makeCols(right)
 
         val comparators: Array[CPathComparator] = (for ((lPath, lCol) <- lCols; (rPath, rCol) <- rCols) yield {
           CPathComparator(lPath, lCol, rPath, rCol)

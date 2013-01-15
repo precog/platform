@@ -110,13 +110,14 @@ class IngestServiceHandler(
           // TODO: Write out job completion information to the queue.
           M.point(SyncSuccess(total, ingested, errors))
         } else {
-          val (_, values, errors0) = batch.foldLeft((0, Vector.empty[JValue], Vector.empty[(Int, Throwable)])) {
-            case ((i, values, errors), Success(value)) => (i + 1, values :+ value, errors)
-            case ((i, values, errors), Failure(error)) => (i + 1, values, errors :+ (i, error))
+          val (_, values, errors0) = batch.foldLeft((0, Vector.empty[JValue], Vector.empty[(Int, Extractor.Error)])) {
+            case ((i, values, errors), Success(value)) if value.flattenWithPath.size < 250 => (i + 1, values :+ value, errors)
+            case ((i, values, errors), Success(value)) => (i + 1, values, errors :+ (i, Extractor.Invalid("Cannot ingest values with more than 250 primitive fields. This limitiation will be lifted in a future release. Thank you for your patience."))
+            case ((i, values, errors), Failure(error)) => (i + 1, values, errors :+ (i, Extractor.Thrown(error)))
           }
 
           ingest(apiKey, path, accountId, values, Some(jobId)) flatMap { _ =>
-            readBatches(reader, total + batch.length, ingested + values.length, errors ++ (errors0 map { ((_:Throwable).getMessage).second }))
+            readBatches(reader, total + batch.length, ingested + values.length, errors ++ (errors0 map { ((_:Extractor.Error).message).second }))
           }
         }
       }

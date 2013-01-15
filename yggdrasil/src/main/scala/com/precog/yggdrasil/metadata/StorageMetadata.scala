@@ -48,7 +48,7 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 
-trait StorageMetadata[M[+_]] {
+trait StorageMetadata[M[+_]] { self =>
   implicit def M: Monad[M]
 
   def findChildren(path: Path): M[Set[Path]]
@@ -73,6 +73,24 @@ trait StorageMetadata[M[+_]] {
 
   def typeFilter(path: Path, selector: CPath, valueType: CType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
     t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType == valueType )
+  }
+
+
+  def liftM[T[_[+_], +_]](implicit T: Hoist[T]) = new StorageMetadata[({ type λ[+α] = T[M, α] })#λ] {
+    private implicit val M0: Monad[M] = self.M
+    val M: Monad[({ type λ[+α] = T[M, α] })#λ] = T(M0)
+
+    def findChildren(path: Path) = self.findChildren(path).liftM[T]
+    def findSelectors(path: Path) = self.findSelectors(path).liftM[T]
+    def findProjections(path: Path, selector: CPath) = self.findProjections(path, selector).liftM[T]
+    def findPathMetadata(path: Path, selector: CPath) = self.findPathMetadata(path, selector).liftM
+
+    override def findProjections(path: Path) = self.findProjections(path).liftM
+
+    override def findProjections(path: Path, selector: CPath, valueType: CType) = self.findProjections(path, selector, valueType).liftM
+
+    override def typeFilter(path: Path, selector: CPath, valueType: CType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean =
+      self.typeFilter(path, selector, valueType)(t)
   }
 }
 
@@ -173,7 +191,7 @@ class ActorStorageMetadata(actor: ActorRef, serviceTimeout0: Timeout)(implicit v
   }
 
   def findProjections(path: Path, selector: CPath) = 
-    (actor ? FindDescriptors(path, selector)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]] onFailure { 
+    (actor ? FindProjections(path, selector)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]] onFailure { 
       case e => logger.error("Error finding projections for " + (path, selector), e) 
     }
   

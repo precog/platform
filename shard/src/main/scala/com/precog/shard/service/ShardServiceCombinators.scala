@@ -54,9 +54,32 @@ trait ShardServiceCombinators extends EventServiceCombinators {
 
   import scalaz.syntax.apply._
   import scalaz.syntax.validation._
+  import scalaz.std.string._
 
-  private val Limit = """([1-9][0-9]*)""".r
-  private val Offset = """(0|[1-9][0-9]*)""".r
+  trait NonNegativeLong {
+    val BigIntPattern = """(0|[1-9][0-9]*)""".r
+
+    def unapply(str: String): Option[Long] = str match {
+      case BigIntPattern(num) =>
+        val big = BigInt(num)
+        val n = big.toLong
+        if (big == BigInt(n)) Some(n) else None
+      case _ => None
+    }
+  }
+
+  private object Limit extends NonNegativeLong {
+    override def unapply(str: String): Option[Long] = super.unapply(str) filter (_ > 0)
+  }
+  private object Offset extends NonNegativeLong
+  private object Millis extends NonNegativeLong
+
+  private def getTimeout(request: HttpRequest[_]): Validation[String, Option[Long]] = {
+    request.parameters.get('timeout).filter(_ != null).map {
+      case Millis(n) => Validation.success(n)
+      case _ => Validation.failure("Timeout must be a non-negative integer.")
+    }.sequence[({ type λ[α] = Validation[String, α] })#λ, Long]
+  }
 
   private def getSortOn(request: HttpRequest[_]): Validation[String, List[CPath]] = {
     request.parameters.get('sortOn).filter(_ != null) map { paths =>
@@ -85,17 +108,17 @@ trait ShardServiceCombinators extends EventServiceCombinators {
     } getOrElse success(TableModule.SortAscending)
   }
 
-  private def getOffsetAndLimit(request: HttpRequest[_]): ValidationNEL[String, Option[(Int, Int)]] = {
-    val limit: Validation[String, Option[Int]] = request.parameters.get('limit).filter(_ != null) map {
-      case Limit(str) => Validation.success(Some(str.toInt))
+  private def getOffsetAndLimit(request: HttpRequest[_]): ValidationNEL[String, Option[(Long, Long)]] = {
+    val limit = request.parameters.get('limit).filter(_ != null).map {
+      case Limit(n) => Validation.success(n)
       case _ => Validation.failure("The limit query parameter must be a positive integer.")
-    } getOrElse Validation.success(None)
+    }.sequence[({ type λ[α] = Validation[String, α] })#λ, Long]
 
-    val offset: Validation[String, Option[Int]] = request.parameters.get('skip).filter(_ != null) map {
-      case Offset(str) if limit.map(_.isDefined) | true => Validation.success(Some(str.toInt))
-      case Offset(str) => Validation.failure("The offset query parameter cannot be used without a limit.")
+    val offset = request.parameters.get('skip).filter(_ != null).map {
+      case Offset(n) if limit.map(_.isDefined) | true => Validation.success(n)
+      case Offset(n) => Validation.failure("The offset query parameter cannot be used without a limit.")
       case _ => Validation.failure("The offset query parameter must be a non-negative integer.")
-    } getOrElse Validation.success(None)
+    }.sequence[({ type λ[α] = Validation[String, α] })#λ, Long]
 
     (offset.toValidationNEL |@| limit.toValidationNEL) { (offset, limit) =>
       limit map ((offset getOrElse 0, _))
@@ -111,12 +134,14 @@ trait ShardServiceCombinators extends EventServiceCombinators {
         val offsetAndLimit = getOffsetAndLimit(request)
         val sortOn = getSortOn(request).toValidationNEL
         val sortOrder = getSortOrder(request).toValidationNEL
+        val timeout = getTimeout(request).toValidationNEL
 
-        (offsetAndLimit |@| sortOn |@| sortOrder) { (offsetAndLimit, sortOn, sortOrder) =>
+        (offsetAndLimit |@| sortOn |@| sortOrder |@| timeout) { (offsetAndLimit, sortOn, sortOrder, timeout) =>
           val opts = QueryOptions(
             page = offsetAndLimit,
             sortOn = sortOn,
-            sortOrder = sortOrder
+            sortOrder = sortOrder,
+            timeout = timeout
           )
 
           query map { q =>
@@ -129,6 +154,20 @@ trait ShardServiceCombinators extends EventServiceCombinators {
           case Failure(errors) => failure(DispatchError(BadRequest, errors.list mkString "\n"))
         }
       }
+    }
+  }
+
+  def asyncQuery[A, B](next: HttpService[A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]]) = {
+    new DelegatingService[A, APIKeyRecord => Future[B], A, (APIKeyRecord, Path) => Future[B]] {
+      val delegate = query(next)
+      val service = { (request: HttpRequest[A]) =>
+        val path = request.parameters.get('prefixPath).filter(_ != null).getOrElse("")
+        delegate.service(request.copy(parameters = request.parameters + ('sync -> "async"))) map { f =>
+          (apiKey: APIKeyRecord) => f(apiKey, Path(path))
+        }
+      }
+
+      def metadata = delegate.metadata
     }
   }
 

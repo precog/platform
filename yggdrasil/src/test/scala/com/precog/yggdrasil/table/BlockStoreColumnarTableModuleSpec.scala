@@ -75,6 +75,9 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
       "fully homogeneous data with object" in homogeneousSortSampleWithNonexistentSortKey
       "data with undefined sort keys" in partiallyUndefinedSortSample
       "heterogeneous sort keys"       in heterogeneousSortSample
+      "heterogeneous sort keys case 2" in heterogeneousSortSample2
+      "heterogeneous sort keys ascending" in heterogeneousSortSampleAscending
+      "heterogeneous sort keys descending" in heterogeneousSortSampleDescending
       "top-level hetereogeneous values" in heterogeneousBaseValueTypeSample
       "sort with a bad schema"        in badSchemaSortSample
       "merges over three cells"       in threeCellMerge

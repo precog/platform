@@ -53,17 +53,15 @@ trait JDBMProjectionModule extends ProjectionModule with YggConfigComponent {
     def fileOps: FileOps
 
     // Must return a directory
-    def baseDir(descriptor: ProjectionDescriptor): IO[Option[File]]
+    def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File]
+    def findBaseDir(descriptor: ProjectionDescriptor): Option[File]
     
     // Must return a directory  
     def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]]
 
     def open(descriptor: ProjectionDescriptor): IO[Projection] = {
       pmLogger.debug("Opening JDBM projection for " + descriptor)
-      baseDir(descriptor) map { 
-        case Some(bd) => new Projection(bd, descriptor) 
-        case None => throw new FileNotFoundException("Could not locate base for projection: " + descriptor)
-      }
+      ensureBaseDir(descriptor) map { bd => new Projection(bd, descriptor) }
     }
 
     def close(projection: Projection) = {
@@ -75,7 +73,7 @@ trait JDBMProjectionModule extends ProjectionModule with YggConfigComponent {
       pmLogger.debug("Archiving " + descriptor)
       val dirs = 
         for {
-          base    <- baseDir(descriptor)
+          base    <- IO { findBaseDir(descriptor) }
           archive <- archiveDir(descriptor)
         } yield (base, archive) 
 
@@ -99,7 +97,7 @@ trait JDBMProjectionModule extends ProjectionModule with YggConfigComponent {
         case (Some(base), _) =>
           throw new FileNotFoundException("Could not locate archive dir for projection: " + descriptor)
         case _ =>
-          throw new FileNotFoundException("Could not locate base dir for projection: " + descriptor)
+          pmLogger.warn("Could not locate base dir for projection: " + descriptor + ", skipping archive"); IO(false)
       }
     }
   }

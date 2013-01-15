@@ -21,6 +21,7 @@ package com.precog.common
 package jobs
 
 import blueeyes.json._
+import blueeyes.core.http.MimeType
 
 import com.precog.common.security._
 
@@ -37,7 +38,7 @@ trait JobManager[M[+_]] { self =>
    * the job will be put in the Started state, otherwise it will be in the
    * NotStarted state until `start(...)` is run.
    */
-  def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): M[Job]
+  def createJob(auth: APIKey, name: String, jobType: String, data: Option[JValue], started: Option[DateTime]): M[Job]
 
   /** 
    * Returns the Job with the given ID if it exists.
@@ -107,11 +108,25 @@ trait JobManager[M[+_]] { self =>
    * Moves the job to the `Finished` terminal state, with the given value as
    * the result.
    */
-  def finish(job: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): M[Either[String, Job]]
+  def finish(job: JobId, finishedAt: DateTime = new DateTime): M[Either[String, Job]]
 
-  def withM[N[+_]](implicit t: M ~> N) = new JobManager[N] {
-    def createJob(auth: APIKey, name: String, jobType: String, started: Option[DateTime], expires: Option[DateTime]): N[Job] =
-      t(self.createJob(auth, name, jobType, started, expires))
+  /**
+   * Moves the job to the `Expired` terminal state.
+   */
+  def expire(job: JobId, expiredAt: DateTime = new DateTime): M[Either[String, Job]]
+
+  def setResult(job: JobId, mimeType: Option[MimeType], data: StreamT[M, Array[Byte]]): M[Either[String, Unit]]
+
+  def getResult(job: JobId): M[Either[String, (Option[MimeType], StreamT[M, Array[Byte]])]]
+
+  def withM[N[+_]](implicit t: M ~> N, u: N ~> M, M: Monad[M], N: Monad[N]) = new JobManager[N] {
+    import scalaz.syntax.monad._
+
+    private val transformStreamBack = implicitly[Hoist[StreamT]].hoist(u)
+    private val transformStreamForward = implicitly[Hoist[StreamT]].hoist(t)
+
+    def createJob(auth: APIKey, name: String, jobType: String, data: Option[JValue], started: Option[DateTime]): N[Job] =
+      t(self.createJob(auth, name, jobType, data, started))
 
     def findJob(job: JobId): N[Option[Job]] = t(self.findJob(job))
 
@@ -134,7 +149,17 @@ trait JobManager[M[+_]] { self =>
 
     def abort(job: JobId, reason: String, abortedAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.abort(job, reason, abortedAt))
 
-    def finish(job: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.finish(job, result, finishedAt))
+    def finish(job: JobId, finishedAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.finish(job, finishedAt))
+
+    def expire(job: JobId, expiredAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.expire(job, expiredAt))
+
+    def setResult(job: JobId, mimeType: Option[MimeType], data: StreamT[N, Array[Byte]]): N[Either[String, Unit]] =
+      t(self.setResult(job, mimeType, transformStreamBack(data)))
+
+    def getResult(job: JobId): N[Either[String, (Option[MimeType], StreamT[N, Array[Byte]])]] = t(self.getResult(job)) map {
+      case Left(s) => Left(s)
+      case Right((mimeType, data)) => Right((mimeType, transformStreamForward(data)))
+    }
   }
 }
 
@@ -165,11 +190,38 @@ trait JobStateManager[M[+_]] { self: JobManager[M] =>
       Left("Job already in terminal state. %s" format JobState.describe(badState))
   }
 
-  def finish(id: JobId, result: Option[JobResult], finishedAt: DateTime = new DateTime): M[Either[String, Job]] = transition(id) {
+  def finish(id: JobId, finishedAt: DateTime = new DateTime): M[Either[String, Job]] = transition(id) {
     case prev @ (NotStarted | Started(_, _) | Cancelled(_, _, _)) =>
-      Right(Finished(result, finishedAt, prev))
+      Right(Finished(finishedAt, prev))
+    case badState =>
+      Left("Job already in terminal state. %s" format JobState.describe(badState))
+  }
+
+  def expire(id: JobId, expiredAt: DateTime = new DateTime): M[Either[String, Job]] = transition(id) {
+    case prev @ (NotStarted | Started(_, _) | Cancelled(_, _, _)) =>
+      Right(Expired(expiredAt, prev))
     case badState =>
       Left("Job already in terminal state. %s" format JobState.describe(badState))
   }
 }
 
+trait JobResultManager[M[+_]] { self: JobManager[M] =>
+  import scalaz.syntax.monad._
+
+  implicit def M: Monad[M]
+  protected def fs: FileStorage[M]
+
+  def setResult(id: JobId, mimeType: Option[MimeType], data: StreamT[M, Array[Byte]]): M[Either[String, Unit]] = {
+    findJob(id) flatMap (_ map { job =>
+      fs.save(job.id, FileData(mimeType, data)) map (Right(_))
+    } getOrElse M.point(Left("Invalid job id: " + id)))
+  }
+
+  def getResult(job: JobId): M[Either[String, (Option[MimeType], StreamT[M, Array[Byte]])]] = {
+    fs.load(job) map (_ map { case FileData(mimeType, data) =>
+      Right((mimeType, data))
+    } getOrElse {
+      Left("No results exist for job " + job)
+    })
+  }
+}

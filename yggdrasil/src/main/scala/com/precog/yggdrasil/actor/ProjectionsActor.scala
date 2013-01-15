@@ -290,8 +290,7 @@ trait ProjectionsActorModule extends ProjectionModule {
         val startTime = System.currentTimeMillis
 
         val insertRun: IO[PrecogUnit] = for {
-          _ <- IO { MDC.put("projection", projection.descriptor.shows) }
-          _ <- IO { runInsert(projection, rows) }
+          _ <- IO { runInsert(projection, rows); logger.trace("runInsert complete for " + projection.descriptor.shows) }
           _ <- projection.commit()
         } yield {
           logger.debug("Insertion of %d rows in %d ms".format(rows.size, System.currentTimeMillis - startTime))          
@@ -300,9 +299,7 @@ trait ProjectionsActorModule extends ProjectionModule {
         }
 
         insertRun.except {
-          t: Throwable => IO { logger.error("Error during insert, aborting batch", t) }
-        }.ensuring {
-          IO { MDC.clear() }
+          t: Throwable => IO { logger.error("Error during insert, aborting batch: " + projection.descriptor.shows, t) }
         }.unsafePerformIO
 
         sender ! ReleaseProjection(projection.descriptor)

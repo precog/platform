@@ -62,6 +62,10 @@ class UnionColumn[T <: Column](c1: T, c2: T) { this: T =>
   def isDefinedAt(row: Int) = c1.isDefinedAt(row) || c2.isDefinedAt(row)
 }
 
+class UnionLotsColumn[T <: Column](cols: Set[T]) { this: T =>
+  def isDefinedAt(row: Int) = cols.exists(_.isDefinedAt(row))
+}
+
 class IntersectColumn[T <: Column](c1: T, c2: T) { this: T =>
   def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
 }
