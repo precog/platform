@@ -368,7 +368,7 @@ trait TestQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQue
     }))
   }
 
-  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
+  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
     Future(Success(new SyncQueryExecutor {
       val executionContext = self.executionContext
     }))

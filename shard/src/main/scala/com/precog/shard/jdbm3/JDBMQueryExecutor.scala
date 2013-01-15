@@ -180,7 +180,7 @@ trait JDBMQueryExecutorComponent {
         }).validation
       }
 
-      def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
+      def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
         implicit val futureMonad = new blueeyes.bkka.FutureMonad(defaultAsyncContext)
         (for {
           executionContext0 <- getAccountExecutionContext(apiKey)
