@@ -20,7 +20,7 @@
 #!/bin/bash
 
 # Parse opts to determine settings
-while getopts ":d:lb" opt; do
+while getopts ":d:lbZYR" opt; do
     case $opt in
         d) 
             WORKDIR=$(cd $OPTARG; pwd)
@@ -31,20 +31,39 @@ while getopts ":d:lb" opt; do
         b)
             BUILDMISSING=1
             ;;
+        Z)
+            TESTQUIT=1
+            rm -rf stress-data && mkdir stress-data
+            WORKDIR=$(cd stress-data; pwd)
+            ;;
+        R)
+            TESTRESUME=1
+            WORKDIR=$(cd stress-data; pwd)
+            ;;
+        Y)
+            ( $0 -Z && $0 -R ) 2>&1 | grep ';;;'
+            exit ${PIPESTATUS[0]}
+            ;;
         \?)
             echo "Usage: `basename $0` [-l] [-d <work directory>]"
             echo "  -l: If a temp workdir is used, don't clean up afterward"
             echo "  -d: Use the provided workdir"
             echo "  -b: Build missing artifacts prior to run (depends on sbt in path)"
+            echo "  -Y: Run ingest consistency check"
+            echo "  -Z: (private to -Y) first pass to be interrupted"
+            echo "  -R: (private to -Y) second pass to compelte"
             exit 1
             ;;
     esac
 done
 
+[ -n "$TESTQUIT" ] && echo ";;; starting service for test-quit"
+[ -n "$TESTRESUME" ] && echo ";;; starting service for test-resume"
+
 # Taken from http://blog.publicobject.com/2006/06/canonical-path-of-file-in-bash.html
 function path-canonical-simple() {
-local dst="${1}"
-cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")" | sed 's#/\.##'
+    local dst="${1}"
+    cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")" | sed 's#/\.##'
 }
 
 function random_port() {
@@ -170,9 +189,9 @@ echo "Using artifacts in $ARTIFACTDIR"
 
 unset REBEL_OPTS
 if [ -e "$REBEL_HOME" ]; then
-	REBEL_OPTS="-noverify -javaagent:$REBEL_HOME/jrebel.jar -Dplatform.root=`dirname $0`"
+    REBEL_OPTS="-noverify -javaagent:$REBEL_HOME/jrebel.jar -Dplatform.root=`dirname $0`"
 else
-	REBEL_OPTS=''
+    REBEL_OPTS=''
 fi
 
 if [ "$WORKDIR" == "" ]; then  
@@ -461,6 +480,112 @@ JOBS_PORT:         $JOBS_PORT
 SHARD_PORT:        $SHARD_PORT
 EOF
 echo "============================================================"
+
+function query() {
+    curl -s -G \
+      --data-urlencode "q=$1" \
+      --data-urlencode "apiKey=$ACCOUNTTOKEN" \
+      "http://localhost:$SHARD_PORT/analytics/fs/$ACCOUNTID"
+}
+
+function count() {
+    query "count(//xyz)" | tr -d "[]"
+}
+
+function wait_til_nonzero() {
+    wait_til_n_rows 1 $1
+    return $?
+}
+
+function now() {
+    date "+%s"
+}
+
+function check_time() {
+    expr `now` '>' $1
+}
+
+function wait_til_n_rows() {
+    N=$1
+    LIMIT=$( expr `now` '+' $2 )
+    RESULT=$( count )
+    echo "!!! count returned $RESULT"
+    while [ -z "$RESULT" ] || [ "$RESULT" -lt "$N" ]; do
+        sleep 0.05
+        [ `check_time $LIMIT` -eq 1 ] && return 1
+        RESULT=$( count )
+        echo "!!! count returned $RESULT"
+    done
+    return 0
+}
+
+function count_lines() {
+    wc -l $1 | awk '{print $1}'
+}
+
+TESTJSON="n100k.json"
+TESTURL="http://ops.reportgrid.com.s3.amazonaws.com/datasets/$TESTJSON"
+
+function download_testjson() {
+    echo "downloading json"
+    wget $TESTURL
+    if [ $? -ne 0 ]; then
+        echo "Failed to download $TESTURL" >&2
+        exit 3
+    fi
+    echo "done"
+}
+
+if [ -n "$TESTQUIT" ]; then
+
+    echo "trying??"
+    ( [ -r $TESTJSON ] && [ `count_lines $TESTJSON` -eq 100000 ] ) || download_testjson
+    echo "what????"
+
+    echo ";;; ingesting $TESTJSON"
+    curl -o /dev/null -v \
+      -H 'Content-Type: application/json' \
+      --data-bin "@$TESTJSON" \
+      "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/xyz?apiKey=$ACCOUNTTOKEN"
+
+    echo ";;; polling for rows via count()"
+    wait_til_nonzero 60
+
+    trap EXIT
+
+    if [ $? -eq 0 ]; then
+        echo ";;; ingest rows detected--killing service now!"
+        kill -9 $INGESTPID
+        kill -9 $SHARDPID
+        kill -9 $ACCOUNTSPID
+        kill -9 $JOBSPID
+        kill -9 $AUTHPID
+        on_exit
+        exit 0
+    else
+        echo ";;; no rows ingested after 60s--failed!"
+        on_exit
+        exit 1
+    fi
+fi
+
+if [ -n "$TESTRESUME" ]; then
+    NROWS=`wc -l $TESTJSON | awk '{print $1}'`
+    wait_til_n_rows $NROWS 60
+    trap EXIT
+    echo ";;; verifying that shard resumes ingest"
+    if [ $? -eq 0 ]; then
+        echo ";;; resume succeeded (found $NROWS rows)"
+        echo ";;; ok"
+        on_exit
+        exit 0
+    else
+        echo ";;; resume failed (timed out before seeing $NROWS rows)"
+        echo ";;; ERROR!"
+        on_exit 1
+        exit 1
+    fi
+fi
 
 # Wait forever until the user Ctrl-C's the system
 while true; do sleep 30; done
