@@ -138,6 +138,14 @@ trait BasicValidationSpecs extends EvalStackSpecs {
     "throw an exception with a failed assertion" in {
       eval("assert false 42") must throwA[FatalQueryException]
     }
+    
+    "correctly evaluate forall" in {
+      eval("forall(true union false)") mustEqual Set(SBoolean(false))
+    }
+    
+    "correctly evaluate exists" in {
+      eval("exists(true union false)") mustEqual Set(SBoolean(true))
+    }
   }
 }
 

@@ -234,6 +234,46 @@ trait ReductionLibSpec[M[+_]] extends Specification
       
       result2 must contain(760.4)
     }
+    
+    "forall" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, Forall,
+        dag.IUI(line,
+          true,
+          Const(line, CBoolean(true)),
+          Const(line, CBoolean(false))))
+      
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SBoolean(b)) if ids.length == 0 => b
+      }
+      
+      result2 must contain(false)
+    }
+    
+    "exists" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, Exists,
+        dag.IUI(line,
+          true,
+          Const(line, CBoolean(true)),
+          Const(line, CBoolean(false))))
+      
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SBoolean(b)) if ids.length == 0 => b
+      }
+      
+      result2 must contain(true)
+    }
   }
 
   "reduce heterogeneous sets" >> {
