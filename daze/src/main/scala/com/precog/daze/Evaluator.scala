@@ -1268,7 +1268,7 @@ trait Evaluator[M[+_]] extends DAG
     result.transform(trans.DerefArrayStatic(Leaf(Source), CPathIndex(0)))
   }
   
-  private def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  //TODO don't use Map1, returns an empty array of type CNum
+  def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  //TODO don't use Map1, returns an empty array of type CNum
     val bottomWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, source), paths.Key.name)
     trans.InnerObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
   }
@@ -1338,7 +1338,7 @@ trait Evaluator[M[+_]] extends DAG
   
   private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
   
-  private def liftToValues(trans: TransSpec1): TransSpec1 =
+  def liftToValues(trans: TransSpec1): TransSpec1 =
     TableTransSpec.makeTransSpec(Map(paths.Value -> trans))
 
   def combineTransSpecs(specs: List[TransSpec1]): TransSpec1 =

@@ -250,7 +250,20 @@ trait LogisticRegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] wit
         _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map(_.toSeq)
       }
 
-      reducedTables map { _ reduceOption { _ concat _ } getOrElse Table.empty }
+      val defaultNumber = new java.util.concurrent.atomic.AtomicInteger(1)
+
+      val objectTables: M[Seq[Table]] = reducedTables map { 
+        _ map { tbl =>
+          val modelId = "Model" + defaultNumber.getAndIncrement.toString
+          tbl.transform(liftToValues(trans.WrapObject(TransSpec1.Id, modelId)))
+        }
+      }
+
+      val spec = OuterObjectConcat(
+        DerefObjectStatic(Leaf(SourceLeft), paths.Value),
+        DerefObjectStatic(Leaf(SourceRight), paths.Value))
+
+      objectTables map { _.reduceOption { (tl, tr) => tl.cross(tr)(buildConstantWrapSpec(spec)) } getOrElse Table.empty }
     }
   }
 }
