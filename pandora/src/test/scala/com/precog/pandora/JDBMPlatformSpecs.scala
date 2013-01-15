@@ -107,7 +107,7 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   val storage = new Storage
 
-  val report = new LoggingQueryLogger[M] with ExceptionQueryLogger[M] {
+  val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] {
     implicit def M = outer.M
   }
 

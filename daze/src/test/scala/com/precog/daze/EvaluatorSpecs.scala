@@ -54,7 +54,11 @@ import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
 
-trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestModule[M] with IdSourceScannerModule[M] { outer =>
+trait EvaluatorTestSupport[M[+_]] extends Evaluator[M]
+    with ReductionLib[M]
+    with BaseBlockStoreTestModule[M]
+    with IdSourceScannerModule[M] { outer =>
+      
   val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
@@ -64,7 +68,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
 
   val projections = Map.empty[ProjectionDescriptor, Projection]
 
-  val report = new LoggingQueryLogger[M] with ExceptionQueryLogger[M] {
+  val report = new LoggingQueryLogger[M, instructions.Line] with ExceptionQueryLogger[M, instructions.Line] {
     implicit def M = outer.M
   }
 
@@ -1650,6 +1654,45 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(7, -2.026315789473684, 0.006024096385542169, 13)
       }
+    }
+    
+    "produce a result from the body of a passed assertion" in {
+      val line = Line(0, "")
+      
+      val input = dag.Assert(line,
+        Const(line, CBoolean(true)),
+        dag.LoadLocal(line, Const(line, CString("clicks"))))
+        
+      testEval(input) { result =>
+        result must haveSize(100)
+      }
+    }
+    
+    "throw an exception from a failed assertion" in {
+      val line = Line(0, "")
+      
+      val input = dag.Assert(line,
+        Const(line, CBoolean(false)),
+        dag.LoadLocal(line, Const(line, CString("clicks"))))
+        
+      testEval(input) { result =>
+        result must haveSize(100)
+      } must throwA[FatalQueryException]
+    }
+    
+    "fail an assertion according to forall semantics" in {
+      val line = Line(0, "")
+      
+      val input = dag.Assert(line,
+        dag.IUI(line,
+          true,
+          Const(line, CBoolean(false)),
+          Const(line, CBoolean(true))),
+        dag.LoadLocal(line, Const(line, CString("clicks"))))
+        
+      testEval(input) { result =>
+        result must haveSize(100)
+      } must throwA[FatalQueryException]
     }
 
     "compute the set difference of two sets" in {

@@ -105,6 +105,8 @@ trait TypeInferencer extends DAG {
           case Join(_, op: BinaryOperation, _, left, right) =>
             inner(op.tpe.arg1, inner(op.tpe.arg0, typing, left), right)
     
+          case Assert(_, pred, child) => inner(jtpe, inner(jtpe, typing, pred), child)
+          
           case IUI(_, _, left, right) => inner(jtpe, inner(jtpe, typing, left), right)
   
           case Diff(_, left, right) => inner(jtpe, inner(jtpe, typing, left), right)

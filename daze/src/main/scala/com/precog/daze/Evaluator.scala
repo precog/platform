@@ -98,8 +98,11 @@ trait Evaluator[M[+_]] extends DAG
   def ConstantEmptyArray: F1
   
   def freshIdScanner: Scanner
-
+  
   def report: QueryLogger[M, instructions.Line]
+  
+  def Forall: Reduction { type Result = Option[Boolean] }
+  def Exists: Reduction { type Result = Option[Boolean] }
 
   def rewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph = {
     (if (optimize) inlineStatics(_: DepGraph, ctx) else identity[DepGraph] _) andThen
@@ -465,6 +468,31 @@ trait Evaluator[M[+_]] extends DAG
           table map { PendingTable(_, graph, TransSpec1.Id) }
         }
         
+        case dag.Assert(_, pred, child) => {
+          for {
+            predPending <- prepareEval(pred, splits)
+            childPending <- prepareEval(child, splits)     // TODO squish once brian's PR lands
+          } yield {
+            val tableM = for {
+              predPendingTable <- predPending.table
+              
+              liftedTrans = liftToValues(predPending.trans)
+              predTable = predPendingTable transform DerefObjectStatic(liftedTrans, paths.Value)
+              
+              truthiness <- predTable.reduce(Forall reducer ctx)(Forall.monoid)
+              
+              _ <- if (truthiness getOrElse false)
+                M.point(())
+              else
+                report.fatal(graph.loc, "Assertion failed")
+              
+              childPendingTable <- childPending.table
+            } yield childPendingTable transform liftToValues(childPending.trans)
+            
+            PendingTable(tableM, graph, TransSpec1.Id)
+          }
+        }
+        
         case IUI(_, union, left, right) => {
           for {
             leftPending <- prepareEval(left, splits)
@@ -692,8 +720,7 @@ trait Evaluator[M[+_]] extends DAG
             pendingTableRight <- prepareEval(right, splits)
           } yield {
             if (pendingTableLeft.graph == pendingTableRight.graph) {
-              val trans2 = transFromBinOp(op, ctx)(pendingTableLeft.trans, pendingTableRight.trans)
-              PendingTable(pendingTableLeft.table, pendingTableLeft.graph, trans2)
+              PendingTable(pendingTableLeft.table, pendingTableLeft.graph, transFromBinOp(op, ctx)(pendingTableLeft.trans, pendingTableRight.trans))
             } else {
               (left.identities, right.identities) match {
                 case (Identities.Specs(_), Identities.Specs(_)) =>
@@ -776,11 +803,11 @@ trait Evaluator[M[+_]] extends DAG
                 
                 case _ => sys.error("unreachable code")
               }
-              
+
               val spec = buildWrappedJoinSpec(prefixLength, target.identities.length, boolean.identities.length) { (srcLeft, srcRight) =>
                 trans.Filter(srcLeft, srcRight)
               }
-              
+
               val result = for {
                 parentTargetTable <- pendingTableTarget.table 
                 val targetResult = parentTargetTable.transform(liftToValues(pendingTableTarget.trans))
@@ -1032,6 +1059,8 @@ trait Evaluator[M[+_]] extends DAG
           case dag.MegaReduce(_, _, parent) => queue2 enqueue parent
           
           case dag.Split(_, specs, child) => queue2 enqueue child enqueue listParents(specs)
+          
+          case dag.Assert(_, pred, child) => queue2 enqueue pred enqueue child
           
           case dag.IUI(_, _, left, right) => queue2 enqueue left enqueue right
           case dag.Diff(_, left, right) => queue2 enqueue left enqueue right

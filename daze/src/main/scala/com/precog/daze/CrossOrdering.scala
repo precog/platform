@@ -90,6 +90,9 @@ trait CrossOrdering extends DAG {
           result
         }
         
+        case dag.Assert(loc, pred, child) =>
+          dag.Assert(loc, memoized(pred, splits), memoized(child, splits))
+        
         case IUI(loc, union, left, right) =>
           IUI(loc, union, memoized(left, splits), memoized(right, splits))
         

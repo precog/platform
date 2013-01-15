@@ -71,6 +71,8 @@ trait DAGTransform extends DAG {
   
         case Join(loc, op, joinSort, left, right) => f(Join(loc, op, joinSort, transformAux(splits, left), transformAux(splits, right)))
   
+        case Assert(loc, pred, child) => f(Assert(loc, transformAux(splits, pred), transformAux(splits, child)))
+        
         case IUI(loc, union, left, right) => f(IUI(loc, union, transformAux(splits, left), transformAux(splits, right)))
 
         case Diff(loc, left, right) => f(Diff(loc, transformAux(splits, left), transformAux(splits, right)))

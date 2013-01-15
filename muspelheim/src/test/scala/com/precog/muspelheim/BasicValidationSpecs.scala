@@ -21,6 +21,7 @@ package com.precog
 package muspelheim
 
 import com.precog.yggdrasil._
+import com.precog.daze._
 
 trait BasicValidationSpecs extends EvalStackSpecs {
   "Fundamental stack support" should {
@@ -128,6 +129,14 @@ trait BasicValidationSpecs extends EvalStackSpecs {
       "empty array (right)" >> {
         eval("true with []") mustEqual Set()
       }
+    }
+    
+    "produce a result with a passed assertion" in {
+      eval("assert true 42") mustEqual Set(SDecimal(42))
+    }
+    
+    "throw an exception with a failed assertion" in {
+      eval("assert false 42") must throwA[FatalQueryException]
     }
   }
 }
