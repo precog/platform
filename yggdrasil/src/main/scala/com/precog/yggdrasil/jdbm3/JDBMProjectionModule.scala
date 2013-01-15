@@ -97,7 +97,7 @@ trait JDBMProjectionModule extends ProjectionModule with YggConfigComponent {
         case (Some(base), _) =>
           throw new FileNotFoundException("Could not locate archive dir for projection: " + descriptor)
         case _ =>
-          throw new FileNotFoundException("Could not locate base dir for projection: " + descriptor)
+          pmLogger.warn("Could not locate base dir for projection: " + descriptor + ", skipping archive"); IO(false)
       }
     }
   }
