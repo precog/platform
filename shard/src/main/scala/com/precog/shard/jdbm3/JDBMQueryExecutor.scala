@@ -85,7 +85,7 @@ trait JDBMQueryExecutorComponent {
   }
 
   def queryExecutorFactoryFactory(config: Configuration,
-      extAccessControl: AccessControl[Future],
+      extAccessControl: APIKeyManager[Future],
       extAccountManager: BasicAccountManager[Future],
       extJobManager: JobManager[Future]): ManagedQueryExecutorFactory = {
     new JDBMQueryExecutorFactory
@@ -100,6 +100,7 @@ trait JDBMQueryExecutorComponent {
       protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
       
       val actorSystem = ActorSystem("jdbmExecutorActorSystem")
+      val jobActorSystem = ActorSystem("jobPollingActorSystem")
       val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
       val accountManager = extAccountManager
@@ -113,6 +114,7 @@ trait JDBMQueryExecutorComponent {
       val storage = new Storage
       def storageMetadataSource = storage
 
+      val apiKeyManager = extAccessControl
       def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog = FilesystemIngestFailureLog(yggConfig.ingestFailureLogRoot, checkpoint)
 
       object Projection extends JDBMProjectionCompanion {
