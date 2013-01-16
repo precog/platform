@@ -220,21 +220,23 @@ trait Evaluator[M[+_]] extends DAG
       } yield state.assume.get(graph)
       
       def result: StateT[Id, EvaluatorState, PendingTable] = graph match {
-        case s @ SplitParam(_, index) => {
+        // not using extractors due to bug
+        case s: SplitParam => {
           val (key, _) = splits(s.parent)
           
-          val source = trans.DerefObjectStatic(Leaf(Source), CPathField(index.toString))
+          val source = trans.DerefObjectStatic(Leaf(Source), CPathField(s.id.toString))
           val spec = buildConstantWrapSpec(source)
           
           state(PendingTable(M.point(key transform spec), graph, TransSpec1.Id))
         }
         
-        case s @ SplitGroup(_, index, _) => {
+        // not using extractors due to bug
+        case s: SplitGroup => {
           val (_, f) = splits(s.parent)
-          state(PendingTable(f(index), graph, TransSpec1.Id))
+          state(PendingTable(f(s.id), graph, TransSpec1.Id))
         }
         
-        case Const(_, value) => {
+        case Const(value) => {
           val table = value match {
             case str @ CString(_) => Table.constString(Set(str))
             
@@ -260,11 +262,11 @@ trait Evaluator[M[+_]] extends DAG
           state(PendingTable(M.point(table.transform(spec)), graph, TransSpec1.Id))
         }
 
-        case Undefined(_) =>
+        case Undefined() =>
           state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         
         // TODO technically, we can do this without forcing by pre-lifting PendingTable#trans
-        case dag.New(_, parent) => {
+        case dag.New(parent) => {
           for {
             pendingTable <- prepareEval(parent, splits)
             idSpec = TableTransSpec.makeTransSpec(
@@ -277,7 +279,7 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(tableM2, graph, TransSpec1.Id)
         }
         
-        case dag.LoadLocal(_, parent, jtpe) => {
+        case dag.LoadLocal(parent, jtpe) => {
           for {
             pendingTable <- prepareEval(parent, splits)
             Path(prefixStr) = ctx.basePath
@@ -287,14 +289,14 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
-        case dag.Morph1(_, mor, parent) => {
+        case dag.Morph1(mor, parent) => {
           for {
             pendingTable <- prepareEval(parent, splits)
             val back = pendingTable.table flatMap { table => mor(table.transform(liftToValues(pendingTable.trans)), ctx) }
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
-        case dag.Morph2(_, mor, left, right) => {
+        case dag.Morph2(mor, left, right) => {
           lazy val spec = trans.InnerArrayConcat(trans.WrapArray(Leaf(SourceLeft)), trans.WrapArray(Leaf(SourceRight)))
           lazy val specRight = trans.InnerArrayConcat(trans.WrapArray(Leaf(SourceRight)), trans.WrapArray(Leaf(SourceLeft)))
           lazy val key = trans.DerefObjectStatic(Leaf(Source), paths.Key)
@@ -340,7 +342,7 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
-        case dag.Distinct(_, parent) => {
+        case dag.Distinct(parent) => {
           val idSpec = TableTransSpec.makeTransSpec(
             Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
 
@@ -360,13 +362,13 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
 
-        case Operate(_, instructions.WrapArray, parent) => {
+        case Operate(instructions.WrapArray, parent) => {
           for {
             pendingTable <- prepareEval(parent, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.WrapArray(pendingTable.trans))
         }
         
-        case o @ Operate(_, op, parent) => {
+        case o @ Operate(op, parent) => {
           for {
             pendingTable <- prepareEval(parent, splits)
             
@@ -377,7 +379,7 @@ trait Evaluator[M[+_]] extends DAG
         /**
         returns an array (to be dereferenced later) containing the result of each reduction
         */
-        case m @ MegaReduce(_, reds, parent) => {
+        case m @ MegaReduce(reds, parent) => {
           val firstCoalesce = reds.map {
             case (_, reductions) => coalesce(reductions.map((_, None)))
           }
@@ -420,7 +422,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
 
-        case r @ dag.Reduce(_, red, parent) => {
+        case r @ dag.Reduce(red, parent) => {
           for {
             pendingTable <- prepareEval(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
@@ -429,7 +431,7 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(wrapped, graph, TransSpec1.Id)
         }
         
-        case s @ dag.Split(line, spec, child) => {
+        case s @ dag.Split(spec, child) => {
           val idSpec = TableTransSpec.makeTransSpec(
             Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
 
@@ -449,7 +451,7 @@ trait Evaluator[M[+_]] extends DAG
           table map { PendingTable(_, graph, TransSpec1.Id) }
         }
         
-        case dag.Assert(_, pred, child) => {
+        case dag.Assert(pred, child) => {
           for {
             predPending <- prepareEval(pred, splits)
             childPending <- prepareEval(child, splits)     // TODO squish once brian's PR lands
@@ -474,12 +476,12 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case IUI(_, union, left, right) => {
+        case IUI(union, left, right) => {
           for {
             leftPending <- prepareEval(left, splits)
             rightPending <- prepareEval(right, splits)
           } yield {
-            val keyValueSpec = TransSpec1.PruneToKeyValue              
+            val keyValueSpec = TransSpec1.PruneToKeyValue     
 
             val result = for {
               leftPendingTable <- leftPending.table
@@ -503,7 +505,7 @@ trait Evaluator[M[+_]] extends DAG
         }
         
         // TODO unify with IUI
-        case Diff(_, left, right) =>{
+        case Diff(left, right) =>{
           for {
             leftPending <- prepareEval(left, splits)
             rightPending <- prepareEval(right, splits)
@@ -528,31 +530,31 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
+        case Join(Eq, CrossLeftSort | CrossRightSort, left, Const(value)) => {
           for {
             pendingTable <- prepareEval(left, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, false))
         }
         
-        case Join(_, Eq, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
+        case Join(Eq, CrossLeftSort | CrossRightSort, Const(value), right) => {
           for {
             pendingTable <- prepareEval(right, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, false))
         }
         
-        case Join(_, NotEq, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
+        case Join(NotEq, CrossLeftSort | CrossRightSort, left, Const(value)) => {
           for {
             pendingTable <- prepareEval(left, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, true))
         }
         
-        case Join(_, NotEq, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
+        case Join(NotEq, CrossLeftSort | CrossRightSort, Const(value), right) => {
           for {
             pendingTable <- prepareEval(right, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, value, true))
         }
         
-        case Join(_, instructions.WrapObject, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
+        case Join(instructions.WrapObject, CrossLeftSort | CrossRightSort, Const(value), right) => {
           value match {
             case value @ CString(str) => {
               //prepareEval(right, splits) map { pendingTable => PendingTable(pendingTable.table, pendingTable.graph, trans.WrapObject(pendingTable.trans, str)) }
@@ -567,7 +569,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, DerefObject, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
+        case Join(DerefObject, CrossLeftSort | CrossRightSort, left, Const(value)) => {
           value match {
             case value @ CString(str) => {
               for {
@@ -580,7 +582,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, DerefMetadata, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
+        case Join(DerefMetadata, CrossLeftSort | CrossRightSort, left, Const(value)) => {
           value match {
             case value @ CString(str) => {
               for {
@@ -593,7 +595,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
+        case Join(DerefArray, CrossLeftSort | CrossRightSort, left, Const(value)) => {
           val optIndex = value match {
             case CNum(d) => Some(d.toInt)
             case CLong(ln) => Some(ln.toInt)
@@ -608,7 +610,7 @@ trait Evaluator[M[+_]] extends DAG
           } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         
-        case Join(_, instructions.ArraySwap, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
+        case Join(instructions.ArraySwap, CrossLeftSort | CrossRightSort, left, Const(value)) => {
           val optIndex = value match {
             case CNum(d) => Some(d.toInt)
             case CLong(ln) => Some(ln.toInt)
@@ -623,7 +625,7 @@ trait Evaluator[M[+_]] extends DAG
           } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         
-        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
+        case Join(instructions.JoinObject, CrossLeftSort | CrossRightSort, left, Const(value)) => {
           value match {
             case CEmptyObject => {
               for {
@@ -636,7 +638,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, instructions.JoinObject, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
+        case Join(instructions.JoinObject, CrossLeftSort | CrossRightSort, Const(value), right) => {
           value match {
             case CEmptyObject => {
               for {
@@ -649,7 +651,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
+        case Join(instructions.JoinArray, CrossLeftSort | CrossRightSort, left, Const(value)) => {
           value match {
             case CEmptyArray => {
               for {
@@ -662,7 +664,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, instructions.JoinArray, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
+        case Join(instructions.JoinArray, CrossLeftSort | CrossRightSort, Const(value), right) => {
           value match {
             case CEmptyArray => {
               for {
@@ -676,7 +678,7 @@ trait Evaluator[M[+_]] extends DAG
         }
   
         // begin: annoyance with Scala's lousy pattern matcher
-        case Join(_, op, CrossLeftSort | CrossRightSort, left, Const(_, value)) => {
+        case Join(op, CrossLeftSort | CrossRightSort, left, Const(value)) => {
           op2ForBinOp(op) map { _.f2(ctx).partialRight(value) } map { f1 =>
             for {
               pendingTable <- prepareEval(left, splits)
@@ -684,7 +686,7 @@ trait Evaluator[M[+_]] extends DAG
           } getOrElse state(PendingTable(M.point(Table.empty), graph, TransSpec1.Id))
         }
         
-        case Join(_, op, CrossLeftSort | CrossRightSort, Const(_, value), right) => {
+        case Join(op, CrossLeftSort | CrossRightSort, Const(value), right) => {
           op2ForBinOp(op) map { _.f2(ctx).partialLeft(value) } map { f1 =>
             for {
               pendingTable <- prepareEval(right, splits)
@@ -693,7 +695,7 @@ trait Evaluator[M[+_]] extends DAG
         }
         // end: annoyance
         
-        case Join(_, op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => {
+        case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => {
           // TODO binary typing
 
           for {
@@ -737,7 +739,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
   
-        case j @ Join(_, op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => {
+        case j @ Join(op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => {
           val isLeft = joinSort == CrossLeftSort
 
           for {
@@ -763,7 +765,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case dag.Filter(_, joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => {
+        case dag.Filter(joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => {
           // TODO binary typing
 
           for {
@@ -802,7 +804,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case f @ dag.Filter(_, joinSort @ (CrossLeftSort | CrossRightSort), target, boolean) => {
+        case f @ dag.Filter(joinSort @ (CrossLeftSort | CrossRightSort), target, boolean) => {
           val isLeft = joinSort == CrossLeftSort
           
           /* target match {
@@ -1025,29 +1027,29 @@ trait Evaluator[M[+_]] extends DAG
           case _: dag.SplitGroup => queue2
           case _: dag.Root => queue2
           
-          case dag.New(_, parent) => queue2 enqueue parent
+          case dag.New(parent) => queue2 enqueue parent
           
-          case dag.Morph1(_, _, parent) => queue2 enqueue parent
-          case dag.Morph2(_, _, left, right) => queue2 enqueue left enqueue right
+          case dag.Morph1(_, parent) => queue2 enqueue parent
+          case dag.Morph2(_, left, right) => queue2 enqueue left enqueue right
           
-          case dag.Distinct(_, parent) => queue2 enqueue parent
+          case dag.Distinct(parent) => queue2 enqueue parent
           
-          case dag.LoadLocal(_, parent, _) => queue2 enqueue parent
+          case dag.LoadLocal(parent, _) => queue2 enqueue parent
           
-          case dag.Operate(_, _, parent) => queue2 enqueue parent
+          case dag.Operate(_, parent) => queue2 enqueue parent
           
-          case dag.Reduce(_, _, parent) => queue2 enqueue parent
-          case dag.MegaReduce(_, _, parent) => queue2 enqueue parent
+          case dag.Reduce(_, parent) => queue2 enqueue parent
+          case dag.MegaReduce(_, parent) => queue2 enqueue parent
           
-          case dag.Split(_, specs, child) => queue2 enqueue child enqueue listParents(specs)
+          case dag.Split(specs, child) => queue2 enqueue child enqueue listParents(specs)
           
-          case dag.Assert(_, pred, child) => queue2 enqueue pred enqueue child
+          case dag.Assert(pred, child) => queue2 enqueue pred enqueue child
           
-          case dag.IUI(_, _, left, right) => queue2 enqueue left enqueue right
-          case dag.Diff(_, left, right) => queue2 enqueue left enqueue right
+          case dag.IUI(_, left, right) => queue2 enqueue left enqueue right
+          case dag.Diff(left, right) => queue2 enqueue left enqueue right
           
-          case dag.Join(_, _, _, left, right) => queue2 enqueue left enqueue right
-          case dag.Filter(_, _, left, right) => queue2 enqueue left enqueue right
+          case dag.Join(_, _, left, right) => queue2 enqueue left enqueue right
+          case dag.Filter(_, left, right) => queue2 enqueue left enqueue right
           
           case dag.Sort(parent, _) => queue2 enqueue parent
           case dag.SortBy(parent, _, _, _) => queue2 enqueue parent
@@ -1135,27 +1137,27 @@ trait Evaluator[M[+_]] extends DAG
   private def enumerateParents(node: DepGraph): Set[DepGraph] = node match {
     case _: SplitParam | _: SplitGroup | _: Root => Set()
     
-    case dag.New(_, parent) => Set(parent)
+    case dag.New(parent) => Set(parent)
     
-    case dag.Morph1(_, _, parent) => Set(parent)
-    case dag.Morph2(_, _, left, right) => Set(left, right)
+    case dag.Morph1(_, parent) => Set(parent)
+    case dag.Morph2(_, left, right) => Set(left, right)
     
-    case dag.Distinct(_, parent) => Set(parent)
+    case dag.Distinct(parent) => Set(parent)
     
-    case dag.LoadLocal(_, parent, _) => Set(parent)
+    case dag.LoadLocal(parent, _) => Set(parent)
     
-    case Operate(_, _, parent) => Set(parent)
+    case Operate(_, parent) => Set(parent)
     
-    case dag.Reduce(_, _, parent) => Set(parent)
-    case MegaReduce(_, _, parent) => Set(parent)
+    case dag.Reduce(_, parent) => Set(parent)
+    case MegaReduce(_, parent) => Set(parent)
     
-    case dag.Split(_, spec, _) => enumerateSpecParents(spec).toSet
+    case dag.Split(spec, _) => enumerateSpecParents(spec).toSet
     
-    case IUI(_, _, left, right) => Set(left, right)
-    case Diff(_, left, right) => Set(left, right)
+    case IUI(_, left, right) => Set(left, right)
+    case Diff(left, right) => Set(left, right)
     
-    case Join(_, _, _, left, right) => Set(left, right)
-    case dag.Filter(_, _, target, boolean) => Set(target, boolean)
+    case Join(_, _, left, right) => Set(left, right)
+    case dag.Filter(_, target, boolean) => Set(target, boolean)
     
     case Sort(parent, _) => Set(parent)
     case SortBy(parent, _, _, _) => Set(parent)
@@ -1178,33 +1180,33 @@ trait Evaluator[M[+_]] extends DAG
     to match {
       case `from` => true
       
-      case Join(_, Eq, _, left, _: Root) => isTranspecable(left, from)
-      case Join(_, Eq, _, _: Root, right) => isTranspecable(right, from)
+      case Join(Eq, _, left, _: Root) => isTranspecable(left, from)
+      case Join(Eq, _, _: Root, right) => isTranspecable(right, from)
       
-      case Join(_, NotEq, _, left, _: Root) => isTranspecable(left, from)
-      case Join(_, NotEq, _, _: Root, right) => isTranspecable(right, from)
+      case Join(NotEq, _, left, _: Root) => isTranspecable(left, from)
+      case Join(NotEq, _, _: Root, right) => isTranspecable(right, from)
       
-      case Join(_, instructions.WrapObject, _, _: Root, right) => isTranspecable(right, from)
-      case Join(_, instructions.DerefObject, _, left, _: Root) => isTranspecable(left, from)
-      case Join(_, instructions.DerefMetadata, _, left, _: Root) => isTranspecable(left, from)
-      case Join(_, instructions.DerefArray, _, left, _: Root) => isTranspecable(left, from)
-      case Join(_, instructions.ArraySwap, _, left, _: Root) => isTranspecable(left, from)
+      case Join(instructions.WrapObject, _, _: Root, right) => isTranspecable(right, from)
+      case Join(instructions.DerefObject, _, left, _: Root) => isTranspecable(left, from)
+      case Join(instructions.DerefMetadata, _, left, _: Root) => isTranspecable(left, from)
+      case Join(instructions.DerefArray, _, left, _: Root) => isTranspecable(left, from)
+      case Join(instructions.ArraySwap, _, left, _: Root) => isTranspecable(left, from)
       
-      case Join(_, instructions.JoinObject, _, left, _: Root) => isTranspecable(left, from)
-      case Join(_, instructions.JoinObject, _, _: Root, right) => isTranspecable(right, from)
-      case Join(_, instructions.JoinArray, _, left, _: Root) => isTranspecable(left, from)
-      case Join(_, instructions.JoinArray, _, _: Root, right) => isTranspecable(right, from)
+      case Join(instructions.JoinObject, _, left, _: Root) => isTranspecable(left, from)
+      case Join(instructions.JoinObject, _, _: Root, right) => isTranspecable(right, from)
+      case Join(instructions.JoinArray, _, left, _: Root) => isTranspecable(left, from)
+      case Join(instructions.JoinArray, _, _: Root, right) => isTranspecable(right, from)
+                
+      case Join(op, _, left, _: Root) => op2ForBinOp(op).isDefined && isTranspecable(left, from)
+      case Join(op, _, _: Root, right) => op2ForBinOp(op).isDefined && isTranspecable(right, from)
       
-      case Join(_, op, _, left, _: Root) => op2ForBinOp(op).isDefined && isTranspecable(left, from)
-      case Join(_, op, _, _: Root, right) => op2ForBinOp(op).isDefined && isTranspecable(right, from)
-      
-      case Join(_, _, IdentitySort | ValueSort(_), left, right) =>
+      case Join(_, IdentitySort | ValueSort(_), left, right) =>
         isTranspecable(left, from) && isTranspecable(right, from)
       
-      case dag.Filter(_, IdentitySort | ValueSort(_), left, right) =>
+      case dag.Filter(IdentitySort | ValueSort(_), left, right) =>
         isTranspecable(left, from) && isTranspecable(right, from)
       
-      case Operate(_, _, parent) =>
+      case Operate(_, parent) =>
         isTranspecable(parent, from)
       
       case _ => false
