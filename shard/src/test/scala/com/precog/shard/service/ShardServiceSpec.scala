@@ -100,6 +100,7 @@ trait TestShardService extends
   
   def queryExecutorFactoryFactory(config: Configuration, accessControl: APIKeyManager[Future], extAccountManager: BasicAccountManager[Future], extJobManager: JobManager[Future]) = new TestQueryExecutorFactory {
     val actorSystem = self.actorSystem
+    val jobActorSystem = ActorSystem("ingestServiceSpecJobs")
     val executionContext = self.asyncContext
     
     val accessControl = apiKeyManager

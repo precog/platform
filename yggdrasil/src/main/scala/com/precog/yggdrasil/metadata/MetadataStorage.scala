@@ -227,11 +227,19 @@ object FileMetadataStorage extends Logging {
     }
 
     def read(baseDir: File): Validation[String, ProjectionDescriptor] = {
+      val onError = (ex: Throwable) => {
+        logger.error("Failure parsing serialized projection descriptor", ex) 
+        "An error occurred parsing serialized projection descriptor: " + ex.getMessage
+      }
+
       val df = new File(baseDir, descriptorName)
       if (!df.exists) {
         Failure("Unable to find serialized projection descriptor in " + baseDir)
       } else {
-        JParser.parseFromFile(df).bimap(_.getMessage, s => s)
+        ((_: Extractor.Error).message) <-: (for {
+          jv <- ((Extractor.Invalid(_: String)) compose onError) <-: JParser.parseFromFile(df)
+          desc <- jv.validated[ProjectionDescriptor]
+        } yield desc)
       }
     }
 

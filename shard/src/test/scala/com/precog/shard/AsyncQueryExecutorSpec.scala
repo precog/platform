@@ -52,6 +52,7 @@ class AsyncQueryExecutorSpec extends TestAsyncQueryExecutorFactory with Specific
   val JSON = MimeTypes.application / MimeTypes.json
 
   val actorSystem = ActorSystem("managedQueryModuleSpec")
+  val jobActorSystem = ActorSystem("managedQueryModuleSpecJobActorSystem")
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
     def copoint[A](m: Future[A]) = Await.result(m, Duration(15, "seconds"))

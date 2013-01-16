@@ -66,6 +66,7 @@ import ManagedQueryTestSupport._
 
 class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specification {
   val actorSystem = ActorSystem("managedQueryModuleSpec")
+  val jobActorSystem = ActorSystem("managedQueryModuleSpecJobs")
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
     def copoint[A](m: Future[A]) = Await.result(m, Duration(5, "seconds"))
