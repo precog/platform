@@ -57,7 +57,7 @@ trait LogisticRegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] wit
   override def _libMorphism2 = super._libMorphism2 ++ Set(LogisticRegression)
 
   object LogisticRegression extends Morphism2(Stats2Namespace, "logisticRegression") with ReductionHelper {
-    val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JNumberT)
+    val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
 
     override val multivariate = true
     lazy val alignment = MorphismAlignment.Match
@@ -98,7 +98,7 @@ trait LogisticRegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] wit
       } else {
         val result = seq.foldLeft(0D) {
           case (sum, colVal) => {
-            val xs = colVal.take(colVal.length - 1)
+            val xs = java.util.Arrays.copyOf(colVal, colVal.length - 1)
             val y = colVal.last
 
             assert(xs.length == theta.length)

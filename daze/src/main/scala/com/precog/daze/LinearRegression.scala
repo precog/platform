@@ -43,7 +43,7 @@ trait LinearRegressionLib[M[+_]] extends GenOpcode[M] with RegressionSupport wit
   override def _libMorphism2 = super._libMorphism2 ++ Set(MultiLinearRegression)
 
   object MultiLinearRegression extends Morphism2(Stats2Namespace, "linearRegression") {
-    val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JNumberT)
+    val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
 
     override val multivariate = true
     lazy val alignment = MorphismAlignment.Match

@@ -341,7 +341,7 @@ trait Evaluator[M[+_]] extends DAG
               rightSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
 
               leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
-              rightSpec = trans.Map1(rightSpec0, cf.util.CoerceToDouble)
+              rightSpec = trans.DeepMap1(rightSpec0, cf.util.CoerceToDouble)
 
               transformed = {
                 if (mor.multivariate) aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
