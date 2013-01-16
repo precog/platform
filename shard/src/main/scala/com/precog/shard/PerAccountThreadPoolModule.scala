@@ -42,7 +42,7 @@ trait PerAccountThreadPoolModule { self =>
 
   implicit def defaultAsyncContext: ExecutionContext
 
-  private val executorCache = new ConcurrentHashMap[AccountId, ExecutionContext]()
+  private lazy val executorCache = new ConcurrentHashMap[AccountId, ExecutionContext]()
   
   private def asyncContextFor(accountId: AccountId): ExecutionContext = {
     if (executorCache.contains(accountId)) {
