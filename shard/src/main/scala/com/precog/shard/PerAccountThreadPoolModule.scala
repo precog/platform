@@ -31,6 +31,8 @@ trait PerAccountThreadPoolModule { self =>
     } else {
       // FIXME: Dummy pool for now
       executorCache.putIfAbsent(accountId, ExecutionContext.fromExecutor(Executors.newCachedThreadPool()))
+      // Fetch whatever value is there for the accountId now
+      executorCache.get(accountId)
     }
   }
 
