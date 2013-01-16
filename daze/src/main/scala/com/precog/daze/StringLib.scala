@@ -37,7 +37,8 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
     toLowerCase, isEmpty, intern, parseNum, numToString)
 
   override def _lib2 = super._lib2 ++ Set(equalsIgnoreCase, codePointAt,
-    startsWith, lastIndexOf, concat, endsWith, codePointBefore, substring,
+    startsWith, lastIndexOf, concat, endsWith, codePointBefore,
+    takeLeft, takeRight, dropLeft, dropRight,
     matches, compareTo, compareToIgnoreCase, equals, indexOf)
 
   private def isValidInt(num: BigDecimal): Boolean = {
@@ -136,25 +137,33 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
     (s, n) => n >= 0 && s.length > n,
     (s, n) => s.codePointBefore(n.toInt))
 
-  object substring extends Op2(StringNamespace, "substring") {
+  class Substring(name: String)(f: (String, Int) => String) extends Op2(StringNamespace, name) {
     val tpe = BinaryOperationType(JTextT, JNumberT, JTextT)
-    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::substring") {
+    def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::substring::" + name) {
       case (c1: StrColumn, c2: LongColumn) =>
-        new StrFrom.SL(c1, c2,
-          (s, n) => n >= 0 && s.length > n,
-          _ substring _.toInt)
-
-      case (c1: StrColumn, c2: NumColumn) =>
-        new StrFrom.SN(c1, c2,
-          (s, n) => n >= 0 && (n % 1 == 0) && s.length > n,
-          _ substring _.toInt)
-
+        new StrFrom.SL(c1, c2, (s, n) => n >= 0, { (s, n) => f(s, n.toInt) })
       case (c1: StrColumn, c2: DoubleColumn) =>
-        new StrFrom.SD(c1, c2,
-          (s, n) => n >= 0 && (n % 1 == 0) && s.length > n,
-          _ substring _.toInt)
+        new StrFrom.SD(c1, c2, (s, n) => n >= 0 && (n % 1 == 0), { (s, n) => f(s, n.toInt) })
+      case (c1: StrColumn, c2: NumColumn) =>
+        new StrFrom.SN(c1, c2, (s, n) => n >= 0 && (n % 1 == 0), { (s, n) => f(s, n.toInt) })
     }
   }
+
+  object takeLeft extends Substring("takeLeft")({ (s, n) =>
+    s.substring(0, math.min(n, s.length))
+  })
+
+  object takeRight extends Substring("takeRight")({ (s, n) =>
+    s.substring(math.max(s.length - n, 0))
+  })
+
+  object dropLeft extends Substring("dropLeft")({ (s, n) =>
+    s.substring(math.min(n, s.length))
+  })
+
+  object dropRight extends Substring("dropRight")({ (s, n) =>
+    s.substring(0, math.max(0, s.length - n))
+  })
 
   class Op2SSL(name: String, f: (String, String) => Long)
   extends Op2(StringNamespace, name) {
