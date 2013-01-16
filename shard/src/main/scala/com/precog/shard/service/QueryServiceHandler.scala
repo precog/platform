@@ -191,8 +191,8 @@ class SyncQueryServiceHandler(
                   errors <- jobManager.listMessages(jobId, channels.Error, None)
                 } yield {
                   val suffix = """, "errors": %s, "warnings": %s }""" format (
-                    JArray(errors.toList map (_.serialize)).renderCompact,
-                    JArray(warnings.toList map (_.serialize)).renderCompact
+                    JArray(errors.toList map (_.value)).renderCompact,
+                    JArray(warnings.toList map (_.value)).renderCompact
                   )
                   Some((CharBuffer.wrap(suffix), None))
                 }

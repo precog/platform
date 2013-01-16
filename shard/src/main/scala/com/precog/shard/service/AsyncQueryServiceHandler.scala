@@ -70,8 +70,8 @@ extends CustomHttpService[ByteChunk, APIKeyRecord => Future[HttpResponse[ByteChu
                       val headers = HttpHeaders.Empty + `Content-Type`(mimeType)
                       val data = data0 map (ByteBuffer.wrap(_))
                       val prefix = Utf8.encode("""{ "errors": %s, "warnings": %s, "data": """ format (
-                        JArray(errors.toList map (_.serialize)).renderCompact,
-                        JArray(warnings.toList map (_.serialize)).renderCompact
+                        JArray(errors.toList map (_.value)).renderCompact,
+                        JArray(warnings.toList map (_.value)).renderCompact
                       ))
                       val suffix = Utf8.encode(" }") :: StreamT.empty[Future, ByteBuffer]
 
