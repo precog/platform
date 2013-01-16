@@ -75,7 +75,7 @@ trait TestShardService extends
 
   override val configuration = "services { quirrel { v1 { " + config + " } } }"
 
-  val actorSystem = ActorSystem("ingestServiceSpec")
+  val actorSystem = ActorSystem("shardServiceSpec")
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
@@ -104,6 +104,7 @@ trait TestShardService extends
 
   def configureShardState(config: Configuration): ShardState = {
     val queryExecutorFactory = new TestQueryExecutorFactory {
+      val jobActorSystem = self.actorSystem
       val actorSystem = self.actorSystem
       val executionContext = self.asyncContext
       val accessControl = apiKeyManager
