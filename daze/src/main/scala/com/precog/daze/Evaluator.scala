@@ -921,10 +921,14 @@ trait Evaluator[M[+_]] extends DAG
       }
       
       val preState = preStates reduceOption { _ >> _ } getOrElse StateT.stateT[M, EvaluatorState, Unit](())
-      
+
       // run the evaluator on all forcing points *including* the endpoint, in order
       for {
-        pendingTable <- preState >> prepareEval(graph, splits)
+        assumed <- preState >> monadState.gets(_.assume)
+        rewrittenGraph <- transState liftM assumed.toList.foldLeftM(graph) {
+          case (graph, (from, table)) => rewriteNodeFromTable(graph, from, table)
+        }
+        pendingTable <- prepareEval(rewrittenGraph, splits)
         table = pendingTable.table transform liftToValues(pendingTable.trans)
       } yield table
     }
@@ -934,6 +938,45 @@ trait Evaluator[M[+_]] extends DAG
 
     val resultTable: M[Table] = resultState.eval(EvaluatorState())
     resultTable map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
+  }
+
+  /*
+   * Takes a graph, a node and a table and replaces the node (and
+   * possibly its parents) into a node with the table's contents.
+   */
+  def rewriteNodeFromTable(graph: DepGraph, from: DepGraph, table: Table) = {
+    val mslice = table.slices.head
+
+    val replacements = graph.foldDown(true) {
+      case join@Join(
+        line,
+        DerefArray,
+        CrossLeftSort,
+        Join(_,
+          DerefArray,
+          CrossLeftSort,
+          `from`,
+          Const(_, CLong(index2))),
+        Const(_, CLong(index1))) =>
+
+
+        List((
+          join,
+          for {
+            slice <- mslice
+            columnRef = ColumnRef(paths.Value \ CPathIndex(index1.toInt) \ CPathIndex(index2.toInt), CNum)
+            value = slice.columns(columnRef).cValue(0)
+          } yield Const(line, value)
+        ))
+    }
+
+    replacements.foldLeftM(graph) {
+      case (graph, (from, mto)) => for {
+        to <- mto
+      } yield graph.mapDown(_ => {
+        case `from` => to
+      })
+    }
   }
   
   /**
