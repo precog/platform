@@ -655,6 +655,23 @@ trait MathLibSpec[M[+_]] extends Specification
       
       result2 must contain(0.0, 1.0, -1.0, -2.0)
     }
+    "compute roundTo" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, BuiltInFunction2Op(roundTo), CrossLeftSort,
+        dag.LoadLocal(line, Const(line, CString("/hom/decimals"))),
+        Const(line, CLong(2)))
+      
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1  => d
+      }
+      
+      result2 must contain(1.24, 123.19, 100.00, 0, 0.50)
+    }
   }
 
   "for heterogeneous sets, the appropriate math function" should {
@@ -1244,6 +1261,23 @@ trait MathLibSpec[M[+_]] extends Specification
       
       result2 must contain(0.0, 1.0, -1.0, -2.0)
     }
+    "compute roundTo" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, BuiltInFunction2Op(roundTo), CrossLeftSort,
+        dag.LoadLocal(line, Const(line, CString("/het/numbers4"))),
+        Const(line, CLong(-1)))
+      
+      val result = testEval(input)
+      
+      result must haveSize(6)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1  => d
+      }
+      
+      result2 must contain(0, 0, 40, -20)
+    }
   }
 
   "for homogeneous sets across two slice boundaries (22 elements)" should {
@@ -1782,6 +1816,23 @@ trait MathLibSpec[M[+_]] extends Specification
 
       result2 must contain(0, -3, 1, 2, -1, -2)
     }
+    "compute roundTo" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, BuiltInFunction2Op(roundTo), CrossLeftSort,
+        dag.LoadLocal(line, Const(line, CString("/hom/numbersAcrossSlices"))),
+        Const(line, CLong(0)))
+      
+      val result = testEval(input)
+      
+      result must haveSize(22)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1  => d
+      }
+      
+      result2 must contain(-7, 15, -13, 11, 7, 11, -7, 0, 14, -3, 6, -12, 10, -9, 15, -5, -13, -14, 11, -5, -5, 13)
+    }
   }
 
   "for heterogeneous sets across two slice boundaries (22 elements)" should {
@@ -2319,6 +2370,23 @@ trait MathLibSpec[M[+_]] extends Specification
       }
 
       result2 must contain(0, -3, 1, 2, -1, -2)
+    }
+    "compute roundTo" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, BuiltInFunction2Op(roundTo), CrossLeftSort,
+        dag.LoadLocal(line, Const(line, CString("/het/numbersAcrossSlices"))),
+        Const(line, CLong(0)))
+      
+      val result = testEval(input)
+      
+      result must haveSize(9)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1  => d
+      }
+      
+      result2 must contain(5, 0, 1, -1, 1, 12, 0, 2, -3)
     }
   }
 }

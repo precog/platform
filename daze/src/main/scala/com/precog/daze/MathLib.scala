@@ -31,7 +31,7 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
 
   override def _lib1 = super._lib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, log, signum, acos, ulp)
 
-  override def _lib2 = super._lib2 ++ Set(min, hypot, pow, max, atan2, copySign, IEEEremainder)
+  override def _lib2 = super._lib2 ++ Set(min, hypot, pow, max, atan2, copySign, roundTo, IEEEremainder)
 
   import StdLib.{DoubleFrom, doubleIsDefined}
   import java.lang.Math
@@ -156,4 +156,10 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
 
   object IEEEremainder extends Op2DDD("IEEEremainder", bothDefined,
     Math.IEEEremainder)
+
+  object roundTo extends Op2DDD("roundTo", bothDefined, { (n, digits) =>
+    val adjusted = n * math.pow(10, digits)
+    val rounded = if (Math.abs(n) >= 4503599627370496.0) adjusted else Math.round(adjusted)
+    rounded * math.pow(10, -digits)
+  })
 }
