@@ -95,7 +95,7 @@ class MongoQueryExecutorConfig(val config: Configuration)
 }
 
 object MongoQueryExecutor {
-  def apply(config: Configuration): MongoQueryExecutor = {
+  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): MongoQueryExecutor = {
     new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
   }
 }
