@@ -64,17 +64,17 @@ object ManagedQueryTestSupport {
 
 import ManagedQueryTestSupport._
 
-class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specification {
-  val actorSystem = ActorSystem("managedQueryModuleSpec")
-  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
+class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
+  lazy val actorSystem = ActorSystem("managedQueryModuleSpec")
+  implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit lazy val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
     def copoint[A](m: Future[A]) = Await.result(m, Duration(5, "seconds"))
   }
 
-  val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
-  val apiKey = "O.o"
+  lazy val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
+  def apiKey = "O.o"
 
-  val dropStreamToFuture = implicitly[Hoist[StreamT]].hoist[TestFuture, Future](new (TestFuture ~> Future) {
+  def dropStreamToFuture = implicitly[Hoist[StreamT]].hoist[TestFuture, Future](new (TestFuture ~> Future) {
     def apply[A](fa: TestFuture[A]): Future[A] = fa.value
   })
 
@@ -235,14 +235,14 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
   }
 }
 
-trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[TestFuture, StreamT[TestFuture, CharBuffer]]
+trait TestManagedQueryModule extends QueryExecutorFactory[TestFuture, StreamT[TestFuture, CharBuffer]]
     with ManagedQueryModule with SchedulableFuturesModule { self =>
 
   def actorSystem: ActorSystem  
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
-  
-  val jobManager: JobManager[Future]
+
+  def jobManager: JobManager[Future]
 
   type YggConfig = ManagedQueryModuleConfig
 

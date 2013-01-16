@@ -39,19 +39,18 @@ import blueeyes.core.http.MimeTypes
 import scalaz._
 
 /**
- * An `AsyncQueryExecutorFactory` extends `QueryExecutorFactory` by allowing the
- * creation of a `QueryExecutor` that returns `JobId`s, rather than a stream of
- * results. It also has default implementable traits for both synchronous and
- * asynchronous QueryExecutors.
+ * A `ManagedQueryExecutorFactory` extends `QueryExecutorFactory` by allowing the
+ * creation of a `BasicQueryExecutor` that can also allows "synchronous" (but
+ * managed) queries and asynchronous queries.
  */
-trait AsyncQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] { self: ManagedQueryModule =>
+trait ManagedQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] with ManagedQueryModule { self =>
 
   /**
    * Returns an `QueryExecutorFactory` whose execution returns a `JobId` rather
    * than a `StreamT[Future, CharBuffer]`.
    */
-  def asynchronous: QueryExecutorFactory[Future, JobId] = {
-    new QueryExecutorFactory[Future, JobId] {
+  def asynchronous: AsyncQueryExecutorFactory[Future] = {
+    new AsyncQueryExecutorFactory[Future] {
       def browse(apiKey: APIKey, path: Path) = self.browse(apiKey, path)
       def structure(apiKey: APIKey, path: Path) = self.structure(apiKey, path)
       def executorFor(apiKey: APIKey) = self.asyncExecutorFor(apiKey)
@@ -61,8 +60,13 @@ trait AsyncQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Fut
     }
   }
 
-  def synchronous: QueryExecutorFactory[Future, (Option[JobId], StreamT[Future, CharBuffer])] = {
-    new QueryExecutorFactory[Future, (Option[JobId], StreamT[Future, CharBuffer])] {
+  /**
+   * Returns a `QueryExecutorFactory` whose execution returns both the
+   * streaming results and its `JobId`. Note that the reults will not be saved
+   * to job.
+   */
+  def synchronous: SyncQueryExecutorFactory[Future] = {
+    new SyncQueryExecutorFactory[Future] {
       def browse(apiKey: APIKey, path: Path) = self.browse(apiKey, path)
       def structure(apiKey: APIKey, path: Path) = self.structure(apiKey, path)
       def executorFor(apiKey: APIKey) = self.syncExecutorFor(apiKey)

@@ -94,13 +94,8 @@ class MongoQueryExecutorConfig(val config: Configuration)
   val ingestConfig = None
 }
 
-trait MongoQueryExecutorComponent {
-  val actorSystem = ActorSystem("mongoExecutorActorSystem")
-  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit val futureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
-  
-  def accountManagerFactory(config: Configuration) = new InMemoryAccountManager[Future]()
-  def queryExecutorFactoryFactory(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] = {
+object MongoQueryExecutor {
+  def apply(config: Configuration): MongoQueryExecutor = {
     new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
   }
 }

@@ -76,7 +76,7 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
 
 trait TestShardService extends
   BlueEyesServiceSpecification with
-  AsyncShardService with
+  ShardService with
   AkkaDefaults { self =>
   
   import DefaultBijections._
@@ -98,27 +98,10 @@ trait TestShardService extends
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
-  def queryExecutorFactoryFactory(config: Configuration, accessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future], extJobManager: JobManager[Future]) = new TestQueryExecutorFactory {
-    val actorSystem = self.actorSystem
-    val executionContext = self.asyncContext
-    
-    val accessControl = apiKeyManager
-    val accountManager = inMemAccountMgr
-    val jobManager = self.jobManager
-
-    val ownerMap = Map(
-      Path("/")     ->             Set("root"),
-      Path("/test") ->             Set("test"),
-      Path("/test/foo") ->         Set("test"),
-      Path("/expired") ->          Set("expired"),
-      Path("/inaccessible") ->     Set("other"),
-      Path("/inaccessible/foo") -> Set("other")
-    )
-  }
-
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
   val inMemAccountMgr = new InMemoryAccountManager[Future]
   val jobManager = new InMemoryJobManager[Future]
+
   val to = Duration(3, "seconds")
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   
@@ -136,15 +119,28 @@ trait TestShardService extends
     apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, accessTest, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
   }, to)
   
-  def apiKeyManagerFactory(config: Configuration) = apiKeyManager
-
-  def accountManagerFactory(config: Configuration) = inMemAccountMgr
-
-  def jobManagerFactory(config: Configuration) = jobManager
-
   def clock = Clock.System
 
-  import java.nio.ByteBuffer
+  def configureShardState(config: Configuration): ShardState = {
+    val queryExecutorFactory = new TestQueryExecutorFactory {
+      val actorSystem = self.actorSystem
+      val executionContext = self.asyncContext
+      val accessControl = apiKeyManager
+      val accountManager = inMemAccountMgr
+      val jobManager = self.jobManager
+
+      val ownerMap = Map(
+        Path("/")     ->             Set("root"),
+        Path("/test") ->             Set("test"),
+        Path("/test/foo") ->         Set("test"),
+        Path("/expired") ->          Set("expired"),
+        Path("/inaccessible") ->     Set("other"),
+        Path("/inaccessible/foo") -> Set("other")
+      )
+    }
+
+    ManagedQueryShardState(queryExecutorFactory, apiKeyManager, inMemAccountMgr, jobManager, clock)
+  }
 
   implicit val queryResultByteChunkTranscoder =
    new AsyncHttpTranscoder[QueryResult, ByteChunk] {
@@ -189,8 +185,13 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
 
   val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  def query(query: String, apiKey: Option[String] = Some(testAPIKey), path: String = ""): Future[HttpResponse[QueryResult]] = {
-    apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query).get(path)
+  def syncClient(query: String, apiKey: Option[String] = Some(testAPIKey)) = {
+    apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query)
+  }
+
+  def query(query: String, apiKey: Option[String] = Some(testAPIKey), format: Option[String] = None, path: String = ""): Future[HttpResponse[QueryResult]] = {
+    val client = syncClient(query, apiKey)
+    (format map (client.query("format", _)) getOrElse client).get(path)
   }
 
   def asyncQuery(query: String, apiKey: Option[String] = Some(testAPIKey), path: String = ""): Future[HttpResponse[QueryResult]] = {
@@ -299,6 +300,33 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
         case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
       }}
     }
+    "return warnings/errors if format is 'detailed'" in {
+      val result = for {
+        HttpResponse(HttpStatus(OK, _), _, Some(Right(data)), _) <- query(simpleQuery, format = Some("detailed"))
+        result <- extractResult(data)
+      } yield result
+
+      val expected = JObject(
+        JField("warnings", JArray(Nil)) ::
+        JField("errors", JArray(Nil)) ::
+        JField("data", JArray(JNum(2) :: Nil)) ::
+        Nil)
+
+      result must whenDelivered { beLike {
+        case `expected` => ok
+      }}
+    }
+    "return just the results if format is 'simple'" in {
+      val result = for {
+        HttpResponse(HttpStatus(OK, _), _, Some(Right(data)), _) <- query(simpleQuery, format = Some("simple"))
+        result <- extractResult(data)
+      } yield result
+
+      val expected = JArray(JNum(2) :: Nil)
+      result must whenDelivered { beLike {
+        case `expected` => ok
+      }}
+    }
   }
   
   def browse(apiKey: Option[String] = Some(testAPIKey), path: String = "/test"): Future[HttpResponse[QueryResult]] = {
@@ -335,7 +363,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   }
 }
 
-trait TestQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQueryModule { self =>
+trait TestQueryExecutorFactory extends ManagedQueryExecutorFactory { self =>
   import scalaz.syntax.monad._
   import scalaz.syntax.traverse._
   import AkkaTypeClasses._

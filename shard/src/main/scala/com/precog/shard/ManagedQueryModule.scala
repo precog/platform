@@ -32,7 +32,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import org.joda.time.DateTime
 
 import akka.dispatch.{ Future, ExecutionContext }
-import akka.actor.ActorSystem
+import akka.actor.{ ActorSystem, Cancellable }
 import akka.util.Duration
 
 import scalaz._
@@ -84,7 +84,7 @@ trait ManagedQueryModule extends YggConfigComponent {
     def jobId: Option[JobId]
   }
 
-  private implicit val jobActorSystem = ActorSystem("jobPollingActorSystem")
+  private implicit lazy val jobActorSystem = ActorSystem("jobPollingActorSystem")
 
   def jobManager: JobManager[Future]
 
@@ -103,7 +103,9 @@ trait ManagedQueryModule extends YggConfigComponent {
     for {
       job <- futureJob map { job => Some(job) } recover { case _ => None }
       queryStateManager = job map { job =>
-        JobQueryStateManager(job.id, expires)
+        val mgr = JobQueryStateManager(job.id, expires)
+        mgr.start()
+        mgr
       } getOrElse FakeJobQueryStateManager(expires)
     } yield (new ShardQueryMonad {
       val jobId = job map (_.id)
@@ -170,6 +172,9 @@ trait ManagedQueryModule extends YggConfigComponent {
         writeLock.lock()
         try {
           jobStatus = job
+          if (job map (_.state.isTerminal) getOrElse true) {
+            stop()
+          }
         } finally {
           writeLock.unlock()
         }
@@ -196,10 +201,19 @@ trait ManagedQueryModule extends YggConfigComponent {
     }
 
     // TODO: Should this be explicitly started?
-    private val poller = jobActorSystem.scheduler.schedule(yggConfig.jobPollFrequency, yggConfig.jobPollFrequency) {
-      poll()
+    private var poller: Option[Cancellable] = None
+
+    def start(): Unit = synchronized {
+      if (poller.isEmpty) {
+        poller = Some(jobActorSystem.scheduler.schedule(yggConfig.jobPollFrequency, yggConfig.jobPollFrequency) {
+          poll()
+        })
+      }
     }
 
-    def stop(): Unit = poller.cancel()
+    def stop(): Unit = synchronized {
+      poller map (_.cancel())
+      poller = None
+    }
   }
 }

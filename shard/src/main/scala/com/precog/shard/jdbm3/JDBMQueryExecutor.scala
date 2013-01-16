@@ -106,7 +106,7 @@ trait JDBMQueryExecutorComponent {
   def queryExecutorFactoryFactory(config: Configuration,
       extAccessControl: AccessControl[Future],
       extAccountManager: BasicAccountManager[Future],
-      extJobManager: JobManager[Future]): AsyncQueryExecutorFactory = {
+      extJobManager: JobManager[Future]): ManagedQueryExecutorFactory = {
     new JDBMQueryExecutorFactory
         with JDBMProjectionModule
         with ProductionShardSystemActorModule
@@ -225,8 +225,7 @@ trait JDBMQueryExecutorFactory
     extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]]
     with StorageModule[Future]
     with PerAccountThreadPoolModule
-    with ManagedQueryModule
-    with AsyncQueryExecutorFactory { self =>
+    with ManagedQueryExecutorFactory { self =>
 
   type YggConfig <: BaseJDBMQueryExecutorConfig
 
@@ -269,4 +268,3 @@ trait JDBMQueryExecutorFactory
     futRoot.map { pr => Success(transform(pr.children)) } 
   }
 }
-
