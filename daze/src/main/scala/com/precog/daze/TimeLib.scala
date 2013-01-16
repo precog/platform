@@ -28,7 +28,7 @@ import yggdrasil.table._
 import org.joda.time._
 import org.joda.time.format._
 
-import com.precog.util.DateTimeUtil.parseDateTime
+import com.precog.util.DateTimeUtil.{parseDateTime, parseDateTimeFlexibly, isDateTimeFlexibly}
 
 trait TimeLib[M[+_]] extends GenOpcode[M] {
   val TimeNamespace = Vector("std", "time")
@@ -62,7 +62,9 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
     TimeWithZone,
     TimeWithoutZone,
     HourMinute,
-    HourMinuteSecond
+    HourMinuteSecond,
+
+    ParseDateTimeFlexibly
   )
 
   override def _lib2 = super._lib2 ++ Set(
@@ -127,6 +129,16 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
           ISO.toString()
         }
+      }
+    }
+  }
+
+  object ParseDateTimeFlexibly extends Op1(TimeNamespace, "parseFlexibly") {
+    val tpe = UnaryOperationType(JTextT, JTextT)
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::parseDateTimeFlexibly") {
+      case (c: StrColumn) => new Map1Column(c) with StrColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isDateTimeFlexibly(c(row))
+        def apply(row: Int) = parseDateTimeFlexibly(c(row)).toString
       }
     }
   }
