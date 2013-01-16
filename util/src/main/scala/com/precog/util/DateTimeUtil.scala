@@ -57,8 +57,7 @@ object DateTimeUtil {
   }
 
   def isDateTimeFlexibly(s: String): Boolean = try {
-    Chronic.parse(s, defaultOptions)
-    true
+    Chronic.parse(s, defaultOptions) != null
   } catch {
     case e: Exception => false
   }
