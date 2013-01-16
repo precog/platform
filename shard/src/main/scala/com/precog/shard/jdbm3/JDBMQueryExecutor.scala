@@ -119,6 +119,7 @@ trait JDBMQueryExecutorComponent {
       protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
       
       val actorSystem = ActorSystem("jdbmExecutorActorSystem")
+      val jobActorSystem = ActorSystem("jobPollingActorSystem")
       val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
       val accountManager = extAccountManager
