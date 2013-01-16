@@ -106,31 +106,30 @@ trait ShardService extends
   // TODO: maybe some of these implicits should be moved, but for now i
   // don't have the patience to figure out where.
 
-  implicit val err: (HttpFailure, String) => HttpResponse[ByteChunk] = { (failure, s) =>
+  implicit def err: (HttpFailure, String) => HttpResponse[ByteChunk] = { (failure, s) =>
     HttpResponse(failure, content = Some(ByteChunk(s.getBytes("UTF-8"))))
   }
 
-  implicit val failureToQueryResult:
-      (HttpFailure, String) => HttpResponse[QueryResult] =
-    (fail: HttpFailure, msg: String) =>
-  HttpResponse[QueryResult](status = fail, content = Some(Left(JString(msg))))
+  implicit def failureToQueryResult: (HttpFailure, String) => HttpResponse[QueryResult] = { (fail: HttpFailure, msg: String) =>
+    HttpResponse[QueryResult](status = fail, content = Some(Left(JString(msg))))
+  }
 
-  implicit val futureJValueToFutureQueryResult:
-      Future[HttpResponse[JValue]] => Future[HttpResponse[QueryResult]] =
+  implicit def futureJValueToFutureQueryResult: Future[HttpResponse[JValue]] => Future[HttpResponse[QueryResult]] = {
     (fr: Future[HttpResponse[JValue]]) => fr.map { r => 
       r.copy(content = r.content.map(Left(_)))
     }
+  }
 
-  val utf8 = Charset.forName("UTF-8")
+  lazy val utf8 = Charset.forName("UTF-8")
 
-  implicit val queryResultToFutureByteChunk: QueryResult => Future[ByteChunk] = {
+  implicit def queryResultToFutureByteChunk: QueryResult => Future[ByteChunk] = {
     (qr: QueryResult) => qr match {
       case Left(jv) => Future(Left(ByteBuffer.wrap(jv.renderCompact.getBytes)))
       case Right(stream) => Future(Right(stream.map(cb => utf8.encode(cb))))
     }
   }
 
-  implicit val futureByteChunk2byteChunk: Future[ByteChunk] => ByteChunk = { fb =>
+  implicit def futureByteChunk2byteChunk: Future[ByteChunk] => ByteChunk = { fb =>
     Right(StreamT.wrapEffect[Future, ByteBuffer] {
       fb map {
         case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
@@ -139,7 +138,7 @@ trait ShardService extends
     })
   }
 
-  implicit val queryResult2byteChunk = futureByteChunk2byteChunk compose queryResultToFutureByteChunk
+  implicit def queryResult2byteChunk = futureByteChunk2byteChunk compose queryResultToFutureByteChunk
 
   // I feel dirty inside.
   implicit def futureMapper[A, B](implicit a2b: A => B): Future[HttpResponse[A]] => Future[HttpResponse[B]] = { fa =>
@@ -167,8 +166,6 @@ trait ShardService extends
       }
     }
 
-    // ByteChunk -> HttpResponse[ByteChunk]
-    // Future[JValue] -> StreamT[Future, CharBuffer]
     state match {
       case ManagedQueryShardState(_, apiKeyManager, _, jobManager, clock) =>
         // [ByteChunk, Future[HttpResponse[ByteChunk]]]
@@ -222,7 +219,7 @@ trait ShardService extends
     }
   }
 
-  val analyticsService = this.service("quirrel", "1.0") {
+  lazy val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {

@@ -63,7 +63,7 @@ with Logging {
   def queryExecutorFactory: QueryExecutorFactory[Future, A]
   def extractResponse(request: HttpRequest[Future[JValue]], a: A): HttpResponse[QueryResult]
 
-  val Command = """:(\w+)\s+(.+)""".r
+  private val Command = """:(\w+)\s+(.+)""".r
 
   private def handleErrors[A](qt: String, result: EvaluationError): HttpResponse[QueryResult] = result match {
     case UserError(errorData) =>
@@ -84,7 +84,7 @@ with Logging {
       HttpResponse[QueryResult](HttpStatus(PreconditionFailed, error))
   }
 
-  val service = { (request: HttpRequest[Future[JValue]]) =>
+  lazy val service = { (request: HttpRequest[Future[JValue]]) =>
     success((r: APIKeyRecord, p: Path, q: String, opts: QueryOptions) => q.trim match {
       case Command("ls", arg) => list(r.apiKey, Path(arg.trim))
       case Command("list", arg) => list(r.apiKey, Path(arg.trim))
@@ -108,7 +108,7 @@ with Logging {
     })
   }
 
-  val metadata = Some(DescriptionMetadata(
+  def metadata = Some(DescriptionMetadata(
     """
 Takes a quirrel query and returns the result of evaluating the query.
     """

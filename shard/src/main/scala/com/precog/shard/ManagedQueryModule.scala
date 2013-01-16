@@ -84,7 +84,7 @@ trait ManagedQueryModule extends YggConfigComponent {
     def jobId: Option[JobId]
   }
 
-  private implicit lazy val jobActorSystem = ActorSystem("jobPollingActorSystem")
+  implicit def jobActorSystem: ActorSystem
 
   def jobManager: JobManager[Future]
 

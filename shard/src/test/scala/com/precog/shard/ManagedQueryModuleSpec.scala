@@ -65,9 +65,10 @@ object ManagedQueryTestSupport {
 import ManagedQueryTestSupport._
 
 class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
-  lazy val actorSystem = ActorSystem("managedQueryModuleSpec")
-  implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit lazy val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
+  val actorSystem = ActorSystem("managedQueryModuleSpec")
+  val jobActorSystem = ActorSystem("managedQueryModuleSpecJobs")
+  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
     def copoint[A](m: Future[A]) = Await.result(m, Duration(5, "seconds"))
   }
 
