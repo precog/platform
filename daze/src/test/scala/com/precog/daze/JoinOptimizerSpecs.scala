@@ -64,59 +64,59 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         |   { name: a.name, height: b.height } where a.userId = b.userId """.stripMargin
         
       val line = Line(0, "")
-      val users = dag.LoadLocal(line,Const(line,CString("/hom/users")), JUnfixedT)
-      val heightWeight = dag.LoadLocal(line,Const(line,CString("/hom/heightWeight")), JUnfixedT)
-      val height = Const(line, CString("height"))
-      val name = Const(line, CString("name"))
-      val userId = Const(line, CString("userId"))
-      val key = Const(line, CString("key"))
-      val value = Const(line, CString("value"))
+      val users = dag.LoadLocal(Const(CString("/hom/users"))(line), JUnfixedT)(line)
+      val heightWeight = dag.LoadLocal(Const(CString("/hom/heightWeight"))(line), JUnfixedT)(line)
+      val height = Const(CString("height"))(line)
+      val name = Const(CString("name"))(line)
+      val userId = Const(CString("userId"))(line)
+      val key = Const(CString("key"))(line)
+      val value = Const(CString("value"))(line)
 
       val liftedLHS =
         SortBy(
-          Join(line, JoinObject, IdentitySort,
-            Join(line, WrapObject, CrossLeftSort,
+          Join(JoinObject, IdentitySort,
+            Join(WrapObject, CrossLeftSort,
               key,
-              Join(line, DerefObject, CrossLeftSort, heightWeight, userId)),
-            Join(line, WrapObject, CrossLeftSort, value, heightWeight)),
+              Join(DerefObject, CrossLeftSort, heightWeight, userId)(line))(line),
+            Join(WrapObject, CrossLeftSort, value, heightWeight)(line))(line),
           "key", "value", 0)
         
       val liftedRHS =
         SortBy(
-          Join(line, JoinObject, IdentitySort,
-            Join(line, WrapObject, CrossLeftSort,
+          Join(JoinObject, IdentitySort,
+            Join(WrapObject, CrossLeftSort,
               key,
-              Join(line, DerefObject, CrossLeftSort, users, userId)),
-            Join(line, WrapObject, CrossLeftSort, value, users)),
+              Join(DerefObject, CrossLeftSort, users, userId)(line))(line),
+            Join(WrapObject, CrossLeftSort, value, users)(line))(line),
           "key", "value", 0)
           
       val input =
-        Filter(line, IdentitySort,
-          Join(line, JoinObject, CrossLeftSort,
-            Join(line, WrapObject, CrossLeftSort,
+        Filter(IdentitySort,
+          Join(JoinObject, CrossLeftSort,
+            Join(WrapObject, CrossLeftSort,
               height,
-              Join(line, DerefObject, CrossLeftSort, heightWeight, height)),
-            Join(line, WrapObject, CrossLeftSort,
+              Join(DerefObject, CrossLeftSort, heightWeight, height)(line))(line),
+            Join(WrapObject, CrossLeftSort,
               name,
-              Join(line, DerefObject, CrossLeftSort, users, name))),
-          Join(line, Eq, CrossLeftSort,
-            Join(line, DerefObject, CrossLeftSort,
+              Join(DerefObject, CrossLeftSort, users, name)(line))(line))(line),
+          Join(Eq, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort,
               users,
-              userId),
-            Join(line, DerefObject, CrossLeftSort,
+              userId)(line),
+            Join(DerefObject, CrossLeftSort,
               heightWeight,
-              userId)))    
+              userId)(line))(line))(line)    
       
       val opt = optimizeJoins(input, new IdGen)
       
       val expectedOpt =
-        Join(line, JoinObject, ValueSort(0),
-          Join(line, WrapObject, CrossLeftSort,
+        Join(JoinObject, ValueSort(0),
+          Join(WrapObject, CrossLeftSort,
             height,
-            Join(line, DerefObject, CrossLeftSort, liftedLHS, height)),
-          Join(line, WrapObject, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort, liftedLHS, height)(line))(line),
+          Join(WrapObject, CrossLeftSort,
             name,
-            Join(line, DerefObject, CrossLeftSort, liftedRHS, name)))
+            Join(DerefObject, CrossLeftSort, liftedRHS, name)(line))(line))(line)
 
       opt must_== expectedOpt
     }
@@ -130,71 +130,71 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         |   { name: a.name, height: b.height, weight: b.weight } where a.userId = b.userId """.stripMargin
         
       val line = Line(0, "")
-      val users = dag.LoadLocal(line, Const(line, CString("/users")))
-      val heightWeight = dag.LoadLocal(line, Const(line, CString("/heightWeight")))
-      val userId = Const(line, CString("userId"))
-      val name = Const(line, CString("name"))
-      val height = Const(line, CString("height"))
-      val weight = Const(line, CString("weight"))
-      val key = Const(line, CString("key"))
-      val value = Const(line, CString("value"))
+      val users = dag.LoadLocal(Const(CString("/users"))(line))(line)
+      val heightWeight = dag.LoadLocal(Const(CString("/heightWeight"))(line))(line)
+      val userId = Const(CString("userId"))(line)
+      val name = Const(CString("name"))(line)
+      val height = Const(CString("height"))(line)
+      val weight = Const(CString("weight"))(line)
+      val key = Const(CString("key"))(line)
+      val value = Const(CString("value"))(line)
       
       val liftedLHS =
         SortBy(
-          Join(line, JoinObject, IdentitySort,
-            Join(line, WrapObject, CrossLeftSort,
+          Join(JoinObject, IdentitySort,
+            Join(WrapObject, CrossLeftSort,
               key,
-              Join(line, DerefObject, CrossLeftSort, heightWeight, userId)),
-            Join(line, WrapObject, CrossLeftSort, value, heightWeight)),
+              Join(DerefObject, CrossLeftSort, heightWeight, userId)(line))(line),
+            Join(WrapObject, CrossLeftSort, value, heightWeight)(line))(line),
           "key", "value", 0)
         
       val liftedRHS =
         SortBy(
-          Join(line, JoinObject, IdentitySort,
-            Join(line, WrapObject, CrossLeftSort,
+          Join(JoinObject, IdentitySort,
+            Join(WrapObject, CrossLeftSort,
               key,
-              Join(line, DerefObject, CrossLeftSort, users, userId)),
-            Join(line, WrapObject, CrossLeftSort, value, users)),
+              Join(DerefObject, CrossLeftSort, users, userId)(line))(line),
+            Join(WrapObject, CrossLeftSort, value, users)(line))(line),
           "key", "value", 0)
           
       val input =
-        Filter(line, IdentitySort,
-          Join(line, JoinObject, CrossLeftSort,
-            Join(line, JoinObject, IdentitySort,
-              Join(line, WrapObject, CrossLeftSort,
+        Filter(IdentitySort,
+          Join(JoinObject, CrossLeftSort,
+            Join(JoinObject, IdentitySort,
+              Join(WrapObject, CrossLeftSort,
                 height,
-                Join(line, DerefObject, CrossLeftSort, heightWeight, height)
-              ),
-              Join(line, WrapObject, CrossLeftSort,
+                Join(DerefObject, CrossLeftSort, heightWeight, height)(line)
+              )(line),
+              Join(WrapObject, CrossLeftSort,
                 weight,
-                Join(line, DerefObject, CrossLeftSort, heightWeight, weight)
-              )
-            ),
-            Join(line, WrapObject, CrossLeftSort,
+                Join(DerefObject, CrossLeftSort, heightWeight, weight)(line)
+              )(line)
+            )(line),
+            Join(WrapObject, CrossLeftSort,
               name,
-              Join(line, DerefObject, CrossLeftSort, users, name)
-            )
-          ),
-          Join(line, Eq, CrossLeftSort,
-            Join(line, DerefObject, CrossLeftSort, users, userId),
-            Join(line, DerefObject, CrossLeftSort, heightWeight, userId)
-          )
-        )
+              Join(DerefObject, CrossLeftSort, users, name)(line)
+            )(line)
+          )(line),
+          Join(Eq, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort, users, userId)(line),
+            Join(DerefObject, CrossLeftSort, heightWeight, userId)(line)
+          )(line)
+        )(line)
 
       val opt = optimizeJoins(input, new IdGen)
       
       val expectedOpt =
-        Join(line, JoinObject, ValueSort(0),
-          Join(line, JoinObject, ValueSort(0),
-            Join(line, WrapObject, CrossLeftSort,
+        Join(JoinObject, ValueSort(0),
+          Join(JoinObject, ValueSort(0),
+            Join(WrapObject, CrossLeftSort,
               height,
-              Join(line, DerefObject, CrossLeftSort, liftedLHS, height)),
-            Join(line, WrapObject, CrossLeftSort,
+              Join(DerefObject, CrossLeftSort, liftedLHS, height)(line))(line),
+            Join(WrapObject, CrossLeftSort,
               weight,
-              Join(line, DerefObject, CrossLeftSort, liftedLHS, weight))),
-          Join(line, WrapObject, CrossLeftSort,
+              Join(DerefObject, CrossLeftSort, liftedLHS, weight)(line))(line))(line),
+          Join(WrapObject, CrossLeftSort,
             name,
-            Join(line, DerefObject, CrossLeftSort, liftedRHS, name)))
+            Join(DerefObject, CrossLeftSort, liftedRHS, name)(line))(line))(line)
 
        opt must_== expectedOpt
     }
@@ -209,50 +209,50 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
 
       val line = Line(0, "")
       
-      lazy val users = dag.LoadLocal(line, Const(line, CString("/users")))
-      lazy val heightWeight = dag.LoadLocal(line, Const(line, CString("/heightWeight")))
-      lazy val userId = Const(line, CString("userId"))
-      lazy val name = Const(line, CString("name"))
-      lazy val key = Const(line, CString("key"))
-      lazy val value = Const(line, CString("value"))
+      lazy val users = dag.LoadLocal(Const(CString("/users"))(line))(line)
+      lazy val heightWeight = dag.LoadLocal(Const(CString("/heightWeight"))(line))(line)
+      lazy val userId = Const(CString("userId"))(line)
+      lazy val name = Const(CString("name"))(line)
+      lazy val key = Const(CString("key"))(line)
+      lazy val value = Const(CString("value"))(line)
       
       lazy val input =
-        Filter(line, IdentitySort,
-          Join(line, JoinObject, CrossLeftSort,
-            Join(line, WrapObject, CrossLeftSort,
+        Filter(IdentitySort,
+          Join(JoinObject, CrossLeftSort,
+            Join(WrapObject, CrossLeftSort,
               name,
-              Join(line, DerefObject, CrossLeftSort, users, name)
-            ),
+              Join(DerefObject, CrossLeftSort, users, name)(line)
+            )(line),
             heightWeight
-          ),
-          Join(line, Eq, CrossLeftSort,
-            Join(line, DerefObject, CrossLeftSort, users, userId),
-            Join(line, DerefObject, CrossLeftSort, heightWeight, userId)
-          )
-        )
+          )(line),
+          Join(Eq, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort, users, userId)(line),
+            Join(DerefObject, CrossLeftSort, heightWeight, userId)(line)
+          )(line)
+        )(line)
 
       val opt = optimizeJoins(input, new IdGen)
 
       val expectedOpt =
-        Join(line, JoinObject, ValueSort(0),
-          Join(line, WrapObject, CrossLeftSort,
+        Join(JoinObject, ValueSort(0),
+          Join(WrapObject, CrossLeftSort,
             name,
-            Join(line, DerefObject, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort,
               SortBy(
-                Join(line, JoinObject, IdentitySort,
-                  Join(line, WrapObject, CrossLeftSort,
+                Join(JoinObject, IdentitySort,
+                  Join(WrapObject, CrossLeftSort,
                     key,
-                    Join(line, DerefObject, CrossLeftSort, users, userId)),
-                  Join(line, WrapObject, CrossLeftSort, value, users)),
+                    Join(DerefObject, CrossLeftSort, users, userId)(line))(line),
+                  Join(WrapObject, CrossLeftSort, value, users)(line))(line),
                 "key", "value", 0),
-              name)),
+              name)(line))(line),
           SortBy(
-            Join(line, JoinObject, IdentitySort,
-              Join(line, WrapObject, CrossLeftSort,
+            Join(JoinObject, IdentitySort,
+              Join(WrapObject, CrossLeftSort,
                 key,
-                Join(line, DerefObject, CrossLeftSort, heightWeight, userId)),
-              Join(line, WrapObject, CrossLeftSort, value, heightWeight)),
-            "key", "value", 0))
+                Join(DerefObject, CrossLeftSort, heightWeight, userId)(line))(line),
+              Join(WrapObject, CrossLeftSort, value, heightWeight)(line))(line),
+            "key", "value", 0))(line)
 
       opt must_== expectedOpt
     }
@@ -274,77 +274,77 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
        
       val line = Line(0, "")
       
-      val medals = dag.LoadLocal(line, Const(line, CString("/summer_games/london_medals")))
-      val athletes = dag.LoadLocal(line, Const(line, CString("/summer_games/athletes")))
+      val medals = dag.LoadLocal(Const(CString("/summer_games/london_medals"))(line))(line)
+      val athletes = dag.LoadLocal(Const(CString("/summer_games/athletes"))(line))(line)
       
-      val medalsP = Join(line, JoinObject, IdentitySort,
+      val medalsP = Join(JoinObject, IdentitySort,
         medals,
-        Join(line, WrapObject, CrossRightSort,
-          Const(line, CString("name")),
-          Operate(line, BuiltInFunction1Op(toLowerCase),
-            Join(line, DerefObject, CrossLeftSort, medals, Const(line, CString("name"))))))
+        Join(WrapObject, CrossRightSort,
+          Const(CString("name"))(line),
+          Operate(BuiltInFunction1Op(toLowerCase),
+            Join(DerefObject, CrossLeftSort, medals, Const(CString("name"))(line))(line))(line))(line))(line)
           
-      val athletesP = Join(line, JoinObject, IdentitySort,
+      val athletesP = Join(JoinObject, IdentitySort,
         athletes,
-        Join(line, WrapObject, CrossRightSort,
-          Const(line, CString("name")),
-          Operate(line, BuiltInFunction1Op(toLowerCase),
-            Join(line, DerefObject, CrossLeftSort, athletes, Const(line, CString("name"))))))
+        Join(WrapObject, CrossRightSort,
+          Const(CString("name"))(line),
+          Operate(BuiltInFunction1Op(toLowerCase),
+            Join(DerefObject, CrossLeftSort, athletes, Const(CString("name"))(line))(line))(line))(line))(line)
             
-      val input = Filter(line, IdentitySort,
-        Join(line, JoinObject, CrossLeftSort,
-          Join(line, WrapObject, CrossRightSort,
-            Const(line, CString("winner")),
-            Join(line, DerefObject, CrossLeftSort,
+      val input = Filter(IdentitySort,
+        Join(JoinObject, CrossLeftSort,
+          Join(WrapObject, CrossRightSort,
+            Const(CString("winner"))(line),
+            Join(DerefObject, CrossLeftSort,
               medalsP,
-              Const(line, CString("Medal winner")))),
-          Join(line, WrapObject, CrossRightSort,
-            Const(line, CString("country")),
-            Join(line, DerefObject, CrossLeftSort,
+              Const(CString("Medal winner"))(line))(line))(line),
+          Join(WrapObject, CrossRightSort,
+            Const(CString("country"))(line),
+            Join(DerefObject, CrossLeftSort,
               athletesP,
-              Const(line, CString("Countryname"))))),
-        Join(line, Eq, CrossLeftSort,
-          Join(line, DerefObject, CrossLeftSort,
+              Const(CString("Countryname"))(line))(line))(line))(line),
+        Join(Eq, CrossLeftSort,
+          Join(DerefObject, CrossLeftSort,
             medalsP,
-            Const(line, CString("name"))),
-          Join(line, DerefObject, CrossLeftSort,
+            Const(CString("name"))(line))(line),
+          Join(DerefObject, CrossLeftSort,
             athletesP,
-            Const(line, CString("name")))))
+            Const(CString("name"))(line))(line))(line))(line)
             
       val result = optimizeJoins(input, new IdGen)
       
       val expected =
-        Join(line, JoinObject, ValueSort(0),
-          Join(line, WrapObject, CrossRightSort,
-            Const(line, CString("winner")),
-            Join(line, DerefObject, CrossLeftSort,
+        Join(JoinObject, ValueSort(0),
+          Join(WrapObject, CrossRightSort,
+            Const(CString("winner"))(line),
+            Join(DerefObject, CrossLeftSort,
               SortBy(
-                Join(line, JoinObject, IdentitySort,
-                  Join(line, WrapObject, CrossLeftSort,
-                    Const(line, CString("key")),
-                    Join(line, DerefObject, CrossLeftSort,
+                Join(JoinObject, IdentitySort,
+                  Join(WrapObject, CrossLeftSort,
+                    Const(CString("key"))(line),
+                    Join(DerefObject, CrossLeftSort,
                       medalsP,
-                      Const(line, CString("name")))),
-                  Join(line, WrapObject, CrossLeftSort,
-                    Const(line, CString("value")),
-                    medalsP)),
+                      Const(CString("name"))(line))(line))(line),
+                  Join(WrapObject, CrossLeftSort,
+                    Const(CString("value"))(line),
+                    medalsP)(line))(line),
                 "key", "value", 0),
-              Const(line, CString("Medal winner")))),
-          Join(line, WrapObject, CrossRightSort,
-            Const(line, CString("country")),
-            Join(line, DerefObject, CrossLeftSort,
+              Const(CString("Medal winner"))(line))(line))(line),
+          Join(WrapObject, CrossRightSort,
+            Const(CString("country"))(line),
+            Join(DerefObject, CrossLeftSort,
               SortBy(
-                Join(line, JoinObject, IdentitySort,
-                  Join(line, WrapObject, CrossLeftSort,
-                    Const(line, CString("key")),
-                    Join(line, DerefObject, CrossLeftSort,
+                Join(JoinObject, IdentitySort,
+                  Join(WrapObject, CrossLeftSort,
+                    Const(CString("key"))(line),
+                    Join(DerefObject, CrossLeftSort,
                       athletesP,
-                      Const(line, CString("name")))),
-                  Join(line, WrapObject, CrossLeftSort,
-                    Const(line, CString("value")),
-                    athletesP)),
+                      Const(CString("name"))(line))(line))(line),
+                  Join(WrapObject, CrossLeftSort,
+                    Const(CString("value"))(line),
+                    athletesP)(line))(line),
                 "key", "value", 0),
-              Const(line, CString("Countryname")))))
+              Const(CString("Countryname"))(line))(line))(line))(line)
             
       result mustEqual expected
     }
@@ -360,89 +360,89 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       
       val line = Line(0, "")
       
-      lazy val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
-      lazy val clicksP = dag.New(line, clicks)
+      lazy val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
+      lazy val clicksP = dag.New(clicks)(line)
       
       lazy val input =
-        Filter(line, IdentitySort,
-          Join(line, JoinObject, CrossLeftSort,
-            Join(line, JoinObject, IdentitySort,
-              Join(line, WrapObject, CrossLeftSort,
-                Const(line, CString("a")),
+        Filter(IdentitySort,
+          Join(JoinObject, CrossLeftSort,
+            Join(JoinObject, IdentitySort,
+              Join(WrapObject, CrossLeftSort,
+                Const(CString("a"))(line),
                 clicks
-              ),
-              Join(line, WrapObject, CrossLeftSort,
-                Const(line, CString("c")),
+              )(line),
+              Join(WrapObject, CrossLeftSort,
+                Const(CString("c"))(line),
                 clicks
-              )
-            ),
-            Join(line, WrapObject, CrossLeftSort,
-              Const(line, CString("b")),
+              )(line)
+            )(line),
+            Join(WrapObject, CrossLeftSort,
+              Const(CString("b"))(line),
               clicksP
-            )
-          ),
-          Join(line, Eq, CrossLeftSort,
-            Join(line, DerefObject, CrossLeftSort,
+            )(line)
+          )(line),
+          Join(Eq, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort,
               clicks,
-              Const(line, CString("pageId"))
-            ),
-            Join(line, DerefObject, CrossLeftSort,
+              Const(CString("pageId"))(line)
+            )(line),
+            Join(DerefObject, CrossLeftSort,
               clicksP,
-              Const(line, CString("pageId"))
-            )
-          )
-        )
+              Const(CString("pageId"))(line)
+            )(line)
+          )(line)
+        )(line)
 
         lazy val clickPages =
           SortBy(
-            Join(line, JoinObject, IdentitySort,
-              Join(line, WrapObject, CrossLeftSort,
-                Const(line, CString("key")),
-                Join(line, DerefObject, CrossLeftSort,
+            Join(JoinObject, IdentitySort,
+              Join(WrapObject, CrossLeftSort,
+                Const(CString("key"))(line),
+                Join(DerefObject, CrossLeftSort,
                   clicks,
-                  Const(line, CString("pageId"))
-                )
-              ),
-              Join(line, WrapObject, CrossLeftSort,
-                Const(line, CString("value")),
+                  Const(CString("pageId"))(line)
+                )(line)
+              )(line),
+              Join(WrapObject, CrossLeftSort,
+                Const(CString("value"))(line),
                 clicks
-              )
-            ),
+              )(line)
+            )(line),
             "key", "value", 0
           )
         
         lazy val expected =
-          Join(line, JoinObject, ValueSort(0),
-            Join(line, JoinObject, ValueSort(0),
-              Join(line, WrapObject, CrossLeftSort,
-                Const(line, CString("a")),
+          Join(JoinObject, ValueSort(0),
+            Join(JoinObject, ValueSort(0),
+              Join(WrapObject, CrossLeftSort,
+                Const(CString("a"))(line),
                 clickPages
-              ),
-              Join(line, WrapObject, CrossLeftSort,
-                Const(line, CString("c")),
+              )(line),
+              Join(WrapObject, CrossLeftSort,
+                Const(CString("c"))(line),
                 clickPages
-              )
-            ),
-            Join(line, WrapObject, CrossLeftSort,
-              Const(line, CString("b")),
+              )(line)
+            )(line),
+            Join(WrapObject, CrossLeftSort,
+              Const(CString("b"))(line),
               SortBy(
-                Join(line, JoinObject, IdentitySort,
-                  Join(line, WrapObject, CrossLeftSort,
-                    Const(line, CString("key")),
-                    Join(line, DerefObject, CrossLeftSort,
+                Join(JoinObject, IdentitySort,
+                  Join(WrapObject, CrossLeftSort,
+                    Const(CString("key"))(line),
+                    Join(DerefObject, CrossLeftSort,
                       clicksP,
-                      Const(line, CString("pageId"))
-                    )
-                  ),
-                  Join(line, WrapObject, CrossLeftSort,
-                    Const(line, CString("value")),
+                      Const(CString("pageId"))(line)
+                    )(line)
+                  )(line),
+                  Join(WrapObject, CrossLeftSort,
+                    Const(CString("value"))(line),
                     clicksP
-                  )
-                ),
+                  )(line)
+                )(line),
                 "key", "value", 0
               )
-            )
-          )
+            )(line)
+          )(line)
         
       optimizeJoins(input, new IdGen) mustEqual expected
     }
