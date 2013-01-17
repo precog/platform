@@ -26,6 +26,7 @@ import com.precog.yggdrasil._
 import org.joda.time.DateTime
 
 import scalaz.{ Tag, FirstOption }
+import scalaz.std.anyVal.booleanInstance.disjunction
 import scalaz.std.option.optionFirst
 import scalaz.syntax.copointed._
 
@@ -83,16 +84,21 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
       val result = eval(megaReduce.get, ctx, optimize)
       val rewritten = rewriteNodeFromTable(
         optimizedDAG,
+        optimize,
         megaReduce.get,
         result.copoint
       ).copoint
 
-      val rewrittenMegaReduce = rewritten.foldDown(true) {
-        case m@MegaReduce(_, _, _) => Tag(Some(m)): FirstOption[DepGraph]
-      }
+      val hasMegaReduce = rewritten.foldDown(true) {
+        case m@MegaReduce(_, _, _) => true
+      }(disjunction)
+      val hasConst = rewritten.foldDown(true) {
+        case m@Const(_, CNum(n)) if n == 5 => true
+      }(disjunction)
 
       // Must be turned into a Const node
-      rewrittenMegaReduce must beNone
+      hasMegaReduce must beFalse
+      hasConst must beTrue
     }
   }
 }

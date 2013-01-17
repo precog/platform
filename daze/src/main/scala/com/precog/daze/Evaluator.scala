@@ -108,6 +108,9 @@ trait Evaluator[M[+_]] extends DAG
     (if (optimize) { g => megaReduce(g, findReductions(g, ctx)) } else identity) andThen
     (if (optimize) (memoize _) else identity)
   }
+
+  def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
+    (if (optimize) inlineStatics(_: DepGraph, ctx) else identity[DepGraph] _)
   
   /**
    * The entry point to the evaluator.  The main implementation of the evaluator
@@ -913,22 +916,24 @@ trait Evaluator[M[+_]] extends DAG
       // find the topologically-sorted forcing points (excluding the endpoint)
       // at the current split level
       val toEval = stagingPoints filter referencesOnlySplit(parentSplits)
-      
-      val preStates = toEval map { graph =>
-        for {
-          _ <- prepareEval(graph, splits)
-        } yield ()        // the result is uninteresting, since it has been stored in `assumed`
+
+      type EvaluatorStateT[A] = StateT[M, EvaluatorState, A]
+      val preState = toEval.foldLeftM[EvaluatorStateT, DepGraph](graph) {
+        case (graph, node) => for {
+          assumed <- monadState.gets(_.assume)
+          rewrittenNode <- transState liftM assumed.toList.foldLeftM(node: DepGraph) {
+            case (graph, (from, table)) => rewriteNodeFromTable(graph, optimize, from, table)
+          }
+          rewrittenDAG = replaceNode(graph, node, rewrittenNode)
+          _ <- prepareEval(rewrittenNode, splits)
+        } yield rewrittenDAG
       }
-      
-      val preState = preStates reduceOption { _ >> _ } getOrElse StateT.stateT[M, EvaluatorState, Unit](())
 
       // run the evaluator on all forcing points *including* the endpoint, in order
       for {
-        assumed <- preState >> monadState.gets(_.assume)
-        rewrittenGraph <- transState liftM assumed.toList.foldLeftM(graph) {
-          case (graph, (from, table)) => rewriteNodeFromTable(graph, from, table)
-        }
-        pendingTable <- prepareEval(rewrittenGraph, splits)
+        rewrittenDAG <- preState
+        stagedDAG = stagedRewriteDAG(optimize, ctx)(rewrittenDAG)
+        pendingTable <- prepareEval(stagedDAG, splits)
         table = pendingTable.table transform liftToValues(pendingTable.trans)
       } yield table
     }
@@ -944,9 +949,18 @@ trait Evaluator[M[+_]] extends DAG
    * Takes a graph, a node and a table and replaces the node (and
    * possibly its parents) into a node with the table's contents.
    */
-  def rewriteNodeFromTable(graph: DepGraph, from: DepGraph, table: Table) = for {
-    maybeSlice <- table.slices.headOption
-  } yield maybeSlice.map { rewriteNodeFromSlice(graph, from, _) } getOrElse graph
+  def rewriteNodeFromTable(graph: DepGraph, optimize: Boolean, from: DepGraph, table: Table) =
+    if (optimize) {
+      for {
+        maybeSlice <- table.slices.headOption
+      } yield {
+        maybeSlice.map {
+          rewriteNodeFromSlice(graph, from, _)
+        } getOrElse graph
+      }
+    } else {
+      M.point(graph)
+    }
 
   private[this] def rewriteNodeFromSlice(graph: DepGraph, from: DepGraph, slice: Slice) = {
     val replacements = graph.foldDown(true) {
@@ -971,13 +985,16 @@ trait Evaluator[M[+_]] extends DAG
     }
 
     replacements.foldLeft(graph) {
-      case (graph, (from, to)) => graph.mapDown(recurse => {
-        case splitGroup: dag.SplitGroup => splitGroup
-        case splitParam: dag.SplitParam => splitParam
-        case `from` => to
-      })
+      case (graph, (from, to)) => replaceNode(graph, from, to)
     }
   }
+
+  private[this] def replaceNode(graph: DepGraph, from: DepGraph, to: DepGraph) =
+    graph.mapDown(recurse => {
+      case splitGroup: dag.SplitGroup => splitGroup
+      case splitParam: dag.SplitParam => splitParam
+      case `from` => to
+    })
 
   /**
    * Returns all forcing points in the graph, ordered topologically.
