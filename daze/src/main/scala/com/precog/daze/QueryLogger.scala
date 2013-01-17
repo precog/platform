@@ -25,6 +25,8 @@ import com.precog.common.security._
 import blueeyes.json._
 import blueeyes.json.{ serialization => _, _ }
 import blueeyes.json.serialization.SerializationImplicits._
+import blueeyes.json.serialization._
+
 import blueeyes.util.Clock
 
 import org.slf4j.{ LoggerFactory, Logger }
@@ -32,29 +34,29 @@ import org.slf4j.{ LoggerFactory, Logger }
 import scalaz._
 import scalaz.syntax.monad._
 
-trait QueryLogger[M[+_]] {
+trait QueryLogger[M[+_], -P] {
 
   /**
    * This reports a fatal error user. Depending on the implementation, this may
    * also stop computation completely.
    */
-  def fatal(msg: => String): M[Unit]
+  def fatal(pos: P, msg: String): M[Unit]
 
   /**
    * Report a warning to the user.
    */
-  def warn(msg: => String): M[Unit]
+  def warn(pos: P, msg: String): M[Unit]
 
   /**
    * Report an informational message to the user.
    */
-  def info(msg: => String): M[Unit]
+  def info(pos: P, msg: String): M[Unit]
 }
 
 /**
  * Reports errors to a job's channel.
  */
-trait JobQueryLogger[M[+_]] extends QueryLogger[M] {
+trait JobQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
   import JobManager._
 
   implicit def M: Monad[M]
@@ -63,46 +65,49 @@ trait JobQueryLogger[M[+_]] extends QueryLogger[M] {
   def jobId: JobId
   def clock: Clock
 
-  private def mkMessage(msg: String): JValue = {
+  protected def decomposer: Decomposer[P]
+
+  protected def mkMessage(pos: P, msg: String): JValue = {
     JObject(
       JField("message", JString(msg)) ::
       JField("timestamp", clock.now().serialize) ::
+      JField("position", decomposer.decompose(pos)) ::
       Nil)
   }
 
-  private def send(channel: String, msg: String): M[Unit] =
-    jobManager.addMessage(jobId, channel, mkMessage(msg)) map { _ => () }
+  private def send(channel: String, pos: P, msg: String): M[Unit] =
+    jobManager.addMessage(jobId, channel, mkMessage(pos, msg)) map { _ => () }
 
-  def fatal(msg: => String): M[Unit] = for {
-    _ <- send(channels.Error, msg)
+  def fatal(pos: P, msg: String): M[Unit] = for {
+    _ <- send(channels.Error, pos, msg)
     _ <- jobManager.cancel(jobId, "Cancelled because of error: " + msg, clock.now())
   } yield ()
 
-  def warn(msg: => String): M[Unit] = send(channels.Warning, msg)
+  def warn(pos: P, msg: String): M[Unit] = send(channels.Warning, pos, msg)
 
-  def info(msg: => String): M[Unit] = send(channels.Info, msg)
+  def info(pos: P, msg: String): M[Unit] = send(channels.Info, pos, msg)
 }
 
-trait LoggingQueryLogger[M[+_]] extends QueryLogger[M] {
+trait LoggingQueryLogger[M[+_]] extends QueryLogger[M, Any] {
   implicit def M: Applicative[M]
 
   protected val logger = LoggerFactory.getLogger("com.precog.daze.QueryLogger")
 
-  def fatal(msg: => String): M[Unit] = M.point {
+  def fatal(pos: Any, msg: String): M[Unit] = M.point {
     logger.error(msg)
   }
 
-  def warn(msg: => String): M[Unit] = M.point {
+  def warn(pos: Any, msg: String): M[Unit] = M.point {
     logger.warn(msg)
   }
 
-  def info(msg: => String): M[Unit] = M.point {
+  def info(pos: Any, msg: String): M[Unit] = M.point {
     logger.info(msg)
   }
 }
 
 object LoggingQueryLogger {
-  def apply[M[+_]](implicit M0: Applicative[M]): QueryLogger[M] = {
+  def apply[M[+_]](implicit M0: Applicative[M]): QueryLogger[M, Any] = {
     new LoggingQueryLogger[M] {
       val M = M0
     }

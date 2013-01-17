@@ -206,7 +206,7 @@ trait JDBMQueryExecutorComponent {
 
           val yggConfig = self.yggConfig
           val storage = self.storage.liftM[JobQueryT](shardQueryMonad, shardQueryMonad.M)
-          val report = errorReport(shardQueryMonad)
+          val report = errorReport[instructions.Line](shardQueryMonad, implicitly)
         }
       }
 
