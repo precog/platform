@@ -14,6 +14,7 @@ import java.nio.channels.WritableByteChannel
 import java.nio.{ CharBuffer, ByteBuffer, ReadOnlyBufferException }
 import java.io.{ File, FileOutputStream }
 
+import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
 import blueeyes.core.http.MimeTypes
 
@@ -57,7 +58,7 @@ trait ManagedQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[F
     }
   }
 
-  def errorReport(implicit shardQueryMonad: ShardQueryMonad): QueryLogger[ShardQuery] = {
+  def errorReport[A](implicit shardQueryMonad: ShardQueryMonad, decomposer0: Decomposer[A]): QueryLogger[ShardQuery, A] = {
     import scalaz.syntax.monad._
 
     implicit val M0 = shardQueryMonad.M
@@ -67,11 +68,12 @@ trait ManagedQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[F
         def apply[A](fa: Future[A]) = fa.liftM[JobQueryT]
       }
 
-      new JobQueryLogger[ShardQuery] {
+      new JobQueryLogger[ShardQuery, A] {
         val M = shardQueryMonad
         val jobManager = self.jobManager.withM[ShardQuery](lift, implicitly, shardQueryMonad.M, shardQueryMonad)
         val jobId = jobId0
         val clock = yggConfig.clock
+        val decomposer = decomposer0
       }
     } getOrElse {
       LoggingQueryLogger[ShardQuery]
