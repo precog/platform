@@ -349,7 +349,9 @@ trait Evaluator[M[+_]] extends DAG
               }
 
               result <- mor(transformed, ctx)
-            } yield result
+            } yield {
+              result
+            }
 
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
