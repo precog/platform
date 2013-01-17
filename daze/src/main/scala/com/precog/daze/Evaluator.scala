@@ -940,13 +940,15 @@ trait Evaluator[M[+_]] extends DAG
     resultTable map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
   }
 
-  /*
+  /**
    * Takes a graph, a node and a table and replaces the node (and
    * possibly its parents) into a node with the table's contents.
    */
-  def rewriteNodeFromTable(graph: DepGraph, from: DepGraph, table: Table) = {
-    val mslice = table.slices.head
+  def rewriteNodeFromTable(graph: DepGraph, from: DepGraph, table: Table) = for {
+    maybeSlice <- table.slices.headOption
+  } yield maybeSlice.map { rewriteNodeFromSlice(graph, from, _) } getOrElse graph
 
+  private[this] def rewriteNodeFromSlice(graph: DepGraph, from: DepGraph, slice: Slice) = {
     val replacements = graph.foldDown(true) {
       case join@Join(
         line,
@@ -956,29 +958,27 @@ trait Evaluator[M[+_]] extends DAG
           DerefArray,
           CrossLeftSort,
           `from`,
-          Const(_, CLong(index2))),
-        Const(_, CLong(index1))) =>
+          Const(_, CLong(index1))),
+        Const(_, CLong(index2))) =>
 
+        val columnRef =
+          ColumnRef(paths.Value \ CPathIndex(index1.toInt) \ CPathIndex(index2.toInt), CNum)
+        val value = slice.columns(columnRef).cValue(0)
 
-        List((
-          join,
-          for {
-            slice <- mslice
-            columnRef = ColumnRef(paths.Value \ CPathIndex(index1.toInt) \ CPathIndex(index2.toInt), CNum)
-            value = slice.columns(columnRef).cValue(0)
-          } yield Const(line, value)
-        ))
+        List(
+          (join, Const(line, value))
+        )
     }
 
-    replacements.foldLeftM(graph) {
-      case (graph, (from, mto)) => for {
-        to <- mto
-      } yield graph.mapDown(_ => {
+    replacements.foldLeft(graph) {
+      case (graph, (from, to)) => graph.mapDown(recurse => {
+        case splitGroup: dag.SplitGroup => splitGroup
+        case splitParam: dag.SplitParam => splitParam
         case `from` => to
       })
     }
   }
-  
+
   /**
    * Returns all forcing points in the graph, ordered topologically.
    */
