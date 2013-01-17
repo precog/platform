@@ -41,12 +41,18 @@ trait StaticInliner[M[+_]] extends DAG with EvaluatorMethods[M] {
                 Operate(loc, op, child2)
               
               case _ => {
-                val result = for {
-                  col <- op1(op).f1(ctx).apply(value)
-                  if col isDefinedAt 0
-                } yield col cValue 0
-                
-                Const(loc, result getOrElse CUndefined)
+                val newOp1 = op1(op)
+                newOp1.fold(
+                  _ => Operate(loc, op, child2),
+                  newOp1 => {
+                    val result = for {
+                      col <- newOp1.f1(ctx).apply(value)
+                      if col isDefinedAt 0
+                    } yield col cValue 0
+                    
+                    Const(loc, result getOrElse CUndefined)
+                  }
+                )
               }
             }
           }

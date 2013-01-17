@@ -104,7 +104,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val nonEqTrans = trans.EqualLiteral(trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("foo")), CNum(5), true)
       val objTrans = trans.WrapObject(trans.Leaf(trans.Source), "bar")
-      val opTrans = trans.Map1(trans.DerefArrayStatic(trans.Leaf(trans.Source), CPathIndex(1)), op1(Neg).f1(ctx))
+      val opTrans = op1(Neg).spec(ctx)(trans.DerefArrayStatic(trans.Leaf(trans.Source), CPathIndex(1)))
       val filterTrans = trans.Filter(trans.Leaf(trans.Source), trans.EqualLiteral(trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("baz")), CNum(12), false)) 
 
       val reductions: List[(trans.TransSpec1, List[Reduction])] = List((filterTrans, List(StdDev)), (opTrans, List(Max)), (objTrans, List(Max, Sum)), (nonEqTrans, List(Min))).reverse
