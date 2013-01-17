@@ -12,5 +12,7 @@ package object shard {
   type QueryResult = Either[JValue, StreamT[Future, CharBuffer]]
 
   type JobQueryT[M[+_], +A] = QueryT[JobQueryState, M, A]
+
+  type ShardQuery[+A] = JobQueryT[Future, A]
 }
 
