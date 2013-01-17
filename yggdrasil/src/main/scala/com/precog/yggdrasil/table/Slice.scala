@@ -1457,15 +1457,16 @@ object Slice {
         }, offset + slice.size)
 
       case  ((cols, offset), _) => (cols, offset)
-
     }
 
-    new Slice {
+    val slice = new Slice {
       val size = _size
       val columns = _columns.flatMap { case (ref, parts) =>
         cf.util.NConcat(parts) map ((ref, _))
       }
     }
+
+    slice
   }
 
   def rowComparatorFor(s1: Slice, s2: Slice)(keyf: Slice => Iterable[CPath]): RowComparator = {

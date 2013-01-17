@@ -77,6 +77,7 @@ class MongoQueryExecutorConfig(val config: Configuration)
   with ShardConfig {
     
   val maxSliceSize = config[Int]("mongo.max_slice_size", 10000)
+  val smallSliceSize = config[Int]("mongo.small_slice_size", 8)
 
   val shardId = "standalone"
   val logPrefix = "mongo"

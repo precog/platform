@@ -102,6 +102,7 @@ object BlockStoreColumnarTableModuleSpec extends BlockStoreColumnarTableModuleSp
   
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
+    val smallSliceSize = 3
     
     val idSource = new FreshAtomicIdSource
   }

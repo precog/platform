@@ -119,6 +119,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
     val memoizationWorkDir: File = null //no filesystem storage in test!
     val flatMapTimeout = intToDurationInt(30).seconds
     val maxSliceSize = 10
+    val smallSliceSize = 3
 
     val idSource = new FreshAtomicIdSource
   }
