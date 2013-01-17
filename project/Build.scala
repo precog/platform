@@ -119,7 +119,7 @@ object PlatformBuild extends Build {
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
 
   lazy val platform = Project(id = "platform", base = file(".")).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo, jdbc)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*)
@@ -140,6 +140,9 @@ object PlatformBuild extends Build {
     settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test")
 
   lazy val mongo = Project(id = "mongo", base = file("mongo")).
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test")
+
+  lazy val jdbc = Project(id = "jdbc", base = file("jdbc")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test")
 
   lazy val daze = Project(id = "daze", base = file("daze")).
