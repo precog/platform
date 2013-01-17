@@ -395,7 +395,7 @@ trait RankSpecs extends EvalStackSpecs {
         |     second  := rankedData where rankedData.rank = 'rank + 1
         |     {first: first, second: second}
         | 
-        |   {start: std::math::max(result.first.timestamp, lowerBound), 
+        |   {start: std::math::maxOf(result.first.timestamp, lowerBound), 
         |    end: result.second.timestamp, 
         |    agentId: result.first.agentId, 
         |    status: result.first.status, 
