@@ -2,9 +2,9 @@ package com.precog.ingest
 package service
 
 import com.precog.common.Path
-import com.precog.common.accounts.AccountServiceCombinators
 import com.precog.common.ingest._
 import com.precog.common.security._
+import com.precog.common.security.service.APIKeyServiceCombinators
 import com.precog.common.services.PathServiceCombinators
 
 import blueeyes._

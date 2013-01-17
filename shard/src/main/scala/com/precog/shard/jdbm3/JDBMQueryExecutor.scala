@@ -80,14 +80,14 @@ object JDBMQueryExecutor {
     }
   }
     
-  def apply(config: Configuration, extAccessControl: AccessControl[Future], extAccountFinder: AccountFinder[Future], jobManager: JobManager[Future]): QueryExecutor[Future] = {
+  def apply(config: Configuration, extAccessControl: AccessControl[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]): AsyncQueryExecutorFactory = {
     new JDBMQueryExecutorFactory
         with JDBMColumnarTableModule[Future]
         with JDBMProjectionModule
         with ProductionShardSystemActorModule
         with SystemActorStorageModule { self =>
 
-      override val executionContext = executor
+      //override val executionContext = executor
 
       type YggConfig = JDBMQueryExecutorConfig
       val yggConfig = wrapConfig(config)
@@ -96,10 +96,9 @@ object JDBMQueryExecutor {
       protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
       
       val actorSystem = ActorSystem("jdbmExecutorActorSystem")
-      val executor = ExecutionContext.defaultExecutionContext(actorSystem)
+      implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
       val jobManager = extJobManager
-
       val accountFinder = Some(extAccountFinder)
       val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
@@ -111,6 +110,8 @@ object JDBMQueryExecutor {
       def storageMetadataSource = storage
 
       def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog = FilesystemIngestFailureLog(yggConfig.ingestFailureLogRoot, checkpoint)
+
+      def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
 
       object Projection extends JDBMProjectionCompanion {
         private lazy val logger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.JDBMQueryExecutor.Projection")
@@ -144,11 +145,11 @@ object JDBMQueryExecutor {
         type YggConfig = JDBMQueryExecutorConfig
         type Key = Array[Byte]
         type Projection = JDBMProjection
-        type Storage = StorageLike[ShardQuery, JDBMProjection]
-        }
+        type Storage = StorageLike[ShardQuery]
+      }
 
       def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
-        implicit val futureMonad = new blueeyes.bkka.FutureMonad(executor)
+        implicit val futureMonad = new blueeyes.bkka.FutureMonad(executionContext)
         (for {
           executionContext0 <- getAccountExecutionContext(apiKey)
         } yield {
@@ -159,7 +160,7 @@ object JDBMQueryExecutor {
       }
 
       def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
-        implicit val futureMonad = new blueeyes.bkka.FutureMonad(executor)
+        implicit val futureMonad = new blueeyes.bkka.FutureMonad(executionContext)
         (for {
           executionContext0 <- getAccountExecutionContext(apiKey)
         } yield {
@@ -206,8 +207,6 @@ trait JDBMQueryExecutorFactory
     with AsyncQueryExecutorFactory { self =>
 
   type YggConfig <: BaseJDBMQueryExecutorConfig
-
-  def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
     storage.userMetadataView(userUID).findChildren(path) map {
