@@ -41,6 +41,7 @@ import blueeyes.core.http.HttpHeaders._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.json._
+import blueeyes.json.serialization.Extractor
 import blueeyes.util.Clock
 
 import com.google.common.base.Charsets
@@ -111,9 +112,12 @@ class IngestServiceHandler(
           M.point(SyncSuccess(total, ingested, errors))
         } else {
           val (_, values, errors0) = batch.foldLeft((0, Vector.empty[JValue], Vector.empty[(Int, Extractor.Error)])) {
-            case ((i, values, errors), Success(value)) if value.flattenWithPath.size < 250 => (i + 1, values :+ value, errors)
-            case ((i, values, errors), Success(value)) => (i + 1, values, errors :+ (i, Extractor.Invalid("Cannot ingest values with more than 250 primitive fields. This limitiation will be lifted in a future release. Thank you for your patience."))
-            case ((i, values, errors), Failure(error)) => (i + 1, values, errors :+ (i, Extractor.Thrown(error)))
+            case ((i, values, errors), Success(value)) if value.flattenWithPath.size < 250 => 
+              (i + 1, values :+ value, errors)
+            case ((i, values, errors), Success(value)) => 
+              (i + 1, values, errors :+ (i, Extractor.Invalid("Cannot ingest values with more than 250 primitive fields. This limitiation will be lifted in a future release. Thank you for your patience.")))
+            case ((i, values, errors), Failure(error)) => 
+              (i + 1, values, errors :+ (i, Extractor.Thrown(error)))
           }
 
           ingest(apiKey, path, accountId, values, Some(jobId)) flatMap { _ =>
@@ -357,7 +361,7 @@ class IngestServiceHandler(
 
                 // assign new job ID for batch-mode queries only
                 for {
-                  batchJob <- batchMode.option(jobManager.createJob(apiKey, "ingest-" + path, "ingest", Some(clock.now()), None) map { _.id }).sequence
+                  batchJob <- batchMode.option(jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(clock.now())) map { _.id }).sequence
                   ingestResult <- batchJob map { jobId =>
                                     ingestBatch(apiKey, path, ownerAccountId, content, parseDirectives, jobId, sync)
                                   } getOrElse {

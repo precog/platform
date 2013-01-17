@@ -43,7 +43,7 @@ import com.weiglewilczek.slf4s.Logging
  * Provides a simple interface for ingesting bulk JSON data.
  */
 trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
-  type Storage <: StorageWritable
+  type Storage <: StorageWritable[M]
 
   implicit def coM: Copointed[M]
 

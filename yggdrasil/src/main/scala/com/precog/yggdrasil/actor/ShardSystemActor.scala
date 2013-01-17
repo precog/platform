@@ -41,8 +41,11 @@ import org.streum.configrity.converter.Extra._
 
 import scalaz.{Failure,Success}
 import scalaz.syntax.applicative._
+import scalaz.syntax.semigroup._
 import scalaz.syntax.std.boolean._
 import scalaz.std.option._
+import scalaz.std.map._
+import scalaz.std.vector._
 
 case object ShutdownSystem
 case object ShutdownComplete
@@ -101,8 +104,8 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
     override def preStart() {
       val initialCheckpoint = loadCheckpoint()
 
-      logger.info("Initializing MetadataActor with storage = " + storage)
-      metadataActor = metadataActorSystem.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint)), "metadata")
+      logger.info("Initializing MetadataActor with storage = " + metadataStorage)
+      metadataActor = metadataActorSystem.actorOf(Props(new MetadataActor(yggConfig.shardId, metadataStorage, checkpointCoordination, initialCheckpoint)), "metadata")
 
       logger.debug("Initializing ProjectionsActor")
       projectionsActor = projectionActorSystem.actorOf(Props(new ProjectionsActor(yggConfig.maxOpenProjections)), "projections")
@@ -144,15 +147,10 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
               }
             } onSuccess {
               case descMaps : Seq[Set[ProjectionDescriptor]] => 
-                val projectionMap: Map[Path, Seq[ProjectionDescriptor]] = for {
-                  descMap <- descMaps
-                  desc    <- descMap
-                  column  <- desc.columns
-                } yield (column.path, desc)
+                val grouped: Map[Path, Seq[ProjectionDescriptor]] = descMaps.flatten.foldLeft(Map.empty[Path, Vector[ProjectionDescriptor]]) {
+                  case (acc, descriptor) => descriptor.columns.map(c => (c.path -> Vector(descriptor))).toMap |+| acc
+                }
                 
-                // explicit type ascription to force mapValues; otherwise the resulting map is just a view that 
-                // recomputes values on accesses
-                val grouped: collection.immutable.Map[Path, Seq[ProjectionDescriptor]] = projectionMap.groupBy(_._1).mapValues(_.map(_._2))
                 val updates = routingTable.batchMessages(messages, grouped)
 
                 logger.debug("Sending " + updates.size + " update message(s)")

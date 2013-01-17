@@ -50,7 +50,7 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
 
   protected implicit def actorSystem: ActorSystem
 
-  trait ActorStorageLike extends StorageLike[Future, Projection] with Logging {
+  trait ActorStorageLike extends StorageLike[Future] with Logging {
     def accessControl: AccessControl[Future]
     def shardSystemActor: ActorRef
 
@@ -80,7 +80,7 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
     }
   }
 
-  trait ActorStorageWritable extends ActorStorageLike with StorageWritable {
+  trait ActorStorageWritable extends ActorStorageLike with StorageWritable[Future] {
     override def storeBatch(msgs: Seq[EventMessage]): Future[PrecogUnit] = {
       implicit val storageTimeout: Timeout = Timeout(300 seconds)
 

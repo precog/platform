@@ -80,7 +80,7 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
                   get(ReadGrantChildrenHandler) 
                 }
               } ~
-              apiKey(handlers.apiKeyManager.apiKeyFinder) {
+              apiKey(k => handlers.apiKeyManager.findAPIKey(k).map(_.map(_.apiKey))) {
                 path("/apikeys/") {
                   get(ReadAPIKeysHandler) ~
                   post(CreateAPIKeyHandler) 

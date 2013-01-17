@@ -21,6 +21,7 @@ package com.precog.auth
 
 import com.precog.common.json._
 import com.precog.common.security._
+import com.precog.common.services.ServiceHandlerUtil
 
 import blueeyes.bkka._
 import blueeyes.core.http._
@@ -42,6 +43,7 @@ import scalaz._
 import scalaz.Validation._
 import scalaz.std.boolean._
 import scalaz.std.option._
+import scalaz.std.set._
 import scalaz.syntax.apply._
 import scalaz.syntax.id._
 import scalaz.syntax.traverse._
@@ -50,30 +52,45 @@ import scalaz.syntax.std.option._
 
 import shapeless._
 
-class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val clock: Clock)(implicit executor: ExecutionContext) {
+class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val clock: Clock)(implicit executor: ExecutionContext) extends ServiceHandlerUtil {
   import com.precog.common.security.service.v1
   type R = HttpResponse[JValue]
 
   private implicit val M0: Monad[Future] = new FutureMonad(executor)
 
-  private def badRequest(message: String, details: Option[String] = None) = 
-    HttpResponse[JValue](HttpStatus(BadRequest, message), content = Some(jobject(jfield("error", details getOrElse message))))
-  
-  private def notFound(message: String) = 
-    HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString(message)))
+  val grantDetails: Grant => v1.GrantDetails = {
+    case Grant(gid, gname, gdesc, _, _, perms, exp) => v1.GrantDetails(gid, gname, gdesc, perms, exp) 
+  }
 
-  private def ok[A: Decomposer](content: Option[A]) = 
-    HttpResponse[JValue](OK, content = content.map(_.serialize))
+  val recordDetails: PartialFunction[APIKeyRecord, Future[v1.APIKeyDetails]] = {
+    case APIKeyRecord(apiKey, name, description, _, grantIds, false) =>
+      grantIds.map(apiKeyManager.findGrant).sequence map { grants =>
+        v1.APIKeyDetails(apiKey, name, description, grants.flatten map grantDetails)
+      }
+  }
 
-  private def created[A: Decomposer](content: Option[A]) = 
-    HttpResponse[JValue](Created, content = content.map(_.serialize))
+  def findAPIKey(apiKey: APIKey) = apiKeyManager.findAPIKey(apiKey) flatMap { 
+    _ collect recordDetails sequence
+  }
 
-  private def noContent =
-    HttpResponse[JValue](HttpStatus(NoContent))
+  def findAllAPIKeys(fromRoot: APIKey): Future[Set[v1.APIKeyDetails]] = {
+    def find0(record: APIKeyRecord): Future[Set[v1.APIKeyDetails]] = {
+      for {
+        childKeys  <- apiKeyManager.findAPIKeyChildren(record.apiKey) 
+        keySets    <- (childKeys map find0).sequence
+        keyDetails <- (childKeys collect recordDetails).sequence 
+      } yield keyDetails ++ keySets.flatten 
+    }
+
+    apiKeyManager.findAPIKey(fromRoot) flatMap {
+      case Some(record) => find0(record)
+      case None => M0.point(Set())
+    }
+  }
 
   object ReadAPIKeysHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey) => 
-      apiKeyManager.apiKeyFinder.findAllAPIKeys(authAPIKey) map { keySet =>
+      findAllAPIKeys(authAPIKey) map { keySet =>
         ok(keySet.nonEmpty.option(keySet))
       }
     }
@@ -107,7 +124,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
           } else {
             apiKeyManager.newAPIKeyWithGrants(request.name, request.description, authAPIKey, request.grants.toSet) flatMap { k =>
               if (k.isDefined) {
-                (k collect apiKeyManager.recordDetails sequence) map { ok[v1.APIKeyDetails] }
+                (k collect recordDetails sequence) map { ok[v1.APIKeyDetails] }
               } else {
                 Promise successful badRequest("Error creating new API key.", Some("Requestor lacks permission to assign grants to API key"))
               }
@@ -127,7 +144,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
       // since having an api key means you can see the details, we don't check perms.
       request.parameters.get('apikey) map { apiKey =>
-        apiKeyManager.apiKeyFinder.findAPIKey(apiKey) map { k =>
+        findAPIKey(apiKey) map { k =>
           if (k.isDefined) ok(k) else notFound("Unable to find API key "+apiKey)
         }
       } getOrElse {
@@ -155,7 +172,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
   object ReadAPIKeyGrantsHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
       request.parameters.get('apikey).map { apiKey =>
-        apiKeyManager.apiKeyFinder.findAPIKey(apiKey) map {
+        findAPIKey(apiKey) map {
           case Some(v1.APIKeyDetails(_, _, _, grantDetails)) => ok(Some(grantDetails))
           case None => notFound("The specified API key does not exist")
         }
@@ -209,7 +226,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
 
   object ReadGrantsHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey) =>
-      apiKeyManager.apiKeyFinder.findAllAPIKeys(authAPIKey) map { allKeys =>
+      findAllAPIKeys(authAPIKey) map { allKeys =>
         ok(Some(allKeys.flatMap(_.grants)))
       }
     }
@@ -222,7 +239,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
       requestBody.validated[v1.NewGrantRequest] match {
         case Success(request) => 
           apiKeyManager.deriveGrant(request.name, request.description, authAPIKey, request.permissions, request.expirationDate) map { g =>
-            if (g.isDefined) ok(g map apiKeyManager.grantDetails)
+            if (g.isDefined) ok(g map grantDetails)
             else badRequest("Error creating new grant.", Some("Requestor lacks permissions to create grant"))
           }
 
@@ -239,7 +256,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
       request.parameters.get('grantId) map { grantId =>
         apiKeyManager.findGrant(grantId) map { g =>
-          if (g.isDefined) ok(g map apiKeyManager.grantDetails)
+          if (g.isDefined) ok(g map grantDetails)
           else notFound("Unable to find grant " + grantId)
         }
       } getOrElse {
@@ -254,7 +271,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
       request.parameters.get('grantId) map { grantId =>
         apiKeyManager.findGrantChildren(grantId) map { 
-          grants => ok(Some(grants map apiKeyManager.grantDetails)) 
+          grants => ok(Some(grants map grantDetails)) 
         }
       } getOrElse {
         Promise successful badRequest("Missing grant ID from request URI.")
@@ -269,7 +286,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
       requestBody.validated[v1.NewGrantRequest] match {
         case Success(r) => 
           apiKeyManager.deriveSingleParentGrant(None, None, issuerKey, parentId, r.permissions, r.expirationDate) map { g =>
-            if (g.isDefined) ok(g map apiKeyManager.grantDetails) 
+            if (g.isDefined) ok(g map grantDetails) 
             else badRequest("Error creating new child grant.", Some("Requestor lacks permissions to create grant."))
           }
 

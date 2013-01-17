@@ -21,8 +21,10 @@ package com.precog.shard
 package jdbm3
 
 import com.precog.common.security._
+import com.precog.common.security.service._
 import com.precog.common.accounts._
 import com.precog.common.jobs._
+import com.precog.common.client.BaseClient._
 
 import blueeyes.BlueEyesServer
 import blueeyes.bkka._
@@ -34,11 +36,7 @@ import org.streum.configrity.Configuration
 
 import scalaz._
 
-object JDBMShardServer extends BlueEyesServer 
-    with AsyncShardService 
-    with JDBMQueryExecutorComponent 
-    with AccountManagerClientComponent 
-    with AkkaDefaults {
+object JDBMShardServer extends BlueEyesServer with AsyncShardService with AkkaDefaults {
   import WebJobManager._
   val clock = Clock.System
 
@@ -47,6 +45,7 @@ object JDBMShardServer extends BlueEyesServer
 
   def APIKeyFinder(config: Configuration): APIKeyFinder[Future] = WebAPIKeyFinder(config)
   def AccountFinder(config: Configuration): AccountFinder[Future] = WebAccountFinder(config)
-  def QueryExecutor(config: Configuration, accessControl: AccessControl[Future], accountFinder: AccountFinder[Future]) = JDBMQueryExecutor(config, accessControl, accountFinder)
   def jobManagerFactory(config: Configuration): JobManager[Future] = WebJobManager(config).withM[Future]
+  def QueryExecutor(config: Configuration, accessControl: AccessControl[Future], accountFinder: AccountFinder[Future], jobManager: JobManager[Future]) = 
+    JDBMQueryExecutor(config, accessControl, accountFinder, jobManager)
 }

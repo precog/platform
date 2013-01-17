@@ -43,10 +43,9 @@ import scalaz._
 import scalaz.Validation.{ success, failure }
 import scalaz.syntax.monad._
 
-<<<<<<< HEAD
-class QueryServiceHandler[A](queryExecutor: QueryExecutor[Future])(implicit M: Monad[Future])
-extends CustomHttpService[A, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
-with Logging {
+class QueryServiceHandler[A](implicit M: Monad[Future])
+    extends CustomHttpService[A, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
+
   def queryExecutorFactory: QueryExecutorFactory[Future, A]
   def extractResponse(a: A): HttpResponse[QueryResult]
 
@@ -81,7 +80,7 @@ with Logging {
         val executorV = queryExecutorFactory.executorFor(apiKey)
         executorV flatMap {
           case Success(executor) =>
-            executor.execute(r.apiKey, q, p, opts) map {
+            executor.execute(apiKey, query, path, opts) map {
               case Success(result) =>
                 extractResponse(result)
               case Failure(error) =>
@@ -90,7 +89,7 @@ with Logging {
 
           case Failure(error) =>
             logger.error("Failure during evaluator setup: " + error)
-            Future(HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")))
+            M.point(HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")))
         }
     })
   }
@@ -117,20 +116,14 @@ Takes a quirrel query and returns the result of evaluating the query.
   }
 }
 
-class SyncQueryServiceHandler(
-    val queryExecutorFactory: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]])(implicit
-    val dispatcher: MessageDispatcher,
-    val M: Monad[Future]) extends QueryServiceHandler[StreamT[Future, CharBuffer]] {
+class SyncQueryServiceHandler(val queryExecutorFactory: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]])(implicit M: Monad[Future]) extends QueryServiceHandler[StreamT[Future, CharBuffer]] {
 
   def extractResponse(stream: StreamT[Future, CharBuffer]): HttpResponse[QueryResult] = {
     HttpResponse[QueryResult](OK, content = Some(Right(stream)))
   }
 }
 
-class AsyncQueryServiceHandler(
-    val queryExecutorFactory: QueryExecutorFactory[Future, JobId])(implicit
-    val dispatcher: MessageDispatcher,
-    val M: Monad[Future]) extends QueryServiceHandler[JobId] {
+class AsyncQueryServiceHandler(val queryExecutorFactory: QueryExecutorFactory[Future, JobId])(implicit M: Monad[Future]) extends QueryServiceHandler[JobId] {
 
   def extractResponse(jobId: JobId): HttpResponse[QueryResult] = {
     val result = JObject(JField("jobId", JString(jobId)) :: Nil)

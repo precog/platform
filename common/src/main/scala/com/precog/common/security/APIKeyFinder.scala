@@ -38,5 +38,9 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging {
   def findAPIKey(apiKey: APIKey): M[Option[v1.APIKeyDetails]]
 
   def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]]
+
+  def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails]
+
+  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): M[Boolean] 
 }
  

@@ -17,45 +17,32 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest
-package service
+package com.precog.common
+package services
 
-import com.precog.common.Path
-import com.precog.common.ingest._
-import com.precog.common.security._
-import com.precog.common.security.service.APIKeyServiceCombinators
-import com.precog.common.services.PathServiceCombinators
-
-import blueeyes._
-import blueeyes.core.data._
 import blueeyes.core.http._
+import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.json._
+import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Extractor._
 
-import akka.dispatch.Future
-import akka.dispatch.ExecutionContext
+trait ServiceHandlerUtil {
+  def badRequest(message: String, details: Option[String] = None): HttpResponse[JValue] = 
+    HttpResponse[JValue](HttpStatus(BadRequest, message), content = Some(jobject(jfield("error", details getOrElse message))))
+  
+  def notFound(message: String): HttpResponse[JValue] = 
+    HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString(message)))
 
-trait EventServiceCombinators extends APIKeyServiceCombinators with PathServiceCombinators {
-  import DefaultBijections._
+  def ok[A: Decomposer](content: Option[A]): HttpResponse[JValue] = 
+    HttpResponse[JValue](OK, content = content.map(_.serialize))
 
-  def left[A, B, C](h: HttpService[Either[A, B], C]): HttpService[A, C] = {
-    new CustomHttpService[A, C] {
-      val service = (req: HttpRequest[A]) =>
-        h.service(req.copy(content = req.content map (Left(_))))
+  def created[A: Decomposer](content: Option[A]): HttpResponse[JValue] = 
+    HttpResponse[JValue](Created, content = content.map(_.serialize))
 
-      val metadata = None
-    }
-  }
-
-  def right[A, B, C](h: HttpService[Either[A, B], C]): HttpService[B, C] = {
-    new CustomHttpService[B, C] {
-      val service = (req: HttpRequest[B]) =>
-        h.service(req.copy(content = req.content map (Right(_))))
-
-      val metadata = None
-    }
-  }
+  def noContent: HttpResponse[JValue] =
+    HttpResponse[JValue](HttpStatus(NoContent))
 }
 
 // vim: set ts=4 sw=4 et:

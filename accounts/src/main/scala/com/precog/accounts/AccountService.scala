@@ -20,7 +20,9 @@
 package com.precog.accounts
 
 import com.precog.util._
+import com.precog.common.NetUtils
 import com.precog.common.accounts._
+import com.precog.common.security._
 import com.precog.common.security.service._
 
 import blueeyes._
@@ -52,19 +54,6 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.std.option._
 
-@deprecated("TODO: This class needs badly to be replaced by a facade for the raw service.", since = "2012-12-26")
-case class SecurityService(protocol: String, host: String, port: Int, path: String, rootKey: String)(implicit executor: ExecutionContext) {
-  def withClient[A](f: HttpClient[ByteChunk] => A): A = {
-    val client = new HttpClientXLightWeb 
-    f(client.protocol(protocol).host(host).port(port).path(path))
-  }
-  
-  def withRootClient[A](f: HttpClient[ByteChunk] => A): A = {
-    val client = new HttpClientXLightWeb 
-    f(client.protocol(protocol).host(host).port(port).path(path).query("apiKey", rootKey))
-  }
-}
-
 trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
   def auth[A](accountManager: AccountManager[Future])(service: HttpService[A, Account => Future[HttpResponse[JValue]]])(implicit ctx: ExecutionContext) = {
     new AuthenticationService[A, HttpResponse[JValue]](accountManager, service)({
@@ -72,19 +61,45 @@ trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
       case AuthMismatch(message) => HttpResponse(Unauthorized, content = Some(message.serialize))
     })
   }
+
+  sealed trait AuthenticationFailure
+  case object NotProvided extends AuthenticationFailure
+  case class AuthMismatch(message: String) extends AuthenticationFailure
+
+  class AuthenticationService[A, B](accountManager: AccountManager[Future], val delegate: HttpService[A, Account => Future[B]])(err: AuthenticationFailure => B)(implicit executor: ExecutionContext)
+      extends DelegatingService[A, Future[B], A, Account => Future[B]] with Logging {
+    val service = (request: HttpRequest[A]) => {
+      delegate.service(request) map { (f: Account => Future[B]) =>
+        request.headers.header[Authorization] flatMap {
+          _.basic map {
+            case BasicAuthCredentials(email,  password) =>
+              accountManager.authAccount(email, password) flatMap { 
+                case Success(account)   => f(account)
+                case Failure(error)     =>
+                  logger.warn("Authentication failure from %s for %s: %s".format(NetUtils.remoteIpFrom(request), email, error))
+                  Future(err(AuthMismatch("Credentials provided were formatted correctly, but did not match a known account.")))
+              }
+          }
+        } getOrElse {
+          Future(err(NotProvided))
+        }
+      }
+    }
+    
+    val metadata = Some(AboutMetadata(ParameterMetadata('accountId, None), DescriptionMetadata("A accountId is required for the use of this service.")))
+  }
 }
 
-
-trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinators {
-  type AM <: AccountManager[Future]
-  case class State(accountManagement: AM, stop: Stop[AM], clock: Clock, securityService: SecurityService, rootAccountId: String)
+trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinators with Logging {
+  case class State(handlers: AccountServiceHandlers, stop: Stoppable)
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
   implicit def executor: ExecutionContext
   implicit def M: Monad[Future]
 
-  def accountManager(config: Configuration): (AM, Stop[AM])
+  def AccountManager(config: Configuration): (AccountManager[Future], Stoppable)
+  def APIKeyFinder(config: Configuration): APIKeyFinder[Future]
 
   def clock: Clock
 
@@ -96,40 +111,35 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
 
           Future {
             logger.debug("Building account service state...")
-            val (accountManagement, stop) = accountManager(config)
-            val securityService = SecurityService(
-               config[String]("security.service.protocol", "http"),
-               config[String]("security.service.host", "localhost"),
-               config[Int]("security.service.port", 80),
-               config[String]("security.service.path", "/security/v1/"),
-               config[String]("security.rootKey")
-             )
-
+            val (accountManager, stoppable) = AccountManager(config)
+            val apiKeyFinder = APIKeyFinder(config.detach("security.service"))
             val rootAccountId = config[String]("accounts.rootAccountId", "INVALID")
+            val handlers = new AccountServiceHandlers(accountManager, apiKeyFinder, clock, rootAccountId)
 
-            State(accountManagement, stop, clock, securityService, rootAccountId)
+            State(handlers, stoppable)
           }
         } ->
-        request { state =>
+        request { case State(handlers, _) =>
+          import handlers._
           jsonp[ByteChunk] {
             transcode {
               path("/accounts/") {
-                post(new PostAccountHandler(state.accountManagement, state.clock, state.securityService, state.rootAccountId)) ~
-                auth(state.accountManagement) {
-                  get(new ListAccountsHandler(state.accountManagement, state.rootAccountId)) ~ 
+                post(PostAccountHandler) ~
+                auth(handlers.accountManager) {
+                  get(ListAccountsHandler) ~ 
                   path("'accountId") {
-                    get(new GetAccountDetailsHandler(state.accountManagement)) ~ 
-                    delete(new DeleteAccountHandler(state.accountManagement)) ~
+                    get(GetAccountDetailsHandler) ~ 
+                    delete(DeleteAccountHandler) ~
                     path("/password") {
-                      put(new PutAccountPasswordHandler(state.accountManagement))
+                      put(PutAccountPasswordHandler)
                     } ~ 
                     path("/grants/") {
-                      post(new CreateAccountGrantHandler(state.accountManagement, state.securityService))
+                      post(CreateAccountGrantHandler)
                     } ~
                     path("/plan") {
-                      get(new GetAccountPlanHandler(state.accountManagement)) ~
-                      put(new PutAccountPlanHandler(state.accountManagement)) ~ 
-                      delete(new DeleteAccountPlanHandler(state.accountManagement))
+                      get(GetAccountPlanHandler) ~
+                      put(PutAccountPlanHandler) ~ 
+                      delete(DeleteAccountPlanHandler)
                     }
                   } 
                 }
@@ -137,9 +147,8 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
             }
           }
         } ->
-        stop { state => 
-          implicit val stop = state.stop
-          Stoppable(state.accountManagement)
+        stop { s: State =>
+          s.stop
         }
       }
     }

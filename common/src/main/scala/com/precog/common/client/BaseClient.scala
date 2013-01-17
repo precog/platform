@@ -41,6 +41,23 @@ object BaseClient {
   type Response[+A] = EitherT[Future, String, A]
 
   case class ClientException(message: String) extends Exception(message)
+
+  /**
+   * A natural transformation from Response to Future that maps the left side
+   * to exceptions thrown inside the future.
+   */
+  implicit def ResponseAsFuture(implicit M: Monad[Future]) = new (Response ~> Future) {
+    def apply[A](res: Response[A]): Future[A] = res.fold({ error => throw ClientException(error) }, identity)
+  }
+
+  implicit def FutureAsResponse(implicit M: Monad[Future]) = new (Future ~> Response) {
+    def apply[A](fa: Future[A]): Response[A] = EitherT.eitherT(fa.map(\/.right).recoverWith {
+      case ClientException(msg) => M.point(\/.left[String, A](msg))
+    })
+  }
+  
+  implicit def FutureStreamAsResponseStream(implicit M: Monad[Future]) = implicitly[Hoist[StreamT]].hoist(FutureAsResponse)
+  implicit def ResponseStreamAsFutureStream(implicit MF: Monad[Future], MR: Monad[Response]) = implicitly[Hoist[StreamT]].hoist(ResponseAsFuture)
 }
 
 trait BaseClient {
@@ -49,23 +66,6 @@ trait BaseClient {
   
   def Response[A](a: Future[A]): Response[A] = EitherT.right(a)
   def BadResponse(msg: String): Response[Nothing] = EitherT.left(M.point(msg))
-
-  /**
-   * A natural transformation from Response to Future that maps the left side
-   * to exceptions thrown inside the future.
-   */
-  implicit def ResponseAsFuture = new (Response ~> Future) {
-    def apply[A](res: Response[A]): Future[A] = res.fold({ error => throw ClientException(error) }, identity)
-  }
-
-  implicit def FutureAsResponse = new (Future ~> Response) {
-    def apply[A](fa: Future[A]): Response[A] = EitherT.eitherT(fa.map(\/.right).recoverWith {
-      case ClientException(msg) => M.point(\/.left[String, A](msg))
-    })
-  }
-  
-  implicit def FutureStreamAsResponseStream = implicitly[Hoist[StreamT]].hoist(FutureAsResponse)
-  implicit def ResponseStreamAsFutureStream(implicit M: Monad[Response]) = implicitly[Hoist[StreamT]].hoist(ResponseAsFuture)
 
   protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A 
   protected def withJsonClient[A](f: HttpClient[ByteChunk] => A): A 

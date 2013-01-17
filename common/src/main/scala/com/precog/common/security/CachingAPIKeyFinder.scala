@@ -21,6 +21,7 @@ package com.precog.common
 package security
 
 import service.v1
+import accounts.AccountId
 import com.precog.common.cache.Cache
 
 import akka.util.Duration
@@ -44,12 +45,12 @@ object CachingAPIKeyFinderSettings {
   )
 }
 
-class CachingAPIKeyFinder[M[+_]](manager: APIKeyFinder[M], settings: CachingAPIKeyFinderSettings = CachingAPIKeyFinderSettings.Default)(implicit val M: Monad[M]) extends APIKeyFinder[M] {
+class CachingAPIKeyFinder[M[+_]](delegate: APIKeyFinder[M], settings: CachingAPIKeyFinderSettings = CachingAPIKeyFinderSettings.Default)(implicit val M: Monad[M]) extends APIKeyFinder[M] {
 
   private val apiKeyCache = Cache.simple[APIKey, v1.APIKeyDetails](settings.apiKeyCacheSettings: _*)
 
   def findAPIKey(tid: APIKey) = apiKeyCache.get(tid) match {
-    case None => manager.findAPIKey(tid).map { _.map { _ tap add } }
+    case None => delegate.findAPIKey(tid).map { _.map { _ tap add } }
     case t    => M.point(t)
   }
 
@@ -61,5 +62,14 @@ class CachingAPIKeyFinder[M[+_]](manager: APIKeyFinder[M], settings: CachingAPIK
 
   protected def remove(r: v1.APIKeyDetails) = apiKeyCache.remove(r.apiKey)
 
-  def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): M[Boolean] = manager.hasCapability(apiKey, perms, at)
+  // TODO: Cache capability checks
+  def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): M[Boolean] = 
+    delegate.hasCapability(apiKey, perms, at)
+
+  // TODO: Cache on creation
+  def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails] = 
+    delegate.newAPIKey(accountId, path, keyName, keyDesc)
+
+  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): M[Boolean] = 
+    delegate.addGrant(authKey, accountKey, grantId)
 }

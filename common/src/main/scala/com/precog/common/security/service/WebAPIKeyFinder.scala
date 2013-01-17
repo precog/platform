@@ -22,6 +22,7 @@ package security
 package service
 
 import client._
+import accounts.AccountId
 
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
@@ -44,12 +45,18 @@ import scalaz.EitherT.eitherT
 import scalaz.syntax.monad._
 
 object WebAPIKeyFinder {
-  def apply(config: Configuration)(implicit M: Monad[Future]): APIKeyFinder[Future] = {
-    sys.error("todo")
+  def apply(config: Configuration)(implicit executor: ExecutionContext): APIKeyFinder[Future] = {
+    new WebAPIKeyFinder(
+      config[String]("protocol", "http"),
+      config[String]("host", "localhost"),
+      config[Int]("port", 80),
+      config[String]("path", "/security/v1/"),
+      config[String]("rootKey")
+    )
   }
 }
 
-class WebAPIKeyFinder(protocol: String, host: String, port: Int, path: String)(implicit executor: ExecutionContext) 
+class WebAPIKeyFinder(protocol: String, host: String, port: Int, path: String, rootAPIKey: APIKey)(implicit executor: ExecutionContext) 
     extends WebClient(protocol, host, port, path) with APIKeyFinder[Future] {
 
   implicit val M = new FutureMonad(executor)
@@ -73,6 +80,42 @@ class WebAPIKeyFinder(protocol: String, host: String, port: Int, path: String)(i
 
   def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): Future[Boolean] = {
     sys.error("todo")
+  }
+
+  def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): Future[v1.APIKeyDetails] = {
+    val keyRequest = v1.NewAPIKeyRequest.newAccount(accountId, path, None, None)
+
+    withJsonClient { client => 
+      client.query("apiKey", rootAPIKey).post[JValue]("apiKeys/")(keyRequest.serialize) map {
+        case HttpResponse(HttpStatus(OK, _), _, Some(wrappedKey), _) =>
+          wrappedKey.validated[v1.APIKeyDetails] valueOr { error =>
+            logger.error("Unable to deserialize response from auth service: " + error.message)
+            throw HttpException(BadGateway, "Unexpected response to API key creation request: " + error.message)
+          }
+
+        case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) => 
+          logger.error("Fatal error attempting to create api key: " + failure + ": " + content)
+          throw HttpException(failure, reason)
+
+        case x => 
+          logger.error("Unexpected response from api provisioning service: " + x)
+          throw HttpException(BadGateway, "Unexpected response from the api provisioning service: " + x)
+      }
+    }
+  }
+
+  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): Future[Boolean] = {
+    val requestBody = jobject(JField("grantId", JString(grantId)))
+
+    withJsonClient { client =>
+      client.query("apiKey", authKey).post[JValue]("apikeys/" + accountKey + "/grants/")(requestBody) map {
+        case HttpResponse(HttpStatus(Created, _), _, None, _) => 
+          true
+        
+        case _ =>
+          false
+      }
+    }
   }
 }
 

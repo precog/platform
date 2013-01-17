@@ -125,7 +125,7 @@ trait ShardServiceCombinators extends EventServiceCombinators {
     }
   }
 
-  def query[A, B](next: HttpService[A, (APIKey, Path, Query, QueryOptions) => Future[B]]) = {
+  def query[A, B](next: HttpService[A, (APIKey, Path, Query, QueryOptions) => Future[B]]): HttpService[A, (APIKey, Path) => Future[B]] = {
     new DelegatingService[A, (APIKey, Path) => Future[B], A, (APIKey, Path, Query, QueryOptions) => Future[B]] {
       val delegate = next
       val metadata = None
@@ -157,13 +157,13 @@ trait ShardServiceCombinators extends EventServiceCombinators {
     }
   }
 
-  def asyncQuery[A, B](next: HttpService[A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]]) = {
-    new DelegatingService[A, APIKeyRecord => Future[B], A, (APIKeyRecord, Path) => Future[B]] {
-      val delegate = query(next)
+  def asyncQuery[A, B](next: HttpService[A, (APIKey, Path, Query, QueryOptions) => Future[B]]): HttpService[A, APIKey => Future[B]] = {
+    new DelegatingService[A, APIKey => Future[B], A, (APIKey, Path) => Future[B]] {
+      val delegate = query[A, B](next)
       val service = { (request: HttpRequest[A]) =>
         val path = request.parameters.get('prefixPath).filter(_ != null).getOrElse("")
         delegate.service(request.copy(parameters = request.parameters + ('sync -> "async"))) map { f =>
-          (apiKey: APIKeyRecord) => f(apiKey, Path(path))
+          (apiKey: APIKey) => f(apiKey, Path(path))
         }
       }
 
@@ -180,14 +180,4 @@ trait ShardServiceCombinators extends EventServiceCombinators {
   }
 
   implicit def stringToBB(s: String): ByteBuffer = ByteBuffer.wrap(s.getBytes("UTF-8"))
-
-/*
-  def jsonpcb[A](delegate: HttpService[Future[JValue], Future[HttpResponse[A]]])
-    (implicit bi: A => Future[ByteChunk], M: Monad[Future]) = {
-
-    jsonpc[ByteBuffer, ByteBuffer](delegate map (_ flatMap { response =>
-      response.content.map(bi).sequence.map(c0 => response.copy(content = c0))
-    }))
-  }
-  */
 }

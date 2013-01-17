@@ -463,7 +463,7 @@ object KafkaTools extends Command {
           data.foreach(v => println(v.renderPretty))
 
         case other =>
-          println("Message %d: %s was not an ingest request.".format(i+1, other.toString)
+          println("Message %d: %s was not an ingest request.".format(i+1, other.toString))
       }
     }
   }
@@ -476,7 +476,7 @@ object KafkaTools extends Command {
           data.foreach(v => println(v.serialize.renderPretty))
 
         case other =>
-          println("Message %d: %s was not an ingest request.".format(i+1, other.toString)
+          println("Message %d: %s was not an ingest request.".format(i+1, other.toString))
       }
     }
   }

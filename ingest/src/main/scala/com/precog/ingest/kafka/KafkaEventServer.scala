@@ -25,6 +25,8 @@ import com.precog.common.jobs._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.security._
+import com.precog.common.security.service._
+import com.precog.common.client.BaseClient._
 import com.precog.ingest.service._
 import WebJobManager._
 
@@ -39,14 +41,11 @@ import org.streum.configrity.Configuration
 
 import scalaz._
 
-object KafkaEventServer extends BlueEyesServer with KafkaEventStoreComponent with AkkaDefaults {
+object KafkaEventServer extends BlueEyesServer with AkkaDefaults {
   val clock = Clock.System
   implicit val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(defaultFutureDispatch)
-}
 
-
-trait KafkaEventStoreComponent extends EventService {
   def APIKeyFinder(config: Configuration) = WebAPIKeyFinder(config)
   def AccountFinder(config: Configuration) = WebAccountFinder(config)
   def JobManager(config: Configuration) = WebJobManager(config).withM[Future]

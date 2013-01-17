@@ -53,41 +53,7 @@ trait ZkAccountManagerSettings {
   def zkAccountIdPath: String
 }
 
-trait MongoAccountManagerSettings extends ZkAccountManagerSettings {
-  def accounts: String
-  def deletedAccounts: String
-  def timeout: Timeout
-}
-
-
-trait ZkMongoAccountManagerComponent {
-  private lazy val zkmLogger = LoggerFactory.getLogger("com.precog.accounts.ZkMongoAccountManagerComponent")
-  
-  implicit def M: Monad[Future] 
-
-  class AM(val zkc: ZkClient, mongo: Mongo, database: String, val settings: MongoAccountManagerSettings) 
-  extends MongoAccountManager(mongo, mongo.database(database), settings) 
-
-  def accountManager(config: Configuration): (AM, Stop[AM]) = {
-    val mongo = RealMongo(config.detach("mongo"))
-    
-    val zkHosts = config[String]("zookeeper.hosts", "localhost:2181")
-    val database = config[String]("mongo.database", "accounts_v1")
-
-    val settings0 = new MongoAccountManagerSettings with ZkAccountManagerSettings {
-      val zkAccountIdPath = config[String]("zookeeper.accountId.path")
-      val accounts = config[String]("mongo.collection", "accounts")
-      val deletedAccounts = config[String]("mongo.deletedCollection", "deleted_accounts")
-      val timeout = new Timeout(config[Int]("mongo.timeout", 30000))
-    }
-
-    val accountManager = new AM(new ZkClient(zkHosts), mongo, database, settings0)
-    (accountManager, new Stop[AM] { def stop(am: AM) = am.close() })
-  }
-}
-
-
-trait ZkAccountIdSource extends AccountManager[Future] {
+trait ZKAccountIdSource extends AccountManager[Future] {
   def zkc: ZkClient
   def settings: ZkAccountManagerSettings
 
@@ -101,9 +67,14 @@ trait ZkAccountIdSource extends AccountManager[Future] {
   }
 }
 
+trait MongoAccountManagerSettings {
+  def accounts: String
+  def deletedAccounts: String
+  def timeout: Timeout
+}
 
 abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val M: Monad[Future])
-    extends AccountManager[Future] with ZkAccountIdSource {
+    extends AccountManager[Future] {
   import Account._
 
   private lazy val mamLogger = LoggerFactory.getLogger("com.precog.accounts.MongoAccountManager")
@@ -111,6 +82,8 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
   private implicit val impTimeout = settings.timeout
   import Account.Serialization._
   
+  def newAccountId: Future[String] 
+
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId] = None)(f: (AccountId, Path) => Future[APIKey]): Future[Account] = {
     for {
       accountId <- newAccountId

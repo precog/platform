@@ -83,22 +83,22 @@ case class ProjectionUpdatesExpected(projections: Int)
 ////////////
 
 trait IngestFailureLog {
-  def logFailed(offset: Long, message: IngestMessage, lastKnownGood: YggCheckpoint): IngestFailureLog
-  def checkFailed(eventId: EventId): Boolean
+  def logFailed(offset: Long, message: EventMessage, lastKnownGood: YggCheckpoint): IngestFailureLog
+  def checkFailed(message: EventMessage): Boolean
   def restoreFrom: YggCheckpoint
   def persist: IO[IngestFailureLog]
 }
 
-case class FilesystemIngestFailureLog(failureLog: Map[EventId, FilesystemIngestFailureLog.LogRecord], restoreFrom: YggCheckpoint, persistDir: File) extends IngestFailureLog {
+case class FilesystemIngestFailureLog(failureLog: Map[EventMessage, FilesystemIngestFailureLog.LogRecord], restoreFrom: YggCheckpoint, persistDir: File) extends IngestFailureLog {
   import scala.math.Ordering.Implicits._
   import FilesystemIngestFailureLog._
   import FilesystemIngestFailureLog.LogRecord._
 
-  def logFailed(offset: Long, message: IngestMessage, lastKnownGood: YggCheckpoint): IngestFailureLog = {
-    copy(failureLog = failureLog + (message.eventId -> LogRecord(offset, message, lastKnownGood)), restoreFrom = lastKnownGood min restoreFrom)
+  def logFailed(offset: Long, message: EventMessage, lastKnownGood: YggCheckpoint): IngestFailureLog = {
+    copy(failureLog = failureLog + (message -> LogRecord(offset, message, lastKnownGood)), restoreFrom = lastKnownGood min restoreFrom)
   }
 
-  def checkFailed(eventId: EventId): Boolean = failureLog.contains(eventId)
+  def checkFailed(message: EventMessage): Boolean = failureLog.contains(message)
 
   def persist: IO[IngestFailureLog] = IO {
     val logFile = new File(persistDir, FilePrefix + System.currentTimeMillis + ".tmp")
@@ -121,12 +121,12 @@ object FilesystemIngestFailureLog {
       throw new IllegalArgumentException(persistDir + " is not a directory usable for failure logs!")
     }
 
-    def readAll(reader: BufferedReader, into: Map[EventId, LogRecord]): Map[EventId, LogRecord] = {
+    def readAll(reader: BufferedReader, into: Map[EventMessage, LogRecord]): Map[EventMessage, LogRecord] = {
       val line = reader.readLine()
       if (line == null) into else {
         val logRecord = ((Thrown(_:Throwable)) <-: JParser.parseFromString(line)).flatMap(_.validated[LogRecord]).valueOr(err => sys.error(err.message))
                         
-        readAll(reader, into + (logRecord.message.eventId -> logRecord))
+        readAll(reader, into + (logRecord.message -> logRecord))
       }
     }
 
@@ -135,7 +135,7 @@ object FilesystemIngestFailureLog {
     else {
       val reader = new BufferedReader(new FileReader(logFiles.maxBy(_.getName.substring(FilePrefix.length).dropRight(4).toLong)))
       try {
-        val failureLog = readAll(reader, Map.empty[EventId, LogRecord])
+        val failureLog = readAll(reader, Map.empty[EventMessage, LogRecord])
         new FilesystemIngestFailureLog(failureLog, if (failureLog.isEmpty) initialCheckpoint else failureLog.values.minBy(_.lastKnownGood).lastKnownGood, persistDir) 
       } finally {
         reader.close()
@@ -143,18 +143,28 @@ object FilesystemIngestFailureLog {
     }
   }
 
-  case class LogRecord(offset: Long, message: IngestMessage, lastKnownGood: YggCheckpoint)
+  case class LogRecord(offset: Long, message: EventMessage, lastKnownGood: YggCheckpoint)
   object LogRecord {
     implicit val decomposer: Decomposer[LogRecord] = new Decomposer[LogRecord] {
-      def decompose(rec: LogRecord) = 
-        JObject("offset" -> rec.offset.serialize, "message" -> rec.message.serialize, "lastKnownGood" -> rec.lastKnownGood.serialize)
+      def decompose(rec: LogRecord) = JObject(
+        "offset" -> rec.offset.serialize, 
+        "messageType" -> rec.message.fold(_ => "ingest", _ => "archive").serialize,
+        "message" -> rec.message.serialize, 
+        "lastKnownGood" -> rec.lastKnownGood.serialize
+      )
     }
 
-    implicit val extractor: Extractor[LogRecord] = new Extractor[LogRecord] with ValidatedExtraction[LogRecord] {
-      override def validated(jv: JValue) = {
-        ( (jv \ "offset").validated[Long] |@|
-          (jv \ "message").validated[IngestMessage] |@|
-          (jv \ "lastKnownGood").validated[YggCheckpoint] ) { LogRecord.apply _ }
+    implicit val extractor: Extractor[LogRecord] = new Extractor[LogRecord] {
+      def validated(jv: JValue) = {
+        for {
+          offset  <- jv.validated[Long]("offset")
+          msgType <- jv.validated[String]("messageType")
+          message <- msgType match {
+                       case "ingest" => jv.validated[IngestMessage]("message")
+                       case "archive" => jv.validated[ArchiveMessage]("message")
+                     }
+          checkpoint <- jv.validated[YggCheckpoint]("lastKnownGood")
+        } yield LogRecord(offset, message, checkpoint)
       }
     }
   }
@@ -171,7 +181,6 @@ abstract class KafkaShardIngestActor(shardId: String,
                                      initialCheckpoint: YggCheckpoint,
                                      consumer: SimpleConsumer,
                                      topic: String,
-                                     ingestEnabled: Boolean,
                                      accountFinder: AccountFinder[Future],
                                      ingestFailureLog: IngestFailureLog,
                                      fetchBufferSize: Int = 1024 * 1024,
@@ -185,7 +194,7 @@ abstract class KafkaShardIngestActor(shardId: String,
 
   private var failureLog = ingestFailureLog
   private var totalConsecutiveFailures = 0
-  private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[(Long, IngestMessage)]] 
+  private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[(Long, EventMessage)]] 
   private var pendingCompletes = Vector.empty[BatchComplete]
 
   implicit def M: Monad[Future]
@@ -293,13 +302,13 @@ abstract class KafkaShardIngestActor(shardId: String,
         input: List[(Long, EventMessage)],
         apiKeyMap: Map[APIKey, AccountId],
         batch: Vector[(Long, EventMessage)],
-        checkpoint: YggCheckpoint): (Vector[EventMessage], YggCheckpoint) = {
+        checkpoint: YggCheckpoint): (Vector[(Long, EventMessage)], YggCheckpoint) = {
 
       input match {
         case Nil =>
           (batch, checkpoint)
 
-        case (event @ IngestMessage(apiKey, _, ownerAccountId0, records, _), offset) :: tail => 
+        case (offset, event @ IngestMessage(apiKey, _, ownerAccountId0, records, _)) :: tail => 
           val newCheckpoint = records.foldLeft(checkpoint) {
             // TODO: This nested pattern match indicates that checkpoints are too closely 
             // coupled to the representation of event IDs.
@@ -310,7 +319,7 @@ abstract class KafkaShardIngestActor(shardId: String,
             case Some(accountId) =>
               //FIXME: Deserialization need to do this.
               //val em = event.copy(ownerAccountId = ownerAccountId0.getOrElse(accountId))
-              buildBatch(tail, apiKeyMap, batch :+ event, newCheckpoint)
+              buildBatch(tail, apiKeyMap, batch :+ (offset, event), newCheckpoint)
 
             case None =>
               // Non-existent account means the account must have been deleted, so we discard the 
@@ -319,14 +328,14 @@ abstract class KafkaShardIngestActor(shardId: String,
               buildBatch(tail, apiKeyMap, batch, newCheckpoint)
           }
         
-        case (offset, ar: ArchiveMessage) :: tail if batch.nonEmpty =>
-          logger.debug("Batch stopping on receipt of ArchiveMessage at offset/id %d/%d".format(offset, ar.eventId.uid))
+        case (offset, ArchiveMessage(eventId, _)) :: tail if batch.nonEmpty =>
+          logger.debug("Batch stopping on receipt of ArchiveMessage at offset/id %d/%d".format(offset, eventId.uid))
           (batch, checkpoint)
 
         case (offset, ar @ ArchiveMessage(EventId(pid, sid), _)) :: tail =>
           // TODO: Where is the authorization checking credentials for the archive done?
           logger.debug("Singleton batch of ArchiveMessage at offset/id %d/%d".format(offset, ar.eventId.uid))
-          if (failureLog.checkFailed(ar.eventId)) {
+          if (failureLog.checkFailed(ar)) {
             // skip the message and continue without deletion.
             // FIXME: This is very dangerous; once we see these errors, we'll have to do a full reingest
             // from before the start of the error range.
@@ -353,9 +362,9 @@ abstract class KafkaShardIngestActor(shardId: String,
       }
 
       val batched: Validation[Error, Future[(Vector[(Long, EventMessage)], YggCheckpoint)]] = 
-        eventMessages.sequence[({ type λ[α] = Validation[Error, α] })#λ, (EventMessage, Long)] map { messageSet =>
+        eventMessages.sequence[({ type λ[α] = Validation[Error, α] })#λ, (Long, EventMessage)] map { messageSet =>
           val apiKeys = messageSet collect { 
-            case (IngestMessage(apiKey, _, _, _, _), _) => apiKey 
+            case (_, IngestMessage(apiKey, _, _, _, _)) => apiKey 
           }
 
           accountFinder.mapAccountIds(apiKeys.toSet) map { apiKeyMap =>

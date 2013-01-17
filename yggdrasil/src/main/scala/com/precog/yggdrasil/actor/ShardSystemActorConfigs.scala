@@ -101,14 +101,15 @@ trait ProductionShardSystemActorModule extends ShardSystemActorModule {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
     yggConfig.ingestConfig map { conf => () => 
       new KafkaShardIngestActor(shardId = yggConfig.shardId, 
-                                         initialCheckpoint = checkpoint, 
-                                         consumer = consumer, 
-                                         topic = yggConfig.kafkaTopic, 
-                                         accountFinder = accountFinder,
-                                         fetchBufferSize = conf.bufferSize,
-                                         ingestTimeout = conf.batchTimeout,
-                                         maxCacheSize = conf.maxParallel,
-                                         maxConsecutiveFailures = conf.maxConsecutiveFailures) {
+                                initialCheckpoint = checkpoint, 
+                                consumer = consumer, 
+                                topic = yggConfig.kafkaTopic, 
+                                accountFinder = accountFinder,
+                                ingestFailureLog = ingestFailureLog(checkpoint),
+                                fetchBufferSize = conf.bufferSize,
+                                ingestTimeout = conf.batchTimeout,
+                                maxCacheSize = conf.maxParallel,
+                                maxConsecutiveFailures = conf.maxConsecutiveFailures) {
         val M = new FutureMonad(executionContext)
         
         def handleBatchComplete(pendingCheckpoint: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]) {

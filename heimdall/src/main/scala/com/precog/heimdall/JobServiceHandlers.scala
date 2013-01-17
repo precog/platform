@@ -84,16 +84,16 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
               Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing required paramter 'apiKey"))))
             }
 
-          case (JUndefined, JUndefined) =>
+          case (JUndefined, JUndefined, _) =>
             Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing both `name` and `type` of job."))))
 
-          case (name, JUndefined) =>
+          case (name, JUndefined, _) =>
             Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing `type` of job."))))
 
-          case (JUndefined, tpe) =>
+          case (JUndefined, tpe, _) =>
             Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing `name` of job."))))
 
-          case (name, tpe) =>
+          case (name, tpe, _) =>
             Future(HttpResponse[JValue](BadRequest, content = Some(JString("Expected `name` and `type` to be strings, but found '%s' and '%s'." format (name, tpe)))))
         }
       })
