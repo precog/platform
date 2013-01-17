@@ -39,15 +39,15 @@ import com.precog.daze.QueryOptions
 import com.precog.yggdrasil.TableModule
 import com.precog.yggdrasil.TableModule._
 
-import scalaz.{ Validation, Success, Failure }
-import scalaz.ValidationNEL
+import com.weiglewilczek.slf4s.Logging
+
+import scalaz._
 import scalaz.Validation._
-import scalaz.Monad
+import scalaz.syntax.bifunctor._
 import scalaz.syntax.traverse._
 import scalaz.std.option._
 
-trait ShardServiceCombinators extends EventServiceCombinators {
-
+trait ShardServiceCombinators extends EventServiceCombinators with Logging {
   type Query = String
 
   import DefaultBijections._
@@ -82,22 +82,29 @@ trait ShardServiceCombinators extends EventServiceCombinators {
   }
 
   private def getSortOn(request: HttpRequest[_]): Validation[String, List[CPath]] = {
+    import blueeyes.json.serialization.Extractor._    
+    val onError: Error => String = {
+      case err @ Thrown(ex) =>
+        logger.warn("Exceptiion thrown from JSON parsing of sortOn parameter", ex)
+        err.message
+      case other => 
+        other.message          
+    }
+
     request.parameters.get('sortOn).filter(_ != null) map { paths =>
-      try {
-        val jpaths = JParser.parse(paths)
-        jpaths match {
-          case JArray(elems) =>
-            Validation.success(elems collect { case JString(path) => CPath(path) })
-          case JString(path) =>
-            Validation.success(CPath(path) :: Nil)
-          case badJVal =>
-            Validation.failure("The sortOn query parameter was expected to be JSON string or array, but found " + badJVal)
-        }
-      } catch {
-        case ex: ParseException =>
-          Validation.failure("Couldn't parse sortOn query parameter: " + ex.getMessage())
+      val parsed: Validation[Error, List[CPath]] = ((Thrown(_:Throwable)) <-: JParser.parseFromString(paths)) flatMap {
+        case JArray(elems) =>
+          Validation.success(elems collect { case JString(path) => CPath(path) })
+        case JString(path) =>
+          Validation.success(CPath(path) :: Nil)
+        case badJVal =>
+          Validation.failure(Invalid("The sortOn query parameter was expected to be JSON string or array, but found " + badJVal))
       }
-    } getOrElse Validation.success[String, List[CPath]](Nil)
+
+      onError <-: parsed 
+    } getOrElse {
+      Validation.success[String, List[CPath]](Nil)
+    }
   }
 
   private def getSortOrder(request: HttpRequest[_]): Validation[String, DesiredSortOrder] = {

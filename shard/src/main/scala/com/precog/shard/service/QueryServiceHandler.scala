@@ -43,8 +43,8 @@ import scalaz._
 import scalaz.Validation.{ success, failure }
 import scalaz.syntax.monad._
 
-class QueryServiceHandler[A](implicit M: Monad[Future])
-    extends CustomHttpService[A, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
+abstract class QueryServiceHandler[A](implicit M: Monad[Future])
+    extends CustomHttpService[Future[JValue], (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
   def queryExecutorFactory: QueryExecutorFactory[Future, A]
   def extractResponse(a: A): HttpResponse[QueryResult]
@@ -70,7 +70,7 @@ class QueryServiceHandler[A](implicit M: Monad[Future])
       HttpResponse[QueryResult](HttpStatus(PreconditionFailed, error))
   }
 
-  val service = (request: HttpRequest[A]) => {
+  val service = (request: HttpRequest[Future[JValue]]) => {
     success((apiKey: APIKey, path: Path, query: String, opts: QueryOptions) => query.trim match {
       case Command("ls", arg) => list(apiKey, Path(arg.trim))
       case Command("list", arg) => list(apiKey, Path(arg.trim))

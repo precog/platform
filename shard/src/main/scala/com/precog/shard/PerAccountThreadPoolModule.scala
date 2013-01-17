@@ -34,10 +34,7 @@ import scalaz._
  * Provides a mechanism for returning an account-specific threadpool. These
  * threadpools are tied to the account and can be used to monitor CPU usage.
  */
-trait PerAccountThreadPoolModule { self =>
-
-  def accountFinder: AccountFinder[Future]
-
+class PerAccountThreadPooling(accountFinder: AccountFinder[Future]) { 
   private val executorCache = new ConcurrentHashMap[AccountId, ExecutionContext]()
   
   private def asyncContextFor(accountId: AccountId): ExecutionContext = {

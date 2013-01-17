@@ -41,23 +41,27 @@ trait StorageModule[M[+_]] {
   trait StorageLike[M[+_]] extends StorageMetadataSource[M] { self =>
     def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)]
 
+/*
     def liftM[T[_[+_], +_]](implicit T: Hoist[T], M: Monad[M]): StorageLike[({ type λ[+α] = T[M, α] })#λ] = new Lifted[T]
 
     protected class Lifted[T[_[+_], +_]](implicit T: Hoist[T], M: Monad[M]) extends StorageLike[({ type λ[+α] = T[M, α] })#λ] {
       def projection(descriptor: ProjectionDescriptor) = self.projection(descriptor).liftM[T]
       def userMetadataView(apiKey: APIKey) = self.userMetadataView(apiKey).liftM[T]
     }
+    */
   }
 
   trait StorageWritable[M[+_]] extends StorageLike[M] { self =>
     def storeBatch(msgs: Seq[EventMessage]): M[PrecogUnit]
     def store(msg: EventMessage): M[PrecogUnit] = storeBatch(Vector(msg))
 
+/*
     override def liftM[T[_[+_], +_]](implicit T: Hoist[T], M: Monad[M]): StorageWritable[({ type λ[+α] = T[M, α] })#λ] = 
       new Lifted[T] with StorageWritable[({ type λ[+α] = T[M, α] })#λ] {
         def storeBatch(msgs: Seq[EventMessage]) = self.storeBatch(msgs).liftM[T]
         override def store(msg: EventMessage) = self.store(msg).liftM[T]
       }
+      */
   }
 }
 

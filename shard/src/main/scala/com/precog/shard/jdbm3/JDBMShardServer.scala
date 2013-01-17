@@ -45,7 +45,7 @@ object JDBMShardServer extends BlueEyesServer with AsyncShardService with AkkaDe
 
   def APIKeyFinder(config: Configuration): APIKeyFinder[Future] = WebAPIKeyFinder(config)
   def AccountFinder(config: Configuration): AccountFinder[Future] = WebAccountFinder(config)
-  def jobManagerFactory(config: Configuration): JobManager[Future] = WebJobManager(config).withM[Future]
-  def QueryExecutor(config: Configuration, accessControl: AccessControl[Future], accountFinder: AccountFinder[Future], jobManager: JobManager[Future]) = 
-    JDBMQueryExecutor(config, accessControl, accountFinder, jobManager)
+  def JobManager(config: Configuration): JobManager[Future] = WebJobManager(config).withM[Future]
+  def QueryExecutorFactory(config: Configuration, accessControl: AccessControl[Future], accountFinder: AccountFinder[Future], jobManager: JobManager[Future]) = 
+    JDBMQueryExecutorFactory(config, accessControl, accountFinder, jobManager)
 }

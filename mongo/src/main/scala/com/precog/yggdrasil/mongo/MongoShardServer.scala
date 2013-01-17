@@ -47,9 +47,8 @@ object MongoShardServer extends BlueEyesServer with ShardService {
 
   def APIKeyFinder(config: Configuration) = new StaticAPIKeyFinder(config[String]("masterAccount.apiKey"))
   def AccountFinder(config: Configuration) = WebAccountFinder(config)
-  def QueryExecutor(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: AccountFinder[Future]): QueryExecutor[Future] = {
+  def QueryExecutorFactory(config: Configuration, extAccessControl: APIKeyFinder[Future], extAccountManager: AccountFinder[Future]) = 
     new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
-  }
 
   val clock = Clock.System
 

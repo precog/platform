@@ -25,6 +25,7 @@ import blueeyes.json._
 import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.common.accounts._
+import com.precog.common.ingest._
 import com.precog.common.jobs._
 
 import com.precog.yggdrasil._
@@ -80,7 +81,7 @@ trait JDBMQueryExecutorConfig extends BaseJDBMQueryExecutorConfig with Productio
   def ingestFailureLogRoot: File
 }
 
-object JDBMQueryExecutor {
+object JDBMQueryExecutorFactory {
   import blueeyes.json.serialization.Extractor
 
   private def wrapConfig(wrappedConfig: Configuration) = {
@@ -101,7 +102,6 @@ object JDBMQueryExecutor {
     
   def apply(config: Configuration, extAccessControl: AccessControl[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]): AsyncQueryExecutorFactory = {
     new JDBMQueryExecutorFactory
-        with JDBMColumnarTableModule[Future]
         with JDBMProjectionModule
         with ProductionShardSystemActorModule
         with SystemActorStorageModule { self =>
@@ -120,6 +120,7 @@ object JDBMQueryExecutor {
       val jobManager = extJobManager
       val accountFinder = Some(extAccountFinder)
       val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
+      private val threadPooling = new PerAccountThreadPooling(extAccountFinder)
 
       class Storage extends SystemActorStorageLike {
         val accessControl = extAccessControl
@@ -158,19 +159,16 @@ object JDBMQueryExecutor {
         }
       }
 
-      trait JDBMShardQueryExecutor 
-          extends ShardQueryExecutor[ShardQuery]
-          with JDBMColumnarTableModule[ShardQuery] {
+      trait JDBMShardQueryExecutor extends ShardQueryExecutor[ShardQuery] with JDBMColumnarTableModule[ShardQuery] {
         type YggConfig = JDBMQueryExecutorConfig
         type Key = Array[Byte]
         type Projection = JDBMProjection
-        type Storage = StorageLike[ShardQuery]
       }
 
       def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
         implicit val futureMonad = new blueeyes.bkka.FutureMonad(executionContext)
         (for {
-          executionContext0 <- getAccountExecutionContext(apiKey)
+          executionContext0 <- threadPooling.getAccountExecutionContext(apiKey)
         } yield {
           new AsyncQueryExecutor {
             val executionContext: ExecutionContext = executionContext0
@@ -181,7 +179,7 @@ object JDBMQueryExecutor {
       def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
         implicit val futureMonad = new blueeyes.bkka.FutureMonad(executionContext)
         (for {
-          executionContext0 <- getAccountExecutionContext(apiKey)
+          executionContext0 <- threadPooling.getAccountExecutionContext(apiKey)
         } yield {
           new SyncQueryExecutor {
             val executionContext: ExecutionContext = executionContext0
@@ -191,7 +189,8 @@ object JDBMQueryExecutor {
 
       protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
         new JDBMShardQueryExecutor {
-          implicit val M = shardQueryMonad
+          val M = shardQueryMonad
+          implicit val M0: Monad[Future] = M.M
 
           trait TableCompanion extends JDBMColumnarTableCompanion {
             import scalaz.std.anyVal._
@@ -201,7 +200,15 @@ object JDBMQueryExecutor {
           object Table extends TableCompanion
       
           val yggConfig = self.yggConfig
-          val storage = self.storage.liftM[JobQueryT](shardQueryMonad, shardQueryMonad.M)
+
+          class Storage extends StorageWritable[ShardQuery] {
+            def userMetadataView(apiKey: APIKey) = self.storage.userMetadataView(apiKey).liftM[JobQueryT]
+            def projection(descriptor: ProjectionDescriptor) = self.storage.projection(descriptor).liftM[JobQueryT]
+            def storeBatch(msgs: Seq[EventMessage]) = self.storage.storeBatch(msgs).liftM[JobQueryT]
+            override def store(msg: EventMessage): ShardQuery[PrecogUnit] = self.storage.store(msg).liftM[JobQueryT]
+          }
+
+          val storage = new Storage
         }
       }
 
@@ -221,7 +228,6 @@ object JDBMQueryExecutor {
 trait JDBMQueryExecutorFactory
     extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]]
     with StorageModule[Future]
-    with PerAccountThreadPoolModule
     with ManagedQueryModule
     with AsyncQueryExecutorFactory { self =>
 

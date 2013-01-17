@@ -55,6 +55,8 @@ import org.streum.configrity.Configuration
 
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
+import scalaz.syntax.monad._
+import scalaz.std.function._
 
 sealed trait BaseShardService extends 
     BlueEyesServiceBuilder with 
@@ -75,37 +77,19 @@ sealed trait BaseShardService extends
     HttpResponse(failure, content = Some(ByteChunk(s.getBytes("UTF-8"))))
   }
 
-  implicit val failureToQueryResult: (HttpFailure, String) => HttpResponse[QueryResult] = { (failure, msg) =>
+  private implicit val onError: (HttpFailure, String) => HttpResponse[QueryResult] = { (failure, msg) =>
     HttpResponse[QueryResult](status = failure, content = Some(Left(JString(msg))))
   }
 
-  implicit val queryResultToFutureByteChunk: QueryResult => Future[ByteChunk] = {
+  private val queryResultToByteChunk: QueryResult => ByteChunk = {
     (qr: QueryResult) => qr match {
-      case Left(jv) => Future(Left(ByteBuffer.wrap(jv.renderCompact.getBytes)))
-      case Right(stream) => Future(Right(stream.map(cb => utf8.encode(cb))))
+      case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes))
+      case Right(stream) => Right(stream.map(cb => utf8.encode(cb)))
     }
   }
 
-  implicit val futureByteChunk2byteChunk: Future[ByteChunk] => ByteChunk = { fb =>
-    Right(StreamT.wrapEffect[Future, ByteBuffer] {
-      fb map {
-        case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
-        case Right(stream) => stream
-      }
-    })
-  }
-
-  implicit val queryResult2byteChunk = futureByteChunk2byteChunk compose queryResultToFutureByteChunk
-
-  // I feel dirty inside.
-  /*
-  implicit def futureMapper[A, B](implicit a2b: A => B): Future[HttpResponse[A]] => Future[HttpResponse[B]] = { fa =>
-    fa map { res => res.copy(content = res.content map a2b) }
-  }
-  */
-
   def optionsResponse = M.point(
-    HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
+    HttpResponse[ByteChunk](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
       "Access-Control-Allow-Origin" -> "*",
       "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
       "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
@@ -117,11 +101,16 @@ sealed trait BaseShardService extends
     apiKey(k => apiKeyFinder.findAPIKey(k).map(_.map(_.apiKey))) {
       path("/analytics/queries") {
         path("'jobId") {
-          get(new AsyncQueryResultServiceHandler(jobManager)) ~
-          delete(new QueryDeleteHandler(jobManager, clock))
+          get(new AsyncQueryResultServiceHandler(jobManager)) ~ 
+          delete(new QueryDeleteHandler[ByteChunk](jobManager, clock))
         } ~
         asyncQuery {
-          post(new AsyncQueryServiceHandler(queryExecutorFactory.asynchronous))
+          post {
+            new AsyncQueryServiceHandler(queryExecutorFactory.asynchronous) map { 
+              //function4, future, httpreponse
+              _ map { _ map { _ map queryResultToByteChunk } }
+            }
+          }
         }
       }
     }
@@ -129,25 +118,35 @@ sealed trait BaseShardService extends
 
   def basicQueryService(queryExecutorFactory: SyncQueryExecutorFactory, apiKeyFinder: APIKeyFinder[Future]) = {
     jsonp[ByteChunk] {
-      path("/actors/status") {
-        get(new ActorStatusHandler(queryExecutorFactory))
+      transcode[ByteChunk, JValue] {
+        path("/actors/status") {
+          get(new ActorStatusHandler(queryExecutorFactory))
+        } 
       } ~ 
-      transcode {
-        apiKey(k => apiKeyFinder.findAPIKey(k).map(_.map(_.apiKey))) {
-          dataPath("analytics/fs") {
-            query {
-              get(new SyncQueryServiceHandler(queryExecutorFactory)) ~
-              options {
-                (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path, s: String, o: QueryOptions) => optionsResponse 
+      apiKey(k => apiKeyFinder.findAPIKey(k).map(_.map(_.apiKey))) {
+        dataPath("analytics/fs") {
+          query {
+            get { 
+              new SyncQueryServiceHandler(queryExecutorFactory) map {
+                //function4, future, httpreponse
+                _ map { _ map { _ map queryResultToByteChunk } }
               }
-            }
-          } ~
-          dataPath("/meta/fs") {
-            get(new BrowseServiceHandler[ByteChunk](queryExecutorFactory, apiKeyFinder)) ~
+            } ~
             options {
-              (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse 
+              (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path, s: String, o: QueryOptions) => optionsResponse 
             }
           }
+        } ~
+        dataPath("/meta/fs") {
+          (get {
+            new BrowseServiceHandler[ByteChunk](queryExecutorFactory, apiKeyFinder) map {
+              //function2, future, httpreponse
+              _ map { _ map { _ map queryResultToByteChunk } }
+            }
+          } ~
+          options {
+            (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse 
+          }): HttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[ByteChunk]]]
         }
       }
     }

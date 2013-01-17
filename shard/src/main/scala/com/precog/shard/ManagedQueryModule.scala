@@ -78,8 +78,6 @@ trait ManagedQueryModule extends YggConfigComponent {
 
   type YggConfig <: ManagedQueryModuleConfig
 
-  type ShardQuery[+A] = JobQueryT[Future, A]
-
   trait ShardQueryMonad extends QueryTMonad[JobQueryState, Future] with QueryTHoist[JobQueryState] {
     def jobId: Option[JobId]
   }

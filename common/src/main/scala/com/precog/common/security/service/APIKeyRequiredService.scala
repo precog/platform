@@ -38,7 +38,7 @@ import scalaz.syntax.std.option._
 trait APIKeyServiceCombinators extends HttpRequestHandlerCombinators {
   implicit val jsonErrorTransform = (failure: HttpFailure, s: String) => HttpResponse(failure, content = Some(s.serialize))
 
-  def apiKey[A, B](keyFinder: APIKey => Future[Option[APIKey]])(service: HttpService[A, APIKey => Future[B]])(implicit err: (HttpFailure, String) => B, M: Monad[Future]) = {
+  def apiKey[A, B](keyFinder: APIKey => Future[Option[APIKey]])(service: HttpService[A, APIKey => Future[B]])(implicit err: (HttpFailure, String) => B, M: Monad[Future]): HttpService[A, Future[B]] = {
     new APIKeyRequiredService[A, B](keyFinder, service, err, M)
   }
 }
