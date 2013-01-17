@@ -26,8 +26,11 @@ trait StaticInliner[M[+_]] extends DAG with EvaluatorMethods[M] {
   import dag._
   import instructions._
   
-  def inlineStatics(graph: DepGraph, ctx: EvaluationContext): DepGraph = {
+  def inlineStatics(graph: DepGraph, ctx: EvaluationContext, enterSplits: Boolean): DepGraph = {
     graph mapDown { recurse => {
+      case splitGroup: SplitGroup if !enterSplits => splitGroup
+      case splitParam: SplitParam if !enterSplits => splitParam
+
       case Operate(loc, op, child) => {
         val child2 = recurse(child)
         

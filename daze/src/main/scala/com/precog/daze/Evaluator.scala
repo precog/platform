@@ -101,7 +101,7 @@ trait Evaluator[M[+_]] extends DAG
   def freshIdScanner: Scanner
 
   def rewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph = {
-    (if (optimize) inlineStatics(_: DepGraph, ctx) else identity[DepGraph] _) andThen
+    (if (optimize) inlineStatics(_: DepGraph, ctx, true) else identity[DepGraph] _) andThen
     (if (optimize) optimizeJoins(_) else identity) andThen
     (orderCrosses _) andThen
     (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
@@ -110,7 +110,7 @@ trait Evaluator[M[+_]] extends DAG
   }
 
   def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
-    (if (optimize) inlineStatics(_: DepGraph, ctx) else identity[DepGraph] _)
+    (if (optimize) inlineStatics(_: DepGraph, ctx, false) else identity[DepGraph] _)
   
   /**
    * The entry point to the evaluator.  The main implementation of the evaluator
@@ -920,20 +920,18 @@ trait Evaluator[M[+_]] extends DAG
       type EvaluatorStateT[A] = StateT[M, EvaluatorState, A]
       val preState = toEval.foldLeftM[EvaluatorStateT, DepGraph](graph) {
         case (graph, node) => for {
-          assumed <- monadState.gets(_.assume)
-          rewrittenNode <- transState liftM assumed.toList.foldLeftM(node: DepGraph) {
+          assume <- monadState.gets(_.assume)
+          rewrittenGraph <- transState liftM assume.toList.foldLeftM(graph) {
             case (graph, (from, table)) => rewriteNodeFromTable(graph, optimize, from, table)
-          }
-          rewrittenDAG = replaceNode(graph, node, rewrittenNode)
-          _ <- prepareEval(rewrittenNode, splits)
-        } yield rewrittenDAG
+          } map stagedRewriteDAG(optimize, ctx)
+          _ <- prepareEval(node, splits)
+        } yield rewrittenGraph
       }
 
       // run the evaluator on all forcing points *including* the endpoint, in order
       for {
-        rewrittenDAG <- preState
-        stagedDAG = stagedRewriteDAG(optimize, ctx)(rewrittenDAG)
-        pendingTable <- prepareEval(stagedDAG, splits)
+        rewrittenGraph <- preState
+        pendingTable <- prepareEval(rewrittenGraph, splits)
         table = pendingTable.table transform liftToValues(pendingTable.trans)
       } yield table
     }
@@ -965,7 +963,7 @@ trait Evaluator[M[+_]] extends DAG
   private[this] def rewriteNodeFromSlice(graph: DepGraph, from: DepGraph, slice: Slice) = {
     val replacements = graph.foldDown(true) {
       case join@Join(
-        line,
+        _,
         DerefArray,
         CrossLeftSort,
         Join(_,
@@ -980,7 +978,7 @@ trait Evaluator[M[+_]] extends DAG
         val value = slice.columns(columnRef).cValue(0)
 
         List(
-          (join, Const(line, value))
+          (join, Const(from.loc, value))
         )
     }
 

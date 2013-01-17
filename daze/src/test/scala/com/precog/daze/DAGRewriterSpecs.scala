@@ -89,10 +89,10 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
         result.copoint
       ).copoint
 
-      val hasMegaReduce = rewritten.foldDown(true) {
+      val hasMegaReduce = rewritten.foldDown(false) {
         case m@MegaReduce(_, _, _) => true
       }(disjunction)
-      val hasConst = rewritten.foldDown(true) {
+      val hasConst = rewritten.foldDown(false) {
         case m@Const(_, CNum(n)) if n == 5 => true
       }(disjunction)
 
