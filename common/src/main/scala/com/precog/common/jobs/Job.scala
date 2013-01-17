@@ -45,10 +45,11 @@ object Job {
 }
 
 object Status {
+  import JobManager._
   import scalaz.syntax.apply._
 
   def fromMessage(message: Message): Option[Status] = {
-    if (message.channel == Message.channels.Status) {
+    if (message.channel == channels.Status) {
       ((message.value \ "message").validated[String] |@|
        (message.value \ "progress").validated[BigDecimal] |@|
        (message.value \ "unit").validated[String])({ (msg, progress, unit) =>
@@ -59,7 +60,7 @@ object Status {
   }
 
   def toMessage(status: Status): Message = {
-    Message(status.job, status.id, Message.channels.Status, JObject(
+    Message(status.job, status.id, channels.Status, JObject(
       JField("message", status.message) ::
       JField("progress", status.progress) ::
       JField("unit", status.unit) ::
@@ -69,12 +70,6 @@ object Status {
 }
 
 object Message {
-  object channels {
-    val Status = "status"
-    val Errors = "errors"
-    val Warnings = "warnings"
-  }
-
   implicit val messageIso = Iso.hlist(Message.apply _, Message.unapply _)
 
   val schema = "jobId" :: "id" :: "channel" :: "value" :: HNil

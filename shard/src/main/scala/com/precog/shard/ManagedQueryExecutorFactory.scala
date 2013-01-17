@@ -33,35 +33,89 @@ import java.nio.channels.WritableByteChannel
 import java.nio.{ CharBuffer, ByteBuffer, ReadOnlyBufferException }
 import java.io.{ File, FileOutputStream }
 
+import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
 import blueeyes.core.http.MimeTypes
 
 import scalaz._
 
 /**
- * An `AsyncQueryExecutorFactory` extends `QueryExecutorFactory` by allowing the
- * creation of a `QueryExecutor` that returns `JobId`s, rather than a stream of
- * results. It also has default implementable traits for both synchronous and
- * asynchronous QueryExecutors.
+ * A `ManagedQueryExecutorFactory` extends `QueryExecutorFactory` by allowing the
+ * creation of a `BasicQueryExecutor` that can also allows "synchronous" (but
+ * managed) queries and asynchronous queries.
  */
-trait AsyncQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] { self: ManagedQueryModule =>
+trait ManagedQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] with ManagedQueryModule { self =>
 
   /**
    * Returns an `QueryExecutorFactory` whose execution returns a `JobId` rather
    * than a `StreamT[Future, CharBuffer]`.
    */
-  def asynchronous: QueryExecutorFactory[Future, JobId] = new QueryExecutorFactory[Future, JobId] {
-    def browse(apiKey: APIKey, path: Path) = self.browse(apiKey, path)
-    def structure(apiKey: APIKey, path: Path) = self.structure(apiKey, path)
-    def executorFor(apiKey: APIKey) = self.asyncExecutorFor(apiKey)
-    def status() = self.status()
-    def startup() = self.startup()
-    def shutdown() = self.shutdown()
+  def asynchronous: AsyncQueryExecutorFactory[Future] = {
+    new AsyncQueryExecutorFactory[Future] {
+      def browse(apiKey: APIKey, path: Path) = self.browse(apiKey, path)
+      def structure(apiKey: APIKey, path: Path) = self.structure(apiKey, path)
+      def executorFor(apiKey: APIKey) = self.asyncExecutorFor(apiKey)
+      def status() = self.status()
+      def startup() = self.startup()
+      def shutdown() = self.shutdown()
+    }
+  }
+
+  /**
+   * Returns a `QueryExecutorFactory` whose execution returns both the
+   * streaming results and its `JobId`. Note that the reults will not be saved
+   * to job.
+   */
+  def synchronous: SyncQueryExecutorFactory[Future] = {
+    new SyncQueryExecutorFactory[Future] {
+      def browse(apiKey: APIKey, path: Path) = self.browse(apiKey, path)
+      def structure(apiKey: APIKey, path: Path) = self.structure(apiKey, path)
+      def executorFor(apiKey: APIKey) = self.syncExecutorFor(apiKey)
+      def status() = self.status()
+      def startup() = self.startup()
+      def shutdown() = self.shutdown()
+    }
+  }
+
+  def errorReport[A](implicit shardQueryMonad: ShardQueryMonad, decomposer0: Decomposer[A]): QueryLogger[ShardQuery, A] = {
+    import scalaz.syntax.monad._
+
+    implicit val M0 = shardQueryMonad.M
+
+    shardQueryMonad.jobId map { jobId0 =>
+      val lift = new (Future ~> ShardQuery) {
+        def apply[A](fa: Future[A]) = fa.liftM[JobQueryT]
+      }
+
+      new JobQueryLogger[ShardQuery, A] {
+        val M = shardQueryMonad
+        val jobManager = self.jobManager.withM[ShardQuery](lift, implicitly, shardQueryMonad.M, shardQueryMonad)
+        val jobId = jobId0
+        val clock = yggConfig.clock
+        val decomposer = decomposer0
+      }
+    } getOrElse {
+      LoggingQueryLogger[ShardQuery]
+    }
   }
 
   protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]]
 
+  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
+    import scalaz.syntax.monad._
+    syncExecutorFor(apiKey) map { queryExecV =>
+      queryExecV map { queryExec =>
+        new QueryExecutor[Future, StreamT[Future, CharBuffer]] {
+          def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+            queryExec.execute(apiKey, query, prefix, opts) map (_ map (_._2))
+          }
+        }
+      }
+    }
+  }
+
   def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]]
+  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]]
 
   trait ManagedQueryExecutor[+A] extends QueryExecutor[Future, A] {
     import UserQuery.Serialization._
@@ -90,10 +144,10 @@ trait AsyncQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Fut
     }
   }
 
-  trait SyncQueryExecutor extends ManagedQueryExecutor[StreamT[Future, CharBuffer]] {
+  trait SyncQueryExecutor extends ManagedQueryExecutor[(Option[JobId], StreamT[Future, CharBuffer])] {
     def complete(result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]])(implicit
-        M: ShardQueryMonad): Future[Validation[EvaluationError, StreamT[Future, CharBuffer]]] = {
-      result map { _ map (completeJob(_)) }
+        M: ShardQueryMonad): Future[Validation[EvaluationError, (Option[JobId], StreamT[Future, CharBuffer])]] = {
+      result map { _ map (M.jobId -> completeJob(_)) }
     }
   }
 

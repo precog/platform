@@ -36,7 +36,7 @@ import org.streum.configrity.Configuration
 import scalaz._
 
 object JDBMShardServer extends BlueEyesServer 
-    with AsyncShardService 
+    with ShardService 
     with JDBMQueryExecutorComponent 
     with MongoAPIKeyManagerComponent 
     with AccountManagerClientComponent
@@ -48,5 +48,12 @@ object JDBMShardServer extends BlueEyesServer
   implicit val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
-  def jobManagerFactory(config: Configuration): JobManager[Future] = WebJobManager(config).withM[Future]
+  def configureShardState(config: Configuration): ShardState = {
+    val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
+    val accountManager = accountManagerFactory(config.detach("accounts"))
+    val jobManager = WebJobManager(config.detach("jobs")).withM[Future]
+    val queryExecutorFactory = queryExecutorFactoryFactory(
+      config.detach("queryExecutor"), apiKeyManager, accountManager, jobManager)
+    ManagedQueryShardState(queryExecutorFactory, apiKeyManager, accountManager, jobManager, clock)
+  }
 }

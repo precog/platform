@@ -95,13 +95,8 @@ class MongoQueryExecutorConfig(val config: Configuration)
   val ingestConfig = None
 }
 
-trait MongoQueryExecutorComponent {
-  val actorSystem = ActorSystem("mongoExecutorActorSystem")
-  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit val futureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
-  
-  def accountManagerFactory(config: Configuration) = new InMemoryAccountManager[Future]()
-  def queryExecutorFactoryFactory(config: Configuration, extAccessControl: APIKeyManager[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] = {
+object MongoQueryExecutor {
+  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): MongoQueryExecutor = {
     new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
   }
 }
@@ -121,6 +116,8 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
   // to satisfy abstract defines in parent traits
   val asyncContext = extAsyncContext
   val M = extM
+
+  val report = LoggingQueryLogger[Future]
 
   def startup() = Future {
     Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
