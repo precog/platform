@@ -128,12 +128,32 @@ trait JDBCColumnarTableModule
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getString(index)) }
         Some(DBColumn(ColumnRef(selector, CString), column, update))
 
+      case TINYINT               =>
+        val column = ArrayLongColumn.empty(yggConfig.maxSliceSize)
+        val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getByte(index)) }
+        Some(DBColumn(ColumnRef(selector, CLong), column, update))
+
+      case SMALLINT               =>
+        val column = ArrayLongColumn.empty(yggConfig.maxSliceSize)
+        val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getShort(index)) }
+        Some(DBColumn(ColumnRef(selector, CLong), column, update))
+
+      case INTEGER               =>
+        val column = ArrayLongColumn.empty(yggConfig.maxSliceSize)
+        val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getInt(index)) }
+        Some(DBColumn(ColumnRef(selector, CLong), column, update))
+
       case BIGINT                =>
         val column = ArrayLongColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getLong(index)) }
         Some(DBColumn(ColumnRef(selector, CLong), column, update))
 
-      case DOUBLE | FLOAT | REAL =>
+      case REAL                  =>
+        val column = ArrayDoubleColumn.empty(yggConfig.maxSliceSize)
+        val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getFloat(index)) }
+        Some(DBColumn(ColumnRef(selector, CDouble), column, update))
+
+      case DOUBLE | FLOAT        =>
         val column = ArrayDoubleColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getDouble(index)) }
         Some(DBColumn(ColumnRef(selector, CDouble), column, update))
