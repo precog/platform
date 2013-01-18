@@ -20,10 +20,11 @@
 package com.precog
 package muspelheim
 
+import com.precog.bytecode._
 import com.precog.yggdrasil._
 import com.precog.daze._
 
-trait BasicValidationSpecs extends EvalStackSpecs {
+trait BasicValidationSpecs extends EvalStackSpecs with Instructions {
   "Fundamental stack support" should {
     "count a filtered clicks dataset" in {
       val input = """
@@ -136,7 +137,18 @@ trait BasicValidationSpecs extends EvalStackSpecs {
     }
     
     "throw an exception with a failed assertion" in {
-      eval("assert false 42") must throwA[FatalQueryException]
+      import instructions.Line
+      
+      val input = """
+        | a := 42
+        | assert false a
+        | """.stripMargin
+        
+      eval(input) must throwA[FatalQueryException[Line]].like {
+        case e => e must beLike {
+          case FatalQueryException(Line(3, 2, " assert false a"), "Assertion failed") => ok
+        }
+      }
     }
     
     "correctly evaluate forall" in {

@@ -119,8 +119,8 @@ trait ExceptionQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
   
   abstract override def fatal(pos: P, msg: String): M[Unit] = for {
     _ <- super.fatal(pos, msg)
-    _ = throw FatalQueryException(msg)
+    _ = throw FatalQueryException(pos, msg)
   } yield ()
 }
 
-case class FatalQueryException(msg: String) extends RuntimeException(msg)
+case class FatalQueryException[+P](pos: P, msg: String) extends RuntimeException(msg)

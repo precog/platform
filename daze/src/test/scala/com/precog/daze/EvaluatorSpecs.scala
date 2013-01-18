@@ -1675,7 +1675,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
       testEval(input) { result =>
         result must haveSize(100)
-      } must throwA[FatalQueryException]
+      } must throwA[FatalQueryException[instructions.Line]]
     }
     
     "fail an assertion according to forall semantics" in {
@@ -1690,7 +1690,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
       testEval(input) { result =>
         result must haveSize(100)
-      } must throwA[FatalQueryException]
+      } must throwA[FatalQueryException[instructions.Line]]
     }
 
     "compute the set difference of two sets" in {
