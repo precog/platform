@@ -74,12 +74,13 @@ object JDBCColumnarTableModule {
     case ']'                => "PCRBRACKET"
     case '-'                => "PCFIELDDASH"
     case '.'                => "PCDOTSEP"
+    case ' '                => "PCSPACE"
     case c if c.isUpper     => "PCUPPER" + c
     case c                  => c.toString
   }.mkString("")
 
   def unescapePath(name: String): String = {
-    val initial = name.replace("PCLBRACKET", "[").replace("PCRBRACKET", "]").replace("PCFIELDDASH", "-").replace("PCDOTSEP", ".")
+    val initial = name.replace("PCLBRACKET", "[").replace("PCRBRACKET", "]").replace("PCFIELDDASH", "-").replace("PCDOTSEP", ".").replace("PCSPACE", " ")
 
     val parts = initial.split("PCUPPER")
 
