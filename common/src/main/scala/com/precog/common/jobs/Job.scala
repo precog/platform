@@ -43,10 +43,11 @@ object Message {
 
 case class Status(job: JobId, id: StatusId, message: String, progress: BigDecimal, unit: String, info: Option[JValue])
 object Status {
+  import JobManager._
   import scalaz.syntax.apply._
 
   def fromMessage(message: Message): Option[Status] = {
-    (message.channel == Message.channels.Status) option {
+    (message.channel == channels.Status) option {
       ((message.value \ "message").validated[String] |@|
        (message.value \ "progress").validated[BigDecimal] |@|
        (message.value \ "unit").validated[String]) { (msg, progress, unit) =>
@@ -58,7 +59,7 @@ object Status {
   }
 
   def toMessage(status: Status): Message = {
-    Message(status.job, status.id, Message.channels.Status, JObject(
+    Message(status.job, status.id, channels.Status, JObject(
       jfield("message", status.message) ::
       jfield("progress", status.progress) ::
       jfield("unit", status.unit) ::
@@ -66,4 +67,3 @@ object Status {
     ))
   }
 }
-

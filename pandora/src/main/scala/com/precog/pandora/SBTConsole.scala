@@ -111,6 +111,8 @@ object SBTConsole {
 
     val storage = new Storage
 
+    val report = LoggingQueryLogger[Future]
+
     object Projection extends JDBMProjectionCompanion {
       val fileOps = FilesystemFileOps
       def ensureBaseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
