@@ -30,7 +30,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary with
   
   "dag memoization" should {
     "not memoize a sub-graph of non-forcing operations" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
@@ -46,7 +46,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary with
     }
     
     "insert memoization nodes for morph1 referenced by morph1 and cross" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = 
         dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
@@ -71,7 +71,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary with
     }
     
     "insert memoization nodes for split referenced by morph1 and cross" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = 
         dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
@@ -100,7 +100,7 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary with
     }
     
     "insert memoization nodes for reduce parenting a split" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = 
         dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)

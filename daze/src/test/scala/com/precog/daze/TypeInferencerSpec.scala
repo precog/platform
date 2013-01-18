@@ -129,7 +129,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
 
   "type inference" should {
     "propagate structure/type information through a trivial Join/DerefObject node" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Join(DerefObject, CrossLeftSort,
@@ -146,7 +146,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through New nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Operate(Neg,
@@ -165,7 +165,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through Operate nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Operate(Neg,
@@ -183,7 +183,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through Reduce nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Reduce(Mean,
@@ -201,7 +201,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through Morph1 nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Morph1(Median,
@@ -219,7 +219,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through Morph2 nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Morph2(Covariance,
@@ -241,7 +241,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through DerefArray Join nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Operate(Neg,
@@ -260,7 +260,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through ArraySwap Join nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Join(ArraySwap, CrossLeftSort,
@@ -282,7 +282,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through WrapObject Join nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Join(WrapObject, CrossLeftSort,
@@ -304,7 +304,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through Op2 Join nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Join(BuiltInFunction2Op(min), IdentitySort,
@@ -328,7 +328,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through Filter nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Filter(IdentitySort,
@@ -350,7 +350,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through Sort nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Operate(Neg,
@@ -372,7 +372,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through SortBy nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Operate(Neg,
@@ -394,7 +394,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through Memoize nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Operate(Neg,
@@ -416,7 +416,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "propagate structure/type information through Distinct nodes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Operate(Neg,
@@ -435,7 +435,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
     
     "propagate structure/type information through Split nodes (1)" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       def clicks = LoadLocal(Const(CString("/file"))(line))(line)
 
@@ -471,7 +471,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
     
     "propagate structure/type information through Split nodes (2)" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       def clicks = LoadLocal(Const(CString("/clicks"))(line))(line)
       
       // clicks := //clicks forall 'user { user: 'user, num: count(clicks.user where clicks.user = 'user) }
@@ -504,7 +504,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
     
     "propagate structure/type information through Split nodes (3)" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       def clicks = LoadLocal(Const(CString("/clicks"))(line))(line)
       
       // clicks := //clicks forall 'user { user: 'user, age: clicks.age, num: count(clicks.user where clicks.user = 'user) }
@@ -544,7 +544,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
 
     "rewrite loads for a trivial but complete DAG such that they will restrict the columns loaded" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Join(Add, IdentitySort,
@@ -566,7 +566,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
     
     "negate type inference from deref by wrap" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = LoadLocal(Const(CString("/clicks"))(line))(line)
       
@@ -586,7 +586,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     }
     
     "propagate type information through split->wrap->deref" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = LoadLocal(Const(CString("/clicks"))(line))(line)
       

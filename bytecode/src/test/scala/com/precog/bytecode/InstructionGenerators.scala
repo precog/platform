@@ -118,9 +118,10 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genSwap = arbitrary[Int] map Swap
   
   private lazy val genLine = for {
-    num <- arbitrary[Int]
+    line <- arbitrary[Int]
+    col <- arbitrary[Int]
     text <- arbitrary[String]
-  } yield Line(num, text)
+  } yield Line(line, col, text)
   
   private lazy val genLoadLocal = LoadLocal
   private lazy val genDistinct = Distinct

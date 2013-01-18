@@ -51,7 +51,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
 
   "reduce homogeneous sets" >> {
     "singleton count" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Count, Const(CString("alpha"))(line))(line)
         
@@ -67,7 +67,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }   
     
     "count" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Count,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -84,7 +84,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "geometricMean" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(GeometricMean,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -101,7 +101,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "mean" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Mean,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -118,7 +118,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "max" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Max,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -135,7 +135,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "min" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Min,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -152,7 +152,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "standard deviation" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(StdDev,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -169,7 +169,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "sum a singleton" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Sum, Const(CLong(18))(line))(line)
         
@@ -185,7 +185,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }    
     
     "sum" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Sum,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -202,7 +202,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "sumSq" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(SumSq,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -219,7 +219,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "variance" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Variance,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -236,7 +236,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "forall" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Forall,
         dag.IUI(true,
@@ -255,7 +255,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "exists" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Exists,
         dag.IUI(true,
@@ -276,7 +276,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
 
   "reduce heterogeneous sets" >> {
     "count" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Count,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
@@ -293,7 +293,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }    
     
     "geometricMean" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(GeometricMean,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
@@ -310,7 +310,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "mean" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Mean,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
@@ -327,7 +327,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "max" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Max,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
@@ -344,7 +344,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "min" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Min,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
@@ -361,7 +361,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "standard deviation" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(StdDev,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
@@ -378,7 +378,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "sum" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Sum,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
@@ -395,7 +395,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }      
   
     "sumSq" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(SumSq,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
@@ -412,7 +412,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     } 
   
     "variance" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Variance,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
@@ -431,7 +431,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
 
   "reduce heterogeneous sets across two slice boundaries (22 elements)" >> {
     "count" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Count,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -448,7 +448,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }    
     
     "geometricMean" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(GeometricMean,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -465,7 +465,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "mean" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Mean,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -482,7 +482,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "max" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Max,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -499,7 +499,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "min" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Min,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -516,7 +516,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "standard deviation" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(StdDev,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -533,7 +533,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
     
     "sum" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Sum,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -550,7 +550,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }      
   
     "sumSq" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(SumSq,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -567,7 +567,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     } 
   
     "variance" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Reduce(Variance,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -586,7 +586,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
   
   "reduce homogeneous sets across two slice boundaries (22 elements)" >> {
     "count" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
   
       val input = dag.Reduce(Count,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -603,7 +603,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
   
     "geometricMean" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
   
       val input = dag.Reduce(GeometricMean,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -620,7 +620,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
   
     "mean" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
   
       val input = dag.Reduce(Mean,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -637,7 +637,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
   
     "max" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
   
       val input = dag.Reduce(Max,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -654,7 +654,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
   
     "min" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
   
       val input = dag.Reduce(Min,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -671,7 +671,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
   
     "standard deviation" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
   
       val input = dag.Reduce(StdDev,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -688,7 +688,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
   
     "sum" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
   
       val input = dag.Reduce(Sum,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -705,7 +705,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
   
     "sumSq" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
   
       val input = dag.Reduce(SumSq,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -722,7 +722,7 @@ trait ReductionLibSpec[M[+_]] extends Specification
     }
   
     "variance" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
   
       val input = dag.Reduce(Variance,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)

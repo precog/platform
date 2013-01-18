@@ -34,7 +34,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
   
   "static inlining of Root computation" should {
     "detect and resolve addition" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(Add, CrossLeftSort,
         Const(CLong(42))(line),
@@ -46,7 +46,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
     }
     
     "detect and resolve operations at depth" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(Add, CrossLeftSort,
         Const(CLong(42))(line),
@@ -60,7 +60,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
     }
     
     "produce CUndefined in cases where the operation is undefined" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(Div, CrossLeftSort,
         Const(CLong(42))(line),
@@ -72,7 +72,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
     }
     
     "propagate through static computations CUndefined when produced at depth" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(Add, CrossLeftSort,
         Const(CLong(42))(line),
@@ -86,7 +86,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
     }
     
     "propagate through non-singleton computations CUndefined when produced at depth" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       "left" >> {
         val input = Join(Add, CrossLeftSort,
@@ -114,7 +114,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
     }
     
     "reduce filters with static RHS" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       "true" >> {
         val input = Filter(CrossLeftSort,

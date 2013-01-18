@@ -57,7 +57,7 @@ trait Emitter extends AST
   private case class Emission(
     bytecode: Vector[Instruction] = Vector(),
     marks: Map[MarkType, Mark] = Map(),
-    curLine: Option[(Int, String)] = None,
+    curLine: Option[(Int, Int, String)] = None,
     ticVars: Map[(ast.Solve, TicId), EmitterState] = Map(),
     keyParts: Map[(ast.Solve, TicId), Int] = Map(),
     formals: Map[(Identifier, ast.Let), EmitterState] = Map(),
@@ -104,11 +104,11 @@ trait Emitter extends AST
         emitAndMark(markType)(f)(e)
     }
 
-    def emitLine(lineNum: Int, line: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    def emitLine(line: Int, col: Int, text: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       e.curLine match {
-        case Some((`lineNum`, `line`)) => (e, ())
+        case Some((`line`, `col`, `text`)) => (e, ())
 
-        case _ => emitInstr(Line(lineNum, line))(e.copy(curLine = Some((lineNum, line))))
+        case _ => emitInstr(Line(line, col, text))(e.copy(curLine = Some((line, col, text))))
       }
     }
 
@@ -357,7 +357,7 @@ trait Emitter extends AST
     }
     
     def emitExpr(expr: Expr, dispatches: Set[ast.Dispatch]): StateT[Id, Emission, Unit] = {
-      emitLine(expr.loc.lineNum, expr.loc.line) >>
+      emitLine(expr.loc.lineNum, expr.loc.colNum, expr.loc.line) >>
       (expr match {
         case ast.Let(loc, id, params, left, right) =>
           emitExpr(right, dispatches)

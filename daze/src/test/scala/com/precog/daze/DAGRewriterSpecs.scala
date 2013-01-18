@@ -32,7 +32,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification with EvaluatorTestSupport[M]
 
   "DAG rewriting" should {
     "compute identities given a relative path" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
 

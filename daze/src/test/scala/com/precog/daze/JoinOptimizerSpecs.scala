@@ -63,7 +63,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         | a ~ b
         |   { name: a.name, height: b.height } where a.userId = b.userId """.stripMargin
         
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val users = dag.LoadLocal(Const(CString("/hom/users"))(line), JUnfixedT)(line)
       val heightWeight = dag.LoadLocal(Const(CString("/hom/heightWeight"))(line), JUnfixedT)(line)
       val height = Const(CString("height"))(line)
@@ -129,7 +129,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         | a ~ b
         |   { name: a.name, height: b.height, weight: b.weight } where a.userId = b.userId """.stripMargin
         
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val users = dag.LoadLocal(Const(CString("/users"))(line))(line)
       val heightWeight = dag.LoadLocal(Const(CString("/heightWeight"))(line))(line)
       val userId = Const(CString("userId"))(line)
@@ -207,7 +207,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         | a ~ b
         |   ({ name: a.name } with b) where a.userId = b.userId """.stripMargin
 
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       lazy val users = dag.LoadLocal(Const(CString("/users"))(line))(line)
       lazy val heightWeight = dag.LoadLocal(Const(CString("/heightWeight"))(line))(line)
@@ -272,7 +272,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
        *     where medals'.name = athletes'.name
        */
        
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val medals = dag.LoadLocal(Const(CString("/summer_games/london_medals"))(line))(line)
       val athletes = dag.LoadLocal(Const(CString("/summer_games/athletes"))(line))(line)
@@ -358,7 +358,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
        *   { a: clicks, b: clicks', c: clicks } where clicks'.pageId = clicks.pageId
        */
       
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       lazy val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       lazy val clicksP = dag.New(clicks)(line)

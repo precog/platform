@@ -64,7 +64,7 @@ trait Instructions extends Library {
       case Drop => (1, 0)
       case Swap(depth) => (depth + 1, depth + 1)
       
-      case Line(_, _) => (0, 0)
+      case Line(_, _, _) => (0, 0)
       
       case LoadLocal => (1, 1)
       case Distinct => (1, 1)
@@ -122,8 +122,8 @@ trait Instructions extends Library {
     case object Drop extends Instruction
     case class Swap(depth: Int) extends Instruction with DataInstr
     
-    case class Line(num: Int, text: String) extends Instruction with DataInstr {
-      override def toString = "<%d>".format(num)
+    case class Line(line: Int, col: Int, text: String) extends Instruction with DataInstr {
+      override def toString = "<%d:%d>".format(line, col)
     }
     
     case object LoadLocal extends Instruction
