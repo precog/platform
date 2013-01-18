@@ -299,11 +299,11 @@ trait Evaluator[M[+_]] extends DAG
             pendingTableRight <- prepareEval(right, splits)
 
             val back = for {
-              leftTable <- pendingTableLeft.table
-              val leftResult = leftTable.transform(liftToValues(pendingTableLeft.trans))
+              pair <- zip(pendingTableLeft.table, pendingTableRight.table)
+              (leftTable, rightTable) = pair
               
-              rightTable <- pendingTableRight.table
-              val rightResult = rightTable.transform(liftToValues(pendingTableRight.trans))
+              leftResult = leftTable.transform(liftToValues(pendingTableLeft.trans))
+              rightResult = rightTable.transform(liftToValues(pendingTableRight.trans))
             
               val aligned = mor.alignment match {
                 case MorphismAlignment.Cross => leftResult.cross(rightResult)(spec)
@@ -452,14 +452,14 @@ trait Evaluator[M[+_]] extends DAG
             val keyValueSpec = TransSpec1.PruneToKeyValue              
 
             val result = for {
-              leftPendingTable <- leftPending.table
-              rightPendingTable <- rightPending.table
+              pair <- zip(leftPending.table, rightPending.table)
+              (leftPendingTable, rightPendingTable) = pair
 
               leftTable = leftPendingTable.transform(liftToValues(leftPending.trans))
               rightTable = rightPendingTable.transform(liftToValues(rightPending.trans))
 
-              leftSorted <- leftTable.sort(keyValueSpec, SortAscending)
-              rightSorted <- rightTable.sort(keyValueSpec, SortAscending)
+              pair <- zip(leftTable.sort(keyValueSpec, SortAscending), rightTable.sort(keyValueSpec, SortAscending))
+              (leftSorted, rightSorted) = pair
             } yield {
               if (union) {
                 leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
@@ -479,8 +479,8 @@ trait Evaluator[M[+_]] extends DAG
             rightPending <- prepareEval(right, splits)
           } yield {
             val result = for {
-              leftPendingTable <- leftPending.table
-              rightPendingTable <- rightPending.table
+              pair <- zip(leftPending.table, rightPending.table)
+              (leftPendingTable, rightPendingTable) = pair
 
               leftTable = leftPendingTable.transform(liftToValues(leftPending.trans))
               rightTable = rightPendingTable.transform(liftToValues(rightPending.trans))
@@ -488,8 +488,8 @@ trait Evaluator[M[+_]] extends DAG
               // this transspec prunes everything that is not a key or a value.
               keyValueSpec = TransSpec1.PruneToKeyValue
 
-              leftSorted <- leftTable.sort(keyValueSpec, SortAscending)
-              rightSorted <- rightTable.sort(keyValueSpec, SortAscending)
+              pair <- zip(leftTable.sort(keyValueSpec, SortAscending), rightTable.sort(keyValueSpec, SortAscending))
+              (leftSorted, rightSorted) = pair
             } yield {
               leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(TransSpec1.Id, TransSpec1.DeleteKeyValue, TransSpec2.DeleteKeyValueLeft)
             }
@@ -691,12 +691,11 @@ trait Evaluator[M[+_]] extends DAG
                   val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op, ctx))
 
                   val result = for {
-                    parentLeftTable <- pendingTableLeft.table
-                    val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
-
-                    parentRightTable <- pendingTableRight.table
-                    val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
-
+                    pair <- zip(pendingTableLeft.table, pendingTableRight.table)
+                    (parentLeftTable, parentRightTable) = pair
+                    
+                    leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
+                    rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
                   } yield join(leftResult, rightResult)(key, spec)
 
                   PendingTable(result, graph, TransSpec1.Id)
@@ -716,11 +715,11 @@ trait Evaluator[M[+_]] extends DAG
             pendingTableRight <- prepareEval(right, splits)
           } yield {
             val result = for {
-              parentLeftTable <- pendingTableLeft.table 
-              val leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
+              pair <- zip(pendingTableLeft.table, pendingTableRight.table)
+              (parentLeftTable, parentRightTable) = pair
               
-              parentRightTable <- pendingTableRight.table 
-              val rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
+              leftResult = parentLeftTable.transform(liftToValues(pendingTableLeft.trans))
+              rightResult = parentRightTable.transform(liftToValues(pendingTableRight.trans))
             } yield {
               val valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
               
@@ -761,11 +760,11 @@ trait Evaluator[M[+_]] extends DAG
               }
               
               val result = for {
-                parentTargetTable <- pendingTableTarget.table 
-                val targetResult = parentTargetTable.transform(liftToValues(pendingTableTarget.trans))
+                pair <- zip(pendingTableTarget.table, pendingTableBoolean.table)
+                (parentTargetTable, parentBooleanTable) = pair
                 
-                parentBooleanTable <- pendingTableBoolean.table
-                val booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
+                targetResult = parentTargetTable.transform(liftToValues(pendingTableTarget.trans))
+                booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
               } yield join(targetResult, booleanResult)(key, spec)
 
               PendingTable(result, graph, TransSpec1.Id)
@@ -787,11 +786,11 @@ trait Evaluator[M[+_]] extends DAG
             pendingTableBoolean <- prepareEval(boolean, splits)
           } yield {
             val result = for {
-              parentTargetTable <- pendingTableTarget.table 
-              val targetResult = parentTargetTable.transform(liftToValues(pendingTableTarget.trans))
+              pair <- zip(pendingTableTarget.table, pendingTableBoolean.table)
+              (parentTargetTable, parentBooleanTable) = pair
               
-              parentBooleanTable <- pendingTableBoolean.table
-              val booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
+              targetResult = parentTargetTable.transform(liftToValues(pendingTableTarget.trans))
+              booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
             } yield {
               val valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
               
@@ -1318,6 +1317,9 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
+  
+  private def zip(table1: M[Table], table2: M[Table]): M[(Table, Table)] =
+    M.apply(table1, table2) { (_, _) }
   
   private def liftToValues(trans: TransSpec1): TransSpec1 =
     TableTransSpec.makeTransSpec(Map(paths.Value -> trans))
