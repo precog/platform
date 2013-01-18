@@ -129,7 +129,7 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
 
               try {
                 // May need refinement to get meaningful results
-                val results = conn.getMetaData.getTables(null, null, "%", null)
+                val results = conn.getMetaData.getTables(null, null, "%", Array("TABLE"))
 
                 var tables = List.empty[String]
 
