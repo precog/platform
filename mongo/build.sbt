@@ -23,7 +23,7 @@ libraryDependencies ++= Seq(
   "org.eclipse.jetty" % "jetty-server"      % "8.1.7.v20120910"
 )
 
-parallelExecution in Test := true
+parallelExecution in Test := false
 
 ivyXML := 
 <dependency org="org.eclipse.jetty.orbit" name="javax.servlet" rev="3.0.0.v201112011016">

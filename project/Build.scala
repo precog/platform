@@ -42,7 +42,7 @@ object PlatformBuild extends Build {
       "Typesafe Repository"               at "http://repo.typesafe.com/typesafe/releases/",
       "Maven Repo 1"                      at "http://repo1.maven.org/maven2/",
       "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/",
-      "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/releases/",
+      "Sonatype Releases"                 at "http://oss.sonatype.org/content/repositories/releases/",
       "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/snapshots/"
     ),
 
@@ -107,7 +107,7 @@ object PlatformBuild extends Build {
     jprofilerConf := "src/main/resources/jprofile.xml",
     jprofilerId := "116",
     
-    javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) {
+    javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) map {
       (opts, lib, conf, id, d) =>
       // download jnilib if necessary. a bit sketchy, but convenient
       Process("./jprofiler/setup-jnilib.py").!!
