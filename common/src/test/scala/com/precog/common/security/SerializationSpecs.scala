@@ -2,6 +2,7 @@ package com.precog.common
 package security
 
 import ingest._
+import service.v1
 
 import blueeyes.json._
 import blueeyes.json.serialization._
@@ -113,7 +114,7 @@ Grant("75826da768b64748b8423cdd047d7e8f6361e5bb50d8428080feaf1c0c6269600982be9e1
     }
 
     "Deserialize NewGrantRequest without parentIds" in {
-      (JObject("permissions" -> JArray())).validated[NewGrantRequest] must beLike {
+      (JObject("permissions" -> JArray())).validated[v1.NewGrantRequest] must beLike {
         case Success(_) => ok
       }
     }
@@ -154,5 +155,3 @@ Grant("75826da768b64748b8423cdd047d7e8f6361e5bb50d8428080feaf1c0c6269600982be9e1
     }
   }
 }
-        
-        
