@@ -35,7 +35,7 @@ import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.ingest._
 import com.precog.common.security._
-import com.precog.daze.StringIdMemoryDatasetConsumer
+import com.precog.daze.{ StringIdMemoryDatasetConsumer, LoggingQueryLogger }
 import com.precog.muspelheim._
 import com.precog.yggdrasil.actor.StandaloneShardSystemConfig
 import com.precog.yggdrasil.util.IdSourceConfig
@@ -159,6 +159,8 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
+
+  val report = LoggingQueryLogger[Future]
 
   trait TableCompanion extends MongoColumnarTableCompanion
 

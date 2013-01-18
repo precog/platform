@@ -36,16 +36,18 @@ import org.streum.configrity.Configuration
 
 import scalaz._
 
-object JDBMShardServer extends BlueEyesServer with AsyncShardService with AkkaDefaults {
+object JDBMShardServer extends BlueEyesServer with ShardService with AkkaDefaults {
   import WebJobManager._
   val clock = Clock.System
 
   val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  def APIKeyFinder(config: Configuration): APIKeyFinder[Future] = WebAPIKeyFinder(config)
-  def AccountFinder(config: Configuration): AccountFinder[Future] = WebAccountFinder(config)
-  def JobManager(config: Configuration): JobManager[Future] = WebJobManager(config).withM[Future]
-  def QueryExecutorFactory(config: Configuration, accessControl: AccessControl[Future], accountFinder: AccountFinder[Future], jobManager: JobManager[Future]) = 
-    JDBMQueryExecutorFactory(config, accessControl, accountFinder, jobManager)
+  def configureShardState(config: Configuration): ShardState = {
+    val apiKeyFinder = WebAPIKeyFinder(config.detach("security"))
+    val accountFinder = WebAccountFinder(config.detach("accounts"))
+    val jobManager = WebJobManager(config.detach("jobs")).withM[Future]
+    val queryExecutorFactory = JDBMQueryExecutorFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
+    ManagedQueryShardState(queryExecutorFactory, apiKeyManager, accountManager, jobManager, clock)
+  }
 }

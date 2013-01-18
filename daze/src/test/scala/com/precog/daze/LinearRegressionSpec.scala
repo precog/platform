@@ -68,7 +68,7 @@ trait LinearRegressionSpec[M[+_]] extends Specification
   import dag._
   import instructions._
 
-  val testAPIKey = "testAPIKey"
+  def testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph): Set[SEvent] = {
     consumeEval(testAPIKey, graph, Path.Root) match {

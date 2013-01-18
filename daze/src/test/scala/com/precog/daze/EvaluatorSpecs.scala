@@ -64,6 +64,8 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
 
   val projections = Map.empty[ProjectionDescriptor, Projection]
 
+  val report = LoggingQueryLogger[M]
+
   trait TableCompanion extends BaseBlockStoreTestTableCompanion {
     override def load(table: Table, apiKey: APIKey, jtpe: JType) = {
       table.toJson map { events =>

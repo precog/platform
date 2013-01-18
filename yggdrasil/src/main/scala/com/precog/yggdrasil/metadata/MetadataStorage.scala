@@ -227,6 +227,11 @@ object FileMetadataStorage extends Logging {
     }
 
     def read(baseDir: File): Validation[String, ProjectionDescriptor] = {
+      val onError = (ex: Throwable) => {
+        logger.error("Failure parsing serialized projection descriptor", ex) 
+        "An error occurred parsing serialized projection descriptor: " + ex.getMessage
+      }
+
       val df = new File(baseDir, descriptorName)
       if (!df.exists) {
         Failure("Unable to find serialized projection descriptor in " + baseDir)
@@ -403,4 +408,3 @@ trait MetadataRecordSerialization {
 }
 
 object MetadataRecord extends MetadataRecordSerialization
-

@@ -29,6 +29,15 @@ import org.joda.time.DateTime
 
 import scalaz._
 
+object JobManager {
+  object channels {
+    val Status = "status"
+    val Error = "error"
+    val Warning = "warning"
+    val Info = "info"
+  }
+}
+
 trait JobManager[M[+_]] { self =>
   import Message._
 
