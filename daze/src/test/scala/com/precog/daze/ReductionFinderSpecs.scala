@@ -22,14 +22,14 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
   "mega reduce" should {
 
     "in a load, rewrite to itself" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val input = dag.LoadLocal(Const(CString("/foo"))(line))(line)
 
       megaReduce(input, findReductions(input, ctx)) mustEqual input
     }
 
     "in a reduction of a singleton" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Reduce(Count, Const(CString("alpha"))(line))(line)
       val megaR = dag.MegaReduce(List((trans.Leaf(trans.Source), List(input.red))), Const(CString("alpha"))(line))
@@ -40,7 +40,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }
 
     "in a single reduction" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Reduce(Count, 
         dag.LoadLocal(Const(CString("/foo"))(line))(line))(line)
@@ -56,7 +56,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     } 
 
     "in joins where transpecs are eq, wrap object, operate, filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
 
@@ -115,7 +115,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }
     
     "in a join of two reductions on the same dataset" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val parent = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val red1 = Count
@@ -147,7 +147,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }
 
     "in a join where only one side is a reduction" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val load = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val reduction = StdDev
       val r = dag.Reduce(reduction, load)(line)
@@ -175,7 +175,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
 
     "where two different sets are being reduced" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load1 = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val load2 = dag.LoadLocal(Const(CString("/bar"))(line))(line)
@@ -198,7 +198,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }    
     
     "where two different sets are being reduced" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load1 = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val load2 = dag.LoadLocal(Const(CString("/bar"))(line))(line)
@@ -238,7 +238,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }
 
     "where a single set is being reduced three times" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val load = dag.LoadLocal(Const(CString("/foo"))(line))(line)
     
       val red1 = Count
@@ -264,7 +264,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "where three reductions use three different trans specs" in {
       import trans._
 
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
@@ -303,7 +303,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "where three reductions use two trans specs" in {
       import trans._
 
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
@@ -340,7 +340,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "where three reductions use one trans spec" in {
       import trans._
 
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
@@ -375,7 +375,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     "where one reduction uses three trans spec" in {
       import trans._
 
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
@@ -410,7 +410,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }
 
     "in a split" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       // 
       // nums := dataset(//hom/numbers)
       // sums('n) :=
@@ -452,7 +452,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }
 
     "in a split that contains two reductions of the same dataset" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       // 
       // clicks := dataset(//clicks)
@@ -515,7 +515,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
   "reduction finder" should {
     "in a load, find no reductions when there aren't any" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val expected = MegaReduceState(
@@ -529,7 +529,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }
 
     "in a single reduction" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val reduction = Count
@@ -546,7 +546,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }   
 
     "in a join of two reductions on the same dataset #2" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val r1 = dag.Reduce(Count, load)(line)
@@ -565,7 +565,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }
 
     "findReductions given a reduction inside a reduction" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val r1 = dag.Reduce(Mean, load)(line)
@@ -582,7 +582,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }     
 
     "findReductions given two reductions inside a reduction" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val foo = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val mean = dag.Reduce(Mean, foo)(line)
@@ -616,7 +616,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
     // TODO: need to test reductions whose parents are splits
     "findReductions inside a Split" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       val red = Count
@@ -640,7 +640,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
 
     "in a join where only one side is a reduction" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val load = dag.LoadLocal(Const(CString("/foo"))(line))(line)
 
       "right" in {
@@ -672,7 +672,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }
     
     "in a split" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       // nums := dataset(//hom/numbers)
       // sums('n) :=
@@ -703,7 +703,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
     }
 
     "in a split that contains two reductions of the same dataset #2" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       // clicks := dataset(//clicks)
       // histogram('user) :=

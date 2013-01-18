@@ -141,7 +141,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
   
   "evaluator" should {
     "evaluate simple two-value multiplication" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(Mul, CrossLeftSort,
         Const(CLong(6))(line),
@@ -160,7 +160,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "evaluate single value roots" >> {
       "push_string" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val input = Const(CString("daniel"))(line)
         
         testEval(input) { result =>
@@ -175,7 +175,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "push_num" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val input = Const(CLong(42))(line)
         testEval(input) { result =>
           result must haveSize(1)
@@ -189,7 +189,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "push_true" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val input = Const(CBoolean(true))(line)
         
         testEval(input) { result =>
@@ -204,7 +204,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "push_false" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val input = Const(CBoolean(false))(line)
         
         testEval(input) { result =>
@@ -219,7 +219,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "push_null" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val input = Const(CNull)(line)
         
         testEval(input) { result =>
@@ -229,7 +229,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "push_object" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val input = Const(CEmptyObject)(line)
         
         testEval(input) { result =>
@@ -244,7 +244,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "push_array" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val input = Const(CEmptyArray)(line)
         
         testEval(input) { result =>
@@ -260,7 +260,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate a load_local" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val input = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
 
       testEval(input) { result =>
@@ -275,7 +275,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate a join given a relative path" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val numbers = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
 
@@ -293,7 +293,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate a join given a relative path with two different JTypes" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val numbers = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
       val numbers0 = dag.LoadLocal(Const(CString("/numbers"))(line), JNumberT)(line)
@@ -312,7 +312,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }       
     
     "evaluate a join given a relative path with two different datasets" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val numbers = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
       val numbers2 = dag.LoadLocal(Const(CString("/numbers2"))(line))(line)
@@ -331,7 +331,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }       
     
     "evaluate a negation mapped over numbers" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Operate(Neg,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -348,7 +348,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate a new mapped over numbers as no-op" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.New(
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -365,7 +365,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate a new literal" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.New(Const(CString("foo"))(line))(line)
         
@@ -381,7 +381,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate a join of two reductions on the same dataset" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val parent = dag.LoadLocal(Const(CString("/hom/numbers7"))(line))(line)
 
@@ -401,7 +401,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate a join of two reductions on the same dataset using a MegaReduce" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val parent = dag.LoadLocal(Const(CString("/hom/numbers7"))(line))(line)
       
@@ -427,7 +427,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "MegaReduce of two tuples must return an array" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val parent = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
       
@@ -452,7 +452,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate a join of two reductions on two datasets with the same parent using a MegaReduce" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val parent = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
       
@@ -481,7 +481,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate a join of three reductions on the same dataset using a MegaReduce" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val parent = dag.LoadLocal(Const(CString("/hom/numbers7"))(line))(line)
       
@@ -507,7 +507,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate a rewrite/eval of a 3-way mega reduce" in {
       import trans._
 
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
@@ -535,7 +535,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate a rewrite/eval of reductions" in {
       import trans._
 
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
@@ -562,7 +562,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "three reductions on the same dataset" in {
       import trans._
 
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
@@ -588,7 +588,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "the same reduction on three datasets" in {
       import trans._
 
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
@@ -615,7 +615,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "join two sets" >> {
       "from different paths" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
 
         val input = Join(Add, CrossLeftSort,
           Join(DerefObject, CrossLeftSort, 
@@ -637,7 +637,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "from the same path" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val heightWeight = dag.LoadLocal(Const(CString("/hom/heightWeight"))(line))(line)
 
         val input = Join(Add, IdentitySort,
@@ -660,7 +660,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "from the same path (with a relative path)" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val heightWeight = dag.LoadLocal(Const(CString("/heightWeight"))(line))(line)
 
         val input = Join(Add, IdentitySort,
@@ -685,7 +685,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
     "evaluate a binary numeric operation mapped over homogeneous numeric set" >> {
       "addition" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Add, CrossLeftSort,
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
@@ -703,7 +703,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "subtraction" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Sub, CrossLeftSort,
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
@@ -722,7 +722,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "multiplication" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Mul, CrossLeftSort,
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
@@ -740,7 +740,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "division" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Div, CrossLeftSort,
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
@@ -758,7 +758,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }      
 
       "mod both positive" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Mod, CrossLeftSort,
           Const(CLong(11))(line),
@@ -775,7 +775,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }
       "mod both negative" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Mod, CrossLeftSort,
           Const(CLong(-11))(line),
@@ -792,7 +792,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }
       "mod negative left" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Mod, CrossLeftSort,
           Const(CLong(-11))(line),
@@ -809,7 +809,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }
       "mod" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Mod, CrossLeftSort,
           Const(CLong(11))(line),
@@ -829,7 +829,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "evaluate a binary numeric operation mapped over heterogeneous numeric set" >> {
       "addition" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Add, CrossLeftSort,
           dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
@@ -847,7 +847,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "subtraction" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Sub, CrossLeftSort,
           dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
@@ -865,7 +865,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "multiplication" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Mul, CrossLeftSort,
           dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
@@ -883,7 +883,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "division" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Div, CrossLeftSort,
           dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
@@ -902,7 +902,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "count a filtered dataset" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
 
       val input = dag.Reduce(Count,
@@ -933,7 +933,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
        * count(clicks' union clicks')
        */
       
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
       val clicksP = dag.New(clicks)(line)
@@ -957,7 +957,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
        * count(clicks' intersect clicks')
        */
       
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
       val clicksP = dag.New(clicks)(line)
@@ -974,7 +974,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "filter a dataset to return a set of boolean" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Join(Gt, CrossLeftSort,
             Join(DerefObject, CrossLeftSort,
@@ -994,7 +994,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "reduce a derefed object" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Reduce(Count,
         Join(DerefObject, CrossLeftSort,
@@ -1014,7 +1014,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
     "evaluate cross when one side is a singleton" >> {
       "a reduction on the right side of the cross" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
 
         val input = Join(Add, CrossLeftSort, 
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
@@ -1033,7 +1033,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "a reduction on the left side of the cross" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
 
         val input = Join(Add, CrossLeftSort, 
           dag.Reduce(Count, 
@@ -1052,7 +1052,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "a root on the right side of the cross" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
 
         val input = Join(Add, CrossLeftSort,  
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
@@ -1070,7 +1070,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "a root on the left side of the cross" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
 
         val input = Join(Add, CrossLeftSort, 
           Const(CLong(3))(line),
@@ -1089,7 +1089,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate wrap_object on a single numeric value" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(WrapObject, CrossLeftSort,
         Const(CString("answer"))(line),
@@ -1116,7 +1116,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate wrap_object on an object" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(WrapObject, CrossLeftSort,
         Const(CString("answer"))(line),
@@ -1148,7 +1148,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate wrap_object on clicks dataset" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(WrapObject, CrossLeftSort,
         Const(CString("aa"))(line),
@@ -1170,7 +1170,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate wrap_array on a single numeric value" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Operate(WrapArray,
         Const(CLong(42))(line))(line)
@@ -1196,7 +1196,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate wrap_array on a single null value" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Operate(WrapArray,
         Const(CNull)(line))(line)
@@ -1220,7 +1220,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate join_object on single values" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(JoinObject, CrossLeftSort,
         Join(WrapObject, CrossLeftSort,
@@ -1256,7 +1256,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate join_array on single values" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(JoinArray, CrossLeftSort,
         Operate(WrapArray,
@@ -1287,7 +1287,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "create an array" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = 
         Join(JoinArray, CrossLeftSort,
@@ -1324,7 +1324,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "evaluate array_swap on single values" >> {
       "at start" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(ArraySwap, CrossLeftSort,
           Join(JoinArray, CrossLeftSort,
@@ -1361,7 +1361,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "at end" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(ArraySwap, CrossLeftSort,
           Join(JoinArray, CrossLeftSort,
@@ -1399,7 +1399,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate descent on a homogeneous set" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(DerefObject, CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/pairs"))(line))(line),
@@ -1417,7 +1417,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate descent on a heterogeneous set" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(DerefObject, CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/pairs"))(line))(line),
@@ -1436,7 +1436,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate descent producing a heterogeneous set" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(DerefObject, CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/het-pairs"))(line))(line),
@@ -1457,7 +1457,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "an array must return an array" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.LoadLocal(Const(CString("/hom/arrays"))(line))(line)
 
@@ -1473,7 +1473,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
   
     "MegaReduce must return an array" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val parent = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
       val input = dag.MegaReduce(List((trans.Leaf(trans.Source), List(Count, Sum))), parent)
@@ -1490,7 +1490,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate array dereference on a MegaReduce" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val parent = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
       val red = Sum
@@ -1510,7 +1510,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate array dereference on a homogeneous set" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(DerefArray, CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/arrays"))(line))(line),
@@ -1528,7 +1528,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate array dereference on a heterogeneous set" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(DerefArray, CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/arrays"))(line))(line),
@@ -1546,7 +1546,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate array dereference producing a heterogeneous set" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(DerefArray, CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/het-arrays"))(line))(line),
@@ -1567,7 +1567,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate matched binary numeric operation" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val pairs = dag.LoadLocal(Const(CString("/hom/pairs"))(line))(line)
       
       val input = Join(Sub, IdentitySort,
@@ -1590,7 +1590,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate matched binary numeric operation dropping undefined result" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val pairs = dag.LoadLocal(Const(CString("/hom/pairs"))(line))(line)
       
       val input = Join(Div, IdentitySort,
@@ -1613,7 +1613,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate matched binary numeric operation dropping undefined result (with relative path)" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val pairs = dag.LoadLocal(Const(CString("/pairs"))(line))(line)
       
       val input = Join(Div, IdentitySort,
@@ -1636,7 +1636,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "produce a result from the body of a passed assertion" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Assert(
         Const(CBoolean(true))(line),
@@ -1648,7 +1648,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "throw an exception from a failed assertion" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Assert(
         Const(CBoolean(false))(line),
@@ -1660,7 +1660,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "fail an assertion according to forall semantics" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Assert(
         dag.IUI(
@@ -1675,7 +1675,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "compute the set difference of two sets" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val clicks2 = dag.LoadLocal(Const(CString("/clicks2"))(line))(line)
       
       val input = Diff(
@@ -1704,7 +1704,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "compute the set difference of the set difference" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val clicks2 = dag.LoadLocal(Const(CString("/clicks2"))(line))(line)
       
       val input = Diff(
@@ -1733,7 +1733,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "compute the iunion of a set with itself" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
 
@@ -1745,7 +1745,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "compute the iunion of two homogeneous sets" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = IUI(true,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
@@ -1767,7 +1767,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "compute the iunion of two homogeneous sets (with relative path)" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = IUI(true,
         dag.LoadLocal(Const(CString("/numbers"))(line))(line),
@@ -1785,7 +1785,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "compute the iunion of two datasets, one with objects" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = IUI(true,
         dag.LoadLocal(Const(CString("/clicks"))(line))(line),
@@ -1797,7 +1797,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "compute the iintersect of two nonintersecting sets of numbers" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = IUI(false,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
@@ -1809,7 +1809,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "compute the iintersect of two nonintersecting datasets" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = IUI(false,
         dag.LoadLocal(Const(CString("/clicks"))(line))(line),
@@ -1821,7 +1821,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "compute the iintersect of mod2 and mod3" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val numbers = dag.LoadLocal(Const(CString("/hom/numbersmod"))(line))(line)
 
       val input = IUI(false,
@@ -1853,7 +1853,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "filter homogeneous numeric set by binary operation" >> {
       "less-than" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -1874,7 +1874,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }      
       
       "less-than (with relative paths)" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -1895,7 +1895,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "less-than-equal" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -1916,7 +1916,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "greater-than" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -1937,7 +1937,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "greater-than-equal" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -1958,7 +1958,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "equal with a number literal" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -1979,7 +1979,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "equal without a filter" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Eq, CrossLeftSort,
             dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
@@ -1997,7 +1997,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "not-equal" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2016,7 +2016,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "and" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2041,7 +2041,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "and (with relative paths)" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2066,7 +2066,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "or" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2091,7 +2091,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "complement of equality" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2115,7 +2115,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     
     "filter heterogeneous numeric set by binary operation" >> {
       "less-than" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2136,7 +2136,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "less-than-equal" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2157,7 +2157,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }      
 
       "less-than-equal (with relative path)" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2178,7 +2178,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "greater-than" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2199,7 +2199,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "greater-than-equal" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2220,7 +2220,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "equal with boolean set as the source" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2243,7 +2243,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "equal" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2264,7 +2264,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }      
 
       "equal with empty array" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers9 = dag.LoadLocal(Const(CString("/het/numbers9"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2285,7 +2285,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "equal with empty object" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers9 = dag.LoadLocal(Const(CString("/het/numbers9"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2306,7 +2306,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       } 
 
       "equal with an array" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2331,7 +2331,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "equal with a singleton array" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/array"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2357,7 +2357,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "equal with an object" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2383,7 +2383,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "equal without a filter" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(Eq, CrossLeftSort,
             dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
@@ -2404,7 +2404,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "not equal without a filter" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = Join(NotEq, CrossLeftSort,
             dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
@@ -2425,7 +2425,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "not-equal" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2451,7 +2451,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
       
       "not-equal with empty array" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers10"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2473,7 +2473,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }       
 
       "not-equal with empty object" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers10"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2495,7 +2495,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       } 
 
       "not-equal with an array" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers10"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2521,7 +2521,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "not-equal with an object" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers10"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2546,7 +2546,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "and" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2576,7 +2576,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "or" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2601,7 +2601,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
 
       "complement of equality" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
@@ -2629,7 +2629,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "correctly order a match following a cross" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
         
       val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
       
@@ -2654,7 +2654,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "correctly evaluate a match following a cross with equality" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
       val numbers3 = dag.LoadLocal(Const(CString("/hom/numbers3"))(line))(line)
@@ -2669,7 +2669,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "correctly order a match following a cross within a new" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
       
       val input = Join(Mul, IdentitySort,
@@ -2693,7 +2693,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "split on a homogeneous set" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       // 
       // nums := dataset(//hom/numbers)
@@ -2732,7 +2732,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       // solve 'userId
       //   clicks.time where clicks.userId = 'userId
       
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
       lazy val input: dag.Split = dag.Split(
@@ -2752,7 +2752,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         // solve 'time
         //   count(clicks.page where clicks.page = "/sign-up.html" & clicks.time = 'time)
         
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
       lazy val input: dag.Split = dag.Split(
@@ -2781,7 +2781,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
        *   'bins
        */
        
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
       val data = Join(JoinObject, IdentitySort,
@@ -2804,7 +2804,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       // solve 'page 
       //   data where data.page = 'page
         
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       val data = dag.IUI(true, clicks, clicks)(line)
       
@@ -2818,7 +2818,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "memoize properly in a load" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input0 = dag.Memoize(dag.LoadLocal(Const(CString("/clicks"))(line))(line), 1)
       val input1 = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
@@ -2831,7 +2831,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "memoize properly in an add" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input0 = dag.Memoize(
         dag.Join(Add, CrossLeftSort, 
@@ -2854,7 +2854,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val Expected = Map("daniel" -> 9, "kris" -> 8, "derek" -> 7, "nick" -> 17,
         "john" -> 13, "alissa" -> 7, "franco" -> 13, "matthew" -> 10, "jason" -> 13, SNull -> 3)
       
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       // 
       // clicks := dataset(//clicks)
@@ -2913,7 +2913,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate with on the clicks dataset" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = Join(JoinObject, CrossLeftSort,
         dag.LoadLocal(Const(CString("/clicks"))(line))(line),
@@ -2945,7 +2945,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
        * clicks with {a:a}
        */
        
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = 
         Join(WrapObject, CrossLeftSort,
@@ -2980,7 +2980,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "evaluate filter with null" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
 
       //
@@ -3009,7 +3009,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate filter with non-boolean where clause (with empty result)" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
 
@@ -3023,7 +3023,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate filter on the results of a histogram function" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       // 
       // clicks := //clicks
@@ -3073,7 +3073,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "evaluate with on the results of a histogram function" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       // 
       // clicks := //clicks
@@ -3130,7 +3130,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "perform a naive cartesian product on the clicks dataset" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
       val input = Join(JoinObject, CrossLeftSort,
@@ -3160,7 +3160,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "distinct homogenous set of numbers" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Distinct(
         dag.LoadLocal(Const(CString("/hom/numbers2"))(line))(line))(line)
@@ -3177,7 +3177,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "distinct heterogenous sets" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Distinct(
         dag.LoadLocal(Const(CString("/het/numbers2"))(line))(line))(line)
@@ -3198,7 +3198,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "join two sets according to a value sort" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       val clicks2 = dag.LoadLocal(Const(CString("/clicks2"))(line))(line)
@@ -3245,7 +3245,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }    
 
     "join two sets according to a value sort and then an identity sort" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       val clicks2 = dag.LoadLocal(Const(CString("/clicks2"))(line))(line)
@@ -3271,7 +3271,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
 
     "filter two sets according to a value sort" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       val clicks2 = dag.LoadLocal(Const(CString("/clicks2"))(line))(line)
@@ -3322,7 +3322,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     }
     
     "produce a preemptive error when crossing enormous sets" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val tweets = dag.LoadLocal(Const(CString("/election/tweets"))(line))(line)
       
@@ -3344,7 +3344,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
        *   t1 where t1.userId = t2.userId
        */
        
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val t1 = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       val t2 = dag.LoadLocal(Const(CString("/clicks2"))(line))(line)

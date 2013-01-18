@@ -59,7 +59,7 @@ trait LinearRegressionSpec[M[+_]] extends Specification
   }
 
   def testTrivial = {
-    val line = Line(0, "")
+    val line = Line(1, 1, "")
 
     val num = 2
     val loops = 50
@@ -115,7 +115,7 @@ trait LinearRegressionSpec[M[+_]] extends Specification
   }
 
   def testThreeFeatures = {
-    val line = Line(0, "")
+    val line = Line(1, 1, "")
 
     val num = 4
     val loops = 50
@@ -175,7 +175,7 @@ trait LinearRegressionSpec[M[+_]] extends Specification
   }
 
   def testThreeSchemata = {
-    val line = Line(0, "")
+    val line = Line(1, 1, "")
 
     val num = 3
     val loops = 50

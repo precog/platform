@@ -12,7 +12,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
 
   "pretty printing" should {
     "format a trivial DAG" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input =
         Join(DerefObject, CrossLeftSort,
@@ -22,7 +22,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
       val result = prettyPrint(input)
       
       val expected = 
-        """|val line = Line(0, "")
+        """|val line = Line(1, 1, "")
            |
            |lazy val input =
            |  Join(DerefObject, CrossLeftSort,
@@ -37,7 +37,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
     }
 
     "format a DAG with shared structure" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val file = dag.LoadLocal(Const(CString("/file"))(line))(line)
       
       val input =
@@ -52,7 +52,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
       val result = prettyPrint(input)
 
       val expected =
-        """|val line = Line(0, "")
+        """|val line = Line(1, 1, "")
            |
            |lazy val node =
            |  LoadLocal(
@@ -76,7 +76,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
     }
 
     "format a DAG containing a Split" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       def clicks = dag.LoadLocal(Const(CString("/file"))(line))(line)
 
@@ -100,7 +100,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
       val result = prettyPrint(input)
       
       val expected =
-        """|val line = Line(0, "")
+        """|val line = Line(1, 1, "")
            |
            |lazy val node =
            |  LoadLocal(

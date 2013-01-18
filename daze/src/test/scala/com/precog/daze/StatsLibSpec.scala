@@ -41,7 +41,7 @@ trait StatsLibSpec[M[+_]] extends Specification
 
   "homogenous sets" should {
     "median with odd number of elements" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph1(Median,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -58,7 +58,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
     
     "median with even number of elements" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph1(Median,
         dag.LoadLocal(Const(CString("/hom/numbers5"))(line))(line))(line)
@@ -75,7 +75,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "median with singleton" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph1(Median,
         Const(CLong(42))(line))(line)
@@ -92,7 +92,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
     
     "mode" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph1(Mode,
         dag.LoadLocal(Const(CString("/hom/numbers2"))(line))(line))(line)
@@ -109,7 +109,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }.pendingUntilFixed
 
     "mode with a singleton" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph1(Mode,
         Const(CLong(42))(line))(line)
@@ -126,7 +126,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }.pendingUntilFixed
 
     "mode where each value appears exactly once" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph1(Mode,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -143,7 +143,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }.pendingUntilFixed
     
     "compute rank" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Rank,
         dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line)
@@ -160,7 +160,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within a filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val numbers = dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line)
 
@@ -182,7 +182,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank resulting in a boolean set" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Join(Eq, CrossLeftSort,
         dag.Morph1(Rank,
@@ -204,7 +204,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within a join" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(Rank,
@@ -223,7 +223,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(DenseRank,
         dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line)
@@ -240,7 +240,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank within a filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line),
@@ -261,7 +261,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank within a join" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(DenseRank,
@@ -280,7 +280,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute linear correlation" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       val heightWeight = dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line)
       
       val input = dag.Morph2(LinearCorrelation,
@@ -303,7 +303,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute covariance" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, CrossLeftSort,
@@ -325,7 +325,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute the correct coefficients in a simple linear regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, CrossLeftSort,
@@ -353,7 +353,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute the correct coefficients in a simple log regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, CrossLeftSort,
@@ -383,7 +383,7 @@ trait StatsLibSpec[M[+_]] extends Specification
   
   "heterogenous sets" should {
     "median" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph1(Median,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
@@ -400,7 +400,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
     
     "mode in the case there is only one" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph1(Mode,
         dag.LoadLocal(Const(CString("/het/numbers2"))(line))(line))(line)
@@ -417,7 +417,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }.pendingUntilFixed
     
     "mode in the case there is more than one" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph1(Mode,
         dag.LoadLocal(Const(CString("/het/random"))(line))(line))(line)
@@ -434,7 +434,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }.pendingUntilFixed
     
     "compute rank" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Rank,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line)
@@ -451,7 +451,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within an equals filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
@@ -472,7 +472,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within another equals filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
@@ -494,7 +494,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within a less-than filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
@@ -515,7 +515,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within a join" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(Rank,
@@ -534,7 +534,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(DenseRank,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line)
@@ -551,7 +551,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank within an equals filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
@@ -572,7 +572,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank within a less-than filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
@@ -593,7 +593,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank within a join" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(DenseRank,
@@ -612,7 +612,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute linear correlation" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefObject, CrossLeftSort,
@@ -634,7 +634,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute covariance" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, CrossLeftSort,
@@ -656,7 +656,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute the correct coefficients in a simple linear regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, CrossLeftSort,
@@ -684,7 +684,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute the correct coefficients in a simple log regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, CrossLeftSort,
@@ -715,7 +715,7 @@ trait StatsLibSpec[M[+_]] extends Specification
   
   "for homogenous sets, in a cross, the appropriate stats function" should {
     "compute linear correlation" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefObject, CrossLeftSort,
@@ -737,7 +737,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute covariance" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, CrossLeftSort,
@@ -759,7 +759,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute the correct coefficients in a simple linear regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, CrossLeftSort,
@@ -787,7 +787,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute the correct coefficients in a simple log regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, CrossLeftSort,
@@ -817,7 +817,7 @@ trait StatsLibSpec[M[+_]] extends Specification
   
   "for the same homogenous set, the appropriate stats function" should {
     "compute linear correlation" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefObject, CrossLeftSort,
@@ -839,7 +839,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute covariance" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, CrossLeftSort,
@@ -861,7 +861,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute the correct coefficients in a simple linear regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, CrossLeftSort,
@@ -889,7 +889,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute the correct coefficients in a simple log regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, CrossLeftSort,
@@ -921,7 +921,7 @@ trait StatsLibSpec[M[+_]] extends Specification
   "for a homogenous set and a value, the appropriate stats function" should {
     "compute linear correlation" in {
       "with value on the right" in {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = dag.Morph2(LinearCorrelation,
           Join(DerefObject, CrossLeftSort,
@@ -935,7 +935,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
     
       "with value on the left" in {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = dag.Morph2(LinearCorrelation,
           Const(CLong(5))(line),
@@ -950,7 +950,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute covariance" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, CrossLeftSort,
@@ -970,7 +970,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute the correct coefficients in a simple linear regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, CrossLeftSort,
@@ -997,7 +997,7 @@ trait StatsLibSpec[M[+_]] extends Specification
 
     "compute the correct coefficients in a simple log regression" >> {
       "with a positive constant y-value" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = dag.Morph2(LogarithmicRegression,
           Join(DerefObject, CrossLeftSort,
@@ -1023,7 +1023,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       "with a negative constant x-value" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = dag.Morph2(LogarithmicRegression,
           Operate(Neg, 
@@ -1044,7 +1044,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
 
       "with a negative x-value in one object" >> {
-        val line = Line(0, "")
+        val line = Line(1, 1, "")
         
         val input = dag.Morph2(LogarithmicRegression,
           Join(DerefObject, CrossLeftSort,
@@ -1075,7 +1075,7 @@ trait StatsLibSpec[M[+_]] extends Specification
 
   "homogenous sets across two slice boundaries (22 elements)" should {
     "median with odd number of elements" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Median,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -1092,7 +1092,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "median with even number of elements" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Median,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -1109,7 +1109,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "median with singleton" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Median,
         Const(CLong(42))(line))(line)
@@ -1126,7 +1126,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "mode" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Mode,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -1143,7 +1143,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }.pendingUntilFixed
 
     "mode with a singleton" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Mode,
         Const(CLong(42))(line))(line)
@@ -1160,7 +1160,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }.pendingUntilFixed
 
     "mode where each value appears exactly once" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Mode,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -1177,7 +1177,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }.pendingUntilFixed
 
     "compute rank" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Rank,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -1194,7 +1194,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within a filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val numbers = dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line)
 
@@ -1216,7 +1216,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank resulting in a boolean set" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Join(Eq, CrossLeftSort,
         dag.Morph1(Rank,
@@ -1238,7 +1238,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within a join" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(Rank,
@@ -1257,7 +1257,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(DenseRank,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
@@ -1274,7 +1274,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank within a filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
@@ -1295,7 +1295,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank within a join" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(DenseRank,
@@ -1314,7 +1314,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute covariance" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, CrossLeftSort,
@@ -1336,7 +1336,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute linear correlation" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefObject, CrossLeftSort,
@@ -1358,7 +1358,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute the correct coefficients in a simple linear regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, CrossLeftSort,
@@ -1386,7 +1386,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
     
     "compute the correct coefficients in a simple log regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, CrossLeftSort,
@@ -1416,7 +1416,7 @@ trait StatsLibSpec[M[+_]] extends Specification
 
   "heterogenous sets across two slice boundaries (22 elements)" should {
     "median" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Median,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -1433,7 +1433,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "mode in the case there is only one" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Mode,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -1450,7 +1450,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }.pendingUntilFixed
 
     "mode in the case there is more than one" >> {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Mode,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -1467,7 +1467,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }.pendingUntilFixed
 
     "compute rank" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(Rank,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -1484,7 +1484,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within an equals filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
@@ -1505,7 +1505,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within another equals filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
@@ -1527,7 +1527,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within a less-than filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
@@ -1548,7 +1548,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute rank within a join" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(Rank,
@@ -1567,7 +1567,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = dag.Morph1(DenseRank,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
@@ -1584,7 +1584,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank within an equals filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
@@ -1605,7 +1605,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank within a less-than filter" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
@@ -1626,7 +1626,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute denseRank within a join" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(DenseRank,
@@ -1645,7 +1645,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute covariance" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, CrossLeftSort,
@@ -1667,7 +1667,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute correlation of 0 when datasets are uncorrelated" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefArray, CrossLeftSort,
@@ -1686,7 +1686,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute linear correlation" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefObject, CrossLeftSort,
@@ -1708,7 +1708,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }
 
     "compute the correct coefficients in a simple linear regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, CrossLeftSort,
@@ -1736,7 +1736,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }    
     
     "compute the correct coefficients in a simple log regression" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, CrossLeftSort,
