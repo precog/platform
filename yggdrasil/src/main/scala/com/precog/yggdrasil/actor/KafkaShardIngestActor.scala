@@ -124,7 +124,7 @@ object FilesystemIngestFailureLog {
     val logFiles = persistDir.listFiles.toSeq.filter(_.getName.startsWith(FilePrefix))
     if (logFiles.isEmpty) new FilesystemIngestFailureLog(Map(), initialCheckpoint, persistDir)
     else {
-      val reader = new BufferedReader(new FileReader(logFiles.maxBy(_.getName.substring(FilePrefix.length).toLong)))
+      val reader = new BufferedReader(new FileReader(logFiles.maxBy(_.getName.substring(FilePrefix.length).dropRight(4).toLong)))
       try {
         val failureLog = readAll(reader, Map.empty[EventId, LogRecord])
         new FilesystemIngestFailureLog(failureLog, if (failureLog.isEmpty) initialCheckpoint else failureLog.values.minBy(_.lastKnownGood).lastKnownGood, persistDir) 
@@ -186,8 +186,8 @@ abstract class KafkaShardIngestActor(shardId: String,
       // the minimum value in the ingest cache is complete, so
       // all pending checkpoints from batches earlier than the
       // specified checkpoint can be flushed
-      //logger.debug("BatchComplete insert. Head = %s, completed = %s".format(ingestCache.head, checkpoint))
-      if (ingestCache.head._1 == checkpoint) {
+      logger.debug("BatchComplete insert. Head = %s, completed = %s".format(ingestCache.headOption.map(_._1), checkpoint))
+      if (ingestCache.headOption.exists(_._1 == checkpoint)) {
         // reset failures count here since this state means that we've made forward progress
         totalConsecutiveFailures = 0
 

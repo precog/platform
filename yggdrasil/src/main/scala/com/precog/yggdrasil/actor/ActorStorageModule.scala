@@ -71,7 +71,7 @@ trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
       implicit val storageTimeout: Timeout = Timeout(300 seconds)
 
 
-      (for (ProjectionAcquired(projection) <- (shardSystemActor ? AcquireProjection(descriptor, false))) yield {
+      (for (ProjectionAcquired(projection) <- (shardSystemActor ? AcquireProjection(descriptor, ReadLock))) yield {
         logger.debug("  projection obtained")
         (projection.asInstanceOf[Projection], new Release(IO { shardSystemActor ! ReleaseProjection(descriptor); PrecogUnit }))
       }) onFailure {

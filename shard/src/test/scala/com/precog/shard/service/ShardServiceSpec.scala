@@ -98,8 +98,9 @@ trait TestShardService extends
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
-  def queryExecutorFactoryFactory(config: Configuration, accessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future], extJobManager: JobManager[Future]) = new TestQueryExecutorFactory {
+  def queryExecutorFactoryFactory(config: Configuration, accessControl: APIKeyManager[Future], extAccountManager: BasicAccountManager[Future], extJobManager: JobManager[Future]) = new TestQueryExecutorFactory {
     val actorSystem = self.actorSystem
+    val jobActorSystem = ActorSystem("ingestServiceSpecJobs")
     val executionContext = self.asyncContext
     
     val accessControl = apiKeyManager

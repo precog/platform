@@ -130,7 +130,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
     )
 
     withClient { client =>
-      val job0: Response[Job] = eitherT(client.query("apiKey", apiKey).post("/jobs/")(content) map {
+      val job0: Response[Job] = eitherT(client.query("apiKey", apiKey).post("")(content) map {
         case HttpResponse(HttpStatus(Created, _), _, Some(obj), _) =>
           obj.validated[Job] map (right(_)) getOrElse left("Invalid job returned by server:\n" + obj)
         case res =>
@@ -149,7 +149,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
 
   def findJob(jobId: JobId): Response[Option[Job]] = {
     withClient { client =>
-      eitherT(client.get[JValue]("/jobs/" + jobId) map {
+      eitherT(client.get[JValue](jobId) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
           obj.validated[Job] map { job => right(Some(job)) } getOrElse left("Invalid job returned from server:\n" + obj)
         case HttpResponse(HttpStatus(NotFound, _), _, _, _) =>
@@ -162,7 +162,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
 
   def listJobs(apiKey: APIKey): Response[Seq[Job]] = {
     withClient { client =>
-      eitherT(client.query("apiKey", apiKey).get[JValue]("/jobs/") map {
+      eitherT(client.query("apiKey", apiKey).get[JValue]("") map {
         case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
           obj.validated[Vector[Job]] map (right(_)) getOrElse left("Invalid list of jobs returned from server:\n" + obj)
         case res =>
@@ -181,7 +181,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
       )
 
       val client = prevStatus map { id => client0.query("prevStatusId", id.toString) } getOrElse client0
-      eitherT(client.put[JValue]("/jobs/" + jobId + "/status")(update) map {
+      eitherT(client.put[JValue](jobId + "/status")(update) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
           obj.validated[Message] map (Status.fromMessage(_)) match {
             case Success(Some(status)) => right(Right(status))
@@ -199,7 +199,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
   }
 
   def getStatus(jobId: JobId): Response[Option[Status]] = withClient { client =>
-    eitherT(client.get[JValue]("/jobs/" + jobId + "/status") map {
+    eitherT(client.get[JValue](jobId + "/status") map {
       case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
         obj.validated[Message] map (Status.fromMessage(_)) match {
           case Success(Some(status)) => right(Some(status))
@@ -213,7 +213,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
   }
 
   def listChannels(jobId: JobId): Response[Seq[String]] = withClient { client =>
-    eitherT(client.get[JValue]("/jobs/" + jobId + "/messages/") map {
+    eitherT(client.get[JValue](jobId + "/messages/") map {
       case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
         obj.validated[Vector[String]] map (right(_)) getOrElse left("Invalid list of channels returned from server:\n" + obj)
       case res =>
@@ -222,7 +222,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
   }
 
   def addMessage(jobId: JobId, channel: String, value: JValue): Response[Message] = withClient { client =>
-    eitherT(client.post[JValue]("/jobs/" + jobId + "/messages/" + channel)(value) map {
+    eitherT(client.post[JValue](jobId + "/messages/" + channel)(value) map {
       case HttpResponse(HttpStatus(Created, _), _, Some(obj), _) =>
         obj.validated[Message] map (right(_)) getOrElse left("Invalid message returned from server:\n" + obj)
       case res =>
@@ -232,7 +232,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
 
   def listMessages(jobId: JobId, channel: String, since: Option[MessageId]): Response[Seq[Message]] = withClient { client0 =>
     val client = since map { id => client0.query("after", id.toString) } getOrElse client0
-    eitherT(client.get[JValue]("/jobs/" + jobId + "/messages/" + channel) map {
+    eitherT(client.get[JValue](jobId + "/messages/" + channel) map {
       case HttpResponse(HttpStatus(OK, _), _, Some(obj), _) =>
         obj.validated[Vector[Message]] map (right(_)) getOrElse left("Invalid list of messages returned from server:\n" + obj)
       case res =>
@@ -245,7 +245,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
       case Some(job) =>
         t(job.state) match {
           case Right(state) =>
-            Response(client.put[JValue]("/jobs/" + jobId + "/state")(state.serialize)) flatMap {
+            Response(client.put[JValue](jobId + "/state")(state.serialize)) flatMap {
               case HttpResponse(HttpStatus(OK, _), _, _, _) =>
                 findJob(jobId) map {
                   case Some(job) => Right(job)
@@ -271,7 +271,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
   def setResult(jobId: JobId, mimeType: Option[MimeType], data: StreamT[Response, Array[Byte]]): Response[Either[String, Unit]] = {
     withRawClient { client0 =>
       eitherT(mimeType.foldLeft(client0)(_ contentType _)
-               .put[ByteChunk]("/jobs/" + jobId + "/result") {
+               .put[ByteChunk](jobId + "/result") {
         val t = ResponseStreamAsFutureStream
         Right(t(data) map (ByteBuffer.wrap(_)))
       } map {
@@ -286,7 +286,7 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
     def contentType(headers: HttpHeaders): Option[MimeType] = headers.header[`Content-Type`] flatMap (_.mimeTypes.headOption)
 
     withRawClient { client =>
-      eitherT(client.get[ByteChunk]("/jobs/" + jobId + "/result") map {
+      eitherT(client.get[ByteChunk](jobId + "/result") map {
         case HttpResponse(HttpStatus(OK, _), headers, Some(Left(buffer)), _) =>
           right(Right((contentType(headers), flipBytes(buffer) :: StreamT.empty[Response, Array[Byte]])))
 
