@@ -114,7 +114,7 @@ trait Evaluator[M[+_]] extends DAG
    * and `prepareEval` (which has the primary eval loop).
    */
   def eval(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean): M[Table] = {
-    evalLogger.debug("Eval for %s = %s".format(ctx.apiKey.toString, graph))
+    evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
   
     val rewrittenDAG = rewriteDAG(optimize, ctx)(graph)
     val stagingPoints = listStagingPoints(Queue(rewrittenDAG))
@@ -227,7 +227,7 @@ trait Evaluator[M[+_]] extends DAG
     }
 
     def prepareEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[Id, EvaluatorState, PendingTable] = {
-      evalLogger.trace("Loop on %s".format(graph))
+      evalLogger.trace("Loop on {}", graph)
       
       val assumptionCheck: StateT[Id, EvaluatorState, Option[M[Table]]] = for {
         state <- get[EvaluatorState]
