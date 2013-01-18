@@ -66,7 +66,7 @@ trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
 
   def projections: Map[ProjectionDescriptor, Projection]
 
-  class Storage extends StorageLike[M, Projection] {
+  class Storage extends StorageLike[M] {
     def storeBatch(ems: Seq[EventMessage]) = sys.error("Feature not implemented in test stub.")
 
     def projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = 

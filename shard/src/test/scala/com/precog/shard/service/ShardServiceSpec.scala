@@ -88,7 +88,7 @@ trait TestShardService extends
   """
 
   override val configuration = "services { quirrel { v1 { " + config + " } } }"
-  val to = Duration(1, "seconds")
+  val to = Duration(3, "seconds")
 
   val actorSystem = ActorSystem("ingestServiceSpec")
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -97,29 +97,9 @@ trait TestShardService extends
     def copoint[A](m: Future[A]) = Await.result(m, to)
   }
 
-  val apiKeyManager = new InMemoryAPIKeyManager[Future]
-  val accountFinder0 = new TestAccountFinder[Future](Map(), Map())
-  val jobManager = new InMemoryJobManager[Future]
-  val to = Duration(3, "seconds")
+  private val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  protected val jobManager = new InMemoryJobManager[Future]
   
-  def queryExecutorFactoryFactory(config: Configuration, accessControl: AccessControl[Future], extAccountManager: BasicAccountManager[Future], extJobManager: JobManager[Future]) = new TestQueryExecutorFactory {
-    val actorSystem = self.actorSystem
-    val executionContext = self.asyncContext
-    
-    val accessControl = apiKeyManager
-    val apiKeyFinder = apiKeyFinder0
-    val jobManager = self.jobManager
-
-    val ownerMap = Map(
-      Path("/")     ->             Set("root"),
-      Path("/test") ->             Set("test"),
-      Path("/test/foo") ->         Set("test"),
-      Path("/expired") ->          Set("expired"),
-      Path("/inaccessible") ->     Set("other"),
-      Path("/inaccessible/foo") -> Set("other")
-    )
-  }
-
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   
   val testPath = Path("/test")
@@ -131,37 +111,39 @@ trait TestShardService extends
     WritePermission(testPath, Set()),
     DeletePermission(testPath, Set())
   )
+
   val expiredPath = Path("expired")
+
   val expiredAPIKey = apiKeyManager.newStandardAPIKeyRecord("expired", expiredPath).map(_.apiKey).flatMap { expiredAPIKey => 
     apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, accessTest, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
   } copoint
-  
-  def QueryExecutor(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: AccountFinder[Future]) = new TestQueryExecutor {
-    val actorSystem = self.actorSystem
-    val executionContext = self.asyncContext
-    
-    val accessControl = extAccessControl
-    val accountFinder = extAccountManager
 
-    val ownerMap = Map(
-      Path("/")     ->             Set("root"),
-      Path("/test") ->             Set("test"),
-      Path("/test/foo") ->         Set("test"),
-      Path("/expired") ->          Set("expired"),
-      Path("/inaccessible") ->     Set("other"),
-      Path("/inaccessible/foo") -> Set("other")
-    )
+  def APIKeyFinder(config: Configuration) = new DirectAPIKeyFinder[Future](apiKeyManager)
+
+  def AccountFinder(config: Configuration) = new TestAccountFinder[Future](Map(), Map())
+
+  def JobManager(config: Configuration) = jobManager
+
+  def QueryExecutorFactory(config: Configuration, accessControl0: AccessControl[Future], accountFinder0: AccountFinder[Future], jobManager0: JobManager[Future]) = {
+    new TestQueryExecutorFactory {
+      val actorSystem = self.actorSystem
+      val executionContext = self.asyncContext
+      
+      val accessControl = accessControl0
+      val jobManager = jobManager0
+
+      val ownerMap = Map(
+        Path("/")     ->             Set("root"),
+        Path("/test") ->             Set("test"),
+        Path("/test/foo") ->         Set("test"),
+        Path("/expired") ->          Set("expired"),
+        Path("/inaccessible") ->     Set("other"),
+        Path("/inaccessible/foo") -> Set("other")
+      )
+    }
   }
   
-  def APIKeyFinder(config: Configuration) = apiKeyManager
-
-  def AccountFinder(config: Configuration) = accountFinder
-
-  def jobManagerFactory(config: Configuration) = jobManager
-
   def clock = Clock.System
-
-  import java.nio.ByteBuffer
 
   implicit val queryResultByteChunkTranscoder =
    new AsyncHttpTranscoder[QueryResult, ByteChunk] {
@@ -202,8 +184,9 @@ trait TestShardService extends
   }
 }
 
+
 class ShardServiceSpec extends TestShardService with FutureMatchers {
-  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  val executionContext = defaultFutureDispatch
 
   def query(query: String, apiKey: Option[String] = Some(testAPIKey), path: String = ""): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query).get(path)

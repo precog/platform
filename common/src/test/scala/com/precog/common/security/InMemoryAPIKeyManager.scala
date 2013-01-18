@@ -71,6 +71,13 @@ class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManag
   def listGrants() = grants.values.toList.point[M]
 
   def findAPIKey(apiKey: APIKey) = apiKeys.get(apiKey).point[M]
+  def findAPIKeyChildren(parent: APIKey) = {
+    def parentIsAncestor(childKey: APIKey): Boolean = {
+      childKey == parent || (apiKeys.get(childKey) flatMap { _.issuerKey } exists { parentIsAncestor })
+    }
+
+    apiKeys.values.filter(rec => parentIsAncestor(rec.apiKey)).toSet.point[M]
+  }
 
   def findGrant(gid: GrantId) = grants.get(gid).point[M]
   def findGrantChildren(gid: GrantId) =

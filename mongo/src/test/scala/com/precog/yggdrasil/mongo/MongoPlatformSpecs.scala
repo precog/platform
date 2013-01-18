@@ -33,6 +33,7 @@ import com.mongodb.WriteConcern
 import com.precog.bytecode._
 import com.precog.common._
 import com.precog.common.json._
+import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.daze.StringIdMemoryDatasetConsumer
 import com.precog.muspelheim._
@@ -183,7 +184,7 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
     }
   }
 
-  class Storage extends StorageLike[Future, Projection] {
+  class Storage extends StorageLike[Future] {
     def projection(descriptor: ProjectionDescriptor) = Promise.successful(null) // FIXME: Just to get it compiling...
     def storeBatch(msgs: Seq[EventMessage]) = Promise.successful(PrecogUnit)
     def userMetadataView(apiKey: APIKey) = null

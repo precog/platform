@@ -50,6 +50,7 @@ import scalaz._
 
 import com.precog.common.Path
 import com.precog.common.security._
+import com.precog.common.security.service.v1
 import com.precog.common.accounts._
 
 import APIKeyRecord.SafeSerialization._
@@ -80,6 +81,7 @@ trait TestAPIKeyService extends BlueEyesServiceSpecification
   override val configuration = "services { auth { v1 { " + config + " } } }"
   
   val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  val clock = blueeyes.util.Clock.System
 
   override def APIKeyManager(config: Configuration) = (apiKeyManager, Stoppable.Noop)
 
@@ -105,7 +107,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   def getAPIKeys(authAPIKey: String) = 
     authService.query("apiKey", authAPIKey).get("/apikeys/")
     
-  def createAPIKey(authAPIKey: String, request: NewAPIKeyRequest) =
+  def createAPIKey(authAPIKey: String, request: v1.NewAPIKeyRequest) =
     createAPIKeyRaw(authAPIKey, request.serialize)
 
   def createAPIKeyRaw(authAPIKey: String, request: JValue) = 
@@ -117,21 +119,21 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   def getAPIKeyGrants(authAPIKey: String, queryKey: String) = 
     authService.query("apiKey", authAPIKey).get("/apikeys/"+queryKey+"/grants/")
 
-  def addAPIKeyGrant(authAPIKey: String, updateKey: String, grantId: WrappedGrantId) = 
-    addAPIKeyGrantRaw(authAPIKey, updateKey, grantId.serialize)
+  def addAPIKeyGrant(authAPIKey: String, updateKey: String, grantId: GrantId) = 
+    addAPIKeyGrantRaw(authAPIKey, updateKey, JObject("grantId" -> JString(grantId)))
 
   def addAPIKeyGrantRaw(authAPIKey: String, updateKey: String, grantId: JValue) = 
     authService.query("apiKey", authAPIKey).
       post("/apikeys/"+updateKey+"/grants/")(grantId)(f, tc)
 
-  def createAPIKeyGrant(authAPIKey: String, request: NewGrantRequest) = 
+  def createAPIKeyGrant(authAPIKey: String, request: v1.NewGrantRequest) = 
     createAPIKeyGrantRaw(authAPIKey, request.serialize)
 
   def createAPIKeyGrantRaw(authAPIKey: String, request: JValue) = 
     authService.query("apiKey", authAPIKey).
       post("/grants/")(request)(f, tc)
 
-  def removeAPIKeyGrant(authAPIKey: String, updateKey: String, grantId: String) = 
+  def removeAPIKeyGrant(authAPIKey: String, updateKey: String, grantId: GrantId) = 
     authService.query("apiKey", authAPIKey).delete("/apikeys/"+updateKey+"/grants/"+grantId)
 
   def getGrantDetails(authAPIKey: String, grantId: String) = 
@@ -140,7 +142,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   def getGrantChildren(authAPIKey: String, grantId: String) = 
     authService.query("apiKey", authAPIKey).get("/grants/"+grantId+"/children/")
 
-  def addGrantChild(authAPIKey: String, grantId: String, request: NewGrantRequest) =
+  def addGrantChild(authAPIKey: String, grantId: String, request: v1.NewGrantRequest) =
     addGrantChildRaw(authAPIKey, grantId, request.serialize)
     
   def addGrantChildRaw(authAPIKey: String, grantId: String, request: JValue) = 
@@ -154,7 +156,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   
   def mkNewGrantRequest(grant: Grant) = grant match {
     case Grant(_, name, description, _, parentIds, permissions, expirationDate) =>
-      NewGrantRequest(name, description, parentIds, permissions, expirationDate)
+      v1.NewGrantRequest(name, description, parentIds, permissions, expirationDate)
   }
 
   val to = Duration(30, "seconds")
@@ -215,34 +217,34 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     "enumerate existing API keys" in {
       getAPIKeys(rootAPIKey) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jts), _) =>
-          val ks = jts.deserialize[Set[WrappedAPIKey]]
-          ks must containTheSameElementsAs(allAPIKeys.filter(_.issuerKey == rootAPIKey).map(r => WrappedAPIKey(r.apiKey, r.name, r.description)).toSeq)
+          val ks = jts.deserialize[Set[v1.APIKeyDetails]]
+          ks must containTheSameElementsAs(allAPIKeys.filter(_.issuerKey == rootAPIKey).map(r => v1.APIKeyDetails(r.apiKey, r.name, r.description, Set())).toSeq)
       }}
     }
 
     "create root-like API key with defaults" in {
-      val request = NewAPIKeyRequest(Some("root-like"), None, rootGrantRequests)
+      val request = v1.NewAPIKeyRequest(Some("root-like"), None, rootGrantRequests)
       createAPIKey(rootAPIKey, request) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
-          val id = jid.deserialize[WrappedAPIKey]
+          val id = jid.deserialize[v1.APIKeyDetails]
           id.apiKey.length must be_>(0)
       }}
     }
 
     "create non-root API key with defaults" in {
-      val request = NewAPIKeyRequest(Some("non-root-1"), None, Set(standardGrant("non-root-1")))
+      val request = v1.NewAPIKeyRequest(Some("non-root-1"), None, Set(standardGrant("non-root-1")))
       createAPIKey(rootAPIKey, request) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) => 
-          val id = jid.deserialize[WrappedAPIKey]
+          val id = jid.deserialize[v1.APIKeyDetails]
           id.apiKey.length must be_>(0)
       }}
     }
 
     "create derived non-root API key" in {
-      val request = NewAPIKeyRequest(Some("non-root-2"), None, Set(mkNewGrantRequest(user1Grant)))
+      val request = v1.NewAPIKeyRequest(Some("non-root-2"), None, Set(mkNewGrantRequest(user1Grant)))
       val result = for {
         HttpResponse(HttpStatus(OK, _), _, Some(jid), _)    <- createAPIKey(user1.apiKey, request)
-        WrappedAPIKey(apiKey, _, _) = jid.deserialize[WrappedAPIKey]
+        apiKey = jid.deserialize[v1.APIKeyDetails].apiKey
         HttpResponse(HttpStatus(OK, _), _, Some(jtd), _)    <- getAPIKeyDetails(rootAPIKey, apiKey)
       } yield {
         val perms = ((jtd \\ "permissions") --> classOf[JArray]).elements map { elem => 
@@ -269,7 +271,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "don't create if API key is expired" in {
-      val request = NewAPIKeyRequest(Some("expired-2"), None, Set(mkNewGrantRequest(expiredGrant)))
+      val request = v1.NewAPIKeyRequest(Some("expired-2"), None, Set(mkNewGrantRequest(expiredGrant)))
       createAPIKey(expired.apiKey, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(elems)), _) if elems.contains("error") =>
@@ -280,7 +282,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "don't create if API key cannot grant permissions" in {
-      val request = NewAPIKeyRequest(Some("unauthorized"), None, Set(mkNewGrantRequest(user1Grant)))
+      val request = v1.NewAPIKeyRequest(Some("unauthorized"), None, Set(mkNewGrantRequest(user1Grant)))
       createAPIKey(user2.apiKey, request) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(elems)), _) if elems.contains("error") =>
@@ -293,13 +295,13 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     "retrieve the grants associated with a given API key" in {
       getAPIKeyGrants(rootAPIKey, rootAPIKey) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgs), _) =>
-          val gs = jgs.deserialize[Set[WrappedGrantId]]
+          val gs = jgs.deserialize[Set[v1.GrantDetails]]
           gs.map(_.grantId) must containTheSameElementsAs(Seq(rootGrantId))
       }}
     }
     
     "add a specified grant to an API key" in {
-      addAPIKeyGrant(user1.apiKey, user2.apiKey, WrappedGrantId(user1Grant.grantId, None, None)) must whenDelivered { beLike {
+      addAPIKeyGrant(user1.apiKey, user2.apiKey, user1Grant.grantId) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(Created, _), _, None, _) => ok
       }}
     }
@@ -320,15 +322,15 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "create a new grant derived from the grants of the authorization API key" in {
-      createAPIKeyGrant(user1.apiKey, NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/read-me"), Set("user1"))), None)) must whenDelivered { beLike {
+      createAPIKeyGrant(user1.apiKey, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/read-me"), Set("user1"))), None)) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) =>
-          val id = jid.deserialize[WrappedGrantId]
+          val id = jid.deserialize[v1.GrantDetails]
           id.grantId.length must be_>(0)
       }}
     }
     
     "don't create a new grant if it can't be derived from the authorization API keys grants" in {
-      createAPIKeyGrant(user1.apiKey, NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user2/secret"), Set("user2"))), None)) must whenDelivered { beLike {
+      createAPIKeyGrant(user1.apiKey, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user2/secret"), Set("user2"))), None)) must whenDelivered { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(elems)), _) if elems.contains("error") =>
             elems("error") must beLike {
@@ -353,9 +355,9 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "add a child grant to the given grant" in {
-      addGrantChild(user1.apiKey, user1Grant.grantId, NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/secret"), Set("user1"))), None)) must whenDelivered { beLike {
+      addGrantChild(user1.apiKey, user1Grant.grantId, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/secret"), Set("user1"))), None)) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) =>
-          val id = jid.deserialize[WrappedGrantId]
+          val id = jid.deserialize[v1.GrantDetails]
           id.grantId.length must be_>(0)
       }}
     }
@@ -363,15 +365,15 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     "delete a grant" in {
       import Grant.Serialization._
       (for {
-        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)      <- addGrantChild(user1.apiKey, user1Grant.grantId, NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/secret"), Set("user1"))), None))
-        WrappedGrantId(id, _, _) = jid.deserialize[WrappedGrantId]
+        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)      <- addGrantChild(user1.apiKey, user1Grant.grantId, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/secret"), Set("user1"))), None))
+        details                                               = jid.deserialize[v1.GrantDetails]
         HttpResponse(HttpStatus(OK, _), _, Some(jgs), _)      <- getGrantChildren(user1.apiKey, user1Grant.grantId)
-        beforeDelete = jgs.deserialize[Set[Grant]]
-        if beforeDelete.exists(_.grantId == id)
-        HttpResponse(HttpStatus(NoContent, _), _, None, _)    <- deleteGrant(user1.apiKey, id)
+        beforeDelete                                          = jgs.deserialize[Set[v1.GrantDetails]]
+        if beforeDelete.exists(_.grantId == details.grantId)
+        HttpResponse(HttpStatus(NoContent, _), _, None, _)    <- deleteGrant(user1.apiKey, details.grantId)
         HttpResponse(HttpStatus(OK, _), _, Some(jgs), _)      <- getGrantChildren(user1.apiKey, user1Grant.grantId)
-        afterDelete = jgs.deserialize[Set[Grant]]
-      } yield !afterDelete.exists(_.grantId == id)) must whenDelivered { beTrue }
+        afterDelete = jgs.deserialize[Set[v1.GrantDetails]]
+      } yield !afterDelete.exists(_.grantId == details.grantId)) must whenDelivered { beTrue }
     }
   }
 }

@@ -156,9 +156,7 @@ sealed trait BaseShardService extends
 trait ShardService extends BaseShardService {
   case class State(queryExecutorFactory: SyncQueryExecutorFactory, apiKeyFinder: APIKeyFinder[Future])
 
-  def QueryExecutorFactory(config: Configuration,
-                           apiKeyFinder: APIKeyFinder[Future],
-                           accountFinder: AccountFinder[Future]): SyncQueryExecutorFactory
+  def QueryExecutorFactory(config: Configuration, accessControl: AccessControl[Future], accountFinder: AccountFinder[Future]): SyncQueryExecutorFactory
 
   val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {
@@ -198,10 +196,7 @@ trait AsyncShardService extends BaseShardService {
 
   def JobManager(config: Configuration): JobManager[Future] 
 
-  def QueryExecutorFactory(config: Configuration,
-                           accessControl: AccessControl[Future],
-                           accountFinder: AccountFinder[Future],
-                           jobManager: JobManager[Future]): AsyncQueryExecutorFactory
+  def QueryExecutorFactory(config: Configuration, accessControl: AccessControl[Future], accountFinder: AccountFinder[Future], jobManager: JobManager[Future]): AsyncQueryExecutorFactory
 
   val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {

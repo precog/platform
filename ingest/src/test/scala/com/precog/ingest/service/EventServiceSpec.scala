@@ -63,7 +63,7 @@ import blueeyes.json._
 
 import blueeyes.util.Clock
 
-class EventServiceSpec extends TestEventService with FutureMatchers with ArbitraryJValue {
+class EventServiceSpec extends TestEventService with FutureMatchers with com.precog.common.util.ArbitraryJValue {
   implicit def executionContext = defaultFutureDispatch
 
   import DefaultBijections._
@@ -87,6 +87,7 @@ class EventServiceSpec extends TestEventService with FutureMatchers with Arbitra
           Ingest(_, _, _, Vector(`testValue`), _) :: Nil) => ok
       } }
     }
+
     "track asynchronous event with valid API key" in {
       track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = false) {
         chunk("""{ "testing": 123 }\n""", """{ "testing": 321 }""")
@@ -94,6 +95,7 @@ class EventServiceSpec extends TestEventService with FutureMatchers with Arbitra
         case (HttpResponse(HttpStatus(Accepted, _), _, None, _), _) => ok
       } }
     }
+
     "track synchronous event with bad row" in {
       val msg = JParser.parse("""{
           "total": 2,
@@ -116,6 +118,7 @@ class EventServiceSpec extends TestEventService with FutureMatchers with Arbitra
         }
       }
     }
+    
     "track CSV batch ingest with valid API key" in {
       track(CSV, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true) {
         chunk("a,b,c\n1,2,3\n4, ,a", "\n6,7,8")
@@ -127,21 +130,25 @@ class EventServiceSpec extends TestEventService with FutureMatchers with Arbitra
             JParser.parse("""{ "a": 6, "b": 7, "c": "8" }"""))
       } }
     }
+    
     "reject track request when API key not found" in {
       track(JSON, Some("not gonna find it"), testAccount.rootPath, Some(testAccount.accountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified API key does not exist: not gonna find it")), _), _) => ok 
       } }
     }
+    
     "reject track request when no API key provided" in {
       track(JSON, None, testAccount.rootPath, Some(testAccount.accountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, _, _), _) => ok 
       }}
     }
+    
     "reject track request when grant is expired" in {
       track(JSON, Some(expiredAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
       }}
     }
+    
     "reject track request when path is not accessible by API key" in {
       track(JSON, Some(testAccount.apiKey), Path("/"), Some(testAccount.accountId))(testValue) must whenDelivered { beLike {
         case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
@@ -149,7 +156,7 @@ class EventServiceSpec extends TestEventService with FutureMatchers with Arbitra
     }
 
     "reject track request for json values that flatten to more than 250 primitive values" in {
-      track(JSON, Some(testAPIKey), testPath, Some(testAccountId), sync = true) { genObject(251).sample.get: JValue } must whenDelivered {
+      track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true) { genObject(251).sample.get: JValue } must whenDelivered {
         beLike {
           case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), _) =>
             msg \ "total" must_== JNum(1)
@@ -159,6 +166,7 @@ class EventServiceSpec extends TestEventService with FutureMatchers with Arbitra
         }
       }
     }
+    
     "cap errors at 100" in {
       val data = chunk(List.fill(500)("!@#$") mkString "\n")
       track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId))(data) must whenDelivered { beLike {

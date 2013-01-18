@@ -93,7 +93,7 @@ trait TestEventService extends
 
   private val accountFinder = new TestAccountFinder[Future](Map(testAccount.apiKey -> testAccount.accountId), Map(testAccount.accountId -> testAccount))
 
-  def APIKeyFinder(config: Configuration) = apiKeyManager
+  def APIKeyFinder(config: Configuration) = new DirectAPIKeyFinder(apiKeyManager)
   
   def AccountFinder(config: Configuration) = accountFinder
 

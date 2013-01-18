@@ -101,19 +101,6 @@ object v1 {
       NewGrantRequest(name, description, parentIds, readPerms ++ writePerms, expiration)
     }
   }
-
-/*
-  case class WrappedAPIKey(apiKey: APIKey, name: Option[String], description: Option[String])
-
-  object WrappedAPIKey {
-    implicit val wrappedAPIKeyIso = Iso.hlist(WrappedAPIKey.apply _, WrappedAPIKey.unapply _)
-    
-    val schema = "apiKey" :: "name" :: "description" :: HNil
-
-    implicit val decomposerV1: Decomposer[WrappedAPIKey]= decomposer[WrappedAPIKey](schema)
-    implicit val extractorV1: Extractor[WrappedAPIKey] = extractor[WrappedAPIKey](schema)
-  }
-  */
 }
 
 // vim: set ts=4 sw=4 et:

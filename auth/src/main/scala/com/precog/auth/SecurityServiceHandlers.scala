@@ -57,36 +57,9 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
   type R = HttpResponse[JValue]
 
   private implicit val M0: Monad[Future] = new FutureMonad(executor)
+  private val apiKeyFinder = new DirectAPIKeyFinder(apiKeyManager)
 
-  val grantDetails: Grant => v1.GrantDetails = {
-    case Grant(gid, gname, gdesc, _, _, perms, exp) => v1.GrantDetails(gid, gname, gdesc, perms, exp) 
-  }
-
-  val recordDetails: PartialFunction[APIKeyRecord, Future[v1.APIKeyDetails]] = {
-    case APIKeyRecord(apiKey, name, description, _, grantIds, false) =>
-      grantIds.map(apiKeyManager.findGrant).sequence map { grants =>
-        v1.APIKeyDetails(apiKey, name, description, grants.flatten map grantDetails)
-      }
-  }
-
-  def findAPIKey(apiKey: APIKey) = apiKeyManager.findAPIKey(apiKey) flatMap { 
-    _ collect recordDetails sequence
-  }
-
-  def findAllAPIKeys(fromRoot: APIKey): Future[Set[v1.APIKeyDetails]] = {
-    def find0(record: APIKeyRecord): Future[Set[v1.APIKeyDetails]] = {
-      for {
-        childKeys  <- apiKeyManager.findAPIKeyChildren(record.apiKey) 
-        keySets    <- (childKeys map find0).sequence
-        keyDetails <- (childKeys collect recordDetails).sequence 
-      } yield keyDetails ++ keySets.flatten 
-    }
-
-    apiKeyManager.findAPIKey(fromRoot) flatMap {
-      case Some(record) => find0(record)
-      case None => M0.point(Set())
-    }
-  }
+  import apiKeyFinder.{findAPIKey, findAllAPIKeys, grantDetails, recordDetails}
 
   object ReadAPIKeysHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey) => 

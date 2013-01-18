@@ -119,7 +119,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 
   val metadataStorage = new TestMetadataStorage(projectionMetadata)
 
-  abstract class Storage extends StorageLike {
+  abstract class Storage extends StorageLike[M] {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
 
     def storeBatch(ems: Seq[EventMessage]) = sys.error("Feature not implemented in test stub.")
