@@ -257,6 +257,11 @@ trait JDBCPlatformSpecs extends ParseEvalStackSpecs[Future]
   override def map (fs: => Fragments): Fragments = Step { startup() } ^ fs ^ Step { shutdown() }
 }
 
+/*
+// These are disabled for now because getting SQL tables to hold our JSON datasets
+// is too onerous at this point, and won't show us anything that the JDBM and Mongo
+// specs don't already
+
 class JDBCBasicValidationSpecs extends BasicValidationSpecs with JDBCPlatformSpecs
 
 class JDBCHelloQuirrelSpecs extends HelloQuirrelSpecs with JDBCPlatformSpecs
@@ -270,4 +275,44 @@ class JDBCRankSpecs extends RankSpecs with JDBCPlatformSpecs
 class JDBCRenderStackSpecs extends RenderStackSpecs with JDBCPlatformSpecs
 
 class JDBCUndefinedLiteralSpecs extends UndefinedLiteralSpecs with JDBCPlatformSpecs
+*/
+ 
+class JDBMLoadSpecs extends EvalStackSpecs with JDBCPlatformSpecs {
+  "JDBC stack support" should {
+    "count a filtered clicks dataset" in {
+      val input = """
+        | clicks := //clicks
+        | count(clicks where clicks.time > 0)""".stripMargin
+        
+      eval(input) mustEqual Set(SDecimal(100))
+    }
 
+    "count the campaigns dataset" >> {
+      "<root>" >> {
+        eval("count(//campaigns)") mustEqual Set(SDecimal(100))
+      }
+      
+      "gender" >> {
+        eval("count((//campaigns).gender)") mustEqual Set(SDecimal(100))
+      }
+      
+      "platform" >> {
+        eval("count((//campaigns).platform)") mustEqual Set(SDecimal(100))
+      }
+      
+      "campaign" >> {
+        eval("count((//campaigns).campaign)") mustEqual Set(SDecimal(100))
+      }
+      
+      "cpm" >> {
+        eval("count((//campaigns).cpm)") mustEqual Set(SDecimal(100))
+      }
+    }
+
+    "reduce the obnoxiously large dataset" >> {
+      "<root>" >> {
+        eval("mean((//obnoxious).v)") mustEqual Set(SDecimal(50000.5))
+      }
+    }
+  }
+}

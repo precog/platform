@@ -87,7 +87,7 @@ fi
 set +e
 
 if [ -z "$SKIPTEST" ]; then
-    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil shard pandora mongo; do
+    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil shard pandora mongo jdbc; do
         run_sbt "$PROJECT/test"
     done
 fi
