@@ -82,7 +82,7 @@ object IngestRecord {
  * ownerAccountId must be determined before the message is sent to the central queue; we have to 
  * accept records for processing in the local queue.
  */
-case class IngestMessage(apiKey: APIKey, path: Path, ownerAccountId: AccountId, data: Vector[IngestRecord], jobId: Option[JobId]) extends EventMessage {
+case class IngestMessage(apiKey: APIKey, path: Path, ownerAccountId: AccountId, data: Seq[IngestRecord], jobId: Option[JobId]) extends EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A = im(this)
 }
 
@@ -94,6 +94,7 @@ object IngestMessage {
   implicit val ingestMessageIso = Iso.hlist(IngestMessage.apply _, IngestMessage.unapply _)
 
   val schemaV1 = "apiKey"  :: "path" :: "ownerAccountId" :: "data" :: "jobId" :: HNil
+  implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
   val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.0"))
   val extractorV1: Extractor[IngestMessage] = extractorV[IngestMessage](schemaV1, Some("1.0"))
