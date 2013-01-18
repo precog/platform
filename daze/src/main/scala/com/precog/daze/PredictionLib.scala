@@ -20,7 +20,7 @@
 package com.precog
 package daze
 
-import util.{BitSet, BitSetUtil}
+import util._
 
 import yggdrasil._
 import table._
@@ -29,100 +29,234 @@ import bytecode._
 
 import common.json._
 
-trait PredictionLib[M[+_]] extends GenOpcode[M] with Evaluator[M] {
+import scalaz._
+import Scalaz._
+import scalaz.std.anyVal._
+import scalaz.std.set._
+import scalaz.syntax.foldable._
+import scalaz.syntax.monad._
+import scalaz.syntax.std.boolean._
+import scalaz.syntax.traverse._
+
+trait PredictionHelper[M[+_]] extends GenOpcode[M] {
   import trans._
 
-  override def _libMorphism2 = super._libMorphism2 ++ Set(LinearPrediction)
-
   val Stats3Namespace = Vector("std", "stats")
+
+  case class Model(name: String, featureValues: Map[CPath, Double], constant: Double)
+  case class ModelSet(identity: Seq[Option[Long]], models: Set[Model])
+  type Models = List[ModelSet]
+
+  val monoid = implicitly[Monoid[Models]]
+
+  val reducer: CReducer[Models] = new CReducer[Models] {
+    private val kPath = CPath(TableModule.paths.Key)
+    private val vPath = CPath(TableModule.paths.Value)
+
+    def reduce(schema: CSchema, range: Range): Models = {
+
+      val rowIdentities: Int => Seq[Option[Long]] = {
+        val indexedCols: Set[(Int, LongColumn)] = schema.columnRefs collect { 
+          case ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), ctype) => 
+            val idxCols = schema.columns(JObjectFixedT(Map("key" -> JArrayFixedT(Map(idx -> JNumberT)))))  
+            assert(idxCols.size == 1)
+            (idx, idxCols.head match { case (col: LongColumn) => col })
+        }
+
+        val deref = indexedCols.toList.sortBy(_._1).map(_._2)
+        (i: Int) => deref.map(c => c.isDefinedAt(i).option(c.apply(i)))
+      }
+
+      val rowModels: Int => Set[Model] = {
+        val features: Map[String, Set[(String, CPath, CType)]] = {
+          schema.columnRefs.collect { 
+            case ColumnRef(path @ CPath(TableModule.paths.Value, CPathField(modelName), CPathIndex(0), rest @ _*), ctype) => 
+              (modelName, path, ctype) 
+          } groupBy { _._1 }
+        }
+
+        val featureValues: Map[String, Set[Option[(CPath, DoubleColumn)]]] = features lazyMapValues {
+          _ map {
+            case (_, cpath, ctype) => {
+              val jtpe: Option[JType] = Schema.mkType(Seq((cpath, ctype)))
+              jtpe map { tpe => 
+                val res = schema.columns(tpe)
+                assert(res.size == 1)
+                (cpath, res.head match { case (col: DoubleColumn) => col })
+              }
+            }
+          }
+        }
+
+        val constant: Map[String, (String, CPath, CType)] = {
+          schema.columnRefs.collect { 
+            case ColumnRef(path @ CPath(TableModule.paths.Value, CPathField(modelName), CPathIndex(1), rest @ _*), ctype) => 
+              (modelName, path, ctype) 
+          } groupBy { _._1 } lazyMapValues { case set => 
+            assert(set.size == 1)
+            set.head
+          }
+        }
+
+        val constantValue: Map[String, Option[DoubleColumn]] = constant lazyMapValues {
+          case (_, cpath, ctype) => {
+            val jtpe: Option[JType] = Schema.mkType(Seq((cpath, ctype)))
+            jtpe map { tpe => 
+              val res = schema.columns(tpe)
+              assert(res.size == 1)
+              res.head match { case (col: DoubleColumn) => col }
+            }
+          }
+        }
+
+        val featuresFinal: Map[String, Map[CPath, DoubleColumn]] = featureValues lazyMapValues {
+          _ collect { case opt if opt.isDefined => opt.get } toMap
+        }
+
+        val constantFinal: Map[String, DoubleColumn] = constantValue collect {
+          case (str, opt) if opt.isDefined => (str, opt.get)
+        }
+
+        val joined: Map[String, (Map[CPath, DoubleColumn], DoubleColumn)] = {
+          featuresFinal flatMap {
+            case (field1, values) => constantFinal collect {
+              case (field2, col) if field1 == field2 => (field1, (values, col))
+            }
+          }
+        }
+
+        (i: Int) => joined collect { case (field, (values, constant)) if constant.isDefinedAt(i) => 
+          val fts = values collect { case (CPath(TableModule.paths.Value, CPathField(modelName), CPathIndex(0), rest @ _*), col) if col.isDefinedAt(i) => 
+            val paths = TableModule.paths.Value +: rest
+            (CPath(paths: _*), col.apply(i))
+          }
+          val cnst = constant.apply(i)
+          Model(field, fts, cnst)
+        } toSet
+      }
+
+      range.toList map { i => ModelSet(rowIdentities(i), rowModels(i)) }
+    }
+  }
+
+  def morph1Apply(models: Models, function: Double => Double): Morph1Apply = new Morph1Apply {
+
+    def scanner(modelSet: ModelSet): CScanner = new CScanner {
+      type A = Unit
+      def init: A = ()
+
+      def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+        def included(model: Model): Map[ColumnRef, Column] = {
+          val featurePaths = model.featureValues.keySet
+
+          val res = cols filter { case (ColumnRef(cpath, ctype), col) =>
+            featurePaths.contains(cpath)
+          }
+
+          val resPaths = res map { case (ColumnRef(cpath, _), _) => cpath } toSet
+
+          if (resPaths == featurePaths) res
+          else Map.empty[ColumnRef, Column]
+        }
+
+        def defined(cols: Map[ColumnRef, Column]): BitSet = {
+          val columns = cols map { case (_, col) => col }
+
+          BitSetUtil.filteredRange(range) {
+            i => columns.forall(_ isDefinedAt i)
+          }
+        }
+
+        def filteredRange(cols: Map[ColumnRef, Column]) = range.filter(defined(cols).apply)
+
+        val result: Set[Map[ColumnRef, Column]] = {
+
+          val modelsResult: Set[Map[ColumnRef, Column]] = modelSet.models map { case model =>
+            val includedModel = included(model)
+            val definedModel = defined(includedModel)
+
+            val resultArray = filteredRange(includedModel).foldLeft(new Array[Double](range.end)) { case (arr, i) =>
+              val cpaths = includedModel.map { case (ColumnRef(cpath, _), _) => cpath }.toSeq sorted
+
+              val modelDoubles = cpaths map { model.featureValues(_) }
+
+              val includedCols = includedModel.collect { case (ColumnRef(cpath, _), col: DoubleColumn) => (cpath, col) }.toSeq sortBy { _._1 } toMap
+              val includedDoubles = cpaths map { includedCols(_).apply(i) }
+
+              assert(modelDoubles.length == includedDoubles.length)
+              val res = (modelDoubles.zip(includedDoubles)).map { case (d1, d2) => d1 * d2 }.sum + model.constant
+
+              arr(i) = function(res)
+              arr
+            }
+
+            Map(ColumnRef(CPath(TableModule.paths.Value, CPathField(model.name)), CDouble) -> ArrayDoubleColumn(definedModel, resultArray))
+          } 
+          
+          val identitiesResult: Map[ColumnRef, Column] = {
+            val modelIds = modelSet.identity collect { case id if id.isDefined => id.get } toArray
+            val modelCols: Map[ColumnRef, Column] = modelIds.zipWithIndex map { case (id, idx) => (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), CLong), Column.const(id)) } toMap
+
+            val featureCols = cols collect { 
+              case (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx), rest @ _*), ctype), col) => 
+                val path = Seq(TableModule.paths.Key, CPathIndex(idx + modelIds.size)) ++ rest
+                (ColumnRef(CPath(path: _*), ctype), col)
+            }
+
+            modelCols ++ featureCols
+          }
+
+          modelsResult ++ Set(identitiesResult)
+        }
+
+        implicit val semigroup = Column.unionRightSemigroup
+        val monoidCols = implicitly[Monoid[Map[ColumnRef, Column]]]
+
+        val reduced: Map[ColumnRef, Column] = result.toSet.suml(monoidCols)
+
+        ((), reduced)
+      }
+    }
+
+    def apply(table: Table, ctx: EvaluationContext): M[Table] = {
+      val scanners: Seq[TransSpec1] = models map { model => WrapArray(Scan(TransSpec1.Id, scanner(model))) }
+      val spec: TransSpec1 = scanners reduceOption { (s1, s2) => InnerArrayConcat(s1, s2) } getOrElse TransSpec1.Id
+
+      val forcedTable = table.transform(spec).force
+      val tables0 = Range(0, scanners.size) map { i => forcedTable.map(_.transform(DerefArrayStatic(TransSpec1.Id, CPathIndex(i)))) }
+      val tables: M[Seq[Table]] = (tables0.toList).sequence
+
+      tables.map(_.reduceOption { _ concat _ } getOrElse Table.empty)
+    }
+  }
+}
+
+trait PredictionLib[M[+_]] extends Evaluator[M] with PredictionHelper[M] {
+  import trans._ 
+
+  override def _libMorphism2 = super._libMorphism2 ++ Set(LinearPrediction, LogisticPrediction)
 
   object LinearPrediction extends Morphism2(Stats3Namespace, "predictLinear") {
     val tpe = BinaryOperationType(JObjectUnfixedT, JType.JUniverseT, JObjectUnfixedT)
 
-    override val multivariate = true  // `true` lets it use Coerce To Double
-    
-    // need to do a cross since LHS could have Set({Model1:.., Model2:..}, {Model1:..})
-    // though results ambiguous since there are two `Model1`
-    lazy val alignment = MorphismAlignment.Cross
+    lazy val alignment = MorphismAlignment.Custom(alignCustom _)
 
-    def scanner: CScanner = new CScanner {
-      type A = Unit
-      def init: A = Unit
-
-      def dropPrefixHelper(prefix: CPath, cols: Map[ColumnRef, Column]): Map[ColumnRef, Column] = {
-        val colsWithPrefix = cols filter { case (ColumnRef(path, _), _) => path.hasPrefix(prefix) }
-        colsWithPrefix map { case (ColumnRef(path, ctpe), col) =>
-          (ColumnRef(path.dropPrefix(prefix) getOrElse path, ctpe), col) //todo what should getOrElse do?
-        }
-      }
-
-      def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-        val modelCols = cols filter { case (ColumnRef(path, _), _) => path.hasPrefix(CPath(CPathIndex(0))) }
-        val inputCols = cols filter { case (ColumnRef(path, _), _) => path.hasPrefix(CPath(CPathIndex(1))) }
-
-        val modelColsDrop = dropPrefixHelper(CPath(CPathIndex(0)), modelCols)
-        
-        val models = modelColsDrop map { case (ColumnRef(path, _), _) => path.nodes.head } toSet //todo need headOption, or something like that
-
-        val newModelCols = models map { node => 
-          val dropped = dropPrefixHelper(CPath(CPathIndex(0), node, CPathIndex(0)), modelCols)
-          (node, dropped)
-        } toMap
-        
-
-        val newInputCols = models map { node =>
-          val dropped = dropPrefixHelper(CPath(CPathIndex(1), node), inputCols)
-          (node, dropped)
-        } toMap
-
-        val jointModels = newModelCols.keySet intersect newInputCols.keySet
-
-        val combinedModels = jointModels map { model => 
-          val m = newModelCols(model)
-          val i = newInputCols(model)
-          (model, (m, i))
-        } toMap
-
-        //todo use lazyMapValues
-        val result: Map[CPathNode, Seq[(Column, Column)]] = combinedModels mapValues { case (cols1, cols2) =>
-          cols1.toSeq flatMap { case (ColumnRef(modelPath, _), modelCol) =>
-            cols2.toSeq collect { case (ColumnRef(inputPath, _), inputCol) if (modelPath == inputPath) =>
-              (modelCol, inputCol)
-            }
-          }
-        }
-
-        val defined: BitSet = BitSetUtil.filteredRange(range) {
-          i => result exists { case (_, cols) =>
-            cols forall { case (c1, c2) => c1.isDefinedAt(i) && c2.isDefinedAt(i) }  //todo doesn't handle numeric columns
-          }
-        }
-        
-        def constants: Map[CPathNode, Double] = Map(CPathField("Model1") -> 2.2) //todo
-
-        val result2: Map[CPath, Array[Double]] = result map { case (node, cols) =>
-          val pathArray = range.foldLeft(new Array[Double](range.end)) { case (acc, i) =>
-            val productCols = cols map { 
-              case (c1: DoubleColumn, c2: DoubleColumn) => c1(i) * c2(i)  //todo where does handling of undefineds occur?
-              case _ => sys.error("todo")
-            }
-
-            acc(i) = productCols.sum + constants(node)
-            acc
-          }
-
-          (CPath(node), pathArray)
-        }
-
-        val result3 = result2 map { case (cpath, values) => 
-          (ColumnRef(cpath, CDouble), ArrayDoubleColumn(defined, values))
-        }
-
-        (Unit, result3)
-      }
+    def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
+      val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
+      t1.transform(spec).reduce(reducer) map { models => (t2.transform(spec), morph1Apply(models, identity _)) }
     }
+  }
 
-    def apply(table: Table, ctx: EvaluationContext) = 
-      M.point(table.transform(buildConstantWrapSpec(Scan(TransSpec1.Id, scanner))))
+  object LogisticPrediction extends Morphism2(Stats3Namespace, "predictLogistic") {
+    val tpe = BinaryOperationType(JObjectUnfixedT, JType.JUniverseT, JObjectUnfixedT)
+
+    lazy val alignment = MorphismAlignment.Custom(alignCustom _)
+
+    def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
+      val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
+      def sigmoid(d: Double): Double = 1.0 / (1.0 + math.exp(d))
+
+      t1.transform(spec).reduce(reducer) map { models => (t2.transform(spec), morph1Apply(models, sigmoid _)) }
+    }
   }
 }

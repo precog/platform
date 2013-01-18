@@ -319,36 +319,47 @@ trait Evaluator[M[+_]] extends DAG
 
             val back = for {
               leftTable <- pendingTableLeft.table
-              val leftResult = leftTable.transform(liftToValues(pendingTableLeft.trans))
+              leftResult = leftTable.transform(liftToValues(pendingTableLeft.trans))
               
               rightTable <- pendingTableRight.table
-              val rightResult = rightTable.transform(liftToValues(pendingTableRight.trans))
+              rightResult = rightTable.transform(liftToValues(pendingTableRight.trans))
+
+              transform = (aligned: Table) => {
+                val leftSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(0)), paths.Value)
+                val rightSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
+
+                //val leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
+                //val rightSpec = trans.DeepMap1(rightSpec0, cf.util.CoerceToDouble)
+
+                //if (mor.multivariate) aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
+                //else 
+                aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec0), trans.WrapArray(rightSpec0)))
+              }
             
-              val aligned = mor.alignment match {
-                case MorphismAlignment.Cross => leftResult.cross(rightResult)(spec)
-                case MorphismAlignment.Match if sharedPrefixLength(left, right) > 0 => join(leftResult, rightResult)(key, spec)
-                case MorphismAlignment.Match if sharedPrefixLength(left, right) == 0 => {
-                  if (left.isSingleton) {
-                    rightResult.cross(leftResult)(specRight) 
-                  } else if (right.isSingleton) {
-                    leftResult.cross(rightResult)(spec) 
-                  } else {
-                    rightResult.cross(leftResult)(specRight) 
+              transformedAndMorph1 <- mor.alignment match {
+                case MorphismAlignment.Cross(morph1) => 
+                  morph1 map { Tuple2(transform(leftResult.cross(rightResult)(spec)), _) }
+                case MorphismAlignment.Match(morph1) if sharedPrefixLength(left, right) > 0 => 
+                  morph1 map { Tuple2(transform(join(leftResult, rightResult)(key, spec)), _) }
+                case MorphismAlignment.Match(morph1) if sharedPrefixLength(left, right) == 0 => 
+                  morph1 map { 
+                    Tuple2(
+                      transform(
+                        if (left.isSingleton || !right.isSingleton) {
+                          rightResult.cross(leftResult)(specRight) 
+                        } else {
+                          leftResult.cross(rightResult)(spec) 
+                        }
+                      ), 
+                      _
+                    )
                   }
-                }
-              }
-              leftSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(0)), paths.Value)
-              rightSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
-
-              leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
-              rightSpec = trans.DeepMap1(rightSpec0, cf.util.CoerceToDouble)
-
-              transformed = {
-                if (mor.multivariate) aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
-                else aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec0), trans.WrapArray(rightSpec0)))
+                case MorphismAlignment.Custom(f) =>
+                  f(leftResult, rightResult)
               }
 
-              result <- mor(transformed, ctx)
+              (transformed, morph1) = transformedAndMorph1
+              result <- morph1(transformed, ctx)
             } yield {
               result
             }

@@ -76,21 +76,22 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   def _lib2: Set[Op2] = Set()
   def _libReduction: Set[Reduction] = Set()
 
-  trait Morphism1Impl extends Morphism1Like {
+  trait Morph1Apply {
     def apply(input: Table, ctx: EvaluationContext): M[Table]
   }
-  
+
+  trait Morphism1Impl extends Morphism1Like with Morph1Apply
+
   trait Morphism2Impl extends Morphism2Like {
     def alignment: MorphismAlignment
-    val multivariate: Boolean = false
-    def apply(input: Table, ctx: EvaluationContext): M[Table]
   }
  
   sealed trait MorphismAlignment
   
   object MorphismAlignment {
-    case object Match extends MorphismAlignment
-    case object Cross extends MorphismAlignment
+    case class Match(morph: M[Morph1Apply]) extends MorphismAlignment
+    case class Cross(morph: M[Morph1Apply]) extends MorphismAlignment
+    case class Custom(f: (Table, Table) => M[(Table, Morph1Apply)]) extends MorphismAlignment
   }
 
   trait Op1Impl extends Op1Like with Morphism1Impl {
@@ -124,13 +125,16 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   class WrapArrayReductionImpl(val r: ReductionImpl, val idx: Option[Int]) extends ReductionImpl {
     type Result = r.Result
     def reducer(ctx: EvaluationContext) = new CReducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+      def reduce(schema: CSchema, range: Range): Result = {
         idx match {
           case Some(jdx) =>
-            val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
+            val cols0 = new CSchema {
+              def columnRefs = schema.columnRefs
+              def columns(tpe: JType) = schema.columns(JArrayFixedT(Map(jdx -> tpe)))
+            }
             r.reducer(ctx).reduce(cols0, range)
           case None => 
-            r.reducer(ctx).reduce(cols, range)
+            r.reducer(ctx).reduce(schema, range)
         }
       }
     }
@@ -153,14 +157,17 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
             type Result = (x.Result, acc.Result) 
 
             def reducer(ctx: EvaluationContext) = new CReducer[Result] {
-              def reduce(cols: JType => Set[Column], range: Range): Result = {
+              def reduce(schema: CSchema, range: Range): Result = {
                 idx match {
                   case Some(jdx) =>
-                    val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
-                    val (a, b) = (x.reducer(ctx).reduce(cols0, range), acc.reducer(ctx).reduce(cols, range))
+                    val cols0 = new CSchema {
+                      def columnRefs = schema.columnRefs
+                      def columns(tpe: JType) = schema.columns(JArrayFixedT(Map(jdx -> tpe)))
+                    }
+                    val (a, b) = (x.reducer(ctx).reduce(cols0, range), acc.reducer(ctx).reduce(schema, range))
                     (a, b)
                   case None => 
-                    (x.reducer(ctx).reduce(cols, range), acc.reducer(ctx).reduce(cols, range))
+                    (x.reducer(ctx).reduce(schema, range), acc.reducer(ctx).reduce(schema, range))
                 }
               }
             }

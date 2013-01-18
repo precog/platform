@@ -45,8 +45,7 @@ trait LinearRegressionLib[M[+_]] extends GenOpcode[M] with RegressionSupport wit
   object MultiLinearRegression extends Morphism2(Stats2Namespace, "linearRegression") {
     val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
 
-    override val multivariate = true
-    lazy val alignment = MorphismAlignment.Match
+    lazy val alignment = MorphismAlignment.Match(M.point(morph1))
 
     type Beta = Array[Double]
     type Result = Beta
@@ -92,8 +91,8 @@ trait LinearRegressionLib[M[+_]] extends GenOpcode[M] with RegressionSupport wit
     }
 
     def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val features = cols(JArrayHomogeneousT(JNumberT))
+      def reduce(schema: CSchema, range: Range): Result = {
+        val features = schema.columns(JArrayHomogeneousT(JNumberT))
 
         val values: Set[Option[Array[Array[Double]]]] = features map {
           case c: HomogeneousArrayColumn[_] if c.tpe.manifest.erasure == classOf[Array[Double]] =>
@@ -154,47 +153,49 @@ trait LinearRegressionLib[M[+_]] extends GenOpcode[M] with RegressionSupport wit
       valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
     }
 
-    def apply(table: Table, ctx: EvaluationContext) = {
-      val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
-      
-      val specs: M[Seq[TransSpec1]] = schemas map {
-        _ map { jtype => trans.Typed(TransSpec1.Id, jtype) }
-      }
-
-      val tables: M[Seq[Table]] = specs map { _ map { table.transform } }
-
-      val tablesWithType: M[Seq[(Table, JType)]] = for {
-        tbls <- tables
-        jtypes <- schemas
-      } yield {
-        tbls zip jtypes
-      }
-  
-      // important note: regression will explode if there are more than 1000 columns due to rank-deficient matrix
-      // this could be remedied in the future by smarter choice of `sliceSize`
-      // though do we really want to allow people to run regression on >1000 columns?
-      val sliceSize = 1000
-      val tableReducer: (Table, JType) => M[Table] =
-        (table, jtype) => table.canonicalize(sliceSize).toArray[Double].normalize.reduce(reducer).map(res => extract(res, jtype))
-
-      val reducedTables: M[Seq[Table]] = tablesWithType flatMap { 
-        _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map(_.toSeq)
-      }
-
-      val defaultNumber = new java.util.concurrent.atomic.AtomicInteger(1)
-
-      val objectTables: M[Seq[Table]] = reducedTables map { 
-        _ map { tbl =>
-          val modelId = "Model" + defaultNumber.getAndIncrement.toString
-          tbl.transform(liftToValues(trans.WrapObject(TransSpec1.Id, modelId)))
+    private val morph1 = new Morph1Apply {
+      def apply(table: Table, ctx: EvaluationContext) = {
+        val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
+        
+        val specs: M[Seq[TransSpec1]] = schemas map {
+          _ map { jtype => trans.Typed(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble), jtype) }
         }
+
+        val tables: M[Seq[Table]] = specs map { _ map { table.transform } }
+
+        val tablesWithType: M[Seq[(Table, JType)]] = for {
+          tbls <- tables
+          jtypes <- schemas
+        } yield {
+          tbls zip jtypes
+        }
+    
+        // important note: regression will explode if there are more than 1000 columns due to rank-deficient matrix
+        // this could be remedied in the future by smarter choice of `sliceSize`
+        // though do we really want to allow people to run regression on >1000 columns?
+        val sliceSize = 1000
+        val tableReducer: (Table, JType) => M[Table] =
+          (table, jtype) => table.canonicalize(sliceSize).toArray[Double].normalize.reduce(reducer).map(res => extract(res, jtype))
+
+        val reducedTables: M[Seq[Table]] = tablesWithType flatMap { 
+          _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map(_.toSeq)
+        }
+
+        val defaultNumber = new java.util.concurrent.atomic.AtomicInteger(1)
+
+        val objectTables: M[Seq[Table]] = reducedTables map { 
+          _ map { tbl =>
+            val modelId = "Model" + defaultNumber.getAndIncrement.toString
+            tbl.transform(liftToValues(trans.WrapObject(TransSpec1.Id, modelId)))
+          }
+        }
+
+        val spec = OuterObjectConcat(
+          DerefObjectStatic(Leaf(SourceLeft), paths.Value),
+          DerefObjectStatic(Leaf(SourceRight), paths.Value))
+
+        objectTables map { _.reduceOption { (tl, tr) => tl.cross(tr)(buildConstantWrapSpec(spec)) } getOrElse Table.empty }
       }
-
-      val spec = OuterObjectConcat(
-        DerefObjectStatic(Leaf(SourceLeft), paths.Value),
-        DerefObjectStatic(Leaf(SourceRight), paths.Value))
-
-      objectTables map { _.reduceOption { (tl, tr) => tl.cross(tr)(buildConstantWrapSpec(spec)) } getOrElse Table.empty }
     }
   }
 }
