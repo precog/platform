@@ -257,12 +257,13 @@ object EmitterSpecs extends Specification
     "emit line information for cross for division of load in static provenance with load in value provenance" in {
       testEmitLine("load(\"foo\") * 2")(
         Vector(
-          Line(1, 1, "load(\"foo\") * 2"),
           Line(1, 6, "load(\"foo\") * 2"),
           PushString("foo"),
+          Line(1, 1, "load(\"foo\") * 2"),
           LoadLocal,
           Line(1, 15, "load(\"foo\") * 2"),
           PushNum("2"),
+          Line(1, 1, "load(\"foo\") * 2"),
           Map2Cross(Mul)))
     }
 
