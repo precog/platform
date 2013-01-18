@@ -255,8 +255,7 @@ trait DAG extends Instructions with TransSpecModule {
           }
         }
         
-        // TODO reenable lines
-        case _: Line => loop(loc, roots, splits, stream.tail)
+        case loc: Line => loop(loc, roots, splits, stream.tail)
         
         case instr @ instructions.LoadLocal => {
           continue {
