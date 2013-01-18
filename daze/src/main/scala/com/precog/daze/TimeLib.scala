@@ -112,7 +112,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
   DateTimeZone.setDefault(DateTimeZone.UTC)
 
-  object ParseDateTime extends Op2(TimeNamespace, "parse") {
+  object ParseDateTime extends Op2(TimeNamespace, "parseDateTime") {
     val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
     def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::parseDateTime") {
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
