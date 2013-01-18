@@ -46,7 +46,7 @@ function run_sbt() {
     fi
 }
 
-while getopts ":m:saok" opt; do
+while getopts ":m:saokc" opt; do
     case $opt in
         k)
             SKIPCLEAN=1
@@ -60,16 +60,28 @@ while getopts ":m:saok" opt; do
         o)
             OPTIMIZE="-J-Dcom.precog.build.optimize=true"
             ;;
+	c)
+	    COVERAGE=1
+	    ;;
         \?)
             echo "Usage: `basename $0` [-a] [-o] [-s] [-k] [-m <mongo port>]"
             echo "  -a: Build assemdblies only"
             echo "  -o: Optimized build"
             echo "  -s: Skip all clean/compile setup steps"
             echo "  -k: Skip sbt clean step"
+	    echo "  -c: Do code coverage"
             exit 1
             ;;
     esac
 done
+
+if [ -n "$COVERAGE" ]; then
+	SCCT="scct:"
+	SCCTTEST="scct-"
+else
+	SCCT=""
+	SCCTTEST=""
+fi
 
 if [ -z "$SKIPSETUP" ]; then
     echo "Linking quirrel examples"
@@ -77,9 +89,9 @@ if [ -z "$SKIPSETUP" ]; then
 
     [ -z "$SKIPCLEAN" ] && run_sbt clean
     
-    run_sbt compile
+    run_sbt "${SCCT}compile"
 
-    run_sbt test:compile
+    run_sbt "${SCCTTEST}test:compile"
 else
     echo "Skipping clean/compile"
 fi
@@ -93,8 +105,11 @@ set +e
 
 if [ -z "$SKIPTEST" ]; then
     for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil shard pandora mongo; do
-        run_sbt "$PROJECT/test"
+	run_sbt "$PROJECT/${SCCT}test"
     done
+    if [ -n "$COVERAGE" ]; then
+	run_sbt scct-merge-report
+    fi
 fi
 
 if [ $SUCCESS -eq 0 ]; then

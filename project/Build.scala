@@ -22,6 +22,7 @@ import Keys._
 import sbtassembly.Plugin.AssemblyKeys._
 import sbt.NameFilter._
 import com.typesafe.sbteclipse.plugin.EclipsePlugin.{ EclipseKeys, EclipseCreateSrc }
+import de.johoop.cpd4sbt.CopyPasteDetector._
 
 object PlatformBuild extends Build {
   val jprofilerLib = SettingKey[String]("jprofiler-lib", "The library file used by jprofiler")
@@ -115,10 +116,14 @@ object PlatformBuild extends Build {
     }
   )
 
-  val commonNexusSettings = nexusSettings ++ commonSettings
+  //val scctSettings = seq(ScctPlugin.instrumentSettings : _*)
+
+  val commonPluginsSettings = ScctPlugin.instrumentSettings ++ cpdSettings ++ commonSettings
+  val commonNexusSettings = nexusSettings ++ commonPluginsSettings
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
 
   lazy val platform = Project(id = "platform", base = file(".")).
+    settings(ScctPlugin.mergeReportSettings: _*).
     aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo)
 
   lazy val util = Project(id = "util", base = file("util")).
