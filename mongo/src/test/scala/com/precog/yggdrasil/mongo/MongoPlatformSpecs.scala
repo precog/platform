@@ -34,7 +34,7 @@ import com.precog.bytecode._
 import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
-import com.precog.daze.{ StringIdMemoryDatasetConsumer, LoggingQueryLogger }
+import com.precog.daze._
 import com.precog.muspelheim._
 import com.precog.yggdrasil.actor.StandaloneShardSystemConfig
 import com.precog.yggdrasil.util.IdSourceConfig
@@ -159,7 +159,9 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
 
-  val report = LoggingQueryLogger[Future]
+  val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] {
+    implicit def M = self.M
+  }
 
   trait TableCompanion extends MongoColumnarTableCompanion
 
