@@ -255,6 +255,7 @@ object IndicesSpec extends IndicesSpec[Free.Trampoline] {
 
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
+    val smallSliceSize = 3
     
     val idSource = new FreshAtomicIdSource
   }

@@ -31,7 +31,7 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
 
   override def _lib1 = super._lib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, log, signum, acos, ulp)
 
-  override def _lib2 = super._lib2 ++ Set(min, hypot, pow, max, atan2, copySign, IEEEremainder)
+  override def _lib2 = super._lib2 ++ Set(min, hypot, pow, maxOf, atan2, copySign, IEEEremainder)
 
   import StdLib.{DoubleFrom, doubleIsDefined}
   import java.lang.Math
@@ -148,7 +148,7 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
 
   object pow extends Op2DDD("pow", bothDefined, Math.pow)
 
-  object max extends Op2DDD("max", bothDefined, Math.max)
+  object maxOf extends Op2DDD("maxOf", bothDefined, Math.max)
 
   object atan2 extends Op2DDD("atan2", bothDefined, Math.atan2)
 

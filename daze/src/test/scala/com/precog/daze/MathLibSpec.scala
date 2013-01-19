@@ -587,10 +587,10 @@ trait MathLibSpec[M[+_]] extends Specification
       
       result2 must contain(0.0, 1.0, -1.0, 2.30539333248E11, -3.404825447E9)
     }
-    "compute max" in {
+    "compute maxOf" in {
       val line = Line(1, 1, "")
       
-      val input = Join(BuiltInFunction2Op(max), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -1125,10 +1125,10 @@ trait MathLibSpec[M[+_]] extends Specification
       
       result2 must contain(0.0, 1.0, -1.0, 2.30539333248E11, -3.404825447E9)
     }
-    "compute max" in {
+    "compute maxOf" in {
       val line = Line(1, 1, "")
       
-      val input = Join(BuiltInFunction2Op(max), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -1142,10 +1142,10 @@ trait MathLibSpec[M[+_]] extends Specification
       
       result2 must contain(7, 42)
     }    
-    "compute max over numeric arrays (doesn't map over arrays)" in {
+    "compute maxOf over numeric arrays (doesn't map over arrays)" in {
       val line = Line(1, 1, "")
       
-      val input = Join(BuiltInFunction2Op(max), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/arrays"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -1159,10 +1159,10 @@ trait MathLibSpec[M[+_]] extends Specification
       
       result2 must contain(47)
     }    
-    "compute max over numeric arrays and numeric objects (doesn't map over arrays or objects)" in {
+    "compute maxOf over numeric arrays and numeric objects (doesn't map over arrays or objects)" in {
       val line = Line(1, 1, "")
       
-      val input = Join(BuiltInFunction2Op(max), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers7"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -1176,10 +1176,10 @@ trait MathLibSpec[M[+_]] extends Specification
       
       result2 must contain(7)
     }    
-    "compute max over numeric arrays and numeric objects (using Map2)" in {
+    "compute maxOf over numeric arrays and numeric objects (using Map2)" in {
       val line = Line(1, 1, "")
       
-      val input = Join(BuiltInFunction2Op(max), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers7"))(line))(line),
         dag.LoadLocal(Const(CString("/het/arrays"))(line))(line))(line)
         
@@ -1714,10 +1714,10 @@ trait MathLibSpec[M[+_]] extends Specification
 
       result2 must contain(0.0, 170859375, 62748517, 19487171, -2187.0, -35831808, -4782969.0, 823543.0, -62748517, 279936.0, -105413504, 1.0E+7, -78125.0, -823543.0, 105413504)
     }
-    "compute max" in {
+    "compute maxOf" in {
       val line = Line(1, 1, "")
 
-      val input = Join(BuiltInFunction2Op(max), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -2252,10 +2252,10 @@ trait MathLibSpec[M[+_]] extends Specification
 
       result2 must contain(0, 1, -2187, 78125, 35831808, 128, -1)
     }
-    "compute max" in {
+    "compute maxOf" in {
       val line = Line(1, 1, "")
 
-      val input = Join(BuiltInFunction2Op(max), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
