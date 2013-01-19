@@ -94,18 +94,26 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ IngestBatchMetadata(updates, batchClock, batchOffset) =>
       MDC.put("metadata_batch", ingestBatchId.getAndIncrement().toString)
-      for(update <- updates) update match {
+      (for {
+        update <- updates.toList
+      } yield update match {
         case (descriptor, Some(metadata)) =>
-          val newMetadata = projections.get(descriptor).map { _ |+| metadata }.getOrElse(metadata)
-          logger.trace("Updating descriptor from %s to %s".format(projections.get(descriptor), newMetadata))
-          projections += (descriptor -> newMetadata)
-          dirty += descriptor
+          ensureMetadataCached(descriptor).map { currentMetadata =>
+            val newMetadata = currentMetadata |+| metadata
+            logger.trace("Updating descriptor from %s to %s".format(currentMetadata, newMetadata))
+            projections += (descriptor -> newMetadata)
+            dirty += descriptor
+          }
         case (descriptor, None) =>
           logger.trace("Archive metadata on %s".format(descriptor))
-          flush(None).flatMap(_ => storage.archiveMetadata(descriptor)).unsafePerformIO
-          projections -= descriptor
-          dirty -= descriptor
-      }
+          for {
+            _ <- flush(None)
+            _ <- storage.archiveMetadata(descriptor)
+          } yield {
+            projections -= descriptor
+            dirty -= descriptor
+          }
+      }).sequence.unsafePerformIO
       MDC.remove("metadata_batch")
       
       messageClock = messageClock |+| batchClock
@@ -203,13 +211,15 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
     storage.findDescriptors(_.columns.exists(matches(path, selector)))
   } 
 
-  def ensureMetadataCached(descriptor: ProjectionDescriptor): IO[PrecogUnit] = {
-    if (projections.contains(descriptor)) {
-      IO(PrecogUnit)
-    } else storage.getMetadata(descriptor) map { 
-      case MetadataRecord(metadata, clock) => 
-        projections += (descriptor -> metadata)
-        PrecogUnit
+  def ensureMetadataCached(descriptor: ProjectionDescriptor): IO[ColumnMetadata] = {
+    projections.get(descriptor) match {
+      case Some(metadata) => IO(metadata)
+      case None =>
+        storage.getMetadata(descriptor) map {
+          case MetadataRecord(metadata, clock) =>
+            projections += (descriptor -> metadata)
+            metadata
+        }
     }
   }
 

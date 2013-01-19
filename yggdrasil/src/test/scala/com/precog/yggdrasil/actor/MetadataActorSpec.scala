@@ -59,7 +59,11 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = data.keySet.filter(f)
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = IO {
-    updates.get(desc).map(_.last).orElse(data.get(desc).map(MetadataRecord(_, VectorClock.empty))).get
+    updates.get(desc).map(_.last).orElse {
+      data.get(desc).map(MetadataRecord(_, VectorClock.empty))
+    }.orElse {
+      Some(MetadataRecord(ProjectionMetadata.initMetadata(desc), VectorClock.empty))
+    }.get
   }
 
   def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[PrecogUnit] = IO {
