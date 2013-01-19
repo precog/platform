@@ -93,6 +93,8 @@ class IngestServiceHandler(
   case class StreamingSyncResult(ingested: Int, error: Option[String]) extends IngestResult 
   case class NotIngested(reason: String) extends IngestResult 
 
+  private val excessiveFieldsError = "Cannot ingest values with more than 250 primitive fields. This limitiation will be lifted in a future release. Thank you for your patience."
+
   trait BatchIngest {
     def apply(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[IngestResult]
   }
@@ -118,7 +120,7 @@ class IngestServiceHandler(
               case ((i, values, errors), Success(value)) if value.flattenWithPath.size < 250 => 
                 (i + 1, values :+ value, errors)
               case ((i, values, errors), Success(value)) => 
-                (i + 1, values, errors :+ (i, Extractor.Invalid("Cannot ingest values with more than 250 primitive fields. This limitiation will be lifted in a future release. Thank you for your patience.")))
+                (i + 1, values, errors :+ (i, Extractor.Invalid(excessiveFieldsError)))
               case ((i, values, errors), Failure(error)) => 
                 (i + 1, values, errors :+ (i, Extractor.Thrown(error)))
             }
@@ -359,7 +361,11 @@ class IngestServiceHandler(
           else if (line.trim.isEmpty) read(reader, ingested)
           else {
             JParser.parseFromString(line) map { jvalue =>
-              ingest(apiKey, path, accountId, Vector(jvalue), None) flatMap { _ => read(reader, ingested + 1) }
+              if (jvalue.flattenWithPath.size > 250) {
+                Promise successful StreamingSyncResult(ingested, Some(excessiveFieldsError))
+              } else {
+                ingest(apiKey, path, accountId, Vector(jvalue), None) flatMap { _ => read(reader, ingested + 1) }
+              }
             } valueOr { error =>
               logger.warn("Ingest for %s with key %s at %s failed after %d results!".format(accountId, apiKey, path.toString, ingested), error)
               Promise successful StreamingSyncResult(ingested, Some(error.getMessage))
@@ -377,7 +383,11 @@ class IngestServiceHandler(
         ensureByteBufferSanity(buf)
         val readableLength = buf.remaining
         JParser.parseManyFromByteBuffer(buf) map { jvalues =>
-          ingest(apiKey, path, accountId, jvalues, None) map { _ => StreamingSyncResult(jvalues.length, None) }
+          if (jvalues.exists(_.flattenWithPath.size > 250)) {
+            Promise successful NotIngested(excessiveFieldsError)
+          } else {
+            ingest(apiKey, path, accountId, jvalues, None) map { _ => StreamingSyncResult(jvalues.length, None) }
+          }
         } valueOr { error =>
           logger.warn("Ingest for %s with key %s at %s failed!".format(accountId, apiKey, path.toString), error)
           Promise successful NotIngested(error.getMessage) 

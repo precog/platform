@@ -127,8 +127,9 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       } 
 
       Await.result(result, 5.seconds) must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), event) =>
-          event map (_.data) must_== List(
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), events) =>
+          // render then parse so that we get the same numeric representations
+          events flatMap { _.data.map(v => JParser.parse(v.renderCompact)) } must_== List(
             JParser.parse("""{ "a": 1, "b": 2, "c": "3" }"""),
             JParser.parse("""{ "a": 4, "b": null, "c": "a" }"""),
             JParser.parse("""{ "a": 6, "b": 7, "c": "8" }"""))
@@ -167,16 +168,14 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
     }
 
     "reject track request for json values that flatten to more than 250 primitive values" in {
-      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true) { 
+      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = false) { 
         genObject(251).sample.get: JValue 
       }
 
       Await.result(result, 5.seconds) must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), _) =>
-          msg \ "total" must_== JNum(1)
           msg \ "ingested" must_== JNum(0)
-          msg \ "failed" must_== JNum(1)
-          msg \ "skipped" must_== JNum(0)
+          msg \ "errors" must_== JString("")
       }
     }
     
