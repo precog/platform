@@ -1218,6 +1218,12 @@ object ProvenanceComputationSpecs extends Specification
           tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz")) => ok }
           tree.errors must beEmpty
         }
+        // Regression test for #PLATFORM-652
+        {
+          val tree = compileSingle("if //foo then 1 else 0")
+          tree.provenance mustEqual StaticProvenance("/foo")
+          tree.errors mustEqual Set()
+        }
         {
           val tree = compileSingle("if //foo then //bar else //baz")
           tree.provenance mustEqual NullProvenance
