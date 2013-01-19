@@ -45,6 +45,7 @@ trait BlockStoreTestModule[M[+_]] extends BaseBlockStoreTestModule[M] {
     val idSource = new FreshAtomicIdSource
 
     val maxSliceSize = 10
+    val smallSliceSize = 3
   }
 
   val yggConfig = new YggConfig
