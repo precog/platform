@@ -78,6 +78,14 @@ trait Slice { source =>
   
   def isDefinedAt(row: Int) = columns.values.exists(_.isDefinedAt(row))
 
+  def definedAt: BitSet = {
+    val defined = BitSetUtil.create()
+    columns foreach { case (_, col) =>
+      defined.or(col.definedAt(0, size))
+    }
+    defined
+  }
+
   def mapRoot(f: CF1): Slice = new Slice {
     val size = source.size
 
