@@ -81,19 +81,17 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
 
       megaReduce must beSome
 
-      val result = eval(megaReduce.get, ctx, optimize)
-      val rewritten = rewriteNodeFromTable(
+      val rewritten = inlineNodeValue(
         optimizedDAG,
-        optimize,
         megaReduce.get,
-        result.copoint
-      ).copoint
+        CNum(42)
+      )
 
       val hasMegaReduce = rewritten.foldDown(false) {
         case m@MegaReduce(_, _, _) => true
       }(disjunction)
       val hasConst = rewritten.foldDown(false) {
-        case m@Const(_, CNum(n)) if n == 5 => true
+        case m@Const(_, CNum(n)) if n == 42 => true
       }(disjunction)
 
       // Must be turned into a Const node
