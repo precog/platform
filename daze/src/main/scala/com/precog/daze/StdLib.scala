@@ -91,6 +91,7 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
     def reducer(ctx: EvaluationContext): CReducer[Result]
     implicit def monoid: Monoid[Result]
     def extract(res: Result): Table
+    def extractValue(res: Result): Option[CValue]
   }
 
   class WrapArrayReductionImpl(val r: ReductionImpl, val idx: Option[Int]) extends ReductionImpl {
@@ -110,6 +111,8 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
     def extract(res: Result): Table = {
       r.extract(res).transform(trans.WrapArray(trans.Leaf(trans.Source)))
     }
+
+    def extractValue(res: Result) = r.extractValue(res)
 
     val tpe = r.tpe
     val opcode = r.opcode
@@ -152,6 +155,10 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
               
               left.cross(right)(OuterArrayConcat(WrapArray(Leaf(SourceLeft)), Leaf(SourceRight)))
             }
+
+            // TODO: Can't translate this into a CValue. Evaluator
+            // won't inline the results. See call to inlineNodeValue
+            def extractValue(res: Result) = None
 
             val namespace = Vector()
             val name = ""
