@@ -52,7 +52,7 @@ object Event {
   }
 }
 
-case class Ingest(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountId], data: Vector[JValue], jobId: Option[JobId]) extends Event {
+case class Ingest(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountId], data: Seq[JValue], jobId: Option[JobId]) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A): A = ingest(this)
 }
 
@@ -60,6 +60,7 @@ object Ingest {
   implicit val eventIso = Iso.hlist(Ingest.apply _, Ingest.unapply _)
   
   val schemaV1 = "apiKey" :: "path" :: "ownerAccountId" :: "data" :: "jobId" :: HNil
+  implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
   
   val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.0"))
   val extractorV1: Extractor[Ingest] = extractorV[Ingest](schemaV1, Some("1.0")) <+> extractorV1a

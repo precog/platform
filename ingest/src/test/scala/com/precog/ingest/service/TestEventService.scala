@@ -134,11 +134,11 @@ trait TestEventService extends
 
   implicit def jValueToFutureJValue(j: JValue) = Future(j)
 
-  def track[A](contentType: MimeType, apiKey: Option[APIKey], path: Path, ownerAccountId: Option[AccountId], sync: Boolean = true)(data: A)(implicit
+  def track[A](contentType: MimeType, apiKey: Option[APIKey], path: Path, ownerAccountId: Option[AccountId], sync: Boolean = true, batch: Boolean = false)(data: A)(implicit
     bi: A => Future[JValue],
     t: AsyncHttpTranscoder[A, ByteChunk]
   ): Future[(HttpResponse[JValue], List[Ingest])] = {
-    val svc = client.contentType[A](contentType).path(if (sync) "/sync/fs/" else "/async/fs/")
+    val svc = client.contentType[A](contentType).query("receipt", sync.toString).query("mode", if (batch) "batch" else "stream").path("/fs/")
 
     val queries = List(apiKey.map(("apiKey", _)), ownerAccountId.map(("ownerAccountId", _))).sequence
 
