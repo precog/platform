@@ -86,7 +86,7 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
       val storage = new TestMetadataStorage(Map())
       val coord = mock[CheckpointCoordination]
 
-      val actorRef = TestActorRef(new MetadataActor("test", storage, coord, Some(YggCheckpoint(0, VectorClock.empty))))
+      val actorRef = TestActorRef(new MetadataActor("test", storage, coord, Some(YggCheckpoint(0, VectorClock.empty)), false))
       
       (actorRef ? FlushMetadata) must whenDelivered {
         beLike {
@@ -100,7 +100,7 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
       val storage = new TestMetadataStorage(Map())
       val coord = mock[CheckpointCoordination]
 
-      val actorRef = TestActorRef(new MetadataActor("test", storage, coord, None))
+      val actorRef = TestActorRef(new MetadataActor("test", storage, coord, None, false))
 
       val colDesc = ColumnDescriptor(Path("/"), CPath(".test"), CString, Authorities(Set("me")))
 
@@ -183,7 +183,7 @@ object MetadataActorStateSpec extends Specification {
   ))
 
   val source = new TestMetadataStorage(data)
-  val actor = TestActorRef(new MetadataActor("test", source, CheckpointCoordination.Noop, None)).underlyingActor
+  val actor = TestActorRef(new MetadataActor("test", source, CheckpointCoordination.Noop, None, false)).underlyingActor
 
   def dump(root: PathRoot, indent: Int = 0) {
     dumpMeta(root.children, indent)
