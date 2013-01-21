@@ -30,7 +30,11 @@ import org.joda.time.format._
 
 import com.precog.util.DateTimeUtil.parseDateTime
 
+import TransSpecModule._
+
 trait TimeLib[M[+_]] extends GenOpcode[M] {
+  import trans._
+
   val TimeNamespace = Vector("std", "time")
 
   override def _lib1 = super._lib1 ++ Set(
@@ -326,7 +330,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
     }
   }
 
-  object GetMillis extends Op1(TimeNamespace, "getMillis") {
+  object GetMillis extends Op1F1(TimeNamespace, "getMillis") {
     val tpe = UnaryOperationType(JTextT, JNumberT)
     def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::getMillis") {
       case c: StrColumn => new Map1Column(c) with LongColumn {
@@ -340,9 +344,11 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
   }
 
-  object TimeZone extends Op1(TimeNamespace, "timeZone") {
+  object TimeZone extends Op1F1(TimeNamespace, "timeZone") {
     val tpe = UnaryOperationType(JTextT, JTextT)
     def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::timeZone") {
       case c: StrColumn => new Map1Column(c) with StrColumn {
@@ -357,9 +363,11 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
   }
 
-  object Season extends Op1(TimeNamespace, "season") {
+  object Season extends Op1F1(TimeNamespace, "season") {
     val tpe = UnaryOperationType(JTextT, JTextT)
     def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::season") {
       case c: StrColumn => new Map1Column(c) with StrColumn {
@@ -378,9 +386,11 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
   } 
 
-  trait TimeFraction extends Op1 {
+  trait TimeFraction extends Op1F1 {
     val tpe = UnaryOperationType(JTextT, JNumberT)
     def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::timeFraction") {
       case c: StrColumn => new Map1Column(c) with LongColumn {
@@ -394,27 +404,29 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
 
     def fraction(d: DateTime): Int
   }
 
-  object Year extends Op1(TimeNamespace, "year") with TimeFraction {
+  object Year extends Op1F1(TimeNamespace, "year") with TimeFraction {
     def fraction(d: DateTime) = d.year.get
   }
 
-  object QuarterOfYear extends Op1(TimeNamespace, "quarter") with TimeFraction {
+  object QuarterOfYear extends Op1F1(TimeNamespace, "quarter") with TimeFraction {
     def fraction(d: DateTime) = ((d.monthOfYear.get - 1) / 3) + 1
   }
 
-  object MonthOfYear extends Op1(TimeNamespace, "monthOfYear") with TimeFraction {
+  object MonthOfYear extends Op1F1(TimeNamespace, "monthOfYear") with TimeFraction {
     def fraction(d: DateTime) = d.monthOfYear.get
   }
 
-  object WeekOfYear extends Op1(TimeNamespace, "weekOfYear") with TimeFraction {
+  object WeekOfYear extends Op1F1(TimeNamespace, "weekOfYear") with TimeFraction {
     def fraction(d: DateTime) = d.weekOfWeekyear.get
   } 
 
-  object WeekOfMonth extends Op1(TimeNamespace, "weekOfMonth") with TimeFraction {
+  object WeekOfMonth extends Op1F1(TimeNamespace, "weekOfMonth") with TimeFraction {
     def fraction(newTime: DateTime) = {
       val dayOfMonth = newTime.dayOfMonth().get
       val firstDate = newTime.withDayOfMonth(1)
@@ -424,35 +436,35 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
     } 
   }
  
-  object DayOfYear extends Op1(TimeNamespace, "dayOfYear") with TimeFraction {
+  object DayOfYear extends Op1F1(TimeNamespace, "dayOfYear") with TimeFraction {
     def fraction(d: DateTime) = d.dayOfYear.get
   }
 
-  object DayOfMonth extends Op1(TimeNamespace, "dayOfMonth") with TimeFraction {
+  object DayOfMonth extends Op1F1(TimeNamespace, "dayOfMonth") with TimeFraction {
     def fraction(d: DateTime) = d.dayOfMonth.get
   }
 
-  object DayOfWeek extends Op1(TimeNamespace, "dayOfWeek") with TimeFraction {
+  object DayOfWeek extends Op1F1(TimeNamespace, "dayOfWeek") with TimeFraction {
     def fraction(d: DateTime) = d.dayOfWeek.get
   }
 
-  object HourOfDay extends Op1(TimeNamespace, "hourOfDay") with TimeFraction {
+  object HourOfDay extends Op1F1(TimeNamespace, "hourOfDay") with TimeFraction {
     def fraction(d: DateTime) = d.hourOfDay.get
   }
 
-  object MinuteOfHour extends Op1(TimeNamespace, "minuteOfHour") with TimeFraction {
+  object MinuteOfHour extends Op1F1(TimeNamespace, "minuteOfHour") with TimeFraction {
     def fraction(d: DateTime) = d.minuteOfHour.get
   }
 
-  object SecondOfMinute extends Op1(TimeNamespace, "secondOfMinute") with TimeFraction {
+  object SecondOfMinute extends Op1F1(TimeNamespace, "secondOfMinute") with TimeFraction {
     def fraction(d: DateTime) = d.secondOfMinute.get
   }
     
-  object MillisOfSecond extends Op1(TimeNamespace, "millisOfSecond") with TimeFraction {
+  object MillisOfSecond extends Op1F1(TimeNamespace, "millisOfSecond") with TimeFraction {
     def fraction(d: DateTime) = d.millisOfSecond.get
   }
 
-  trait TimeTruncation extends Op1 {
+  trait TimeTruncation extends Op1F1 {
     val tpe = UnaryOperationType(JTextT, JTextT)
     def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::truncation") {
       case c: StrColumn => new Map1Column(c) with StrColumn {
@@ -466,55 +478,57 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
 
     def fmt: DateTimeFormatter
   }
 
-  object Date extends Op1(TimeNamespace, "date") with TimeTruncation {
+  object Date extends Op1F1(TimeNamespace, "date") with TimeTruncation {
     val fmt = ISODateTimeFormat.date()
   }
 
-  object YearMonth extends Op1(TimeNamespace, "yearMonth") with TimeTruncation {
+  object YearMonth extends Op1F1(TimeNamespace, "yearMonth") with TimeTruncation {
     val fmt = ISODateTimeFormat.yearMonth()
   }
 
-  object YearDayOfYear extends Op1(TimeNamespace, "yearDayOfYear") with TimeTruncation {
+  object YearDayOfYear extends Op1F1(TimeNamespace, "yearDayOfYear") with TimeTruncation {
     val fmt = ISODateTimeFormat.ordinalDate()
   }
 
-  object MonthDay extends Op1(TimeNamespace, "monthDay") with TimeTruncation {
+  object MonthDay extends Op1F1(TimeNamespace, "monthDay") with TimeTruncation {
     val fmt = DateTimeFormat.forPattern("MM-dd")
   }
 
-  object DateHour extends Op1(TimeNamespace, "dateHour") with TimeTruncation {
+  object DateHour extends Op1F1(TimeNamespace, "dateHour") with TimeTruncation {
     val fmt = ISODateTimeFormat.dateHour()
   }
 
-  object DateHourMinute extends Op1(TimeNamespace, "dateHourMin") with TimeTruncation {
+  object DateHourMinute extends Op1F1(TimeNamespace, "dateHourMin") with TimeTruncation {
     val fmt = ISODateTimeFormat.dateHourMinute()
   }
 
-  object DateHourMinuteSecond extends Op1(TimeNamespace, "dateHourMinSec") with TimeTruncation {
+  object DateHourMinuteSecond extends Op1F1(TimeNamespace, "dateHourMinSec") with TimeTruncation {
     val fmt = ISODateTimeFormat.dateHourMinuteSecond()
   }
 
-  object DateHourMinuteSecondMillis extends Op1(TimeNamespace, "dateHourMinSecMilli") with TimeTruncation {
+  object DateHourMinuteSecondMillis extends Op1F1(TimeNamespace, "dateHourMinSecMilli") with TimeTruncation {
     val fmt = ISODateTimeFormat.dateHourMinuteSecondMillis()
   }
 
-  object TimeWithZone extends Op1(TimeNamespace, "timeWithZone") with TimeTruncation {
+  object TimeWithZone extends Op1F1(TimeNamespace, "timeWithZone") with TimeTruncation {
     val fmt = ISODateTimeFormat.time()
   }
 
-  object TimeWithoutZone extends Op1(TimeNamespace, "timeWithoutZone") with TimeTruncation {
+  object TimeWithoutZone extends Op1F1(TimeNamespace, "timeWithoutZone") with TimeTruncation {
     val fmt = ISODateTimeFormat.hourMinuteSecondMillis()
   }
 
-  object HourMinute extends Op1(TimeNamespace, "hourMin") with TimeTruncation {
+  object HourMinute extends Op1F1(TimeNamespace, "hourMin") with TimeTruncation {
     val fmt = ISODateTimeFormat.hourMinute()
   }
 
-  object HourMinuteSecond extends Op1(TimeNamespace, "hourMinSec") with TimeTruncation {
+  object HourMinuteSecond extends Op1F1(TimeNamespace, "hourMinSec") with TimeTruncation {
     val fmt = ISODateTimeFormat.hourMinuteSecond()
   }
 }

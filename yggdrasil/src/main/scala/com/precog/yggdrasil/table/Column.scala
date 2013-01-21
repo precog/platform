@@ -134,9 +134,18 @@ trait BoolColumn extends Column with (Int => Boolean) {
   override def strValue(row: Int): String = String.valueOf(this(row))
   override def toString = "BoolColumn"
 }
+
 object BoolColumn {
   def True(definedAt: BitSet) = new BitsetColumn(definedAt) with BoolColumn {
     def apply(row: Int) = true
+  }
+
+  def False(definedAt: BitSet) = new BitsetColumn(definedAt) with BoolColumn {
+    def apply(row: Int) = false
+  }
+
+  def Either(definedAt: BitSet, values: BitSet) = new BitsetColumn(definedAt) with BoolColumn {
+    def apply(row: Int) = values(row)
   }
 }
 

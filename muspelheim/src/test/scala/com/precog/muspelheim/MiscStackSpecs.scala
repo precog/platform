@@ -70,6 +70,33 @@ trait MiscStackSpecs extends EvalStackSpecs {
       actual mustEqual Set("2011-02-21T01:09:59.000Z")
     }
 
+    "recognize and respect isNumber" in {
+      val input1 = """
+        | london := //summer_games/london_medals
+        | u := london.Weight union london.Country
+        | u where std::type::isNumber(u)
+      """.stripMargin
+
+      val result1 = evalE(input1)
+
+      val actual = result1 collect {
+        case (ids, value) if ids.length == 1 => value
+      }
+
+      val input2 = """
+        | london := //summer_games/london_medals
+        | london.Weight 
+      """.stripMargin
+
+      val result2 = evalE(input2)
+
+      val expected = result2 collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => SDecimal(d)
+      }
+
+      actual mustEqual expected
+    }
+
     "timelib functions should accept ISO8601 with a space instead of a T" in {
       val input = """
         | std::time::year("2011-02-21 01:09:59")

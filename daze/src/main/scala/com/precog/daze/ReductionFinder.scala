@@ -139,7 +139,7 @@ trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with InfixLib[
 
       case dag.Operate(instructions.WrapArray, parent) => loop(parent, t => f(trans.WrapArray(t)))
 
-      case dag.Operate(op, parent) => loop(parent, t => f(trans.Map1(t, op1(op).f1(ctx))))
+      case dag.Operate(op, parent) => loop(parent, t => f(op1(op).spec(ctx)(t)))
 
       case _ => (f(Leaf(Source)), graph)
     }

@@ -329,21 +329,26 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
+
       "perform a trivial map1" in testMap1IntLeaf
       "perform deepmap1 using numeric coercion" in testDeepMap1CoerceToDouble
       "perform map1 using numeric coercion" in testMap1CoerceToDouble
       "fail to map1 into array and object" in testMap1ArrayObject
       "perform a less trvial map1" in checkMap1
+
       //"give the identity transform for the trivial filter" in checkTrivialFilter
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
       "give the identity transform for a nontrivial filter" in checkFilter
       "give a transformation for a big decimal and a long" in testMod2Filter
+      
       "perform an object dereference" in checkObjectDeref
       "perform an array dereference" in checkArrayDeref
       "perform metadata dereference on data without metadata" in checkMetaDeref
+
       "perform a trivial map2 add" in checkMap2Add
       "perform a trivial map2 eq" in checkMap2Eq
       "perform a map2 add over but not into arrays and objects" in testMap2ArrayObject
+
       "perform a trivial equality check" in checkEqualSelf
       "perform a trivial equality check on an array" in checkEqualSelfArray
       "perform a slightly less trivial equality check" in checkEqual
@@ -352,8 +357,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "perform another simple equality check" in testAnotherSimpleEqual
       "perform yet another simple equality check" in testYetAnotherSimpleEqual
       "perform a simple not-equal check" in testASimpleNonEqual
+
       "perform a equal-literal check" in checkEqualLiteral
       "perform a not-equal-literal check" in checkNotEqualLiteral
+
       "wrap the results of a transform in an object as the specified field" in checkWrapObject
       "give the identity transform for self-object concatenation" in checkObjectConcatSelf
       "use a right-biased overwrite strategy in object concat conflicts" in checkObjectConcatOverwrite
@@ -367,6 +374,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "test outer object concat with undefined" in testOuterObjectConcatUndefined
       "test inner object concat with empty" in testInnerObjectConcatLeftEmpty
       "test outer object concat with empty" in testOuterObjectConcatLeftEmpty
+
       "concatenate dissimilar arrays" in checkArrayConcat
       "inner concatenate arrays with undefineds" in testInnerArrayConcatUndefined
       "outer concatenate arrays with undefineds" in testOuterArrayConcatUndefined
@@ -400,6 +408,18 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
         results.copoint mustEqual expected.toStream
       }
+
+      "perform a basic IsType transformation" in testIsTypeTrivial
+      "perform an IsType transformation on numerics" in testIsTypeNumeric
+      "perform an IsType transformation on trivial union" in testIsTypeUnionTrivial
+      "perform an IsType transformation on union" in testIsTypeUnion
+      "perform an IsType transformation on nested unfixed types" in testIsTypeUnfixed
+      "perform an IsType transformation on objects" in testIsTypeObject
+      "perform an IsType transformation on unfixed objects" in testIsTypeObjectUnfixed
+      "perform an IsType transformation on unfixed arrays" in testIsTypeArrayUnfixed
+      "perform an IsType transformation on empty objects" in testIsTypeObjectEmpty
+      "perform an IsType transformation on empty arrays" in testIsTypeArrayEmpty
+      "perform a check on IsType" in checkIsType
 
       "perform a trivial type-based filter" in checkTypedTrivial
       "perform a less trivial type-based filter" in checkTyped

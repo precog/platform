@@ -382,7 +382,7 @@ trait Evaluator[M[+_]] extends DAG
             pendingTable <- prepareEval(parent, splits)
             
             // TODO unary typing
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, op1(op).f1(ctx)))
+          } yield PendingTable(pendingTable.table, pendingTable.graph, op1(op).spec(ctx)(pendingTable.trans))
         }
 
         /**
