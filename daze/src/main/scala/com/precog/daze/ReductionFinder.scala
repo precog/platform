@@ -12,120 +12,15 @@ import com.precog.yggdrasil.CLong
 
 import scalaz.std.map._
 
-trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with InfixLib[M]  {
+trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with TransSpecable[M] with InfixLib[M]  {
   import dag._ 
   import trans._
   import instructions._
 
   case class ReduceInfo(reduce: dag.Reduce, spec: TransSpec1, ancestor: DepGraph)
 
-  // for a reduce, build the single transpecable chain, ignoring other irrelevant branches
-  def buildReduceInfo(reduce: dag.Reduce, ctx: EvaluationContext): ReduceInfo = {
-    def loop(graph: DepGraph, f: TransSpec1 => TransSpec1): (TransSpec1, DepGraph) = graph match {
-      case Join(_, Eq, _, left, Const(_, value)) =>
-        loop(left, t => f(trans.EqualLiteral(t, value, false)))
-
-      case Join(_, Eq, _, Const(_, value), right) =>
-        loop(right, t => f(trans.EqualLiteral(t, value, false)))
-
-      case Join(_, NotEq, _, left, Const(_, value)) =>
-        loop(left, t => f(trans.EqualLiteral(t, value, true)))
-
-      case Join(_, NotEq, _, Const(_, value), right) =>
-        loop(right, t => f(trans.EqualLiteral(t, value, true)))
-
-      case Join(_, instructions.WrapObject, _, Const(_, value), right) =>
-        value match {
-          case value @ CString(str) => loop(right, t => f(trans.WrapObject(t, str)))
-          case _ => (f(Leaf(Source)), graph)
-        }
-
-      case Join(_, instructions.DerefObject, _, left, Const(_, value)) =>
-        value match {
-          case value @ CString(str) => loop(left, t => f(DerefObjectStatic(t, CPathField(str))))
-          case _ => (f(Leaf(Source)), graph)
-        }
-      
-      case Join(_, instructions.DerefMetadata, _, left, Const(_, value)) =>
-        value match {
-          case value @ CString(str) => loop(left, t => f(DerefMetadataStatic(t, CPathMeta(str))))
-          case _ => (f(Leaf(Source)), graph)
-        }
-
-      case Join(_, DerefArray, _, left, Const(_, value)) =>
-        value match {
-          case CNum(n) => loop(left, t => f(DerefArrayStatic(t, CPathIndex(n.toInt))))
-          case CLong(n) => loop(left, t => f(DerefArrayStatic(t, CPathIndex(n.toInt))))
-          case CDouble(n) => loop(left, t => f(DerefArrayStatic(t, CPathIndex(n.toInt))))
-          case _ => (f(Leaf(Source)), graph)
-        }
-      
-      case Join(_, instructions.ArraySwap, _, left, Const(_, value)) =>
-        value match {
-          case CNum(n) => loop(left, t => f(trans.ArraySwap(t, n.toInt)))
-          case CLong(n) => loop(left, t => f(trans.ArraySwap(t, n.toInt)))
-          case CDouble(n) => loop(left, t => f(trans.ArraySwap(t, n.toInt)))
-          case _ => (f(Leaf(Source)), graph)
-        }
-
-      case Join(_, instructions.JoinObject, _, left, Const(_, value)) =>
-        value match {
-          case CEmptyObject => loop(left, t => f(trans.InnerObjectConcat(t)))
-          case _ => (f(Leaf(Source)), graph)
-        }
-                  
-      case Join(_, instructions.JoinObject, _, Const(_, value), right) =>
-        value match {
-          case CEmptyObject => loop(right, t => f(trans.InnerObjectConcat(t)))
-          case _ => (f(Leaf(Source)), graph)
-        }
-
-      case Join(_, instructions.JoinArray, _, left, Const(_, value)) =>
-        value match {
-          case CEmptyArray => loop(left, t => f(trans.InnerArrayConcat(t)))
-          case _ => (f(Leaf(Source)), graph)
-        }
-
-      case Join(_, instructions.JoinArray, _, Const(_, value), right) =>
-        value match {
-          case CEmptyArray => loop(right, t => f(trans.InnerArrayConcat(t)))
-          case _ => (f(Leaf(Source)), graph)
-        }
-
-      case Join(_, op, _, left, Const(_, value)) =>
-        op2ForBinOp(op) map { _.f2(ctx).partialRight(value) } match {
-          case Some(f1) => loop(left, t => f(trans.Map1(t, f1)))
-          case None => (f(Leaf(Source)), graph)
-        }
-          
-      case Join(_, op, CrossLeftSort | CrossRightSort, Const(_, value), right) =>
-        op2ForBinOp(op) map { _.f2(ctx).partialLeft(value) } match {
-          case Some(f1) => loop(right, t => f(trans.Map1(t, f1)))
-          case None => (f(Leaf(Source)), graph)
-        }
-
-      case dag.Join(_, op, joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
-        val (targetTrans, targetAncestor) = loop(target, identity _)
-        val (booleanTrans, booleanAncestor) = loop(boolean, identity _)
-
-        if (targetAncestor == booleanAncestor) (f(transFromBinOp(op, ctx)(targetTrans, booleanTrans)), targetAncestor)
-        else (f(Leaf(Source)), graph)
-
-      case dag.Filter(_, joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
-        val (targetTrans, targetAncestor) = loop(target, identity _)
-        val (booleanTrans, booleanAncestor) = loop(boolean, identity _)
-
-        if (targetAncestor == booleanAncestor) (f(trans.Filter(targetTrans, booleanTrans)), targetAncestor)
-        else (f(Leaf(Source)), graph)
-
-      case dag.Operate(_, instructions.WrapArray, parent) => loop(parent, t => f(trans.WrapArray(t)))
-
-      case dag.Operate(_, op, parent) => loop(parent, t => f(trans.Map1(t, op1(op).f1(ctx))))
-
-      case _ => (f(Leaf(Source)), graph)
-    }
-
-    val (spec, ancestor) = loop(reduce.parent, identity _)
+  def buildReduceInfo(reduce: dag.Reduce, ctx: EvaluationContext) = {
+    val (spec, ancestor) = findTransSpecAndAncestor(reduce.parent, ctx).getOrElse((Leaf(Source), reduce.parent))
     ReduceInfo(reduce, spec, ancestor)
   }
 }
