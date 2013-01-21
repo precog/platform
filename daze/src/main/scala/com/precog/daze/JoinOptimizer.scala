@@ -45,10 +45,10 @@ trait JoinOptimizer extends DAGTransform {
         
         case r : Root => (false, true)
         
-        case Join(_, _, _, left, right) =>
+        case Join(_, _, left, right) =>
           merge(determinedByAux(left, determiner), determinedByAux(right, determiner))
 
-        case Filter(_, IdentitySort, body, _) => determinedByAux(body, determiner)
+        case Filter(IdentitySort, body, _) => determinedByAux(body, determiner)
         
         case Memoize(parent, _) => determinedByAux(parent, determiner)
     
@@ -68,22 +68,22 @@ trait JoinOptimizer extends DAGTransform {
     def rewriteUnderEq(graph: DepGraph, eqA: DepGraph, eqB: DepGraph, liftedA: DepGraph, liftedB: DepGraph, sortId: Int): DepGraph =
       transformBottomUp(graph) {
         _ match {
-          case j @ Join(loc1, op, CrossLeftSort | CrossRightSort, lhs, rhs)
+          case j @ Join(op, CrossLeftSort | CrossRightSort, lhs, rhs)
             if (determinedBy(lhs, eqA) && determinedBy(rhs, eqB)) ||
                (determinedBy(lhs, eqB) && determinedBy(rhs, eqA)) => {
             
             val (eqLHS, eqRHS, liftedLHS, liftedRHS) =
               if (determinedBy(lhs, eqA)) (eqA, eqB, liftedA, liftedB) else(eqB, eqA, liftedB, liftedA) 
  
-              Join(loc1, op, ValueSort(sortId),
+              Join(op, ValueSort(sortId),
                 liftRewrite(lhs, eqLHS, liftedLHS),
-                liftRewrite(rhs, eqRHS, liftedRHS))
+                liftRewrite(rhs, eqRHS, liftedRHS))(j.loc)
           }
 
-          case Join(loc1, op, IdentitySort, lhs, rhs)
+          case j @ Join(op, IdentitySort, lhs, rhs)
             if (determinedBy(lhs, eqA) && determinedBy(rhs, eqA)) ||
                (determinedBy(lhs, eqB) && determinedBy(rhs, eqB)) => {
-            Join(loc1, op, ValueSort(sortId), lhs, rhs)
+            Join(op, ValueSort(sortId), lhs, rhs)(j.loc)
           }
 
           case other => other
@@ -93,26 +93,26 @@ trait JoinOptimizer extends DAGTransform {
     transformBottomUp(graph) {
       _ match {
         case
-          f @ Filter(loc, IdentitySort,
+          f @ Filter(IdentitySort,
             body,
-            Join(_, Eq, CrossLeftSort | CrossRightSort,
-              Join(_, DerefObject, CrossLeftSort,
+            Join(Eq, CrossLeftSort | CrossRightSort,
+              Join(DerefObject, CrossLeftSort,
                 eqLHS,
-                Const(_, CString(sortFieldLHS))),
-              Join(_, DerefObject, CrossLeftSort,
+                Const(CString(sortFieldLHS))),
+              Join(DerefObject, CrossLeftSort,
                 eqRHS,
-                Const(_, CString(sortFieldRHS))))) => {
+                Const(CString(sortFieldRHS))))) => {
                   
             val sortId = idGen.nextInt()
             
             def lift(graph: DepGraph, sortField: String) = {
               SortBy(
-                Join(loc, JoinObject, IdentitySort,
-                  Join(loc, WrapObject, CrossLeftSort,
-                    Const(loc, CString("key")),
-                    Join(loc, DerefObject, CrossLeftSort, graph, Const(loc, CString(sortField)))),
-                  Join(loc, WrapObject, CrossLeftSort, Const(loc, CString("value")), graph)),
-                "key", "value", sortId) 
+                Join(JoinObject, IdentitySort,
+                  Join(WrapObject, CrossLeftSort,
+                    Const(CString("key"))(f.loc),
+                    Join(DerefObject, CrossLeftSort, graph, Const(CString(sortField))(f.loc))(f.loc))(f.loc),
+                  Join(WrapObject, CrossLeftSort, Const(CString("value"))(f.loc), graph)(f.loc))(f.loc),
+                "key", "value", sortId)
             }
             
             val rewritten = rewriteUnderEq(body, eqLHS, eqRHS, lift(eqLHS, sortFieldLHS), lift(eqRHS, sortFieldRHS), sortId)

@@ -80,6 +80,8 @@ trait REPL
   val Prompt = "quirrel> "
   val Follow = "       | "
 
+  val report = LoggingQueryLogger[Future]
+
   def run = IO {
     val terminal = TerminalFactory.getFlavor(TerminalFactory.Flavor.UNIX)
     terminal.init()
@@ -261,6 +263,7 @@ object Console extends App {
     val clock = blueeyes.util.Clock.System
     
     val maxSliceSize = 10000
+    val smallSliceSize = 8
 
     //TODO: Get a producer ID
     val idSource = new FreshAtomicIdSource

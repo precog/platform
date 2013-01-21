@@ -54,26 +54,45 @@ trait CanonicalizeSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Spe
     fromSample(sample)
   }
 
+  def checkBoundedCanonicalize = {
+    implicit val gen = sample(schema)
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+      val size = sample.data.size
+      val minLength = Gen.choose(0, size / 2).sample.get
+      val maxLength = minLength + Gen.choose(1, size / 2 + 1).sample.get
+
+      val canonicalizedTable = table.canonicalize(minLength, Some(maxLength))
+      val slices = canonicalizedTable.slices.toStream.copoint map (_.size)
+      if (size > 0) {
+        slices.init must haveAllElementsLike { case (sliceSize: Int) =>
+          sliceSize must beBetween(minLength, maxLength)
+        }
+        slices.last must be_<=(maxLength)
+      } else {
+        slices must haveSize(0)
+      }
+    }
+  }
+
   def checkCanonicalize = {
     implicit val gen = sample(schema)  
     check { (sample: SampleData) =>
       val table = fromSample(sample)
       val size = sample.data.size
-      val length = Gen.choose(-2, size + 2).sample.get
+      val length = Gen.choose(1, size + 3).sample.get
 
       val canonicalizedTable = table.canonicalize(length)
       val resultSlices = canonicalizedTable.slices.toStream.copoint
       val resultSizes = resultSlices.map(_.size)
 
-      val expected = 
-        if (length <= 0 || size <= 0) {
-          Stream()
-        } else {  
-          val num = math.floor(size/length) toInt
-          val remainder = size - num * length
-          Stream.continually(length).take(num) :+ remainder
-        }
-      
+      val expected = {
+        val num = size / length
+        val remainder = size % length
+        val prefix = Stream.fill(num)(length)
+        if (remainder > 0) prefix :+ remainder else prefix
+      }
+
       resultSizes mustEqual expected
     }
   }.set(minTestsOk -> 1000)
@@ -88,12 +107,7 @@ trait CanonicalizeSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Spe
   }
 
   def testCanonicalizeZero = {
-    val result = table.canonicalize(0)
-
-    val slices = result.slices.toStream.copoint
-    val sizes = slices.map(_.size)
-
-    sizes mustEqual Stream()
+    table.canonicalize(0) must throwA[IllegalArgumentException]
   }
 
   def testCanonicalizeBoundary = {

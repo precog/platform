@@ -64,7 +64,7 @@ object ManagedQueryTestSupport {
 
 import ManagedQueryTestSupport._
 
-class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specification {
+class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
   val actorSystem = ActorSystem("managedQueryModuleSpec")
   val jobActorSystem = ActorSystem("managedQueryModuleSpecJobs")
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -72,10 +72,10 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
     def copoint[A](m: Future[A]) = Await.result(m, Duration(5, "seconds"))
   }
 
-  val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
-  val apiKey = "O.o"
+  lazy val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
+  def apiKey = "O.o"
 
-  val dropStreamToFuture = implicitly[Hoist[StreamT]].hoist[TestFuture, Future](new (TestFuture ~> Future) {
+  def dropStreamToFuture = implicitly[Hoist[StreamT]].hoist[TestFuture, Future](new (TestFuture ~> Future) {
     def apply[A](fa: TestFuture[A]): Future[A] = fa.value
   })
 
@@ -190,13 +190,13 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
 
     "cannot be cancelled after it has successfully completed" in {
       val ticks = for {
-        (jobId, _, query) <- execute(10)
-        cancelled <- cancel(jobId, 11)
-        _ <- waitFor(12)
+        (jobId, _, query) <- execute(3)
+        cancelled <- cancel(jobId, 5)
+        _ <- waitFor(1)
         ticks <- query
       } yield ticks
 
-      ticks.copoint must_== 10
+      ticks.copoint must_== 3
     }
 
     "be expireable" in {
@@ -236,14 +236,14 @@ class ManagedQueryModuleSpec extends TestManagedQueryExecutorFactory with Specif
   }
 }
 
-trait TestManagedQueryExecutorFactory extends QueryExecutorFactory[TestFuture, StreamT[TestFuture, CharBuffer]]
+trait TestManagedQueryModule extends QueryExecutorFactory[TestFuture, StreamT[TestFuture, CharBuffer]]
     with ManagedQueryModule with SchedulableFuturesModule { self =>
 
   def actorSystem: ActorSystem  
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
-  
-  val jobManager: JobManager[Future]
+
+  def jobManager: JobManager[Future]
 
   type YggConfig = ManagedQueryModuleConfig
 

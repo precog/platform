@@ -25,25 +25,30 @@ import bytecode.Library
 
 import yggdrasil._
 import yggdrasil.table._
+import TransSpecModule._
 
 trait MathLib[M[+_]] extends GenOpcode[M] {
+  import trans._
+
   val MathNamespace = Vector("std", "math")
 
   override def _lib1 = super._lib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, log, signum, acos, ulp)
 
-  override def _lib2 = super._lib2 ++ Set(min, hypot, pow, max, atan2, copySign, IEEEremainder)
+  override def _lib2 = super._lib2 ++ Set(min, hypot, pow, maxOf, atan2, copySign, IEEEremainder)
 
   import StdLib.{DoubleFrom, doubleIsDefined}
   import java.lang.Math
 
   abstract class Op1DD(name: String, defined: Double => Boolean, f: Double => Double)
-  extends Op1(MathNamespace, name) {
-     val tpe = UnaryOperationType(JNumberT, JNumberT)
-     def f1(ctx: EvaluationContext): F1 = CF1P("builtin::math::op1dd::" + name) {
-      case c: DoubleColumn => new DoubleFrom.D(c, defined, f)
-      case c: LongColumn => new DoubleFrom.L(c, defined, f)
-      case c: NumColumn => new DoubleFrom.N(c, defined, f)
-     }
+  extends Op1F1(MathNamespace, name) {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::math::op1dd::" + name) {
+     case c: DoubleColumn => new DoubleFrom.D(c, defined, f)
+     case c: LongColumn => new DoubleFrom.L(c, defined, f)
+     case c: NumColumn => new DoubleFrom.N(c, defined, f)
+    }
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
   }
 
   object sinh extends Op1DD("sinh", doubleIsDefined, Math.sinh)
@@ -148,7 +153,7 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
 
   object pow extends Op2DDD("pow", bothDefined, Math.pow)
 
-  object max extends Op2DDD("max", bothDefined, Math.max)
+  object maxOf extends Op2DDD("maxOf", bothDefined, Math.max)
 
   object atan2 extends Op2DDD("atan2", bothDefined, Math.atan2)
 

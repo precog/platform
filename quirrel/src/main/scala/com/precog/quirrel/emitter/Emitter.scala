@@ -57,7 +57,7 @@ trait Emitter extends AST
   private case class Emission(
     bytecode: Vector[Instruction] = Vector(),
     marks: Map[MarkType, Mark] = Map(),
-    curLine: Option[(Int, String)] = None,
+    lineStack: List[(Int, Int, String)] = Nil,
     ticVars: Map[(ast.Solve, TicId), EmitterState] = Map(),
     keyParts: Map[(ast.Solve, TicId), Int] = Map(),
     formals: Map[(Identifier, ast.Let), EmitterState] = Map(),
@@ -104,11 +104,25 @@ trait Emitter extends AST
         emitAndMark(markType)(f)(e)
     }
 
-    def emitLine(lineNum: Int, line: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      e.curLine match {
-        case Some((`lineNum`, `line`)) => (e, ())
+    def emitLine(line: Int, col: Int, text: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      val e2 = e.copy(lineStack = (line, col, text) :: e.lineStack)
+      
+      e.lineStack match {
+        case (`line`, `col`, `text`) :: _ => (e2, ())
 
-        case _ => emitInstr(Line(lineNum, line))(e.copy(curLine = Some((lineNum, line))))
+        case stack =>
+          emitInstr(Line(line, col, text))(e2)
+      }
+    }
+    
+    def emitPopLine: EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      e.lineStack match {
+        case Nil => (e, ())
+        
+        case _ :: Nil => (e.copy(lineStack = Nil), ())
+        
+        case _ :: (stack @ (line, col, text) :: _) =>
+          emitInstr(Line(line, col, text))(e.copy(lineStack = stack))
       }
     }
 
@@ -357,7 +371,7 @@ trait Emitter extends AST
     }
     
     def emitExpr(expr: Expr, dispatches: Set[ast.Dispatch]): StateT[Id, Emission, Unit] = {
-      emitLine(expr.loc.lineNum, expr.loc.line) >>
+      emitLine(expr.loc.lineNum, expr.loc.colNum, expr.loc.line) >>
       (expr match {
         case ast.Let(loc, id, params, left, right) =>
           emitExpr(right, dispatches)
@@ -390,9 +404,11 @@ trait Emitter extends AST
             emitExpr(body, dispatches) >>
             emitInstr(Merge)
                   
-        
         case ast.Import(_, _, child) =>
           emitExpr(child, dispatches)
+        
+        case ast.Assert(_, pred, child) =>
+          emitExpr(pred, dispatches) >> emitExpr(child, dispatches) >> emitInstr(Assert)
 
         case ast.New(loc, child) => 
           emitExpr(child, dispatches) >> emitInstr(Map1(New))
@@ -645,9 +661,18 @@ trait Emitter extends AST
         
         case ast.Paren(loc, child) => 
           emitExpr(child, dispatches)
-      }) >> emitConstraints(expr, dispatches)
+      }) >> emitConstraints(expr, dispatches) >> emitPopLine
     }
     
-    emitExpr(expr, Set()).exec(Emission()).bytecode
+    collapseLines(emitExpr(expr, Set()).exec(Emission()).bytecode)
+  }
+  
+  private def collapseLines(bytecode: Vector[Instruction]): Vector[Instruction] = {
+    bytecode.foldLeft(Vector[Instruction]()) {
+      case (acc, line: Line) if !acc.isEmpty && acc.last.isInstanceOf[Line] =>
+        acc.updated(acc.length - 1, line)
+      
+      case (acc, instr) => acc :+ instr
+    }
   }
 }

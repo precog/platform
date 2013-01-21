@@ -123,6 +123,8 @@ trait Binder extends parser.AST with Library {
         loop(child, env.copy(names = env.names ++ addend))
       }
       
+      case Assert(_, pred, child) => loop(pred, env) ++ loop(child, env)
+      
       case New(_, child) => loop(child, env)
       
       case Relate(_, from, to, in) =>
