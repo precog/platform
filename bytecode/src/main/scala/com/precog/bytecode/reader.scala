@@ -151,6 +151,8 @@ trait BytecodeReader extends Reader {
         case 0x09 => morphism1 map Morph1
         case 0x19 => morphism2 map Morph2
         
+        case 0x10 => Some(Assert)
+        
         case 0x12 => Some(IUnion)
         case 0x13 => Some(IIntersect)
 
@@ -207,10 +209,11 @@ trait BytecodeReader extends Reader {
     }
   }
   
-  private def readLineInfo(buffer: ByteBuffer): Option[(Int, String)] = {
+  private def readLineInfo(buffer: ByteBuffer): Option[(Int, Int, String)] = {
     try {
-      val number = buffer.getInt
-      readString(buffer) map { str => number -> str }
+      val line = buffer.getInt
+      val col = buffer.getInt
+      readString(buffer) map { str => (line, col, str) }
     } catch {
       case _ => None
     }

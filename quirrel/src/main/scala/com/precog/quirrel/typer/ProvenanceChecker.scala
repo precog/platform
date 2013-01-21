@@ -220,6 +220,18 @@ trait ProvenanceChecker extends parser.AST with Binder {
           (errorSet, constrConstr ++ constr)
         }
         
+        case Assert(_, pred, child) => {
+          val (predErrors, predConst) = loop(pred, relations, constraints)
+          val (childErrors, childConst) = loop(child, relations, constraints)
+          
+          if (pred.provenance != NullProvenance)
+            expr.provenance = child.provenance
+          else
+            expr.provenance = NullProvenance
+          
+          (predErrors ++ childErrors, predConst ++ childConst)
+        }
+        
         case New(_, child) => {
           val (errors, constr) = loop(child, relations, constraints)
 
