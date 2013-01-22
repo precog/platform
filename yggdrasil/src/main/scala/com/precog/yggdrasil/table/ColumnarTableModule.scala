@@ -392,9 +392,11 @@ trait ColumnarTableModule[M[+_]]
           Table.fromJson(row #:: Stream.empty)
         }
 
-        val groupKeys = unionOfIntersections(indicesGroupedBySource)
+        val groupKeys: Set[Key] = unionOfIntersections(indicesGroupedBySource)
 
-        val evaluatorResults = for (groupKey <- groupKeys) yield {
+        // given a groupKey, return an M[Table] which represents running
+        // the evaluator on that subgroup.
+        def evaluateGroupKey(groupKey: Key): M[Table] = {
           val groupKeyTable = tableFromGroupKey(groupKey, fullSchema)
 
           def map(gid: GroupId): M[Table] = {
@@ -412,14 +414,15 @@ trait ColumnarTableModule[M[+_]]
           body(groupKeyTable, map)
         }
 
-        // TODO: consider moving to TableCompanion.concat?
-        evaluatorResults.sequence.map { tables =>
-          val (slices, size) = tables.foldLeft((StreamT.empty[M, Slice], TableSize(0))) {
-            case ((slices, size), table) =>
-              (slices ++ table.slices, size + table.size)
-          }
-          Table(slices, size)
+        // TODO: this can probably be done as one step, but for now
+        // it's probably fine.
+        val tables: StreamT[M, Table] = StreamT.unfoldM(groupKeys.toList) {
+          case k :: ks => evaluateGroupKey(k).map(t => Some((t, ks)))
+          case Nil => M.point(None)
         }
+        val slices: StreamT[M, Slice] = tables.flatMap(_.slices)
+
+        M.point(Table(slices, UnknownSize))
       }
     }
 
