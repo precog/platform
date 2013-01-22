@@ -49,6 +49,7 @@ trait GenOpcode[M[+_]] extends ImplLibrary[M] {
 
   private val defaultUnaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class Op1(val namespace: Vector[String], val name: String, val opcode: Int = defaultUnaryOpcode.getAndIncrement) extends Op1Impl
+  abstract class Op1F1(namespace: Vector[String], name: String, opcode: Int = defaultUnaryOpcode.getAndIncrement) extends Op1(namespace, name, opcode) with Op1F1Impl
 
   private val defaultBinaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class Op2(val namespace: Vector[String], val name: String, val opcode: Int = defaultBinaryOpcode.getAndIncrement) extends Op2Impl
@@ -75,26 +76,35 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   def _lib2: Set[Op2] = Set()
   def _libReduction: Set[Reduction] = Set()
 
-  trait Morphism1Impl extends Morphism1Like {
+  trait Morph1Apply {
     def apply(input: Table, ctx: EvaluationContext): M[Table]
   }
-  
+
+  trait Morphism1Impl extends Morphism1Like with Morph1Apply
+
   trait Morphism2Impl extends Morphism2Like {
     def alignment: MorphismAlignment
-    val multivariate: Boolean = false
-    def apply(input: Table, ctx: EvaluationContext): M[Table]
   }
  
   sealed trait MorphismAlignment
   
   object MorphismAlignment {
-    case object Match extends MorphismAlignment
-    case object Cross extends MorphismAlignment
+    case class Match(morph: M[Morph1Apply]) extends MorphismAlignment
+    case class Cross(morph: M[Morph1Apply]) extends MorphismAlignment
+    case class Custom(f: (Table, Table) => M[(Table, Morph1Apply)]) extends MorphismAlignment
   }
 
   trait Op1Impl extends Op1Like with Morphism1Impl {
     def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op1")     // TODO make this actually work
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A]
+
+    def fold[A](op1: Op1Impl => A, op1F1: Op1F1Impl => A): A = op1(this)
+  }
+
+  trait Op1F1Impl extends Op1Impl {
     def f1(ctx: EvaluationContext): F1
+
+    override def fold[A](op1: Op1Impl => A, op1F1: Op1F1Impl => A): A = op1F1(this)
   }
 
   trait Op2Impl extends Op2Like {
@@ -115,13 +125,16 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   class WrapArrayReductionImpl(val r: ReductionImpl, val idx: Option[Int]) extends ReductionImpl {
     type Result = r.Result
     def reducer(ctx: EvaluationContext) = new CReducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+      def reduce(schema: CSchema, range: Range): Result = {
         idx match {
           case Some(jdx) =>
-            val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
+            val cols0 = new CSchema {
+              def columnRefs = schema.columnRefs
+              def columns(tpe: JType) = schema.columns(JArrayFixedT(Map(jdx -> tpe)))
+            }
             r.reducer(ctx).reduce(cols0, range)
           case None => 
-            r.reducer(ctx).reduce(cols, range)
+            r.reducer(ctx).reduce(schema, range)
         }
       }
     }
@@ -144,14 +157,17 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
             type Result = (x.Result, acc.Result) 
 
             def reducer(ctx: EvaluationContext) = new CReducer[Result] {
-              def reduce(cols: JType => Set[Column], range: Range): Result = {
+              def reduce(schema: CSchema, range: Range): Result = {
                 idx match {
                   case Some(jdx) =>
-                    val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
-                    val (a, b) = (x.reducer(ctx).reduce(cols0, range), acc.reducer(ctx).reduce(cols, range))
+                    val cols0 = new CSchema {
+                      def columnRefs = schema.columnRefs
+                      def columns(tpe: JType) = schema.columns(JArrayFixedT(Map(jdx -> tpe)))
+                    }
+                    val (a, b) = (x.reducer(ctx).reduce(cols0, range), acc.reducer(ctx).reduce(schema, range))
                     (a, b)
                   case None => 
-                    (x.reducer(ctx).reduce(cols, range), acc.reducer(ctx).reduce(cols, range))
+                    (x.reducer(ctx).reduce(schema, range), acc.reducer(ctx).reduce(schema, range))
                 }
               }
             }
@@ -194,6 +210,7 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   type Morphism1 <: Morphism1Impl
   type Morphism2 <: Morphism2Impl
   type Op1 <: Op1Impl
+  type Op1F1 <: Op1F1Impl
   type Op2 <: Op2Impl
   type Reduction <: ReductionImpl
 }
@@ -203,8 +220,10 @@ trait StdLib[M[+_]] extends
       ReductionLib[M] with 
       TimeLib[M] with 
       MathLib[M] with 
+      TypeLib[M] with 
       StringLib[M] with 
       StatsLib[M] with 
+      PredictionLib[M] with 
       LogisticRegressionLib[M] with
       LinearRegressionLib[M] with
       FSLib[M]

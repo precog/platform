@@ -19,8 +19,12 @@
  */
 package com.precog.yggdrasil
 
-import com.precog.common.json._
+import table._
 
+import com.precog.util.{BitSet, BitSetUtil, Loop}
+import com.precog.util.BitSetUtil.Implicits._
+
+import com.precog.common.json._
 import com.precog.bytecode._
 
 object Schema {
@@ -57,6 +61,105 @@ object Schema {
     case CLong | CDouble | CNum => Some(JNumberT)
     case CArrayType(elemType) => fromCValueType(elemType) map (JArrayHomogeneousT(_))
     case CDate => None
+  }
+
+  
+  /**
+  * returns a function that, for a given (row: Int), produces a Boolean
+  * value is true if the given row subsumes the provided `jtpe`
+  */
+  def findTypes(jtpe: JType, seenPath: CPath, cols: Map[ColumnRef, Column], size: Int): Int => Boolean = {
+    def handleRoot(providedCTypes: Seq[CType], cols: Map[ColumnRef, Column]) = {
+      val filteredCols = cols filter { case (ColumnRef(path, ctpe), _) =>
+        path == seenPath && providedCTypes.contains(ctpe)
+      }
+      val bits = filteredCols.values map { 
+        _.definedAt(0, size)
+      } reduceOption { _ | _ } getOrElse new BitSet
+
+      (row: Int) => bits(row)
+    }
+
+    def handleUnfixed(emptyCType: CType, checkNode: CPathNode => Boolean, cols: Map[ColumnRef, Column]) = {
+      val objCols = cols filter { case (ColumnRef(path, ctpe), _) =>
+        val emptyCrit = path == seenPath && ctpe == emptyCType
+
+        lazy val seenPathLength = seenPath.nodes.length
+        lazy val nonemptyCrit = {
+          if (seenPathLength + 1 <= path.nodes.length) {
+            val pathToCompare = path.nodes.take(seenPathLength)
+            pathToCompare == seenPath.nodes && checkNode(path.nodes(seenPathLength))
+          } else {
+            false
+          }
+        }
+
+        emptyCrit || nonemptyCrit
+      }
+      val objBits = objCols.values map { 
+        _.definedAt(0, size)
+      } reduceOption { _ | _ } getOrElse new BitSet
+
+      (row: Int) => objBits(row)
+    }
+
+    def handleEmpty(emptyCType: CType, cols: Map[ColumnRef, Column]) = {
+      val emptyCols = cols filter { case (ColumnRef(path, ctpe), _) =>
+        path == seenPath && ctpe == emptyCType
+      }
+      val emptyBits = emptyCols.values map {
+        _.definedAt(0, size)
+      } reduceOption { _ | _ } getOrElse new BitSet
+
+      (row: Int) => emptyBits(row)
+    }
+
+    def combineFixedResults(results: Seq[Int => Boolean]): Int => Boolean = {
+      (row: Int) => results.foldLeft(true) { case (bool, fcn) => bool && fcn(row) } 
+    }
+
+    jtpe match {
+      case JNumberT => handleRoot(Seq(CDouble, CLong, CNum), cols)
+      case JBooleanT => handleRoot(Seq(CBoolean), cols)
+      case JTextT => handleRoot(Seq(CString), cols)
+      case JNullT => handleRoot(Seq(CNull), cols)
+
+      case JObjectUnfixedT => handleUnfixed(CEmptyObject, _.isInstanceOf[CPathField], cols)
+      case JArrayUnfixedT => handleUnfixed(CEmptyArray, _.isInstanceOf[CPathIndex], cols)
+
+      case JObjectFixedT(fields) =>
+        if (fields.isEmpty) {
+          handleEmpty(CEmptyObject, cols)
+        } else {
+          val results: Seq[Int => Boolean] = fields.toSeq map { case (field, tpe) =>
+            val seenPath0 = CPath(seenPath.nodes :+ CPathField(field))
+            findTypes(tpe, seenPath0, cols, size) 
+          }
+
+          combineFixedResults(results)
+        }
+
+      case JArrayFixedT(elements) =>
+        if (elements.isEmpty) {
+          handleEmpty(CEmptyArray, cols)
+        } else {
+          val results: Seq[Int => Boolean] = elements.toSeq map { case (idx, tpe) =>
+            val seenPath0 = CPath(seenPath.nodes :+ CPathIndex(idx))
+            findTypes(tpe, seenPath0, cols, size)
+          }
+
+          combineFixedResults(results)
+        }
+
+      case JUnionT(left, right) =>
+        val leftTypes = findTypes(left, seenPath, cols, size)
+        val rightTypes = findTypes(right, seenPath, cols, size)
+
+        (row: Int) => leftTypes(row) || rightTypes(row)
+
+      case JArrayHomogeneousT(jtpe) =>
+        findTypes(jtpe, CPath(seenPath.nodes :+ CPathArray), cols, size)
+    }
   }
 
   /**
@@ -132,7 +235,6 @@ object Schema {
     case (JObjectFixedT(fields), (CPath.Identity, CEmptyObject)) if fields.isEmpty => true
 
     case (JObjectFixedT(fields), (CPath(CPathField(head), tail @ _*), ctpe)) => {
-      val fieldHead = fields.get(head)
       fields.get(head).map(includes(_, CPath(tail: _*), ctpe)).getOrElse(false)
     }
 
@@ -178,6 +280,7 @@ object Schema {
       case (CPath(CPathField(_), _*), _) => true
       case _ => false
     }
+    case JObjectFixedT(fields) if fields.isEmpty => ctpes.contains(CPath.Identity, CEmptyObject)
     case JObjectFixedT(fields) => {
       val keys = fields.keySet
       keys.forall { key =>
@@ -193,6 +296,7 @@ object Schema {
       case (CPath(CPathIndex(_), _*), _) => true
       case _ => false
     }
+    case JArrayFixedT(elements) if elements.isEmpty => ctpes.contains(CPath.Identity, CEmptyArray)
     case JArrayFixedT(elements) => {
       val indices = elements.keySet
       indices.forall { i =>

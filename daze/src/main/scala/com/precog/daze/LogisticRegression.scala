@@ -57,10 +57,9 @@ trait LogisticRegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] wit
   override def _libMorphism2 = super._libMorphism2 ++ Set(LogisticRegression)
 
   object LogisticRegression extends Morphism2(Stats2Namespace, "logisticRegression") with ReductionHelper {
-    val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JNumberT)
+    val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
 
-    override val multivariate = true
-    lazy val alignment = MorphismAlignment.Match
+    lazy val alignment = MorphismAlignment.Match(M.point(morph1))
 
     def sigmoid(z: Double): Double = 1.0 / (1.0 + exp(z))
 
@@ -98,7 +97,7 @@ trait LogisticRegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] wit
       } else {
         val result = seq.foldLeft(0D) {
           case (sum, colVal) => {
-            val xs = colVal.take(colVal.length - 1)
+            val xs = java.util.Arrays.copyOf(colVal, colVal.length - 1)
             val y = colVal.last
 
             assert(xs.length == theta.length)
@@ -150,8 +149,8 @@ trait LogisticRegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] wit
     }
 
     def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val features = cols(JArrayHomogeneousT(JNumberT))
+      def reduce(schema: CSchema, range: Range): Result = {
+        val features = schema.columns(JArrayHomogeneousT(JNumberT))
 
         val result: Set[Result] = features map {
           case c: HomogeneousArrayColumn[_] if c.tpe.manifest.erasure == classOf[Array[Double]] =>
@@ -227,30 +226,53 @@ trait LogisticRegressionLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] wit
       } getOrElse Table.empty
     }
 
-    def apply(table: Table, ctx: EvaluationContext): M[Table] = {
-      val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
-      
-      val specs: M[Seq[TransSpec1]] = schemas map {
-        _ map { jtype => trans.Typed(TransSpec1.Id, jtype) }
+    private val morph1 = new Morph1Apply {
+      def apply(table0: Table, ctx: EvaluationContext): M[Table] = {
+        val leftSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(0))
+        val rightSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(1))
+
+        val leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
+        val rightSpec = trans.Map1(rightSpec0, cf.util.CoerceToDouble)
+
+        val table = table0.transform(InnerArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
+
+        val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
+        
+        val specs: M[Seq[TransSpec1]] = schemas map {
+          _ map { jtype => trans.Typed(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble) , jtype) }
+        }
+
+        val sampleTables: M[Seq[Table]] = specs flatMap { seq => table.sample(10000, seq) }
+
+        val tablesWithType: M[Seq[(Table, JType)]] = for {
+          samples <- sampleTables
+          jtypes <- schemas
+        } yield {
+          samples zip jtypes
+        }
+
+        val tableReducer: (Table, JType) => M[Table] = 
+          (table, jtype) => table.toArray[Double].reduce(reducer).map(res => extract(res, jtype))
+
+        val reducedTables: M[Seq[Table]] = tablesWithType flatMap { 
+          _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map(_.toSeq)
+        }
+
+        val defaultNumber = new java.util.concurrent.atomic.AtomicInteger(1)
+
+        val objectTables: M[Seq[Table]] = reducedTables map { 
+          _ map { tbl =>
+            val modelId = "Model" + defaultNumber.getAndIncrement.toString
+            tbl.transform(liftToValues(trans.WrapObject(TransSpec1.Id, modelId)))
+          }
+        }
+
+        val spec = OuterObjectConcat(
+          DerefObjectStatic(Leaf(SourceLeft), paths.Value),
+          DerefObjectStatic(Leaf(SourceRight), paths.Value))
+
+        objectTables map { _.reduceOption { (tl, tr) => tl.cross(tr)(buildConstantWrapSpec(spec)) } getOrElse Table.empty }
       }
-
-      val sampleTables: M[Seq[Table]] = specs flatMap { seq => table.sample(10000, seq) }
-
-      val tablesWithType: M[Seq[(Table, JType)]] = for {
-        samples <- sampleTables
-        jtypes <- schemas
-      } yield {
-        samples zip jtypes
-      }
-
-      val tableReducer: (Table, JType) => M[Table] = 
-        (table, jtype) => table.toArray[Double].reduce(reducer).map(res => extract(res, jtype))
-
-      val reducedTables: M[Seq[Table]] = tablesWithType flatMap { 
-        _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map(_.toSeq)
-      }
-
-      reducedTables map { _ reduceOption { _ concat _ } getOrElse Table.empty }
     }
   }
 }

@@ -320,31 +320,38 @@ trait Evaluator[M[+_]] extends DAG
             leftResult = pendingTableLeft.table.transform(liftToValues(pendingTableLeft.trans))
             rightResult = pendingTableRight.table.transform(liftToValues(pendingTableRight.trans))
 
-            aligned = mor.alignment match {
-              case MorphismAlignment.Cross => leftResult.cross(rightResult)(spec)
-              case MorphismAlignment.Match if sharedPrefixLength(left, right) > 0 => join(leftResult, rightResult)(key, spec)
-              case MorphismAlignment.Match if sharedPrefixLength(left, right) == 0 => {
-                if (left.isSingleton) {
-                  rightResult.cross(leftResult)(specRight)
-                } else if (right.isSingleton) {
-                  leftResult.cross(rightResult)(spec)
-                } else {
-                  rightResult.cross(leftResult)(specRight)
+            transform = (aligned: Table) => {
+              val leftSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(0)), paths.Value)
+              val rightSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
+
+              aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec0), trans.WrapArray(rightSpec0)))
+            }
+            
+            transformedAndMorph1 <- transState liftM (mor.alignment match {
+              case MorphismAlignment.Cross(morph1) => 
+                morph1 map { Tuple2(transform(leftResult.cross(rightResult)(spec)), _) }
+              case MorphismAlignment.Match(morph1) if sharedPrefixLength(left, right) > 0 => 
+                morph1 map { Tuple2(transform(join(leftResult, rightResult)(key, spec)), _) }
+              case MorphismAlignment.Match(morph1) if sharedPrefixLength(left, right) == 0 => 
+                morph1 map { 
+                  Tuple2(
+                    transform(
+                      if (left.isSingleton || !right.isSingleton) {
+                        rightResult.cross(leftResult)(specRight) 
+                      } else {
+                        leftResult.cross(rightResult)(spec) 
+                      }
+                    ), 
+                    _
+                  )
                 }
-              }
-            }
-            leftSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(0)), paths.Value)
-            rightSpec0 = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, CPathIndex(1)), paths.Value)
+              case MorphismAlignment.Custom(f) =>
+                f(leftResult, rightResult)
+            })
 
-            leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
-            rightSpec = trans.Map1(rightSpec0, cf.util.CoerceToDouble)
+            (transformed, morph1) = transformedAndMorph1
 
-            transformed = {
-              if (mor.multivariate) aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
-              else aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec0), trans.WrapArray(rightSpec0)))
-            }
-
-            back <- transState liftM mor(transformed, ctx)
+            back <- transState liftM morph1(transformed, ctx) 
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
@@ -378,7 +385,7 @@ trait Evaluator[M[+_]] extends DAG
             pendingTable <- prepareEval(parent, splits)
             
             // TODO unary typing
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, op1(op).f1(ctx)))
+          } yield PendingTable(pendingTable.table, pendingTable.graph, op1(op).spec(ctx)(pendingTable.trans))
         }
 
         /**
@@ -1217,7 +1224,7 @@ trait Evaluator[M[+_]] extends DAG
     result.transform(trans.DerefArrayStatic(Leaf(Source), CPathIndex(0)))
   }
   
-  private def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  //TODO don't use Map1, returns an empty array of type CNum
+  def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  //TODO don't use Map1, returns an empty array of type CNum
     val bottomWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, source), paths.Key.name)
     trans.InnerObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
   }
@@ -1287,7 +1294,7 @@ trait Evaluator[M[+_]] extends DAG
   
   private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
   
-  private def liftToValues(trans: TransSpec1): TransSpec1 =
+  def liftToValues(trans: TransSpec1): TransSpec1 =
     TableTransSpec.makeTransSpec(Map(paths.Value -> trans))
 
   def combineTransSpecs(specs: List[TransSpec1]): TransSpec1 =

@@ -396,6 +396,34 @@ trait Slice { source =>
     val columns = source.columns filter { case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe) }
   }
 
+  /**
+    * returns a BoolColumn that is true if row subsumes jtype, false otherwise (unless undefined)
+    * determine if the supplied jtype subsumes all the columns
+    * if false, return a BoolColumn with all falses, defined by union
+    * if true, collect just those columns that the jtype specifies
+    * then on a row-by-row basis, using a BitSet, we use `Schema.findTypes(...)` to determine the Boolean values
+    */
+  def isType(jtpe: JType): Slice = new Slice {
+    val size = source.size
+    val pathsAndTypes: Seq[(CPath, CType)] = source.columns.toSeq map { case (ColumnRef(selector, ctype), _) => (selector, ctype) } 
+
+    // we cannot just use subsumes because there could be rows with undefineds in them
+    val subsumes = Schema.subsumes(pathsAndTypes, jtpe)
+
+    val definedBits = (source.columns).values.map(_.definedAt(0, size)).reduceOption(_ | _) getOrElse new BitSet
+
+    val columns = if (subsumes) {
+      val cols = source.columns filter { case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe) }
+
+      val included = Schema.findTypes(jtpe, CPath.Identity, cols, size)
+      val includedBits = BitSetUtil.filteredRange(0, size)(included)
+
+      Map(ColumnRef(CPath.Identity, CBoolean) -> BoolColumn.Either(definedBits, includedBits))
+    } else {
+      Map(ColumnRef(CPath.Identity, CBoolean) -> BoolColumn.False(definedBits))
+    }
+  }
+
   def nest(selectorPrefix: CPath) = new Slice {
     val arraylessPrefix = CPath(selectorPrefix.nodes map {
       case CPathArray => CPathIndex(0)
