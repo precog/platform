@@ -98,8 +98,8 @@ trait AsyncQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Fut
   }
 
   trait AsyncQueryExecutor extends ManagedQueryExecutor[JobId] {
-    private val Utf8 = Charset.forName("UTF-8")
-    private val JSON = MimeTypes.application / MimeTypes.json
+    private lazy val Utf8 = Charset.forName("UTF-8")
+    private lazy val JSON = MimeTypes.application / MimeTypes.json
 
     // Encode a stream of CharBuffers using the specified charset.
     private def encodeCharStream(stream: StreamT[Future, CharBuffer], charset: Charset)(implicit M: Monad[Future]): StreamT[Future, Array[Byte]] = {

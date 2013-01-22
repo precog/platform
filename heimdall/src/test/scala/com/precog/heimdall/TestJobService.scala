@@ -42,22 +42,22 @@ import org.joda.time.DateTime
 import scalaz._
 
 trait TestJobService extends BlueEyesServiceSpecification with JobService with AkkaDefaults {
-  val executionContext = defaultFutureDispatch
+  lazy val executionContext = defaultFutureDispatch
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(5, "second"))
 
-  val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
+  lazy val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 
   implicit val M = AkkaTypeClasses.futureApplicative(executionContext)
 
-  val clock = blueeyes.util.Clock.System
+  lazy val clock = blueeyes.util.Clock.System
 
   type Resource = Unit
 
-  val jobs = new InMemoryJobManager[Future]
+  lazy val jobs = new InMemoryJobManager[Future]
   def jobManager(config: Configuration): (Unit, JobManager[Future]) = ((), jobs)
 
-  val validAPIKey = "secret"
+  def validAPIKey = "secret"
 
   def authService(config: Configuration): AuthService[Future] = TestAuthService[Future](Set(validAPIKey))
 

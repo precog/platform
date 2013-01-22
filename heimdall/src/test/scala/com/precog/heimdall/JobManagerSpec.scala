@@ -67,7 +67,7 @@ class WebJobManagerSpec extends TestJobService { self =>
 
     lazy val jobs = (new WebJobManager {
       val executionContext = self.executionContext
-      protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = f(client)
+      protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = f(client.path("/jobs/"))
     }).withM[Future](WebJobManager.ResponseAsFuture(M), WebJobManager.FutureAsResponse(M),
         Monad[WebJobManager.Response], M)
   })

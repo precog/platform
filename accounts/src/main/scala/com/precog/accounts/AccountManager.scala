@@ -30,6 +30,8 @@ import com.google.common.hash.Hashing
 
 import scalaz._
 import scalaz.syntax.monad._
+import scalaz.syntax.traverse._
+import scalaz.std.stream._
 
 trait BasicAccountManager[M[+_]] {
   implicit val M: Monad[M]
@@ -37,6 +39,10 @@ trait BasicAccountManager[M[+_]] {
   def listAccountIds(apiKey: APIKey) : M[Set[AccountId]]
 
   def mapAccountIds(apiKeys: Set[APIKey]) : M[Map[APIKey, Set[AccountId]]]
+
+  def findControllingAccount(apiKeys: Seq[APIKey]): M[Option[AccountId]] = {
+    apiKeys.reverse.toStream.map(listAccountIds).sequence.map(_.find(_.nonEmpty).map(_.head))
+  }
   
   def findAccountById(accountId: AccountId): M[Option[Account]]
 
