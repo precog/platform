@@ -112,8 +112,8 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     }
 
     def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {  //TODO add cases for other column types; get information necessary for dealing with slice boundaries and unsoretd slices in the Iterable[Slice] that's used in table.reduce
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
-        cols(JNumberT) flatMap {
+      def reduce(schema: CSchema, range: Range): Result = {
+        schema.columns(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
@@ -163,7 +163,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
   object LinearCorrelation extends Morphism2(StatsNamespace, "corr") {
     val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
     
-    lazy val alignment = MorphismAlignment.Match
+    lazy val alignment = MorphismAlignment.Match(M.point(morph1))
 
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal) // (count, sum1, sum2, sumsq1, sumsq2, productSum)
     type Result = Option[(BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal)]
@@ -171,9 +171,9 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     implicit def monoid = implicitly[Monoid[Result]]
     
     def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val left = cols(JArrayFixedT(Map(0 -> JNumberT)))
-        val right = cols(JArrayFixedT(Map(1 -> JNumberT)))
+      def reduce(schema: CSchema, range: Range): Result = {
+        val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT)))
+        val right = schema.columns(JArrayFixedT(Map(1 -> JNumberT)))
 
         val cross = for (l <- left; r <- right) yield (l, r)
 
@@ -306,13 +306,15 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       } getOrElse Table.empty
     }
 
-    def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+    private val morph1 = new Morph1Apply {
+      def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+    }
   }
 
   object Covariance extends Morphism2(StatsNamespace, "cov") {
     val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
 
-    lazy val alignment = MorphismAlignment.Match
+    lazy val alignment = MorphismAlignment.Match(M.point(morph1))
 
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal, BigDecimal) // (count, sum1, sum2, productSum)
     type Result = Option[(BigDecimal, BigDecimal, BigDecimal, BigDecimal)]
@@ -320,10 +322,10 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     implicit def monoid = implicitly[Monoid[Result]]
     
     def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+      def reduce(schema: CSchema, range: Range): Result = {
 
-        val left = cols(JArrayFixedT(Map(0 -> JNumberT))) 
-        val right = cols(JArrayFixedT(Map(1 -> JNumberT))) 
+        val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT))) 
+        val right = schema.columns(JArrayFixedT(Map(1 -> JNumberT))) 
 
         val cross = for (l <- left; r <- right) yield (l, r)
 
@@ -454,13 +456,15 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       } getOrElse Table.empty
     }
 
-    def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+    private val morph1 = new Morph1Apply {
+      def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+    }
   }
 
   object LinearRegression extends Morphism2(StatsNamespace, "linReg") {
     val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
 
-    lazy val alignment = MorphismAlignment.Match
+    lazy val alignment = MorphismAlignment.Match(M.point(morph1))
 
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal) // (count, sum1, sum2, sumsq1, productSum)
     type Result = Option[(BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal)]
@@ -468,10 +472,10 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     implicit def monoid = implicitly[Monoid[Result]]
     
     def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+      def reduce(schema: CSchema, range: Range): Result = {
 
-        val left = cols(JArrayFixedT(Map(0 -> JNumberT))) 
-        val right = cols(JArrayFixedT(Map(1 -> JNumberT))) 
+        val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT))) 
+        val right = schema.columns(JArrayFixedT(Map(1 -> JNumberT))) 
 
         val cross = for (l <- left; r <- right) yield (l, r)
 
@@ -612,13 +616,15 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       } getOrElse Table.empty
     }
 
-    def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+    private val morph1 = new Morph1Apply {
+      def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+    }
   }
 
   object LogarithmicRegression extends Morphism2(StatsNamespace, "logReg") {
     val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
 
-    lazy val alignment = MorphismAlignment.Match
+    lazy val alignment = MorphismAlignment.Match(M.point(morph1))
 
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal) // (count, sum1, sum2, sumsq1, productSum)
     type Result = Option[(BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal)]
@@ -626,10 +632,10 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     implicit def monoid = implicitly[Monoid[Result]]
     
     def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+      def reduce(schema: CSchema, range: Range): Result = {
 
-        val left = cols(JArrayFixedT(Map(0 -> JNumberT))) 
-        val right = cols(JArrayFixedT(Map(1 -> JNumberT))) 
+        val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT))) 
+        val right = schema.columns(JArrayFixedT(Map(1 -> JNumberT))) 
 
         val cross = for (l <- left; r <- right) yield (l, r)
 
@@ -815,7 +821,9 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       } getOrElse Table.empty
     }
 
-    def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+    private val morph1 = new Morph1Apply {
+      def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+    }
   }
 
   object DenseRank extends Morphism1(StatsNamespace, "denseRank") {
