@@ -76,7 +76,8 @@ Please note that path globs are not yet supported in Precog for MongoDB
                    request: HttpServletRequest,
                    response: HttpServletResponse): Unit = {
           if (target == "/") {
-            response.sendRedirect("http://localhost:%d/index.html?apiKey=%s&analyticsService=http://localhost:%d/&version=false&useJsonp=true".format(serverPort, rootKey, quirrelPort))
+            val requestedHost = Option(request.getHeader("Host")).map(_.toLowerCase).getOrElse("localhost")
+            response.sendRedirect("http://%1$s:%2$d/index.html?apiKey=%3$s&analyticsService=http://%1$s:%4$d/&version=false&useJsonp=true".format(requestedHost, serverPort, rootKey, quirrelPort))
           }
         }
       }
