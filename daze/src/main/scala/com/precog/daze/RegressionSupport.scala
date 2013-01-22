@@ -21,7 +21,7 @@ package com.precog
 package daze
 
 trait RegressionSupport {
-  val Stats2Namespace = Vector("std", "stats")
+  def Stats2Namespace = Vector("std", "stats")
 
   def dotProduct(xs: Array[Double], ys: Array[Double]): Double = {
     assert(xs.length == ys.length)

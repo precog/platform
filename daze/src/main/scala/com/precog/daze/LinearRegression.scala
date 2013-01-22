@@ -154,11 +154,19 @@ trait LinearRegressionLib[M[+_]] extends GenOpcode[M] with RegressionSupport wit
     }
 
     private val morph1 = new Morph1Apply {
-      def apply(table: Table, ctx: EvaluationContext) = {
+      def apply(table0: Table, ctx: EvaluationContext) = {
+        val leftSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(0))
+        val rightSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(1))
+
+        val leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
+        val rightSpec = trans.Map1(rightSpec0, cf.util.CoerceToDouble)
+
+        val table = table0.transform(InnerArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
+
         val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
         
         val specs: M[Seq[TransSpec1]] = schemas map {
-          _ map { jtype => trans.Typed(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble), jtype) }
+          _ map { jtype => trans.Typed(TransSpec1.Id, jtype) }
         }
 
         val tables: M[Seq[Table]] = specs map { _ map { table.transform } }

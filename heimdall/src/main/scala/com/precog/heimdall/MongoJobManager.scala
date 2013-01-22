@@ -78,6 +78,7 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
     (implicit executionContext: ExecutionContext)
     extends JobManager[Future] with JobStateManager[Future] with JobResultManager[Future] {
 
+  import JobManager._
   import JobState._
 
   protected val fs = fs0
@@ -146,7 +147,7 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
     // TODO: Get Job object, find current status ID, then use that as since.
     // It'll include at least the last status, but rarely much more.
 
-    listMessages(jobId, Message.channels.Status, None) map (_.lastOption flatMap (Status.fromMessage(_)))
+    listMessages(jobId, channels.Status, None) map (_.lastOption flatMap (Status.fromMessage(_)))
   }
 
   private def nextMessageId(jobId: JobId): Future[Long] = {

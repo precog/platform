@@ -48,45 +48,53 @@ import blueeyes.json.JValue
 
 import DefaultBijections._
 
-import java.nio.CharBuffer
+import java.nio.{ CharBuffer, ByteBuffer }
+import java.nio.charset.Charset
 
 import org.streum.configrity.Configuration
 
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
 
-sealed trait BaseShardService extends 
+sealed trait ShardState {
+  def queryExecutorFactory: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]]
+  def apiKeyManager: APIKeyManager[Future]
+}
+
+case class ManagedQueryShardState(
+  queryExecutorFactory: ManagedQueryExecutorFactory,
+  apiKeyManager: APIKeyManager[Future],
+  accountManager: BasicAccountManager[Future],
+  jobManager: JobManager[Future],
+  clock: Clock) extends ShardState
+
+case class BasicShardState(
+  queryExecutorFactory: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]],
+  apiKeyManager: APIKeyManager[Future]) extends ShardState
+
+
+trait ShardService extends 
     BlueEyesServiceBuilder with 
     ShardServiceCombinators with 
     Logging {
-
-  type SyncQueryExecutorFactory = QueryExecutorFactory[Future, StreamT[Future, CharBuffer]]
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
   implicit def M: Monad[Future]
 
-  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
+  /**
+   * This provides the configuration for the service and expects a `ShardState`
+   * in return. The exact `ShardState` can be either a `BasicShardState` or a
+   * `ManagedQueryShardState`. If a `ManagedQueryShardState` is returned, then
+   * all features, including async queries and detailed query output are
+   * enabled. Otherwise, if only a `BasicShardState` is returned, then only
+   * basic synchronous queries will be allowed.
+   *
+   * On service startup, the queryExecutorFactory's `startup` method will be
+   * called.
+   */
+  def configureShardState(config: Configuration): ShardState
 
-  def accountManagerFactory(config: Configuration): BasicAccountManager[Future]
-
-  // TODO: maybe some of these implicits should be moved, but for now i
-  // don't have the patience to figure out where.
-
-  implicit val err: (HttpFailure, String) => HttpResponse[ByteChunk] = { (failure, s) =>
-    HttpResponse(failure, content = Some(ByteChunk(s.getBytes("UTF-8"))))
-  }
-
-  implicit val failureToQueryResult:
-      (HttpFailure, String) => HttpResponse[QueryResult] =
-    (fail: HttpFailure, msg: String) =>
-  HttpResponse[QueryResult](status = fail, content = Some(Left(JString(msg))))
-
-  implicit val futureJValueToFutureQueryResult:
-      Future[HttpResponse[JValue]] => Future[HttpResponse[QueryResult]] =
-    (fr: Future[HttpResponse[JValue]]) => fr.map { r => 
-      r.copy(content = r.content.map(Left(_)))
-    }
 
   def optionsResponse = Promise.successful(
     HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
@@ -95,19 +103,33 @@ sealed trait BaseShardService extends
       "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
   )
 
-  import java.nio.ByteBuffer
-  import java.nio.charset.Charset
+  // TODO: maybe some of these implicits should be moved, but for now i
+  // don't have the patience to figure out where.
 
-  val utf8 = Charset.forName("UTF-8")
+  implicit def err: (HttpFailure, String) => HttpResponse[ByteChunk] = { (failure, s) =>
+    HttpResponse(failure, content = Some(ByteChunk(s.getBytes("UTF-8"))))
+  }
 
-  implicit val queryResultToFutureByteChunk: QueryResult => Future[ByteChunk] = {
+  implicit def failureToQueryResult: (HttpFailure, String) => HttpResponse[QueryResult] = { (fail: HttpFailure, msg: String) =>
+    HttpResponse[QueryResult](status = fail, content = Some(Left(JString(msg))))
+  }
+
+  implicit def futureJValueToFutureQueryResult: Future[HttpResponse[JValue]] => Future[HttpResponse[QueryResult]] = {
+    (fr: Future[HttpResponse[JValue]]) => fr.map { r => 
+      r.copy(content = r.content.map(Left(_)))
+    }
+  }
+
+  lazy val utf8 = Charset.forName("UTF-8")
+
+  implicit def queryResultToFutureByteChunk: QueryResult => Future[ByteChunk] = {
     (qr: QueryResult) => qr match {
       case Left(jv) => Future(Left(ByteBuffer.wrap(jv.renderCompact.getBytes)))
       case Right(stream) => Future(Right(stream.map(cb => utf8.encode(cb))))
     }
   }
 
-  implicit val futureByteChunk2byteChunk: Future[ByteChunk] => ByteChunk = { fb =>
+  implicit def futureByteChunk2byteChunk: Future[ByteChunk] => ByteChunk = { fb =>
     Right(StreamT.wrapEffect[Future, ByteBuffer] {
       fb map {
         case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
@@ -116,43 +138,66 @@ sealed trait BaseShardService extends
     })
   }
 
-  implicit val queryResult2byteChunk = futureByteChunk2byteChunk compose queryResultToFutureByteChunk
+  implicit def queryResult2byteChunk = futureByteChunk2byteChunk compose queryResultToFutureByteChunk
 
   // I feel dirty inside.
   implicit def futureMapper[A, B](implicit a2b: A => B): Future[HttpResponse[A]] => Future[HttpResponse[B]] = { fa =>
     fa map { res => res.copy(content = res.content map a2b) }
   }
 
-  def asyncQueryService(queryExecutorFactory: AsyncQueryExecutorFactory, apiKeyManager: APIKeyManager[Future], jobManager: JobManager[Future], clock: Clock) = {
-    apiKey[ByteChunk, HttpResponse[ByteChunk]](apiKeyManager) {
+  private def asyncQueryService(state: ShardState) = state match {
+    case BasicShardState(_, _) =>
+      new QueryServiceNotAvailable
+    case ManagedQueryShardState(queryExecutorFactory, _, _, _, _) =>
+      new AsyncQueryServiceHandler(queryExecutorFactory.asynchronous)
+  }
+
+  private def syncQueryService(state: ShardState) = state match {
+    case BasicShardState(queryExecutorFactory, _) =>
+      new BasicQueryServiceHandler(queryExecutorFactory)
+    case ManagedQueryShardState(queryExecutorFactory, _, _, jobManager, _) =>
+      new SyncQueryServiceHandler(queryExecutorFactory.synchronous, jobManager, SyncResultFormat.Simple)
+  }
+
+  private def asyncHandler(state: ShardState) = {
+    val queryHandler: HttpService[Future[JValue], Future[HttpResponse[QueryResult]]] = apiKey(state.apiKeyManager) {
       path("/analytics/queries") {
-        path("'jobId") {
-          get(new AsyncQueryResultServiceHandler(jobManager)) ~
-          delete(new QueryDeleteHandler(jobManager, clock))
-        }
+        asyncQuery(post(asyncQueryService(state)))
       }
-    } ~
-    apiKey(apiKeyManager) {
-      path("/analytics/queries") {
-        asyncQuery {
-          post(new AsyncQueryServiceHandler(queryExecutorFactory.asynchronous))
-        }
-      }
+    }
+
+    state match {
+      case ManagedQueryShardState(_, apiKeyManager, _, jobManager, clock) =>
+        // [ByteChunk, Future[HttpResponse[ByteChunk]]]
+        apiKey[ByteChunk, HttpResponse[ByteChunk]](apiKeyManager) {
+          path("/analytics/queries") {
+            path("'jobId") {
+              get(new AsyncQueryResultServiceHandler(jobManager)) ~
+              delete(new QueryDeleteHandler(jobManager, clock))
+            }
+          }
+        } ~ queryHandler
+
+      case _ =>
+        val x: HttpService[Future[JValue], Future[HttpResponse[ByteChunk]]] = queryHandler map (_ map { response =>
+          response.copy(content = response.content map queryResult2byteChunk)
+        })
+        val f: ByteChunk => Future[JValue] = implicitly
+        x contramap f
     }
   }
 
-  def basicQueryService(queryExecutorFactory: SyncQueryExecutorFactory, apiKeyManager: APIKeyManager[Future]) = {
+  private def syncHandler(state: ShardState) = {
     jvalue[ByteChunk] {
       path("/actors/status") {
-        get(new ActorStatusHandler(queryExecutorFactory))
+        get(new ActorStatusHandler(state.queryExecutorFactory))
       }
     } ~ jsonpcb[QueryResult] {
-      apiKey(apiKeyManager) {
+      apiKey(state.apiKeyManager) {
         dataPath("analytics/fs") {
           query {
-            get(new SyncQueryServiceHandler(queryExecutorFactory)) ~
-            // Handle OPTIONS requests internally to simplify the standalone service
-            options {
+            get(syncQueryService(state)) ~
+            options {   // Handle OPTIONS requests internally to simplify the standalone service
               (request: HttpRequest[ByteChunk]) => {
                 (a: APIKeyRecord, p: Path, s: String, o: QueryOptions) => optionsResponse
               }
@@ -160,7 +205,7 @@ sealed trait BaseShardService extends
           }
         } ~
         dataPath("meta/fs") {
-          get(new BrowseServiceHandler(queryExecutorFactory, apiKeyManager)) ~
+          get(new BrowseServiceHandler(state.queryExecutorFactory, state.apiKeyManager)) ~
           // Handle OPTIONS requests internally to simplify the standalone service
           options {
             (request: HttpRequest[ByteChunk]) => {
@@ -169,112 +214,21 @@ sealed trait BaseShardService extends
           }
         }
       } ~ path("actors/status") {
-        get(new ActorStatusHandler(queryExecutorFactory))
+        get(new ActorStatusHandler(state.queryExecutorFactory))
       }
     }
   }
-}
 
-trait ShardService extends BaseShardService {
-
-  case class ShardState(
-    queryExecutorFactory: SyncQueryExecutorFactory,
-    apiKeyManager: APIKeyManager[Future]
-  )
-
-  def queryExecutorFactoryFactory(config: Configuration,
-    accessControl: AccessControl[Future],
-    accountManager: BasicAccountManager[Future]): SyncQueryExecutorFactory
-
-  val analyticsService = this.service("quirrel", "1.0") {
+  lazy val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
-          import context._
-
-          logger.info("Using config: " + config)
-
-          val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
-
-          logger.trace("apiKeyManager loaded")
-
-          val accountManager = accountManagerFactory(config.detach("accounts"))
-
-          logger.trace("accountManager loaded")
-
-          val queryExecutorFactory = queryExecutorFactoryFactory(config.detach("queryExecutor"), apiKeyManager, accountManager)
-
-          logger.trace("queryExecutorFactory loaded")
-
-          queryExecutorFactory.startup.map { _ =>
-            ShardState(queryExecutorFactory, apiKeyManager)
-          }
+          logger.info("Starting shard with config:\n" + context.config)
+          val state = configureShardState(context.config)
+          state.queryExecutorFactory.startup map { _ => state }
         } ->
-        request { case ShardState(queryExecutorFactory, apiKeyManager) =>
-          basicQueryService(queryExecutorFactory, apiKeyManager)
-        } ->
-        shutdown { case ShardState(queryExecutorFactory, apiKeyManager) =>
-          for {
-            shutdownState <- queryExecutorFactory.shutdown()
-            _ <- apiKeyManager.close()
-          } yield {
-            logger.info("Stopped shard: " + shutdownState)
-            Option.empty[Stoppable]
-          }
-        }
-      }
-    }
-  }
-}
-
-trait AsyncShardService extends BaseShardService {
-
-  case class ShardState(
-    queryExecutorFactory: AsyncQueryExecutorFactory,
-    apiKeyManager: APIKeyManager[Future],
-    jobManager: JobManager[Future],
-    clock: Clock)
-
-  def clock: Clock
-
-  def jobManagerFactory(config: Configuration): JobManager[Future] 
-
-  def queryExecutorFactoryFactory(config: Configuration,
-    accessControl: AccessControl[Future],
-    accountManager: BasicAccountManager[Future],
-    jobManager: JobManager[Future]): AsyncQueryExecutorFactory
-
-  val analyticsService = this.service("quirrel", "1.0") {
-    requestLogging(timeout) {
-      healthMonitor(timeout, List(eternity)) { monitor => context =>
-        startup {
-          import context._
-
-          logger.info("Using config: " + config)
-
-          val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
-
-          logger.trace("apiKeyManager loaded")
-
-          val accountManager = accountManagerFactory(config.detach("accounts"))
-
-          logger.trace("accountManager loaded")
-
-          val jobManager = jobManagerFactory(config.detach("jobs"))
-
-          logger.trace("jobManager loaded")
-
-          val queryExecutorFactory = queryExecutorFactoryFactory(config.detach("queryExecutor"), apiKeyManager, accountManager, jobManager)
-
-          logger.trace("queryExecutorFactory loaded")
-
-          queryExecutorFactory.startup.map { _ =>
-            ShardState(queryExecutorFactory, apiKeyManager, jobManager, clock)
-          }
-        } ->
-        request { case ShardState(queryExecutorFactory, apiKeyManager, jobManager, clock) =>
-          asyncQueryService(queryExecutorFactory, apiKeyManager, jobManager, clock) ~
-          basicQueryService(queryExecutorFactory, apiKeyManager)
+        request { state =>
+          asyncHandler(state) ~ syncHandler(state)
         } ->
         shutdown { state =>
           for {
@@ -289,4 +243,3 @@ trait AsyncShardService extends BaseShardService {
     }
   }
 }
-

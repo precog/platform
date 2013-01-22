@@ -80,6 +80,13 @@ trait ColumnarTableTypes {
 
 trait ColumnarTableModuleConfig {
   def maxSliceSize: Int
+
+  // This is a slice size that we'd like our slices to be at least as large as.
+  def minIdealSliceSize: Int = maxSliceSize / 4
+
+  // This is what we consider a "small" slice. This may affect points where
+  // we take proactive measures to prevent problems caused by small slices.
+  def smallSliceSize: Int
   
   def maxSaneCrossSize: Long = 2400000000L    // 2.4 billion
 }
@@ -626,56 +633,66 @@ trait ColumnarTableModule[M[+_]]
       Table(slices2, size)
     }
 
-    case class SlicesInfo(previousSlice: Option[Slice], stream: StreamT[M, Slice], acc: Vector[Slice], done: Boolean = false)
-
     /**
      * Returns a table where each slice (except maybe the last) has slice size `length`.
-     * Also removes slices of size zero.
+     * Also removes slices of size zero. If an optional `maxLength0` size is provided,
+     * then the slices need only land in the range between `length` and `maxLength0`.
+     * For slices being loaded from ingest, it is often the case that we are missing a
+     * few rows at the end, so we shouldn't be too strict.
      */
-    def canonicalize(length: Int): Table = {
-      def makeNewInfo(toConcat: Vector[Slice], stream: StreamT[M, Slice], acc: Vector[Slice], taken: Int): M[SlicesInfo] = {
+    def canonicalize(length: Int, maxLength0: Option[Int] = None): Table = {
+      val minLength = length
+      val maxLength = maxLength0 getOrElse length
+
+      require(maxLength > 0 && minLength >= 0 && maxLength >= minLength, "length bounds must be positive and ordered")
+
+
+      def concat(rslices: List[Slice]): Slice = rslices.reverse match {
+        case Nil => Slice(Map.empty, 0)
+        case slice :: Nil => slice
+        case slices =>
+          val slice = Slice.concat(slices)
+          if (slices.size > (slice.size / yggConfig.smallSliceSize)) {
+            slice.materialized // Deal w/ lots of small slices by materializing them.
+          } else {
+            slice
+          }
+      }
+
+      def step(sliceSize: Int, acc: List[Slice], stream: StreamT[M, Slice]): M[StreamT.Step[Slice, StreamT[M, Slice]]] = {
         stream.uncons flatMap {
           case Some((head, tail)) =>
-            if (length - taken <= head.size) {
-              val sameSlice = toConcat :+ head.take(length - taken)
-              val concatted = Slice.concat(sameSlice)
-              inner(M.point(SlicesInfo(Some(head.drop(length - taken)), tail, acc :+ concatted)))
+            if (head.size == 0) {
+              // Skip empty slices.
+              step(sliceSize, acc, tail)
+
+            } else if (sliceSize + head.size >= minLength) {
+              // We emit a slice, but the last slice added may fall on a stream boundary.
+              val splitAt = math.min(head.size, maxLength - sliceSize)
+              if (splitAt < head.size) {
+                val (prefix, suffix) = head.split(splitAt)
+                val slice = concat(prefix :: acc)
+                M.point(StreamT.Yield(slice, StreamT(step(0, Nil, suffix :: tail))))
+              } else {
+                val slice = concat(head :: acc)
+                M.point(StreamT.Yield(slice, StreamT(step(0, Nil, tail))))
+              }
+
             } else {
-              makeNewInfo(toConcat :+ head, tail, acc, taken + head.size)
+              // Just keep swimming (aka accumulating).
+              step(sliceSize + head.size, head :: acc, tail)
             }
+
           case None =>
-            val newSlices = if (toConcat.isEmpty) acc else acc :+ Slice.concat(toConcat)
-            M.point(SlicesInfo(None, stream, newSlices, true))
-        }
-      }
-
-      def inner(slicesInfo0: M[SlicesInfo]): M[SlicesInfo] = {
-        slicesInfo0 flatMap { slicesInfo =>
-          if (slicesInfo.done) {
-            slicesInfo0
-          } else {
-            slicesInfo.previousSlice match {
-              case Some(slice) =>
-                val info = {
-                  if (length <= slice.size) {
-                    M.point(SlicesInfo(Some(slice.drop(length)), slicesInfo.stream, slicesInfo.acc :+ slice.take(length)))
-                  } else {
-                    makeNewInfo(Vector(slice), slicesInfo.stream, slicesInfo.acc, slice.size)
-                  }
-                }
-                inner(info)
-              case None =>
-                makeNewInfo(Vector.empty[Slice], slicesInfo.stream, slicesInfo.acc, 0)
+            if (sliceSize > 0) {
+              M.point(StreamT.Yield(concat(acc), StreamT.empty[M, Slice]))
+            } else {
+              M.point(StreamT.Done)
             }
-          }
         }
       }
 
-      val result =
-        if (length <= 0) M.point(SlicesInfo(None, StreamT.empty[M, Slice], Vector.empty[Slice]))
-        else inner(M.point(SlicesInfo(None, slices, Vector.empty[Slice])))
-
-      Table(StreamT.fromStream(result map { case slicesInfo => slicesInfo.acc.toStream }), size)
+      Table(StreamT(step(0, Nil, slices)), size)
     }
 
     /**
@@ -1067,7 +1084,44 @@ trait ColumnarTableModule[M[+_]]
       def cross0[A](transform: SliceTransform2[A]): M[StreamT[M, Slice]] = {
         case class CrossState(a: A, position: Int, tail: StreamT[M, Slice])
 
-        def crossLeftSingle(lhead: Slice, right: StreamT[M, Slice]): StreamT[M, Slice] = {
+        def crossBothSingle(lhead: Slice, rhead: Slice)(a0: A): (A, StreamT[M, Slice]) = {
+
+          // We try to fill out the slices as much as possible, so we work with
+          // several rows from the left at a time.
+
+          val lrowsPerSlice = math.max(1, yggConfig.maxSliceSize / rhead.size)
+          val sliceSize = lrowsPerSlice * rhead.size
+
+          // Note that this is still memory efficient, as the columns are re-used
+          // between all slices.
+
+          val (a1, slices) = (0 until lhead.size by lrowsPerSlice).foldLeft((a0, List.empty[Slice])) { case ((a, acc), offset) =>
+            val rows = math.min(sliceSize, (lhead.size - offset) * rhead.size)
+
+            val lslice = new Slice {
+              val size = rows
+              val columns = lhead.columns.lazyMapValues(Remap({ i =>
+                offset + (i / rhead.size)
+              })(_).get)
+            }
+
+            val rslice = new Slice {
+              val size = rows
+              val columns = if (rhead.size == 0)
+                rhead.columns.lazyMapValues(Empty(_).get)
+              else
+                rhead.columns.lazyMapValues(Remap(_ % rhead.size)(_).get)
+            }
+
+            val (b, resultSlice) = transform.f(a, lslice, rslice)
+            (b, resultSlice :: acc)
+          }
+
+          val sliceStream = slices.reverse.toStream
+          (a1, StreamT.fromStream(M.point(sliceStream)))
+        }
+
+        def crossLeftSingle(lhead: Slice, right: StreamT[M, Slice])(a0: A): StreamT[M, Slice] = {
           def step(state: CrossState): M[Option[(Slice, CrossState)]] = {
             if (state.position < lhead.size) {
               state.tail.uncons flatMap {
@@ -1088,62 +1142,49 @@ trait ColumnarTableModule[M[+_]]
             }
           }
 
-          StreamT.unfoldM(CrossState(transform.initial, 0, right))(step _)
+          StreamT.unfoldM(CrossState(a0, 0, right))(step _)
         }
         
-        def crossRightSingle(left: StreamT[M, Slice], rhead: Slice): StreamT[M, Slice] = {
-          def step(state: CrossState): M[Option[(Slice, CrossState)]] = {
-            state.tail.uncons map {
-              case Some((lhead, ltail0)) =>
-                val lslice = new Slice {
-                  val size = rhead.size * lhead.size
-                  val columns = if (rhead.size == 0)
-                    lhead.columns.lazyMapValues(Empty(_).get)
-                  else
-                    lhead.columns.lazyMapValues(Remap(_ / rhead.size)(_).get)
-                }
+        def crossRightSingle(left: StreamT[M, Slice], rhead: Slice)(a0: A): StreamT[M, Slice] = {
+          StreamT(left.uncons map {
+            case Some((lhead, ltail0)) =>
+              val (a1, prefix) = crossBothSingle(lhead, rhead)(a0)
+              StreamT.Skip(prefix ++ crossRightSingle(ltail0, rhead)(a1))
 
-                val rslice = new Slice {
-                  val size = rhead.size * lhead.size
-                  val columns = if (rhead.size == 0)
-                    rhead.columns.lazyMapValues(Empty(_).get)
-                  else
-                    rhead.columns.lazyMapValues(Remap(_ % rhead.size)(_).get)
-                }
-
-                val (a0, resultSlice) = transform.f(state.a, lslice, rslice)
-                Some((resultSlice, CrossState(a0, state.position, ltail0)))
-                
-              case None => None
-            }
-          }
-
-          StreamT.unfoldM(CrossState(transform.initial, 0, left))(step _)
+            case None =>
+              StreamT.Done
+          })
         }
 
         def crossBoth(ltail: StreamT[M, Slice], rtail: StreamT[M, Slice]): StreamT[M, Slice] = {
-          ltail.flatMap(crossLeftSingle(_ :Slice, rtail))
+          // This doesn't carry the Transform's state around, so, I think it is broken.
+          ltail.flatMap(crossLeftSingle(_, rtail)(transform.initial))
         }
 
-        this.slices.uncons flatMap {
+        // We canonicalize the tables so that no slices are too small.
+        val left = this.canonicalize(yggConfig.minIdealSliceSize, Some(yggConfig.maxSliceSize))
+        val right = that.canonicalize(yggConfig.minIdealSliceSize, Some(yggConfig.maxSliceSize))
+
+        left.slices.uncons flatMap {
           case Some((lhead, ltail)) =>
-            that.slices.uncons flatMap {
+            right.slices.uncons flatMap {
               case Some((rhead, rtail)) =>
                 for {
                   lempty <- ltail.isEmpty //TODO: Scalaz result here is negated from what it should be!
                   rempty <- rtail.isEmpty
                 } yield {
-                  val frontSize = lhead.size * rhead.size
-                  
-                  if (lempty && frontSize <= yggConfig.maxSliceSize) {
+                  if (lempty && rempty) {
+                    // both are small sets, so find the cross in memory
+                    crossBothSingle(lhead, rhead)(transform.initial)._2
+                  } else if (lempty) {
                     // left side is a small set, so restart it in memory
-                    crossLeftSingle(lhead, rhead :: rtail)
-                  } else if (rempty && frontSize <= yggConfig.maxSliceSize) {
+                    crossLeftSingle(lhead, rhead :: rtail)(transform.initial)
+                  } else if (rempty) {
                     // right side is a small set, so restart it in memory
-                    crossRightSingle(lhead :: ltail, rhead)
+                    crossRightSingle(lhead :: ltail, rhead)(transform.initial)
                   } else {
                     // both large sets, so just walk the left restarting the right.
-                    crossBoth(this.slices, that.slices)
+                    crossBoth(lhead :: ltail, rhead :: rtail)
                   }
                 }
 

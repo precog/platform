@@ -114,6 +114,7 @@ object SBTConsole {
       val ingestConfig = None
       
       val maxSliceSize = 10000
+      val smallSliceSize = 8
 
       //TODO: Get a producer ID
       val idSource = new FreshAtomicIdSource
@@ -129,6 +130,8 @@ object SBTConsole {
     }
 
     val storage = new Storage
+
+    val report = LoggingQueryLogger[Future]
 
     object Projection extends JDBMProjectionCompanion {
       val fileOps = FilesystemFileOps

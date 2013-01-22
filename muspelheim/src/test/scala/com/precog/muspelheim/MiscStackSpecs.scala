@@ -1242,7 +1242,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | 
         |   {
         |   sum: sum(medals.Age where medals.Age = 30),
-        |   mean: mean(std::math::max(medals.B, medals.Age)),
+        |   mean: mean(std::math::maxOf(medals.B, medals.Age)),
         |   max: max(medals.G where medals.Sex = "F"),
         |   stdDev: stdDev(std::math::pow(medals.Total, medals.S))
         |   }

@@ -64,6 +64,8 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
 
   val projections = Map.empty[ProjectionDescriptor, Projection]
 
+  val report = LoggingQueryLogger[M]
+
   trait TableCompanion extends BaseBlockStoreTestTableCompanion {
     override def load(table: Table, apiKey: APIKey, jtpe: JType) = {
       table.toJson map { events =>
@@ -119,6 +121,7 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
     val memoizationWorkDir: File = null //no filesystem storage in test!
     val flatMapTimeout = intToDurationInt(30).seconds
     val maxSliceSize = 10
+    val smallSliceSize = 3
 
     val idSource = new FreshAtomicIdSource
   }

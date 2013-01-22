@@ -107,6 +107,8 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   val storage = new Storage
 
+  val report = LoggingQueryLogger[Future]
+
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
     def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] =
