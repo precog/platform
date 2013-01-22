@@ -17,6 +17,7 @@ SUCCESS=0
 FAILEDTARGETS=""
 
 function run_sbt() {
+    echo "SBT Run: $@"
     sbt -mem 2048 $OPTIMIZE -J-Dsbt.log.noformat=true $@
     if [[ $? != 0 ]]; then
         SUCCESS=1
@@ -26,8 +27,11 @@ function run_sbt() {
     fi
 }
 
-while getopts ":m:sao" opt; do
+while getopts ":m:saok" opt; do
     case $opt in
+        k)
+            SKIPCLEAN=1
+            ;;
         s)
             SKIPSETUP=1
             ;;
@@ -38,20 +42,21 @@ while getopts ":m:sao" opt; do
             OPTIMIZE="-J-Dcom.precog.build.optimize=true"
             ;;
         \?)
-            echo "Usage: `basename $0` [-a] [-o] [-s] [-m <mongo port>]"
+            echo "Usage: `basename $0` [-a] [-o] [-s] [-k] [-m <mongo port>]"
             echo "  -a: Build assemdblies only"
             echo "  -o: Optimized build"
-            echo "  -s: Skip clean/compile setup steps"
+            echo "  -s: Skip all clean/compile setup steps"
+            echo "  -k: Skip sbt clean step"
             exit 1
             ;;
     esac
 done
 
 if [ -z "$SKIPSETUP" ]; then
-    echo "Running clean/compile"
+    echo "Linking quirrel examples"
     (cd quirrel && ln -fs ../../research/quirrel/examples)
 
-    run_sbt clean
+    [ -z "$SKIPCLEAN" ] && run_sbt clean
     
     run_sbt compile
 
