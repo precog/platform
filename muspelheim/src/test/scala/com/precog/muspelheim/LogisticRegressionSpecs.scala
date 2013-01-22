@@ -48,6 +48,29 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
       }
     }
 
+    "predict logistic regression" >> {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
+        model := std::stats::logisticRegression({ height: medals.HeightIncm }, gender)
+
+        std::stats::predictLogistic(model, {height: 34, other: 35})
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SObject(elems)) =>
+          ids must haveSize(0)
+          elems.keys mustEqual Set("Model1")
+
+          elems("Model1") must beLike { case SDecimal(d) => ok }
+      }
+    }
+
     "return correct number of results in more complex case of logistic regression" >> {
       val input = """
           medals := //summer_games/london_medals

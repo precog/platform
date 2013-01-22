@@ -45,6 +45,27 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
           arr1(0) must beLike { case SObject(elems) => elems("height") match { case SDecimal(d) => elems must haveSize(1) } }
           arr1(1) must beLike { case SDecimal(d) => ok }
       }
+    }    
+    
+    "predict linear regression" >> {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        model := std::stats::linearRegression({ height: medals.HeightIncm }, medals.Weight)
+        std::stats::predictLinear(model, {height: 34, other: 35})
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)  
+
+      forall(results) {
+        case (ids, SObject(elems)) =>
+          ids must haveSize(0)
+          elems.keys mustEqual Set("Model1")
+
+          elems("Model1") must beLike { case SDecimal(d) => ok }
+      }
     }
 
     "return correct number of results in more complex case of linear regression" >> {

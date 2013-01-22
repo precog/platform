@@ -198,9 +198,10 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
             val modelCols: Map[ColumnRef, Column] = modelIds.zipWithIndex map { case (id, idx) => (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), CLong), Column.const(id)) } toMap
 
             val featureCols = cols collect { 
-              case (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx), rest @ _*), ctype), col) => 
-                val path = Seq(TableModule.paths.Key, CPathIndex(idx + modelIds.size)) ++ rest
+              case (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), ctype), col) => 
+                val path = Seq(TableModule.paths.Key, CPathIndex(idx + modelIds.size))
                 (ColumnRef(CPath(path: _*), ctype), col)
+              case c @ (ColumnRef(CPath(TableModule.paths.Key), _), _) => c
             }
 
             modelCols ++ featureCols
