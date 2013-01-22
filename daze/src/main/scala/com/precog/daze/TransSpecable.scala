@@ -134,9 +134,9 @@ trait TransSpecable[M[+_]] extends DAG with EvaluatorMethods[M] {
     
     object ConstInt {
       def unapply(c: Const) = c match {
-        case Const(_, CNum(n)) => Some(n.toInt)
-        case Const(_, CLong(n)) => Some(n.toInt)
-        case Const(_, CDouble(n)) => Some(n.toInt)
+        case Const(CNum(n)) => Some(n.toInt)
+        case Const(CLong(n)) => Some(n.toInt)
+        case Const(CDouble(n)) => Some(n.toInt)
         case _ => None
       }
     }
@@ -148,61 +148,61 @@ trait TransSpecable[M[+_]] extends DAG with EvaluatorMethods[M] {
     def loop(graph: DepGraph): T = graph match {
       case node if from.map(_ == node).getOrElse(false) => alg.done(node)
         
-      case node @ Join(_, Eq, CrossLeftSort | CrossRightSort, left, Const(_, value)) =>
+      case node @ Join(Eq, CrossLeftSort | CrossRightSort, left, Const(value)) =>
         alg.EqualLiteral(node)(loop(left), value, false)
 
-      case node @ Join(_, Eq, CrossLeftSort | CrossRightSort, Const(_, value), right) =>
+      case node @ Join(Eq, CrossLeftSort | CrossRightSort, Const(value), right) =>
         alg.EqualLiteral(node)(loop(right), value, false)
 
-      case node @ Join(_, NotEq, CrossLeftSort | CrossRightSort, left, Const(_, value)) =>
+      case node @ Join(NotEq, CrossLeftSort | CrossRightSort, left, Const(value)) =>
         alg.EqualLiteral(node)(loop(left), value, true)
 
-      case node @ Join(_, NotEq, CrossLeftSort | CrossRightSort, Const(_, value), right) =>
+      case node @ Join(NotEq, CrossLeftSort | CrossRightSort, Const(value), right) =>
         alg.EqualLiteral(node)(loop(right), value, true)
 
-      case node @ Join(_, WrapObject, CrossLeftSort | CrossRightSort, Const(_, CString(field)), right) =>
+      case node @ Join(WrapObject, CrossLeftSort | CrossRightSort, Const(CString(field)), right) =>
         alg.WrapObject(node)(loop(right), field)
 
-      case node @ Join(_, DerefObject, CrossLeftSort | CrossRightSort, left, Const(_, CString(field))) =>
+      case node @ Join(DerefObject, CrossLeftSort | CrossRightSort, left, Const(CString(field))) =>
         alg.DerefObjectStatic(node)(loop(left), field)
       
-      case node @ Join(_, DerefMetadata, CrossLeftSort | CrossRightSort, left, Const(_, CString(field))) =>
+      case node @ Join(DerefMetadata, CrossLeftSort | CrossRightSort, left, Const(CString(field))) =>
         alg.DerefMetadataStatic(node)(loop(left), field)
 
-      case node @ Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, ConstInt(index)) =>
+      case node @ Join(DerefArray, CrossLeftSort | CrossRightSort, left, ConstInt(index)) =>
         alg.DerefArrayStatic(node)(loop(left), index)
       
-      case node @ Join(_, ArraySwap, CrossLeftSort | CrossRightSort, left, ConstInt(index)) =>
+      case node @ Join(ArraySwap, CrossLeftSort | CrossRightSort, left, ConstInt(index)) =>
         alg.ArraySwap(node)(loop(left), index)
 
-      case node @ Join(_, JoinObject, CrossLeftSort | CrossRightSort, left, Const(_, CEmptyObject)) =>
+      case node @ Join(JoinObject, CrossLeftSort | CrossRightSort, left, Const(CEmptyObject)) =>
         alg.InnerObjectConcat(node)(loop(left))
                   
-      case node @ Join(_, JoinObject, CrossLeftSort | CrossRightSort, Const(_, CEmptyObject), right) =>
+      case node @ Join(JoinObject, CrossLeftSort | CrossRightSort, Const(CEmptyObject), right) =>
         alg.InnerObjectConcat(node)(loop(right))
 
-      case node @ Join(_, JoinArray, CrossLeftSort | CrossRightSort, left, Const(_, CEmptyArray)) =>
+      case node @ Join(JoinArray, CrossLeftSort | CrossRightSort, left, Const(CEmptyArray)) =>
         alg.InnerArrayConcat(node)(loop(left))
                   
-      case node @ Join(_, JoinArray, CrossLeftSort | CrossRightSort, Const(_, CEmptyArray), right) =>
+      case node @ Join(JoinArray, CrossLeftSort | CrossRightSort, Const(CEmptyArray), right) =>
         alg.InnerArrayConcat(node)(loop(right))
 
-      case node @ Join(_, Op2ForBinOp(op), CrossLeftSort | CrossRightSort, left, Const(_, value)) =>
+      case node @ Join(Op2ForBinOp(op), CrossLeftSort | CrossRightSort, left, Const(value)) =>
         alg.Map1Left(node)(loop(left), op, left, value)
 
-      case node @ Join(_, Op2ForBinOp(op), CrossLeftSort | CrossRightSort, Const(_, value), right) =>
+      case node @ Join(Op2ForBinOp(op), CrossLeftSort | CrossRightSort, Const(value), right) =>
         alg.Map1Right(node)(loop(right), op, right, value) 
 
-      case node @ Join(_, op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
+      case node @ Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
         alg.binOp(node)(loop(left), loop(right), op)
 
-      case node @ Filter(_, joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
+      case node @ Filter(joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
         alg.Filter(node)(loop(left), loop(right))
 
-      case node @ Operate(_, WrapArray, parent) =>
+      case node @ Operate(WrapArray, parent) =>
         alg.WrapArray(node)(loop(parent))
 
-      case node @ Operate(_, op, parent) =>
+      case node @ Operate(op, parent) =>
         alg.Map1(node)(loop(parent), op)
 
       case node => alg.unmatched(node)

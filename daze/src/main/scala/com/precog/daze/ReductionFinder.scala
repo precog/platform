@@ -80,12 +80,12 @@ trait ReductionFinder[M[+_]] extends TransSpecModule with TransSpecFinder[M] {
     val reduceTable = mutable.Map[DepGraph, dag.MegaReduce]() 
 
     node mapDown { recurse => {
-      case graph @ dag.Reduce(loc, red, parent) if st.ancestorByReduce contains graph => {
+      case graph @ dag.Reduce(red, parent) if st.ancestorByReduce contains graph => {
         val ancestor = st.ancestorByReduce(graph)
         val members = st.buildMembers(ancestor)
 
         val left = reduceTable get ancestor getOrElse {
-          val result = dag.MegaReduce(loc, members, recurse(ancestor))
+          val result = dag.MegaReduce(members, recurse(ancestor))
           reduceTable(ancestor) = result
           result
         }
@@ -93,11 +93,11 @@ trait ReductionFinder[M[+_]] extends TransSpecModule with TransSpecFinder[M] {
         val firstIndex = st.parentsByAncestor(ancestor).reverse indexOf parent
         val secondIndex = st.reducesByParent(parent).reverse indexOf graph
 
-        dag.Join(loc, DerefArray, CrossLeftSort, 
-          dag.Join(loc, DerefArray, CrossLeftSort, 
+        dag.Join(DerefArray, CrossLeftSort, 
+          dag.Join(DerefArray, CrossLeftSort, 
             left,
-            Const(loc, CLong(firstIndex))),
-          Const(loc, CLong(secondIndex)))
+            Const(CLong(firstIndex))(graph.loc))(graph.loc),
+          Const(CLong(secondIndex))(graph.loc))(graph.loc)
       }
     }}
   }

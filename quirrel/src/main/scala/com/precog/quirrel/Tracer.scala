@@ -14,6 +14,9 @@ trait Tracer extends parser.AST with typer.Binder {
       Tree.node((sigma, expr), nodes)
     }
     
+    case Assert(_, pred, child) =>
+      Tree.node((sigma, expr), buildTrace(sigma)(pred) #:: buildTrace(sigma)(child) #:: SNil)
+    
     case New(_, child) =>
       Tree.node((sigma, expr), buildTrace(sigma)(child) #:: SNil)
     

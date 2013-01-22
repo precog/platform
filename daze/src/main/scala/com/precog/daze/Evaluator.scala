@@ -81,8 +81,11 @@ trait Evaluator[M[+_]] extends DAG
   def ConstantEmptyArray: F1
   
   def freshIdScanner: Scanner
-
+  
   def report: QueryLogger[M, instructions.Line]
+  
+  def Forall: Reduction { type Result = Option[Boolean] }
+  def Exists: Reduction { type Result = Option[Boolean] }
 
   def rewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph = {
     (if (optimize) inlineStatics(_: DepGraph, ctx) else identity[DepGraph] _) andThen
@@ -218,7 +221,7 @@ trait Evaluator[M[+_]] extends DAG
       
       def evalNotTransSpecable(graph: DepGraph): StateT[M, EvaluatorState, PendingTable] = graph match {
         
-        case Join(_, op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => {
+        case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => {
           // TODO binary typing
 
           for {
@@ -255,7 +258,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case dag.Filter(_, joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => {
+        case dag.Filter(joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => {
           // TODO binary typing
 
           for {
@@ -289,21 +292,22 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case s @ SplitParam(_, index) => {
+        case s: SplitParam => {
           val (key, _) = splits(s.parent)
           
-          val source = trans.DerefObjectStatic(Leaf(Source), CPathField(index.toString))
+          val source = trans.DerefObjectStatic(Leaf(Source), CPathField(s.id.toString))
           val spec = buildConstantWrapSpec(source)
           
           monadState point PendingTable(key transform spec, graph, TransSpec1.Id)
         }
         
-        case s @ SplitGroup(_, index, _) => {
+        // not using extractors due to bug
+        case s: SplitGroup => {
           val (_, f) = splits(s.parent)
-          transState liftM (f(index) map { PendingTable(_, graph, TransSpec1.Id) })
+          transState liftM (f(s.id) map { PendingTable(_, graph, TransSpec1.Id) })
         }
         
-        case Const(_, value) => {
+        case Const(value) => {
           val table = value match {
             case str @ CString(_) => Table.constString(Set(str))
             
@@ -329,11 +333,11 @@ trait Evaluator[M[+_]] extends DAG
           monadState point PendingTable(table.transform(spec), graph, TransSpec1.Id)
         }
 
-        case Undefined(_) =>
+        case Undefined() =>
           monadState point PendingTable(Table.empty, graph, TransSpec1.Id)
         
         // TODO technically, we can do this without forcing by pre-lifting PendingTable#trans
-        case dag.New(_, parent) => {
+        case dag.New(parent) => {
           for {
             pendingTable <- prepareEval(parent, splits)
             idSpec = TableTransSpec.makeTransSpec(
@@ -343,7 +347,7 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(tableM2, graph, TransSpec1.Id)
         }
         
-        case dag.LoadLocal(_, parent, jtpe) => {
+        case dag.LoadLocal(parent, jtpe) => {
           for {
             pendingTable <- prepareEval(parent, splits)
             Path(prefixStr) = ctx.basePath
@@ -353,14 +357,14 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
-        case dag.Morph1(_, mor, parent) => {
+        case dag.Morph1(mor, parent) => {
           for {
             pendingTable <- prepareEval(parent, splits)
             back <- transState liftM mor(pendingTable.table.transform(liftToValues(pendingTable.trans)), ctx)
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
-        case dag.Morph2(_, mor, left, right) => {
+        case dag.Morph2(mor, left, right) => {
           lazy val spec = trans.InnerArrayConcat(trans.WrapArray(Leaf(SourceLeft)), trans.WrapArray(Leaf(SourceRight)))
           lazy val specRight = trans.InnerArrayConcat(trans.WrapArray(Leaf(SourceRight)), trans.WrapArray(Leaf(SourceLeft)))
           lazy val key = trans.DerefObjectStatic(Leaf(Source), paths.Key)
@@ -400,7 +404,7 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
-        case dag.Distinct(_, parent) => {
+        case dag.Distinct(parent) => {
           val idSpec = TableTransSpec.makeTransSpec(
             Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
 
@@ -422,7 +426,7 @@ trait Evaluator[M[+_]] extends DAG
         /**
         returns an array (to be dereferenced later) containing the result of each reduction
         */
-        case m @ MegaReduce(_, reds, parent) => {
+        case m @ MegaReduce(reds, parent) => {
           val firstCoalesce = reds.map {
             case (_, reductions) => coalesce(reductions.map((_, None)))
           }
@@ -463,7 +467,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
 
-        case r @ dag.Reduce(_, red, parent) => {
+        case r @ dag.Reduce(red, parent) => {
           for {
             pendingTable <- prepareEval(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
@@ -472,7 +476,7 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(wrapped, graph, TransSpec1.Id)
         }
         
-        case s @ dag.Split(line, spec, child) => {
+        case s @ dag.Split(spec, child) => {
           val idSpec = TableTransSpec.makeTransSpec(
             Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
 
@@ -491,7 +495,28 @@ trait Evaluator[M[+_]] extends DAG
           table map { PendingTable(_, graph, TransSpec1.Id) }
         }
         
-        case IUI(_, union, left, right) => {
+        case dag.Assert(pred, child) => {
+          for {
+            predPending <- prepareEval(pred, splits)
+            childPending <- prepareEval(child, splits)     // TODO squish once brian's PR lands
+            
+            liftedTrans = liftToValues(predPending.trans)
+            predTable = predPending.table transform DerefObjectStatic(liftedTrans, paths.Value)
+            
+            truthiness <- transState liftM predTable.reduce(Forall reducer ctx)(Forall.monoid)
+            
+            assertion = if (truthiness getOrElse false)
+              M.point(())
+            else
+              report.fatal(graph.loc, "Assertion failed")
+            
+            _ <- transState liftM assertion
+            
+            result = childPending.table transform liftToValues(childPending.trans)
+          } yield PendingTable(result, graph, TransSpec1.Id)
+        }
+        
+        case IUI(union, left, right) => {
           for {
             leftPending <- prepareEval(left, splits)
             rightPending <- prepareEval(right, splits)
@@ -515,7 +540,7 @@ trait Evaluator[M[+_]] extends DAG
         }
         
         // TODO unify with IUI
-        case Diff(_, left, right) =>{
+        case Diff(left, right) =>{
           for {
             leftPending <- prepareEval(left, splits)
             rightPending <- prepareEval(right, splits)
@@ -534,7 +559,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
   
-        case j @ Join(_, op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => {
+        case j @ Join(op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => {
           val isLeft = joinSort == CrossLeftSort
 
           for {
@@ -555,7 +580,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case f @ dag.Filter(_, joinSort @ (CrossLeftSort | CrossRightSort), target, boolean) => {
+        case f @ dag.Filter(joinSort @ (CrossLeftSort | CrossRightSort), target, boolean) => {
           val isLeft = joinSort == CrossLeftSort
           
           /* target match {
@@ -763,27 +788,29 @@ trait Evaluator[M[+_]] extends DAG
           case _: dag.SplitGroup => queue2
           case _: dag.Root => queue2
           
-          case dag.New(_, parent) => queue2 enqueue parent
+          case dag.New(parent) => queue2 enqueue parent
           
-          case dag.Morph1(_, _, parent) => queue2 enqueue parent
-          case dag.Morph2(_, _, left, right) => queue2 enqueue left enqueue right
+          case dag.Morph1(_, parent) => queue2 enqueue parent
+          case dag.Morph2(_, left, right) => queue2 enqueue left enqueue right
           
-          case dag.Distinct(_, parent) => queue2 enqueue parent
+          case dag.Distinct(parent) => queue2 enqueue parent
           
-          case dag.LoadLocal(_, parent, _) => queue2 enqueue parent
+          case dag.LoadLocal(parent, _) => queue2 enqueue parent
           
-          case dag.Operate(_, _, parent) => queue2 enqueue parent
+          case dag.Operate(_, parent) => queue2 enqueue parent
           
-          case dag.Reduce(_, _, parent) => queue2 enqueue parent
-          case dag.MegaReduce(_, _, parent) => queue2 enqueue parent
+          case dag.Reduce(_, parent) => queue2 enqueue parent
+          case dag.MegaReduce(_, parent) => queue2 enqueue parent
           
-          case dag.Split(_, specs, child) => queue2 enqueue child enqueue listParents(specs)
+          case dag.Split(specs, child) => queue2 enqueue child enqueue listParents(specs)
           
-          case dag.IUI(_, _, left, right) => queue2 enqueue left enqueue right
-          case dag.Diff(_, left, right) => queue2 enqueue left enqueue right
+          case dag.Assert(pred, child) => queue2 enqueue pred enqueue child
           
-          case dag.Join(_, _, _, left, right) => queue2 enqueue left enqueue right
-          case dag.Filter(_, _, left, right) => queue2 enqueue left enqueue right
+          case dag.IUI(_, left, right) => queue2 enqueue left enqueue right
+          case dag.Diff(left, right) => queue2 enqueue left enqueue right
+          
+          case dag.Join(_, _, left, right) => queue2 enqueue left enqueue right
+          case dag.Filter(_, left, right) => queue2 enqueue left enqueue right
           
           case dag.Sort(parent, _) => queue2 enqueue parent
           case dag.SortBy(parent, _, _, _) => queue2 enqueue parent
@@ -871,27 +898,27 @@ trait Evaluator[M[+_]] extends DAG
   private def enumerateParents(node: DepGraph): Set[DepGraph] = node match {
     case _: SplitParam | _: SplitGroup | _: Root => Set()
     
-    case dag.New(_, parent) => Set(parent)
+    case dag.New(parent) => Set(parent)
     
-    case dag.Morph1(_, _, parent) => Set(parent)
-    case dag.Morph2(_, _, left, right) => Set(left, right)
+    case dag.Morph1(_, parent) => Set(parent)
+    case dag.Morph2(_, left, right) => Set(left, right)
     
-    case dag.Distinct(_, parent) => Set(parent)
+    case dag.Distinct(parent) => Set(parent)
     
-    case dag.LoadLocal(_, parent, _) => Set(parent)
+    case dag.LoadLocal(parent, _) => Set(parent)
     
-    case Operate(_, _, parent) => Set(parent)
+    case Operate(_, parent) => Set(parent)
     
-    case dag.Reduce(_, _, parent) => Set(parent)
-    case MegaReduce(_, _, parent) => Set(parent)
+    case dag.Reduce(_, parent) => Set(parent)
+    case MegaReduce(_, parent) => Set(parent)
     
-    case dag.Split(_, spec, _) => enumerateSpecParents(spec).toSet
+    case dag.Split(spec, _) => enumerateSpecParents(spec).toSet
     
-    case IUI(_, _, left, right) => Set(left, right)
-    case Diff(_, left, right) => Set(left, right)
+    case IUI(_, left, right) => Set(left, right)
+    case Diff(left, right) => Set(left, right)
     
-    case Join(_, _, _, left, right) => Set(left, right)
-    case dag.Filter(_, _, target, boolean) => Set(target, boolean)
+    case Join(_, _, left, right) => Set(left, right)
+    case dag.Filter(_, target, boolean) => Set(target, boolean)
     
     case Sort(parent, _) => Set(parent)
     case SortBy(parent, _, _, _) => Set(parent)
