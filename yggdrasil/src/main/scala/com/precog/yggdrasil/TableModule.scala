@@ -38,7 +38,8 @@ import java.nio.CharBuffer
 sealed trait TableSize {
   def maxSize: Long
   def lessThan (other: TableSize): Boolean = maxSize < other.maxSize
-  def + (other: TableSize): TableSize
+  def +(other: TableSize): TableSize
+  def *(other: TableSize): TableSize
 }
 
 object TableSize {
@@ -49,24 +50,38 @@ object TableSize {
 
 case class ExactSize(minSize: Long) extends TableSize {
   val maxSize = minSize
-  def + (other: TableSize) = other match {
+  
+  def +(other: TableSize) = other match {
     case ExactSize(n) => ExactSize(minSize + n)
     case EstimateSize(n1, n2) => EstimateSize(minSize + n1, minSize + n2)
+    case UnknownSize => UnknownSize
+  }
+  
+  def *(other: TableSize) = other match {
+    case ExactSize(n) => ExactSize(minSize * n)
+    case EstimateSize(n1, n2) => EstimateSize(minSize * n1, minSize * n2)
     case UnknownSize => UnknownSize
   }
 }
 
 case class EstimateSize(minSize: Long, maxSize: Long) extends TableSize {
-  def + (other: TableSize) = other match {
+  def +(other: TableSize) = other match {
     case ExactSize(n) => EstimateSize(minSize + n, maxSize + n)
     case EstimateSize(n1, n2) => EstimateSize(minSize + n1, maxSize + n2)
+    case UnknownSize => UnknownSize
+  }
+  
+  def *(other: TableSize) = other match {
+    case ExactSize(n) => EstimateSize(minSize * n, maxSize * n)
+    case EstimateSize(n1, n2) => EstimateSize(minSize * n1, maxSize * n2)
     case UnknownSize => UnknownSize
   }
 }
 
 case object UnknownSize extends TableSize {
   val maxSize = Long.MaxValue
-  def + (other: TableSize) = UnknownSize
+  def +(other: TableSize) = UnknownSize
+  def *(other: TableSize) = UnknownSize
 }
 
 object TableModule {
