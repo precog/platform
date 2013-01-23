@@ -9,6 +9,8 @@ import org.joda.time.DateTime
 
 import scalaz._
 import scalaz.syntax.monad._
+import scalaz.syntax.traverse._
+import scalaz.std.stream._
 
 trait AccountManager[M[+_]] extends AccountFinder[M] {
   import Account._
