@@ -84,6 +84,16 @@ trait APIKeyManager[M[+_]] extends Logging { self =>
   def listAPIKeys: M[Seq[APIKeyRecord]]
   def findAPIKey(apiKey: APIKey): M[Option[APIKeyRecord]]
   def findAPIKeyChildren(apiKey: APIKey): M[Set[APIKeyRecord]]
+  def findAPIKeyAncestry(apiKey: APIKey): M[List[APIKeyRecord]] = {
+    findAPIKey(apiKey) flatMap {
+      case Some(keyRecord) => 
+        if (keyRecord.issuerKey == apiKey) M.point(List(keyRecord))
+        else findAPIKeyAncestry(keyRecord.issuerKey) map { keyRecord :: _ }
+
+      case None => 
+        M.point(List.empty[APIKeyRecord])
+    }
+  }
 
   def listGrants: M[Seq[Grant]]
   def findGrant(gid: GrantId): M[Option[Grant]]

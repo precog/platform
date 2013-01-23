@@ -113,7 +113,7 @@ class IngestServiceHandler(
         M.point(readBatch(reader, Vector())) flatMap { batch =>
           if (batch.isEmpty) {
             // the batch will only be empty if there's nothing left to read
-            // TODO: Write out job completion information to the queue.
+            // TODO: notify jobs api of completion
             M.point(BatchSyncResult(total, ingested, errors))
           } else {
             val (_, values, errors0) = batch.foldLeft((0, Vector.empty[JValue], Vector.empty[(Int, Extractor.Error)])) {

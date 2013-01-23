@@ -25,8 +25,9 @@ import accounts.AccountId
 
 import blueeyes.json._
 import blueeyes.json.serialization.{ Extractor, Decomposer }
-import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
+import blueeyes.json.serialization.Extractor.Error
 import blueeyes.json.serialization.Extractor.Invalid
+import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
 import scalaz._
 import scalaz.std.option._
@@ -107,10 +108,9 @@ object Permission {
     override def validated(obj: JValue) = {
       val accessTypeV = obj.validated[(Path, Set[AccountId]) => Permission]("accessType") 
       val pathV = obj.validated[Path]("path") 
-      println("owner: " + (obj \? "ownerAccountIds"))
-      val ownerV = (obj \? "ownerAccountIds") map { jv => println(jv); jv.validated[Set[AccountId]] } getOrElse { Success(Set.empty[AccountId]) }
+      val ownerV = (obj \? "ownerAccountIds") map { _.validated[Set[AccountId]] } getOrElse { Success(Set.empty[AccountId]) }
 
-      (accessTypeV |@| pathV |@| ownerV) { (c, p, o) => 
+      Apply[({ type l[a] = Validation[Error, a] })#l].apply3(accessTypeV, pathV, ownerV) { (c, p, o) => 
         c(p, o) 
       }
     }

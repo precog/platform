@@ -877,12 +877,18 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
 
     val dbStop = Stoppable.fromFuture(database.disconnect.fallbackTo(Future(())) flatMap { _ => mongo.close })
 
-    val rootKey = MongoAPIKeyManager.findRootAPIKey(
-      database,
-      config.mongoSettings.apiKeys, 
-      config.mongoSettings.grants, 
-      config.createRoot
-    )
+    val rootKey: Future[APIKeyRecord] = if (config.createRoot) {
+      MongoAPIKeyManager.createRootAPIKey(
+        database,
+        config.mongoSettings.apiKeys, 
+        config.mongoSettings.grants
+      )
+    } else {
+      MongoAPIKeyManager.findRootAPIKey(
+        database,
+        config.mongoSettings.apiKeys
+      )
+    }
 
     rootKey map { k => (new MongoAPIKeyManager(mongo, database, config.mongoSettings.copy(rootKeyId = k.apiKey)), dbStop) }
   }

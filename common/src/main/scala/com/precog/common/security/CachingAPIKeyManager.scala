@@ -59,7 +59,7 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
       childCache.put(k, childCache.get(k).getOrElse(Set()) union c)
 
     apiKeyCache.put(r.apiKey, r)
-    r.issuerKey.foreach(addChildren(_, Set(r)))
+    addChildren(r.issuerKey, Set(r))
   }
 
   protected def add(g: Grant) = grantCache.put(g.grantId, g)
@@ -69,7 +69,7 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
       childCache.put(k, childCache.get(k).getOrElse(Set()) diff c)
 
     apiKeyCache.remove(r.apiKey)
-    r.issuerKey.foreach(removeChildren(_, Set(r)))
+    removeChildren(r.issuerKey, Set(r))
   }
 
   protected def remove(g: Grant) = grantCache.remove(g.grantId)

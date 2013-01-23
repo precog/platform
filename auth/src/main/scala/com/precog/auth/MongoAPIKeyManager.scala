@@ -86,40 +86,37 @@ object MongoAPIKeyManager extends Logging {
     (if (cached) new CachingAPIKeyManager(mongoAPIKeyManager) else mongoAPIKeyManager, dbStop)
   }
 
+  def createRootAPIKey(db: Database, keyCollection: String, grantCollection: String)(implicit timeout: Timeout): Future[APIKeyRecord] = {
+    def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
 
-  def findRootAPIKey(db: Database, keyCollection: String, grantCollection: String, createIfMissing: Boolean)(implicit context: ExecutionContext, timeout: Timeout): Future[APIKeyRecord] = {
-    import Grant.Serialization._
-    import APIKeyRecord.Serialization._
+    logger.info("Creating new root key")
+    // Set up a new root API Key
+    val rootAPIKeyId = APIKeyManager.newAPIKey()
+    val rootGrantId = APIKeyManager.newGrantId()
 
-    db(selectOne().from(keyCollection).where("isRoot" === true)).flatMap {
+    val rootGrant = Grant(
+      rootGrantId, Some("root-grant"), Some("The root grant"), rootAPIKeyId, Set(),
+      Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
+      None
+    )
+  
+    val rootAPIKeyRecord = APIKeyRecord(rootAPIKeyId, Some("root-apiKey"), Some("The root API key"), rootAPIKeyId, Set(rootGrantId), true)
+
+    for {
+      _ <- db(insert(rootGrant.serialize.asInstanceOf[JObject]).into(grantCollection)) 
+      _ <- db(insert(rootAPIKeyRecord.serialize.asInstanceOf[JObject]).into(keyCollection))
+    } yield rootAPIKeyRecord
+  }
+
+  def findRootAPIKey(db: Database, keyCollection: String)(implicit context: ExecutionContext, timeout: Timeout): Future[APIKeyRecord] = {
+    db(selectOne().from(keyCollection).where("isRoot" === true)) flatMap {
       case Some(keyJv) => 
         logger.info("Retrieved existing root key")
         Promise.successful(keyJv.deserialize[APIKeyRecord])
-      case None if createIfMissing => {
-        logger.info("Creating new root key")
-        // Set up a new root API Key
-        val rootGrantId = APIKeyManager.newGrantId()
-        val rootGrant = {
-          def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
-        
-          Grant(
-            rootGrantId, Some("root-grant"), Some("The root grant"), None, Set(),
-            Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
-            None
-          )
-        }
-      
-        val rootAPIKeyId = APIKeyManager.newAPIKey()
-        val rootAPIKeyRecord =
-          APIKeyRecord(rootAPIKeyId, Some("root-apiKey"), Some("The root API key"), None, Set(rootGrantId), true)
 
-        db(insert(rootGrant.serialize.asInstanceOf[JObject]).into(grantCollection)) flatMap {
-          _ => db(insert(rootAPIKeyRecord.serialize.asInstanceOf[JObject]).into(keyCollection)).map { _ => rootAPIKeyRecord }
-        }
-      }
-      case _ => 
+      case None => 
         logger.error("Could not locate existing root API key!")
-        throw new Exception("Could not locate existing root API key!")
+        Promise.failed(new IllegalStateException("Could not locate existing root API key!"))
     }
   }
 }
@@ -129,8 +126,6 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
 
   private implicit val impTimeout = settings.timeout
 
-  import Grant.Serialization._
-  import APIKeyRecord.Serialization._
 
   val rootAPIKeyRecord : Future[APIKeyRecord] = findAPIKey(settings.rootKeyId).map { 
     _.getOrElse { throw new Exception("Could not locate root api key as specified in the configuration") }
@@ -140,14 +135,14 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
   def rootGrantId: Future[GrantId] = rootAPIKeyRecord.map(_.grants.head) 
 
   def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): Future[APIKeyRecord] = {
-    val apiKey = APIKeyRecord(APIKeyManager.newAPIKey(), name, description, some(issuerKey), grants, false)
+    val apiKey = APIKeyRecord(APIKeyManager.newAPIKey(), name, description, issuerKey, grants, false)
     database(insert(apiKey.serialize.asInstanceOf[JObject]).into(settings.apiKeys)) map {
       _ => apiKey
     }
   }
 
   def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): Future[Grant] = {
-    val ng = Grant(APIKeyManager.newGrantId(), name, description, some(issuerKey), parentIds, perms, expiration)
+    val ng = Grant(APIKeyManager.newGrantId(), name, description, issuerKey, parentIds, perms, expiration)
     logger.debug("Adding grant: " + ng)
     database(insert(ng.serialize.asInstanceOf[JObject]).into(settings.grants)) map {
       _ => logger.debug("Add complete for " + ng); ng
@@ -248,17 +243,18 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
     } 
 
   def deleteGrant(gid: GrantId): Future[Set[Grant]] = {
-    findGrantChildren(gid).flatMap { gc =>
-      Future.sequence(gc.map { g => deleteGrant(g.grantId)}).map { _.flatten }.flatMap { gds =>
-        findGrant(gid).flatMap {
-          case og @ Some(g) =>
-            for {
-              _ <- database(insert(g.serialize.asInstanceOf[JObject]).into(settings.deletedGrants))
-              _ <- database(remove.from(settings.grants).where("grantId" === gid))
-            } yield { gds + g }
-          case None    => Future(gds)
-        }
-      }
-    }
+    for {
+      children <- findGrantChildren(gid)
+      deletedChildren <- Future.sequence(children map { g => deleteGrant(g.grantId) }) map { _.flatten } 
+      leafOpt <- findGrant(gid) 
+      result <- leafOpt map { leafGrant =>
+                  for {
+                    _ <- database(insert(leafGrant.serialize.asInstanceOf[JObject]).into(settings.deletedGrants))
+                    _ <- database(remove.from(settings.grants).where("grantId" === gid))
+                  } yield { deletedChildren + leafGrant } 
+                } getOrElse {
+                  Promise successful deletedChildren
+                }
+    } yield result
   }
 }

@@ -99,7 +99,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
               if (k.isDefined) {
                 (k collect recordDetails sequence) map { ok[v1.APIKeyDetails] }
               } else {
-                Promise successful badRequest("Error creating new API key.", Some("Requestor lacks permission to assign grants to API key"))
+                Promise successful badRequest("Error creating new API key.", Some("Requestor lacks permission to assign given grants to API key"))
               }
             }
           }
@@ -144,7 +144,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
 
   object ReadAPIKeyGrantsHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { 
-      request.parameters.get('apikey).map { apiKey =>
+      request.parameters.get('apikey) map { apiKey =>
         findAPIKey(apiKey) map {
           case Some(v1.APIKeyDetails(_, _, _, grantDetails)) => ok(Some(grantDetails))
           case None => notFound("The specified API key does not exist")
@@ -280,14 +280,26 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
   }
 
   object DeleteGrantHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
+    private def deleteGrant(grantId: GrantId) = apiKeyManager.deleteGrant(grantId) map { s =>
+      //TODO: Is the badRequest message here really appropriate?
+      if (s.nonEmpty) noContent else badRequest("Unable to find grant " + grantId + " for deletion.")
+    } 
+
     val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey) =>
-      //FIXME: simply having the grant ID doesn't give you power to delete it!
-      sys.error("fixme")
       request.parameters.get('grantId) map { grantId =>
-        apiKeyManager.deleteGrant(grantId) map { s =>
-          if (s.nonEmpty) noContent
-          else badRequest("Requestor does not have permission to delete grant " + grantId)
-        } 
+        apiKeyManager.findGrant(grantId) flatMap { 
+          case Some(grant) =>
+            if (grant.issuerKey == authAPIKey) deleteGrant(grantId)
+            else {
+              apiKeyManager.findAPIKeyAncestry(grant.issuerKey) flatMap { ancestry =>
+                if (ancestry.exists(_.apiKey == authAPIKey)) deleteGrant(grantId)
+                else Promise successful badRequest("Requestor does not have permission to delete grant " + grantId)
+              }
+            }
+
+          case None =>
+            Promise successful badRequest("Unable to find grant " + grantId + " for deletion.")
+        }
       } getOrElse {
         Promise successful badRequest("Missing grant ID from request URI.")
       }

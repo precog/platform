@@ -39,43 +39,22 @@ import org.joda.time.DateTime
 import shapeless._
 
 object v1 {
-  case class APIKeyDetails(apiKey: APIKey, name: Option[String], description: Option[String], grants: Set[GrantDetails])
-  object APIKeyDetails {
-    implicit val apiKeyDetailsIso = Iso.hlist(APIKeyDetails.apply _, APIKeyDetails.unapply _)
-    
-    val schema = "apiKey" :: "name" :: "description" :: "grants" :: HNil
-    
-    implicit val decomposer: Decomposer[APIKeyDetails] = IsoSerialization.decomposer[APIKeyDetails](schema)
-    implicit val extractor: Extractor[APIKeyDetails] = IsoSerialization.extractor[APIKeyDetails](schema)
-  }
-
   case class GrantDetails(grantId: GrantId, name: Option[String], description: Option[String], permissions: Set[Permission], expirationDate: Option[DateTime])
   object GrantDetails {
     implicit val grantDetailsIso = Iso.hlist(GrantDetails.apply _, GrantDetails.unapply _)
     
     val schema = "grantId" :: "name" :: "description" :: "permissions" :: "expirationDate" :: HNil
 
-    implicit val decomposer: Decomposer[GrantDetails] = IsoSerialization.decomposer[GrantDetails](schema)
-    implicit val extractor: Extractor[GrantDetails] = IsoSerialization.extractor[GrantDetails](schema)
+    implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[GrantDetails](schema)
   }
 
-  case class NewAPIKeyRequest(name: Option[String], description: Option[String], grants: Set[NewGrantRequest])
-
-  object NewAPIKeyRequest {
-    implicit val newAPIKeyRequestIso = Iso.hlist(NewAPIKeyRequest.apply _, NewAPIKeyRequest.unapply _)
+  case class APIKeyDetails(apiKey: APIKey, name: Option[String], description: Option[String], grants: Set[GrantDetails])
+  object APIKeyDetails {
+    implicit val apiKeyDetailsIso = Iso.hlist(APIKeyDetails.apply _, APIKeyDetails.unapply _)
     
-    val schemaV1 = "name" :: "description" :: "grants" :: HNil
-
-    val decomposerV1: Decomposer[NewAPIKeyRequest]= decomposerV[NewAPIKeyRequest](schemaV1, Some("1.0"))
-    val extractorV1: Extractor[NewAPIKeyRequest] = extractorV[NewAPIKeyRequest](schemaV1, Some("1.0"))
-
-    implicit val decomposer: Decomposer[NewAPIKeyRequest] = decomposerV1
-    implicit val dxtractor: Extractor[NewAPIKeyRequest] = extractorV1
+    val schema = "apiKey" :: "name" :: "description" :: "grants" :: HNil
     
-    def newAccount(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None) = {
-      val grants = NewGrantRequest.newAccount(accountId, path, name.map(_+"-grant"), description.map(_+" standard account grant"), Set.empty[GrantId], None)
-      NewAPIKeyRequest(name, description, Set(grants))
-    }
+    implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[APIKeyDetails](schema)
   }
 
   case class NewGrantRequest(name: Option[String], description: Option[String], parentIds: Set[GrantId], permissions: Set[Permission], expirationDate: Option[DateTime]) {
@@ -92,13 +71,28 @@ object v1 {
     
     val schemaV1 = "name" :: "description" :: ("parentIds" ||| Set.empty[GrantId]) :: "permissions" :: "expirationDate" :: HNil
     
-    implicit val (decomposerV1, extractorV1) = serializationV[NewGrantRequest](schemaV1, None)
+    implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[NewGrantRequest](schemaV1)
 
-    def newAccount(accountId: AccountId, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantId], expiration: Option[DateTime]): NewGrantRequest = {
+    def newGrant(accountId: AccountId, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantId], expiration: Option[DateTime]): NewGrantRequest = {
       // Path is "/" so that an account may read data it owns no matter what path it exists under. See AccessControlSpec, APIKeyManager.newAccountGrant
       val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path("/"), Set(accountId)) : Permission)
       val writePerms = Set(WritePermission, DeletePermission).map(_(path, Set()) : Permission)
       NewGrantRequest(name, description, parentIds, readPerms ++ writePerms, expiration)
+    }
+  }
+
+  case class NewAPIKeyRequest(name: Option[String], description: Option[String], grants: Set[NewGrantRequest])
+
+  object NewAPIKeyRequest {
+    implicit val newAPIKeyRequestIso = Iso.hlist(NewAPIKeyRequest.apply _, NewAPIKeyRequest.unapply _)
+    
+    val schemaV1 = "name" :: "description" :: "grants" :: HNil
+
+    implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[NewAPIKeyRequest](schemaV1)
+
+    def newAccount(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None) = {
+      val grants = NewGrantRequest.newGrant(accountId, path, name.map(_+"-grant"), description.map(_+" standard account grant"), Set.empty[GrantId], None)
+      NewAPIKeyRequest(name, description, Set(grants))
     }
   }
 }

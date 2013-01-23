@@ -40,8 +40,7 @@ import scalaz._
 trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinators {
   case class State(handlers: SecurityServiceHandlers, stoppable: Stoppable)
 
-  val insertTimeout = akka.util.Timeout(10000)
-  implicit val timeout = akka.util.Timeout(120000) //for now
+  val timeout = akka.util.Timeout(120000) //for now
 
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]

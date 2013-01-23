@@ -31,20 +31,18 @@ import scalaz.syntax.monad._
 
 class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManager[M] {
   val (rootAPIKeyRecord, grants, apiKeys) = { 
-    val rootGrantId = APIKeyManager.newGrantId()
-    val rootGrant = {
-      def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
-      
-      Grant(
-        rootGrantId, some("root-grant"), some("The root grant"), None, Set(),
-        Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
-        None
-      )
-    }
-    
+    def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
+
     val rootAPIKey = APIKeyManager.newAPIKey()
-    val rootAPIKeyRecord = 
-      APIKeyRecord(rootAPIKey, some("root-apiKey"), some("The root API key"), None, Set(rootGrantId), true)
+    val rootGrantId = APIKeyManager.newGrantId()
+
+    val rootGrant = Grant(
+      rootGrantId, some("root-grant"), some("The root grant"), rootAPIKey, Set(),
+      Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
+      None
+    )
+    
+    val rootAPIKeyRecord = APIKeyRecord(rootAPIKey, some("root-apiKey"), some("The root API key"), rootAPIKey, Set(rootGrantId), true)
       
     (rootAPIKeyRecord, mutable.Map(rootGrantId -> rootGrant), mutable.Map(rootAPIKey -> rootAPIKeyRecord))
   }
@@ -56,13 +54,13 @@ class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManag
   private val deletedGrants = mutable.Map.empty[GrantId, Grant]
 
   def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): M[APIKeyRecord] = {
-    val record = APIKeyRecord(APIKeyManager.newAPIKey(), name, description, some(issuerKey), grants, false)
+    val record = APIKeyRecord(APIKeyManager.newAPIKey(), name, description, issuerKey, grants, false)
     apiKeys.put(record.apiKey, record)
     record.point[M]
   }
 
   def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): M[Grant] = {
-    val newGrant = Grant(APIKeyManager.newGrantId(), name, description, some(issuerKey), parentIds, perms, expiration)
+    val newGrant = Grant(APIKeyManager.newGrantId(), name, description, issuerKey, parentIds, perms, expiration)
     grants.put(newGrant.grantId, newGrant)
     newGrant.point[M]
   }
@@ -72,11 +70,11 @@ class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManag
 
   def findAPIKey(apiKey: APIKey) = apiKeys.get(apiKey).point[M]
   def findAPIKeyChildren(parent: APIKey) = {
-    def parentIsAncestor(childKey: APIKey): Boolean = {
-      childKey == parent || (apiKeys.get(childKey) flatMap { _.issuerKey } exists { parentIsAncestor })
-    }
+//    def parentIsAncestor(childKey: APIKey): Boolean = {
+//      childKey == parent || (apiKeys.get(childKey) flatMap { _.issuerKey } exists { parentIsAncestor })
+//    }
 
-    apiKeys.values.filter(rec => parentIsAncestor(rec.apiKey)).toSet.point[M]
+    apiKeys.values.filter(_.issuerKey exists { _ == parent }).toSet.point[M]
   }
 
   def findGrant(gid: GrantId) = grants.get(gid).point[M]
