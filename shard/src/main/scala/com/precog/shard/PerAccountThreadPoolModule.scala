@@ -36,13 +36,15 @@ import scalaz._
  */
 class PerAccountThreadPooling(accountFinder: AccountFinder[Future]) { 
   private val executorCache = new ConcurrentHashMap[AccountId, ExecutionContext]()
-  
+
   private def asyncContextFor(accountId: AccountId): ExecutionContext = {
     if (executorCache.contains(accountId)) {
       executorCache.get(accountId)
     } else {
       // FIXME: Dummy pool for now
       executorCache.putIfAbsent(accountId, ExecutionContext.fromExecutor(Executors.newCachedThreadPool()))
+      // Fetch whatever value is there for the accountId now
+      executorCache.get(accountId)
     }
   }
 

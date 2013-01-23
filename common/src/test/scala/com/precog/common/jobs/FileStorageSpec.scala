@@ -40,8 +40,8 @@ class InMemoryFileStorageSpec extends Specification {
 }
 
 trait FileStorageSpec[M[+_]] extends Specification {
-  val TEXT = MimeTypes.text / plain
-  val HTML = MimeTypes.text / html
+  lazy val TEXT = MimeTypes.text / plain
+  lazy val HTML = MimeTypes.text / html
 
   implicit def M: Monad[M] with Copointed[M]
   def fs: FileStorage[M]

@@ -38,19 +38,24 @@ import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 import org.eclipse.jetty.server.{Handler, Request, Server}
 import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, HandlerList, ResourceHandler}
 
+import akka.actor.ActorSystem
+
+import scalaz._
+
 import org.streum.configrity.Configuration
 
 object MongoShardServer extends BlueEyesServer with ShardService {
+  
   val actorSystem = ActorSystem("mongoExecutorActorSystem")
-  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit val M = new FutureMonad(executionContext)
-
-  def APIKeyFinder(config: Configuration) = new StaticAPIKeyFinder(config[String]("masterAccount.apiKey"))
-  def AccountFinder(config: Configuration) = WebAccountFinder(config)
-  def QueryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future], extAccountManager: AccountFinder[Future]) = 
-    new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
+  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  val futureMonad: Monad[Future] = new FutureMonad(asyncContext)
 
   val clock = Clock.System
+
+  def configureShardState(config: Configuration): ShardState = {
+    val apiKeyFinder = new StaticAPIKeyFinder(config[String]("security.masterAccount.apiKey"))
+    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor"))(asyncContext, futureMonad), apiKeyFinder)
+  }
 
   val jettyService = this.service("labcoat", "1.0") { context =>
     startup {

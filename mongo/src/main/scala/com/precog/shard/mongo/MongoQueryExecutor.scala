@@ -90,6 +90,12 @@ class MongoQueryExecutorConfig(val config: Configuration)
   val ingestConfig = None
 }
 
+object MongoQueryExecutor {
+  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): MongoQueryExecutor = {
+    new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
+  }
+}
+
 class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit val asyncContext: ExecutionContext, val M: Monad[Future]) 
     extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] with ShardQueryExecutor[Future] with MongoColumnarTableModule {
   type YggConfig = MongoQueryExecutorConfig
@@ -101,6 +107,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit val a
   }
 
   lazy val storage = new MongoStorageMetadataSource(Table.mongo)
+  lazy val report = LoggingQueryLogger[Future]
 
   def startup() = Future {
     Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))

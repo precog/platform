@@ -99,14 +99,12 @@ object JDBMQueryExecutorFactory {
       val idSource = new FreshAtomicIdSource
     }
   }
-    
-  def apply(config: Configuration, extAccessControl: AccessControl[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]): AsyncQueryExecutorFactory = {
+
+  def apply(config: Configuration, extAccessControl: AccessControl[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]): ManagedQueryExecutorFactory = {
     new JDBMQueryExecutorFactory
         with JDBMProjectionModule
         with ProductionShardSystemActorModule
         with SystemActorStorageModule { self =>
-
-      //override val executionContext = executor
 
       type YggConfig = JDBMQueryExecutorConfig
       val yggConfig = wrapConfig(config)
@@ -116,6 +114,7 @@ object JDBMQueryExecutorFactory {
       
       val actorSystem = ActorSystem("jdbmExecutorActorSystem")
       implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+      val jobActorSystem = ActorSystem("jobPollingActorSystem")
 
       val jobManager = extJobManager
       val accountFinder = Some(extAccountFinder)
@@ -129,6 +128,7 @@ object JDBMQueryExecutorFactory {
       val storage = new Storage
       def storageMetadataSource = storage
 
+      val apiKeyManager = extAccessControl
       def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog = FilesystemIngestFailureLog(yggConfig.ingestFailureLogRoot, checkpoint)
 
       def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
@@ -176,8 +176,8 @@ object JDBMQueryExecutorFactory {
         }).validation
       }
 
-      def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
-        implicit val futureMonad = new blueeyes.bkka.FutureMonad(executionContext)
+      def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
+        implicit val futureMonad = new blueeyes.bkka.FutureMonad(defaultAsyncContext)
         (for {
           executionContext0 <- threadPooling.getAccountExecutionContext(apiKey)
         } yield {
@@ -209,6 +209,7 @@ object JDBMQueryExecutorFactory {
           }
 
           val storage = new Storage
+          val report = errorReport[instructions.Line](shardQueryMonad, implicitly)
         }
       }
 
@@ -228,8 +229,7 @@ object JDBMQueryExecutorFactory {
 trait JDBMQueryExecutorFactory
     extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]]
     with StorageModule[Future]
-    with ManagedQueryModule
-    with AsyncQueryExecutorFactory { self =>
+    with ManagedQueryExecutorFactory { self =>
 
   type YggConfig <: BaseJDBMQueryExecutorConfig
 
@@ -270,4 +270,3 @@ trait JDBMQueryExecutorFactory
     futRoot.map { pr => Success(transform(pr.children)) } 
   }
 }
-
