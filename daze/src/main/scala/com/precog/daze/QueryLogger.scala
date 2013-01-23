@@ -34,7 +34,7 @@ import org.slf4j.{ LoggerFactory, Logger }
 import scalaz._
 import scalaz.syntax.monad._
 
-trait QueryLogger[M[+_], -P] {
+trait QueryLogger[M[+_], P] {
 
   /**
    * This reports a fatal error user. Depending on the implementation, this may
@@ -56,7 +56,7 @@ trait QueryLogger[M[+_], -P] {
 /**
  * Reports errors to a job's channel.
  */
-trait JobQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
+trait JobQueryLogger[M[+_], P] extends QueryLogger[M, P] {
   import JobManager._
 
   implicit def M: Monad[M]
@@ -88,27 +88,27 @@ trait JobQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
   def info(pos: P, msg: String): M[Unit] = send(channels.Info, pos, msg)
 }
 
-trait LoggingQueryLogger[M[+_]] extends QueryLogger[M, Any] {
+trait LoggingQueryLogger[M[+_], P] extends QueryLogger[M, P] {
   implicit def M: Applicative[M]
 
   protected val logger = LoggerFactory.getLogger("com.precog.daze.QueryLogger")
 
-  def fatal(pos: Any, msg: String): M[Unit] = M.point {
+  def fatal(pos: P, msg: String): M[Unit] = M.point {
     logger.error(msg)
   }
 
-  def warn(pos: Any, msg: String): M[Unit] = M.point {
+  def warn(pos: P, msg: String): M[Unit] = M.point {
     logger.warn(msg)
   }
 
-  def info(pos: Any, msg: String): M[Unit] = M.point {
+  def info(pos: P, msg: String): M[Unit] = M.point {
     logger.info(msg)
   }
 }
 
 object LoggingQueryLogger {
-  def apply[M[+_]](implicit M0: Applicative[M]): QueryLogger[M, Any] = {
-    new LoggingQueryLogger[M] {
+  def apply[M[+_], P](implicit M0: Applicative[M]): QueryLogger[M, P] = {
+    new LoggingQueryLogger[M, P] {
       val M = M0
     }
   }

@@ -47,14 +47,14 @@ import org.streum.configrity.Configuration
 object MongoShardServer extends BlueEyesServer with ShardService {
   
   val actorSystem = ActorSystem("mongoExecutorActorSystem")
-  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  val futureMonad: Monad[Future] = new FutureMonad(asyncContext)
+  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
   val clock = Clock.System
 
   def configureShardState(config: Configuration): ShardState = {
     val apiKeyFinder = new StaticAPIKeyFinder(config[String]("security.masterAccount.apiKey"))
-    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor"))(asyncContext, futureMonad), apiKeyFinder)
+    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor")), apiKeyFinder)
   }
 
   val jettyService = this.service("labcoat", "1.0") { context =>

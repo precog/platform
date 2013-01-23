@@ -95,7 +95,7 @@ trait ManagedQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[F
         val decomposer = decomposer0
       }
     } getOrElse {
-      LoggingQueryLogger[ShardQuery]
+      LoggingQueryLogger[ShardQuery, A]
     }
   }
 

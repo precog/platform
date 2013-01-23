@@ -45,14 +45,18 @@ import scalaz.Validation.{ success, failure }
 import scalaz.syntax.monad._
 
 final class QueryServiceNotAvailable(implicit M: Monad[Future])
-    extends CustomHttpService[Future[JValue], (APIKeyRecord, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] {
+    extends CustomHttpService[Future[JValue], (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] {
   val service = { (request: HttpRequest[Future[JValue]]) =>
-    success({ (r: APIKeyRecord, p: Path, q: String, opts: QueryOptions) =>
+    success({ (r: APIKey, p: Path, q: String, opts: QueryOptions) =>
       M.point(HttpResponse(HttpStatus(NotFound, "This service is not available in this version.")))
     })
   }
 
   val metadata = Some(DescriptionMetadata("Takes a quirrel query and returns the result of evaluating the query."))
+}
+
+object QueryServiceHandler {
+  type Service = HttpService[Future[JValue], (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] 
 }
 
 abstract class QueryServiceHandler[A](implicit M: Monad[Future])

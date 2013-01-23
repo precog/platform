@@ -177,7 +177,7 @@ object JDBMQueryExecutorFactory {
       }
 
       def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
-        implicit val futureMonad = new blueeyes.bkka.FutureMonad(defaultAsyncContext)
+        implicit val futureMonad = new blueeyes.bkka.FutureMonad(executionContext)
         (for {
           executionContext0 <- threadPooling.getAccountExecutionContext(apiKey)
         } yield {

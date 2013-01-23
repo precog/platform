@@ -87,27 +87,23 @@ trait TestShardService extends
     }
   """
 
-  override val configuration = "services { quirrel { v1 { " + config + " } } }"
-  val to = Duration(3, "seconds")
+  private val to = Duration(3, "seconds")
 
-  val actorSystem = ActorSystem("shardServiceSpec")
-  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  private val actorSystem = ActorSystem("shardServiceSpec")
+  private val executor = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  implicit val M: Monad[Future] with Copointed[Future] = new FutureMonad(asyncContext) with Copointed[Future] {
-    def copoint[A](m: Future[A]) = Await.result(m, to)
-  }
+  private val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  private val apiKeyFinder = new DirectAPIKeyFinder[Future](apiKeyManager)
+  private val accountFinder =  new TestAccountFinder[Future](Map(), Map())
+  protected val jobManager = new InMemoryJobManager[Future] //TODO: should be private?
+  private val clock = Clock.System
 
-  val apiKeyManager = new InMemoryAPIKeyManager[Future]
-  val inMemAccountMgr = new InMemoryAccountManager[Future]
-  val jobManager = new InMemoryJobManager[Future]
-
-  val to = Duration(3, "seconds")
-  val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
+  val rootAPIKey = apiKeyManager.rootAPIKey.copoint
   
   val testPath = Path("/test")
-  val testAPIKey = Await.result(apiKeyManager.newStandardAPIKeyRecord("test", testPath).map(_.apiKey), to)
+  val testAPIKey = apiKeyManager.newStandardAPIKeyRecord("test", testPath).map(_.apiKey).copoint
   
-  val accessTest = Set[Permission](
+  val testPermissions = Set[Permission](
     ReadPermission(testPath, Set("test")),
     ReducePermission(testPath, Set("test")),
     WritePermission(testPath, Set()),
@@ -117,44 +113,22 @@ trait TestShardService extends
   val expiredPath = Path("expired")
 
   val expiredAPIKey = apiKeyManager.newStandardAPIKeyRecord("expired", expiredPath).map(_.apiKey).flatMap { expiredAPIKey => 
-    apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, accessTest, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
+    apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, testPermissions, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
   } copoint
 
-  def APIKeyFinder(config: Configuration) = new DirectAPIKeyFinder[Future](apiKeyManager)
+  override val configuration = "services { quirrel { v1 { " + config + " } } }"
 
-  def AccountFinder(config: Configuration) = new TestAccountFinder[Future](Map(), Map())
-
-  def JobManager(config: Configuration) = jobManager
-
-  def QueryExecutorFactory(config: Configuration, accessControl0: AccessControl[Future], accountFinder0: AccountFinder[Future], jobManager0: JobManager[Future]) = {
-    new TestQueryExecutorFactory {
-      val actorSystem = self.actorSystem
-      val executionContext = self.asyncContext
-      
-      val accessControl = accessControl0
-      val jobManager = jobManager0
-
-      val ownerMap = Map(
-        Path("/")     ->             Set("root"),
-        Path("/test") ->             Set("test"),
-        Path("/test/foo") ->         Set("test"),
-        Path("/expired") ->          Set("expired"),
-        Path("/inaccessible") ->     Set("other"),
-        Path("/inaccessible/foo") -> Set("other")
-      )
-    }
+  override implicit val M: Monad[Future] with Copointed[Future] = new FutureMonad(executor) with Copointed[Future] {
+    def copoint[A](m: Future[A]) = Await.result(m, to)
   }
-  
-  def clock = Clock.System
 
-  def configureShardState(config: Configuration): ShardState = {
+  override def configureShardState(config: Configuration): ShardState = {
     val queryExecutorFactory = new TestQueryExecutorFactory {
-      val jobActorSystem = self.actorSystem
-      val actorSystem = self.actorSystem
-      val executionContext = self.asyncContext
-      val accessControl = apiKeyManager
-      val accountManager = inMemAccountMgr
-      val jobManager = self.jobManager
+      override val jobActorSystem = self.actorSystem
+      override val actorSystem = self.actorSystem
+      override val executionContext = self.executor
+      override val accessControl = self.apiKeyFinder
+      override val jobManager = self.jobManager
 
       val ownerMap = Map(
         Path("/")     ->             Set("root"),
@@ -166,27 +140,22 @@ trait TestShardService extends
       )
     }
 
-    ManagedQueryShardState(queryExecutorFactory, apiKeyManager, inMemAccountMgr, jobManager, clock)
+    ManagedQueryShardState(queryExecutorFactory, apiKeyFinder, jobManager, clock)
   }
 
-  implicit val queryResultByteChunkTranscoder =
-   new AsyncHttpTranscoder[QueryResult, ByteChunk] {
+  implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
      def apply(req: HttpRequest[QueryResult]): HttpRequest[ByteChunk] =
-       req.copy(content = req.content.map {
-         case Left(jv) =>
-           Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
-         case Right(stream) =>
-           Right(stream.map(utf8.encode))
-       })
-     def unapply(res: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[QueryResult]] =
-       res.map { r =>
-         val q: Option[QueryResult] = r.content.map {
-           case Left(bb) =>
-             Left(JParser.parseFromByteBuffer(bb).valueOr(throw _))
-           case Right(stream) =>
-             Right(stream.map(utf8.decode))
+       req map { 
+         case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
+         case Right(stream) => Right(stream.map(utf8.encode))
+       }
+
+     def unapply(fres: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[QueryResult]] =
+       fres map { 
+         _ map {
+           case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _))
+           case Right(stream) => Right(stream.map(utf8.decode))
          }
-         r.copy(content = q)
        }
    }
 
@@ -202,10 +171,12 @@ trait TestShardService extends
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(1, Duration(3, "second"))
   val shortFutureTimeouts = FutureTimeouts(1, Duration(50, "millis"))
   
+  /*
   implicit def AwaitBijection(implicit bi: Bijection[QueryResult, Future[ByteChunk]]): Bijection[QueryResult, ByteChunk] = new Bijection[QueryResult, ByteChunk] {
     def unapply(chunk: ByteChunk): QueryResult = bi.unapply(Future(chunk))
     def apply(res: QueryResult) = Await.result(bi(res), Duration(3, "second"))
   }
+  */
 }
 
 
@@ -267,6 +238,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
         case HttpResponse(HttpStatus(OK, _), _, Some(_), _) => ok
       }}
     }
+
     "create a job when an async query is posted" in {
       val res = for {
         HttpResponse(HttpStatus(Accepted, _), _, Some(Right(res)), _) <- asyncQuery(simpleQuery)

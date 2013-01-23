@@ -48,6 +48,7 @@ object JDBMShardServer extends BlueEyesServer with ShardService with AkkaDefault
     val accountFinder = WebAccountFinder(config.detach("accounts"))
     val jobManager = WebJobManager(config.detach("jobs")).withM[Future]
     val queryExecutorFactory = JDBMQueryExecutorFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
-    ManagedQueryShardState(queryExecutorFactory, apiKeyManager, accountManager, jobManager, clock)
+
+    ManagedQueryShardState(queryExecutorFactory, apiKeyFinder, jobManager, clock)
   }
 }

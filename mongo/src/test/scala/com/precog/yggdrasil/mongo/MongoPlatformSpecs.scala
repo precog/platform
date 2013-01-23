@@ -160,7 +160,7 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
 
-  val report = LoggingQueryLogger[Future]
+  val report = LoggingQueryLogger[Future, instructions.Line]
 
   trait TableCompanion extends MongoColumnarTableCompanion
 

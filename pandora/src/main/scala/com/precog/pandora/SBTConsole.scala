@@ -130,7 +130,7 @@ object SBTConsole {
 
     val storage = new Storage
 
-    val report = LoggingQueryLogger[Future]
+    val report = LoggingQueryLogger[Future, instructions.Line]
 
     object Projection extends JDBMProjectionCompanion {
       val fileOps = FilesystemFileOps

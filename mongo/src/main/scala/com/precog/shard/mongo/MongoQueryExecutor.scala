@@ -107,7 +107,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit val a
   }
 
   lazy val storage = new MongoStorageMetadataSource(Table.mongo)
-  lazy val report = LoggingQueryLogger[Future]
+  lazy val report = LoggingQueryLogger[Future, instructions.Line]
 
   def startup() = Future {
     Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))

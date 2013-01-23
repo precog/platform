@@ -17,22 +17,17 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package ragnarok
+package com.precog.ragnarok
 
-import com.precog.daze._
-import com.precog.accounts.InMemoryAccountManager
-
-import yggdrasil.{ ProjectionDescriptor, BaseConfig }
-import yggdrasil.jdbm3._
-import yggdrasil.actor._
-import yggdrasil.table.jdbm3.JDBMColumnarTableModule
-import yggdrasil.table.BlockStoreColumnarTableModuleConfig
-import yggdrasil.metadata.FileMetadataStorage
-
-import common.security._
-
-import util.{ FileOps, FilesystemFileOps }
+import com.precog.common.security._
+import com.precog.daze.LoggingQueryLogger
+import com.precog.yggdrasil.{ ProjectionDescriptor, BaseConfig }
+import com.precog.yggdrasil.jdbm3._
+import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.table.jdbm3.JDBMColumnarTableModule
+import com.precog.yggdrasil.table.BlockStoreColumnarTableModuleConfig
+import com.precog.yggdrasil.metadata.FileMetadataStorage
+import com.precog.util.{ FileOps, FilesystemFileOps }
 
 import java.io.File
 
@@ -111,5 +106,5 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
     def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = fileMetadataStorage.findArchiveRoot(descriptor)
   }
 
-  val report = LoggingQueryLogger[Future]
+  val report = LoggingQueryLogger[Future, instructions.Line]
 }
