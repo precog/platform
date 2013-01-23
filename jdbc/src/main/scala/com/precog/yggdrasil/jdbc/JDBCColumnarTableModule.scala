@@ -173,7 +173,7 @@ trait JDBCColumnarTableModule
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, new DateTime(rs.getTimestamp(index).getTime)) }
         Some(DBColumn(ColumnRef(selector, CDate), column, update))
 
-      case other => logger.warn("Unsupported JDBC column type: " + other); None
+      case other => logger.warn("Unsupported JDBC column type %d for %s".format(other, selector)); None
     }
   }
 
