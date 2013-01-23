@@ -1624,7 +1624,7 @@ object EmitterSpecs extends Specification
       }
     }
 
-    // Regression test for #39652091
+    // Regression test for #PLATFORM-503 (Pivotal #39652091)
     "not emit dups inside functions (might have let bindings with formals)" in {
       val input = """
         |
@@ -1643,6 +1643,21 @@ object EmitterSpecs extends Specification
 
       result must contain(PushString("India"))
       result must contain(PushString("Canada"))
+    }
+
+    // Regression test for #PLATFORM-652
+    "if/then/else compiles into match instead of cross" in {
+      val input = """
+        | conversions := //conversions
+        | conversions' := conversions with
+        | {female: if conversions.customer.gender = "female" then 1 else 0}
+        | conversions'
+        """.stripMargin
+
+      val result = compileEmit(input)
+
+      result must contain(Map2Match(JoinObject))
+      result must not(contain(Map2Cross(JoinObject)))
     }
   }
   
