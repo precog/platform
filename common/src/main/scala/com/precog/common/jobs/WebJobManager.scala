@@ -95,9 +95,9 @@ object WebJobManager {
 }
 
 case class RealWebJobManager(protocol: String, host: String, port: Int, path: String)(implicit val executionContext: ExecutionContext) extends WebJobManager {
+  val client = (new HttpClientXLightWeb).protocol(protocol).host(host).port(port).path(path)
   protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
-    val client = new HttpClientXLightWeb
-    f(client.protocol(protocol).host(host).port(port).path(path))
+    f(client)
   }
 }
 
