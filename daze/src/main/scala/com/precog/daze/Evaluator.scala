@@ -100,17 +100,23 @@ trait Evaluator[M[+_]] extends DAG
   
   def freshIdScanner: Scanner
 
-  def rewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph = {
-    (if (optimize) inlineStatics(_: DepGraph, ctx) else identity[DepGraph] _) andThen
-    (if (optimize) optimizeJoins(_) else identity) andThen
-    (orderCrosses _) andThen
-    (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
-    (if (optimize) { g => megaReduce(g, findReductions(g, ctx)) } else identity) andThen
-    (if (optimize) (memoize _) else identity)
-  }
+  def composeOptimizations(optimize: Boolean, funcs: List[DepGraph => DepGraph]): DepGraph => DepGraph =
+    if (optimize) funcs.map(Endo[DepGraph]).suml.run else identity
 
   def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
-    (if (optimize) inlineStatics(_: DepGraph, ctx) else identity[DepGraph] _)
+    composeOptimizations(optimize, List(
+      inlineStatics(_, ctx),
+      optimizeJoins(_)
+    ))
+
+  def fullRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
+    stagedRewriteDAG(optimize, ctx) andThen
+    (orderCrosses _) andThen
+    composeOptimizations(optimize, List(
+      inferTypes(JType.JUnfixedT),
+      { g => megaReduce(g, findReductions(g, ctx)) },
+      memoize
+    ))
   
   /**
    * The entry point to the evaluator.  The main implementation of the evaluator
@@ -120,7 +126,7 @@ trait Evaluator[M[+_]] extends DAG
   def eval(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean): M[Table] = {
     evalLogger.debug("Eval for %s = %s".format(ctx.apiKey.toString, graph))
   
-    val rewrittenDAG = rewriteDAG(optimize, ctx)(graph)
+    val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
     val stagingPoints = listStagingPoints(Queue(rewrittenDAG))
 
     def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[M, EvaluatorState, M[GroupingSpec]] = spec match {

@@ -44,7 +44,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
       val input = dag.LoadLocal(line, Const(line, CString("/numbers")))
 
       val ctx = EvaluationContext("testAPIKey", Path.Root, new DateTime())
-      val result = rewriteDAG(true, ctx)(input)
+      val result = fullRewriteDAG(true, ctx)(input)
 
       result.identities mustEqual Identities.Specs(Vector(LoadIds("/numbers")))
     }
@@ -74,7 +74,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
       val optimize = true
 
       // The should be a MegaReduce for the Count reduction
-      val optimizedDAG = rewriteDAG(optimize, ctx)(input)
+      val optimizedDAG = fullRewriteDAG(optimize, ctx)(input)
       val megaReduce = optimizedDAG.foldDown(true) {
         case m@MegaReduce(_, _, _) => Tag(Some(m)): FirstOption[DepGraph]
       }
