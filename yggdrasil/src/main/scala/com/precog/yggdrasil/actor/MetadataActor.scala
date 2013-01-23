@@ -97,9 +97,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ IngestBatchMetadata(updates, batchClock, batchOffset) =>
       MDC.put("metadata_batch", ingestBatchId.getAndIncrement().toString)
-      (for {
-        update <- updates.toList
-      } yield update match {
+      updates.toList.map {
         case (descriptor, Some(metadata)) =>
           ensureMetadataCached(descriptor).map { currentMetadata =>
             val newMetadata = currentMetadata |+| metadata
@@ -116,11 +114,14 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
             projections -= descriptor
             dirty -= descriptor
           }
-      }).sequence.unsafePerformIO
-      MDC.remove("metadata_batch")
-      
-      messageClock = messageClock |+| batchClock
-      kafkaOffset = batchOffset orElse kafkaOffset
+      }.sequence.map { _ =>
+        MDC.remove("metadata_batch")
+
+        messageClock = messageClock |+| batchClock
+        kafkaOffset = batchOffset orElse kafkaOffset
+      }.except {
+        case t: Throwable => IO { logger.error("Error during metadata batch update", t) }
+      }.unsafePerformIO
    
     case msg @ FindChildren(path) => 
       logger.trace(msg.toString)
