@@ -42,7 +42,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
         
       val expected = Const(line, CNum(45.14))
       
-      inlineStatics(input, defaultEvaluationContext, true) mustEqual expected
+      inlineStatics(input, defaultEvaluationContext) mustEqual expected
     }
     
     "detect and resolve operations at depth" in {
@@ -56,7 +56,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
         
       val expected = Const(line, CNum(48.28))
       
-      inlineStatics(input, defaultEvaluationContext, true) mustEqual expected
+      inlineStatics(input, defaultEvaluationContext) mustEqual expected
     }
     
     "produce CUndefined in cases where the operation is undefined" in {
@@ -68,7 +68,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
         
       val expected = Const(line, CUndefined)
       
-      inlineStatics(input, defaultEvaluationContext, true) mustEqual expected
+      inlineStatics(input, defaultEvaluationContext) mustEqual expected
     }
     
     "propagate through static computations CUndefined when produced at depth" in {
@@ -82,7 +82,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
         
       val expected = Const(line, CUndefined)
       
-      inlineStatics(input, defaultEvaluationContext, true) mustEqual expected
+      inlineStatics(input, defaultEvaluationContext) mustEqual expected
     }
     
     "propagate through non-singleton computations CUndefined when produced at depth" >> {
@@ -97,7 +97,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
           
         val expected = Const(line, CUndefined)
         
-        inlineStatics(input, defaultEvaluationContext, true) mustEqual expected
+        inlineStatics(input, defaultEvaluationContext) mustEqual expected
       }
       
       "right" >> {
@@ -109,7 +109,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
           
         val expected = Const(line, CUndefined)
         
-        inlineStatics(input, defaultEvaluationContext, true) mustEqual expected
+        inlineStatics(input, defaultEvaluationContext) mustEqual expected
       }
     }
     
@@ -121,7 +121,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
           dag.LoadLocal(line, Const(line, CString("/foo"))),
           Const(line, CBoolean(true)))
           
-        inlineStatics(input, defaultEvaluationContext, true) mustEqual dag.LoadLocal(line, Const(line, CString("/foo")))
+        inlineStatics(input, defaultEvaluationContext) mustEqual dag.LoadLocal(line, Const(line, CString("/foo")))
       }
       
       "false" >> {
@@ -129,7 +129,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
           dag.LoadLocal(line, Const(line, CString("/foo"))),
           Const(line, CBoolean(false)))
           
-        inlineStatics(input, defaultEvaluationContext, true) mustEqual Const(line, CUndefined)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(line, CUndefined)
       }
     }
   }

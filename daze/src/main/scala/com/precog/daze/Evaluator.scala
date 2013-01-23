@@ -101,7 +101,7 @@ trait Evaluator[M[+_]] extends DAG
   def freshIdScanner: Scanner
 
   def rewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph = {
-    (if (optimize) inlineStatics(_: DepGraph, ctx, true) else identity[DepGraph] _) andThen
+    (if (optimize) inlineStatics(_: DepGraph, ctx) else identity[DepGraph] _) andThen
     (if (optimize) optimizeJoins(_) else identity) andThen
     (orderCrosses _) andThen
     (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
@@ -110,7 +110,7 @@ trait Evaluator[M[+_]] extends DAG
   }
 
   def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
-    (if (optimize) inlineStatics(_: DepGraph, ctx, false) else identity[DepGraph] _)
+    (if (optimize) inlineStatics(_: DepGraph, ctx) else identity[DepGraph] _)
   
   /**
    * The entry point to the evaluator.  The main implementation of the evaluator
@@ -449,7 +449,7 @@ trait Evaluator[M[+_]] extends DAG
             state <- monadState.gets(identity)
             grouping2 <- transState liftM grouping
             result <- transState liftM Table.merge(grouping2) { (key: Table, map: Int => M[Table]) =>
-              val back = fullEval(child, splits + (s -> (key -> map)), s :: splits.keys.toList)
+              val back = fullEval(child, splits + (s -> (key -> map)), s :: splits.keys.toList, false)
 
               back.eval(state)  //: M[Table]
             }
@@ -915,7 +915,7 @@ trait Evaluator[M[+_]] extends DAG
      * graph is considered to be a special forcing point, but as it is the endpoint,
      * it will perforce be evaluated last.
      */
-    def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])], parentSplits: List[dag.Split]): StateT[M, EvaluatorState, Table] = {
+    def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])], parentSplits: List[dag.Split], optimize: Boolean): StateT[M, EvaluatorState, Table] = {
       import scalaz.syntax.monoid._
 
       // find the topologically-sorted forcing points (excluding the endpoint)
@@ -943,7 +943,7 @@ trait Evaluator[M[+_]] extends DAG
     }
     
     val resultState: StateT[M, EvaluatorState, Table] =
-      fullEval(rewrittenDAG, Map(), Nil)
+      fullEval(rewrittenDAG, Map(), Nil, optimize)
 
     val resultTable: M[Table] = resultState.eval(EvaluatorState())
     resultTable map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
@@ -978,8 +978,6 @@ trait Evaluator[M[+_]] extends DAG
 
   private[this] def replaceNode(graph: DepGraph, from: DepGraph, to: DepGraph) =
     graph.mapDown(recurse => {
-      case splitGroup: dag.SplitGroup => splitGroup
-      case splitParam: dag.SplitParam => splitParam
       case `from` => to
     })
 
