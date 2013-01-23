@@ -48,32 +48,88 @@ trait ArrayLib[M[+_]] extends GenOpcode[M] with Evaluator[M] {
         
         totalMaxLength = totalMaxLength max maxLength
         
-        val columns2 = slice.columns.foldLeft(Map[ColumnRef, Column]()) {
+        val columnTables = slice.columns.foldLeft(Map[ColumnRef, Array[Column]]()) {
           case (acc, (ColumnRef(CPath(CPathIndex(idx), ptail @ _*), tpe), col)) => {
             // remap around the mod ring w.r.t. max length
             // s.t. f(i) = f'(i * max + arrayI)
-            val remap = cf.util.Remap { idx2 =>
-              (idx2 - idx) / maxLength
-            }
-            
-            val col2 = remap(col).get   // known to be safe
-            
-            // remove indices which don't make sense
-            val definedComplement = new NullColumn {
-              def isDefinedAt(idx2: Int) = (idx2 - idx) % maxLength != 0
-            }
-            
-            val col3 = cf.util.FilterComplement(definedComplement)(col2).get
             
             val finalRef = ColumnRef(CPath(ptail: _*), tpe)
-            val finalCol = acc get finalRef flatMap { accCol =>
-              cf.util.UnionRight(accCol, col3)
-            } getOrElse col3
+            val colTable = acc get finalRef getOrElse (new Array[Column](maxLength))
             
-            acc.updated(finalRef, finalCol)
+            colTable(idx) = col
+            
+            acc.updated(finalRef, colTable)
           }
           
           case (acc, _) => acc
+        }
+        
+        val columns2 = columnTables map {
+          case (ref @ ColumnRef(_, CBoolean), colTable) => {
+            val col = new ModUnionColumn(colTable) with BoolColumn {
+              def apply(i: Int) = col(i).asInstanceOf[BoolColumn](row(i))
+            }
+            
+            ref -> col
+          }
+          
+          case (ref @ ColumnRef(_, CString), colTable) => {
+            val col = new ModUnionColumn(colTable) with StrColumn {
+              def apply(i: Int) = col(i).asInstanceOf[StrColumn](row(i))
+            }
+            
+            ref -> col
+          }
+          
+          case (ref @ ColumnRef(_, CLong), colTable) => {
+            val col = new ModUnionColumn(colTable) with LongColumn {
+              def apply(i: Int) = col(i).asInstanceOf[LongColumn](row(i))
+            }
+            
+            ref -> col
+          }
+          
+          case (ref @ ColumnRef(_, CDouble), colTable) => {
+            val col = new ModUnionColumn(colTable) with DoubleColumn {
+              def apply(i: Int) = col(i).asInstanceOf[DoubleColumn](row(i))
+            }
+            
+            ref -> col
+          }
+          
+          case (ref @ ColumnRef(_, CNum), colTable) => {
+            val col = new ModUnionColumn(colTable) with NumColumn {
+              def apply(i: Int) = col(i).asInstanceOf[NumColumn](row(i))
+            }
+            
+            ref -> col
+          }
+          
+          case (ref @ ColumnRef(_, CEmptyObject), colTable) => {
+            val col = new ModUnionColumn(colTable) with EmptyObjectColumn
+            
+            ref -> col
+          }
+          
+          case (ref @ ColumnRef(_, CEmptyArray), colTable) => {
+            val col = new ModUnionColumn(colTable) with EmptyArrayColumn
+            
+            ref -> col
+          }
+          
+          case (ref @ ColumnRef(_, CNull), colTable) => {
+            val col = new ModUnionColumn(colTable) with NullColumn
+            
+            ref -> col
+          }
+          
+          case (ref @ ColumnRef(_, CDate), colTable) => {
+            val col = new ModUnionColumn(colTable) with DateColumn {
+              def apply(i: Int) = col(i).asInstanceOf[DateColumn](row(i))
+            }
+            
+            ref -> col
+          }
         }
         
         Slice(columns2, slice.size * maxLength)
