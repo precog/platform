@@ -121,7 +121,6 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M] with BaseBlockStoreTestMo
   }
 
   object yggConfig extends YggConfig 
-
 }
 
 trait EvaluatorSpecs[M[+_]] extends Specification

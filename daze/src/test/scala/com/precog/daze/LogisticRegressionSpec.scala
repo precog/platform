@@ -109,7 +109,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
         CPath(CPathIndex(1))) sorted
 
       val samples = createLogisticSamplePoints(num, 100, actualThetas)
-      val points = jvalues(samples, cpaths) map { _.toString }
+      val points = jvalues(samples, cpaths) map { _.renderCompact }
 
       val tmpFile = File.createTempFile("values", ".json")
       IOUtils.writeSeqToFile(points, tmpFile).unsafePerformIO
@@ -167,7 +167,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
         CPath(CPathIndex(1))) sorted
 
       val samples = createLogisticSamplePoints(num, 100, actualThetas)
-      val points = jvalues(samples, cpaths) map { _.toString }
+      val points = jvalues(samples, cpaths) map { _.renderCompact }
 
       val tmpFile = File.createTempFile("values", ".json")
       IOUtils.writeSeqToFile(points, tmpFile).unsafePerformIO
@@ -234,7 +234,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
         val samples0 = createLogisticSamplePoints(num, 100, actualThetas)
         samples0 map { case (xs, y) => (Random.nextGaussian +: Random.nextGaussian +: xs, y) }
       }
-      val points = jvalues(samples, cpaths, num) map { _.toString }
+      val points = jvalues(samples, cpaths, num) map { _.renderCompact }
 
       val suffix = ".json"
       val tmpFile = File.createTempFile("values", suffix)
