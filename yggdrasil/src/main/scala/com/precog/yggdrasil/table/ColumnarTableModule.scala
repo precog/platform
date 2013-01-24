@@ -1510,42 +1510,68 @@ trait ColumnarTableModule[M[+_]]
      * 
      * "the fox said: ""hello, my name is fred."""
      */
-    def renderCsv(): M[String] = {
-      import scala.collection.mutable
+    def renderCsv(): StreamT[M, CharBuffer] = {
+      import scala.collection.{Map => GenMap}
+      import scala.util.Sorting
 
       /**
-       * Represents the column headers we have so far. We track three
-       * things:
+       * Represents the column headers we have. We track three things:
        * 
        *  1. n: the number of headers so far.
        *  2. m: a map from path strings to header position
-       *  3. a: a list of path strings used.
+       *  3. a: an array of path strings used.
        * 
        * The class is immutable so as we find new headers we'll create
        * new instances. If this proves to be a problem we could easily
        * make a mutable version.
        */
-      class Indices(n: Int, m: Map[String, Int], a: Vector[String]) {
+      class Indices(n: Int, m: GenMap[String, Int], a: Array[String]) {
         def size = n
-        def getPaths: Vector[String] = a
+        def getPaths: Array[String] = a
         def columnForPath(path: String) = m(path)
         def pathForColumn(col: Int) = a(col)
-        def addPath(path: String): Indices = if (m.contains(path))
-          this
-        else
-          new Indices(n + 1, m.updated(path, n), a :+ path)
+        def combine(that: Indices): Indices = {
+          val buf = new mutable.ArrayBuffer[String](a.length)
+          buf ++= a
+          that.getPaths.foreach(p => if (!m.contains(p)) buf.append(p))
+          Indices.fromPaths(buf.toArray)
+        }
+        override def equals(that: Any): Boolean = that match {
+          case that: Indices =>
+            val len = n
+            if (len != that.size) return false
+            var i = 0
+            val paths = that.getPaths
+            while (i < len) {
+              if (a(i) != paths(i)) return false
+              i += 1
+            }
+            true
+          case _ =>
+            false
+        }
+        def writeToBuilder(sb: StringBuilder): Unit = {
+          if (n == 0) return ()
+          sb.append(a(0))
+          var i = 1
+          val len = n
+          while (i < len) { sb.append(','); sb.append(a(i)); i += 1 }
+          sb.append("\r\n")
+        }
       }
 
       object Indices {
-        def empty = new Indices(0, Map.empty[String, Int], Vector.empty[String])
-      }
+        def empty: Indices = new Indices(0, Map.empty[String, Int], new Array[String](0))
 
-      /**
-       * Represents a row of CSV values. We track how many values we
-       * were using so that later (when we know how many columns the
-       * entire document had) we can pad extra commas on the end.
-       */
-      case class Line(str: String, n: Int)
+        def fromPaths(ps: Array[String]): Indices = {
+          val paths = ps.sorted
+          val m = mutable.Map.empty[String, Int]
+          var i = 0
+          val len = paths.length
+          while (i < len) { m(paths(i)) = i; i += 1 }
+          new Indices(len, m, paths)
+        }
+      }
 
       // these methods will quote CSV values for us
       // they could probably be a bit faster but are OK so far.
@@ -1579,6 +1605,12 @@ trait ColumnarTableModule[M[+_]]
       }
 
       /**
+       * Generate indices for this slice.
+       */
+      def indicesForSlice(slice: Slice): Indices =
+        Indices.fromPaths(slice.columns.keys.map(_.selector.toString).toArray)
+
+      /**
        * Renders a slice into an array of lines, as well as updating
        * our Indices with any previous unseen paths.
        * 
@@ -1590,28 +1622,38 @@ trait ColumnarTableModule[M[+_]]
        * Since we know in advance how many rows we have, we can return
        * an array of lines.
        */
-      def renderSlice(indices: Indices, slice: Slice): (Indices, Array[Line]) = {
-        // add all selector paths from our columns to the map
+      def renderSlice(pastIndices: Option[Indices], slice: Slice): (Indices, CharBuffer) = {
+
+        val indices = indicesForSlice(slice)
         val height = slice.size
-        val keys = slice.columns.keys.map(_.selector).toArray
-        scala.util.Sorting.quickSort(keys)
-        val updated = keys.foldLeft(indices)(_ addPath _.toString)
-        val width = updated.size
+        val width = indices.size
+
+        if (width == 0) return (indices, CharBuffer.allocate(0))
 
         val items = slice.columns.toArray
         val ncols = items.length
 
         // load each column into strings
         val columns = items.map { case (_, col) =>
-            renderColumn(col, height)
+          renderColumn(col, height)
         }
         val positions = items.map { case (ColumnRef(path, _), _) =>
-            updated.columnForPath(path.toString)
+          indices.columnForPath(path.toString)
         }
 
-        val lines = new Array[Line](height)
+        val sb = new StringBuilder()
+
+        pastIndices match {
+          case None => indices.writeToBuilder(sb)
+          case Some(ind) => if (ind != indices) {
+            sb.append("\r\n")
+            indices.writeToBuilder(sb)
+          }
+        }
+
         var row = 0
         while (row < height) {
+          // fill in all the buckets for this particular row
           val buckets = Array.fill(width)("")
           var i = 0
           while (i < ncols) {
@@ -1619,66 +1661,31 @@ trait ColumnarTableModule[M[+_]]
             if (s != "") buckets(positions(i)) = s
             i += 1
           }
-          lines(row) = Line(buckets.mkString(","), width)
-          row += 1
-        }
-        (updated, lines)
-      }
 
-      /**
-       * Given indices and a vector of arrays of lines, render the
-       * actual CSV output string.
-       * 
-       * This method pretty much does what it says.
-       */
-      def linesToString(indices: Indices, groups: Vector[Array[Line]]): String = {
-        val paths = indices.getPaths
-        val ncols = paths.length
-        val sb = new StringBuilder
-        val crlf = "\r\n"
-
-        // append headers
-        sb.append(paths.map(quoteIfNeeded).mkString(","))
-        sb.append(crlf)
-
-        groups.foreach { arr =>
-          var i = 0
-          val len = arr.length
-          while (i < len) {
-            val line = arr(i)
-            sb.append(line.str)
-            sb.append("," * (ncols - line.n))
-            sb.append(crlf)
+          // having filled the buckets, add them to the string builder
+          sb.append(buckets(0))
+          i = 1
+          while (i < width) {
+            sb.append(',')
+            sb.append(buckets(i))
             i += 1
           }
+          sb.append("\r\n")
+
+          row += 1
         }
-        sb.toString
+        (indices, CharBuffer.wrap(sb))
       }
 
-      /**
-       * This folds the stream of slices into indices and groups, and
-       * then uses those to generate the CSV output.
-       */
-      def loop(stream: StreamT[M, Slice], indices: Indices, groups: Vector[Array[Line]]): M[String] = {
-        stream.uncons.flatMap {
-          case None => 
-            M.point(linesToString(indices, groups))
-          case Some((slice, stream)) =>
-            val (updated, lines) = renderSlice(indices, slice)
-            loop(stream, updated, groups :+ lines)
-        }
+      StreamT.unfoldM((slices, none[Indices])) { case (stream, pastIndices) =>
+          stream.uncons.map {
+            case Some((slice, tail)) =>
+              val (indices, cb) = renderSlice(pastIndices, slice)
+              Some((cb, (tail, Some(indices))))
+            case None =>
+              None
+          }
       }
-
-      loop(slices, Indices.empty, Vector.empty[Array[Line]])
-    }
-
-    def renderJsonToString(delimiter: Char = '\n'): M[String] = {
-      val stream = renderJson(delimiter)
-      def loop(stream: StreamT[M, CharBuffer], s: String): M[String] = stream.uncons.flatMap {
-        case Some((cb, tail)) => loop(tail, s + cb.toString)
-        case None => M.point(s)
-      }
-      loop(stream, "")
     }
 
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {

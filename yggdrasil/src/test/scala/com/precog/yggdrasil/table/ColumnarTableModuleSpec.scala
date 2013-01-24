@@ -38,6 +38,7 @@ import scala.util.Random
 import scalaz._
 import scalaz.effect.IO 
 import scalaz.syntax.copointed._
+import scalaz.syntax.monad._
 import scalaz.std.anyVal._
 import scalaz.std.stream._
 
@@ -49,6 +50,8 @@ import org.scalacheck.Gen
 import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
+
+import java.nio.CharBuffer
 
 import TableModule._
 import SampleData._
@@ -573,11 +576,24 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       }
     }
 
+    def streamToString(stream: StreamT[M, CharBuffer]): String = {
+      def loop(stream: StreamT[M, CharBuffer], sb: StringBuilder): M[String] =
+        stream.uncons.flatMap {
+          case None =>
+            M.point(sb.toString)
+          case Some((cb, tail)) =>
+            sb.append(cb)
+            loop(tail, sb)
+        }
+      loop(stream, new StringBuilder).copoint
+    }
+
+
     def testRenderCsv(json: String, maxSliceSize: Option[Int] = None): String = {
       val t0 = System.currentTimeMillis()
       val es = JParser.parseManyFromString(json).valueOr(throw _)
       val table = fromJson(es.toStream, maxSliceSize)
-      val csv = table.renderCsv().copoint
+      val csv = streamToString(table.renderCsv())
       val t = System.currentTimeMillis() - t0
       // uncomment for timing info
       //println("rendered csv (len=%d) in %d ms" format (csv.length, t))
@@ -618,7 +634,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
         val t0 = System.currentTimeMillis()
         val es = JParser.parseManyFromString(json).valueOr(throw _)
         val table = fromJson(es.toStream, maxSliceSize)
-        val output = table.renderJsonToString(',').copoint
+        val output = streamToString(table.renderJson(','))
         val t = System.currentTimeMillis() - t0
         // uncomment for timing info
         //println("rendered json (len=%d) in %d ms" format (output.length, t))
@@ -640,11 +656,13 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
     "test string escaping" in {
       val csv = testRenderCsv("{\"s\":\"a\\\"b\",\"t\":\",\",\"u\":\"aa\\nbb\",\"v\":\"a,b\\\"c\\r\\nd\"}")
+
       val expected = "" +
 ".s,.t,.u,.v\r\n" +
 "\"a\"\"b\",\",\",\"aa\n" +
 "bb\",\"a,b\"\"c\r\n" +
 "d\"\r\n"
+
       csv must_== expected
     }
 
@@ -661,8 +679,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 {"c": 100, "g": 934}
 """.trim
 
-      val csv = testRenderCsv(input)
-
       val expected = "" +
 ".a,.b,.c,.d,.e,.f.aaa,.g\r\n" +
 "1,,,,,,\r\n" +
@@ -674,8 +690,15 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 ",,,,,9,\r\n" +
 ",,100,,,,934\r\n"
 
-      csv must_== expected
+      testRenderCsv(input) must_== expected
 
+      val expected2 = "" +
+".a,.b\r\n1,\r\n,99.1\r\n\r\n" +
+".a,.c\r\ntrue,\r\n,jgeiwgjewigjewige\r\n\r\n" +
+".b,.d,.e\r\nfoo,999,\r\n,,null\r\n\r\n" +
+".c,.f.aaa,.g\r\n,9,\r\n100,,934\r\n"
+
+      testRenderCsv(input, Some(2)) must_== expected2
     }
   }
 }

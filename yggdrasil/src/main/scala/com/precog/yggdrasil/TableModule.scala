@@ -211,7 +211,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
 
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer]
 
-    def renderCsv(): M[String]
+    def renderCsv(): StreamT[M, CharBuffer]
     
     // for debugging only!!
     def toJson: M[Iterable[JValue]]
