@@ -20,9 +20,9 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
 
   "DAG rewriting" should {
     "compute identities given a relative path" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
-      val input = dag.LoadLocal(line, Const(line, CString("/numbers")))
+      val input = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
 
       val ctx = EvaluationContext("testAPIKey", Path.Root, new DateTime())
       val result = fullRewriteDAG(true, ctx)(input)
@@ -36,20 +36,20 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
        * foo.a + count(foo) + foo.c
        */
 
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
-      val t1 = dag.LoadLocal(line, Const(line, CString("/hom/pairs")))
+      val t1 = dag.LoadLocal(Const(CString("/hom/pairs"))(line))(line)
 
       val input =
-        Join(line, Add, IdentitySort,
-          Join(line, Add, CrossLeftSort,
-            Join(line, DerefObject, CrossLeftSort,
+        Join(Add, IdentitySort,
+          Join(Add, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort,
               t1,
-              Const(line, CString("first"))),
-            dag.Reduce(line, Count, t1)),
-          Join(line, DerefObject, CrossLeftSort,
+              Const(CString("first"))(line))(line),
+            dag.Reduce(Count, t1)(line))(line),
+          Join(DerefObject, CrossLeftSort,
             t1,
-            Const(line, CString("second"))))
+            Const(CString("second"))(line))(line))(line)
 
       val ctx = EvaluationContext("testAPIKey", Path.Root, new DateTime())
       val optimize = true
@@ -57,7 +57,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
       // The should be a MegaReduce for the Count reduction
       val optimizedDAG = fullRewriteDAG(optimize, ctx)(input)
       val megaReduce = optimizedDAG.foldDown(true) {
-        case m@MegaReduce(_, _, _) => Tag(Some(m)): FirstOption[DepGraph]
+        case m@MegaReduce(_, _) => Tag(Some(m)): FirstOption[DepGraph]
       }
 
       megaReduce must beSome
@@ -69,10 +69,10 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
       )
 
       val hasMegaReduce = rewritten.foldDown(false) {
-        case m@MegaReduce(_, _, _) => true
+        case m@MegaReduce(_, _) => true
       }(disjunction)
       val hasConst = rewritten.foldDown(false) {
-        case m@Const(_, CNum(n)) if n == 42 => true
+        case m@Const(CNum(n)) if n == 42 => true
       }(disjunction)
 
       // Must be turned into a Const node
