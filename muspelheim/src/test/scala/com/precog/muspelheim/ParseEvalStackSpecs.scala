@@ -74,6 +74,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val clock = blueeyes.util.Clock.System
     
     val maxSliceSize = self.sliceSize
+    val smallSliceSize = 3
 
     val idSource = new FreshAtomicIdSource
   }
