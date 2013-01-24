@@ -14,6 +14,7 @@ import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
 import akka.pattern.ask
 import akka.util.{Duration, DurationLong, Timeout}
+import akka.util.duration._
 
 import blueeyes.json._
 import blueeyes.persistence.cache.Cache
@@ -68,11 +69,11 @@ case object InsertNoMetadata
 
 ////////////////
 trait ActorProjectionModuleConfig extends BaseConfig {
-  def maxOpenProjections: Int = config[Int]("actors.store.max_open_projections", 5000)
+  def projectionRetrievalTimeout: Timeout = config[Long]("actors.store.idle_projection_seconds", 300) seconds
   def idleProjectionDelay: Duration = config[Long]("actors.store.idle_projection_seconds", 300) seconds
 }
 
-trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Block] extends YggConfigComponent { self =>
+trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Block] with YggConfigComponent { self =>
   type YggConfig <: ActorProjectionModuleConfig 
 
   val rawProjectionModule: RawProjectionModule[IO, Key, Block]
@@ -97,7 +98,7 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
   // ACTORS //
   ////////////
 
-  class ProjectionsActor(maxIdleTime: Duration, projectionTimeout: Timeout) extends Actor { self =>
+  class ProjectionsActor extends Actor { self =>
     private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionsActor")
 
     private val projectionActors = mutable.Map.empty[ProjectionDescriptor, Projection]
@@ -107,8 +108,8 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
         descriptor, 
         new Projection(
           descriptor, 
-          context.actorOf(Props(new ProjectionActor(context.system.scheduler, descriptor, maxIdleTime))), 
-          projectionTimeout
+          context.actorOf(Props(new ProjectionActor(context.system.scheduler, descriptor, yggConfig.idleProjectionDelay))), 
+          yggConfig.projectionRetrievalTimeout
         )
       )
     }
