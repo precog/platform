@@ -729,8 +729,12 @@ object ImportTools extends Command with Logging {
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
     val io = for (ms <- FileMetadataStorage.load(config.storageRoot, config.archiveRoot, FilesystemFileOps)) yield {
-      object shardModule extends StandaloneShardSystemActorModule[Array[Byte], table.Slice] { self =>
-        class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig with JDBMProjectionModuleConfig with ActorStorageModuleConfig {
+      object shardModule extends ActorStorageModule with ActorProjectionModule[Array[Byte], table.Slice] with StandaloneActorProjectionSystem { self =>
+        class YggConfig(val config: Configuration) extends BaseConfig 
+            with StandaloneShardSystemConfig 
+            with JDBMProjectionModuleConfig 
+            with ActorStorageModuleConfig 
+            with ActorProjectionModuleConfig {
           val maxSliceSize = config[Int]("precog.jdbm.maxSliceSize", 50000)
           val ingestConfig = None
           val smallSliceSize = config[Int]("precog.jdbm.smallSliceSize", 8)
@@ -753,22 +757,16 @@ object ImportTools extends Command with Logging {
         implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
         implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(ExecutionContext.defaultExecutionContext(actorSystem))
 
-        val shardActors @ ShardActors(ingestSupervisor, metadataActor, projectionsActor, metadataSync) = 
-          initShardActors(ms, new InMemoryAccountManager[Future]())
+        val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
+        val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) = 
+          initShardActors(ms, new InMemoryAccountManager[Future](), projectionsActor)
 
         object Projection extends ProjectionCompanion(projectionsActor, yggConfig.metadataTimeout)
 
-        object actorStorage extends ActorStorageModule {
-          type YggConfig = self.YggConfig
-          val yggConfig = self.yggConfig
-          implicit val M = self.M
-          val accessControl = new UnrestrictedAccessControl()
-          class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor) {
-            val accessControl = actorStorage.accessControl
-          }
+        val accessControl = new UnrestrictedAccessControl()
+        class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor) 
 
-          val storage = new Storage
-        }
+        val storage = new Storage
       }
 
       import shardModule.{logger => _, _}
@@ -789,7 +787,7 @@ object ImportTools extends Command with Logging {
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
               logger.info("Saving batch " + id + " of size " + batch.size)
-              Await.result(actorStorage.storage.storeBatch(batch.toSeq), Duration(300, "seconds"))
+              Await.result(storage.storeBatch(batch.toSeq), Duration(300, "seconds"))
               logger.info("Batch saved")
             }
           }

@@ -46,7 +46,7 @@ import scalaz._
 import scalaz.syntax.id._
 
 
-trait ProductionShardSystemConfig extends ShardConfig {
+trait KafkaIngestActorProjectionSystemConfig extends ShardConfig {
   case class IngestConfig(
     bufferSize: Int,
     maxParallel: Int, 
@@ -88,13 +88,13 @@ trait ProductionShardSystemConfig extends ShardConfig {
 }
 
 trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
-  type YggConfig <: ProductionShardSystemConfig
+  type YggConfig <: KafkaIngestActorProjectionSystemConfig
 
   def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog
 
-  def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = {
+  def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
-    yggConfig.ingestConfig map { conf => () => 
+    yggConfig.ingestConfig map { conf => actorSystem.actorOf(Props(
       new KafkaShardIngestActor(shardId = yggConfig.shardId, 
                                          initialCheckpoint = checkpoint, 
                                          consumer = consumer, 
@@ -109,7 +109,7 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
           logger.debug(pendingCheckpoint + " to be updated")
           metadataActor ! IngestBatchMetadata(updates, pendingCheckpoint.messageClock, Some(pendingCheckpoint.offset))
         }
-      }
+      }), "ingest")
     }
   }
 
@@ -119,7 +119,6 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
 trait StandaloneShardSystemConfig extends ShardConfig {
   def shardId = "standalone"
   def logPrefix = "[Standalone Yggdrasil Shard]"
-  def metadataServiceTimeout = metadataTimeout
 }
 
 trait StandaloneActorProjectionSystem extends ShardSystemActorModule {

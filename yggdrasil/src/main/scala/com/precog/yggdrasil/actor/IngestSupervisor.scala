@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package actor 
 
 import com.precog.common._
+import com.precog.common.json._
 
 import akka.actor.{Actor,ActorRef,Props,Scheduler}
 import akka.dispatch.Await
@@ -66,11 +67,13 @@ case class DirectIngestData(messages: Seq[IngestMessage]) extends ShardIngestAct
  * by the ingestActor, and the "manual" ingest pipeline which may send direct ingest requests to
  * this actor. 
  */
-abstract class IngestSupervisor(ingestActor: Option[ActorRef], 
-                                projectionsActor: ActorRef,
-                                idleDelay: Duration,
-                                scheduler: Scheduler,
-                                shutdownCheck: Duration) extends Actor {
+class IngestSupervisor( ingestActor: Option[ActorRef], 
+                        metadataActor: ActorRef,
+                        projectionsActor: ActorRef,
+                        scheduler: Scheduler,
+                        metadataTimeout: Timeout,
+                        idleDelay: Duration,
+                        shutdownCheck: Duration) extends Actor {
 
   protected lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.IngestSupervisor")
 
@@ -128,8 +131,8 @@ abstract class IngestSupervisor(ingestActor: Option[ActorRef],
    */
   def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
     logger.debug("Beginning processing of %d messages".format(messages.size))
-    implicit val to = yggConfig.metadataTimeout
-    implicit val execContext = ExecutionContext.defaultExecutionContext(ingestActorSystem)
+    implicit val to = metadataTimeout
+    implicit val executor = context.dispatcher
     
     val archivePaths = messages.collect { case ArchiveMessage(_, Archive(path, _)) => path } 
 
@@ -143,7 +146,7 @@ abstract class IngestSupervisor(ingestActor: Option[ActorRef],
       archivePaths map { path =>
         (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Set[ProjectionDescriptor]]
       }
-    }.onSuccess {
+    } onSuccess {
       case descMaps : Seq[Set[ProjectionDescriptor]] => 
         val projectionMap: Map[Path, Seq[ProjectionDescriptor]] = (for {
           descMap <- descMaps

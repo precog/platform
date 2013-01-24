@@ -55,14 +55,13 @@ trait ShardConfig extends BaseConfig {
   def metadataTimeout: Timeout = config[Long]("actors.metadata.timeout", 30) seconds
   def stopTimeout: Timeout = config[Long]("actors.stop.timeout", 300) seconds
 
-
   def metadataSyncPeriod: Duration = config[Int]("actors.metadata.sync_minutes", 1) minutes
   def batchStoreDelay: Duration    = config[Long]("actors.store.idle_millis", 1000) millis
   def batchShutdownCheckInterval: Duration = config[Int]("actors.store.shutdown_check_seconds", 1) seconds
 }
 
 // The ingest system consists of the ingest supervisor and ingest actor(s)
-case class ShardActors(ingestSystem: ActorRef, metadataActor: ActorRef, projectionsActor: ActorRef, metadataSync: Cancellable)
+case class ShardActors(ingestSystem: ActorRef, metadataActor: ActorRef, metadataSync: Cancellable)
 
 object ShardActors extends Logging {
   def stop(config: ShardConfig, actors: ShardActors)(implicit system: ActorSystem, executor: ExecutionContext): Future[Unit] = {
@@ -70,7 +69,6 @@ object ShardActors extends Logging {
       _ <- Future(logger.info("Stopping shard system"))
       _ <- Future(actors.metadataSync.cancel())
       _ <- actorStop(config, actors.ingestSystem, "ingest")
-      _ <- actorStop(config, actors.projectionsActor, "projections")
       _ <- actorStop(config, actors.metadataActor, "metadata")
     } yield ()
   }
@@ -119,7 +117,7 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
 
     logger.debug("Initializing ingest system")
     val ingestSystem = ingestActorSystem.actorOf(Props(
-      new IngestSupervisor(ingestActor, yggConfig.batchStoreDelay, projectionsActor, ingestActorSystem.scheduler, yggConfig.batchShutdownCheckInterval)
+      new IngestSupervisor(ingestActor, metadataActor, projectionsActor, ingestActorSystem.scheduler, yggConfig.metadataTimeout, yggConfig.batchStoreDelay, yggConfig.batchShutdownCheckInterval)
       ), 
       "ingestRouter"
     )
