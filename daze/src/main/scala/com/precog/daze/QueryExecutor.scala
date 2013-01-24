@@ -48,11 +48,17 @@ object EvaluationError {
   val timeoutError: EvaluationError = TimeoutError
 }
 
+sealed trait QueryOutput
+case object JsonOutput extends QueryOutput
+case object CsvOutput extends QueryOutput
+
 case class QueryOptions(
   page: Option[(Long, Long)] = None,
   sortOn: List[CPath] = Nil,
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending,
-  timeout: Option[Long] = None)
+  timeout: Option[Long] = None,
+  output: QueryOutput = JsonOutput
+)
 
 trait MetadataClient[M[+_]] {
   def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]]

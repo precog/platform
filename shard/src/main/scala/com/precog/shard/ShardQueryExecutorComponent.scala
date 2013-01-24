@@ -81,7 +81,7 @@ trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]]
     val solution: Validation[Throwable, Validation[EvaluationError, StreamT[M, CharBuffer]]] = Validation.fromTryCatch {
       asBytecode(query) flatMap { bytecode =>
         ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
-          Validation.success(jsonChunks {
+          Validation.success(outputChunks(opts.output) {
             applyQueryOptions(opts) {
               if (queryLogger.isDebugEnabled) {
                 eval(dag, evaluationContext, true) map {
@@ -176,6 +176,24 @@ trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]]
         )
       )
     }
+  }
+
+  private def outputChunks(output: QueryOutput)(tableM: M[Table]): StreamT[M, CharBuffer] = {
+    System.err.println("query output: %s" format output)
+    output match {
+      case JsonOutput =>
+        System.err.println("json")
+        jsonChunks(tableM)
+      case CsvOutput =>
+        System.err.println("csv")
+        csvChunks(tableM)
+    }
+  }
+
+  private def csvChunks(tableM: M[Table]): StreamT[M, CharBuffer] = {
+    import trans._
+    val spec = DerefObjectStatic(Leaf(Source), TableModule.paths.Value)
+    StreamT.wrapEffect(tableM.map(_.transform(spec).renderCsv))
   }
 
   private def jsonChunks(tableM: M[Table]): StreamT[M, CharBuffer] = {
