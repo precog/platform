@@ -27,7 +27,7 @@ function run_sbt() {
     fi
 }
 
-while getopts ":m:saokc" opt; do
+while getopts ":m:saokcf" opt; do
     case $opt in
         k)
             SKIPCLEAN=1
@@ -44,6 +44,9 @@ while getopts ":m:saokc" opt; do
 	c)
 	    COVERAGE=1
 	    ;;
+	f)
+	    FAILFAST=1
+	    ;;
         \?)
             echo "Usage: `basename $0` [-a] [-o] [-s] [-k] [-m <mongo port>]"
             echo "  -a: Build assemdblies only"
@@ -51,6 +54,7 @@ while getopts ":m:saokc" opt; do
             echo "  -s: Skip all clean/compile setup steps"
             echo "  -k: Skip sbt clean step"
 	    echo "  -c: Do code coverage"
+	    echo "  -f: Fail fast if a module test fails"
             exit 1
             ;;
     esac
@@ -63,6 +67,9 @@ else
 	SCCT=""
 	SCCTTEST=""
 fi
+
+# enable errexit (jenkins does it, but not shell)
+set -e
 
 if [ -z "$SKIPSETUP" ]; then
     echo "Linking quirrel examples"
@@ -82,7 +89,10 @@ if [ ! -f "yggdrasil/target/yggdrasil-assembly-$(git describe).jar" ]; then
 fi
 
 # For the runs, we don't want to terminate early if a particular project fails
-set +e
+if [ -z "$FAILFAST" ]
+then
+	set +e
+fi
 
 if [ -z "$SKIPTEST" ]; then
     for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil shard pandora mongo; do
