@@ -208,17 +208,18 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   type Reduction <: ReductionImpl
 }
 
-trait StdLib[M[+_]] extends 
-      InfixLib[M] with 
-      ReductionLib[M] with 
-      TimeLib[M] with 
-      MathLib[M] with 
-      TypeLib[M] with 
-      StringLib[M] with 
-      StatsLib[M] with 
-      LogisticRegressionLib[M] with
-      LinearRegressionLib[M] with
-      FSLib[M]
+trait StdLib[M[+_]] 
+    extends InfixLib[M] 
+    with ReductionLib[M]
+    with ArrayLib[M]
+    with TimeLib[M] 
+    with MathLib[M] 
+    with TypeLib[M] 
+    with StringLib[M] 
+    with StatsLib[M] 
+    with LogisticRegressionLib[M]
+    with LinearRegressionLib[M]
+    with FSLib[M]
 
 object StdLib {
   import java.lang.Double.{isNaN, isInfinite}
