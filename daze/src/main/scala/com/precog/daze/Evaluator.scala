@@ -403,13 +403,13 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pendingTable <- prepareEval(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
-            table = pendingTable.table
+            result = pendingTable.table
                 .transform(liftedTrans)
                 .transform(DerefObjectStatic(Leaf(Source), paths.Value))
                 .transform(spec)
                 .reduce(reduction.reducer(ctx))(reduction.monoid)
 
-            result = table.map(reduction.extract)
+            table = result.map(reduction.extract)
 
             keyWrapped = trans.WrapObject(
               trans.ConstLiteral(
@@ -421,10 +421,10 @@ trait Evaluator[M[+_]] extends DAG
               keyWrapped,
               trans.WrapObject(Leaf(Source), paths.Value.name))
 
-            wrapped <- transState liftM (result map { table =>
+            wrapped <- transState liftM (table map { table =>
               table.transform(valueWrapped)
             })
-            cvalue <- transState liftM table.map(reduction.extractValue)
+            cvalue <- transState liftM result.map(reduction.extractValue)
 
             _ <- monadState.modify { state =>
               state.copy(
@@ -931,11 +931,7 @@ trait Evaluator[M[+_]] extends DAG
       type EvaluatorStateT[A] = StateT[M, EvaluatorState, A]
       val preState = toEval.foldLeftM[EvaluatorStateT, DepGraph](graph) {
         case (graph, node) => for {
-          reductions <- monadState.gets(_.reductions)
-          rewrittenGraph = stagedRewriteDAG(optimize, ctx)(reductions.toList.foldLeft(graph) {
-            case (graph, (from, Some(result))) if optimize => inlineNodeValue(graph, from, result)
-            case (graph, _) => graph
-          })
+          rewrittenGraph <- stagedOptimizations(graph, ctx, optimize)
           _ <- prepareEval(node, splits)
         } yield rewrittenGraph
       }
@@ -954,6 +950,14 @@ trait Evaluator[M[+_]] extends DAG
     val resultTable: M[Table] = resultState.eval(EvaluatorState())
     resultTable map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
   }
+
+  private[this] def stagedOptimizations(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean) =
+    for {
+      reductions <- monadState.gets(_.reductions)
+    } yield stagedRewriteDAG(optimize, ctx)(reductions.toList.foldLeft(graph) {
+      case (graph, (from, Some(result))) if optimize => inlineNodeValue(graph, from, result)
+      case (graph, _) => graph
+    })
 
   /**
    * Takes a graph, a node and a value. Replaces the node (and
