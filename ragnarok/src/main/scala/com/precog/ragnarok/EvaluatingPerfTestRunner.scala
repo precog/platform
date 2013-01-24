@@ -67,6 +67,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
     val maxEvalDuration: Duration = Duration(30, "seconds")
     
     val maxSliceSize = 10000
+    val smallSliceSize = 8
 
     val idSource = new FreshAtomicIdSource
   }

@@ -32,7 +32,7 @@ import akka.dispatch.{Future, ExecutionContext}
 
 import java.nio.CharBuffer
 
-import scalaz.{ Validation, StreamT, Id }
+import scalaz.{ Validation, StreamT, Id, Applicative }
 import Validation._
 
 sealed trait EvaluationError
@@ -59,8 +59,15 @@ trait MetadataClient[M[+_]] {
   def structure(apiKey: APIKey, path: Path): M[Validation[String, JObject]]
 }
 
-trait QueryExecutor[M[+_], +A] {
+trait QueryExecutor[M[+_], +A] { self =>
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, A]]
+
+  def map[B](f: A => B)(implicit M: Applicative[M]): QueryExecutor[M, B] = new QueryExecutor[M, B] {
+    import scalaz.syntax.monad._
+    def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, B]] = {
+      self.execute(apiKey, query, prefix, opts) map { _ map f }
+    }
+  }
 }
 
 trait QueryExecutorFactory[M[+_], +A] extends MetadataClient[M] {

@@ -62,16 +62,58 @@ class UnionColumn[T <: Column](c1: T, c2: T) { this: T =>
   def isDefinedAt(row: Int) = c1.isDefinedAt(row) || c2.isDefinedAt(row)
 }
 
-class UnionLotsColumn[T <: Column](cols: Set[T]) { this: T =>
-  def isDefinedAt(row: Int) = cols.exists(_.isDefinedAt(row))
+class UnionLotsColumn[T <: Column](cols: Array[T]) { this: T =>
+  def isDefinedAt(row: Int) = {
+    var i = 0
+    var exists = false
+    while (i < cols.length && !exists) {
+      exists = cols(i).isDefinedAt(row)
+      i += 1
+    }
+    exists
+  }
 }
 
 class IntersectColumn[T <: Column](c1: T, c2: T) { this: T =>
   def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
 }
 
-class IntersectLotsColumn[T <: Column](cols: Set[T]) { this: T =>
-  def isDefinedAt(row: Int) = cols.forall(_.isDefinedAt(row))
+class IntersectLotsColumn[T <: Column](cols: Array[T]) { this: T =>
+  def isDefinedAt(row: Int) = {
+    var i = 0
+    var forall = true
+    while (i < cols.length && forall) {
+      forall = cols(i).isDefinedAt(row)
+      i += 1
+    }
+    forall
+  }
+}
+
+class AndLotsColumn(cols: Array[BoolColumn]) extends UnionLotsColumn[BoolColumn](cols) with BoolColumn {
+  def apply(row: Int): Boolean = {
+    var result = true
+    var i = 0
+    while (i < cols.length && result) {
+      if (cols(i).isDefinedAt(row))
+        result = cols(i)(row)
+      i += 1
+    }
+    result
+  }
+}
+
+class OrLotsColumn(cols: Array[BoolColumn]) extends UnionLotsColumn[BoolColumn](cols) with BoolColumn {
+  def apply(row: Int): Boolean = {
+    var result = false
+    var i = 0
+    while (i < cols.length && !result) {
+      if (cols(i).isDefinedAt(row))
+        result = cols(i)(row)
+      i += 1
+    }
+    result
+  }
 }
 
 class ConcatColumn[T <: Column](at: Int, c1: T, c2: T) { this: T =>

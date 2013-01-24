@@ -64,7 +64,16 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
         bindRoot(tree, tree)
         
         shakeTree(tree) must beLike {
-          case Import(LineStream(), SpecificImport(Vector("std")), NumLit(LineStream(), "12"))=> ok
+          case Import(LineStream(), SpecificImport(Vector("std")), NumLit(LineStream(), "12")) => ok
+        }
+      }
+      
+      "assert" >> {
+        val tree = Assert(LineStream(), NumLit(LineStream(), "42"), NumLit(LineStream(), "12"))
+        bindRoot(tree, tree)
+        
+        shakeTree(tree) must beLike {
+          case Assert(LineStream(), NumLit(LineStream(), "42"), NumLit(LineStream(), "12")) => ok
         }
       }
       
@@ -433,6 +442,86 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
   }
   
   "tree shaking at depth" should {
+    "eliminate let when not found in scope in import" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Import(LineStream(), SpecificImport(Vector()), NumLit(LineStream(), "24")))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result must beLike {
+        case Import(LineStream(), SpecificImport(Vector()), NumLit(LineStream(), "24")) => ok
+      }
+      
+      result.errors mustEqual Set(UnusedLetBinding(Identifier(Vector(), "a")))
+    }
+    
+    "preserve let when found in scope in import" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Import(LineStream(), SpecificImport(Vector()), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result must beLike {
+        case Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Import(LineStream(), SpecificImport(Vector()), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))) => ok
+      }
+      
+      result.errors must beEmpty
+    }
+    
+    "detect unused formal in import" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Import(LineStream(), SpecificImport(Vector()), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42"))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result.errors mustEqual Set(UnusedFormalBinding(Identifier(Vector(), "b")))
+    }    
+
+    "detect unused tic-variable from solve in import" in {
+      val tree = Solve(LineStream(), Vector(TicVar(LineStream(), "'a"), TicVar(LineStream(), "'b")), Import(LineStream(), SpecificImport(Vector()), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42"))))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result.errors mustEqual Set(UnusedTicVariable("'b"))
+    }
+    
+    "eliminate let when not found in scope in assert" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Assert(LineStream(), BoolLit(LineStream(), true), NumLit(LineStream(), "24")))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result must beLike {
+        case Assert(LineStream(), BoolLit(LineStream(), true), NumLit(LineStream(), "24")) => ok
+      }
+      
+      result.errors mustEqual Set(UnusedLetBinding(Identifier(Vector(), "a")))
+    }
+    
+    "preserve let when found in scope in assert" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Assert(LineStream(), BoolLit(LineStream(), true), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result must beLike {
+        case Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Assert(LineStream(), BoolLit(LineStream(), true), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))) => ok
+      }
+      
+      result.errors must beEmpty
+    }
+    
+    "detect unused formal in assert" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Assert(LineStream(), BoolLit(LineStream(), true), Add(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42"))), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result.errors mustEqual Set(UnusedFormalBinding(Identifier(Vector(), "b")))
+    }    
+
+    "detect unused tic-variable from solve in assert" in {
+      val tree = Solve(LineStream(), Vector(TicVar(LineStream(), "'a"), TicVar(LineStream(), "'b")), Assert(LineStream(), BoolLit(LineStream(), true), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42"))))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result.errors mustEqual Set(UnusedTicVariable("'b"))
+    }
+    
     "eliminate let when not found in scope in new" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), New(LineStream(), NumLit(LineStream(), "24")))
       bindRoot(tree, tree)

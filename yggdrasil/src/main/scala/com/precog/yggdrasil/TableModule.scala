@@ -205,7 +205,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
     
     def takeRange(startIndex: Long, numberToTake: Long): Table
 
-    def canonicalize(length: Int): Table
+    def canonicalize(length: Int, maxLength0: Option[Int] = None): Table
 
     def schemas: M[Set[JType]]
 

@@ -49,6 +49,7 @@ trait GenOpcode[M[+_]] extends ImplLibrary[M] {
 
   private val defaultUnaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class Op1(val namespace: Vector[String], val name: String, val opcode: Int = defaultUnaryOpcode.getAndIncrement) extends Op1Impl
+  abstract class Op1F1(namespace: Vector[String], name: String, opcode: Int = defaultUnaryOpcode.getAndIncrement) extends Op1(namespace, name, opcode) with Op1F1Impl
 
   private val defaultBinaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class Op2(val namespace: Vector[String], val name: String, val opcode: Int = defaultBinaryOpcode.getAndIncrement) extends Op2Impl
@@ -94,7 +95,15 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
 
   trait Op1Impl extends Op1Like with Morphism1Impl {
     def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op1")     // TODO make this actually work
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A]
+
+    def fold[A](op1: Op1Impl => A, op1F1: Op1F1Impl => A): A = op1(this)
+  }
+
+  trait Op1F1Impl extends Op1Impl {
     def f1(ctx: EvaluationContext): F1
+
+    override def fold[A](op1: Op1Impl => A, op1F1: Op1F1Impl => A): A = op1F1(this)
   }
 
   trait Op2Impl extends Op2Like {
@@ -201,6 +210,7 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   type Morphism1 <: Morphism1Impl
   type Morphism2 <: Morphism2Impl
   type Op1 <: Op1Impl
+  type Op1F1 <: Op1F1Impl
   type Op2 <: Op2Impl
   type Reduction <: ReductionImpl
 }
@@ -210,6 +220,7 @@ trait StdLib[M[+_]] extends
       ReductionLib[M] with 
       TimeLib[M] with 
       MathLib[M] with 
+      TypeLib[M] with 
       StringLib[M] with 
       StatsLib[M] with 
       LogisticRegressionLib[M] with
