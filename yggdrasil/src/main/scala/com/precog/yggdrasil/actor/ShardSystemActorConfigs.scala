@@ -73,7 +73,7 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
 
   def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog
 
-  def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = {
+  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
     yggConfig.ingestConfig map { conf => actorSystem.actorOf(Props(
       new KafkaShardIngestActor(shardId = yggConfig.shardId, 
@@ -94,7 +94,7 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
     }
   }
 
-  def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestConfig.isDefined) 
+  override def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestConfig.isDefined) 
 }
 
 trait StandaloneShardSystemConfig extends ShardConfig {
@@ -104,8 +104,8 @@ trait StandaloneShardSystemConfig extends ShardConfig {
 
 trait StandaloneActorProjectionSystem extends ShardSystemActorModule {
   type YggConfig <: StandaloneShardSystemConfig
-  def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = None
-  def checkpointCoordination = CheckpointCoordination.Noop
+  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = None
+  override def checkpointCoordination = CheckpointCoordination.Noop
 }
 
 // vim: set ts=4 sw=4 et:
