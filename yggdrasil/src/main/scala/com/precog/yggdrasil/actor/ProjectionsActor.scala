@@ -58,10 +58,26 @@ import scalaz.syntax.traverse._
 // MESSAGES //
 //////////////
 
+sealed trait LockPurpose {
+  def exclusive: Boolean
+}
+
+case object ReadLock extends LockPurpose {
+  val exclusive = false
+}
+
+case object WriteLock extends LockPurpose {
+  val exclusive = true
+}
+
+case object ArchiveLock extends LockPurpose {
+  val exclusive = true
+}
+
 // To simplify routing, tag all messages for the ProjectionLike actor
 sealed trait ShardProjectionAction
 
-case class AcquireProjection(descriptor: ProjectionDescriptor, lockForArchive: Boolean) extends ShardProjectionAction
+case class AcquireProjection(descriptor: ProjectionDescriptor, purpose: LockPurpose) extends ShardProjectionAction
 case class ReleaseProjection(descriptor: ProjectionDescriptor) extends ShardProjectionAction
 
 sealed trait ProjectionUpdate extends ShardProjectionAction {
@@ -103,8 +119,8 @@ trait ProjectionsActorModule extends ProjectionModule {
   class ProjectionsActor(val maxOpenProjections: Int) extends Actor { self =>
     private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionsActor")
 
-    case class AcquisitionRequest(requestor: ActorRef, lockForArchive: Boolean) 
-    case class AcquisitionState(archiveLock: Boolean, count: Int, queue: List[AcquisitionRequest])
+    case class AcquisitionRequest(requestor: ActorRef, purpose: LockPurpose) 
+    case class AcquisitionState(exclusive: Boolean, count: Int, queue: List[AcquisitionRequest])
     
     private val acquisitionState = mutable.Map.empty[ProjectionDescriptor, AcquisitionState] 
     
@@ -112,21 +128,21 @@ trait ProjectionsActorModule extends ProjectionModule {
       case Status =>
         sender ! status
 
-      case AcquireProjection(descriptor, lockForArchive) => 
+      case AcquireProjection(descriptor, purpose) => 
         val io = acquisitionState.get(descriptor) match {
           case None =>
-            logger.debug("Fresh acquisition of " + descriptor.shows + (if(lockForArchive) " (archive)" else ""))
-            acquisitionState(descriptor) = AcquisitionState(lockForArchive, 1, Nil)
-            if (lockForArchive) archive(sender, descriptor) else acquired(sender, descriptor)
+            logger.debug("Fresh acquisition of " + descriptor.shows + " with " + purpose)
+            acquisitionState(descriptor) = AcquisitionState(purpose.exclusive, 1, Nil)
+            if (purpose == ArchiveLock) archive(sender, descriptor) else acquired(sender, descriptor)
             
-          case Some(s @ AcquisitionState(false, count0, Nil)) if !lockForArchive =>
+          case Some(s @ AcquisitionState(false, count0, Nil)) if !purpose.exclusive =>
             logger.debug("Non-exclusive acquisition (%d prior) of %s".format(count0, descriptor.shows))
             acquisitionState(descriptor) = s.copy(count = count0+1)
             acquired(sender, descriptor)
             
           case Some(s @ AcquisitionState(_, _, queue0)) =>
             logger.warn("Queueing due to exclusive lock on " + descriptor.shows)
-            IO(acquisitionState(descriptor) = s.copy(queue = AcquisitionRequest(sender, lockForArchive) :: queue0))
+            IO(acquisitionState(descriptor) = s.copy(queue = AcquisitionRequest(sender, purpose) :: queue0))
         } 
 
         io.unsafePerformIO
@@ -148,14 +164,14 @@ trait ProjectionsActorModule extends ProjectionModule {
             }
           
           case Some(s @ AcquisitionState(_, 1, queue)) =>
-            queue.reverse.span(!_.lockForArchive) match {
+            queue.reverse.span(!_.purpose.exclusive) match {
               case (Nil, excl :: rest) =>
-                logger.debug("Dequeued exclusive archive lock request for " + descriptor.shows + " after release")
+                logger.debug("Dequeued exclusive archive lock request for " + descriptor.shows + " after release with " + excl.purpose)
                 acquisitionState(descriptor) = AcquisitionState(true, 1, rest)
-                archive(excl.requestor, descriptor).map { _ => PrecogUnit }
+                (if (excl.purpose == ArchiveLock) archive(excl.requestor, descriptor) else acquired(excl.requestor, descriptor)).map { _ => PrecogUnit }
 
               case (nonExcl, excl) =>
-                logger.debug("Dequeued non-exclusive acquisition of " + descriptor.shows + " after release")
+                logger.debug("Dequeued %d non-exclusive acquisitions of %s after release".format(nonExcl.size, descriptor.shows))
                 acquisitionState(descriptor) = AcquisitionState(false, nonExcl.size, excl)
                 (nonExcl map { req => acquired(req.requestor, descriptor) }).sequence[IO, PrecogUnit].map(_ => PrecogUnit)
             }
@@ -175,14 +191,14 @@ trait ProjectionsActorModule extends ProjectionModule {
         logger.trace(coordinator + " is inserting into projection " + descriptor.shows)
         
         val insertActor = context.actorOf(Props(new ProjectionInsertActor(rows, coordinator)))
-        self.tell(AcquireProjection(descriptor, false), insertActor)
+        self.tell(AcquireProjection(descriptor, WriteLock), insertActor)
       
       case ProjectionArchive(descriptor, archive) => 
         val coordinator = sender
         logger.info(coordinator + " is archiving projection " + descriptor.shows)
         
         val archiveActor = context.actorOf(Props(new ProjectionArchiveActor(coordinator)))
-        self.tell(AcquireProjection(descriptor, true), archiveActor)
+        self.tell(AcquireProjection(descriptor, ArchiveLock), archiveActor)
     }
 
     override def postStop(): Unit = {
@@ -347,3 +363,4 @@ trait ProjectionsActorModule extends ProjectionModule {
 }
 
 // vim: set ts=4 sw=4 et:
+

@@ -1491,6 +1491,292 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
   */
 
+  def testIsTypeNumeric = {
+    val JArray(elements) = JParser.parse("""[
+      {"key":[1], "value": "value1"},
+      45,
+      true,
+      {"value":"foobaz"},
+      [234],
+      233.4,
+      29292.3,
+      null,
+      [{"bar": 12}],
+      {"baz": 34.3},
+      23
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JNumberT
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JFalse, JTrue, JFalse, JFalse, JFalse, JTrue, JTrue, JFalse, JFalse, JFalse, JTrue)
+
+    results.copoint must_== expected
+  }
+
+  def testIsTypeUnionTrivial = {
+    val JArray(elements) = JParser.parse("""[
+      {"key":[1], "value": "value1"},
+      45,
+      true,
+      {"value":"foobaz"},
+      [234],
+      233.4,
+      29292.3,
+      null,
+      [{"bar": 12}],
+      {"baz": 34.3},
+      23
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JUnionT(JNumberT, JNullT)
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JFalse, JTrue, JFalse, JFalse, JFalse, JTrue, JTrue, JTrue, JFalse, JFalse, JTrue)
+
+    results.copoint must_== expected
+  }
+
+  def testIsTypeUnion = {
+    val JArray(elements) = JParser.parse("""[
+      {"key":[1], "value": 23},
+      {"key":[1, "bax"], "value": {"foo":4, "bar":{}}},
+      {"key":[null, "bax", 4], "value": {"foo":4.4, "bar":{"a": false}}},
+      {"key":[], "value": {"foo":34, "bar":{"a": null}}},
+      {"key":[2], "value": {"foo": "dd"}},
+      {"key":[3]},
+      {"key":[2], "value": {"foo": -1.1, "bar": {"a": 4, "b": 5}}},
+      {"key":[2], "value": {"foo": "dd", "bar": [{"a":6}]}},
+      {"key":[44], "value": {"foo": "x", "bar": {"a": 4, "b": 5}}},
+      {"value":"foobaz"},
+      {}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JObjectFixedT(Map(
+      "value" -> JObjectFixedT(Map(
+        "foo" -> JUnionT(JNumberT, JTextT), 
+        "bar" -> JObjectUnfixedT)),
+      "key" -> JArrayUnfixedT))   
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JFalse, JTrue, JTrue, JTrue, JFalse, JFalse, JTrue, JFalse, JTrue, JFalse, JFalse)
+
+    results.copoint must_== expected
+  }
+
+  def testIsTypeUnfixed = {
+    val JArray(elements) = JParser.parse("""[
+      {"key":[1], "value": 23},
+      {"key":[1, "bax"], "value": {"foo":4, "bar":{}}},
+      {"key":[null, "bax", 4], "value": {"foo":4.4, "bar":{"a": false}}},
+      {"key":[], "value": {"foo":34, "bar":{"a": null}}},
+      {"key":[2], "value": {"foo": "dd"}},
+      {"key":[3]},
+      {"key":[2], "value": {"foo": -1.1, "bar": {"a": 4, "b": 5}}},
+      {"key":[2], "value": {"foo": "dd", "bar": [{"a":6}]}},
+      {"key":[44], "value": {"foo": "x", "bar": {"a": 4, "b": 5}}},
+      {"value":"foobaz"},
+      {}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JObjectFixedT(Map(
+      "value" -> JObjectFixedT(Map("foo" -> JNumberT, "bar" -> JObjectUnfixedT)), 
+      "key" -> JArrayUnfixedT))
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JFalse, JTrue, JTrue, JTrue, JFalse, JFalse, JTrue, JFalse, JFalse, JFalse, JFalse)
+
+    results.copoint must_== expected
+  }
+
+  def testIsTypeObject = {
+    val JArray(elements) = JParser.parse("""[
+      {"key":[1], "value": 23},
+      {"key":[1, "bax"], "value": 24},
+      {"key":[2], "value": "foo"},
+      15,
+      {"key":[3]},
+      {"value":"foobaz"},
+      {"notkey":[3]},
+      {"key":[3], "value": 18, "baz": true},
+      {"key":["foo"], "value": 18.6, "baz": true},
+      {"key":[3, 5], "value": [34], "baz": 33}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JObjectFixedT(Map("value" -> JNumberT, "key" -> JArrayUnfixedT))
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JTrue, JTrue, JFalse, JFalse, JFalse, JFalse, JFalse, JTrue, JTrue, JFalse)
+
+    results.copoint must_== expected
+  }
+
+  def testIsTypeObjectEmpty = {
+    val JArray(elements) = JParser.parse("""[
+      [],
+      1,
+      {},
+      null,
+      {"a": 1},
+      [6.2, -6],
+      {"b": [9]}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JObjectFixedT(Map())
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JFalse, JFalse, JTrue, JFalse, JFalse, JFalse, JFalse)
+
+    results.copoint must_== expected
+  }
+
+  def testIsTypeArrayEmpty = {
+    val JArray(elements) = JParser.parse("""[
+      [],
+      1,
+      {},
+      null,
+      {"a": 1},
+      [6.2, -6],
+      {"b": [9]}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JArrayFixedT(Map())
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JTrue, JFalse, JFalse, JFalse, JFalse, JFalse, JFalse)
+
+    results.copoint must_== expected
+  }
+
+  def testIsTypeObjectUnfixed = {
+    val JArray(elements) = JParser.parse("""[
+      [],
+      1,
+      {},
+      null,
+      {"a": 1},
+      [6.2, -6],
+      {"b": [9]}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JObjectUnfixedT
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JFalse, JFalse, JTrue, JFalse, JTrue, JFalse, JTrue)
+
+    results.copoint must_== expected
+  }
+
+  def testIsTypeArrayUnfixed = {
+    val JArray(elements) = JParser.parse("""[
+      [],
+      1,
+      {},
+      null,
+      [false, 3.2, "a"],
+      [6.2, -6],
+      {"b": [9]}
+    ]""")
+
+    val sample = SampleData(elements.toStream)
+    val table = fromSample(sample)
+
+    val jtpe = JArrayUnfixedT
+    val results = toJson(table.transform {
+      IsType(Leaf(Source), jtpe)
+    })
+
+    val expected = Stream(JTrue, JFalse, JFalse, JFalse, JTrue, JTrue, JFalse)
+
+    results.copoint must_== expected
+  }
+
+  def testIsTypeTrivial = {
+    val JArray(elements) = JParser.parse("""[
+      {"key":[2,1,1],"value":[]},
+      {"key":[2,2,2],"value":{"dx":[8.342062585288287E+307]}}]
+    """)
+
+    val sample = SampleData(elements.toStream, Some((3, Seq((JPath.Identity, CEmptyArray)))))
+
+    testIsType(sample)
+  }
+
+  def testIsType(sample: SampleData) = {
+    val (_, schema) = sample.schema.getOrElse(0 -> List())
+    val cschema = schema map { case (jpath, ctype) => (CPath(jpath), ctype) }
+
+    // using a generator with heterogeneous data, we're just going to produce
+    // the jtype that chooses all of the elements of the non-random data.
+    val jtpe = JObjectFixedT(Map(
+      "value" -> Schema.mkType(cschema).getOrElse(sys.error("Could not generate JType from schema " + cschema)),
+      "key" -> JArrayUnfixedT
+    ))
+
+    val table = fromSample(sample)
+    val results = toJson(table.transform(
+      IsType(Leaf(Source), jtpe)))
+
+    val schemasSeq: Stream[Seq[JValue]] = toJson(table).copoint.map(Seq(_))
+    val schemas0 = schemasSeq map { inferSchema(_) }
+    val schemas = schemas0 map { _ map { case (jpath, ctype) => (CPath(jpath), ctype) } }
+
+    val expected0 = schemas map { schema => Schema.subsumes(schema, jtpe) }
+    val expected = expected0 map {
+      case true => JTrue
+      case false => JFalse
+      case _ => sys.error("impossible result")
+    }
+
+    results.copoint mustEqual expected
+  }
+
+  def checkIsType = {
+    implicit val gen = sample(schema)
+    check { testIsType _ }.set(minTestsOk -> 10000)
+  }
+
   def checkTypedTrivial = {
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CBoolean, JPath("value3") -> CLong))
     check { (sample: SampleData) =>
@@ -1948,74 +2234,35 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def expectedResult(data: Stream[JValue], included: Map[JPath, Set[CType]], subsumes: Boolean): Stream[JValue] = {
-    //if (subsumes) { 
-      data map { jv =>
-        val paths = jv.flattenWithPath.toMap.keys.toList
+    data map { jv =>
+      val paths = jv.flattenWithPath.toMap.keys.toList
 
-/*
-        val includes: Boolean = included.keys forall {
-          case CPath(tail) => paths.contains(CPath(CPathField("value"), tail)) 
-          case _ => true
-        } 
-        */
+      val filtered = jv.flattenWithPath filter {
+        case (JPath(JPathField("value"), tail @ _*), leaf) =>
+          included.get(JPath(tail: _*)).exists { ctpes =>
+            leaf match {
+              case JBool(_) => ctpes.contains(CBoolean)
+              case JString(_) => ctpes.contains(CString)
+              case JNum(_) => ctpes.contains(CLong) || ctpes.contains(CDouble) || ctpes.contains(CNum)
+              case JNull => ctpes.contains(CNull)
+              case JObject(elements) => 
+                // if elements is nonempty, then leaf is a nonempty object and consequently can't conform
+                // to any leaf type.
+                elements.isEmpty && ctpes.contains(CEmptyObject)
 
-        val filtered = jv.flattenWithPath filter {
-          case (JPath(JPathField("value"), tail @ _*), leaf) =>
-            included.get(JPath(tail: _*)).exists { ctpes =>
-              leaf match {
-                case JBool(_) => ctpes.contains(CBoolean)
-                case JString(_) => ctpes.contains(CString)
-                case JNum(_) => ctpes.contains(CLong) || ctpes.contains(CDouble) || ctpes.contains(CNum)
-                case JNull => ctpes.contains(CNull)
-                case JObject(elements) => 
-                  // if elements is nonempty, then leaf is a nonempty object and consequently can't conform
-                  // to any leaf type.
-                  elements.isEmpty && ctpes.contains(CEmptyObject)
-
-                case JArray(elements) => 
-                  // if elements is nonempty, then leaf is a nonemtpy array and consequently can't conform
-                  // to any leaf type.
-                  elements.isEmpty && ctpes.contains(CEmptyArray)
-              }
+              case JArray(elements) => 
+                // if elements is nonempty, then leaf is a nonemtpy array and consequently can't conform
+                // to any leaf type.
+                elements.isEmpty && ctpes.contains(CEmptyArray)
             }
-            
-          case (JPath(JPathField("key"), _*), _) => true
-          case _ => sys.error("Unexpected JValue schema for " + jv)
-        }
-
-        JValue.unflatten(filtered) /*JValue.unflatten(
-          if (filtered forall {
-            case (path @ CPath(CPathField("key"), _*), _) => true
-            case (path @ CPath(CPathField("value"), tail @ _*), value) => {
-              val (inc, vau) = (included(CPath(tail : _*)), value) 
-              (inc, vau) match {
-                case (CBoolean, JBool(_)) => true
-                case (CString, JString(_)) => true
-                case (CLong | CDouble | CNum, JNum(_)) => true
-                case (CEmptyObject, JObject.empty) => true
-                case (CEmptyArray, JArray.empty) => true
-                case (CNull, JNull) => true
-                case _ => false
-              }
-            }
-            case _ => false
-          }) filtered else List())
-        */
-        /*
-
-        if (includes) 
-          if (back \ "value" == JUndefined)
-            None
-          else
-            Some(back)
-        else None
-          */
+          }
+          
+        case (JPath(JPathField("key"), _*), _) => true
+        case _ => sys.error("Unexpected JValue schema for " + jv)
       }
-      /*
-    } else {
-      Stream()
+
+      JValue.unflatten(filtered)
     }
-    */
   }
 }
 

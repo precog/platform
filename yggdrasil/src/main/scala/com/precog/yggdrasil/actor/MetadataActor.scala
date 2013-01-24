@@ -48,38 +48,41 @@ import scalaz.std.list._
 import scalaz.std.map._
 import scalaz.std.set._
 
-class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordination: CheckpointCoordination, initialCheckpoint: Option[YggCheckpoint]) extends Actor with Logging { metadataActor =>
+class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordination: CheckpointCoordination, initialCheckpoint: Option[YggCheckpoint], preloadMetadata: Boolean) extends Actor with Logging { metadataActor =>
   import ProjectionMetadata._
+
+  type MetadataMap = Map[ProjectionDescriptor, ColumnMetadata]
   
   private var messageClock: VectorClock = initialCheckpoint map { _.messageClock } getOrElse { VectorClock.empty }
   private var kafkaOffset: Option[Long] = initialCheckpoint map { _.offset }
-  private var projections: Map[ProjectionDescriptor, ColumnMetadata] = Map()
-  private var dirty: Set[ProjectionDescriptor] = Set()
+  private var projections: MetadataMap = Map.empty
+  private var dirty: Set[ProjectionDescriptor] = Set.empty
   private var flushRequests = 0
   private var flushesComplete = 0
 
+  private implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
+
   override def preStart(): Unit = {
-    logger.info("Loading yggCheckpoint...")
+    if (preloadMetadata) {
+      logger.info("Preloading column metadata")
 
-/*
-    checkpointCoordination.loadYggCheckpoint(shardId) match {
-      case Some(Success(checkpoint)) =>
-        messageClock = checkpoint.messageClock
-        kafkaOffset = Some(checkpoint.offset)
-        logger.info("Successfully loaded checkpoint " + messageClock + " and kafka offset " + kafkaOffset)
+      Future {
+        var newMap: MetadataMap = Map.empty
 
-      case Some(Failure(errors)) =>
-        // TODO: This could be normal state on the first startup of a shard
-        sys.error("Unable to load Kafka checkpoint: " + errors)
+        storage.findDescriptors(_ => true).map { desc => 
+          storage.getMetadata(desc) map {
+            case MetadataRecord(metadata, clock) =>
+              newMap += (desc -> metadata)
+          }
+        }.sequence.unsafePerformIO
 
-      case None =>
-        logger.warn("No checkpoint loaded")
-        messageClock = VectorClock.empty
-        kafkaOffset = None
-    } 
-    */
+        logger.info("Column metadata preload complete (%d)" format newMap.size)
 
-    logger.info("MetadataActor yggCheckpoint load complete")
+        self ! UpdateMetadataCache(newMap)
+      }
+
+      logger.info("MetadataActor preStart complete")
+    }
   }
 
   override def postStop(): Unit = {
@@ -95,22 +98,31 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ IngestBatchMetadata(updates, batchClock, batchOffset) =>
       MDC.put("metadata_batch", ingestBatchId.getAndIncrement().toString)
-      for(update <- updates) update match {
+      updates.toList.map {
         case (descriptor, Some(metadata)) =>
-          val newMetadata = projections.get(descriptor).map { _ |+| metadata }.getOrElse(metadata)
-          logger.trace("Updating descriptor from %s to %s".format(projections.get(descriptor), newMetadata))
-          projections += (descriptor -> newMetadata)
-          dirty += descriptor
+          ensureMetadataCached(descriptor).map { currentMetadata =>
+            val newMetadata = currentMetadata |+| metadata
+            logger.trace("Updating descriptor from %s to %s".format(currentMetadata, newMetadata))
+            projections += (descriptor -> newMetadata)
+            dirty += descriptor
+          }
         case (descriptor, None) =>
           logger.trace("Archive metadata on %s".format(descriptor))
-          flush(None).flatMap(_ => storage.archiveMetadata(descriptor)).unsafePerformIO
-          projections -= descriptor
-          dirty -= descriptor
-      }
-      MDC.remove("metadata_batch")
-      
-      messageClock = messageClock |+| batchClock
-      kafkaOffset = batchOffset orElse kafkaOffset
+          for {
+            _ <- flush(None)
+            _ <- storage.archiveMetadata(descriptor)
+          } yield {
+            projections -= descriptor
+            dirty -= descriptor
+          }
+      }.sequence.map { _ =>
+        MDC.remove("metadata_batch")
+
+        messageClock = messageClock |+| batchClock
+        kafkaOffset = batchOffset orElse kafkaOffset
+      }.except {
+        case t: Throwable => IO { logger.error("Error during metadata batch update", t) }
+      }.unsafePerformIO
    
     case msg @ FindChildren(path) => 
       logger.trace(msg.toString)
@@ -139,8 +151,11 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ FindPathMetadata(path, selector) => 
       logger.trace(msg.toString)
-      sender ! runIO(storage.findPathMetadata(path, selector, columnMetadataFor), "FindPathMetadata")
-      logger.trace("Completed " + msg.toString)
+      Future {
+        logger.trace("Spawning Future for FindPathMetadata")
+        sender ! runIO(storage.findPathMetadata(path, selector, columnMetadataFor), "FindPathMetadata")
+        logger.trace("Completed " + msg.toString)
+      }
 
     case msg @ InitDescriptorRoot(descriptor) =>
       logger.trace(msg.toString)
@@ -164,6 +179,15 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       logger.trace(msg.toString)
       sender ! kafkaOffset.map(YggCheckpoint(_, messageClock)) 
       logger.trace("Completed " + msg.toString)
+
+    // Currently, UpdateMetadataCache is only used for cache preload. Any other use
+    // would require some sort of sequencing/queueing of metadata updates to ensure
+    // That we don't get changes in two places.
+    case UpdateMetadataCache(newMap) =>
+      logger.trace("Updating cache with %d entries".format(newMap.size))
+      // Merge current and new maps, preferring current entries
+      projections = newMap ++ projections
+      logger.trace("Updated cache. Total entries = " + projections.size)
 
     case bad =>
       logger.error("Unknown message: " + bad)
@@ -204,13 +228,15 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
     storage.findDescriptors(_.columns.exists(matches(path, selector)))
   } 
 
-  def ensureMetadataCached(descriptor: ProjectionDescriptor): IO[PrecogUnit] = {
-    if (projections.contains(descriptor)) {
-      IO(PrecogUnit)
-    } else storage.getMetadata(descriptor) map { 
-      case MetadataRecord(metadata, clock) => 
-        projections += (descriptor -> metadata)
-        PrecogUnit
+  def ensureMetadataCached(descriptor: ProjectionDescriptor): IO[ColumnMetadata] = {
+    projections.get(descriptor) match {
+      case Some(metadata) => IO(metadata)
+      case None =>
+        storage.getMetadata(descriptor) map {
+          case MetadataRecord(metadata, clock) =>
+            projections += (descriptor -> metadata)
+            metadata
+        }
     }
   }
 
@@ -289,6 +315,7 @@ case class InitDescriptorRoot(desc: ProjectionDescriptor) extends ShardMetadataA
 case class FindDescriptorRoot(desc: ProjectionDescriptor) extends ShardMetadataAction
 case class FindDescriptorArchive(desc: ProjectionDescriptor) extends ShardMetadataAction
 case class MetadataSaved(saved: Set[ProjectionDescriptor]) extends ShardMetadataAction
+case class UpdateMetadataCache(newData: Map[ProjectionDescriptor, ColumnMetadata]) extends ShardMetadataAction
 case object GetCurrentCheckpoint
 
 case class IngestBatchMetadata(updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])],  messageClock: VectorClock, kafkaOffset: Option[Long]) extends ShardMetadataAction

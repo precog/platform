@@ -67,7 +67,7 @@ trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]]
 
   implicit def LineDecompose: Decomposer[instructions.Line] = new Decomposer[instructions.Line] {
     def decompose(line: instructions.Line): JValue = {
-      JObject(JField("lineNum", JNum(line.num)) :: JField("detail", JString(line.text)) :: Nil)
+      JObject(JField("lineNum", JNum(line.line)) :: JField("colNum", JNum(line.col)) :: JField("detail", JString(line.text)) :: Nil)
     }
   }
 

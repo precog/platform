@@ -112,6 +112,7 @@ object SBTConsole {
       val ingestConfig = None
       
       val maxSliceSize = 10000
+      val smallSliceSize = 8
 
       //TODO: Get a producer ID
       val idSource = new FreshAtomicIdSource

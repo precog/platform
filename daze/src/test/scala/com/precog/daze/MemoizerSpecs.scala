@@ -30,105 +30,105 @@ object MemoizerSpecs extends Specification with Memoizer with StaticLibrary with
   
   "dag memoization" should {
     "not memoize a sub-graph of non-forcing operations" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
-      val clicks = dag.LoadLocal(line, Const(line, CString("/clicks")))
+      val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
       val input =
-        Join(line, Add, IdentitySort,
+        Join(Add, IdentitySort,
           clicks,
-          Operate(line, Neg,
-            Join(line, Mul, CrossLeftSort,
+          Operate(Neg,
+            Join(Mul, CrossLeftSort,
               clicks,
-              Const(line, CLong(42)))))
+              Const(CLong(42))(line))(line))(line))(line)
           
       memoize(input) mustEqual input
     }
     
     "insert memoization nodes for morph1 referenced by morph1 and cross" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = 
-        dag.Morph1(line, libMorphism1.head, dag.LoadLocal(line, Const(line, CString("/clicks"))))
+        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
       
       val input =
-        Join(line, Add, IdentitySort,
-          dag.Morph1(line, libMorphism1.head, clicks),
-          Join(line, Mul, CrossLeftSort,
+        Join(Add, IdentitySort,
+          dag.Morph1(libMorphism1.head, clicks)(line),
+          Join(Mul, CrossLeftSort,
             clicks,
-            clicks))
+            clicks)(line))(line)
             
       val memoClicks = Memoize(clicks, 3)
       
       val expected =
-        Join(line, Add, IdentitySort,
-          dag.Morph1(line, libMorphism1.head, memoClicks),
-          Join(line, Mul, CrossLeftSort,
+        Join(Add, IdentitySort,
+          dag.Morph1(libMorphism1.head, memoClicks)(line),
+          Join(Mul, CrossLeftSort,
             memoClicks,
-            memoClicks))
+            memoClicks)(line))(line)
             
       memoize(input) mustEqual expected
     }
     
     "insert memoization nodes for split referenced by morph1 and cross" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = 
-        dag.Morph1(line, libMorphism1.head, dag.LoadLocal(line, Const(line, CString("/clicks"))))
+        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
       
-      lazy val split: dag.Split = dag.Split(line,
+      lazy val split: dag.Split = dag.Split(
         dag.Group(0, clicks, UnfixedSolution(1, clicks)),
-        SplitParam(line, 1)(split))
+        SplitParam(1)(split)(line))(line)
       
       val input =
-        Join(line, Add, IdentitySort,
-          dag.Morph1(line, libMorphism1.head, split),
-          Join(line, Mul, CrossLeftSort,
+        Join(Add, IdentitySort,
+          dag.Morph1(libMorphism1.head, split)(line),
+          Join(Mul, CrossLeftSort,
             split,
-            split))
+            split)(line))(line)
             
       val memoSplit = Memoize(split, 3)
       
       val expected =
-        Join(line, Add, IdentitySort,
-          dag.Morph1(line, libMorphism1.head, memoSplit),
-          Join(line, Mul, CrossLeftSort,
+        Join(Add, IdentitySort,
+          dag.Morph1(libMorphism1.head, memoSplit)(line),
+          Join(Mul, CrossLeftSort,
             memoSplit,
-            memoSplit))
+            memoSplit)(line))(line)
             
       memoize(input) mustEqual expected
     }
     
     "insert memoization nodes for reduce parenting a split" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
       
       val clicks = 
-        dag.Morph1(line, libMorphism1.head, dag.LoadLocal(line, Const(line, CString("/clicks"))))
+        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
       
       val join =
-        Join(line, Add, IdentitySort,
-          dag.Morph1(line, libMorphism1.head, clicks),
-          Join(line, Mul, CrossLeftSort,
+        Join(Add, IdentitySort,
+          dag.Morph1(libMorphism1.head, clicks)(line),
+          Join(Mul, CrossLeftSort,
             clicks,
-            clicks))
+            clicks)(line))(line)
             
-      lazy val split: dag.Split = dag.Split(line, 
+      lazy val split: dag.Split = dag.Split(
         dag.Group(0, join, UnfixedSolution(1, join)),
-        SplitParam(line, 1)(split))
+        SplitParam(1)(split)(line))(line)
             
       val memoClicks = Memoize(clicks, 3)
       
       val expectedJoin =
-        Join(line, Add, IdentitySort,
-          dag.Morph1(line, libMorphism1.head, memoClicks),
-          Join(line, Mul, CrossLeftSort,
+        Join(Add, IdentitySort,
+          dag.Morph1(libMorphism1.head, memoClicks)(line),
+          Join(Mul, CrossLeftSort,
             memoClicks,
-            memoClicks))
+            memoClicks)(line))(line)
             
-      lazy val expectedSplit: dag.Split = dag.Split(line, 
+      lazy val expectedSplit: dag.Split = dag.Split(
         dag.Group(0, expectedJoin, UnfixedSolution(1, expectedJoin)),
-        SplitParam(line, 1)(expectedSplit))
-            
+        SplitParam(1)(expectedSplit)(line))(line)
+        
       memoize(split) mustEqual expectedSplit
     }
   }

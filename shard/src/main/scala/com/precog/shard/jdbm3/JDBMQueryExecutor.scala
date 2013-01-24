@@ -94,6 +94,7 @@ object JDBMQueryExecutorFactory {
       val clock = blueeyes.util.Clock.System
       val maxSliceSize = config[Int]("jdbm.max_slice_size", 10000)
       val ingestFailureLogRoot = new File(config[String]("ingest.failure_log_root"))
+      val smallSliceSize = config[Int]("jdbm.small_slice_size", 8)
 
       //TODO: Get a producer ID
       val idSource = new FreshAtomicIdSource

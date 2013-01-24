@@ -113,3 +113,14 @@ object LoggingQueryLogger {
     }
   }
 }
+
+trait ExceptionQueryLogger[M[+_], P] extends QueryLogger[M, P] {
+  implicit def M: Applicative[M]
+  
+  abstract override def fatal(pos: P, msg: String): M[Unit] = for {
+    _ <- super.fatal(pos, msg)
+    _ = throw FatalQueryException(pos, msg)
+  } yield ()
+}
+
+case class FatalQueryException[+P](pos: P, msg: String) extends RuntimeException(msg)

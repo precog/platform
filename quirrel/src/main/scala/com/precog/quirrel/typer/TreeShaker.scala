@@ -83,6 +83,13 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       (Import(loc, spec, child2), names, vars, errors)
     }
     
+    case Assert(loc, pred, child) => {
+      val (pred2, predNames, predVars, predErrors) = performShake(pred)
+      val (child2, childNames, childVars, childErrors) = performShake(child)
+      
+      (Assert(loc, pred2, child2), predNames ++ childNames, predVars ++ childVars, predErrors ++ childErrors)
+    }
+    
     case New(loc, child) => {
       val (child2, names, vars, errors) = performShake(child)
       (New(loc, child2), names, vars, errors)

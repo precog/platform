@@ -123,7 +123,6 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
     val metadata = None
   }
 
-
   //returns accountId of account if exists, else creates account, 
   //we are working on path accountId.. do we use this to get the account the user wants to create?
   //because we also need auth at this stage.. auth will give us the root key for permmissions

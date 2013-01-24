@@ -76,8 +76,8 @@ trait BaseClient {
 }
 
 abstract class WebClient(protocol: String, host: String, port: Int, path: String)(implicit executor: ExecutionContext) extends BaseClient {
+  val client = new HttpClientXLightWeb
   final protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = {
-    val client = new HttpClientXLightWeb
     f(client.protocol(protocol).host(host).port(port).path(path))
   }
 }

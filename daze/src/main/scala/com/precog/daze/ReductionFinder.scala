@@ -41,37 +41,37 @@ trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with InfixLib[
   // for a reduce, build the single transpecable chain, ignoring other irrelevant branches
   def buildReduceInfo(reduce: dag.Reduce, ctx: EvaluationContext): ReduceInfo = {
     def loop(graph: DepGraph, f: TransSpec1 => TransSpec1): (TransSpec1, DepGraph) = graph match {
-      case Join(_, Eq, _, left, Const(_, value)) =>
+      case Join(Eq, _, left, Const(value)) =>
         loop(left, t => f(trans.EqualLiteral(t, value, false)))
 
-      case Join(_, Eq, _, Const(_, value), right) =>
+      case Join(Eq, _, Const(value), right) =>
         loop(right, t => f(trans.EqualLiteral(t, value, false)))
 
-      case Join(_, NotEq, _, left, Const(_, value)) =>
+      case Join(NotEq, _, left, Const(value)) =>
         loop(left, t => f(trans.EqualLiteral(t, value, true)))
 
-      case Join(_, NotEq, _, Const(_, value), right) =>
+      case Join(NotEq, _, Const(value), right) =>
         loop(right, t => f(trans.EqualLiteral(t, value, true)))
 
-      case Join(_, instructions.WrapObject, _, Const(_, value), right) =>
+      case Join(instructions.WrapObject, _, Const(value), right) =>
         value match {
           case value @ CString(str) => loop(right, t => f(trans.WrapObject(t, str)))
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, instructions.DerefObject, _, left, Const(_, value)) =>
+      case Join(instructions.DerefObject, _, left, Const(value)) =>
         value match {
           case value @ CString(str) => loop(left, t => f(DerefObjectStatic(t, CPathField(str))))
           case _ => (f(Leaf(Source)), graph)
         }
       
-      case Join(_, instructions.DerefMetadata, _, left, Const(_, value)) =>
+      case Join(instructions.DerefMetadata, _, left, Const(value)) =>
         value match {
           case value @ CString(str) => loop(left, t => f(DerefMetadataStatic(t, CPathMeta(str))))
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, DerefArray, _, left, Const(_, value)) =>
+      case Join(DerefArray, _, left, Const(value)) =>
         value match {
           case CNum(n) => loop(left, t => f(DerefArrayStatic(t, CPathIndex(n.toInt))))
           case CLong(n) => loop(left, t => f(DerefArrayStatic(t, CPathIndex(n.toInt))))
@@ -79,7 +79,7 @@ trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with InfixLib[
           case _ => (f(Leaf(Source)), graph)
         }
       
-      case Join(_, instructions.ArraySwap, _, left, Const(_, value)) =>
+      case Join(instructions.ArraySwap, _, left, Const(value)) =>
         value match {
           case CNum(n) => loop(left, t => f(trans.ArraySwap(t, n.toInt)))
           case CLong(n) => loop(left, t => f(trans.ArraySwap(t, n.toInt)))
@@ -87,59 +87,59 @@ trait TransSpecFinder[M[+_]] extends DAG with EvaluatorMethods[M] with InfixLib[
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, instructions.JoinObject, _, left, Const(_, value)) =>
+      case Join(instructions.JoinObject, _, left, Const(value)) =>
         value match {
           case CEmptyObject => loop(left, t => f(trans.InnerObjectConcat(t)))
           case _ => (f(Leaf(Source)), graph)
         }
-                  
-      case Join(_, instructions.JoinObject, _, Const(_, value), right) =>
+        
+      case Join(instructions.JoinObject, _, Const(value), right) =>
         value match {
           case CEmptyObject => loop(right, t => f(trans.InnerObjectConcat(t)))
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, instructions.JoinArray, _, left, Const(_, value)) =>
+      case Join(instructions.JoinArray, _, left, Const(value)) =>
         value match {
           case CEmptyArray => loop(left, t => f(trans.InnerArrayConcat(t)))
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, instructions.JoinArray, _, Const(_, value), right) =>
+      case Join(instructions.JoinArray, _, Const(value), right) =>
         value match {
           case CEmptyArray => loop(right, t => f(trans.InnerArrayConcat(t)))
           case _ => (f(Leaf(Source)), graph)
         }
 
-      case Join(_, op, _, left, Const(_, value)) =>
+      case Join(op, _, left, Const(value)) =>
         op2ForBinOp(op) map { _.f2(ctx).partialRight(value) } match {
           case Some(f1) => loop(left, t => f(trans.Map1(t, f1)))
           case None => (f(Leaf(Source)), graph)
         }
           
-      case Join(_, op, CrossLeftSort | CrossRightSort, Const(_, value), right) =>
+      case Join(op, CrossLeftSort | CrossRightSort, Const(value), right) =>
         op2ForBinOp(op) map { _.f2(ctx).partialLeft(value) } match {
           case Some(f1) => loop(right, t => f(trans.Map1(t, f1)))
           case None => (f(Leaf(Source)), graph)
         }
 
-      case dag.Join(_, op, joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
+      case dag.Join(op, joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
         val (targetTrans, targetAncestor) = loop(target, identity _)
         val (booleanTrans, booleanAncestor) = loop(boolean, identity _)
 
         if (targetAncestor == booleanAncestor) (f(transFromBinOp(op, ctx)(targetTrans, booleanTrans)), targetAncestor)
         else (f(Leaf(Source)), graph)
 
-      case dag.Filter(_, joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
+      case dag.Filter(joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
         val (targetTrans, targetAncestor) = loop(target, identity _)
         val (booleanTrans, booleanAncestor) = loop(boolean, identity _)
 
         if (targetAncestor == booleanAncestor) (f(trans.Filter(targetTrans, booleanTrans)), targetAncestor)
         else (f(Leaf(Source)), graph)
 
-      case dag.Operate(_, instructions.WrapArray, parent) => loop(parent, t => f(trans.WrapArray(t)))
+      case dag.Operate(instructions.WrapArray, parent) => loop(parent, t => f(trans.WrapArray(t)))
 
-      case dag.Operate(_, op, parent) => loop(parent, t => f(trans.Map1(t, op1(op).f1(ctx))))
+      case dag.Operate(op, parent) => loop(parent, t => f(op1(op).spec(ctx)(t)))
 
       case _ => (f(Leaf(Source)), graph)
     }
@@ -204,12 +204,12 @@ trait ReductionFinder[M[+_]] extends TransSpecModule with TransSpecFinder[M] {
     val reduceTable = mutable.Map[DepGraph, dag.MegaReduce]() 
 
     node mapDown { recurse => {
-      case graph @ dag.Reduce(loc, red, parent) if st.ancestorByReduce contains graph => {
+      case graph @ dag.Reduce(red, parent) if st.ancestorByReduce contains graph => {
         val ancestor = st.ancestorByReduce(graph)
         val members = st.buildMembers(ancestor)
 
         val left = reduceTable get ancestor getOrElse {
-          val result = dag.MegaReduce(loc, members, recurse(ancestor))
+          val result = dag.MegaReduce(members, recurse(ancestor))
           reduceTable(ancestor) = result
           result
         }
@@ -217,11 +217,11 @@ trait ReductionFinder[M[+_]] extends TransSpecModule with TransSpecFinder[M] {
         val firstIndex = st.parentsByAncestor(ancestor).reverse indexOf parent
         val secondIndex = st.reducesByParent(parent).reverse indexOf graph
 
-        dag.Join(loc, DerefArray, CrossLeftSort, 
-          dag.Join(loc, DerefArray, CrossLeftSort, 
+        dag.Join(DerefArray, CrossLeftSort, 
+          dag.Join(DerefArray, CrossLeftSort, 
             left,
-            Const(loc, CLong(firstIndex))),
-          Const(loc, CLong(secondIndex)))
+            Const(CLong(firstIndex))(graph.loc))(graph.loc),
+          Const(CLong(secondIndex))(graph.loc))(graph.loc)
       }
     }}
   }

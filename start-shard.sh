@@ -20,7 +20,7 @@
 #!/bin/bash
 
 # Parse opts to determine settings
-while getopts ":d:lb" opt; do
+while getopts ":d:lbZYR" opt; do
     case $opt in
         d) 
             WORKDIR=$(cd $OPTARG; pwd)
@@ -31,20 +31,39 @@ while getopts ":d:lb" opt; do
         b)
             BUILDMISSING=1
             ;;
+        Z)
+            TESTQUIT=1
+            rm -rf stress-data && mkdir stress-data
+            WORKDIR=$(cd stress-data; pwd)
+            ;;
+        R)
+            TESTRESUME=1
+            WORKDIR=$(cd stress-data; pwd)
+            ;;
+        Y)
+            ( $0 -Z && $0 -R ) 2>&1 | grep ';;;'
+            exit ${PIPESTATUS[0]}
+            ;;
         \?)
             echo "Usage: `basename $0` [-l] [-d <work directory>]"
             echo "  -l: If a temp workdir is used, don't clean up afterward"
             echo "  -d: Use the provided workdir"
             echo "  -b: Build missing artifacts prior to run (depends on sbt in path)"
+            echo "  -Y: Run ingest consistency check"
+            echo "  -Z: (private to -Y) first pass to be interrupted"
+            echo "  -R: (private to -Y) second pass to compelte"
             exit 1
             ;;
     esac
 done
 
+[ -n "$TESTQUIT" ] && echo ";;; starting service for test-quit"
+[ -n "$TESTRESUME" ] && echo ";;; starting service for test-resume"
+
 # Taken from http://blog.publicobject.com/2006/06/canonical-path-of-file-in-bash.html
 function path-canonical-simple() {
-local dst="${1}"
-cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")" | sed 's#/\.##'
+    local dst="${1}"
+    cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")" | sed 's#/\.##'
 }
 
 function random_port() {
@@ -170,9 +189,9 @@ echo "Using artifacts in $ARTIFACTDIR"
 
 unset REBEL_OPTS
 if [ -e "$REBEL_HOME" ]; then
-	REBEL_OPTS="-noverify -javaagent:$REBEL_HOME/jrebel.jar -Dplatform.root=`dirname $0`"
+    REBEL_OPTS="-noverify -javaagent:$REBEL_HOME/jrebel.jar -Dplatform.root=`dirname $0`"
 else
-	REBEL_OPTS=''
+    REBEL_OPTS=''
 fi
 
 if [ "$WORKDIR" == "" ]; then  
@@ -288,10 +307,21 @@ echo "dataDir=$ZKDATA" >> $ZKBASE/conf/zoo.cfg
 echo "# the port at which the clients will connect" >> $ZKBASE/conf/zoo.cfg
 echo "clientPort=$ZOOKEEPER_PORT" >> $ZKBASE/conf/zoo.cfg
 
+# Set up logging for zookeeper
+cat > $ZKBASE/bin/log4j.properties <<EOF
+log4j.rootLogger=INFO, file
+log4j.appender.file=org.apache.log4j.RollingFileAppender
+log4j.appender.file.File=$WORKDIR/logs/zookeeper.log
+log4j.appender.file.MaxFileSize=1MB
+log4j.appender.file.MaxBackupIndex=1
+log4j.appender.file.layout=org.apache.log4j.PatternLayout
+log4j.appender.file.layout.ConversionPattern=%d{ABSOLUTE} %5p %c{1}:%L - %m%n
+EOF
+
 # Start it up!
 echo "Starting zookeeper on port $ZOOKEEPER_PORT"
 cd $ZKBASE/bin
-./zkServer.sh start
+./zkServer.sh start &> $WORKDIR/logs/zookeeper.stdout
 
 wait_until_port_open $ZOOKEEPER_PORT
 
@@ -308,14 +338,14 @@ chmod +x $KFBASE/bin/kafka-server-start.sh
 
 KAFKA_GLOBAL_PORT=$(random_port "Kafka global")
 sed -e "s#log.dir=.*#log.dir=$KFGLOBALDATA#; s/port=.*/port=$KAFKA_GLOBAL_PORT/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-global.properties
-$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-global.properties &
+$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-global.properties &> $WORKDIR/logs/kafka-global.stdout &
 KFGLOBALPID=$!
 
 wait_until_port_open $KAFKA_GLOBAL_PORT
 
 KAFKA_LOCAL_PORT=$(random_port "Kafka local")
 sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=$KAFKA_LOCAL_PORT/; s/enable.zookeeper=.*/enable.zookeeper=false/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-local.properties
-$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-local.properties &
+$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-local.properties &> $WORKDIR/logs/kafka-local.stdout &
 KFLOCALPID=$!
 
 wait_until_port_open $KAFKA_LOCAL_PORT
@@ -328,7 +358,7 @@ MONGO_PORT=$(random_port "Mongo")
 # Start up mongo and set test token
 cd $MONGOBASE
 tar --strip-components=1 -xvzf "$ARTIFACTDIR"/mongo* &> /dev/null
-$MONGOBASE/bin/mongod --port $MONGO_PORT --dbpath $MONGODATA --nojournal --nounixsocket --noauth --noprealloc &
+$MONGOBASE/bin/mongod --port $MONGO_PORT --dbpath $MONGODATA --nojournal --nounixsocket --noauth --noprealloc &> $WORKDIR/logs/mongo.stdout &
 MONGOPID=$!
 
 wait_until_port_open $MONGO_PORT
@@ -373,7 +403,7 @@ cd "$BASEDIR"
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
 if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
-    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" || {
+    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" &> $WORKDIR/logs/checkpoint_init.stdout || {
         echo "Couldn't set initial checkpoint!" >&2
         exit 3
     }
@@ -381,15 +411,15 @@ if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
 fi
 
 echo "Starting auth service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/auth-v1.logging.xml -jar "$AUTH_ASSEMBLY" --configFile "$WORKDIR"/configs/auth-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/auth-v1.logging.xml -jar "$AUTH_ASSEMBLY" --configFile "$WORKDIR"/configs/auth-v1.conf &> $WORKDIR/logs/auth-v1.stdout &
 AUTHPID=$!
 
 echo "Starting accounts service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/accounts-v1.logging.xml -jar "$ACCOUNTS_ASSEMBLY" --configFile "$WORKDIR"/configs/accounts-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/accounts-v1.logging.xml -jar "$ACCOUNTS_ASSEMBLY" --configFile "$WORKDIR"/configs/accounts-v1.conf &> $WORKDIR/logs/accounts-v1.stdout &
 ACCOUNTSPID=$!
 
 echo "Starting jobs service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/jobs-v1.logging.xml -jar "$JOBS_ASSEMBLY" --configFile "$WORKDIR"/configs/jobs-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/jobs-v1.logging.xml -jar "$JOBS_ASSEMBLY" --configFile "$WORKDIR"/configs/jobs-v1.conf &> $WORKDIR/logs/jobs-v1.stdout &
 JOBSPID=$!
 
 wait_until_port_open $AUTH_PORT
@@ -418,11 +448,11 @@ else
 fi
 
 echo "Starting ingest service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/ingest-v1.logging.xml -jar "$INGEST_ASSEMBLY" --configFile "$WORKDIR"/configs/ingest-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/ingest-v1.logging.xml -jar "$INGEST_ASSEMBLY" --configFile "$WORKDIR"/configs/ingest-v1.conf &> $WORKDIR/logs/ingest-v1.stdout &
 INGESTPID=$!
 
 echo "Starting shard service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/shard-v1.conf &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/shard-v1.conf &> $WORKDIR/logs/shard-v1.stdout &
 SHARDPID=$!
 
 # Let the ingest/shard services startup in parallel
@@ -461,6 +491,112 @@ JOBS_PORT:         $JOBS_PORT
 SHARD_PORT:        $SHARD_PORT
 EOF
 echo "============================================================"
+
+function query() {
+    curl -s -G \
+      --data-urlencode "q=$1" \
+      --data-urlencode "apiKey=$ACCOUNTTOKEN" \
+      "http://localhost:$SHARD_PORT/analytics/fs/$ACCOUNTID"
+}
+
+function count() {
+    query "count(//xyz)" | tr -d "[]"
+}
+
+function wait_til_nonzero() {
+    wait_til_n_rows 1 $1
+    return $?
+}
+
+function now() {
+    date "+%s"
+}
+
+function check_time() {
+    expr `now` '>' $1
+}
+
+function wait_til_n_rows() {
+    N=$1
+    LIMIT=$( expr `now` '+' $2 )
+    RESULT=$( count )
+    echo "!!! count returned $RESULT"
+    while [ -z "$RESULT" ] || [ "$RESULT" -lt "$N" ]; do
+        sleep 0.05
+        [ `check_time $LIMIT` -eq 1 ] && return 1
+        RESULT=$( count )
+        echo "!!! count returned $RESULT"
+    done
+    return 0
+}
+
+function count_lines() {
+    wc -l $1 | awk '{print $1}'
+}
+
+TESTJSON="n100k.json"
+TESTURL="http://ops.reportgrid.com.s3.amazonaws.com/datasets/$TESTJSON"
+
+function download_testjson() {
+    echo "downloading json"
+    wget $TESTURL
+    if [ $? -ne 0 ]; then
+        echo "Failed to download $TESTURL" >&2
+        exit 3
+    fi
+    echo "done"
+}
+
+if [ -n "$TESTQUIT" ]; then
+
+    echo "trying??"
+    ( [ -r $TESTJSON ] && [ `count_lines $TESTJSON` -eq 100000 ] ) || download_testjson
+    echo "what????"
+
+    echo ";;; ingesting $TESTJSON"
+    curl -o /dev/null -v \
+      -H 'Content-Type: application/json' \
+      --data-bin "@$TESTJSON" \
+      "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/xyz?apiKey=$ACCOUNTTOKEN"
+
+    echo ";;; polling for rows via count()"
+    wait_til_nonzero 60
+
+    trap EXIT
+
+    if [ $? -eq 0 ]; then
+        echo ";;; ingest rows detected--killing service now!"
+        kill -9 $INGESTPID
+        kill -9 $SHARDPID
+        kill -9 $ACCOUNTSPID
+        kill -9 $JOBSPID
+        kill -9 $AUTHPID
+        on_exit
+        exit 0
+    else
+        echo ";;; no rows ingested after 60s--failed!"
+        on_exit
+        exit 1
+    fi
+fi
+
+if [ -n "$TESTRESUME" ]; then
+    NROWS=`wc -l $TESTJSON | awk '{print $1}'`
+    wait_til_n_rows $NROWS 60
+    trap EXIT
+    echo ";;; verifying that shard resumes ingest"
+    if [ $? -eq 0 ]; then
+        echo ";;; resume succeeded (found $NROWS rows)"
+        echo ";;; ok"
+        on_exit
+        exit 0
+    else
+        echo ";;; resume failed (timed out before seeing $NROWS rows)"
+        echo ";;; ERROR!"
+        on_exit 1
+        exit 1
+    fi
+fi
 
 # Wait forever until the user Ctrl-C's the system
 while true; do sleep 30; done

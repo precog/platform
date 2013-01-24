@@ -65,6 +65,7 @@ trait ShardConfig extends BaseConfig {
   def maxOpenProjections: Int = config[Int]("actors.store.max_open_projections", 5000)
 
   def metadataSyncPeriod: Duration = config[Int]("actors.metadata.sync_minutes", 1) minutes
+  def metadataPreload: Boolean = config[Boolean]("actors.metadata.preload", true)
   def batchStoreDelay: Duration    = config[Long]("actors.store.idle_millis", 1000) millis
   def batchShutdownCheckInterval: Duration = config[Int]("actors.store.shutdown_check_seconds", 1) seconds
 }
@@ -105,7 +106,7 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
       val initialCheckpoint = loadCheckpoint()
 
       logger.info("Initializing MetadataActor with storage = " + metadataStorage)
-      metadataActor = metadataActorSystem.actorOf(Props(new MetadataActor(yggConfig.shardId, metadataStorage, checkpointCoordination, initialCheckpoint)), "metadata")
+      metadataActor = metadataActorSystem.actorOf(Props(new MetadataActor(yggConfig.shardId, metadataStorage, checkpointCoordination, initialCheckpoint, yggConfig.metadataPreload)), "metadata")
 
       logger.debug("Initializing ProjectionsActor")
       projectionsActor = projectionActorSystem.actorOf(Props(new ProjectionsActor(yggConfig.maxOpenProjections)), "projections")

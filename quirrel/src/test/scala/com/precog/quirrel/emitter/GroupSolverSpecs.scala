@@ -268,6 +268,35 @@ object GroupSolverSpecs extends Specification
       tree.errors must beEmpty
       tree.buckets mustEqual Map(Set() -> expected)
     }
+
+    "identify composite bucket for solve with constraint for 'a in constraints and body with assertion" in {
+      val input = """
+        | foo := //foo 
+        | bar := //bar 
+        | assert true
+        | solve 'a = bar.a 
+        |   count(foo where foo.a = 'a)
+        """.stripMargin
+      
+      val Let(_, _, _, _,
+        Let(_, _, _, _,
+          Assert(_, _, 
+            tree @ Solve(_,
+              Vector(Eq(_, _, constrSol)), count @ Dispatch(_, _, Vector(origin @ Where(_, target, Eq(_, bodySol, _)))))))) = compileSingle(input)
+          
+      val btrace1 = List()
+      val btrace2 = List()
+      val expected = IntersectBucketSpec(
+        Group(Some(origin), target,
+          UnfixedSolution("'a", bodySol),
+          btrace1),
+        Group(None, constrSol,
+          UnfixedSolution("'a", constrSol),
+          btrace2))
+      
+      tree.errors must beEmpty
+      tree.buckets mustEqual Map(Set() -> expected)
+    }
     
     "identify composite bucket for solve with constraint for 'a only solvable in constrains" in {
       val input = """
@@ -579,6 +608,18 @@ object GroupSolverSpecs extends Specification
               Where(_, left, right))))) = compileSingle(input)
       
       tree.errors must not(beEmpty)
+    }
+    
+    "reject a constraint which attempts to parent through an assertion" in {
+      val input = """
+        | foo := //foo
+        | foo' := assert true foo
+        |
+        | solve 'a
+        |   foo where foo'.a = 'a
+        | """.stripMargin
+        
+      compileSingle(input).errors must not(beEmpty)
     }
 
     "accept a constraint in a solve" in {

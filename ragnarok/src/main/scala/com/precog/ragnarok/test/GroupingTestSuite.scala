@@ -17,31 +17,20 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.daze
+package com.precog
+package ragnarok
+package test
 
-import org.specs2.mutable._
-
-import com.precog.common.Path
-import com.precog.yggdrasil._
-import org.joda.time.DateTime
-
-trait DAGRewriterSpecs[M[+_]] extends Specification with EvaluatorTestSupport[M] {
-
-  import dag._
-  import instructions._
-
-  "DAG rewriting" should {
-    "compute identities given a relative path" in {
-      val line = Line(1, 1, "")
-
-      val input = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
-
-      val ctx = EvaluationContext("testAPIKey", Path.Root, new DateTime())
-      val result = rewriteDAG(true, ctx)(input)
-
-      result.identities mustEqual Identities.Specs(Vector(LoadIds("/numbers")))
-    }
-  }
+object BugTestSuite extends PerfTestSuite {
+  query(
+    """
+      | conversions := //conversions
+      |  
+      | result := solve 'customerId
+      |   conversions' := conversions where conversions.customer.ID = 'customerId
+      |  
+      |   {count: count(conversions'), customerId: 'customerId}
+      |  
+      | result
+      | """.stripMargin)
 }
-
-object DAGRewriterSpecs extends DAGRewriterSpecs[test.YId] with test.YIdInstances

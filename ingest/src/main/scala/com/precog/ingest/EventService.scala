@@ -23,6 +23,8 @@ import service._
 import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.common.security._
+import com.precog.common.security.service._
+import com.precog.common.services._
 
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
@@ -50,7 +52,7 @@ import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExec
 
 case class EventServiceState(accessControl: APIKeyFinder[Future], ingestHandler: IngestServiceHandler, archiveHandler: ArchiveServiceHandler[ByteChunk], stop: Stoppable)
 
-trait EventService extends BlueEyesServiceBuilder with EventServiceCombinators with DecompressCombinators { 
+trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with DecompressCombinators { 
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 

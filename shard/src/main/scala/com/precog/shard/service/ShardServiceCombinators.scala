@@ -32,9 +32,10 @@ import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
 
 import com.precog.common.Path
-import com.precog.common.security._
 import com.precog.common.json._
-import com.precog.ingest.service._
+import com.precog.common.security._
+import com.precog.common.security.service._
+import com.precog.common.services._
 import com.precog.daze.QueryOptions
 import com.precog.yggdrasil.TableModule
 import com.precog.yggdrasil.TableModule._
@@ -47,7 +48,7 @@ import scalaz.syntax.bifunctor._
 import scalaz.syntax.traverse._
 import scalaz.std.option._
 
-trait ShardServiceCombinators extends EventServiceCombinators with Logging {
+trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with Logging {
   type Query = String
 
   import DefaultBijections._
