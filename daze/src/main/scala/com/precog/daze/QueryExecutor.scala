@@ -59,7 +59,7 @@ trait MetadataClient[M[+_]] {
   def structure(apiKey: APIKey, path: Path): M[Validation[String, JObject]]
 }
 
-trait QueryExecutor[M[+_], +A] { self =>
+trait QueryExecutor[M[+_], +A] extends MetadataClient[M] { self =>
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, A]]
 
   def map[B](f: A => B)(implicit M: Applicative[M]): QueryExecutor[M, B] = new QueryExecutor[M, B] {
@@ -67,20 +67,17 @@ trait QueryExecutor[M[+_], +A] { self =>
     def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, B]] = {
       self.execute(apiKey, query, prefix, opts) map { _ map f }
     }
+
+    def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]] = self.browse(apiKey, path)
+    def structure(apiKey: APIKey, path: Path): M[Validation[String, JObject]] = self.structure(apiKey, path)
   }
 }
 
-trait QueryExecutorFactory[M[+_], +A] extends MetadataClient[M] {
+trait QueryExecutorFactory[M[+_], +A] {
   def executorFor(apiKey: APIKey): M[Validation[String, QueryExecutor[M, A]]]
-  def status(): M[Validation[String, JValue]]
-  def startup(): M[Boolean]
-  def shutdown(): M[Boolean]
 }
 
-trait NullQueryExecutor extends QueryExecutor[Id.Id, Nothing] {
-  def actorSystem: ActorSystem
-  implicit def executionContext: ExecutionContext
-
+object NullQueryExecutor extends QueryExecutor[Id.Id, Nothing] {
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
     failure(SystemError(new UnsupportedOperationException("Query service not avaialble")))
   }
@@ -88,9 +85,6 @@ trait NullQueryExecutor extends QueryExecutor[Id.Id, Nothing] {
   def browse(apiKey: APIKey, path: Path) = sys.error("feature not available") 
   def structure(apiKey: APIKey, path: Path) = sys.error("feature not available")
   def status() = sys.error("feature not available")
-
-  def startup = true
-  def shutdown = true
 }
 
 // vim: set ts=4 sw=4 et:

@@ -24,9 +24,8 @@ import com.precog.daze._
 import com.precog.accounts.InMemoryAccountManager
 
 import yggdrasil.{ ProjectionDescriptor, BaseConfig }
-import yggdrasil.jdbm3._
 import yggdrasil.actor._
-import yggdrasil.table.jdbm3.JDBMColumnarTableModule
+import yggdrasil.table.SliceColumnarTableModule
 import yggdrasil.table.BlockStoreColumnarTableModuleConfig
 import yggdrasil.metadata.FileMetadataStorage
 
@@ -74,12 +73,10 @@ trait StandalonePerfTestRunner[T] extends EvaluatingPerfTestRunner[Future, T]
 }
 
 final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val optimize: Boolean,
-      val actorSystem: ActorSystem, _rootDir: Option[File])(implicit val M: Monad[Future], val coM: Copointed[Future])
+      val actorSystem: ActorSystem, _rootDir: Option[File])(implicit val M: Monad[Future] with Copointed[Future])
     extends StandalonePerfTestRunner[T]
-    with JDBMColumnarTableModule[Future]
-    with SystemActorStorageModule
-    with JDBMProjectionModule
-    with StandaloneShardSystemActorModule { self =>
+    with SliceColumnarTableModule[Future, Array[Byte]]
+    with StandaloneShardSystemActorModule[Array[Byte], table.Slice] { self =>
 
   trait JDBMPerfTestRunnerConfig extends StandalonePerfTestRunnerConfig with JDBMProjectionModuleConfig
     with BlockStoreColumnarTableModuleConfig

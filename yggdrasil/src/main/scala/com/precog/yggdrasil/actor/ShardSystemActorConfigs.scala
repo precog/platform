@@ -87,7 +87,7 @@ trait ProductionShardSystemConfig extends ShardConfig {
   val logPrefix = "[Production Yggdrasil Shard]"
 }
 
-trait ProductionShardSystemActorModule extends ShardSystemActorModule {
+trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
   type YggConfig <: ProductionShardSystemConfig
 
   def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog
@@ -116,13 +116,13 @@ trait ProductionShardSystemActorModule extends ShardSystemActorModule {
   def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestConfig.isDefined) 
 }
 
-trait StandaloneShardSystemConfig extends SystemActorStorageConfig {
+trait StandaloneShardSystemConfig extends ShardConfig {
   def shardId = "standalone"
   def logPrefix = "[Standalone Yggdrasil Shard]"
   def metadataServiceTimeout = metadataTimeout
 }
 
-trait StandaloneShardSystemActorModule extends ShardSystemActorModule {
+trait StandaloneActorProjectionSystem extends ShardSystemActorModule {
   type YggConfig <: StandaloneShardSystemConfig
   def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = None
   def checkpointCoordination = CheckpointCoordination.Noop

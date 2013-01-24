@@ -31,19 +31,20 @@ import org.apache.jdbm._
 import org.joda.time.DateTime
 import com.weiglewilczek.slf4s.Logging
 
-import scalaz.effect.IO
-
 import java.io.File
 import java.util.SortedMap
 import java.nio.ByteBuffer
 
 import scala.collection.JavaConverters._
 
+import scalaz._
+import scalaz.syntax.monad._
+
 /**
  * A Projection wrapping a raw JDBM TreeMap index used for sorting. It's assumed that
  * the index has been created and filled prior to creating this wrapper.
  */
-class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sortOrder: DesiredSortOrder, sliceSize: Int) extends BlockProjectionLike[Array[Byte],Slice] with SortProjectionLike with Logging {
+class JDBMRawSortProjection[M[+_]: Monad] private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sortOrder: DesiredSortOrder, sliceSize: Int) extends SortProjectionLike[M,Array[Byte],Slice] with Logging {
 
   def foreach(f : java.util.Map.Entry[Array[Byte], Array[Byte]] => Unit) {
     val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
@@ -59,7 +60,7 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
   val rowFormat = RowFormat.forValues(valRefs)
   val keyFormat = RowFormat.forSortingKey(sortKeyRefs)
 
-  def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Array[Byte], Slice]] = {
+  def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor] = Set()): M[Option[BlockProjectionData[Array[Byte], Slice]]] = Monad[M].point {
     // TODO: Make this far, far less ugly
     if (columns.size > 0) {
       throw new IllegalArgumentException("JDBM Sort Projections may not be constrained by column descriptor")
@@ -119,7 +120,7 @@ class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String,
           val columns = keyColumns.toMap ++ valColumns
         }
 
-        Some(BlockProjectionData[Array[Byte],Slice](firstKey, lastKey, slice))
+        Some(BlockProjectionData(firstKey, lastKey, slice))
       }
     } finally {
       db.close() // creating the slice should have already read contents into memory

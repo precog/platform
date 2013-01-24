@@ -51,7 +51,7 @@ trait RoutingTable {
   
   def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ArchiveData]
 
-  def batchMessages(events: Iterable[IngestMessage], descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ProjectionUpdate] = {
+  def batchMessages(events: Iterable[IngestMessage], descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ShardProjectionAction] = {
     import ProjectionInsert.Row
     
     val updates = events.flatMap {
@@ -68,7 +68,7 @@ trait RoutingTable {
     
     // Group consecutive inserts into atomic ProjectionInsert messages for batching, but split at any archive requests
     val revBatched = grouped.flatMap {
-      case (desc, updates) => updates.foldLeft(List.empty[ProjectionUpdate]) {
+      case (desc, updates) => updates.foldLeft(List.empty[ShardProjectionAction]) {
         case (rest, id : ArchiveId) => ProjectionArchive(desc, id) :: rest
         case (ProjectionInsert(_, inserts) :: rest, insert : Row) => ProjectionInsert(desc, insert +: inserts) :: rest
         case (rest, insert : Row) => ProjectionInsert(desc, Seq(insert)) :: rest

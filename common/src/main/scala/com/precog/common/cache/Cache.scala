@@ -19,9 +19,11 @@
  */
 package com.precog.common.cache
 
+import com.precog.util.PrecogUnit
+
 import akka.util.Duration
 
-import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache, Cache => GCache}
+import com.google.common.cache.{Cache => GCache, _}
 
 import java.util.concurrent.ExecutionException
 
@@ -50,32 +52,38 @@ class AutoCache[K, V] (private val backing: LoadingCache[K, V]) extends Map[K, V
 
 
 object Cache {
-  sealed trait CacheOption {
-    def apply[K,V](builder: CacheBuilder[K, V]): CacheBuilder[K, V]
+  sealed trait CacheOption[K, V] {
+    def apply(builder: CacheBuilder[K, V]): CacheBuilder[K, V]
   }
 
-  case class MaxSize(size: Long) extends CacheOption {
-    def apply[K,V](builder: CacheBuilder[K, V]) = builder.maximumSize(size)
+  case class MaxSize[K, V](size: Long) extends CacheOption[K, V] {
+    def apply(builder: CacheBuilder[K, V]) = builder.maximumSize(size)
   }
 
-  case class ExpireAfterAccess(timeout: Duration) extends CacheOption {
-    def apply[K,V](builder: CacheBuilder[K, V]) = builder.expireAfterAccess(timeout.length, timeout.unit)
+  case class ExpireAfterAccess[K, V](timeout: Duration) extends CacheOption[K, V] {
+    def apply(builder: CacheBuilder[K, V]) = builder.expireAfterAccess(timeout.length, timeout.unit)
   }
 
-  case class ExpireAfterWrite(timeout: Duration) extends CacheOption {
-    def apply[K,V](builder: CacheBuilder[K, V]) = builder.expireAfterWrite(timeout.length, timeout.unit)
+  case class ExpireAfterWrite[K, V](timeout: Duration) extends CacheOption[K, V] {
+    def apply(builder: CacheBuilder[K, V]) = builder.expireAfterWrite(timeout.length, timeout.unit)
   }
 
-  private def createBuilder[K, V](options: Seq[CacheOption]): CacheBuilder[K, V] = 
+  case class OnRemoval[K, V](onRemove: (K, V, RemovalCause) => PrecogUnit) extends CacheOption[K, V] {
+    def apply(builder: CacheBuilder[K, V]) = builder.removalListener(new RemovalListener[K, V] {
+      def onRemoval(notification: RemovalNotification[K, V]) = onRemove(notification.getKey, notification.getValue, notification.getCause)
+    })
+  }
+
+  private def createBuilder[K, V](options: Seq[CacheOption[K, V]]): CacheBuilder[K, V] = 
     options.foldLeft(CacheBuilder.newBuilder.asInstanceOf[CacheBuilder[K, V]]) {
       case (acc, opt) => opt.apply(acc)
     }
 
-  def simple[K, V] (options: CacheOption*): SimpleCache[K, V] = {
+  def simple[K, V] (options: CacheOption[K, V]*): SimpleCache[K, V] = {
     new SimpleCache[K, V](createBuilder(options).build())
   }
 
-  def auto[K, V] (options: CacheOption*)(loader: K => V): AutoCache[K, V] = {
+  def auto[K, V] (options: CacheOption[K, V]*)(loader: K => V): AutoCache[K, V] = {
     val backing = createBuilder(options).build(new CacheLoader[K, V] {
       def load(key : K) = loader(key)
     })

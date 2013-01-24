@@ -19,7 +19,6 @@
  */
 package com.precog.yggdrasil
 package table
-package jdbm3
 
 import com.precog.common.{MetadataStats,Path,VectorCase}
 import com.precog.common.json._
@@ -58,15 +57,13 @@ import scala.collection.mutable
 
 import TableModule._
 
-trait JDBMColumnarTableModule[M[+_]] extends BlockStoreColumnarTableModule[M] with StorageModule[M] {
-  import JDBMColumnarTableModule._
+trait SliceColumnarTableModule[M[+_], Key] extends BlockStoreColumnarTableModule[M] with ProjectionModule[M, Key, Slice] with StorageModule[M] {
+  import SliceColumnarTableModule._
 
-  type Key
-  type Projection <: BlockProjectionLike[Key, Slice]
   type TableCompanion <: JDBMColumnarTableCompanion
 
   trait JDBMColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
-    type BD = BlockProjectionData[Key,Slice]
+    type BD = BlockProjectionData[Key, Slice]
   
     private object loadMergeEngine extends MergeEngine[Key, BD]
 
@@ -77,14 +74,8 @@ trait JDBMColumnarTableModule[M[+_]] extends BlockStoreColumnarTableModule[M] wi
 
       def cellsM(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Stream[M[Option[CellState]]] = {
         for (((desc, cols), i) <- projections.toStream.zipWithIndex) yield {
-          val succ: Option[Key] => M[Option[BD]] = (key: Option[Key]) => storage.projection(desc) map {
-            case (projection, release) => try {
-              val result = projection.getBlockAfter(key, cols)
-              release.release.unsafePerformIO
-              result
-            } catch {
-              case t: Throwable => blockModuleLogger.error("Error in cell fetch", t); throw t
-            }
+          val succ: Option[Key] => M[Option[BD]] = (key: Option[Key]) => Projection(desc) flatMap { projection =>
+            projection.getBlockAfter(key, cols)
           }
 
           succ(None) map { 
@@ -126,7 +117,7 @@ trait JDBMColumnarTableModule[M[+_]] extends BlockStoreColumnarTableModule[M] wi
   }
 }
 
-object JDBMColumnarTableModule {
+object SliceColumnarTableModule {
   /**
    * Find the minimal set of projections (and the relevant columns from each projection) that
    * will be loaded to provide a dataset of the specified type.
