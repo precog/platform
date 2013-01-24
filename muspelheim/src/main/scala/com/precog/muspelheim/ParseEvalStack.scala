@@ -35,3 +35,4 @@ trait ParseEvalStack[M[+_]] extends Compiler
     with Evaluator[M]
     with StdLib[M]
     with TableModule[M]
+

@@ -57,12 +57,12 @@ import scala.collection.mutable
 
 import TableModule._
 
-trait SliceColumnarTableModule[M[+_], Key] extends BlockStoreColumnarTableModule[M] with ProjectionModule[M, Key, Slice] with StorageModule[M] {
+trait SliceColumnarTableModule[M[+_], Key] extends BlockStoreColumnarTableModule[M] with ProjectionModule[M, Key, Slice] with StorageMetadataSource[M] {
   import SliceColumnarTableModule._
 
-  type TableCompanion <: JDBMColumnarTableCompanion
+  type TableCompanion <: SliceColumnarTableCompanion
 
-  trait JDBMColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
+  trait SliceColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
     type BD = BlockProjectionData[Key, Slice]
   
     private object loadMergeEngine extends MergeEngine[Key, BD]
@@ -70,7 +70,7 @@ trait SliceColumnarTableModule[M[+_], Key] extends BlockStoreColumnarTableModule
     def load(table: Table, apiKey: APIKey, tpe: JType): M[Table] = {
       import loadMergeEngine._
 
-      val metadataView = storage.userMetadataView(apiKey)
+      val metadataView = userMetadataView(apiKey)
 
       def cellsM(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): Stream[M[Option[CellState]]] = {
         for (((desc, cols), i) <- projections.toStream.zipWithIndex) yield {

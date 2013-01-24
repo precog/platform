@@ -54,12 +54,7 @@ case class QueryOptions(
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending,
   timeout: Option[Long] = None)
 
-trait MetadataClient[M[+_]] {
-  def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]]
-  def structure(apiKey: APIKey, path: Path): M[Validation[String, JObject]]
-}
-
-trait QueryExecutor[M[+_], +A] extends MetadataClient[M] { self =>
+trait QueryExecutor[M[+_], +A] { self =>
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, A]]
 
   def map[B](f: A => B)(implicit M: Applicative[M]): QueryExecutor[M, B] = new QueryExecutor[M, B] {
@@ -67,24 +62,13 @@ trait QueryExecutor[M[+_], +A] extends MetadataClient[M] { self =>
     def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, B]] = {
       self.execute(apiKey, query, prefix, opts) map { _ map f }
     }
-
-    def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]] = self.browse(apiKey, path)
-    def structure(apiKey: APIKey, path: Path): M[Validation[String, JObject]] = self.structure(apiKey, path)
   }
-}
-
-trait QueryExecutorFactory[M[+_], +A] {
-  def executorFor(apiKey: APIKey): M[Validation[String, QueryExecutor[M, A]]]
 }
 
 object NullQueryExecutor extends QueryExecutor[Id.Id, Nothing] {
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
     failure(SystemError(new UnsupportedOperationException("Query service not avaialble")))
   }
-  
-  def browse(apiKey: APIKey, path: Path) = sys.error("feature not available") 
-  def structure(apiKey: APIKey, path: Path) = sys.error("feature not available")
-  def status() = sys.error("feature not available")
 }
 
 // vim: set ts=4 sw=4 et:

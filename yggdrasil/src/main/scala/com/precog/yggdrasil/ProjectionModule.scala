@@ -21,20 +21,25 @@ package com.precog.yggdrasil
 
 import com.precog.util.PrecogUnit
 
-import scalaz.Order
-import scalaz.effect._
+import scalaz._
+import scalaz.syntax.monad._
 
 trait ProjectionModule[M[+_], Key, Block] {
   type Projection <: ProjectionLike[M, Key, Block]
-  type ProjectionCompanion <: ProjectionCompanionLike
+  type ProjectionCompanion <: ProjectionCompanionLike[M]
 
   def Projection: ProjectionCompanion
 
-  // TODO: Should these really live here, or run through MetadataActor or ProjectionsActor directly?
-  trait ProjectionCompanionLike {
-    def apply(descriptor: ProjectionDescriptor): M[Projection]
+  trait ProjectionCompanionLike[M0[+_]] { self =>
+    //TODO: Move userMetadataView here from StorageModule?
+    def apply(descriptor: ProjectionDescriptor): M0[Projection]
+
+    def liftM[T[_[+_], +_]](implicit T: Hoist[T], M0: Monad[M0]) = new ProjectionCompanionLike[({ type λ[+α] = T[M0, α] })#λ] {
+      def apply(descriptor: ProjectionDescriptor) = self.apply(descriptor).liftM[T]
+    }
   }
 }
+
 
 case class BlockProjectionData[Key, Block](minKey: Key, maxKey: Key, data: Block)
 
@@ -47,23 +52,27 @@ trait ProjectionLike[M[+_], Key, Block] {
    * key. Each resulting block should contain only the columns specified in the 
    * column set; if the set of columns is empty, return all columns.
    */
-  def getBlockAfter(id: Option[Key], columns: Set[ColumnDescriptor] = Set()): M[Option[BlockProjectionData[Key, Block]]]
+  def getBlockAfter(id: Option[Key], columns: Set[ColumnDescriptor] = Set())(implicit M: Monad[M]): M[Option[BlockProjectionData[Key, Block]]]
 }
 
-trait RawProjectionModule[M[+_], Key, Block] extends ProjectionModule[M, Key, Block] {
+trait RawProjectionModule[M[+_], Key, Block] extends ProjectionModule[M, Key, Block] { 
   type Projection <: RawProjectionLike[M, Key, Block]
-  type ProjectionCompanion <: RawProjectionCompanionLike
+  type ProjectionCompanion <: RawProjectionCompanionLike[M]
 
-  trait RawProjectionCompanionLike extends ProjectionCompanionLike {
-    def close(p: Projection): M[PrecogUnit]
+  trait RawProjectionCompanionLike[M0[+_]] extends ProjectionCompanionLike[M0] { self =>
+    def close(p: Projection): M0[PrecogUnit]
+    def archive(d: ProjectionDescriptor): M0[Boolean]
 
-    def archive(d: ProjectionDescriptor): M[Boolean]
+    override def liftM[T[_[+_], +_]](implicit T: Hoist[T], M0: Monad[M0]) = new RawProjectionCompanionLike[({ type λ[+α] = T[M0, α] })#λ] {
+      def apply(descriptor: ProjectionDescriptor) = self(descriptor).liftM[T]
+      def close(p: Projection) = self.close(p).liftM[T]
+      def archive(d: ProjectionDescriptor) = self.archive(d).liftM[T]
+    }
   }
 }
 
 trait RawProjectionLike[M[+_], Key, Block] extends ProjectionLike[M, Key, Block] {
   def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): M[PrecogUnit]
-
   def commit: M[PrecogUnit]
 }
 

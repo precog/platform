@@ -44,7 +44,7 @@ import scalaz.syntax.monad._
  * A Projection wrapping a raw JDBM TreeMap index used for sorting. It's assumed that
  * the index has been created and filled prior to creating this wrapper.
  */
-class JDBMRawSortProjection[M[+_]: Monad] private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sortOrder: DesiredSortOrder, sliceSize: Int) extends SortProjectionLike[M,Array[Byte],Slice] with Logging {
+class JDBMRawSortProjection[M[+_]] private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sortOrder: DesiredSortOrder, sliceSize: Int) extends SortProjectionLike[M,Array[Byte],Slice] with Logging {
 
   def foreach(f : java.util.Map.Entry[Array[Byte], Array[Byte]] => Unit) {
     val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
@@ -60,7 +60,7 @@ class JDBMRawSortProjection[M[+_]: Monad] private[yggdrasil] (dbFile: File, inde
   val rowFormat = RowFormat.forValues(valRefs)
   val keyFormat = RowFormat.forSortingKey(sortKeyRefs)
 
-  def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor] = Set()): M[Option[BlockProjectionData[Array[Byte], Slice]]] = Monad[M].point {
+  def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor] = Set())(implicit M: Monad[M]): M[Option[BlockProjectionData[Array[Byte], Slice]]] = M.point {
     // TODO: Make this far, far less ugly
     if (columns.size > 0) {
       throw new IllegalArgumentException("JDBM Sort Projections may not be constrained by column descriptor")

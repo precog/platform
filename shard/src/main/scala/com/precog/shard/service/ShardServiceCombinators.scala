@@ -44,6 +44,7 @@ import scalaz.ValidationNEL
 import scalaz.Validation._
 import scalaz.Monad
 import scalaz.syntax.traverse._
+import scalaz.syntax.bifunctor._
 import scalaz.std.option._
 
 trait ShardServiceCombinators extends EventServiceCombinators {
@@ -83,21 +84,17 @@ trait ShardServiceCombinators extends EventServiceCombinators {
 
   private def getSortOn(request: HttpRequest[_]): Validation[String, List[CPath]] = {
     request.parameters.get('sortOn).filter(_ != null) map { paths =>
-      try {
-        val jpaths = JParser.parse(paths)
-        jpaths match {
-          case JArray(elems) =>
-            Validation.success(elems collect { case JString(path) => CPath(path) })
-          case JString(path) =>
-            Validation.success(CPath(path) :: Nil)
-          case badJVal =>
-            Validation.failure("The sortOn query parameter was expected to be JSON string or array, but found " + badJVal)
-        }
-      } catch {
-        case ex: ParseException =>
-          Validation.failure("Couldn't parse sortOn query parameter: " + ex.getMessage())
+      (((_: Throwable).getMessage) <-: JParser.parseFromString(paths)) flatMap {
+        case JArray(elems) =>
+          Validation.success(elems collect { case JString(path) => CPath(path) })
+        case JString(path) =>
+          Validation.success(CPath(path) :: Nil)
+        case badJVal =>
+          Validation.failure("The sortOn query parameter was expected to be JSON string or array, but found " + badJVal)
       }
-    } getOrElse Validation.success[String, List[CPath]](Nil)
+    } getOrElse {
+      Validation.success[String, List[CPath]](Nil)
+    }
   }
 
   private def getSortOrder(request: HttpRequest[_]): Validation[String, DesiredSortOrder] = {

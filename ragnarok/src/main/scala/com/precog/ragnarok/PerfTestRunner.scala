@@ -30,7 +30,7 @@ trait PerfTestRunner[M[+_], T] {
   import scalaz.syntax.copointed._
   import scalaz.std.option._
 
-  implicit def M: Monad[M]
+  implicit def M: Monad[M] with Copointed[M]
 
   /** Result type of running an eval. */
   type Result
@@ -69,8 +69,7 @@ trait PerfTestRunner[M[+_], T] {
     }
   }
 
-  def runAll[A](test: Tree[PerfTest], n: Int)(f: Option[(T, T)] => A)(implicit
-    A: Monoid[A], M: Copointed[M]) = runAllM(test, n)(f).copoint
+  def runAll[A: Monoid](test: Tree[PerfTest], n: Int)(f: Option[(T, T)] => A) = runAllM(test, n)(f).copoint
 
   /**
    * Runs `test` `n` times, merging the times for queries together by converting
@@ -131,7 +130,7 @@ trait PerfTestRunner[M[+_], T] {
 }
 
 
-class MockPerfTestRunner[M[+_]](evalTime: => Int)(implicit val M: Monad[M]) extends PerfTestRunner[M, Long] {
+class MockPerfTestRunner[M[+_]](evalTime: => Int)(implicit val M: Monad[M] with Copointed[M]) extends PerfTestRunner[M, Long] {
   import scalaz.syntax.monad._
 
   type Result = Unit

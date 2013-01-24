@@ -17,40 +17,21 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
-package service
+package com.precog.muspelheim
 
-import blueeyes.core.http._
-import blueeyes.core.http.HttpStatusCodes._
-import blueeyes.core.service._
-import blueeyes.json._
-import blueeyes.util.Clock
-
-import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
-
-import scalaz.Success
-import scalaz.Failure
-import scalaz.Validation._
-
-import com.weiglewilczek.slf4s.Logging
-
-import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
+import com.precog.daze.QueryExecutor
+import blueeyes.json._
+import scalaz.Validation
 
-class ActorStatusHandler(queryExecutorFactory: QueryExecutorFactory[Future, _])(implicit dispatcher: MessageDispatcher)
-extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
-  val service = (request: HttpRequest[Future[JValue]]) => {
-    success(queryExecutorFactory.status() map {
-      case Success(result) => HttpResponse[JValue](OK, content = Some(result))
-      case Failure(error) => HttpResponse[JValue](HttpStatus(BadRequest, error))
-    })
-  }
-
-  val metadata = Some(DescriptionMetadata(
-"""
-Shard server actor status.
-"""
-  ))
+trait MetadataClient[M[+_]] {
+  def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]]
+  def structure(apiKey: APIKey, path: Path): M[Validation[String, JObject]]
 }
+
+trait Platform[M[+_], +A] {
+  def metadataClient: MetadataClient[M]
+  def executorFor(apiKey: APIKey): M[Validation[String, QueryExecutor[M, A]]]
+}
+

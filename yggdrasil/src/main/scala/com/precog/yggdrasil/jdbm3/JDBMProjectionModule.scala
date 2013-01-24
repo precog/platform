@@ -47,7 +47,7 @@ trait JDBMProjectionModule extends RawProjectionModule[IO, Array[Byte], Slice] w
 
   class Projection private[JDBMProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends JDBMProjection(baseDir, descriptor, yggConfig.maxSliceSize)
 
-  trait ProjectionCompanion extends RawProjectionCompanionLike {
+  trait ProjectionCompanion extends RawProjectionCompanionLike[IO] {
     def fileOps: FileOps
 
     // Must return a directory

@@ -153,7 +153,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     PrecogUnit
   }
 
-  def getBlockAfter(id: Option[Array[Byte]], desiredColumns: Set[ColumnDescriptor]): IO[Option[BlockProjectionData[Array[Byte], Slice]]] = IO {
+  def getBlockAfter(id: Option[Array[Byte]], desiredColumns: Set[ColumnDescriptor])(implicit M: Monad[IO]): IO[Option[BlockProjectionData[Array[Byte], Slice]]] = M.point {
     setMDC()
     if (idIndexFile.isClosed()) {
       sys.error("Attempting to retrieve more data from a closed projection")

@@ -84,7 +84,7 @@ trait BaseBlockStoreTestModule[M[+_]] extends
 
     type Key = JArray
 
-    implicit def M: Monad[M] with Copointed[M]
+    //implicit def M: Monad[M] with Copointed[M]
 
     object storage extends Storage
 
@@ -96,7 +96,7 @@ trait BaseBlockStoreTestModule[M[+_]] extends
 
       implicit val keyOrder: Order[JArray] = Order[List[JValue]].contramap((_: JArray).elements)
 
-      def getBlockAfter(id: Option[JArray], colSelection: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[JArray, Slice]] = {
+      def getBlockAfter(id: Option[JArray], colSelection: Set[ColumnDescriptor] = Set())(implicit M: Monad[M]) = M.point {
         @tailrec def findBlockAfter(id: JArray, blocks: Stream[Slice]): Option[Slice] = {
           blocks.filterNot(_.isEmpty) match {
             case x #:: xs =>

@@ -73,7 +73,7 @@ object ShardActors extends Logging {
     } yield ()
   }
 
-  private def actorStop(config: ShardConfig, actor: ActorRef, name: String)(implicit system: ActorSystem, executor: ExecutionContext): Future[Unit] = { 
+  def actorStop(config: ShardConfig, actor: ActorRef, name: String)(implicit system: ActorSystem, executor: ExecutionContext): Future[Unit] = { 
     for {
       _ <- Future(logger.debug(config.logPrefix + " Stopping " + name + " actor within " + config.stopTimeout.duration))
       b <- gracefulStop(actor, config.stopTimeout.duration)
@@ -90,7 +90,7 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
 
   protected def checkpointCoordination: CheckpointCoordination
 
-  protected def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]): Option[ActorRef]
+  protected def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]): Option[ActorRef]
 
   def initShardActors(storage: MetadataStorage, accountManager: BasicAccountManager[Future], projectionsActor: ActorRef): ShardActors = {
     val metadataActorSystem = ActorSystem("Metadata")
@@ -113,7 +113,7 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
     val metadataActor = metadataActorSystem.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint)), "metadata")
     val metadataSync = metadataActorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata)
 
-    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(checkpoint, metadataActor, accountManager)) yield init
+    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, checkpoint, metadataActor, accountManager)) yield init
 
     logger.debug("Initializing ingest system")
     val ingestSystem = ingestActorSystem.actorOf(Props(

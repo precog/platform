@@ -101,12 +101,13 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
 
   final class Projection(val descriptor: ProjectionDescriptor, val actorRef: ActorRef, timeout: Timeout) extends ProjectionLike[Future, Key, Block] {
     private implicit val reqTimeout = timeout
-    def getBlockAfter(id: Option[Key], columns: Set[ColumnDescriptor] = Set()): Future[Option[BlockProjectionData[Key, Block]]] = {
-      (actorRef ? ProjectionGetBlock(descriptor, id, columns)).map { _.asInstanceOf[Option[BlockProjectionData[Key, Block]]] }
+    // TODO: need Monad[M] @@ AccountResource
+    def getBlockAfter(id: Option[Key], columns: Set[ColumnDescriptor] = Set())(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Key, Block]]] = {
+      (actorRef ? ProjectionGetBlock(descriptor, id, columns)) flatMap { a => M.point(a.asInstanceOf[Option[BlockProjectionData[Key, Block]]]) }
     }
   }
 
-  class ProjectionCompanion(projectionsActor: ActorRef, timeout: Timeout) extends ProjectionCompanionLike {
+  class ProjectionCompanion(projectionsActor: ActorRef, timeout: Timeout) extends ProjectionCompanionLike[Future] {
     implicit val reqTimeout = timeout
     def apply(descriptor: ProjectionDescriptor): Future[Projection] = {
       (projectionsActor ? ProjectionRequest(descriptor)).mapTo[Projection]
