@@ -1484,6 +1484,203 @@ trait ColumnarTableModule[M[+_]]
       collectSchemas(Set.empty, slices)
     }
 
+    /**
+     * This method renders the entire table into a single string,
+     * encoded as CSV.
+     * 
+     * In the future we may want something Stream-based, but for now
+     * the method seems to be "fast enough" for our purposes.
+     *
+     * The column headers are currently stringified CPaths. These are
+     * introduced introduced slice-by-slice in alphabetical order. So
+     * if there is one slice, the headers will be totally
+     * alphabetical. If two slices, the alphabetized headers from the
+     * first slice are first, and then the other headers (also
+     * alphabetized). And so on.
+     *
+     * The escaping here should match Microsoft's:
+     *
+     * If a value contains commas, double-quotes, or CR/LF, it will be
+     * escaped. To escape a value, it is wrapped in double quotes. Any
+     * double-quotes in the value are themselves doubled. So:
+     * 
+     * the fox said: "hello, my name is fred."
+     * 
+     * becomes:
+     * 
+     * "the fox said: ""hello, my name is fred."""
+     */
+    def renderCsv(): M[String] = {
+      import scala.collection.mutable
+
+      /**
+       * Represents the column headers we have so far. We track three
+       * things:
+       * 
+       *  1. n: the number of headers so far.
+       *  2. m: a map from path strings to header position
+       *  3. a: a list of path strings used.
+       * 
+       * The class is immutable so as we find new headers we'll create
+       * new instances. If this proves to be a problem we could easily
+       * make a mutable version.
+       */
+      class Indices(n: Int, m: Map[String, Int], a: Vector[String]) {
+        def size = n
+        def getPaths: Vector[String] = a
+        def columnForPath(path: String) = m(path)
+        def pathForColumn(col: Int) = a(col)
+        def addPath(path: String): Indices = if (m.contains(path))
+          this
+        else
+          new Indices(n + 1, m.updated(path, n), a :+ path)
+      }
+
+      object Indices {
+        def empty = new Indices(0, Map.empty[String, Int], Vector.empty[String])
+      }
+
+      /**
+       * Represents a row of CSV values. We track how many values we
+       * were using so that later (when we know how many columns the
+       * entire document had) we can pad extra commas on the end.
+       */
+      case class Line(str: String, n: Int)
+
+      // these methods will quote CSV values for us
+      // they could probably be a bit faster but are OK so far.
+      def quoteIfNeeded(s: String): String = if (needsQuoting(s)) quote(s) else s
+      def quote(s: String): String = "\"" + s.replace("\"", "\"\"") + "\""
+      def needsQuoting(s: String): Boolean = {
+        var i = 0
+        while (i < s.length) {
+          val c = s.charAt(i)
+          if (c == ',' || c == '"' || c == '\r' || c == '\n') return true
+          i += 1
+        }
+        false
+      }
+
+      /**
+       * Render a particular column of a slice into an array of
+       * Strings, handling any escaping that is needed.
+       */
+      def renderColumn(col: Column, rows: Int): Array[String] = {
+        val arr = new Array[String](rows)
+        var row = 0
+        while (row < rows) {
+          arr(row) = if (col.isDefinedAt(row))
+            quoteIfNeeded(col.strValue(row))
+          else
+            ""
+          row += 1
+        }
+        arr
+      }
+
+      /**
+       * Renders a slice into an array of lines, as well as updating
+       * our Indices with any previous unseen paths.
+       * 
+       * Since slice's underlying data is column-oriented, we evaluate
+       * each column individually, building an array of values. Then
+       * we stride across these arrays building our rows (Line
+       * objects).
+       * 
+       * Since we know in advance how many rows we have, we can return
+       * an array of lines.
+       */
+      def renderSlice(indices: Indices, slice: Slice): (Indices, Array[Line]) = {
+        // add all selector paths from our columns to the map
+        val height = slice.size
+        val keys = slice.columns.keys.map(_.selector).toArray
+        scala.util.Sorting.quickSort(keys)
+        val updated = keys.foldLeft(indices)(_ addPath _.toString)
+        val width = updated.size
+
+        val items = slice.columns.toArray
+        val ncols = items.length
+
+        // load each column into strings
+        val columns = items.map { case (_, col) =>
+            renderColumn(col, height)
+        }
+        val positions = items.map { case (ColumnRef(path, _), _) =>
+            updated.columnForPath(path.toString)
+        }
+
+        val lines = new Array[Line](height)
+        var row = 0
+        while (row < height) {
+          val buckets = Array.fill(width)("")
+          var i = 0
+          while (i < ncols) {
+            val s = columns(i)(row)
+            if (s != "") buckets(positions(i)) = s
+            i += 1
+          }
+          lines(row) = Line(buckets.mkString(","), width)
+          row += 1
+        }
+        (updated, lines)
+      }
+
+      /**
+       * Given indices and a vector of arrays of lines, render the
+       * actual CSV output string.
+       * 
+       * This method pretty much does what it says.
+       */
+      def linesToString(indices: Indices, groups: Vector[Array[Line]]): String = {
+        val paths = indices.getPaths
+        val ncols = paths.length
+        val sb = new StringBuilder
+        val crlf = "\r\n"
+
+        // append headers
+        sb.append(paths.map(quoteIfNeeded).mkString(","))
+        sb.append(crlf)
+
+        groups.foreach { arr =>
+          var i = 0
+          val len = arr.length
+          while (i < len) {
+            val line = arr(i)
+            sb.append(line.str)
+            sb.append("," * (ncols - line.n))
+            sb.append(crlf)
+            i += 1
+          }
+        }
+        sb.toString
+      }
+
+      /**
+       * This folds the stream of slices into indices and groups, and
+       * then uses those to generate the CSV output.
+       */
+      def loop(stream: StreamT[M, Slice], indices: Indices, groups: Vector[Array[Line]]): M[String] = {
+        stream.uncons.flatMap {
+          case None => 
+            M.point(linesToString(indices, groups))
+          case Some((slice, stream)) =>
+            val (updated, lines) = renderSlice(indices, slice)
+            loop(stream, updated, groups :+ lines)
+        }
+      }
+
+      loop(slices, Indices.empty, Vector.empty[Array[Line]])
+    }
+
+    def renderJsonToString(delimiter: Char = '\n'): M[String] = {
+      val stream = renderJson(delimiter)
+      def loop(stream: StreamT[M, CharBuffer], s: String): M[String] = stream.uncons.flatMap {
+        case Some((cb, tail)) => loop(tail, s + cb.toString)
+        case None => M.point(s)
+      }
+      loop(stream, "")
+    }
+
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
       def delimiterBuffer = {
         val back = CharBuffer.allocate(1)
