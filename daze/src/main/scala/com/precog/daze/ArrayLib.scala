@@ -65,6 +65,9 @@ trait ArrayLib[M[+_]] extends GenOpcode[M] with Evaluator[M] {
         }
         
         val columns2 = columnTables map {
+          case (ref @ ColumnRef(_, CUndefined), _) =>
+            ref -> UndefinedColumn.raw
+          
           case (ref @ ColumnRef(_, CBoolean), colTable) => {
             val col = new ModUnionColumn(colTable) with BoolColumn {
               def apply(i: Int) = col(i).asInstanceOf[BoolColumn](row(i))
@@ -126,6 +129,15 @@ trait ArrayLib[M[+_]] extends GenOpcode[M] with Evaluator[M] {
           case (ref @ ColumnRef(_, CDate), colTable) => {
             val col = new ModUnionColumn(colTable) with DateColumn {
               def apply(i: Int) = col(i).asInstanceOf[DateColumn](row(i))
+            }
+            
+            ref -> col
+          }
+          
+          case (ref @ ColumnRef(_, arrTpe: CArrayType[a]), colTable) => {
+            val col = new ModUnionColumn(colTable) with HomogeneousArrayColumn[a] {
+              val tpe = arrTpe
+              def apply(i: Int) = col(i).asInstanceOf[HomogeneousArrayColumn[a]](row(i))      // primitive arrays are still objects, so the erasure here is not a problem
             }
             
             ref -> col
