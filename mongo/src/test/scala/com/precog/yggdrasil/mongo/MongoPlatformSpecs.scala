@@ -185,13 +185,14 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
     }
   }
 
-  class Storage extends StorageLike[Future, Projection] {
-    def projection(descriptor: ProjectionDescriptor) = Promise.successful(null) // FIXME: Just to get it compiling...
+  class Storage extends StorageLike[Future] {
     def storeBatch(msgs: Seq[EventMessage]) = Promise.successful(PrecogUnit)
     def userMetadataView(apiKey: APIKey) = null
   }
   
   val storage = new Storage
+
+  def userMetadataView(apiKey: APIKey) = null
 
   def shutdown() {
     MongoPlatformSpecEngine.release
