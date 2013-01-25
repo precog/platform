@@ -115,10 +115,7 @@ trait TestEventService extends
   
   val messaging = new CollectingMessaging
 
-  def queryExecutorFactory(config: Configuration) = new NullQueryExecutor {
-    lazy val actorSystem = ActorSystem("ingestServiceSpec")
-    implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  }
+  def queryExecutorFactory(config: Configuration) = NullQueryExecutor
 
   def eventStoreFactory(config: Configuration): EventStore = {
     val defaultAddresses = NonEmptyList(MailboxAddress(0))

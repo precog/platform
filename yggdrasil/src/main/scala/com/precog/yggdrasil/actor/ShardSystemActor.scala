@@ -93,8 +93,9 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
   protected def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]): Option[ActorRef]
 
   def initShardActors(storage: MetadataStorage, accountManager: BasicAccountManager[Future], projectionsActor: ActorRef): ShardActors = {
-    val metadataActorSystem = ActorSystem("Metadata")
-    val ingestActorSystem = ActorSystem("Ingest")
+    //FIXME: move outside
+    val metadataActorSystem: ActorSystem = ActorSystem("Metadata")
+    val ingestActorSystem: ActorSystem = ActorSystem("Ingest")
 
     def loadCheckpoint() : Option[YggCheckpoint] = yggConfig.ingestConfig flatMap { _ =>
         checkpointCoordination.loadYggCheckpoint(yggConfig.shardId) match {

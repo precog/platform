@@ -41,7 +41,6 @@ import yggdrasil.jdbm3._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
-import yggdrasil.table.jdbm3._
 import yggdrasil.util._
 import yggdrasil.test.YId
 import muspelheim._
@@ -54,7 +53,9 @@ import org.specs2.mutable._
 import org.specs2.specification.Fragments
   
 import akka.actor.ActorSystem
+import akka.actor.Props
 import akka.dispatch._
+import akka.util.Duration
 import akka.util.duration._
 
 import java.io.File
@@ -74,71 +75,68 @@ import org.streum.configrity.io.BlockFormat
 
 trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future] 
     with LongIdMemoryDatasetConsumer[Future]
-    with JDBMColumnarTableModule[Future] 
-    with SystemActorStorageModule 
-    with StandaloneShardSystemActorModule 
-    with JDBMProjectionModule {
+    with SliceColumnarTableModule[Future, Array[Byte]] 
+    with ActorStorageModule
+    with ActorProjectionModule[Array[Byte], Slice]
+    with StandaloneActorProjectionSystem { self =>
+      
+  override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
       
   lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
   abstract class YggConfig extends ParseEvalStackSpecConfig
-      with StandaloneShardSystemConfig
       with IdSourceConfig
+      with StandaloneShardSystemConfig
       with ColumnarTableModuleConfig
       with BlockStoreColumnarTableModuleConfig
       with JDBMProjectionModuleConfig
+      with ActorStorageModuleConfig
+      with ActorProjectionModuleConfig
       
   object yggConfig extends YggConfig {
     val ingestConfig = None
   }
 
-  override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
-      
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
 
-  val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
-
-  class Storage extends SystemActorStorageLike(fileMetadataStorage) {
-    val accessControl = new UnrestrictedAccessControl[Future]
-    val accountManager = new InMemoryAccountManager[Future]()
+  val rawProjectionModule = new JDBMProjectionModule {
+    type YggConfig = self.YggConfig
+    val yggConfig = self.yggConfig
+    val Projection = new ProjectionCompanion {
+      def fileOps = FilesystemFileOps
+      def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = fileMetadataStorage.ensureDescriptorRoot(descriptor)
+      def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = fileMetadataStorage.findDescriptorRoot(descriptor)
+      def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = fileMetadataStorage.findArchiveRoot(descriptor)
+    }
   }
 
+  val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
+  val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
+  val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) =
+    initShardActors(fileMetadataStorage, new InMemoryAccountManager[Future](), projectionsActor)
+
+  val accessControl = new UnrestrictedAccessControl[Future]
+  class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor)
   val storage = new Storage
+
+  def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
   val report = LoggingQueryLogger[Future]
 
-  object Projection extends JDBMProjectionCompanion {
-    val fileOps = FilesystemFileOps
-    def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] =
-      fileMetadataStorage.ensureDescriptorRoot(descriptor)
+  object Projection extends ProjectionCompanion(projectionsActor, yggConfig.metadataTimeout)
 
-    def findBaseDir(descriptor: ProjectionDescriptor): Option[File] =
-      fileMetadataStorage.findDescriptorRoot(descriptor)
-
-    def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] =
-      fileMetadataStorage.findArchiveRoot(descriptor)
-  }
-
-  trait TableCompanion extends JDBMColumnarTableCompanion
+  trait TableCompanion extends SliceColumnarTableCompanion
   object Table extends TableCompanion {
-    //override def apply(slices: StreamT[M, Slice]) = super.apply(slices map { s => if (s.size != 96) s else sys.error("Slice size seen as 96 for the first time.") })
     implicit val geq: scalaz.Equal[Int] = intInstance
   }
 
-  def startup() {
-    // start storage shard 
-    Await.result(storage.start(), controlTimeout)
-    psLogger.info("Test shard started")
-  }
+  def startup() { }
   
   def shutdown() {
-    psLogger.info("Shutting down test shard")
-    // stop storage shard
-    Await.result(storage.stop(), controlTimeout)
-    
     actorSystem.shutdown()
+    Await.result(ShardActors.stop(yggConfig, shardActors), Duration(3, "minutes"))
   }
 }
 
