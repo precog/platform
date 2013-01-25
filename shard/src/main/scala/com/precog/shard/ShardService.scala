@@ -28,6 +28,8 @@ import ingest.service._
 import common.Path
 import common.security._
 import daze._
+import com.precog.util.PrecogUnit
+import com.precog.muspelheim._
 
 import akka.dispatch.{Future, Promise}
 
@@ -57,21 +59,23 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 
 sealed trait ShardState {
-  def queryExecutorFactory: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]]
+  def platform: Platform[Future, StreamT[Future, CharBuffer]]
   def apiKeyManager: APIKeyManager[Future]
+  def stoppable: Stoppable
 }
 
 case class ManagedQueryShardState(
-  queryExecutorFactory: ManagedQueryExecutorFactory,
+  platform: ManagedPlatform,
   apiKeyManager: APIKeyManager[Future],
   accountManager: BasicAccountManager[Future],
   jobManager: JobManager[Future],
-  clock: Clock) extends ShardState
+  clock: Clock,
+  stoppable: Stoppable) extends ShardState
 
 case class BasicShardState(
-  queryExecutorFactory: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]],
-  apiKeyManager: APIKeyManager[Future]) extends ShardState
-
+  platform: Platform[Future, StreamT[Future, CharBuffer]],
+  apiKeyManager: APIKeyManager[Future],
+  stoppable: Stoppable) extends ShardState
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
@@ -90,11 +94,10 @@ trait ShardService extends
    * enabled. Otherwise, if only a `BasicShardState` is returned, then only
    * basic synchronous queries will be allowed.
    *
-   * On service startup, the queryExecutorFactory's `startup` method will be
+   * On service startup, the platform's `startup` method will be
    * called.
    */
-  def configureShardState(config: Configuration): ShardState
-
+  def configureShardState(config: Configuration): Future[ShardState]
 
   def optionsResponse = Promise.successful(
     HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
@@ -146,17 +149,17 @@ trait ShardService extends
   }
 
   private def asyncQueryService(state: ShardState) = state match {
-    case BasicShardState(_, _) =>
+    case BasicShardState(_, _, _) =>
       new QueryServiceNotAvailable
-    case ManagedQueryShardState(queryExecutorFactory, _, _, _, _) =>
-      new AsyncQueryServiceHandler(queryExecutorFactory.asynchronous)
+    case ManagedQueryShardState(platform, _, _, _, _, _) =>
+      new AsyncQueryServiceHandler(platform.asynchronous)
   }
 
   private def syncQueryService(state: ShardState) = state match {
-    case BasicShardState(queryExecutorFactory, _) =>
-      new BasicQueryServiceHandler(queryExecutorFactory)
-    case ManagedQueryShardState(queryExecutorFactory, _, _, jobManager, _) =>
-      new SyncQueryServiceHandler(queryExecutorFactory.synchronous, jobManager, SyncResultFormat.Simple)
+    case BasicShardState(platform, _, _) =>
+      new BasicQueryServiceHandler(platform)
+    case ManagedQueryShardState(platform, _, _, jobManager, _, _) =>
+      new SyncQueryServiceHandler(platform.synchronous, jobManager, SyncResultFormat.Simple)
   }
 
   private def asyncHandler(state: ShardState) = {
@@ -167,7 +170,7 @@ trait ShardService extends
     }
 
     state match {
-      case ManagedQueryShardState(_, apiKeyManager, _, jobManager, clock) =>
+      case ManagedQueryShardState(_, apiKeyManager, _, jobManager, clock, _) =>
         // [ByteChunk, Future[HttpResponse[ByteChunk]]]
         apiKey[ByteChunk, HttpResponse[ByteChunk]](apiKeyManager) {
           path("/analytics/queries") {
@@ -188,11 +191,7 @@ trait ShardService extends
   }
 
   private def syncHandler(state: ShardState) = {
-    jvalue[ByteChunk] {
-      path("/actors/status") {
-        get(new ActorStatusHandler(state.queryExecutorFactory))
-      }
-    } ~ jsonpcb[QueryResult] {
+    jsonpcb[QueryResult] {
       apiKey(state.apiKeyManager) {
         dataPath("analytics/fs") {
           query {
@@ -205,7 +204,7 @@ trait ShardService extends
           }
         } ~
         dataPath("meta/fs") {
-          get(new BrowseServiceHandler(state.queryExecutorFactory, state.apiKeyManager)) ~
+          get(new BrowseServiceHandler(state.platform.metadataClient, state.apiKeyManager)) ~
           // Handle OPTIONS requests internally to simplify the standalone service
           options {
             (request: HttpRequest[ByteChunk]) => {
@@ -213,9 +212,7 @@ trait ShardService extends
             }
           }
         }
-      } ~ path("actors/status") {
-        get(new ActorStatusHandler(state.queryExecutorFactory))
-      }
+      } 
     }
   }
 
@@ -224,20 +221,13 @@ trait ShardService extends
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           logger.info("Starting shard with config:\n" + context.config)
-          val state = configureShardState(context.config)
-          state.queryExecutorFactory.startup map { _ => state }
+          configureShardState(context.config)
         } ->
         request { state =>
           asyncHandler(state) ~ syncHandler(state)
         } ->
         shutdown { state =>
-          for {
-            shutdownState <- state.queryExecutorFactory.shutdown()
-            _ <- state.apiKeyManager.close()
-          } yield {
-            logger.info("Stopped shard: " + shutdownState)
-            Option.empty[Stoppable]
-          }
+          Stoppable.stoppableStop.stop(state.stoppable)
         }
       }
     }

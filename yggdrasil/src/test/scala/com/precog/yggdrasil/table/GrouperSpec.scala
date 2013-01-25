@@ -68,7 +68,7 @@ solve 'a, 'b
   ...
 */
 
-trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
+trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
   def tic_a = CPathField("tic_a")
   def tic_b = CPathField("tic_b")
 
@@ -94,10 +94,11 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
   def testHistogramByValue(set: Stream[Int]) = {
     val module = emptyTestModule
+
     import module._
     import trans._
     import constants._
-    
+
     val data = augmentWithIdentities(set.map(JNum(_)))
     val groupId = module.newGroupId
       

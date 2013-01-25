@@ -22,6 +22,7 @@ import Keys._
 import sbtassembly.Plugin.AssemblyKeys._
 import sbt.NameFilter._
 import com.typesafe.sbteclipse.plugin.EclipsePlugin.{ EclipseKeys, EclipseCreateSrc }
+import de.johoop.cpd4sbt.CopyPasteDetector._
 
 object PlatformBuild extends Build {
   val jprofilerLib = SettingKey[String]("jprofiler-lib", "The library file used by jprofiler")
@@ -78,8 +79,9 @@ object PlatformBuild extends Build {
     (unmanagedSourceDirectories in Test) <<= (scalaSource in Test)(Seq(_)),
 
     libraryDependencies ++= Seq(
-      "com.weiglewilczek.slf4s"     %  "slf4s_2.9.1"         % "1.0.7",
-      "com.google.guava"            %  "guava"              % "12.0",
+      "com.weiglewilczek.slf4s"     %  "slf4s_2.9.1"        % "1.0.7",
+      "com.google.guava"            %  "guava"              % "13.0",
+      "com.google.code.findbugs"    % "jsr305"              % "1.3.+",
       "org.scalaz"                  %% "scalaz-core"        % scalazVersion,
       "org.scalaz"                  %% "scalaz-effect"      % scalazVersion,
       "joda-time"                   %  "joda-time"          % "1.6.2",
@@ -93,9 +95,10 @@ object PlatformBuild extends Build {
       "org.specs2"                  %% "specs2"             % "1.12.3-SNAPSHOT" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
       "javolution"                  %  "javolution"         % "5.5.1",
-      "com.chuusai"                 %% "shapeless"          % "1.2.3"//,
+      "com.chuusai"                 %% "shapeless"          % "1.2.3",
       //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
-      ,"org.spire-math"              %% "spire"              % "0.2.0-M2"
+      "org.spire-math"              %% "spire"              % "0.2.0-M2",
+      "com.rubiconproject.oss"      % "jchronic"            % "0.2.6"
     )
   )
 
@@ -115,13 +118,17 @@ object PlatformBuild extends Build {
     }
   )
 
-  val commonNexusSettings = nexusSettings ++ commonSettings
+  //val scctSettings = seq(ScctPlugin.instrumentSettings : _*)
+
+  val commonPluginsSettings = ScctPlugin.instrumentSettings ++ cpdSettings ++ commonSettings
+  val commonNexusSettings = nexusSettings ++ commonPluginsSettings
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
 
   // Logging is simply a common project for the test log configuration files
   lazy val logging = Project(id = "logging", base = file("logging")).settings(commonNexusSettings: _*)
 
   lazy val platform = Project(id = "platform", base = file(".")).
+    settings(ScctPlugin.mergeReportSettings: _*).
     aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo)
 
   lazy val util = Project(id = "util", base = file("util")).

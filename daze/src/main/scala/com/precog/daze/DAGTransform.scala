@@ -55,28 +55,30 @@ trait DAGTransform extends DAG {
       def inner(graph: DepGraph): DepGraph = graph match {
         case r : Root => f(r)
   
-        case New(loc, parent) => f(New(loc, transformAux(splits, parent)))
-  
-        case LoadLocal(loc, parent, jtpe) => f(LoadLocal(loc, transformAux(splits, parent), jtpe))
-  
-        case Operate(loc, op, parent) => f(Operate(loc, op, transformAux(splits, parent)))
-  
-        case Reduce(loc, red, parent) => f(Reduce(loc, red, transformAux(splits, parent)))
+        case graph @ New(parent) => f(New(transformAux(splits, parent))(graph.loc))
         
-        case MegaReduce(loc, reds, parent) => f(MegaReduce(loc, reds, transformAux(splits, parent)))
+        case graph @ LoadLocal(parent, jtpe) => f(LoadLocal(transformAux(splits, parent), jtpe)(graph.loc))
   
-        case Morph1(loc, m, parent) => f(Morph1(loc, m, transformAux(splits, parent)))
+        case graph @ Operate(op, parent) => f(Operate(op, transformAux(splits, parent))(graph.loc))
   
-        case Morph2(loc, m, left, right) => f(Morph2(loc, m, transformAux(splits, left), transformAux(splits, right)))
+        case graph @ Reduce(red, parent) => f(Reduce(red, transformAux(splits, parent))(graph.loc))
+        
+        case MegaReduce(reds, parent) => f(MegaReduce(reds, transformAux(splits, parent)))
   
-        case Join(loc, op, joinSort, left, right) => f(Join(loc, op, joinSort, transformAux(splits, left), transformAux(splits, right)))
+        case graph @ Morph1(m, parent) => f(Morph1(m, transformAux(splits, parent))(graph.loc))
   
-        case IUI(loc, union, left, right) => f(IUI(loc, union, transformAux(splits, left), transformAux(splits, right)))
+        case graph @ Morph2(m, left, right) => f(Morph2(m, transformAux(splits, left), transformAux(splits, right))(graph.loc))
+  
+        case graph @ Join(op, joinSort, left, right) => f(Join(op, joinSort, transformAux(splits, left), transformAux(splits, right))(graph.loc))
+  
+        case graph @ Assert(pred, child) => f(Assert(transformAux(splits, pred), transformAux(splits, child))(graph.loc))
+        
+        case graph @ IUI(union, left, right) => f(IUI(union, transformAux(splits, left), transformAux(splits, right))(graph.loc))
 
-        case Diff(loc, left, right) => f(Diff(loc, transformAux(splits, left), transformAux(splits, right)))
+        case graph @ Diff(left, right) => f(Diff(transformAux(splits, left), transformAux(splits, right))(graph.loc))
 
-        case Filter(loc, cross, target, boolean) =>
-          f(Filter(loc, cross, transformAux(splits, target), transformAux(splits, boolean)))
+        case graph @ Filter(cross, target, boolean) =>
+          f(Filter(cross, transformAux(splits, target), transformAux(splits, boolean))(graph.loc))
   
         case Sort(parent, indices) => f(Sort(transformAux(splits, parent), indices))
 
@@ -86,19 +88,23 @@ trait DAGTransform extends DAG {
   
         case Memoize(parent, priority) => f(Memoize(transformAux(splits, parent), priority))
   
-        case Distinct(loc, parent) => f(Distinct(loc, transformAux(splits, parent)))
+        case graph @ Distinct(parent) => f(Distinct(transformAux(splits, parent))(graph.loc))
   
-        case s @ Split(loc, spec, child) => {
+        case s @ Split(spec, child) => {
           lazy val splits2 = splits + (s -> s2)
           lazy val spec2 = transformSpec(splits2, spec)
           lazy val child2 = transformAux(splits2, child)
-          lazy val s2: Split = Split(loc, spec2, child2)
+          lazy val s2: Split = Split(spec2, child2)(s.loc)
           f(s2)
         }
   
-        case s @ SplitGroup(loc, id, provenance) => f(SplitGroup(loc, id, provenance)(splits(s.parent)))
+        // not using extractors due to bug
+        case s: SplitGroup =>
+          f(SplitGroup(s.id, s.identities)(splits(s.parent))(s.loc))
   
-        case s @ SplitParam(loc, id) => f(SplitParam(loc, id)(splits(s.parent)))
+        // not using extractors due to bug
+        case s: SplitParam =>
+          f(SplitParam(s.id)(splits(s.parent))(s.loc))
       }
 
       memotable.get(graph) getOrElse {

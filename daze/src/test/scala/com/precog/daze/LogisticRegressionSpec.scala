@@ -92,7 +92,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
   }
 
   def testTrivial = {
-    val line = Line(0, "")
+    val line = Line(1, 1, "")
 
     val num = 2
     val loops = 50
@@ -117,13 +117,13 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - 5)
       
-      val input = dag.Morph2(line, LogisticRegression,
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(0))),
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(1))))
+      val input = dag.Morph2(LogisticRegression,
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(0))(line))(line),
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -152,7 +152,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
   }
 
   def testThreeFeatures = {
-    val line = Line(0, "")
+    val line = Line(1, 1, "")
 
     val num = 4
     val loops = 50
@@ -179,13 +179,13 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - 5)
       
-      val input = dag.Morph2(line, LogisticRegression,
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(0))),
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(1))))
+      val input = dag.Morph2(LogisticRegression,
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(0))(line))(line),
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -216,7 +216,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
   }
 
   def testThreeSchema = {
-    val line = Line(0, "")
+    val line = Line(1, 1, "")
 
     val num = 3
     val loops = 50
@@ -251,13 +251,13 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - suffix.length)
       
-      val input = dag.Morph2(line, LogisticRegression,
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(0))),
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(1))))
+      val input = dag.Morph2(LogisticRegression,
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(0))(line))(line),
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()

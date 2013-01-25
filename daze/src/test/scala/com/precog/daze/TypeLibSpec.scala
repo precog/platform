@@ -45,10 +45,10 @@ trait TypeLibSpec[M[+_]] extends Specification
 
   "the type functions" should {
     "return correct booleans for isNumber" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
-      val input = dag.Operate(line, BuiltInFunction1Op(isNumber),
-        dag.LoadLocal(line, Const(line, CString("/het/numbersAcrossSlices2"))))
+      val input = dag.Operate(BuiltInFunction1Op(isNumber),
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -65,10 +65,10 @@ trait TypeLibSpec[M[+_]] extends Specification
     }
   
     "return correct booleans for isBoolean" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
-      val input = dag.Operate(line, BuiltInFunction1Op(isBoolean),
-        dag.LoadLocal(line, Const(line, CString("/het/numbersAcrossSlices2"))))
+      val input = dag.Operate(BuiltInFunction1Op(isBoolean),
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -85,10 +85,10 @@ trait TypeLibSpec[M[+_]] extends Specification
     }
   
     "return correct booleans for isNull" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
-      val input = dag.Operate(line, BuiltInFunction1Op(isNull),
-        dag.LoadLocal(line, Const(line, CString("/het/numbersAcrossSlices2"))))
+      val input = dag.Operate(BuiltInFunction1Op(isNull),
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -105,10 +105,10 @@ trait TypeLibSpec[M[+_]] extends Specification
     }
   
     "return correct booleans for isString" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
-      val input = dag.Operate(line, BuiltInFunction1Op(isString),
-        dag.LoadLocal(line, Const(line, CString("/het/numbersAcrossSlices2"))))
+      val input = dag.Operate(BuiltInFunction1Op(isString),
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -125,10 +125,10 @@ trait TypeLibSpec[M[+_]] extends Specification
     }
   
     "return correct booleans for isObject" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
-      val input = dag.Operate(line, BuiltInFunction1Op(isObject),
-        dag.LoadLocal(line, Const(line, CString("/het/numbersAcrossSlices2"))))
+      val input = dag.Operate(BuiltInFunction1Op(isObject),
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -145,10 +145,10 @@ trait TypeLibSpec[M[+_]] extends Specification
     }
   
     "return correct booleans for isArray" in {
-      val line = Line(0, "")
+      val line = Line(1, 1, "")
 
-      val input = dag.Operate(line, BuiltInFunction1Op(isArray),
-        dag.LoadLocal(line, Const(line, CString("/het/numbersAcrossSlices2"))))
+      val input = dag.Operate(BuiltInFunction1Op(isArray),
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 

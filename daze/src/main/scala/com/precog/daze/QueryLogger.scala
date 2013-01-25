@@ -88,28 +88,39 @@ trait JobQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
   def info(pos: P, msg: String): M[Unit] = send(channels.Info, pos, msg)
 }
 
-trait LoggingQueryLogger[M[+_]] extends QueryLogger[M, Any] {
+trait LoggingQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
   implicit def M: Applicative[M]
 
   protected val logger = LoggerFactory.getLogger("com.precog.daze.QueryLogger")
 
-  def fatal(pos: Any, msg: String): M[Unit] = M.point {
+  def fatal(pos: P, msg: String): M[Unit] = M.point {
     logger.error(msg)
   }
 
-  def warn(pos: Any, msg: String): M[Unit] = M.point {
+  def warn(pos: P, msg: String): M[Unit] = M.point {
     logger.warn(msg)
   }
 
-  def info(pos: Any, msg: String): M[Unit] = M.point {
+  def info(pos: P, msg: String): M[Unit] = M.point {
     logger.info(msg)
   }
 }
 
 object LoggingQueryLogger {
   def apply[M[+_]](implicit M0: Applicative[M]): QueryLogger[M, Any] = {
-    new LoggingQueryLogger[M] {
+    new LoggingQueryLogger[M, Any] {
       val M = M0
     }
   }
 }
+
+trait ExceptionQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
+  implicit def M: Applicative[M]
+  
+  abstract override def fatal(pos: P, msg: String): M[Unit] = for {
+    _ <- super.fatal(pos, msg)
+    _ = throw FatalQueryException(pos, msg)
+  } yield ()
+}
+
+case class FatalQueryException[+P](pos: P, msg: String) extends RuntimeException(msg)

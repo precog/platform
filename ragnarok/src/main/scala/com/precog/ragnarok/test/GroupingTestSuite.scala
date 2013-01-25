@@ -17,34 +17,20 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil 
+package com.precog
+package ragnarok
+package test
 
-import metadata.StorageMetadata
-import com.precog.common._
-import com.precog.util.PrecogUnit
-import com.precog.common.security._
-
-import scalaz._
-import scalaz.syntax.monad._
-
-trait StorageModule[M[+_]] {
-  type Storage <: StorageLike[M]
-
-  def storage: Storage
+object BugTestSuite extends PerfTestSuite {
+  query(
+    """
+      | conversions := //conversions
+      |  
+      | result := solve 'customerId
+      |   conversions' := conversions where conversions.customer.ID = 'customerId
+      |  
+      |   {count: count(conversions'), customerId: 'customerId}
+      |  
+      | result
+      | """.stripMargin)
 }
-
-trait StorageMetadataSource[M[+_]] {
-  def userMetadataView(apiKey: APIKey): StorageMetadata[M]
-}
-
-trait StorageLike[M[+_]] extends StorageMetadataSource[M] { self =>
-  def storeBatch(msgs: Seq[EventMessage]): M[PrecogUnit]
-  def store(msg: EventMessage): M[PrecogUnit] = storeBatch(Vector(msg))
-
-  def liftM[T[_[+_], +_]](implicit T: Hoist[T], M: Monad[M]) = new StorageLike[({ type λ[+α] = T[M, α] })#λ] {
-    def userMetadataView(apiKey: APIKey) = self.userMetadataView(apiKey).liftM[T]
-    def storeBatch(msgs: Seq[EventMessage]) = self.storeBatch(msgs).liftM[T]
-    override def store(msg: EventMessage) = self.store(msg).liftM[T]
-  }
-}
-

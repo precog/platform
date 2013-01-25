@@ -242,14 +242,23 @@ trait IndicesModule[M[+_]]
       Table(slices, ExactSize(rows.size))
     }
 
+    // we can use this to avoid allocating/remapping empty slices
+    private val emptySlice = new Slice {
+      val size = 0
+      val columns = Map.empty[ColumnRef, Column]
+    }
+
     /**
      * Given a set of rows, builds the appropriate slice.
      */
-    private[table] def buildSubSlice(rows: GenSet[Int]): Slice = {
-      val arr = new ArrayIntList(rows.size)
-      rows.foreach(arr.add)
-      valueSlice.remap(arr)
-    }
+    private[table] def buildSubSlice(rows: GenSet[Int]): Slice =
+      if (rows.isEmpty) {
+        emptySlice
+      } else {
+        val arr = new ArrayIntList(rows.size)
+        rows.foreach(arr.add)
+        valueSlice.remap(arr)
+      }
   }
 
   object SliceIndex {

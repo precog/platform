@@ -97,6 +97,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         constrLoopErrors ++ childErrors ++ forestErrors2 ++ constrErrors ++ finalErrors
       }
       
+      case Assert(_, pred, child) =>
+        loop(dispatches)(pred) ++ loop(dispatches)(child)
+      
       case New(_, child) => loop(dispatches)(child)
       
       case Relate(_, from, to, in) =>
@@ -519,6 +522,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       allVars -- listTicVars(Some(b2), child, sigma)
     }
     
+    case Assert(_, pred, child) => listTicVars(b, pred, sigma) ++ listTicVars(b, child, sigma)
+    
     case New(_, child) => listTicVars(b, child, sigma)
     
     case Relate(_, from, to, in) => listTicVars(b, from, sigma) ++ listTicVars(b, to, sigma) ++ listTicVars(b, in, sigma)
@@ -630,6 +635,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case Let(_, _, _, _, right) => (Set(right), sigma)
     
     case _: Solve => (Set(), sigma)      // TODO will this do the right thing?
+    
+    case Assert(_, pred, child) => (Set(pred, child), sigma)
     
     case New(_, child) => (Set(child), sigma)
     

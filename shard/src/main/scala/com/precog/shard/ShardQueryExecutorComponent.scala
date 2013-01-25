@@ -35,7 +35,6 @@ import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
-import com.precog.yggdrasil.table.jdbm3._
 import com.precog.yggdrasil.util._
 
 import org.slf4j.{ Logger, LoggerFactory }
@@ -57,17 +56,17 @@ trait ShardQueryExecutorConfig
 }
 
 trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
-  import scalaz.syntax.monad._
-
   type YggConfig <: ShardQueryExecutorConfig
 
   protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
 
   case class StackException(error: StackError) extends Exception(error.toString)
 
+  implicit def M: Monad[M]
+
   implicit def LineDecompose: Decomposer[instructions.Line] = new Decomposer[instructions.Line] {
     def decompose(line: instructions.Line): JValue = {
-      JObject(JField("lineNum", JNum(line.num)) :: JField("detail", JString(line.text)) :: Nil)
+      JObject(JField("lineNum", JNum(line.line)) :: JField("colNum", JNum(line.col)) :: JField("detail", JString(line.text)) :: Nil)
     }
   }
 
