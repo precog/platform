@@ -147,6 +147,9 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
               }).toArray
 
               val cost = kMediansCost(points, clusters)
+              println("cost: " + cost)
+              println("targetCost: " + targetCost)
+              
               cost must be_<(3 * targetCost)
           }
         }

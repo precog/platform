@@ -203,8 +203,6 @@ trait KMediansCoreSetClustering {
    * @link http://valis.cs.uiuc.edu/~sariel/papers/03/kcoreset/kcoreset.pdf
    */
   private def createCenters(points: Array[Array[Double]], weights: Array[Long]): Array[Array[Double]] = {
-    println("points: " + points.deep.mkString(", "))
-    println("weights: " + weights.deep.mkString(", "))
     if (points.length < 100) {
       points
     } else {
@@ -212,95 +210,92 @@ trait KMediansCoreSetClustering {
       val weight = weights.qsum
 
       val (cost, clustering, isCenter) = approxKMedian(points, weights, k)
-      var radius = cost / weight
 
-      val gamma = 2d
-      val sampleSize = gamma * k * (math.floor(math.log(points.length)) ** 2.0)
+      if (cost == 0) {
+        clustering
+      } else {
+        var radius = cost / weight
 
-      println("Sample size: " + sampleSize)
+        //val gamma = 0.001
+        //val sampleSize = gamma * k * (math.floor(math.log(points.length)) ** 2.0)
+        val sampleSize = math.min(k * math.log(points.length), points.length / 10d)
 
-      val samples = points.take(sampleSize.toInt)
+        val samples = points.take(sampleSize.toInt)
 
-      var i = samples.length
-      while (i < samples.length) {
-        val idx = scala.util.Random.nextInt(i + 1)
-        if (idx < samples.length) samples(idx) = samples(i)
-        i += 1
-      }
-
-      val centers = clustering ++ samples
-      val (distances, assignments) = assign(points, centers)
-
-      val logRadius = math.log(radius)
-      val logWeight = math.floor(math.log(weight))
-      val log2 = math.log(2)
-
-      val klassCounts = new Array[Long](2 * logWeight.toInt + 3)
-
-      i = 0
-      while (i < distances.length) {
-        // logRadius = log(cost) - log(weight)
-        val relPos = (math.log(distances(i)) - logRadius + logWeight) / log2
-        val klass = math.max(math.floor(relPos).toInt + 1, 0)
-        assignments(i) = klass
-        if (klass < klassCounts.length) {
-          klassCounts(klass) += weights(i)
+        var i = samples.length
+        while (i < points.length) {
+          val idx = scala.util.Random.nextInt(i + 1)
+          if (idx < samples.length) samples(idx) = points(i)
+          i += 1
         }
-        i += 1
-      }
 
-      val thresholdCount = weight / (10 * logWeight)
-      i = 0
-      while (i < klassCounts.length && klassCounts(i) > thresholdCount) {
-        i += 1
-      }
-      val alpha = i
+        val centers = clustering ++ samples
+        val (distances, assignments) = assign(points, centers)
 
-      println("assignments: " + assignments.deep.mkString(", "))
-      println("isCenter: " + isCenter.deep.mkString(", "))
-      println("alpha: " + alpha)
-      println("threshold: " + thresholdCount)
-      @inline def isBad(idx: Int) = assignments(idx) >= alpha && !isCenter(idx)
+        val logRadius = math.log(radius)
+        val logWeight = math.log(weight)
+        val log2 = math.log(2)
 
-      // Remove all points whose klass <= i || cluster
-      var keepLength = 0
-      i = 0
-      while (i < assignments.length) {
-        if (isBad(i)) keepLength += 1
-        i += 1
-      }
+        val klassCounts = new Array[Long](2 * math.ceil(logWeight).toInt + 3)
 
-      val badPoints = new Array[Array[Double]](keepLength)
-      val badWeights = new Array[Long](keepLength)
-      i = 0
-      var j = 0
-      while (i < points.length) {
-        if (isBad(i)) {
-          badPoints(j) = points(i)
-          badWeights(j) = weights(i)
-          j += 1
+        i = 0
+        while (i < distances.length) {
+          val relPos = (math.log(distances(i)) - logRadius + logWeight) / log2
+          val klass = math.max(math.floor(relPos).toInt + 1, 0)
+          assignments(i) = klass
+          if (klass < klassCounts.length) {
+            klassCounts(klass) += weights(i)
+          }
+          i += 1
         }
-        i += 1
+
+        val thresholdCount = weight / (10 * logWeight)
+        i = klassCounts.length - 1
+        while (i >= 0 && klassCounts(i) < thresholdCount) {
+          i -= 1
+        }
+        val alpha = i
+
+        @inline def isBad(idx: Int) = assignments(idx) > alpha && !isCenter(idx)
+
+        // Remove all points whose klass <= i || cluster
+        var keepLength = 0
+        i = 0
+        while (i < assignments.length) {
+          if (isBad(i)) keepLength += 1
+          i += 1
+        }
+
+        val badPoints = new Array[Array[Double]](keepLength)
+        val badWeights = new Array[Long](keepLength)
+        i = 0
+        var j = 0
+        while (i < points.length) {
+          if (isBad(i)) {
+            badPoints(j) = points(i)
+            badWeights(j) = weights(i)
+            j += 1
+          }
+          i += 1
+        }
+
+        centers ++ createCenters(badPoints, badWeights)
       }
-
-      println("Started with %d points, recursing with %d points." format (points.length, badPoints.length))
-
-      if (badPoints.length > (points.length - 2))
-        sys.error("Danger!")
-
-      centers ++ createCenters(badPoints, badWeights)
     }
   }
 
   /**
    * Returns a clustering that is within 2 times the cost of the optimal k-medians clustering.
    *
+   * The algorithm is fairly simple. It starts with a ranomd seed cluster. It then adds a new
+   * cluster by finding the point that is farthest away from its nearest cluster. This point is
+   * the seed for a new cluster. We repeat until we have `k` clusters.
+   *
    * @note Clustering to Minimize the Maximum Intercluster Distance, Gonzalez 1984
    * @link http://www.cs.ucsb.edu/~TEO/papers/Ktmm.pdf
    */
-  def approxKMedian(points: Array[Array[Double]], weights: Array[Long], k: Int): (Double, Array[Array[Double]], Array[Boolean]) = {   // (cost, centers, isCenter)
+  def approxKMedian(points: Array[Array[Double]], weights: Array[Long], k: Int): (Double, Array[Array[Double]], Array[Boolean]) = {  // (cost, centers, isCenter)
 
-    println("weights in approx k-median: " + weights.deep.mkString(", "))
     val reps = new Array[Array[Double]](k)
     reps(0) = points(0)
 
@@ -322,7 +317,7 @@ trait KMediansCoreSetClustering {
 
     i = 0
     while (i < k - 1) {
-      var maxWeight = weight(0, 0)
+      var maxWeight = 0.0
       var maxIdx = 0
 
       var j = 0
@@ -364,9 +359,8 @@ trait KMediansCoreSetClustering {
     var i = 0
 
     while (i < points.length) {
-      var j = 0
       var minDist = Double.PositiveInfinity
-
+      var j = 0
       while (j < clustering.length) {
         val d = dist(points(i), clustering(j))
         if (d < minDist) {
@@ -397,7 +391,7 @@ trait KMediansCoreSetClustering {
 
     val cost = distance.qsum
     val weight = weights.qsum
-    val c = 4
+    val c = 4d
     val n = points.length
 
     val radiusGLB = cost / (c * weight)
@@ -608,12 +602,14 @@ trait ClusteringLib[M[+_]] extends GenOpcode[M] {
       val valueTable = result.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
       val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
-      valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight))).transform(TransSpec1.Id)
+      valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
     }
 
     def morph1Apply(ks: List[Int]): Morph1Apply = new Morph1Apply {
       def apply(table0: Table, ctx: EvaluationContext): M[Table] = {
         val table = table0.transform(DerefObjectStatic(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble), paths.Value))
+
+        val defaultNumber = new java.util.concurrent.atomic.AtomicInteger(1)
 
         val res = ks map { k =>
           val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
@@ -628,8 +624,6 @@ trait ClusteringLib[M[+_]] extends GenOpcode[M] {
             }
           }
 
-          val defaultNumber = new java.util.concurrent.atomic.AtomicInteger(1)
-
           val sliceSize = 1000
           val features: StreamT[M, Table] = tables flatMap { case (tbl, jtype) =>
             val coreSetTree = tbl.canonicalize(sliceSize).toArray[Double].normalize.reduce(reducerFeatures(k))
@@ -642,12 +636,15 @@ trait ClusteringLib[M[+_]] extends GenOpcode[M] {
         }
 
         val tables: StreamT[M, Table] = res.foldLeft(StreamT.empty[M, Table])(_ ++ _)
+        val modelConcat = buildConstantWrapSpec(OuterObjectConcat(
+          DerefObjectStatic(Leaf(SourceLeft), paths.Value),
+          DerefObjectStatic(Leaf(SourceRight), paths.Value)))
 
         def merge(table: Option[Table], tables: StreamT[M, Table]): OptionT[M, Table] = {
           OptionT(tables.uncons flatMap {
             case Some((head, tail)) =>
               table map { tbl =>
-                merge(Some(tbl concat head), tail).run
+                merge(Some(tbl.cross(head)(modelConcat)), tail).run
               } getOrElse {
                 merge(Some(head), tail).run
               }
