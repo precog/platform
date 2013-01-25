@@ -115,7 +115,7 @@ object PlatformBuild extends Build {
     }
   )
 
-  val commonNexusSettings = nexusSettings ++ commonSettings
+  val commonNexusSettings = nexusSettings ++ commonSettings ++ net.virtualvoid.sbt.graph.Plugin.graphSettings
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
 
   lazy val platform = Project(id = "platform", base = file(".")).
