@@ -35,7 +35,7 @@ import com.precog.common.Path
 import com.precog.common.security._
 import com.precog.common.json._
 import com.precog.ingest.service._
-import com.precog.daze.QueryOptions
+import com.precog.daze.{QueryOptions, QueryOutput, JsonOutput, CsvOutput}
 import com.precog.yggdrasil.TableModule
 import com.precog.yggdrasil.TableModule._
 
@@ -74,6 +74,19 @@ trait ShardServiceCombinators extends EventServiceCombinators {
   }
   private object Offset extends NonNegativeLong
   private object Millis extends NonNegativeLong
+
+  // XYZ
+  private def getOutputType(request: HttpRequest[_]): QueryOutput = {
+    import MimeTypes._
+    import HttpHeaders.Accept
+
+    val JSON = application/json
+    val CSV = text/csv
+    request.headers.header[Accept].map(_.mimeTypes).getOrElse(Nil).collect {
+      case JSON => JsonOutput
+      case CSV => CsvOutput
+    }.headOption.getOrElse(JsonOutput)
+  }
 
   private def getTimeout(request: HttpRequest[_]): Validation[String, Option[Long]] = {
     request.parameters.get('timeout).filter(_ != null).map {
@@ -132,13 +145,15 @@ trait ShardServiceCombinators extends EventServiceCombinators {
         val sortOn = getSortOn(request).toValidationNEL
         val sortOrder = getSortOrder(request).toValidationNEL
         val timeout = getTimeout(request).toValidationNEL
+        val output = getOutputType(request)
 
         (offsetAndLimit |@| sortOn |@| sortOrder |@| timeout) { (offsetAndLimit, sortOn, sortOrder, timeout) =>
           val opts = QueryOptions(
             page = offsetAndLimit,
             sortOn = sortOn,
             sortOrder = sortOrder,
-            timeout = timeout
+            timeout = timeout,
+            output = output
           )
 
           query map { q =>

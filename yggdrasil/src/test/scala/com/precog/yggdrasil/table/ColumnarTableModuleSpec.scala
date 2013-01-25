@@ -38,6 +38,7 @@ import scala.util.Random
 import scalaz._
 import scalaz.effect.IO 
 import scalaz.syntax.copointed._
+import scalaz.syntax.monad._
 import scalaz.std.anyVal._
 import scalaz.std.stream._
 
@@ -49,6 +50,8 @@ import org.scalacheck.Gen
 import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
+
+import java.nio.CharBuffer
 
 import TableModule._
 import SampleData._
@@ -571,6 +574,131 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
         t0.metrics.startCount must_== 1
         t0.metrics.sliceTraversedCount must_== expectedSlices
       }
+    }
+
+    def streamToString(stream: StreamT[M, CharBuffer]): String = {
+      def loop(stream: StreamT[M, CharBuffer], sb: StringBuilder): M[String] =
+        stream.uncons.flatMap {
+          case None =>
+            M.point(sb.toString)
+          case Some((cb, tail)) =>
+            sb.append(cb)
+            loop(tail, sb)
+        }
+      loop(stream, new StringBuilder).copoint
+    }
+
+
+    def testRenderCsv(json: String, maxSliceSize: Option[Int] = None): String = {
+      val t0 = System.currentTimeMillis()
+      val es = JParser.parseManyFromString(json).valueOr(throw _)
+      val table = fromJson(es.toStream, maxSliceSize)
+      val csv = streamToString(table.renderCsv())
+      val t = System.currentTimeMillis() - t0
+      // uncomment for timing info
+      //println("rendered csv (len=%d) in %d ms" format (csv.length, t))
+      csv
+    }
+
+    "render to CSV in a simple case" in {
+      val events = """
+{"a": 1, "b": {"bc": 999, "bd": "foooooo", "be": true, "bf": null, "bg": false}, "c": [1.999], "d": "dog"}
+{"a": 2, "b": {"bc": 998, "bd": "fooooo", "be": null, "bf": false, "bg": true}, "c": [2.999], "d": "dogg"}
+{"a": 3, "b": {"bc": 997, "bd": "foooo", "be": false, "bf": true, "bg": null}, "c": [3.999], "d": "doggg"}
+{"a": 4, "b": {"bc": 996, "bd": "fooo", "be": true, "bf": null, "bg": false}, "c": [4.999], "d": "dogggg"}
+""".trim
+
+      val expected = "" +
+      ".a,.b.bc,.b.bd,.b.be,.b.bf,.b.bg,.c[0],.d\r\n" +
+      "1,999,foooooo,true,null,false,1.999,dog\r\n" +
+      "2,998,fooooo,null,false,true,2.999,dogg\r\n" +
+      "3,997,foooo,false,true,null,3.999,doggg\r\n" +
+      "4,996,fooo,true,null,false,4.999,dogggg\r\n"
+
+      testRenderCsv(events) must_== expected
+    }
+
+    def renderLotsToCsv(lots: Int, maxSliceSize: Option[Int] = None) {
+      val event = "{\"x\":123,\"y\":\"foobar\",\"z\":{\"xx\":1.0,\"yy\":2.0}}"
+      val events = event * lots
+      val csv = testRenderCsv(events, maxSliceSize)
+      val expected = ".x,.y,.z.xx,.z.yy\r\n" + ("123,foobar,1,2\r\n" * lots)
+      csv must_== expected
+    }
+
+    def renderLotsToJson(lots: Int, maxSliceSize: Option[Int] = None) {
+      val event = "{\"x\":123,\"y\":\"foobar\",\"z\":{\"xx\":1.0,\"yy\":2.0}}"
+      val events = event * lots
+      testRenderJson(events, maxSliceSize)
+      def testRenderJson(json: String, maxSliceSize: Option[Int] = None): String = {
+        val t0 = System.currentTimeMillis()
+        val es = JParser.parseManyFromString(json).valueOr(throw _)
+        val table = fromJson(es.toStream, maxSliceSize)
+        val output = streamToString(table.renderJson(','))
+        val t = System.currentTimeMillis() - t0
+        // uncomment for timing info
+        //println("rendered json (len=%d) in %d ms" format (output.length, t))
+        output
+      }
+    }
+
+    "test rendering uniform tables of varying sizes" in {
+      // renderLotsToJson(100)
+      // renderLotsToJson(1000)
+      // renderLotsToJson(10000)
+      // renderLotsToJson(100000) // this is really slow, takes ~100s to run
+
+      renderLotsToCsv(100)
+      renderLotsToCsv(1000)
+      renderLotsToCsv(10000)
+      renderLotsToCsv(100000)
+    }
+
+    "test string escaping" in {
+      val csv = testRenderCsv("{\"s\":\"a\\\"b\",\"t\":\",\",\"u\":\"aa\\nbb\",\"v\":\"a,b\\\"c\\r\\nd\"}")
+
+      val expected = "" +
+".s,.t,.u,.v\r\n" +
+"\"a\"\"b\",\",\",\"aa\n" +
+"bb\",\"a,b\"\"c\r\n" +
+"d\"\r\n"
+
+      csv must_== expected
+    }
+
+    "test mixed rows" in {
+
+      val input = """
+{"a": 1}
+{"b": 99.1}
+{"a": true}
+{"c": "jgeiwgjewigjewige"}
+{"b": "foo", "d": 999}
+{"e": null}
+{"f": {"aaa": 9}}
+{"c": 100, "g": 934}
+""".trim
+
+      val expected = "" +
+".a,.b,.c,.d,.e,.f.aaa,.g\r\n" +
+"1,,,,,,\r\n" +
+",99.1,,,,,\r\n" +
+"true,,,,,,\r\n" +
+",,jgeiwgjewigjewige,,,,\r\n" +
+",foo,,999,,,\r\n" +
+",,,,null,,\r\n" +
+",,,,,9,\r\n" +
+",,100,,,,934\r\n"
+
+      testRenderCsv(input) must_== expected
+
+      val expected2 = "" +
+".a,.b\r\n1,\r\n,99.1\r\n\r\n" +
+".a,.c\r\ntrue,\r\n,jgeiwgjewigjewige\r\n\r\n" +
+".b,.d,.e\r\nfoo,999,\r\n,,null\r\n\r\n" +
+".c,.f.aaa,.g\r\n,9,\r\n100,,934\r\n"
+
+      testRenderCsv(input, Some(2)) must_== expected2
     }
   }
 }
