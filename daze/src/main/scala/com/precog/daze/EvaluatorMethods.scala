@@ -52,7 +52,7 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with OpFinderModule[M] {
       case DerefObject => DerefObjectDynamic(left, right)
       case DerefMetadata => sys.error("cannot do a dynamic metadata deref")
       case DerefArray => DerefArrayDynamic(left, right)
-      case _ => trans.Map2(left, right, op2ForBinOp(op).get.f2(ctx))     // if this fails, we're missing a case above
+      case _ => op2ForBinOp(op).get.spec(ctx)(left, right)
     }
 
     def makeTableTrans(tableTrans: TableTransSpec1): TransSpec1 = {

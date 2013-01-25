@@ -27,6 +27,8 @@ import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.monadPlus._
 
+import Function._
+
 trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] with EvaluatorMethodsModule[M] {
   import dag._ 
   import library._
@@ -44,8 +46,8 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
       def ArraySwap(node: Join)(parent: T, index: Int): T
       def InnerObjectConcat(node: Join)(parent: T): T
       def InnerArrayConcat(node: Join)(parent: T): T
-      def Map1Left(node: Join)(parent: T, op: Op2, graph: DepGraph, value: CValue): T
-      def Map1Right(node: Join)(parent: T, op: Op2, graph: DepGraph, value: CValue): T
+      def Map1Left(node: Join)(parent: T, op: Op2F2, graph: DepGraph, value: CValue): T
+      def Map1Right(node: Join)(parent: T, op: Op2F2, graph: DepGraph, value: CValue): T
       def binOp(node: Join)(leftParent: T, rightParent: => T, op: BinaryOperation): T
       def Filter(node: dag.Filter)(leftParent: T, rightParent: => T): T
       def WrapArray(node: Operate)(parent: T): T
@@ -63,8 +65,8 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
       def ArraySwap(node: Join)(parent: Boolean, index: Int) = parent
       def InnerObjectConcat(node: Join)(parent: Boolean) = parent
       def InnerArrayConcat(node: Join)(parent: Boolean) = parent
-      def Map1Left(node: Join)(parent: Boolean, op: Op2, graph: DepGraph, value: CValue) = parent
-      def Map1Right(node: Join)(parent: Boolean, op: Op2, graph: DepGraph, value: CValue) = parent
+      def Map1Left(node: Join)(parent: Boolean, op: Op2F2, graph: DepGraph, value: CValue) = parent
+      def Map1Right(node: Join)(parent: Boolean, op: Op2F2, graph: DepGraph, value: CValue) = parent
       def binOp(node: Join)(leftParent: Boolean, rightParent: => Boolean, op: BinaryOperation) = leftParent && rightParent
       def Filter(node: dag.Filter)(leftParent: Boolean, rightParent: => Boolean) = leftParent && rightParent
       def WrapArray(node: Operate)(parent: Boolean) = parent
@@ -114,10 +116,10 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         def InnerArrayConcat(node: Join)(parent: N[S]) =
           parent.map(leftMap(_)(trans.InnerArrayConcat(_)))
 
-        def Map1Left(node: Join)(parent: N[S], op: Op2, graph: DepGraph, value: CValue) =
+        def Map1Left(node: Join)(parent: N[S], op: Op2F2, graph: DepGraph, value: CValue) =
           parent.map(leftMap(_)(trans.Map1(_, op.f2(ctx).applyr(value))))
           
-        def Map1Right(node: Join)(parent: N[S], op: Op2, graph: DepGraph, value: CValue) =
+        def Map1Right(node: Join)(parent: N[S], op: Op2F2, graph: DepGraph, value: CValue) =
           parent.map(leftMap(_)(trans.Map1(_, op.f2(ctx).applyl(value))))
         
         def binOp(node: Join)(leftParent: N[S], rightParent: => N[S], op: BinaryOperation) = {
@@ -165,6 +167,13 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
       object Op2ForBinOp {
         def unapply(op: BinaryOperation) = op2ForBinOp(op)
       }
+      
+      object Op2F2ForBinOp {
+        def unapply(op: BinaryOperation) = for {
+          op2 <- Op2ForBinOp.unapply(op)
+          op2F2 <- op2.fold(op2 = const(None), op2F2 = { Some(_) })
+        } yield op2F2
+      }
 
       def loop(graph: DepGraph): T = graph match {
         case node if from.map(_ == node).getOrElse(false) => alg.done(node)
@@ -208,10 +217,10 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         case node @ Join(JoinArray, CrossLeftSort | CrossRightSort, Const(CEmptyArray), right) =>
           alg.InnerArrayConcat(node)(loop(right))
 
-        case node @ Join(Op2ForBinOp(op), CrossLeftSort | CrossRightSort, left, Const(value)) =>
+        case node @ Join(Op2F2ForBinOp(op), CrossLeftSort | CrossRightSort, left, Const(value)) =>
           alg.Map1Left(node)(loop(left), op, left, value)
 
-        case node @ Join(Op2ForBinOp(op), CrossLeftSort | CrossRightSort, Const(value), right) =>
+        case node @ Join(Op2F2ForBinOp(op), CrossLeftSort | CrossRightSort, Const(value), right) =>
           alg.Map1Right(node)(loop(right), op, right, value) 
 
         case node @ Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
