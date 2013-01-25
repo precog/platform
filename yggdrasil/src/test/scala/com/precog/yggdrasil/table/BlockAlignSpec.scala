@@ -52,7 +52,7 @@ import SampleData._
 
 trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
   def testAlign(sample: SampleData) = {
-    val module = BlockStoreTestModule.empty[M]
+    val module = emptyTestModule
 
     import module._
     import module.trans._
@@ -307,7 +307,7 @@ trait BlockAlignSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification 
 
 
   def testAlignSymmetry(i: Int) = {
-    val module = BlockStoreTestModule.empty[M]
+    val module = emptyTestModule
 
     import module._
     import module.trans._

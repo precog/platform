@@ -34,17 +34,15 @@ import akka.pattern.ask
 import akka.pattern.gracefulStop
 
 import blueeyes.json._
+import blueeyes.bkka.Stoppable
 
-import com.weiglewilczek.slf4s.Logging
+import com.weiglewilczek.slf4s._
 import org.streum.configrity.converter.Extra._
 
 import scalaz.{Failure,Success}
 import scalaz.syntax.applicative._
 import scalaz.syntax.std.boolean._
 import scalaz.std.option._
-
-case object ShutdownSystem
-case object ShutdownComplete
 
 trait ShardConfig extends BaseConfig {
   type IngestConfig
@@ -58,34 +56,41 @@ trait ShardConfig extends BaseConfig {
   def metadataTimeout: Timeout = config[Long]("actors.metadata.timeout", 30) seconds
   def stopTimeout: Timeout = config[Long]("actors.stop.timeout", 300) seconds
 
-  def maxOpenProjections: Int = config[Int]("actors.store.max_open_projections", 5000)
-
   def metadataSyncPeriod: Duration = config[Int]("actors.metadata.sync_minutes", 1) minutes
   def metadataPreload: Boolean = config[Boolean]("actors.metadata.preload", true)
   def batchStoreDelay: Duration    = config[Long]("actors.store.idle_millis", 1000) millis
   def batchShutdownCheckInterval: Duration = config[Int]("actors.store.shutdown_check_seconds", 1) seconds
 }
 
-trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigComponent {
-  type YggConfig <: ShardConfig
+// The ingest system consists of the ingest supervisor and ingest actor(s)
+case class ShardActors(ingestSystem: ActorRef, metadataActor: ActorRef, stoppable: Stoppable)
 
-  protected def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]): Option[() => Actor]
+object ShardActors extends Logging {
+  def actorStop(config: ShardConfig, actor: ActorRef, name: String)(implicit system: ActorSystem, executor: ExecutionContext): Future[Unit] = { 
+    for {
+      _ <- Future(logger.debug(config.logPrefix + " Stopping " + name + " actor within " + config.stopTimeout.duration))
+      b <- gracefulStop(actor, config.stopTimeout.duration)
+    } yield {
+      logger.debug(config.logPrefix + " Stop call for " + name + " actor returned " + b)  
+    }   
+  } recover { 
+    case e => logger.error("Error stopping " + name + " actor", e)  
+  }   
+}
+
+trait ShardSystemActorModule extends YggConfigComponent with Logging {
+  type YggConfig <: ShardConfig
 
   protected def checkpointCoordination: CheckpointCoordination
 
-  class ShardSystemActor(storage: MetadataStorage, accountManager: BasicAccountManager[Future]) extends Actor with Logging {
+  protected def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]): Option[ActorRef]
 
-    // The ingest system consists of the ingest supervisor and ingest actor(s)
-    private[this] var ingestSystem: ActorRef            = _
-    private[this] var metadataActor: ActorRef           = _
-    private[this] var projectionsActor: ActorRef        = _
-    private[this] var metadataSync: Option[Cancellable] = None
+  def initShardActors(storage: MetadataStorage, accountManager: BasicAccountManager[Future], projectionsActor: ActorRef): ShardActors = {
+    //FIXME: move outside
+    val metadataActorSystem: ActorSystem = ActorSystem("Metadata")
+    val ingestActorSystem: ActorSystem = ActorSystem("Ingest")
 
-    private[this] val metadataActorSystem = ActorSystem("Metadata")
-    private[this] val projectionActorSystem = ActorSystem("Projections")
-    private[this] val ingestActorSystem = ActorSystem("Ingest")
-
-    private def loadCheckpoint() : Option[YggCheckpoint] = yggConfig.ingestConfig flatMap { _ =>
+    def loadCheckpoint() : Option[YggCheckpoint] = yggConfig.ingestConfig flatMap { _ =>
         checkpointCoordination.loadYggCheckpoint(yggConfig.shardId) match {
           case Some(Failure(errors)) =>
             logger.error("Unable to load Kafka checkpoint: " + errors)
@@ -96,128 +101,36 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
       }
     } 
 
-    override def preStart() {
-      val initialCheckpoint = loadCheckpoint()
+    val initialCheckpoint = loadCheckpoint()
 
-      logger.info("Initializing MetadataActor with storage = " + storage)
-      metadataActor = metadataActorSystem.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint, yggConfig.metadataPreload)), "metadata")
+    logger.info("Initializing MetadataActor with storage = " + storage)
+    val metadataActor = metadataActorSystem.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint, yggConfig.metadataPreload)), "metadata")
+    val metadataSync = metadataActorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata)
 
-      logger.debug("Initializing ProjectionsActor")
-      projectionsActor = projectionActorSystem.actorOf(Props(new ProjectionsActor(yggConfig.maxOpenProjections)), "projections")
+    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, checkpoint, metadataActor, accountManager)) yield init
 
-      val ingestActorInit: Option[() => Actor] = 
-        for {
-          checkpoint <- initialCheckpoint
-          init <-  initIngestActor(checkpoint, metadataActor, accountManager)
-        } yield init
- 
-      ingestSystem = { 
-        logger.debug("Initializing ingest system")
-        // Ingest implies a metadata sync
-        metadataSync = Some(metadataActorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata))
+    logger.debug("Initializing ingest system")
+    val ingestSystem = ingestActorSystem.actorOf(Props(
+      new IngestSupervisor(ingestActor, metadataActor, projectionsActor, ingestActorSystem.scheduler, yggConfig.metadataTimeout, yggConfig.batchStoreDelay, yggConfig.batchShutdownCheckInterval)
+      ), 
+      "ingestRouter"
+    )
 
-        val routingTable = new SingleColumnProjectionRoutingTable
-
-        ingestActorSystem.actorOf(Props(new IngestSupervisor(ingestActorInit,
-                                                             yggConfig.batchStoreDelay, ingestActorSystem.scheduler, yggConfig.batchShutdownCheckInterval) {
-          def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
-            logger.debug("Beginning processing of %d messages".format(messages.size))
-            implicit val to = yggConfig.metadataTimeout
-            implicit val execContext = ExecutionContext.defaultExecutionContext(ingestActorSystem)
-            
-            val archivePaths = messages.collect { case ArchiveMessage(_, Archive(path, _)) => path } 
-
-            if (archivePaths.nonEmpty) {
-              logger.debug("Processing archive paths: " + archivePaths)
-            } else {
-              logger.debug("No archive paths")
-            }
-
-            Future.sequence {
-              archivePaths map { path =>
-                (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Set[ProjectionDescriptor]]
-              }
-            }.onSuccess {
-              case descMaps : Seq[Set[ProjectionDescriptor]] => 
-                val projectionMap: Map[Path, Seq[ProjectionDescriptor]] = (for {
-                  descMap <- descMaps
-                  desc    <- descMap
-                  column  <- desc.columns
-                } yield (column.path, desc)).groupBy(_._1).mapValues(_.map(_._2))
-
-                projectionMap.foreach { case (p,d) => logger.debug("Archiving %d projections on path %s".format(d.size, p)) }
-              
-                val updates = routingTable.batchMessages(messages, projectionMap)
-
-                logger.debug("Sending " + updates.size + " update message(s)")
-                batchCoordinator ! ProjectionUpdatesExpected(updates.size)
-                for (update <- updates) projectionsActor.tell(update, batchCoordinator)
-            }
-          }
-        }), "ingestRouter")
-      }
-    }
-
-    def receive = {
-      // Route subordinate messages
-      case pMsg: ShardProjectionAction => 
-        logger.trace("Forwarding message " + pMsg + " to projectionsActor")
-        projectionsActor.tell(pMsg, sender)
-        logger.trace("Forwarding complete: " + pMsg)
-
-      case mMsg: ShardMetadataAction   => 
-        logger.trace("Forwarding message " + mMsg + " to metadataActor")
-        metadataActor.tell(mMsg, sender)
-        logger.trace("Forwarding complete: " + mMsg)
-
-      case iMsg: ShardIngestAction     => 
-        logger.trace("Forwarding message " + iMsg + " to ingestSystem")
-        ingestSystem.tell(iMsg, sender)
-        logger.trace("Forwarding complete: " + iMsg)
-
-      case Status => 
-        logger.trace("Processing status request")
-        implicit val to = Timeout(yggConfig.statusTimeout)
-        implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
-        (for (statusResponses <- Future.sequence { actorsWithStatus map { actor => (actor ? Status).mapTo[JValue] } }) yield JArray(statusResponses)) onSuccess {
-          case status => 
-            sender ! status
-        }
-        logger.trace("Status request complete")
-
-      case ShutdownSystem => 
-        logger.info("Initiating shutdown")
-        onShutdown()
-        sender ! ShutdownComplete
-        self ! PoisonPill
-        logger.info("Shutdown complete")
-
-      case bad =>
-        logger.error("Unknown message received: " + bad)
-    }
-
-    protected def actorsWithStatus = ingestSystem :: metadataActor :: projectionsActor :: Nil
-
-    protected def onShutdown(): Future[Unit] = {
-      implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
+    val stoppable = Stoppable.fromFuture({
+      import ShardActors.actorStop
+      logger.info("Stopping shard system")
       for {
-        _ <- Future(logger.info("Stopping shard system"))
-        _ <- metadataSync.map(syncJob => Future{ syncJob.cancel() }).getOrElse(Future(()))
-        _ <- actorStop(ingestSystem, "ingest")
-        _ <- actorStop(projectionsActor, "projections")
-        _ <- actorStop(metadataActor, "metadata")
-      } yield ()
-    }
-
-    protected def actorStop(actor: ActorRef, name: String)(implicit executor: ExecutionContext): Future[Unit] = { 
-      for {
-        _ <- Future(logger.debug(yggConfig.logPrefix + " Stopping " + name + " actor within " + yggConfig.stopTimeout.duration))
-        b <- gracefulStop(actor, yggConfig.stopTimeout.duration)(context.system) 
+        _ <- ingestActor map { actorStop(yggConfig, _, "ingestActor")(ingestActorSystem, ingestActorSystem.dispatcher) } getOrElse { Future(())(ingestActorSystem.dispatcher) }
+        _ <- actorStop(yggConfig, ingestSystem, "ingestSupervisor")(ingestActorSystem, ingestActorSystem.dispatcher)
+        _ <- actorStop(yggConfig, metadataActor, "metadataActor")(metadataActorSystem, metadataActorSystem.dispatcher)
       } yield {
-        logger.debug(yggConfig.logPrefix + " Stop call for " + name + " actor returned " + b)  
-      }   
-    } recover { 
-      case e => logger.error("Error stopping " + name + " actor", e)  
-    }   
+        metadataSync.cancel()
+        metadataActorSystem.shutdown()
+        ingestActorSystem.shutdown() 
+        logger.info("Shard system stopped.")
+      }
+    })
+
+    ShardActors(ingestSystem, metadataActor, stoppable)
   }
 }

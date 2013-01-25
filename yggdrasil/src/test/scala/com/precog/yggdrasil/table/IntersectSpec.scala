@@ -32,12 +32,10 @@ import org.specs2.mutable._
 
 import SampleData._
 
-trait IntersectSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck {
-  implicit def M: Monad[M] with Copointed[M]
-
-  val module = BlockStoreTestModule.empty[M]
-  
+trait IntersectSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
   def testIntersect(sample: SampleData) = {
+    val module = emptyTestModule
+
     import module._
     import module.trans._
     import module.trans.constants._

@@ -27,6 +27,7 @@ import com.precog.daze._
 import com.precog.common.Path
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.muspelheim._
 
 import java.nio.ByteBuffer
 
@@ -51,7 +52,7 @@ import scalaz.Validation._
 import blueeyes.akka_testing._
 
 import blueeyes.core.data._
-import blueeyes.bkka.{ AkkaDefaults, AkkaTypeClasses }
+import blueeyes.bkka._
 import blueeyes.core.data._
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http._
@@ -121,11 +122,12 @@ trait TestShardService extends
   
   def clock = Clock.System
 
-  def configureShardState(config: Configuration): ShardState = {
-    val queryExecutorFactory = new TestQueryExecutorFactory {
+  def configureShardState(config: Configuration) = Future {
+    val queryExecutorFactory = new TestPlatform {
       val jobActorSystem = self.actorSystem
       val actorSystem = self.actorSystem
       val executionContext = self.asyncContext
+
       val accessControl = apiKeyManager
       val accountManager = inMemAccountMgr
       val jobManager = self.jobManager
@@ -140,7 +142,11 @@ trait TestShardService extends
       )
     }
 
-    ManagedQueryShardState(queryExecutorFactory, apiKeyManager, inMemAccountMgr, jobManager, clock)
+    val stoppable = Stoppable.fromFuture {
+      Future(())
+    }
+
+    ManagedQueryShardState(queryExecutorFactory, apiKeyManager, inMemAccountMgr, jobManager, clock, stoppable)
   }
 
   implicit val queryResultByteChunkTranscoder =
@@ -183,7 +189,6 @@ trait TestShardService extends
 }
 
 class ShardServiceSpec extends TestShardService with FutureMatchers {
-
   val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   def syncClient(query: String, apiKey: Option[String] = Some(testAPIKey)) = {
@@ -364,7 +369,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   }
 }
 
-trait TestQueryExecutorFactory extends ManagedQueryExecutorFactory { self =>
+trait TestPlatform extends ManagedPlatform { self =>
   import scalaz.syntax.monad._
   import scalaz.syntax.traverse._
   import AkkaTypeClasses._
@@ -403,8 +408,6 @@ trait TestQueryExecutorFactory extends ManagedQueryExecutorFactory { self =>
     }))
   }
 
-
-  // def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = Future {
   protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
     new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
@@ -421,25 +424,27 @@ trait TestQueryExecutorFactory extends ManagedQueryExecutorFactory { self =>
     }
   }
 
-  def browse(apiKey: APIKey, path: Path) = {
-    accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
-      if(allowed) {
-        success(JArray(List(JString("foo"), JString("bar"))))
-      } else {
-        failure("The specified API key may not browse this location")
+  val metadataClient = new MetadataClient[Future] {
+    def browse(apiKey: APIKey, path: Path) = {
+      accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
+        if(allowed) {
+          success(JArray(List(JString("foo"), JString("bar"))))
+        } else {
+          failure("The specified API key may not browse this location")
+        }
       }
     }
-  }
-  
-  def structure(apiKey: APIKey, path: Path) = {
-    accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
-      if(allowed) {
-        success(JObject(List(
-          JField("test1", JString("foo")),
-          JField("test2", JString("bar"))
-        )))
-      } else {
-        failure("The specified API key may not browse this location")
+    
+    def structure(apiKey: APIKey, path: Path) = {
+      accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
+        if(allowed) {
+          success(JObject(List(
+            JField("test1", JString("foo")),
+            JField("test2", JString("bar"))
+          )))
+        } else {
+          failure("The specified API key may not browse this location")
+        }
       }
     }
   }

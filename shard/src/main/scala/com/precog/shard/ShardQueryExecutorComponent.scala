@@ -35,7 +35,6 @@ import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
-import com.precog.yggdrasil.table.jdbm3._
 import com.precog.yggdrasil.util._
 
 import org.slf4j.{ Logger, LoggerFactory }
@@ -57,13 +56,13 @@ trait ShardQueryExecutorConfig
 }
 
 trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
-  import scalaz.syntax.monad._
-
   type YggConfig <: ShardQueryExecutorConfig
 
   protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
 
   case class StackException(error: StackError) extends Exception(error.toString)
+
+  implicit def M: Monad[M]
 
   implicit def LineDecompose: Decomposer[instructions.Line] = new Decomposer[instructions.Line] {
     def decompose(line: instructions.Line): JValue = {
@@ -81,7 +80,7 @@ trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]]
     val solution: Validation[Throwable, Validation[EvaluationError, StreamT[M, CharBuffer]]] = Validation.fromTryCatch {
       asBytecode(query) flatMap { bytecode =>
         ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
-          Validation.success(jsonChunks {
+          Validation.success(outputChunks(opts.output) {
             applyQueryOptions(opts) {
               logger.debug("[QID:%d] Evaluating query".format(qid))
               if (queryLogger.isDebugEnabled) {
@@ -177,6 +176,18 @@ trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]]
         )
       )
     }
+  }
+
+  private def outputChunks(output: QueryOutput)(tableM: M[Table]): StreamT[M, CharBuffer] =
+    output match {
+      case JsonOutput => jsonChunks(tableM)
+      case CsvOutput => csvChunks(tableM)
+    }
+
+  private def csvChunks(tableM: M[Table]): StreamT[M, CharBuffer] = {
+    import trans._
+    val spec = DerefObjectStatic(Leaf(Source), TableModule.paths.Value)
+    StreamT.wrapEffect(tableM.map(_.transform(spec).renderCsv))
   }
 
   private def jsonChunks(tableM: M[Table]): StreamT[M, CharBuffer] = {

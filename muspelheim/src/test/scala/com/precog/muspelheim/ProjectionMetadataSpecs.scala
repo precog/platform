@@ -22,26 +22,24 @@ package com.precog.pandora
 import com.precog.bytecode._
 import com.precog.common._
 import com.precog.common.json.CPath
-import com.precog.yggdrasil.{CString, StorageModule}
-import com.precog.yggdrasil.{EstimateSize, ExactSize}
-import com.precog.yggdrasil.table.jdbm3._
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.table._
 
 import org.specs2.mutable._
 
 import scalaz._
 import scalaz.syntax.copointed._
 
-trait ProjectionMetadataSpecs[M[+_]] 
-    extends Specification 
-    with StorageModule[M] 
-    with JDBMColumnarTableModule[M] {
+trait ProjectionMetadataSpecs[M[+_]] extends Specification 
+    with StorageMetadataSource[M] 
+    with SliceColumnarTableModule[M, Identities] {
 
   implicit def M: Monad[M] with Copointed[M]
 
   include(
     "projection metadata" should {
       "provide exact counts for single-projection tables" in {
-        val metadata = storage.userMetadataView("fred-key")
+        val metadata = userMetadataView("fred-key")
         
         val usersAgeMetadata = metadata.findProjections(Path("/users"), CPath(".age")).copoint
 

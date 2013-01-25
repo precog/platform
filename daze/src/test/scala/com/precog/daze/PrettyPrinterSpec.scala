@@ -143,7 +143,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
            |        Const(CString("column1"))(line)
            |      )(line),
            |      Join(DerefObject, CrossLeftSort,
-           |        SplitParam(1, Vector(LoadIds("/file")))(input)(line),
+           |        SplitGroup(1, Vector(LoadIds("/file")))(input)(line),
            |        Const(CString("column2"))(line)
            |      )(line)
            |    )(line)

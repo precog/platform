@@ -34,7 +34,7 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
 
   override def _lib1 = super._lib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, log, signum, acos, ulp)
 
-  override def _lib2 = super._lib2 ++ Set(min, hypot, pow, maxOf, atan2, copySign, IEEEremainder)
+  override def _lib2 = super._lib2 ++ Set(minOf, min, hypot, pow, maxOf, max, atan2, copySign, roundTo, IEEEremainder)
 
   import StdLib.{DoubleFrom, doubleIsDefined}
   import java.lang.Math
@@ -147,6 +147,9 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
 
   def bothDefined(x: Double, y: Double) = doubleIsDefined(x) && doubleIsDefined(y)
 
+  object minOf extends Op2DDD("minOf", bothDefined, Math.min)
+
+  @deprecated
   object min extends Op2DDD("min", bothDefined, Math.min)
 
   object hypot extends Op2DDD("hypot", bothDefined, Math.hypot)
@@ -155,10 +158,19 @@ trait MathLib[M[+_]] extends GenOpcode[M] {
 
   object maxOf extends Op2DDD("maxOf", bothDefined, Math.max)
 
+  @deprecated
+  object max extends Op2DDD("max", bothDefined, Math.max)
+
   object atan2 extends Op2DDD("atan2", bothDefined, Math.atan2)
 
   object copySign extends Op2DDD("copySign", bothDefined, Math.copySign)
 
   object IEEEremainder extends Op2DDD("IEEEremainder", bothDefined,
     Math.IEEEremainder)
+
+  object roundTo extends Op2DDD("roundTo", bothDefined, { (n, digits) =>
+    val adjusted = n * math.pow(10, digits)
+    val rounded = if (Math.abs(n) >= 4503599627370496.0) adjusted else Math.round(adjusted)
+    rounded * math.pow(10, -digits)
+  })
 }

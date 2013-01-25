@@ -318,8 +318,8 @@ trait Evaluator[M[+_]] extends DAG
           lazy val key = trans.DerefObjectStatic(Leaf(Source), paths.Key)
           
           for {
-            pendingTableLeft <- prepareEval(left, splits)
-            pendingTableRight <- prepareEval(right, splits)
+            pair <- zip(prepareEval(left, splits), prepareEval(right, splits))
+            (pendingTableLeft, pendingTableRight) = pair
 
             leftResult = pendingTableLeft.table.transform(liftToValues(pendingTableLeft.trans))
             rightResult = pendingTableRight.table.transform(liftToValues(pendingTableRight.trans))
@@ -480,16 +480,19 @@ trait Evaluator[M[+_]] extends DAG
         
         case IUI(union, left, right) => {
           for {
-            leftPending <- prepareEval(left, splits)
-            rightPending <- prepareEval(right, splits)
+            pair <- zip(prepareEval(left, splits), prepareEval(right, splits))
+            (leftPending, rightPending) = pair
 
             keyValueSpec = TransSpec1.PruneToKeyValue
 
             leftTable = leftPending.table.transform(liftToValues(leftPending.trans))
             rightTable = rightPending.table.transform(liftToValues(rightPending.trans))
 
-            leftSorted <- transState liftM leftTable.sort(keyValueSpec, SortAscending)
-            rightSorted <- transState liftM rightTable.sort(keyValueSpec, SortAscending)
+            leftSortedM = transState liftM leftTable.sort(keyValueSpec, SortAscending)
+            rightSortedM = transState liftM rightTable.sort(keyValueSpec, SortAscending)
+
+            pair <- zip(leftSortedM, rightSortedM)
+            (leftSorted, rightSorted) = pair
 
             result = if (union) {
               leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
@@ -504,16 +507,20 @@ trait Evaluator[M[+_]] extends DAG
         // TODO unify with IUI
         case Diff(left, right) =>{
           for {
-            leftPending <- prepareEval(left, splits)
-            rightPending <- prepareEval(right, splits)
+            pair <- zip(prepareEval(left, splits), prepareEval(right, splits))
+            (leftPending, rightPending) = pair
 
             leftTable = leftPending.table.transform(liftToValues(leftPending.trans))
             rightTable = rightPending.table.transform(liftToValues(rightPending.trans))
 
             // this transspec prunes everything that is not a key or a value.
             keyValueSpec = TransSpec1.PruneToKeyValue
-            leftSorted <- transState liftM leftTable.sort(keyValueSpec, SortAscending)
-            rightSorted <- transState liftM rightTable.sort(keyValueSpec, SortAscending)
+
+            leftSortedM = transState liftM leftTable.sort(keyValueSpec, SortAscending)
+            rightSortedM = transState liftM rightTable.sort(keyValueSpec, SortAscending)
+
+            pair <- zip(leftSortedM, rightSortedM)
+            (leftSorted, rightSorted) = pair
 
             result = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(TransSpec1.Id, TransSpec1.DeleteKeyValue, TransSpec2.DeleteKeyValueLeft)
           } yield {
@@ -792,8 +799,8 @@ trait Evaluator[M[+_]] extends DAG
           } */
           
           for {
-            pendingTableTarget <- prepareEval(target, splits)
-            pendingTableBoolean <- prepareEval(boolean, splits)
+            pair <- zip(prepareEval(target, splits), prepareEval(boolean, splits))
+            (pendingTableTarget, pendingTableBoolean) = pair
 
             targetResult = pendingTableTarget.table.transform(liftToValues(pendingTableTarget.trans))
             booleanResult = pendingTableBoolean.table.transform(liftToValues(pendingTableBoolean.trans))
@@ -1312,6 +1319,9 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
+  
+  private def zip[A](table1: StateT[M, EvaluatorState, A], table2: StateT[M, EvaluatorState, A]): StateT[M, EvaluatorState, (A, A)] =
+    monadState.apply(table1, table2) { (_, _) }
   
   private def liftToValues(trans: TransSpec1): TransSpec1 =
     TableTransSpec.makeTransSpec(Map(paths.Value -> trans))

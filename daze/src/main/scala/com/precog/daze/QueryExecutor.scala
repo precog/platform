@@ -48,16 +48,17 @@ object EvaluationError {
   val timeoutError: EvaluationError = TimeoutError
 }
 
+sealed trait QueryOutput
+case object JsonOutput extends QueryOutput
+case object CsvOutput extends QueryOutput
+
 case class QueryOptions(
   page: Option[(Long, Long)] = None,
   sortOn: List[CPath] = Nil,
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending,
-  timeout: Option[Long] = None)
-
-trait MetadataClient[M[+_]] {
-  def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]]
-  def structure(apiKey: APIKey, path: Path): M[Validation[String, JObject]]
-}
+  timeout: Option[Long] = None,
+  output: QueryOutput = JsonOutput
+)
 
 trait QueryExecutor[M[+_], +A] { self =>
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, A]]
@@ -70,27 +71,10 @@ trait QueryExecutor[M[+_], +A] { self =>
   }
 }
 
-trait QueryExecutorFactory[M[+_], +A] extends MetadataClient[M] {
-  def executorFor(apiKey: APIKey): M[Validation[String, QueryExecutor[M, A]]]
-  def status(): M[Validation[String, JValue]]
-  def startup(): M[Boolean]
-  def shutdown(): M[Boolean]
-}
-
-trait NullQueryExecutor extends QueryExecutor[Id.Id, Nothing] {
-  def actorSystem: ActorSystem
-  implicit def executionContext: ExecutionContext
-
+object NullQueryExecutor extends QueryExecutor[Id.Id, Nothing] {
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
     failure(SystemError(new UnsupportedOperationException("Query service not avaialble")))
   }
-  
-  def browse(apiKey: APIKey, path: Path) = sys.error("feature not available") 
-  def structure(apiKey: APIKey, path: Path) = sys.error("feature not available")
-  def status() = sys.error("feature not available")
-
-  def startup = true
-  def shutdown = true
 }
 
 // vim: set ts=4 sw=4 et:

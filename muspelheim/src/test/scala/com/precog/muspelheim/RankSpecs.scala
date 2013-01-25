@@ -278,8 +278,8 @@ trait RankSpecs extends EvalStackSpecs {
           | medals := //summer_games/london_medals
           |
           | f(y, z) := solve 'age
-          |   medals' := medals where y = 'age
-          |   sum(medals'.Weight where z = "F")
+          |   medals' := medals where y = 'age & z = "F"
+          |   sum(medals'.Weight)
           |
           | {
           |   min: min(f(medals.Age, medals.Sex)),
