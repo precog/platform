@@ -5,6 +5,7 @@ import akka.actor.{ActorSystem, Props}
 import akka.dispatch._
 import akka.util.Duration
 
+import blueeyes.bkka._
 import blueeyes.json._
 
 import com.codecommit.gll.{Failure, LineStream, Success}
@@ -306,7 +307,7 @@ object Console extends App {
         def startup = IO { PrecogUnit }
 
         def shutdown = IO { 
-          Await.result(ShardActors.stop(yggConfig, shardActors), yggConfig.stopTimeout.duration)
+          Await.result(Stoppable.stop(shardActors.stoppable, yggConfig.stopTimeout.duration), yggConfig.stopTimeout.duration)
           actorSystem.shutdown()
           PrecogUnit
         }

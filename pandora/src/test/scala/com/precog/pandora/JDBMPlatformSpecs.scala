@@ -41,6 +41,7 @@ import akka.util.duration._
 
 import java.io.File
 
+import blueeyes.bkka._
 import blueeyes.json._
 
 import org.slf4j.LoggerFactory
@@ -118,8 +119,8 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
   def startup() { }
   
   def shutdown() {
+    Await.result(Stoppable.stop(shardActors.stoppable), Duration(3, "minutes"))
     actorSystem.shutdown()
-    Await.result(ShardActors.stop(yggConfig, shardActors), Duration(3, "minutes"))
   }
 }
 
