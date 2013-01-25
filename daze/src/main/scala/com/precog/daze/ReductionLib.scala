@@ -545,14 +545,14 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     }
     
     def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range) = {
+      def reduce(schema: CSchema, range: Range) = {
         if (range.isEmpty) {
           None
         } else {
           var back = true
           var defined = false
           
-          cols(JBooleanT) foreach { c =>
+          schema.columns(JBooleanT) foreach { c =>
             val bc = c.asInstanceOf[BoolColumn]
             var acc = back
             
@@ -595,14 +595,14 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     }
     
     def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range) = {
+      def reduce(schema: CSchema, range: Range) = {
         if (range.isEmpty) {
           None
         } else {
           var back = false
           var defined = false
           
-          cols(JBooleanT) foreach { c =>
+          schema.columns(JBooleanT) foreach { c =>
             val bc = c.asInstanceOf[BoolColumn]
             var acc = back
             

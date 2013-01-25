@@ -45,11 +45,11 @@ trait PredictionLibSpecs[M[+_]] extends Specification
   
   "linear prediction" should {
     "predict simple case" in {
-      val line = Line(0, "")
+      val line = Line(0, 0, "")
 
-      val input = dag.Morph2(line, LinearPrediction,
-        dag.LoadLocal(line, Const(line, CString("/hom/model1"))),
-        dag.LoadLocal(line, Const(line, CString("/hom/model1data"))))
+      val input = dag.Morph2(LinearPrediction,
+        dag.LoadLocal(Const(CString("/hom/model1"))(line))(line),
+        dag.LoadLocal(Const(CString("/hom/model1data"))(line))(line))(line)
 
       val result0 = testEval(input)
 
@@ -80,11 +80,11 @@ trait PredictionLibSpecs[M[+_]] extends Specification
     }
 
     "predict case with repeated model names and arrays" in {
-      val line = Line(0, "")
+      val line = Line(0, 0, "")
 
-      val input = dag.Morph2(line, LinearPrediction,
-        dag.LoadLocal(line, Const(line, CString("/hom/model2"))),
-        dag.LoadLocal(line, Const(line, CString("/hom/model2data"))))
+      val input = dag.Morph2(LinearPrediction,
+        dag.LoadLocal(Const(CString("/hom/model2"))(line))(line),
+        dag.LoadLocal(Const(CString("/hom/model2data"))(line))(line))(line)
 
       val result0 = testEval(input)
 
@@ -112,11 +112,11 @@ trait PredictionLibSpecs[M[+_]] extends Specification
 
   "logistic prediction" should {
     "predict simple case" in {
-      val line = Line(0, "")
+      val line = Line(0, 0, "")
 
-      val input = dag.Morph2(line, LogisticPrediction,
-        dag.LoadLocal(line, Const(line, CString("/hom/model1"))),
-        dag.LoadLocal(line, Const(line, CString("/hom/model1data"))))
+      val input = dag.Morph2(LogisticPrediction,
+        dag.LoadLocal(Const(CString("/hom/model1"))(line))(line),
+        dag.LoadLocal(Const(CString("/hom/model1data"))(line))(line))(line)
 
       val result0 = testEval(input)
 
@@ -147,11 +147,11 @@ trait PredictionLibSpecs[M[+_]] extends Specification
     }
 
     "predict case with repeated model names and arrays" in {
-      val line = Line(0, "")
+      val line = Line(0, 0, "")
 
-      val input = dag.Morph2(line, LogisticPrediction,
-        dag.LoadLocal(line, Const(line, CString("/hom/model2"))),
-        dag.LoadLocal(line, Const(line, CString("/hom/model2data"))))
+      val input = dag.Morph2(LogisticPrediction,
+        dag.LoadLocal(Const(CString("/hom/model2"))(line))(line),
+        dag.LoadLocal(Const(CString("/hom/model2data"))(line))(line))(line)
 
       val result0 = testEval(input)
 
