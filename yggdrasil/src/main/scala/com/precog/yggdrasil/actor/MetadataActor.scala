@@ -87,6 +87,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
   override def postStop(): Unit = {
     flush(None).unsafePerformIO
+    logger.info("Terminal flush of MetadataActor complete.")
   }
 
   private val ingestBatchId = new java.util.concurrent.atomic.AtomicInteger()

@@ -21,6 +21,7 @@ package com.precog.pandora
 
 import com.precog.common.Path
 import com.precog.common.VectorCase
+import com.precog.common.accounts._
 import com.precog.common.kafka._
 import com.precog.common.security._
 
@@ -56,6 +57,7 @@ import akka.util.duration._
 
 import java.io.File
 
+import blueeyes.bkka._
 import blueeyes.json._
 
 import org.slf4j.LoggerFactory
@@ -106,19 +108,19 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
     val yggConfig = self.yggConfig
     val Projection = new ProjectionCompanion {
       def fileOps = FilesystemFileOps
-      def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = fileMetadataStorage.ensureDescriptorRoot(descriptor)
-      def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = fileMetadataStorage.findDescriptorRoot(descriptor)
-      def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = fileMetadataStorage.findArchiveRoot(descriptor)
+      def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = metadataStorage.ensureDescriptorRoot(descriptor)
+      def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = metadataStorage.findDescriptorRoot(descriptor)
+      def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = metadataStorage.findArchiveRoot(descriptor)
     }
   }
 
   val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
   val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) =
-    initShardActors(fileMetadataStorage, new InMemoryAccountManager[Future](), projectionsActor)
+    initShardActors(metadataStorage, AccountFinder.Empty[Future], projectionsActor)
 
-  val accessControl = new UnrestrictedAccessControl[Future]
+  override val accessControl = new UnrestrictedAccessControl[Future]
   class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor)
-  val storage = new Storage
+  override val storage = new Storage
 
   def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
@@ -137,8 +139,8 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
   def startup() { }
   
   def shutdown() {
+    Await.result(Stoppable.stop(shardActors.stoppable), Duration(3, "minutes"))
     actorSystem.shutdown()
-    Await.result(ShardActors.stop(yggConfig, shardActors), Duration(3, "minutes"))
   }
 }
 

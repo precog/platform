@@ -756,13 +756,13 @@ object ImportTools extends Command with Logging {
         implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(ExecutionContext.defaultExecutionContext(actorSystem))
 
         val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
-        val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) = 
-          initShardActors(ms, AccountFinder.Empty[Future], projectionsActor)
 
-        override val accessControl = new UnrestrictedAccessControl()
+        val shardActors @ ShardActors(ingestSupervisor, metadataActor, shardStoppable) = 
+          initShardActors(ms, AccountFinder.Empty[Future], projectionsActor)
 
         object Projection extends ProjectionCompanion(projectionsActor, yggConfig.metadataTimeout)
 
+        override val accessControl = new UnrestrictedAccessControl[Future]
         class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor) 
 
         override val storage = new Storage
@@ -785,7 +785,8 @@ object ImportTools extends Command with Logging {
       }
 
       logger.info("Waiting for shard shutdown")
-      Await.result(ShardActors.stop(yggConfig, shardActors), stopTimeout)
+      Await.result(Stoppable.stop(shardStoppable), Duration(2, "minutes"))
+      actorSystem.shutdown()
 
       logger.info("Shutdown")
       sys.exit(0)

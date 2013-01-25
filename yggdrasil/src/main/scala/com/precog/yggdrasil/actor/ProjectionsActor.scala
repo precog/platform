@@ -181,7 +181,7 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
     /**
      * A per-projection worker Actor
      */
-  class ProjectionActor(scheduler: Scheduler, descriptor: ProjectionDescriptor, maxIdleTime: Duration) extends Actor {
+  class ProjectionActor(scheduler: Scheduler, descriptor: ProjectionDescriptor, maxIdleTime: Duration) extends Actor { self =>
     private val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionActor")
 
     private var projection: Option[rawProjectionModule.Projection] = None
@@ -200,19 +200,26 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
     }
 
     private def awaken: IO[rawProjectionModule.Projection] = {
+      val lastAccess0 = lastAccess
+      val now0 = now
       for {
-        _ <- IO { lastAccess = System.currentTimeMillis }
-        p <- projection.map(IO(_)) getOrElse { rawProjectionModule.Projection(descriptor) map { _ tap { p => projection = Some(p) } } }
+        _ <- IO { lastAccess = now0 }
+        p <- projection.map(IO(_)) getOrElse { 
+               logger.info("Reopening projection for %s at %d after %d idle.".format(descriptor.shows, now0, now0 - lastAccess0))
+               rawProjectionModule.Projection(descriptor) map { _ tap { p => projection = Some(p) } } 
+             }
       } yield p
     }
 
-    private def sleep: IO[PrecogUnit] = 
+    private def sleep: IO[PrecogUnit] = {
+      logger.info("Closing projection for %s at %d.".format(descriptor.shows, now))
       (for {
+        _ <- (projection map rawProjectionModule.Projection.close).sequence
         _ <- IO { projection = None }
-        _ <- (projection map rawProjectionModule.Projection.close) sequence
       } yield PrecogUnit) except { t => 
         IO { logger.error("Error closing projection for %s.".format(descriptor), t); PrecogUnit } 
       }
+    }
 
     private def runInsert(projection: rawProjectionModule.Projection, rows: Seq[ProjectionInsert.Row]): IO[PrecogUnit] = {
       if (rows.nonEmpty) {
@@ -226,7 +233,7 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
     }
 
     def receive = {
-      case ProjectionInsert(descriptor, rows) => 
+      case ProjectionInsert(`descriptor`, rows) => 
         val startTime = System.currentTimeMillis
         (for {
           p <- awaken
@@ -241,7 +248,7 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
           case t: Throwable => IO { logger.error("Error during insert, aborting batch: " + descriptor.shows, t) }
         } unsafePerformIO
 
-      case ProjectionArchive(descriptor, archive) => 
+      case ProjectionArchive(`descriptor`, archive) => 
         logger.debug("Archiving " + descriptor)
         
         (for {
@@ -253,7 +260,8 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
           case t: Throwable => IO { logger.error("Error during archive on %s".format(descriptor), t) }
         } unsafePerformIO
 
-      case ProjectionGetBlock(_, id, columns) => 
+      case ProjectionGetBlock(`descriptor`, id, columns) => 
+        logger.info("Getting block for %s from actor %s after index %s.".format(descriptor.shows, System.identityHashCode(self), id))
         (for {
           p <- awaken
           block <- p.getBlockAfter(id, columns)

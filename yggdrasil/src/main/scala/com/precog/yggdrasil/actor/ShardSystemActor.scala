@@ -35,6 +35,7 @@ import akka.pattern.ask
 import akka.pattern.gracefulStop
 
 import blueeyes.json._
+import blueeyes.bkka.Stoppable
 
 import com.weiglewilczek.slf4s._
 import org.streum.configrity.converter.Extra._
@@ -66,18 +67,9 @@ trait ShardConfig extends BaseConfig {
 }
 
 // The ingest system consists of the ingest supervisor and ingest actor(s)
-case class ShardActors(ingestSystem: ActorRef, metadataActor: ActorRef, metadataSync: Cancellable)
+case class ShardActors(ingestSystem: ActorRef, metadataActor: ActorRef, stoppable: Stoppable)
 
 object ShardActors extends Logging {
-  def stop(config: ShardConfig, actors: ShardActors)(implicit system: ActorSystem, executor: ExecutionContext): Future[Unit] = {
-    for {
-      _ <- Future(logger.info("Stopping shard system"))
-      _ <- Future(actors.metadataSync.cancel())
-      _ <- actorStop(config, actors.ingestSystem, "ingest")
-      _ <- actorStop(config, actors.metadataActor, "metadata")
-    } yield ()
-  }
-
   def actorStop(config: ShardConfig, actor: ActorRef, name: String)(implicit system: ActorSystem, executor: ExecutionContext): Future[Unit] = { 
     for {
       _ <- Future(logger.debug(config.logPrefix + " Stopping " + name + " actor within " + config.stopTimeout.duration))
@@ -128,6 +120,21 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
       "ingestRouter"
     )
 
-    ShardActors(ingestSystem, metadataActor, metadataSync)
+    val stoppable = Stoppable.fromFuture({
+      import ShardActors.actorStop
+      logger.info("Stopping shard system")
+      for {
+        _ <- ingestActor map { actorStop(yggConfig, _, "ingestActor")(ingestActorSystem, ingestActorSystem.dispatcher) } getOrElse { Future(())(ingestActorSystem.dispatcher) }
+        _ <- actorStop(yggConfig, ingestSystem, "ingestSupervisor")(ingestActorSystem, ingestActorSystem.dispatcher)
+        _ <- actorStop(yggConfig, metadataActor, "metadataActor")(metadataActorSystem, metadataActorSystem.dispatcher)
+      } yield {
+        metadataSync.cancel()
+        metadataActorSystem.shutdown()
+        ingestActorSystem.shutdown() 
+        logger.info("Shard system stopped.")
+      }
+    })
+
+    ShardActors(ingestSystem, metadataActor, stoppable)
   }
 }

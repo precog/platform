@@ -37,7 +37,7 @@ import akka.util.Duration
 
 import org.streum.configrity.Configuration
 
-import blueeyes.bkka.AkkaTypeClasses
+import blueeyes.bkka._
 
 import scalaz._
 import scalaz.effect._
@@ -98,7 +98,7 @@ abstract class StandalonePerfTestRunner[T](testTimeout: Duration) extends Evalua
   def startup() {}
 
   def shutdown() {
-    Await.result(ShardActors.stop(yggConfig, shardActors), yggConfig.stopTimeout.duration)
+    Await.result(Stoppable.stop(shardActors.stoppable), Duration(2, "minutes"))
     actorSystem.shutdown()
   }
 }

@@ -91,7 +91,11 @@ trait TestShardService extends
   private val to = Duration(3, "seconds")
 
   private val actorSystem = ActorSystem("shardServiceSpec")
-  private val executor = ExecutionContext.defaultExecutionContext(actorSystem)
+  val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
+  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
+    def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "minutes"))
+  }
 
   private val apiKeyManager = new InMemoryAPIKeyManager[Future]
   private val apiKeyFinder = new DirectAPIKeyFinder[Future](apiKeyManager)
@@ -121,9 +125,9 @@ trait TestShardService extends
     val queryExecutorFactory = new TestPlatform {
       override val jobActorSystem = self.actorSystem
       override val actorSystem = self.actorSystem
-      override val executionContext = self.asyncContext
+      override val executionContext = self.executionContext
+      override val accessControl = new UnrestrictedAccessControl[Future]()
 
-      override val apiKeyFinder = self.apiKeyFinder
       override val jobManager = self.jobManager
 
       val ownerMap = Map(
@@ -136,7 +140,7 @@ trait TestShardService extends
       )
     }
 
-    ManagedQueryShardState(queryExecutorFactory, apiKeyManager, jobManager, clock, Stoppable.Noop)
+    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, jobManager, clock, Stoppable.Noop)
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
@@ -176,8 +180,6 @@ trait TestShardService extends
 }
 
 class ShardServiceSpec extends TestShardService with FutureMatchers {
-  val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-
   def syncClient(query: String, apiKey: Option[String] = Some(testAPIKey)) = {
     apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query)
   }

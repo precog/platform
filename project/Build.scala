@@ -95,9 +95,10 @@ object PlatformBuild extends Build {
       "org.specs2"                  %% "specs2"             % "1.12.3-SNAPSHOT" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
       "javolution"                  %  "javolution"         % "5.5.1",
-      "com.chuusai"                 %% "shapeless"          % "1.2.3"//,
+      "com.chuusai"                 %% "shapeless"          % "1.2.3",
       //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
-      ,"org.spire-math"              %% "spire"              % "0.2.0-M2"
+      "org.spire-math"              %% "spire"              % "0.2.0-M2",
+      "com.rubiconproject.oss"      % "jchronic"            % "0.2.6"
     )
   )
 

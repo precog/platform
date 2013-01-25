@@ -60,6 +60,8 @@ import java.io.File
 
 import scalaz.effect.IO
 
+import blueeyes.bkka._
+
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
@@ -191,7 +193,7 @@ object SBTConsole {
     
     def shutdown() {
       // stop storage shard
-      Await.result(ShardActors.stop(yggConfig, shardActors), yggConfig.stopTimeout.duration)
+      Await.result(Stoppable.stop(shardActors.stoppable, yggConfig.stopTimeout.duration), yggConfig.stopTimeout.duration)
       actorSystem.shutdown()
     }
   }
