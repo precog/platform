@@ -88,7 +88,7 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
         ticker ! Tick
     }
 
-    startup()
+    startup.copoint
   }
 
   "An asynchronous query" should {
@@ -141,7 +141,7 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
   }
 
   step {
-    shutdown()
+    shutdown.copoint
     actorSystem.shutdown()
     actorSystem.awaitTermination()
   }
