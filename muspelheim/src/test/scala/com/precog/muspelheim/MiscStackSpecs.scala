@@ -1576,7 +1576,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       val resultsE = evalE(input)
 
-      println(resultsE)
+      resultsE must not beEmpty
     }
 
     "determine click times around each click" in {
