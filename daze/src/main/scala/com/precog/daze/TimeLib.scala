@@ -158,6 +158,9 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
         }
       }
     }
+
+    def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
+      transSpec => trans.Map1(transSpec, f1(ctx))
   }
 
   object ChangeTimeZone extends Op2(TimeNamespace, "changeTimeZone") {
