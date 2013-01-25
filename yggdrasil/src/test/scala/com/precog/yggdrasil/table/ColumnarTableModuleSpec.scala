@@ -227,7 +227,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       
       val arrayM = strM map { body =>
         val input = "[%s]".format(body)
-        JParser.parse(input)
+        JParser.parseUnsafe(input)
       }
       
       val minimized = minimize(expected) getOrElse JArray(Nil)
@@ -357,7 +357,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
       "delete elements according to a JType" in checkObjectDelete
       "delete only field in object without removing from array" in {
-        val JArray(elements) = JParser.parse("""[
+        val JArray(elements) = JParser.parseUnsafe("""[
           {"foo": 4, "bar": 12},
           {"foo": 5},
           {"bar": 45},
@@ -370,7 +370,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
         val spec = ObjectDelete(Leaf(Source), Set(CPathField("foo")))
         val results = toJson(table.transform(spec))
-        val JArray(expected) = JParser.parse("""[
+        val JArray(expected) = JParser.parseUnsafe("""[
           {"bar": 12},
           {},
           {"bar": 45},
