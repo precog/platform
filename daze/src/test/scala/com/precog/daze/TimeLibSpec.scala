@@ -4040,6 +4040,40 @@ trait TimeLibSpec[M[+_]] extends Specification
       result2 must contain("05:54:08", "01:51:16", "16:27:24", "11:44:19", "18:53:43", "08:58:10", "00:18:50", "23:50:10", "15:47:40", "03:49:30")
     }
   }
+
+
+  "\"flexible\" parsing" should {
+    def testParseFuzzy(s: String, r: String) {
+      val line = Line(0, "")
+      val input = Operate(line, BuiltInFunction1Op(ParseDateTimeFuzzy), Const(line, CString(s)))
+      val result = testEval(input) collect {
+        case (ids, SString(d)) if ids.length == 0 => d.toString
+      }
+      result must haveSize(1)
+      result must contain(r)
+    }
+
+    "correctly handle a bunch of casually formatted dates" in {
+      testParseFuzzy("1907/12/3 16:12:34", "1907-12-03T16:12:34.000Z")
+      testParseFuzzy("1987/12/3 4pm", "1987-12-03T16:00:00.000Z")
+      testParseFuzzy("1987/12/3 4:00 pm", "1987-12-03T16:00:00.000Z")
+      testParseFuzzy("1987/12/3 4 PM", "1987-12-03T16:00:00.000Z")
+      testParseFuzzy("1987/12/3 at 4 PM", "1987-12-03T16:00:00.000Z")
+      testParseFuzzy("1987-12-3 16:00", "1987-12-03T16:00:00.000Z")
+      testParseFuzzy("1987/12/3", "1987-12-03T12:00:00.000Z")
+      testParseFuzzy("12/3/1987", "1987-12-03T12:00:00.000Z")
+
+      // make sure we can handle ISO8601
+      testParseFuzzy("2011-09-08T13:13:13", "2011-09-08T13:13:13.000Z")
+      testParseFuzzy("2011-09-08 13:13:13", "2011-09-08T13:13:13.000Z")
+
+      // yikes!!
+      testParseFuzzy("12/3/87", "1987-12-03T12:00:00.000Z")
+      testParseFuzzy("87/12/3", "1987-12-03T12:00:00.000Z")
+      testParseFuzzy("12/9/3", "2003-12-09T12:00:00.000Z")
+      testParseFuzzy("12/9/03", "2003-12-09T12:00:00.000Z")
+    }
+  }
 }
 
 object TimeLibSpec extends TimeLibSpec[test.YId] with test.YIdInstances

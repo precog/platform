@@ -28,7 +28,7 @@ import yggdrasil.table._
 import org.joda.time._
 import org.joda.time.format._
 
-import com.precog.util.DateTimeUtil.parseDateTime
+import com.precog.util.DateTimeUtil.{parseDateTime, parseDateTimeFlexibly, isDateTimeFlexibly}
 
 import TransSpecModule._
 
@@ -66,7 +66,9 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
     TimeWithZone,
     TimeWithoutZone,
     HourMinute,
-    HourMinuteSecond
+    HourMinuteSecond,
+
+    ParseDateTimeFuzzy
   )
 
   override def _lib2 = super._lib2 ++ Set(
@@ -116,7 +118,7 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
 
   DateTimeZone.setDefault(DateTimeZone.UTC)
 
-  object ParseDateTime extends Op2(TimeNamespace, "parse") {
+  object ParseDateTime extends Op2(TimeNamespace, "parseDateTime") {
     val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
     def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::parseDateTime") {
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
@@ -130,6 +132,29 @@ trait TimeLib[M[+_]] extends GenOpcode[M] {
           val ISO = format.parseDateTime(time)
 
           ISO.toString()
+        }
+      }
+    }
+  }
+
+  object ParseDateTimeFuzzy extends Op1(TimeNamespace, "parseDateTimeFuzzy") {
+    val tpe = UnaryOperationType(JTextT, JTextT)
+    def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::parseDateTimeFuzzy") {
+      case (c: StrColumn) => new Map1Column(c) with StrColumn {
+        override def isDefinedAt(row: Int): Boolean = if (!c.isDefinedAt(row)) {
+          false
+        } else {
+          val s = c(row)
+          isValidISO(s) || isDateTimeFlexibly(s)
+        }
+        def apply(row: Int) = {
+          val s = c(row)
+          try {
+            parseDateTime(s, true).toString
+          } catch {
+            case e: IllegalArgumentException =>
+              parseDateTimeFlexibly(s).toString
+          }
         }
       }
     }
