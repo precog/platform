@@ -2024,24 +2024,46 @@ trait MiscStackSpecs extends EvalStackSpecs {
       eval(input) must not(throwA[Exception])
     }
     
-    "support both max and maxOf for deprecation cycle" in {
-      val input = """
-        | import std::math::*
-        | [max(1, 2), maxOf(1, 2)]
-        | """.stripMargin
-        
-      val results = eval(input)
-      results must contain(SArray(Vector(SDecimal(2), SDecimal(2))))
+    "support both max and maxOf for deprecation cycle" >> {
+      "fqn" >> {
+        val input = """
+          | [std::math::max(1, 2), std::math::maxOf(1, 2)]
+          | """.stripMargin
+          
+        val results = eval(input)
+        results must contain(SArray(Vector(SDecimal(2), SDecimal(2))))
+      }
+      
+      "non-fqn" >> {
+        val input = """
+          | import std::math::*
+          | [max(1, 2), maxOf(1, 2)]
+          | """.stripMargin
+          
+        val results = eval(input)
+        results must contain(SArray(Vector(SDecimal(2), SDecimal(2))))
+      }
     }
     
-    "support both min and minOf for deprecation cycle" in {
-      val input = """
-        | import std::math::*
-        | [min(1, 2), minOf(1, 2)]
-        | """.stripMargin
-        
-      val results = eval(input)
-      results must contain(SArray(Vector(SDecimal(1), SDecimal(1))))
+    "support both min and minOf for deprecation cycle" >> {
+      "fqn" >> {
+        val input = """
+          | [std::math::min(1, 2), std::math::minOf(1, 2)]
+          | """.stripMargin
+          
+        val results = eval(input)
+        results must contain(SArray(Vector(SDecimal(1), SDecimal(1))))
+      }
+      
+      "non-fqn" >> {
+        val input = """
+          | import std::math::*
+          | [min(1, 2), minOf(1, 2)]
+          | """.stripMargin
+          
+        val results = eval(input)
+        results must contain(SArray(Vector(SDecimal(1), SDecimal(1))))
+      }
     }
   }
 }
