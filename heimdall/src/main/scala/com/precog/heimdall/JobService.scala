@@ -8,6 +8,7 @@ import akka.dispatch.ExecutionContext
 import blueeyes._
 import blueeyes.core.data._
 import blueeyes.core.http._
+import blueeyes.core.http.MimeTypes._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.core.service.engines.HttpClientXLightWeb
@@ -20,6 +21,7 @@ import ByteChunk._
 import DefaultBijections._
 
 
+import akka.dispatch.Promise
 import akka.util.Timeout
 
 import org.streum.configrity.Configuration
