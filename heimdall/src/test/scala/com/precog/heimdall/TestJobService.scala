@@ -95,14 +95,14 @@ class JobServiceSpec extends TestJobService {
     (ts map { dt => JField("timestamp", dt.serialize) :: Nil } getOrElse Nil)
   )
 
-  def postJob(job: JValue, apiKey: String = validAPIKey) = client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue](path + "/")(job)
+  def postJob(job: JValue, apiKey: String = validAPIKey) = client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue](path+"/")(job)
 
   def postJobAndGetId(job: JValue, apiKey: String = validAPIKey) = for {
-    res <- client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue](path)(job)
+    res <- client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue](path+"/")(job)
     Some(JString(jobId)) = res.content map (_ \ "id")
   } yield jobId
 
-  def getJob(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue](path + jobId)
+  def getJob(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("%s/%s".format(path,jobId))
 
   def putState(jobId: String, state: JValue) = client.contentType[ByteChunk](JSON).put[JValue]("%s/%s/state".format(path, jobId))(state)
 
