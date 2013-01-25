@@ -66,7 +66,7 @@ trait PerfTestSuite extends Logging {
     selectTest(test, pred)
 
 
-  protected def run[M[+_]: Copointed, T: MetricSpace](test: Tree[PerfTest] = test,
+  protected def run[M[+_], T: MetricSpace](test: Tree[PerfTest] = test,
       runner: PerfTestRunner[M, T], runs: Int = 60, outliers: Double = 0.05) = {
     val tails = (runs * (outliers / 2)).toInt
 
@@ -85,22 +85,13 @@ trait PerfTestSuite extends Logging {
     import PerfTestPrettyPrinters._
     import RunConfig.OutputFormat
 
-    val actorSystem = ActorSystem("perfTestingActorSystem")
     try {
-
-      implicit val execContext = ExecutionContext.defaultExecutionContext(actorSystem)
-      val testTimeout = Duration(config.queryTimeout, "seconds")
-
-      implicit val futureIsCopointed: Copointed[Future] = new Copointed[Future] {
-        def map[A, B](m: Future[A])(f: A => B) = m map f
-        def copoint[A](f: Future[A]) = Await.result(f, testTimeout)
-      }
-
       val runner = new JDBMPerfTestRunner(SimpleTimer,
         optimize = config.optimize,
         apiKey = "dummyAPIKey",
-        actorSystem = actorSystem,
-        _rootDir = config.rootDir)
+        _rootDir = config.rootDir,
+        testTimeout = Duration(config.queryTimeout, "seconds")
+      )
 
       runner.startup()
 
@@ -145,11 +136,7 @@ trait PerfTestSuite extends Logging {
             })
         }
       }
-
       runner.shutdown()
-
-    } finally {
-      actorSystem.shutdown()
     }
   }
 

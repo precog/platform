@@ -22,15 +22,13 @@ trait JDBMProjectionModuleConfig {
   def maxSliceSize: Int
 }
 
-trait JDBMProjectionModule extends ProjectionModule with YggConfigComponent {
+trait JDBMProjectionModule extends RawProjectionModule[IO, Array[Byte], Slice] with YggConfigComponent {
   type YggConfig <: JDBMProjectionModuleConfig
   val pmLogger = Logger("JDBMProjectionModule")
 
-  // type Key = Identities
-  type Key = Array[Byte]
   class Projection private[JDBMProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends JDBMProjection(baseDir, descriptor, yggConfig.maxSliceSize)
 
-  trait JDBMProjectionCompanion extends ProjectionCompanion {
+  trait ProjectionCompanion extends RawProjectionCompanionLike[IO] {
     def fileOps: FileOps
 
     // Must return a directory
@@ -40,7 +38,7 @@ trait JDBMProjectionModule extends ProjectionModule with YggConfigComponent {
     // Must return a directory  
     def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]]
 
-    def open(descriptor: ProjectionDescriptor): IO[Projection] = {
+    def apply(descriptor: ProjectionDescriptor): IO[Projection] = {
       pmLogger.debug("Opening JDBM projection for " + descriptor)
       ensureBaseDir(descriptor) map { bd => new Projection(bd, descriptor) }
     }
