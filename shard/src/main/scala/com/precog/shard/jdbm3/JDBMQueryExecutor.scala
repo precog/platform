@@ -23,7 +23,7 @@ import com.precog.muspelheim._
 import com.precog.util.FilesystemFileOps
 import com.precog.util.PrecogUnit
 
-import blueeyes.bkka.FutureMonad
+import blueeyes.bkka._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
 
 import akka.actor.ActorSystem
@@ -229,10 +229,12 @@ trait JDBMQueryExecutorComponent  {
       }
 
       def shutdown() = for {
-        _ <- ShardActors.stop(yggConfig, shardActors)
+        _ <- Stoppable.stop(shardActors.stoppable)
         _ <- ShardActors.actorStop(yggConfig, projectionsActor, "projections")
       } yield {
         queryLogger.info("Actor ecossytem shutdown complete.")
+        jobActorSystem.shutdown()
+        actorSystem.shutdown()
       }
     }
   }
