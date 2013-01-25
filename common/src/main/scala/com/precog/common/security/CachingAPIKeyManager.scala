@@ -33,8 +33,8 @@ import scalaz._
 import scalaz.syntax.monad._
 
 case class CachingAPIKeyManagerSettings(
-  apiKeyCacheSettings: Seq[Cache.CacheOption],
-  grantCacheSettings: Seq[Cache.CacheOption]
+  apiKeyCacheSettings: Seq[Cache.CacheOption[APIKey, APIKeyRecord]],
+  grantCacheSettings: Seq[Cache.CacheOption[GrantId, Grant]]
 )
 
 class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAPIKeyManagerSettings = CachingAPIKeyManager.defaultSettings)

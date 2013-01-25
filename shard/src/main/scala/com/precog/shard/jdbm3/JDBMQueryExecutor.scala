@@ -34,19 +34,20 @@ import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
-import com.precog.yggdrasil.table.jdbm3._
 import com.precog.yggdrasil.util._
 
 import com.precog.daze._
-import com.precog.muspelheim.ParseEvalStack
+import com.precog.muspelheim._
 
 import com.precog.common._
 import com.precog.util.FilesystemFileOps
 import com.precog.util.PrecogUnit
 
+import blueeyes.bkka.FutureMonad
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
 
 import akka.actor.ActorSystem
+import akka.actor.Props
 import akka.dispatch._
 import akka.pattern.ask
 import akka.util.duration._
@@ -67,113 +68,136 @@ import scalaz.syntax.std.either._
 
 import org.streum.configrity.Configuration
 
-trait BaseJDBMQueryExecutorConfig
+trait JDBMQueryExecutorConfig
     extends ShardQueryExecutorConfig
     with BlockStoreColumnarTableModuleConfig 
     with JDBMProjectionModuleConfig
     with ManagedQueryModuleConfig
-    with IdSourceConfig {
+    with ActorStorageModuleConfig
+    with ActorProjectionModuleConfig 
+    with IdSourceConfig 
+    with KafkaIngestActorProjectionSystemConfig {
       
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
-  lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
   lazy val jobPollFrequency: Duration = config[Int]("precog.evaluator.poll.cancellation", 3) seconds
-}
 
-trait JDBMQueryExecutorConfig extends BaseJDBMQueryExecutorConfig with ProductionShardSystemConfig with SystemActorStorageConfig {
   def ingestFailureLogRoot: File
 }
 
-trait JDBMQueryExecutorComponent {
+
+trait JDBMQueryExecutorComponent  {
   import blueeyes.json.serialization.Extractor
 
-  private def wrapConfig(wrappedConfig: Configuration) = {
-    new JDBMQueryExecutorConfig {
-      val config = wrappedConfig 
-      val sortWorkDir = scratchDir
-      val memoizationBufferSize = sortBufferSize
-      val memoizationWorkDir = scratchDir
-
-      val clock = blueeyes.util.Clock.System
-      val maxSliceSize = config[Int]("jdbm.max_slice_size", 10000)
-      val ingestFailureLogRoot = new File(config[String]("ingest.failure_log_root"))
-      val smallSliceSize = config[Int]("jdbm.small_slice_size", 8)
-
-      //TODO: Get a producer ID
-      val idSource = new FreshAtomicIdSource
-    }
-  }
-
-  def queryExecutorFactoryFactory(config: Configuration,
+  def platformFactory(
+      config0: Configuration,
       extAccessControl: APIKeyManager[Future],
       extAccountManager: BasicAccountManager[Future],
-      extJobManager: JobManager[Future]): ManagedQueryExecutorFactory = {
-    new JDBMQueryExecutorFactory
-        with JDBMProjectionModule
-        with ProductionShardSystemActorModule
-        with SystemActorStorageModule { self =>
+      extJobManager: JobManager[Future]) = {
+    new ManagedPlatform 
+        with KafkaIngestActorProjectionSystem
+        with PerAccountThreadPoolModule  
+        with ActorStorageModule
+        with ActorProjectionModule[Array[Byte], table.Slice] { platform =>
 
       type YggConfig = JDBMQueryExecutorConfig
-      val yggConfig = wrapConfig(config)
+      val yggConfig = new JDBMQueryExecutorConfig {
+        override val config = config0
+        val sortWorkDir = scratchDir
+        val memoizationBufferSize = sortBufferSize
+        val memoizationWorkDir = scratchDir
+
+        val clock = blueeyes.util.Clock.System
+        val maxSliceSize = config[Int]("jdbm.max_slice_size", 10000)
+        val ingestFailureLogRoot = new File(config[String]("ingest.failure_log_root"))
+        val smallSliceSize = config[Int]("jdbm.small_slice_size", 8)
+
+        //TODO: Get a producer ID
+        val idSource = new FreshAtomicIdSource
+      }
+
       val clock = blueeyes.util.Clock.System
 
       protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
       
-      val actorSystem = ActorSystem("jdbmExecutorActorSystem")
+      private implicit val actorSystem = ActorSystem("jdbmExecutorActorSystem")
+      implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+      implicit val M: Monad[Future] = new FutureMonad(defaultAsyncContext)
+
       val jobActorSystem = ActorSystem("jobPollingActorSystem")
-      val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-
-      val accountManager = extAccountManager
-      val jobManager = extJobManager
-
-      class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
-        val accessControl = extAccessControl
-        val accountManager = extAccountManager
-      }
-
-      val storage = new Storage
-      def storageMetadataSource = storage
 
       val apiKeyManager = extAccessControl
-      def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog = FilesystemIngestFailureLog(yggConfig.ingestFailureLogRoot, checkpoint)
+      val accountManager = extAccountManager
+      val jobManager = extJobManager
+      val accessControl = extAccessControl
 
-      object Projection extends JDBMProjectionCompanion {
-        private lazy val logger = LoggerFactory.getLogger("com.precog.shard.yggdrasil.JDBMQueryExecutor.Projection")
+      val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
-        private implicit val askTimeout = yggConfig.projectionRetrievalTimeout
+      val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
+      val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) = 
+        initShardActors(metadataStorage, extAccountManager, projectionsActor)
 
-        val fileOps = FilesystemFileOps
+      class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor)
+      val storage = new Storage
 
-        def ensureBaseDir(descriptor: ProjectionDescriptor) = {
-          logger.trace("Ensuring base dir for " + descriptor)
-          val base = (storage.shardSystemActor ? InitDescriptorRoot(descriptor)).mapTo[File]
-          IO { Await.result(base, yggConfig.maxEvalDuration) }
-        }
+      val rawProjectionModule = new JDBMProjectionModule {
+        type YggConfig = platform.YggConfig
+        val yggConfig = platform.yggConfig
+        val Projection = new ProjectionCompanion {
+          val fileOps = FilesystemFileOps
 
-        def findBaseDir(descriptor: ProjectionDescriptor) = {
-          logger.trace("Finding base dir for " + descriptor)
-          val base = (storage.shardSystemActor ? FindDescriptorRoot(descriptor)).mapTo[Option[File]]
-          Await.result(base, yggConfig.maxEvalDuration)
-        }
-
-        def archiveDir(descriptor: ProjectionDescriptor) = {
-          logger.trace("Finding archive dir for " + descriptor)
-          val archive = (storage.shardSystemActor ? FindDescriptorArchive(descriptor)).mapTo[Option[File]]
-          IO { Await.result(archive, yggConfig.maxEvalDuration) }
+          def ensureBaseDir(descriptor: ProjectionDescriptor) = metadataStorage.ensureDescriptorRoot(descriptor)
+          def findBaseDir(descriptor: ProjectionDescriptor) = metadataStorage.findDescriptorRoot(descriptor)
+          def archiveDir(descriptor: ProjectionDescriptor) = metadataStorage.findArchiveRoot(descriptor)
         }
       }
 
-      trait JDBMShardQueryExecutor 
-          extends ShardQueryExecutor[ShardQuery]
-          with JDBMColumnarTableModule[ShardQuery] {
-        type YggConfig = JDBMQueryExecutorConfig
-        type Key = Array[Byte]
-        type Projection = JDBMProjection
-        type Storage = StorageLike[ShardQuery, JDBMProjection]
+      val Projection = new ProjectionCompanion(projectionsActor, yggConfig.projectionRetrievalTimeout)
+
+      val metadataClient = new MetadataClient[Future] {
+        def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
+          storage.userMetadataView(userUID).findChildren(path) map {
+            case paths => success(JArray(paths.map( p => JString(p.toString)).toSeq: _*))
+          }
+        }
+
+        def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = {
+          val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, CPath(""))
+
+          def transform(children: Set[PathMetadata]): JObject = {
+            // Rewrite with collect or fold?
+            val (primitives, compounds) = children.partition {
+              case PathValue(_, _, _) => true
+              case _                  => false
+            }
+
+            val fields = compounds.map {
+              case PathIndex(i, children) =>
+                val path = "[%d]".format(i)
+                JField(path, transform(children))
+              case PathField(f, children) =>
+                val path = "." + f
+                JField(path, transform(children))
+              case _ => throw new MatchError("Non-compound in compounds")
+            }.toList
+
+            val types = JArray(primitives.map { 
+              case PathValue(t, _, _) => JString(CType.nameOf(t))
+              case _ => throw new MatchError("Non-primitive in primitives")
+            }.toList)
+
+            JObject(fields :+ JField("types", types))
+          }
+
+          futRoot.map { pr => Success(transform(pr.children)) } 
+        }
+      }
+
+      def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog = {
+        FilesystemIngestFailureLog(yggConfig.ingestFailureLogRoot, checkpoint)
       }
 
       def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
-        implicit val futureMonad = new blueeyes.bkka.FutureMonad(defaultAsyncContext)
         (for {
           executionContext0 <- getAccountExecutionContext(apiKey)
         } yield {
@@ -184,7 +208,6 @@ trait JDBMQueryExecutorComponent {
       }
 
       def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
-        implicit val futureMonad = new blueeyes.bkka.FutureMonad(defaultAsyncContext)
         (for {
           executionContext0 <- getAccountExecutionContext(apiKey)
         } yield {
@@ -194,80 +217,48 @@ trait JDBMQueryExecutorComponent {
         }).validation
       }
 
-      protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
-        new JDBMShardQueryExecutor {
-          implicit val M = shardQueryMonad
+      override def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
+        new ShardQueryExecutor[ShardQuery] with SliceColumnarTableModule[ShardQuery, Array[Byte]] {
+          type YggConfig = JDBMQueryExecutorConfig
 
-          trait TableCompanion extends JDBMColumnarTableCompanion {
+          implicit val M0 = platform.M
+          val M = shardQueryMonad
+
+          def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey).liftM[JobQueryT]
+
+          class Projection(delegate: platform.Projection) extends ProjectionLike[ShardQuery, Array[Byte], Slice] {
+            def descriptor = delegate.descriptor
+            def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor])(implicit M: Monad[ShardQuery]): ShardQuery[Option[BlockProjectionData[Array[Byte], Slice]]] = {
+              delegate.getBlockAfter(id, columns).liftM[JobQueryT]
+            }
+          }
+
+          class ProjectionCompanion extends ProjectionCompanionLike[ShardQuery] {
+            def apply(descriptor: ProjectionDescriptor) = {
+              platform.M.map(platform.Projection(descriptor))(new Projection(_)).liftM[JobQueryT]
+            }
+          }
+
+          val Projection = new ProjectionCompanion
+
+          trait TableCompanion extends SliceColumnarTableCompanion {
             import scalaz.std.anyVal._
             implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
           }
 
           object Table extends TableCompanion
 
-          val yggConfig = self.yggConfig
-          val storage = self.storage.liftM[JobQueryT](shardQueryMonad, shardQueryMonad.M)
-          val report = errorReport[instructions.Line](shardQueryMonad, implicitly)
+          val yggConfig = platform.yggConfig
+          val report = errorReport[instructions.Line](M, implicitly)
         }
       }
 
-      def startup() = storage.start.onComplete {
-        case Left(error) => queryLogger.error("Startup of actor ecosystem failed!", error)
-        case Right(_) => queryLogger.info("Actor ecosystem started.")
-      }
-
-      def shutdown() = storage.stop.onComplete {
-        case Left(error) => queryLogger.error("An error was encountered in actor ecosystem shutdown!", error)
-        case Right(_) => queryLogger.info("Actor ecossytem shutdown complete.")
+      def shutdown() = for {
+        _ <- ShardActors.stop(yggConfig, shardActors)
+        _ <- ShardActors.actorStop(yggConfig, projectionsActor, "projections")
+      } yield {
+        queryLogger.info("Actor ecossytem shutdown complete.")
       }
     }
-  }
-}
-
-trait JDBMQueryExecutorFactory
-    extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]]
-    with StorageModule[Future]
-    with PerAccountThreadPoolModule
-    with ManagedQueryExecutorFactory { self =>
-
-  type YggConfig <: BaseJDBMQueryExecutorConfig
-
-  def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
-
-  def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
-    storage.userMetadataView(userUID).findChildren(path) map {
-      case paths => success(JArray(paths.map( p => JString(p.toString)).toSeq: _*))
-    }
-  }
-
-  def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = {
-    val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, CPath(""))
-
-    def transform(children: Set[PathMetadata]): JObject = {
-      // Rewrite with collect or fold?
-      val (primitives, compounds) = children.partition {
-        case PathValue(_, _, _) => true
-        case _                  => false
-      }
-
-      val fields = compounds.map {
-        case PathIndex(i, children) =>
-          val path = "[%d]".format(i)
-          JField(path, transform(children))
-        case PathField(f, children) =>
-          val path = "." + f
-          JField(path, transform(children))
-        case _ => throw new MatchError("Non-compound in compounds")
-      }.toList
-
-      val types = JArray(primitives.map { 
-        case PathValue(t, _, _) => JString(CType.nameOf(t))
-        case _ => throw new MatchError("Non-primitive in primitives")
-      }.toList)
-
-      JObject(fields :+ JField("types", types))
-    }
-
-    futRoot.map { pr => Success(transform(pr.children)) } 
   }
 }

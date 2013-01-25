@@ -50,27 +50,28 @@ trait PerfTestRunnerConfig extends BaseConfig
   def apiKey: APIKey
 }
 
-trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
-    with ParseEvalStack[M]
+trait EvaluatingPerfTestRunnerConfig extends PerfTestRunnerConfig {
+
+  // TODO Get configuration from somewhere...
+  val config = Configuration parse ""
+
+  val maxEvalDuration: Duration = Duration(30, "seconds")
+  
+  val maxSliceSize = 10000
+  val smallSliceSize = 8
+
+  val idSource = new FreshAtomicIdSource
+}
+
+
+trait EvaluatingPerfTestRunner[M[+_], T] extends ParseEvalStack[M]
     with StorageModule[M]
-    with IdSourceScannerModule[M] {
+    with IdSourceScannerModule[M]
+    with PerfTestRunner[M, T] {
 
   type Result = Int
 
   type YggConfig <: PerfTestRunnerConfig
-
-  trait EvaluatingPerfTestRunnerConfig extends PerfTestRunnerConfig {
-
-    // TODO Get configuration from somewhere...
-    val config = Configuration parse ""
-
-    val maxEvalDuration: Duration = Duration(30, "seconds")
-    
-    val maxSliceSize = 10000
-    val smallSliceSize = 8
-
-    val idSource = new FreshAtomicIdSource
-  }
 
   def eval(query: String): M[Result] = try {
     val forest = compile(query)

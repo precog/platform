@@ -292,7 +292,7 @@ class FileMetadataStorage private (baseDir: File, archiveDir: File, fileOps: Fil
       case Some(dir) =>
         val file = new File(dir, curFilename)
         fileOps.exists(file) flatMap {
-          case true  => fileOps.read(file) map { json => JParser.parse(json).deserialize[MetadataRecord] }
+          case true  => fileOps.read(file) map { json => JParser.parseUnsafe(json).deserialize[MetadataRecord] }
           case false => IO(defaultMetadata(desc))
         }
 

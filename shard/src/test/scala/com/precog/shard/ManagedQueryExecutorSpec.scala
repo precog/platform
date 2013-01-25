@@ -24,6 +24,7 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 
 import com.precog.daze._
+import com.precog.muspelheim._
 
 import java.nio.CharBuffer
 
@@ -46,7 +47,7 @@ import scalaz.std.option._
 import scalaz.syntax.monad._
 import scalaz.syntax.copointed._
 
-class ManagedQueryExecutorSpec extends TestManagedQueryExecutorFactory with Specification {
+class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
   import JobState._
 
   val JSON = MimeTypes.application / MimeTypes.json
@@ -105,7 +106,8 @@ class ManagedQueryExecutorSpec extends TestManagedQueryExecutorFactory with Spec
     actorSystem.scheduler.schedule(Duration(0, "milliseconds"), Duration(clock.duration, "milliseconds")) {
         ticker ! Tick
     }
-    startup().copoint
+
+    startup.copoint
   }
 
   "An asynchronous query" should {
@@ -158,13 +160,13 @@ class ManagedQueryExecutorSpec extends TestManagedQueryExecutorFactory with Spec
   }
 
   step {
-    shutdown().copoint
+    shutdown.copoint
     actorSystem.shutdown()
     actorSystem.awaitTermination()
   }
 }
 
-trait TestManagedQueryExecutorFactory extends ManagedQueryExecutorFactory with ManagedQueryModule with SchedulableFuturesModule { self =>
+trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with SchedulableFuturesModule { self =>
   def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
@@ -212,9 +214,10 @@ trait TestManagedQueryExecutorFactory extends ManagedQueryExecutorFactory with M
     }))
   }
 
-  def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
-  def structure(apiKey: APIKey, path: Path) = sys.error("I'm an amorphous blob you insensitive clod!")
-  def status() = sys.error("The lowliest of the low :(")
+  val metadataClient = new MetadataClient[Future] {
+    def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
+    def structure(apiKey: APIKey, path: Path) = sys.error("I'm an amorphous blob you insensitive clod!")
+  }
 
   def startup = Future { true }
   def shutdown = Future { actorSystem.shutdown; true }

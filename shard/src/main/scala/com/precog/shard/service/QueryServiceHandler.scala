@@ -20,6 +20,7 @@
 package com.precog.shard
 package service
 
+
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
@@ -38,6 +39,7 @@ import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.muspelheim._
 
 import scalaz._
 import scalaz.Validation.{ success, failure }
@@ -60,7 +62,7 @@ with Logging {
   implicit def dispatcher: MessageDispatcher
   implicit def M: Monad[Future]
 
-  def queryExecutorFactory: QueryExecutorFactory[Future, A]
+  def platform: Platform[Future, A]
   def extractResponse(request: HttpRequest[Future[JValue]], a: A): HttpResponse[QueryResult]
 
   private val Command = """:(\w+)\s+(.+)""".r
@@ -91,7 +93,7 @@ with Logging {
       case Command("ds", arg) => describe(r.apiKey, Path(arg.trim))
       case Command("describe", arg) => describe(r.apiKey, Path(arg.trim))
       case qt =>
-        val executorV = queryExecutorFactory.executorFor(r.apiKey)
+        val executorV = platform.executorFor(r.apiKey)
         executorV flatMap {
           case Success(executor) =>
             executor.execute(r.apiKey, q, p, opts) map {
@@ -116,14 +118,14 @@ Takes a quirrel query and returns the result of evaluating the query.
 
   
   def list(apiKey: APIKey, p: Path) = {
-    queryExecutorFactory.browse(apiKey, p).map {
+    platform.metadataClient.browse(apiKey, p).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error listing path: " + p))))
     }
   }
 
   def describe(apiKey: APIKey, p: Path) = {
-    queryExecutorFactory.structure(apiKey, p).map {
+    platform.metadataClient.structure(apiKey, p).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error describing path: " + p))))
     }
@@ -131,7 +133,7 @@ Takes a quirrel query and returns the result of evaluating the query.
 }
 
 class BasicQueryServiceHandler(
-    val queryExecutorFactory: QueryExecutorFactory[Future, StreamT[Future, CharBuffer]])(implicit
+    val platform: Platform[Future, StreamT[Future, CharBuffer]])(implicit
     val dispatcher: MessageDispatcher,
     val M: Monad[Future]) extends QueryServiceHandler[StreamT[Future, CharBuffer]] {
 
@@ -147,7 +149,7 @@ object SyncResultFormat {
 }
 
 class SyncQueryServiceHandler(
-    val queryExecutorFactory: QueryExecutorFactory[Future, (Option[JobId], StreamT[Future, CharBuffer])],
+    val platform: Platform[Future, (Option[JobId], StreamT[Future, CharBuffer])],
     jobManager: JobManager[Future],
     defaultFormat: SyncResultFormat)(implicit
     val dispatcher: MessageDispatcher,
@@ -207,7 +209,7 @@ class SyncQueryServiceHandler(
 }
 
 class AsyncQueryServiceHandler(
-    val queryExecutorFactory: QueryExecutorFactory[Future, JobId])(implicit
+    val platform: Platform[Future, JobId])(implicit
     val dispatcher: MessageDispatcher,
     val M: Monad[Future]) extends QueryServiceHandler[JobId] {
 

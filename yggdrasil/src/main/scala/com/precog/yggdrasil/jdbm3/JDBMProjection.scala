@@ -67,7 +67,7 @@ object JDBMProjection {
 // FIXME: Again, related to JDBM concurent mod exception
 class VicciniException(message: String) extends java.io.IOException("Inconceivable! " + message)
 
-abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int) extends BlockProjectionLike[Array[Byte], Slice] { projection =>
+abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int) extends RawProjectionLike[IO, Array[Byte], Slice] { projection =>
   import TransSpecModule.paths._
   import JDBMProjection._
 
@@ -139,7 +139,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     IO { MDC.clear() }
   }
 
-  def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = {
+  def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[PrecogUnit] = IO {
     if (logger.isTraceEnabled) {
       logger.trace("Inserting %s => %s".format(ids.mkString("[", ", ", "]"), v))
     }
@@ -149,9 +149,11 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     if (shouldSync) {
       idIndexFile.commit()
     }
+
+    PrecogUnit
   }
 
-  def getBlockAfter(id: Option[Array[Byte]], desiredColumns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Array[Byte],Slice]] = {
+  def getBlockAfter(id: Option[Array[Byte]], desiredColumns: Set[ColumnDescriptor])(implicit M: Monad[IO]): IO[Option[BlockProjectionData[Array[Byte], Slice]]] = M.point {
     setMDC()
     if (idIndexFile.isClosed()) {
       sys.error("Attempting to retrieve more data from a closed projection")
@@ -217,7 +219,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
           })
         }
 
-        Some(BlockProjectionData[Array[Byte],Slice](firstKey, lastKey, slice))
+        Some(BlockProjectionData(firstKey, lastKey, slice))
       }
     } catch {
       case e: java.util.NoSuchElementException => None

@@ -60,9 +60,7 @@ trait FSLibSpec[M[+_]] extends Specification
     ProjectionDescriptor(1, ColumnDescriptor(Path("/foo2/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty
   )
 
-  object storage extends StorageMetadataSource[M] {
-    def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadata(projectionMetadata)
-  }
+  def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadata(projectionMetadata)
 
   def pathTable(path: String) = {
     Table.constString(Set(CString(path))).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))
