@@ -216,7 +216,7 @@ trait ProjectionDescriptorSerialization {
 
   def fromFile(path: File): IO[Validation[Error,ProjectionDescriptor]] = {
     IOUtils.readFileToString(path).map {
-      JParser.parse(_).validated[ProjectionDescriptor]
+      JParser.parseUnsafe(_).validated[ProjectionDescriptor]
     }
   }
 

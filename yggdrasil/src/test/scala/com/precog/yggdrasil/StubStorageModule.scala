@@ -59,59 +59,16 @@ class StubStorageMetadata[M[+_]](projectionMetadata: Map[ProjectionDescriptor, C
   def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
 }
 
-trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
-  type TestDataset
-
+trait StubProjectionModule[M[+_], Key, Block] extends ProjectionModule[M, Key, Block] with StorageMetadataSource[M] { self =>
   implicit def M: Monad[M]
 
-  def projections: Map[ProjectionDescriptor, Projection]
+  protected def projections: Map[ProjectionDescriptor, Projection]
+  protected def projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
+  protected def metadata = new StubStorageMetadata(projectionMetadata)(M)
 
-  class Storage extends StorageLike[M] {
-    def storeBatch(ems: Seq[EventMessage]) = sys.error("Feature not implemented in test stub.")
-
-    def projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = 
-      projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
-
-    def metadata = new StubStorageMetadata(projectionMetadata)(M)
-
-    def userMetadataView(apiKey: APIKey) = new UserMetadataView[M](apiKey, new UnrestrictedAccessControl(), metadata)
-
-    def projection(descriptor: ProjectionDescriptor) = M.point(projections(descriptor) -> new Release(IO(PrecogUnit)))
+  class ProjectionCompanion extends ProjectionCompanionLike[M] {
+    def apply(descriptor: ProjectionDescriptor) = M.point(projections(descriptor))
   }
+
+  def userMetadataView(apiKey: APIKey) = new UserMetadataView[M](apiKey, new UnrestrictedAccessControl(), metadata)
 }
-
-
-trait DistributedSampleStubStorageModule[M[+_]] extends StubStorageModule[M] {
-  import ProjectionInsert.Row
-  val dataPath = Path("/test")
-  def sampleSize: Int
-  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]): TestDataset
-
-  // TODO: This duplicates the same class in com.precog.muspelheim.RawJsonShardComponent
-  case class Projection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends ProjectionLike {
-    val chunkSize = 2000
-
-    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("Dummy ProjectionLike doesn't support insert")      
-    def commit(): IO[PrecogUnit] = sys.error("Dummy ProjectionLike doesn't support commit")
-  }
-
-  implicit lazy val ordering = IdentitiesOrder.toScalaOrdering
-
-  lazy val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
-
-  lazy val sampleData: Vector[JValue] = DistributedSampleSet.sample(sampleSize, 0)._1
-
-  lazy val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, Projection]) { 
-    case (acc, (jv, i)) => routingTable.routeIngest(IngestMessage("", dataPath, "", Vector(IngestRecord(EventId(0, i), jv)), None)).foldLeft(acc) {
-      case (acc, ProjectionInsert(descriptor, rows)) =>
-        rows.foldLeft(acc) { 
-          case (acc, Row(eventId, values, _)) =>
-            val data = acc.get(descriptor).map(_.data).getOrElse(TreeMap.empty(ordering)) + (Array(eventId.uid) -> values)
-            acc + (descriptor -> Projection(descriptor, data))
-        }
-    }
-  }
-}
-
-
-// vim: set ts=4 sw=4 et:

@@ -727,11 +727,12 @@ object ImportTools extends Command with Logging {
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
     val io = for (ms <- FileMetadataStorage.load(config.storageRoot, config.archiveRoot, FilesystemFileOps)) yield {
-      object shardModule extends SystemActorStorageModule
-                            with JDBMProjectionModule
-                            with StandaloneShardSystemActorModule {
-
-        class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig with JDBMProjectionModuleConfig {
+      object shardModule extends ActorStorageModule with ActorProjectionModule[Array[Byte], table.Slice] with StandaloneActorProjectionSystem { self =>
+        class YggConfig(val config: Configuration) extends BaseConfig 
+            with StandaloneShardSystemConfig 
+            with JDBMProjectionModuleConfig 
+            with ActorStorageModuleConfig 
+            with ActorProjectionModuleConfig {
           val maxSliceSize = config[Int]("precog.jdbm.maxSliceSize", 50000)
           val ingestConfig = None
           val smallSliceSize = config[Int]("precog.jdbm.smallSliceSize", 8)
@@ -739,31 +740,36 @@ object ImportTools extends Command with Logging {
 
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
-        val actorSystem = ActorSystem("yggutilImport")
+        val rawProjectionModule = new JDBMProjectionModule {
+          type YggConfig = self.YggConfig
+          val yggConfig = self.yggConfig
+          val Projection = new ProjectionCompanion {
+            def fileOps = FilesystemFileOps
+            def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = ms.ensureDescriptorRoot(descriptor)
+            def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = ms.findDescriptorRoot(descriptor)
+            def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findArchiveRoot(descriptor)
+          }
+        }
+
+        implicit val actorSystem = ActorSystem("yggutilImport")
+        implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
         implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(ExecutionContext.defaultExecutionContext(actorSystem))
 
-        object Projection extends JDBMProjectionCompanion {
-          def fileOps = FilesystemFileOps
-          def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = ms.ensureDescriptorRoot(descriptor)
-          def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = ms.findDescriptorRoot(descriptor)
-          def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findArchiveRoot(descriptor)
-        }
+        val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
+        val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) = 
+          initShardActors(ms, AccountFinder.Empty[Future], projectionsActor)
 
-        override def accountFinder = None
-        val metadataStorage = ms
+        override val accessControl = new UnrestrictedAccessControl()
 
-        class Storage extends SystemActorStorageLike {
-          override val accessControl = new UnrestrictedAccessControl()
-        }
+        object Projection extends ProjectionCompanion(projectionsActor, yggConfig.metadataTimeout)
 
-        val storage = new Storage
+        class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor) 
+
+        override val storage = new Storage
       }
 
-      import shardModule._
+      import shardModule.{logger => _, _}
 
-      logger.info("Starting shard input")
-      Await.result(storage.start(), Duration(60, "seconds"))
-      logger.info("Shard input started")
       val pid: Int = System.currentTimeMillis.toInt & 0x7fffffff
       logger.info("Using PID: " + pid)
       config.input.foreach {
@@ -779,7 +785,7 @@ object ImportTools extends Command with Logging {
       }
 
       logger.info("Waiting for shard shutdown")
-      Await.result(storage.stop(), stopTimeout)
+      Await.result(ShardActors.stop(yggConfig, shardActors), stopTimeout)
 
       logger.info("Shutdown")
       sys.exit(0)

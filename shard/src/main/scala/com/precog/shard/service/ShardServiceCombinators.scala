@@ -46,6 +46,7 @@ import scalaz._
 import scalaz.Validation._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.traverse._
+import scalaz.syntax.bifunctor._
 import scalaz.std.option._
 
 trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with Logging {

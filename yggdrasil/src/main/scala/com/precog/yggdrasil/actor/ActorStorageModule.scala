@@ -46,56 +46,32 @@ trait ActorStorageModuleConfig {
 }
 
 trait ActorStorageModule extends StorageModule[Future] with YggConfigComponent {
+  implicit def M: Monad[Future]
+
   type YggConfig <: ActorStorageModuleConfig
 
-  protected implicit def actorSystem: ActorSystem
+  def accessControl: AccessControl[Future]
 
-  trait ActorStorageLike extends StorageLike[Future] with Logging {
-    def accessControl: AccessControl[Future]
-    def shardSystemActor: ActorRef
+  class ActorStorageLike(actorSystem: ActorSystem, ingestSupervisor: ActorRef, metadataActor: ActorRef)(implicit executor: ExecutionContext) extends StorageLike[Future] with Logging {
+    val storageMetadata: StorageMetadata[Future] = new ActorStorageMetadata(metadataActor, yggConfig.metadataTimeout)
 
-    def start(): Future[Boolean]
-    def stop(): Future[Boolean]
-
-    implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-    implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
-
-    private lazy val metadata: StorageMetadata[Future] = new ActorStorageMetadata(shardSystemActor, yggConfig.metadataTimeout)
+    def userMetadataView(apiKey: APIKey): StorageMetadata[Future] = new UserMetadataView(apiKey, accessControl, storageMetadata)
     
-    override def userMetadataView(apiKey: APIKey): StorageMetadata[Future] = {
-      new UserMetadataView(apiKey, accessControl, metadata)
-    }
-    
-    override def projection(descriptor: ProjectionDescriptor): Future[(Projection, Release)] = {
-      logger.debug("Obtain projection for " + descriptor)
-      implicit val storageTimeout: Timeout = Timeout(300 seconds)
-
-
-      (for (ProjectionAcquired(projection) <- (shardSystemActor ? AcquireProjection(descriptor, ReadLock))) yield {
-        logger.debug("  projection obtained")
-        (projection.asInstanceOf[Projection], new Release(IO { shardSystemActor ! ReleaseProjection(descriptor); PrecogUnit }))
-      }) onFailure {
-        case e => logger.error("Error acquiring projection: " + descriptor, e)
-      }
-    }
-  }
-
-  trait ActorStorageWritable extends ActorStorageLike with StorageWritable[Future] {
-    override def storeBatch(msgs: Seq[EventMessage]): Future[PrecogUnit] = {
+    def storeBatch(msgs: Seq[EventMessage]): Future[PrecogUnit] = {
       implicit val storageTimeout: Timeout = Timeout(300 seconds)
 
       val result = Promise.apply[BatchComplete]
       val notifier = actorSystem.actorOf(Props(new BatchCompleteNotifier(result)))
       val batchHandler = actorSystem.actorOf(Props(new BatchHandler(notifier, null, YggCheckpoint.Empty, Timeout(120000))))
-      shardSystemActor.tell(DirectIngestData(msgs), batchHandler)
 
-      for {
-        complete <- result
-        checkpoint = complete.checkpoint
-        _ = logger.debug("Batch store complete: " + complete)
-        _ = logger.debug("Sending metadata updates")
-      } yield {
-        shardSystemActor ! IngestBatchMetadata(complete.updatedProjections, checkpoint.messageClock, Some(checkpoint.offset))
+      ingestSupervisor.tell(DirectIngestData(msgs), batchHandler)
+
+      for (complete <- result) yield {
+        val checkpoint = complete.checkpoint
+        logger.debug("Batch store complete: " + complete)
+
+        logger.debug("Sending metadata updates")
+        metadataActor ! IngestBatchMetadata(complete.updatedProjections, checkpoint.messageClock, Some(checkpoint.offset))
         PrecogUnit
       }
     }

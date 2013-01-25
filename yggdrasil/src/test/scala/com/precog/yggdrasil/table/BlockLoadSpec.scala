@@ -128,7 +128,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def testLoadSample1 = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {
           "value":{
             "u":false,
@@ -148,7 +148,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def testLoadSample2 = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {
           "value":{
             "rzp":{ },
@@ -168,7 +168,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def testLoadSample3 = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
          {
            "value":{
              "f":{
@@ -208,7 +208,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def testLoadSample4 = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {
           "value":{
             "dV":{
@@ -240,7 +240,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def testLoadSample5 = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {
           "value":{
             "cfnYTg92dg":"gu",

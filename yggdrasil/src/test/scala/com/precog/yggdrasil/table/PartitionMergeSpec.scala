@@ -39,7 +39,7 @@ trait PartitionMergeSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with S
   import trans._
 
   def testPartitionMerge = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       { "key": [0], "value": { "a": "0a" } },
       { "key": [1], "value": { "a": "1a" } },
       { "key": [1], "value": { "a": "1b" } },
@@ -52,7 +52,7 @@ trait PartitionMergeSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with S
 
     val tbl = fromJson(elements.toStream)
 
-    val JArray(expected) = JParser.parse("""[
+    val JArray(expected) = JParser.parseUnsafe("""[
       "0a",
       "1a;1b;1c",
       "2a",

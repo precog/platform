@@ -54,17 +54,18 @@ import scala.collection.immutable.TreeMap
 
 import TableModule._
 
-trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
+trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
   implicit def M: Monad[M]
 
-//  trait ProjectionCompanion {
-//    def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
-//  }
-//
-//  val Projection: ProjectionCompanion
-  def projectionFor(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
+  protected def projectionData(descriptor: ProjectionDescriptor) = {
+    if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
+    projections(descriptor)
+  }
 
-  implicit val ordering = IdentitiesOrder.toScalaOrdering
+  def userMetadataView(apiKey: APIKey) = new UserMetadataView(apiKey, new UnrestrictedAccessControl[M](), metadata)
+
+  private implicit val ordering = IdentitiesOrder.toScalaOrdering
+
   private val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
 
   private val identity = new java.util.concurrent.atomic.AtomicInteger(0)
@@ -91,20 +92,15 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
       projections = json.elements.foldLeft(projections) { 
         case (acc, jobj) => 
           val evID = EventId(0, identity.getAndIncrement)
-          val ingestMessage = IngestMessage("", path, "acct", Vector(IngestRecord(evID, jobj)), None)
-
-          routingTable.routeIngest(ingestMessage).foldLeft(acc) {
-            case (acc, ProjectionInsert(descriptor, rows)) =>
-              // taking the head of row.values here is okay because projection stores
-              // only a single column
-              val projectionData = rows map { row => row.values.head.toJValue }
-              acc + (descriptor -> (acc.getOrElse(descriptor, Vector.empty[JValue]) ++ projectionData))
+          routingTable.routeIngest(IngestMessage("", path, "", Seq(IngestRecord(evID, jobj)), None)).foldLeft(acc) {
+            case (acc, data) =>
+              acc + (data.descriptor -> (acc.getOrElse(data.descriptor, Vector.empty[JValue]) ++ data.toJValues))
           }
       }
     }
   }
 
-  val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = {
+  private val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = {
     import org.reflections.util._
     import org.reflections.scanners._
     import scala.collection.JavaConverters._
@@ -117,35 +113,19 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
     projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
   }
 
-  val metadataStorage = new TestMetadataStorage(projectionMetadata)
-
-  abstract class Storage extends StorageLike[M] {
-    implicit val ordering = IdentitiesOrder.toScalaOrdering
-
-    def storeBatch(ems: Seq[EventMessage]) = sys.error("Feature not implemented in test stub.")
-
-    val metadata = new StorageMetadata[M] {
-      val M = self.M
-      def findChildren(path: Path) = M.point(metadataStorage.findChildren(path))
-      def findSelectors(path: Path) = M.point(metadataStorage.findSelectors(path))
-      def findProjections(path: Path, selector: CPath) = M.point {
-        projections.collect {
-          case (descriptor, _) if descriptor.columns.exists { case ColumnDescriptor(p, s, _, _) => p == path && s == selector } => 
-            (descriptor, ColumnMetadata.Empty)
-        }
-      }
-
-      def findPathMetadata(path: Path, selector: CPath) = M.point(metadataStorage.findPathMetadata(path, selector).unsafePerformIO)
-    }
-
-    def userMetadataView(apiKey: APIKey) = new UserMetadataView(apiKey, new UnrestrictedAccessControl[M](), metadata)
-
-    def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)] = {
-      M.point {
-        if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
-        (projectionFor(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(PrecogUnit)))
+  private val metadata = new StorageMetadata[M] {
+    val M = self.M
+    val source = new TestMetadataStorage(projectionMetadata)
+    def findChildren(path: Path) = M.point(source.findChildren(path))
+    def findSelectors(path: Path) = M.point(source.findSelectors(path))
+    def findProjections(path: Path, selector: CPath) = M.point {
+      projections.collect {
+        case (descriptor, _) if descriptor.columns.exists { case ColumnDescriptor(p, s, _, _) => p == path && s == selector } => 
+          (descriptor, ColumnMetadata.Empty)
       }
     }
+
+    def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
   }
 }
 
@@ -180,28 +160,18 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
 
       for {
         paths <- pathsM
-        data  <- paths.toList.map(storage.userMetadataView(apiKey).findProjections).sequence
-        path  = data.flatten.headOption
-        table <- path map { 
-                   case (descriptor, _) => storage.projection(descriptor) map { projection => fromJson(projection._1.data.toStream) }
-                 } getOrElse {
-                   M.point(Table.empty)
-                 }
-      } yield table
+        data  <- paths.toList.map(userMetadataView(apiKey).findProjections).sequence
+      } yield {
+        data.flatten.headOption map {
+          case (descriptor, _) => fromJson(projectionData(descriptor).toStream) 
+        } getOrElse {
+          Table.empty
+        }
+      }
     }
   }
-
-  class Projection(val descriptor: ProjectionDescriptor, val data: Vector[JValue]) extends ProjectionLike {
-    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("DummyProjection doesn't support insert")
-    def commit(): IO[PrecogUnit] = sys.error("DummyProjection doesn't support commit")
-  }
-
-  def projectionFor(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = {
-    new Projection(descriptor, data)
-  }
-
-  object storage extends Storage
 }
+
 
 
 // vim: set ts=4 sw=4 et:

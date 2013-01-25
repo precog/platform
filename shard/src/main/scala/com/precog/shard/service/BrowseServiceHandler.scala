@@ -23,6 +23,7 @@ package service
 import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
+import com.precog.muspelheim._
 
 import blueeyes.core.data._
 import blueeyes.core.http._

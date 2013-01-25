@@ -36,12 +36,14 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
 case class CachingAPIKeyManagerSettings(
-  apiKeyCacheSettings: Seq[Cache.CacheOption],
-  grantCacheSettings: Seq[Cache.CacheOption]
+  apiKeyCacheSettings: Seq[Cache.CacheOption[APIKey, APIKeyRecord]],
+  childCacheSettings: Seq[Cache.CacheOption[APIKey, Set[APIKeyRecord]]],
+  grantCacheSettings: Seq[Cache.CacheOption[GrantId, Grant]]
 )
 
 object CachingAPIKeyManagerSettings {
   val Default = CachingAPIKeyManagerSettings(
+    Seq(Cache.ExpireAfterWrite(Duration(5, MINUTES)), Cache.MaxSize(1000)),
     Seq(Cache.ExpireAfterWrite(Duration(5, MINUTES)), Cache.MaxSize(1000)),
     Seq(Cache.ExpireAfterWrite(Duration(5, MINUTES)), Cache.MaxSize(1000))
   )
@@ -51,7 +53,7 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
   implicit val M = manager.M
 
   private val apiKeyCache = Cache.simple[APIKey, APIKeyRecord](settings.apiKeyCacheSettings: _*)
-  private val childCache = Cache.simple[APIKey, Set[APIKeyRecord]](settings.apiKeyCacheSettings: _*)
+  private val childCache = Cache.simple[APIKey, Set[APIKeyRecord]](settings.childCacheSettings: _*)
   private val grantCache = Cache.simple[GrantId, Grant](settings.grantCacheSettings: _*)
 
   protected def add(r: APIKeyRecord) = {

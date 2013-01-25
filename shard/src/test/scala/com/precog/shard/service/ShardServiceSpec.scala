@@ -27,6 +27,7 @@ import com.precog.common.Path
 import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.muspelheim._
 
 import java.nio.ByteBuffer
 
@@ -94,7 +95,7 @@ trait TestShardService extends
 
   private val apiKeyManager = new InMemoryAPIKeyManager[Future]
   private val apiKeyFinder = new DirectAPIKeyFinder[Future](apiKeyManager)
-  private val accountFinder =  new TestAccountFinder[Future](Map(), Map())
+  //private val accountFinder =  new TestAccountFinder[Future](Map(), Map())
   protected val jobManager = new InMemoryJobManager[Future] //TODO: should be private?
   private val clock = Clock.System
 
@@ -116,18 +117,13 @@ trait TestShardService extends
     apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, testPermissions, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
   } copoint
 
-  override val configuration = "services { quirrel { v1 { " + config + " } } }"
-
-  override implicit val M: Monad[Future] with Copointed[Future] = new FutureMonad(executor) with Copointed[Future] {
-    def copoint[A](m: Future[A]) = Await.result(m, to)
-  }
-
-  override def configureShardState(config: Configuration): ShardState = {
-    val queryExecutorFactory = new TestQueryExecutorFactory {
+  def configureShardState(config: Configuration) = Future {
+    val queryExecutorFactory = new TestPlatform {
       override val jobActorSystem = self.actorSystem
       override val actorSystem = self.actorSystem
-      override val executionContext = self.executor
-      override val accessControl = self.apiKeyFinder
+      override val executionContext = self.asyncContext
+
+      override val apiKeyFinder = self.apiKeyFinder
       override val jobManager = self.jobManager
 
       val ownerMap = Map(
@@ -140,7 +136,7 @@ trait TestShardService extends
       )
     }
 
-    ManagedQueryShardState(queryExecutorFactory, apiKeyFinder, jobManager, clock)
+    ManagedQueryShardState(queryExecutorFactory, apiKeyManager, jobManager, clock, Stoppable.Noop)
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
@@ -179,9 +175,8 @@ trait TestShardService extends
   */
 }
 
-
 class ShardServiceSpec extends TestShardService with FutureMatchers {
-  val executionContext = defaultFutureDispatch
+  val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   def syncClient(query: String, apiKey: Option[String] = Some(testAPIKey)) = {
     apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query)
@@ -362,7 +357,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   }
 }
 
-trait TestQueryExecutorFactory extends ManagedQueryExecutorFactory { self =>
+trait TestPlatform extends ManagedPlatform { self =>
   import scalaz.syntax.monad._
   import scalaz.syntax.traverse._
   import AkkaTypeClasses._
@@ -401,8 +396,6 @@ trait TestQueryExecutorFactory extends ManagedQueryExecutorFactory { self =>
     }))
   }
 
-
-  // def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = Future {
   protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
     new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
@@ -419,25 +412,27 @@ trait TestQueryExecutorFactory extends ManagedQueryExecutorFactory { self =>
     }
   }
 
-  def browse(apiKey: APIKey, path: Path) = {
-    accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
-      if(allowed) {
-        success(JArray(List(JString("foo"), JString("bar"))))
-      } else {
-        failure("The specified API key may not browse this location")
+  val metadataClient = new MetadataClient[Future] {
+    def browse(apiKey: APIKey, path: Path) = {
+      accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
+        if(allowed) {
+          success(JArray(List(JString("foo"), JString("bar"))))
+        } else {
+          failure("The specified API key may not browse this location")
+        }
       }
     }
-  }
-  
-  def structure(apiKey: APIKey, path: Path) = {
-    accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
-      if(allowed) {
-        success(JObject(List(
-          JField("test1", JString("foo")),
-          JField("test2", JString("bar"))
-        )))
-      } else {
-        failure("The specified API key may not browse this location")
+    
+    def structure(apiKey: APIKey, path: Path) = {
+      accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
+        if(allowed) {
+          success(JObject(List(
+            JField("test1", JString("foo")),
+            JField("test2", JString("bar"))
+          )))
+        } else {
+          failure("The specified API key may not browse this location")
+        }
       }
     }
   }

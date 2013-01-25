@@ -34,8 +34,8 @@ import scalaz.syntax.id._
 import scalaz.syntax.monad._
 
 case class CachingAPIKeyFinderSettings(
-  apiKeyCacheSettings: Seq[Cache.CacheOption],
-  grantCacheSettings: Seq[Cache.CacheOption]
+  apiKeyCacheSettings: Seq[Cache.CacheOption[APIKey, v1.APIKeyDetails]],
+  grantCacheSettings: Seq[Cache.CacheOption[APIKey, v1.APIKeyDetails]]
 )
 
 object CachingAPIKeyFinderSettings {

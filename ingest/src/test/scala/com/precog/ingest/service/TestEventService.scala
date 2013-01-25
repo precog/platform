@@ -116,13 +116,6 @@ trait TestEventService extends
       }
   } copoint
   
-/*
-  def queryExecutorFactory(config: Configuration) = new NullQueryExecutor {
-    lazy val actorSystem = ActorSystem("ingestServiceSpec")
-    implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  }
-  */
-
   private val stored = scala.collection.mutable.ArrayBuffer.empty[Event]
   def EventStore(config: Configuration): EventStore = new EventStore {
     def save(action: Event, timeout: Timeout) = M.point { stored += action; PrecogUnit }

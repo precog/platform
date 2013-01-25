@@ -88,7 +88,6 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val memoizationWorkDir = scratchDir
 
     val flatMapTimeout = Duration(100, "seconds")
-    val projectionRetrievalTimeout = akka.util.Timeout(Duration(10, "seconds"))
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
     

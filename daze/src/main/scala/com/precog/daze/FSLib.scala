@@ -31,14 +31,12 @@ import scalaz.std.stream._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
-trait FSLib[M[+_]] extends GenOpcode[M] {
+trait FSLib[M[+_]] extends GenOpcode[M] with StorageMetadataSource[M] {
   import trans._
   import constants._
 
   val FSNamespace = Vector("std", "fs")
   override def _libMorphism1 = super._libMorphism1 ++ Set(expandGlob)
-
-  def storage: StorageMetadataSource[M]
 
   object expandGlob extends Morphism1(FSNamespace, "expandGlob") {
     val tpe = UnaryOperationType(JTextT, JTextT)
@@ -66,7 +64,7 @@ trait FSLib[M[+_]] extends GenOpcode[M] {
     }
 
     def apply(input: Table, ctx: EvaluationContext): M[Table] = M.point {
-      val storageMetadata = storage.userMetadataView(ctx.apiKey)
+      val storageMetadata = userMetadataView(ctx.apiKey)
       val result = Table(
         input.transform(SourceValue.Single).slices flatMap { slice =>
           slice.columns.get(ColumnRef.identity(CString)) collect { 

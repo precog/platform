@@ -31,24 +31,30 @@ import blueeyes.bkka._
 import blueeyes.util.Clock
 
 import akka.dispatch.Future
+import akka.dispatch.ExecutionContext
+import akka.actor.ActorSystem
 
 import org.streum.configrity.Configuration
 
 import scalaz._
 
-object JDBMShardServer extends BlueEyesServer with ShardService with AkkaDefaults {
+object JDBMShardServer extends BlueEyesServer 
+    with ShardService 
+    with JDBMQueryExecutorComponent {
   import WebJobManager._
   val clock = Clock.System
 
-  val executionContext = defaultFutureDispatch
+  val actorSystem = ActorSystem("PrecogShard")
+  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  def configureShardState(config: Configuration): ShardState = {
+  override def configureShardState(config: Configuration) = M.point {
     val apiKeyFinder = WebAPIKeyFinder(config.detach("security"))
     val accountFinder = WebAccountFinder(config.detach("accounts"))
     val jobManager = WebJobManager(config.detach("jobs")).withM[Future]
-    val queryExecutorFactory = JDBMQueryExecutorFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
+    val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
+    val stoppable = Stoppable.fromFuture(platform.shutdown)
 
-    ManagedQueryShardState(queryExecutorFactory, apiKeyFinder, jobManager, clock)
+    ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, stoppable)
   }
 }

@@ -24,6 +24,7 @@ import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.muspelheim._
 
 import blueeyes.core.data._
 import blueeyes.core.http._
@@ -62,7 +63,7 @@ object QueryServiceHandler {
 abstract class QueryServiceHandler[A](implicit M: Monad[Future])
     extends CustomHttpService[Future[JValue], (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
-  def queryExecutorFactory: QueryExecutorFactory[Future, A]
+  def platform: Platform[Future, A]
   def extractResponse(request: HttpRequest[Future[JValue]], a: A): HttpResponse[QueryResult]
 
   private val Command = """:(\w+)\s+(.+)""".r
@@ -93,8 +94,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
       case Command("ds", arg) => describe(apiKey, Path(arg.trim))
       case Command("describe", arg) => describe(apiKey, Path(arg.trim))
       case qt =>
-        val executorV = queryExecutorFactory.executorFor(apiKey)
-        executorV flatMap {
+        platform.executorFor(apiKey) flatMap {
           case Success(executor) =>
             executor.execute(apiKey, query, path, opts) map {
               case Success(result) =>
@@ -118,22 +118,24 @@ Takes a quirrel query and returns the result of evaluating the query.
 
   
   def list(apiKey: APIKey, p: Path) = {
-    queryExecutorFactory.browse(apiKey, p).map {
+    platform.metadataClient.browse(apiKey, p).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error listing path: " + p))))
     }
   }
 
   def describe(apiKey: APIKey, p: Path) = {
-    queryExecutorFactory.structure(apiKey, p).map {
+    platform.metadataClient.structure(apiKey, p).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error describing path: " + p))))
     }
   }
 }
 
-class BasicQueryServiceHandler(val queryExecutorFactory: BasicQueryExecutorFactory[Future])(implicit M: Monad[Future])
-    extends QueryServiceHandler[StreamT[Future, CharBuffer]] {
+class BasicQueryServiceHandler(
+    val platform: Platform[Future, StreamT[Future, CharBuffer]])(implicit
+    val M: Monad[Future]) extends QueryServiceHandler[StreamT[Future, CharBuffer]] {
+
   def extractResponse(request: HttpRequest[Future[JValue]], stream: StreamT[Future, CharBuffer]): HttpResponse[QueryResult] = {
     HttpResponse[QueryResult](OK, content = Some(Right(stream)))
   }
@@ -145,8 +147,11 @@ object SyncResultFormat {
   case object Detailed extends SyncResultFormat
 }
 
-class SyncQueryServiceHandler(val queryExecutorFactory: SyncQueryExecutorFactory[Future], jobManager: JobManager[Future], defaultFormat: SyncResultFormat)(implicit M: Monad[Future])
-    extends QueryServiceHandler[(Option[JobId], StreamT[Future, CharBuffer])] {
+class SyncQueryServiceHandler(
+    val platform: Platform[Future, (Option[JobId], StreamT[Future, CharBuffer])],
+    jobManager: JobManager[Future],
+    defaultFormat: SyncResultFormat)(implicit
+    M: Monad[Future]) extends QueryServiceHandler[(Option[JobId], StreamT[Future, CharBuffer])] {
 
   import scalaz.syntax.std.option._
   import scalaz.std.option._
@@ -201,7 +206,10 @@ class SyncQueryServiceHandler(val queryExecutorFactory: SyncQueryExecutorFactory
   }
 }
 
-class AsyncQueryServiceHandler(val queryExecutorFactory: AsyncQueryExecutorFactory[Future])(implicit M: Monad[Future]) extends QueryServiceHandler[JobId] {
+class AsyncQueryServiceHandler(
+    val platform: Platform[Future, JobId])(implicit
+    M: Monad[Future]) extends QueryServiceHandler[JobId] {
+
   def extractResponse(request: HttpRequest[Future[JValue]], jobId: JobId): HttpResponse[QueryResult] = {
     val result = JObject(JField("jobId", JString(jobId)) :: Nil)
     HttpResponse[QueryResult](Accepted, content = Some(Left(result)))

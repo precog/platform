@@ -112,7 +112,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   // Simple test of sorting on homogeneous data
   def homogeneousSortSample = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {
           "value":{
             "uid":"joe",
@@ -143,7 +143,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   // Simple test of sorting on homogeneous data with objects
   def homogeneousSortSampleWithNonexistentSortKey = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {"key":[2],"value":6},
         {"key":[1],"value":5}  
       ]""") --> classOf[JArray]).elements.toStream,
@@ -158,7 +158,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   // Simple test of partially undefined sort key data
   def partiallyUndefinedSortSample = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {
           "value":{
             "uid":"ted",
@@ -187,7 +187,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def heterogeneousBaseValueTypeSample = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {
           "value": [0, 1],
           "key":[1]
@@ -210,7 +210,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def badSchemaSortSample = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {
           "value":{
             "vxu":[],
@@ -247,7 +247,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   // Simple test of sorting on heterogeneous data
   def heterogeneousSortSample2 = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {"key":[1,4,3],"value":{"b0":["",{"alxk":-1},-5.170005125478374E+307],"y":{"pvbT":[-1458654748381439976,{}]}}},
         {"key":[1,4,4],"value":{"y":false,"qvd":[],"aden":{}}},
         {"key":[3,3,3],"value":{"b0":["gxy",{"alxk":-1},6.614267528783459E+307],"y":{"pvbT":[1,{}]}}}
@@ -260,7 +260,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   // Simple test of sorting on heterogeneous data
   def heterogeneousSortSampleDescending = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {"key":[2],"value":{"y":false}},
         {"key":[3],"value":{"y":{"pvbT":1}}}
       ]""") --> classOf[JArray]).elements.toStream,
@@ -272,7 +272,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   // Simple test of sorting on heterogeneous data
   def heterogeneousSortSampleAscending = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {"key":[2],"value":{"y":false}},
         {"key":[3],"value":{"y":{"pvbT":1}}}
       ]""") --> classOf[JArray]).elements.toStream,
@@ -284,7 +284,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
   // Simple test of heterogeneous sort keys
   def heterogeneousSortSample = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {
           "value":{
            "uid": 12,
@@ -327,7 +327,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def secondHetSortSample = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {
           "value":[1.0,0,{
             
@@ -369,7 +369,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
    */
   def threeCellMerge = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         {
           "value":-2355162409801206381,
           "key":[1.0,1.0,11.0]
@@ -515,7 +515,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def uniqueSort = {
     val sampleData = SampleData(
-      (JParser.parse("""[
+      (JParser.parseUnsafe("""[
         { "key" : [2], "value" : { "foo" : 10 } },
         { "key" : [1], "value" : { "foo" : 10 } }
        ]""") --> classOf[JArray]).elements.toStream,
@@ -529,7 +529,7 @@ trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
   def emptySort = {
     val sampleData = SampleData(
-      (JParser.parse("""[]""") --> classOf[JArray]).elements.toStream,
+      (JParser.parseUnsafe("""[]""") --> classOf[JArray]).elements.toStream,
       Some(
         (1 , List())
       )

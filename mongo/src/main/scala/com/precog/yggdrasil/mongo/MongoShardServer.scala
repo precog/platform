@@ -27,6 +27,7 @@ import com.precog.daze._
 
 import blueeyes.bkka._
 import blueeyes.BlueEyesServer
+import blueeyes.bkka._
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
 import blueeyes.util.Clock
@@ -45,16 +46,15 @@ import scalaz._
 import org.streum.configrity.Configuration
 
 object MongoShardServer extends BlueEyesServer with ShardService {
-  
   val actorSystem = ActorSystem("mongoExecutorActorSystem")
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
   val clock = Clock.System
 
-  def configureShardState(config: Configuration): ShardState = {
+  def configureShardState(config: Configuration) = Future {
     val apiKeyFinder = new StaticAPIKeyFinder(config[String]("security.masterAccount.apiKey"))
-    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor")), apiKeyFinder)
+    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor")), apiKeyFinder, Stoppable.fromFuture(Future(())))
   }
 
   val jettyService = this.service("labcoat", "1.0") { context =>

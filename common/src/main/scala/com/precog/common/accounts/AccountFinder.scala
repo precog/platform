@@ -59,5 +59,13 @@ trait AccountFinder[M[+_]] extends Logging {
   }
 }
 
+object AccountFinder {
+  def Empty[M[+_]: Monad] = new AccountFinder[M] {
+    val M = Monad[M]
+    def findAccountByAPIKey(apiKey: APIKey) = M.point(None)
+    def findAccountById(accountId: AccountId) = M.point(None)
+  }
+}
+
 
 // vim: set ts=4 sw=4 et:

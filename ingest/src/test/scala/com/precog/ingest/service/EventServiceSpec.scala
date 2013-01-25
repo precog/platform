@@ -99,7 +99,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
     }
 
     "track synchronous batch event with bad row" in {
-      val msg = JParser.parse("""{
+      val msg = JParser.parseUnsafe("""{
           "total": 2,
           "ingested": 1,
           "failed": 1,
@@ -117,7 +117,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       Await.result(result, 5.seconds) must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(msg2), _), events) =>
           msg mustEqual msg2
-          events flatMap (_.data) mustEqual JParser.parse("""{ "testing": 321 }""") :: Nil
+          events flatMap (_.data) mustEqual JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil
       }
     }
     
@@ -128,11 +128,11 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
 
       Await.result(result, 5.seconds) must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), events) =>
-          // render then parse so that we get the same numeric representations
-          events flatMap { _.data.map(v => JParser.parse(v.renderCompact)) } must_== List(
-            JParser.parse("""{ "a": 1, "b": 2, "c": "3" }"""),
-            JParser.parse("""{ "a": 4, "b": null, "c": "a" }"""),
-            JParser.parse("""{ "a": 6, "b": 7, "c": "8" }"""))
+          // render then parseUnsafe so that we get the same numeric representations
+          events flatMap { _.data.map(v => JParser.parseUnsafe(v.renderCompact)) } must_== List(
+            JParser.parseUnsafe("""{ "a": 1, "b": 2, "c": "3" }"""),
+            JParser.parseUnsafe("""{ "a": 4, "b": null, "c": "a" }"""),
+            JParser.parseUnsafe("""{ "a": 6, "b": 7, "c": "8" }"""))
       }
     }
     

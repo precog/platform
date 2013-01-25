@@ -33,7 +33,7 @@ import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.mongo._
 import com.precog.yggdrasil.util._
 import com.precog.daze._
-import com.precog.muspelheim.ParseEvalStack
+import com.precog.muspelheim._
 import com.precog.util.FilesystemFileOps
 
 import blueeyes.json._
@@ -97,8 +97,8 @@ object MongoQueryExecutor {
   }
 }
 
-class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit val asyncContext: ExecutionContext, val M: Monad[Future]) 
-    extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] with ShardQueryExecutor[Future] with MongoColumnarTableModule {
+class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, val M: Monad[Future])
+    extends Platform[Future, StreamT[Future, CharBuffer]] with ShardQueryExecutor[Future] with MongoColumnarTableModule {
   type YggConfig = MongoQueryExecutorConfig
 
   trait TableCompanion extends MongoColumnarTableCompanion
@@ -109,6 +109,11 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit val a
 
   lazy val storage = new MongoStorageMetadataSource(Table.mongo)
   lazy val report = LoggingQueryLogger[Future, instructions.Line]
+
+  def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
+
+  // to satisfy abstract defines in parent traits
+  val asyncContext = extAsyncContext
 
   def startup() = Future {
     Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
@@ -126,32 +131,34 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit val a
 
   def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
 
-  def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
-    Future {
-      path.elements.toList match {
-        case Nil => 
-          val dbs = Table.mongo.getDatabaseNames.asScala.toList
-          // TODO: Poor behavior on Mongo's part, returning database+collection names
-          // See https://groups.google.com/forum/#!topic/mongodb-user/HbE5wNOfl6k for details
-          
-          val finalNames = dbs.foldLeft(dbs.toSet) {
-            case (acc, dbName) => acc.filterNot { t => t.startsWith(dbName) && t != dbName }
-          }.toList.sorted
-          Success(finalNames.map {d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
+  val metadataClient = new MetadataClient[Future] {
+    def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
+      Future {
+        path.elements.toList match {
+          case Nil => 
+            val dbs = Table.mongo.getDatabaseNames.asScala.toList
+            // TODO: Poor behavior on Mongo's part, returning database+collection names
+            // See https://groups.google.com/forum/#!topic/mongodb-user/HbE5wNOfl6k for details
+            
+            val finalNames = dbs.foldLeft(dbs.toSet) {
+              case (acc, dbName) => acc.filterNot { t => t.startsWith(dbName) && t != dbName }
+            }.toList.sorted
+            Success(finalNames.map {d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
 
-        case dbName :: Nil => 
-          val db = Table.mongo.getDB(dbName)
-          Success(if (db == null) JArray(Nil) else db.getCollectionNames.asScala.map {d => "/" + d + "/" }.toList.sorted.serialize.asInstanceOf[JArray])
+          case dbName :: Nil => 
+            val db = Table.mongo.getDB(dbName)
+            Success(if (db == null) JArray(Nil) else db.getCollectionNames.asScala.map {d => "/" + d + "/" }.toList.sorted.serialize.asInstanceOf[JArray])
 
-        case _ => 
-          Failure("MongoDB paths have the form /databaseName/collectionName; longer paths are not supported.")
+          case _ => 
+            Failure("MongoDB paths have the form /databaseName/collectionName; longer paths are not supported.")
+        }
       }
     }
-  }
 
-  def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = Promise.successful (
-    Success(JObject.empty) // TODO: Implement somehow?
-  )
+    def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = Promise.successful (
+      Success(JObject.empty) // TODO: Implement somehow?
+    )
+  }
 }
 
 

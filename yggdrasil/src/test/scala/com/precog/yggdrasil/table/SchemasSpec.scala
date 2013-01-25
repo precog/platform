@@ -38,7 +38,7 @@ trait SchemasSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
 
   def testSingleSchema = {
     val expected = Set(JObjectFixedT(Map("a" -> JNumberT, "b" -> JTextT, "c" -> JNullT)))
-    val trivialData = Stream.fill(100)(JParser.parse("""{ "a": 1, "b": "x", "c": null }"""))
+    val trivialData = Stream.fill(100)(JParser.parseUnsafe("""{ "a": 1, "b": "x", "c": null }"""))
     val sample = SampleData(trivialData)
     val table = fromSample(sample, Some(10))
     table.schemas.copoint must_== expected
@@ -46,7 +46,7 @@ trait SchemasSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
 
   def testHomogeneousArraySchema = {
     val expected = Set(JArrayHomogeneousT(JNumberT))
-    val data = Stream.fill(10)(JParser.parse("""[1, 2, 3]"""))
+    val data = Stream.fill(10)(JParser.parseUnsafe("""[1, 2, 3]"""))
     val table0 = fromSample(SampleData(data), Some(10))
     val table = table0.toArray[Long]
     table.schemas.copoint must_== expected
@@ -57,8 +57,8 @@ trait SchemasSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
       JObjectFixedT(Map("a" -> JNumberT, "b" -> JTextT)),
       JObjectFixedT(Map("a" -> JTextT, "b" -> JNumberT))
     )
-    val data = Stream.fill(10)(JParser.parse("""{ "a": 1, "b": "2" }""")) ++
-      Stream.fill(10)(JParser.parse("""{ "a": "x", "b": 2 }"""))
+    val data = Stream.fill(10)(JParser.parseUnsafe("""{ "a": 1, "b": "2" }""")) ++
+      Stream.fill(10)(JParser.parseUnsafe("""{ "a": "x", "b": 2 }"""))
     val table = fromSample(SampleData(data), Some(10))
     table.schemas.copoint must_== expected
   }
@@ -70,9 +70,9 @@ trait SchemasSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
       JObjectFixedT(Map("a" -> JArrayFixedT(Map(0 -> JNumberT, 1 -> JNumberT)), "b" -> JArrayFixedT(Map(0 -> JTextT, 1 -> JObjectFixedT(Map.empty)))))
     )
     val data = Stream.tabulate(30) {
-      case i if i % 3 == 0 => JParser.parse("""{ "a": [], "b": "2" }""")
-      case i if i % 3 == 1 => JParser.parse("""{ "a": null, "b": "2" }""")
-      case _ => JParser.parse("""{ "a": [ 1, 2 ], "b": [ "2", {} ] }""")
+      case i if i % 3 == 0 => JParser.parseUnsafe("""{ "a": [], "b": "2" }""")
+      case i if i % 3 == 1 => JParser.parseUnsafe("""{ "a": null, "b": "2" }""")
+      case _ => JParser.parseUnsafe("""{ "a": [ 1, 2 ], "b": [ "2", {} ] }""")
     }
     val table = fromSample(SampleData(data), Some(10))
     table.schemas.copoint must_== expected
@@ -126,7 +126,7 @@ trait SchemasSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
       """{ "a": {} }""",
       """{ "a": [ 1, "a", true ] }""",
       """{ "a": { "b": { "c": 3 } } }"""
-    ) map (JParser.parse(_))
+    ) map (JParser.parseUnsafe(_))
 
     val table = fromSample(SampleData(data), Some(10))
     table.schemas.copoint must_== expected
