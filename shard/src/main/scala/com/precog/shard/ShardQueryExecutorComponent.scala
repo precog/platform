@@ -20,6 +20,7 @@
 package com.precog.shard
 
 import blueeyes.json._
+import blueeyes.json.serialization._
 import blueeyes.util.Clock
 
 import com.precog.common._
@@ -63,6 +64,12 @@ trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]]
   protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
 
   case class StackException(error: StackError) extends Exception(error.toString)
+
+  implicit def LineDecompose: Decomposer[instructions.Line] = new Decomposer[instructions.Line] {
+    def decompose(line: instructions.Line): JValue = {
+      JObject(JField("lineNum", JNum(line.line)) :: JField("colNum", JNum(line.col)) :: JField("detail", JString(line.text)) :: Nil)
+    }
+  }
 
   def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, StreamT[M, CharBuffer]]] = {
     val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())

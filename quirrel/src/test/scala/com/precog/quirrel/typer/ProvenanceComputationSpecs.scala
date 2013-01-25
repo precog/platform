@@ -148,6 +148,18 @@ object ProvenanceComputationSpecs extends Specification
       tree.errors must beEmpty
     }
     
+    "identify import according to its child expression" in {
+      val tree = compileSingle("import std //foo")
+      tree.provenance mustEqual StaticProvenance("/foo")
+      tree.errors must beEmpty
+    }
+    
+    "identify assert according to its right expression" in {
+      val tree = compileSingle("assert //bar //foo")
+      tree.provenance mustEqual StaticProvenance("/foo")
+      tree.errors must beEmpty
+    }
+    
     "identify new as dynamic" in {
       val tree = compileSingle("new 1")
       tree.provenance must beLike {
@@ -1217,6 +1229,12 @@ object ProvenanceComputationSpecs extends Specification
           val tree = compileSingle("if (//bar union //baz) then //bar else //baz")
           tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz")) => ok }
           tree.errors must beEmpty
+        }
+        // Regression test for #PLATFORM-652
+        {
+          val tree = compileSingle("if //foo then 1 else 0")
+          tree.provenance mustEqual StaticProvenance("/foo")
+          tree.errors mustEqual Set()
         }
         {
           val tree = compileSingle("if //foo then //bar else //baz")

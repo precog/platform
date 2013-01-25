@@ -77,7 +77,7 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
     with JDBMColumnarTableModule[Future] 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule 
-    with JDBMProjectionModule {
+    with JDBMProjectionModule { outer =>
       
   lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
@@ -106,6 +106,10 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
   }
 
   val storage = new Storage
+
+  val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] {
+    implicit def M = outer.M
+  }
 
   object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps

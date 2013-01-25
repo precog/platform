@@ -736,6 +736,7 @@ object ImportTools extends Command with Logging {
         class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig with JDBMProjectionModuleConfig {
           val maxSliceSize = config[Int]("precog.jdbm.maxSliceSize", 50000)
           val ingestConfig = None
+          val smallSliceSize = config[Int]("precog.jdbm.smallSliceSize", 8)
         }
 
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))

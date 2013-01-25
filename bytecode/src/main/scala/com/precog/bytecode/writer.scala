@@ -69,7 +69,7 @@ trait BytecodeWriter extends Writer with Version {
           8
         }
 
-        case Line(num, text) => writeLineInfo(num, text, buffer)
+        case Line(num, col, text) => writeLineInfo(num, col, text, buffer)
         
         case PushString(str) => writeString(str, buffer)
         case PushNum(num) => writeNum(num, buffer)
@@ -151,6 +151,8 @@ trait BytecodeWriter extends Writer with Version {
         case Morph1(m1) => (0x09, 0.toShort, morph1Num(m1))
         case Morph2(m2) => (0x19, 0.toShort, morph2Num(m2))
         
+        case Assert => (0x10, 0.toShort, 0)
+        
         case IUnion => (0x12, 0.toShort, 0)
         case IIntersect => (0x13, 0.toShort, 0)
 
@@ -175,7 +177,7 @@ trait BytecodeWriter extends Writer with Version {
         case Drop => (0x21, 0.toShort, 0)
         case i @ Swap(_) => (0x28, 0.toShort, table(i))
         
-        case i @ Line(_, _) => (0x2A, 0.toShort, table(i))
+        case i @ Line(_, _, _) => (0x2A, 0.toShort, table(i))
         
         case LoadLocal => (0x40, 0.toShort, 0)
         
@@ -206,9 +208,10 @@ trait BytecodeWriter extends Writer with Version {
     }
   }
   
-  private def writeLineInfo(num: Int, text: String, buffer: ByteBuffer) = {
-    writeInt(text.length * 2 + 4, buffer)
+  private def writeLineInfo(num: Int, col: Int, text: String, buffer: ByteBuffer) = {
+    writeInt(text.length * 2 + 4 + 4, buffer)
     buffer.putInt(num)
+    buffer.putInt(col)
     text foreach buffer.putChar
     4 + 4 + (text.length * 8)
   }

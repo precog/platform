@@ -97,6 +97,7 @@ trait JDBMQueryExecutorComponent {
       val clock = blueeyes.util.Clock.System
       val maxSliceSize = config[Int]("jdbm.max_slice_size", 10000)
       val ingestFailureLogRoot = new File(config[String]("ingest.failure_log_root"))
+      val smallSliceSize = config[Int]("jdbm.small_slice_size", 8)
 
       //TODO: Get a producer ID
       val idSource = new FreshAtomicIdSource
@@ -106,7 +107,7 @@ trait JDBMQueryExecutorComponent {
   def queryExecutorFactoryFactory(config: Configuration,
       extAccessControl: APIKeyManager[Future],
       extAccountManager: BasicAccountManager[Future],
-      extJobManager: JobManager[Future]): AsyncQueryExecutorFactory = {
+      extJobManager: JobManager[Future]): ManagedQueryExecutorFactory = {
     new JDBMQueryExecutorFactory
         with JDBMProjectionModule
         with ProductionShardSystemActorModule
@@ -182,7 +183,7 @@ trait JDBMQueryExecutorComponent {
         }).validation
       }
 
-      def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
+      def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
         implicit val futureMonad = new blueeyes.bkka.FutureMonad(defaultAsyncContext)
         (for {
           executionContext0 <- getAccountExecutionContext(apiKey)
@@ -206,6 +207,7 @@ trait JDBMQueryExecutorComponent {
 
           val yggConfig = self.yggConfig
           val storage = self.storage.liftM[JobQueryT](shardQueryMonad, shardQueryMonad.M)
+          val report = errorReport[instructions.Line](shardQueryMonad, implicitly)
         }
       }
 
@@ -226,8 +228,7 @@ trait JDBMQueryExecutorFactory
     extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]]
     with StorageModule[Future]
     with PerAccountThreadPoolModule
-    with ManagedQueryModule
-    with AsyncQueryExecutorFactory { self =>
+    with ManagedQueryExecutorFactory { self =>
 
   type YggConfig <: BaseJDBMQueryExecutorConfig
 
@@ -270,4 +271,3 @@ trait JDBMQueryExecutorFactory
     futRoot.map { pr => Success(transform(pr.children)) } 
   }
 }
-

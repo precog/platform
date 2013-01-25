@@ -198,39 +198,23 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
                   case (_, Right3(column)) => Left(column)
                   case (_, Middle3((left :: Nil, right :: Nil))) => Right((left, right))
                 }
+
+                class FuzzyEqColumn(left: Column, right: Column) extends BoolColumn {
+                  val equality = cf.std.Eq(left, right).get.asInstanceOf[BoolColumn]     // yay!
+                  def isDefinedAt(row: Int) = (left isDefinedAt row) || (right isDefinedAt row)
+                  def apply(row: Int) = equality.isDefinedAt(row) && equality(row)
+                }
                 
-                val testedNonNum = simplifiedGroupNonNum map {
+                val testedNonNum: Array[BoolColumn] = simplifiedGroupNonNum.map({
                   case Left(column) => new BoolColumn {
-                    def isDefinedAt(row: Int) = true
-                    def apply(row: Int) = !column.isDefinedAt(row)
+                    def isDefinedAt(row: Int) = column.isDefinedAt(row)
+                    def apply(row: Int) = false
                   }
                   
-                  case Right((left, right)) => {
-                    val equality = cf.std.Eq(left, right).get.asInstanceOf[BoolColumn]     // yay!
-                    
-                    new BoolColumn {
-                      def isDefinedAt(row: Int) = true
-                      
-                      def apply(row: Int) = {
-                        if (equality isDefinedAt row)
-                          equality(row)
-                        else if (left isDefinedAt row)
-                          false
-                        else if (right isDefinedAt row)
-                          false
-                        else
-                          true
-                      }
-                    }
-                  }
-                }
-                
-                val trueCol = new BoolColumn {
-                  def isDefinedAt(row: Int) = true
-                  def apply(row: Int) = true
-                }
-                
-                val unifiedNonNum = testedNonNum reduceOption { cf.std.And(_, _).get.asInstanceOf[BoolColumn] } getOrElse trueCol
+                  case Right((left, right)) =>
+                    new FuzzyEqColumn(left, right)
+
+                })(collection.breakOut)
                 
                 // numeric stuff
                 
@@ -256,72 +240,34 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
                     Right((left, right)): Either[Column, (Set[Column], Set[Column])]
                 }
                 
-                val testedNum = simplifiedGroupedNum map {
-                  case Left(column) => new BoolColumn {
-                    def isDefinedAt(row: Int) = true
-                    def apply(row: Int) = !column.isDefinedAt(row)
-                  }
-                  
-                  case Right((left, right)) => {
-                    val tests = for (l <- left; r <- right) yield {
-                      val equality = cf.std.Eq(l, r).get.asInstanceOf[BoolColumn]     // yay!
-                      
-                      new BoolColumn {
-                        def isDefinedAt(row: Int) = true
-                        
-                        def apply(row: Int) = {
-                          if (equality isDefinedAt row)
-                            equality(row)
-                          else
-                            false
-                        }
-                      }
-                    }
-                    
-                    // catch the cases where both are undefined
-                    val leftMask = new UnionLotsColumn(left) with BoolColumn {
-                      def apply(row: Int) = true
-                    }
-                    
-                    val rightMask = new UnionLotsColumn(right) with BoolColumn {
-                      def apply(row: Int) = true
-                    }
-                    
-                    val unified = tests reduce { cf.std.Or(_, _).get.asInstanceOf[BoolColumn] }
-                    
+                val testedNum: Array[BoolColumn] = simplifiedGroupedNum.map({
+                  case Left(column) =>
                     new BoolColumn {
-                      def isDefinedAt(row: Int) = true
-                      
-                      // if exists(defined at row), then 
-                      def apply(row: Int) = {
-                        val leftDef = leftMask.isDefinedAt(row)
-                        val rightDef = rightMask.isDefinedAt(row)
-                        
-                        if (leftDef && rightDef)
-                          unified(row)
-                        else if (leftDef || rightDef)
-                          false
-                        else
-                          true // if not exists defined column (all undefined), true; else, whatever unified(row)
-                      }
+                      def isDefinedAt(row: Int) = column.isDefinedAt(row)
+                      def apply(row: Int) = false
                     }
+                  
+                  case Right((left, right)) =>
+                    val tests: Array[BoolColumn] = (for (l <- left; r <- right) yield {
+                      new FuzzyEqColumn(l, r)
+                    }).toArray
+                    new OrLotsColumn(tests)
+                })(collection.breakOut)
+
+                val unifiedNonNum = new AndLotsColumn(testedNonNum)
+                val unifiedNum = new AndLotsColumn(testedNum)
+                val unified = new BoolColumn {
+                  def isDefinedAt(row: Int): Boolean = unifiedNonNum.isDefinedAt(row) || unifiedNum.isDefinedAt(row)
+                  def apply(row: Int): Boolean = {
+                    val left = !unifiedNonNum.isDefinedAt(row) || unifiedNonNum(row)
+                    val right = !unifiedNum.isDefinedAt(row) || unifiedNum(row)
+                    left && right
                   }
                 }
-                
-                val unifiedNum = testedNum reduceOption { cf.std.And(_, _).get.asInstanceOf[BoolColumn] } getOrElse trueCol
-                
-                val unified = cf.std.And(unifiedNonNum, unifiedNum).get.asInstanceOf[BoolColumn]
-                
-                val leftMask = new UnionLotsColumn(Set(sl.columns.values.toSeq: _*)) with BoolColumn {
-                  def apply(row: Int) = true
-                }
-                
-                val rightMask = new UnionLotsColumn(Set(sr.columns.values.toSeq: _*)) with BoolColumn {
-                  def apply(row: Int) = true
-                }
-                
+
+                val mask = sl.definedAt & sr.definedAt
                 val column = new BoolColumn {
-                  def isDefinedAt(row: Int) = sl.isDefinedAt(row) && sr.isDefinedAt(row)   // both sides have at least one defined column
+                  def isDefinedAt(row: Int) = mask(row) && unified.isDefinedAt(row)
                   def apply(row: Int) = unified(row)
                 }
                 
@@ -510,6 +456,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
         case Typed(source, tpe) =>
           composeSliceTransform2(source) map {
             _ typed tpe
+          }
+
+        case IsType(source, tpe) =>
+          composeSliceTransform2(source) map {
+            _ isType tpe
           }
 
         case Scan(source, scanner) => 
