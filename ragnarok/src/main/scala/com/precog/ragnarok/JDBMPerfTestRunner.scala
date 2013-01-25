@@ -1,6 +1,7 @@
 package com.precog
 package ragnarok
 
+import com.precog.daze._
 import com.precog.accounts.InMemoryAccountManager
 
 import yggdrasil.{ ProjectionDescriptor, BaseConfig }
@@ -88,4 +89,6 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
     def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = fileMetadataStorage.findDescriptorRoot(descriptor)
     def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = fileMetadataStorage.findArchiveRoot(descriptor)
   }
+
+  val report = LoggingQueryLogger[Future]
 }
