@@ -1677,14 +1677,14 @@ trait ColumnarTableModule[M[+_]]
         (indices, CharBuffer.wrap(sb))
       }
 
-      StreamT.unfoldM((slices, none[Indices])) { case (stream, pastIndices) =>
-          stream.uncons.map {
-            case Some((slice, tail)) =>
-              val (indices, cb) = renderSlice(pastIndices, slice)
-              Some((cb, (tail, Some(indices))))
-            case None =>
-              None
-          }
+      StreamT.unfoldM((slices, none[Indices])) {
+        case (stream, pastIndices) => stream.uncons.map {
+          case Some((slice, tail)) =>
+            val (indices, cb) = renderSlice(pastIndices, slice)
+            Some((cb, (tail, Some(indices))))
+          case None =>
+            None
+        }
       }
     }
 
