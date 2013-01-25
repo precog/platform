@@ -118,8 +118,6 @@ object PlatformBuild extends Build {
     }
   )
 
-  //val scctSettings = seq(ScctPlugin.instrumentSettings : _*)
-
   val commonPluginsSettings = ScctPlugin.instrumentSettings ++ cpdSettings ++ commonSettings
   val commonNexusSettings = nexusSettings ++ commonPluginsSettings
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
@@ -128,7 +126,7 @@ object PlatformBuild extends Build {
   lazy val logging = Project(id = "logging", base = file("logging")).settings(commonNexusSettings: _*)
 
   lazy val platform = Project(id = "platform", base = file(".")).
-    settings(ScctPlugin.mergeReportSettings: _*).
+    settings(ScctPlugin.mergeReportSettings ++ ScctPlugin.instrumentSettings: _*).
     aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo)
 
   lazy val util = Project(id = "util", base = file("util")).
