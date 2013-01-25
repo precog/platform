@@ -32,6 +32,8 @@ import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 
 import java.io.{File, FileReader, FileWriter}
+import java.util.concurrent.ConcurrentHashMap
+
 import scalaz.{Validation, Success, Failure}
 import scalaz.effect._
 import scalaz.std.option._
@@ -45,6 +47,8 @@ import scalaz.syntax.std.option._
 import scalaz.std.map._
 
 import scala.collection.GenTraversableOnce
+import scala.collection.JavaConverters._
+import scala.collection.mutable.ConcurrentMap
 
 object MetadataStorage {
   case class ResolvedSelector(selector: CPath, authorities: Authorities, descriptor: ProjectionDescriptor, metadata: ColumnMetadata) {
@@ -191,7 +195,7 @@ object FileMetadataStorage extends Logging {
     }
   }
 
-  private def loadDescriptors(baseDir: File): IO[Map[ProjectionDescriptor, File]] = {
+  private def loadDescriptors(baseDir: File): IO[ConcurrentMap[ProjectionDescriptor, File]] = {
     def walkDirs(baseDir: File): Seq[File] = {
       def containsDescriptor(dir: File) = new File(dir, descriptorName).isFile 
 
@@ -213,12 +217,13 @@ object FileMetadataStorage extends Logging {
 
 
     def loadMap(baseDir: File) = {
-      walkDirs(baseDir).foldLeft(Map.empty[ProjectionDescriptor, File]) { (acc, dir) =>
+      val initialMap = (new ConcurrentHashMap[ProjectionDescriptor, File]).asScala
+      walkDirs(baseDir).foldLeft(initialMap) { (acc, dir) =>
         logger.debug("loading: " + dir)
         read(dir) match {
           case Success(pd) => 
             logger.debug("Loaded projection descriptor " + pd.shows + " from " + dir.toString)
-            acc + (pd -> dir)
+            acc += (pd -> dir)
           case Failure(error) => 
             logger.warn("Failed to restore %s: %s".format(dir, error))
             acc
@@ -252,10 +257,10 @@ object FileMetadataStorage extends Logging {
   }
 }
 
-class FileMetadataStorage private (baseDir: File, archiveDir: File, fileOps: FileOps, private var metadataLocations: Map[ProjectionDescriptor, File]) extends MetadataStorage with Logging {
+class FileMetadataStorage private (baseDir: File, archiveDir: File, fileOps: FileOps, private val metadataLocations: ConcurrentMap[ProjectionDescriptor, File]) extends MetadataStorage with Logging {
   import FileMetadataStorage._
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = {
-    metadataLocations.keySet.filter(f)
+    metadataLocations.keySet.filter(f).toSet
   }
 
   def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[File] = {

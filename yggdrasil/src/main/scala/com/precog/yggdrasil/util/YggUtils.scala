@@ -49,6 +49,7 @@ import java.nio.ByteBuffer
 import collection.mutable.{Buffer, ListBuffer}
 import collection.JavaConversions._
 
+import blueeyes.bkka._
 import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -93,7 +94,6 @@ trait YggUtilsCommon {
 }
 
 object YggUtils {
- 
   def usage(message: String*): String = {
     val initial = message ++ List("Usage: yggutils {command} {flags/args}",""," For details on a particular command enter yggutils {command} -help", "")
     
@@ -758,7 +758,7 @@ object ImportTools extends Command with Logging {
         implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(ExecutionContext.defaultExecutionContext(actorSystem))
 
         val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
-        val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) = 
+        val shardActors @ ShardActors(ingestSupervisor, metadataActor, shardStoppable) = 
           initShardActors(ms, new InMemoryAccountManager[Future](), projectionsActor)
 
         object Projection extends ProjectionCompanion(projectionsActor, yggConfig.metadataTimeout)
@@ -794,7 +794,8 @@ object ImportTools extends Command with Logging {
       }
 
       logger.info("Waiting for shard shutdown")
-      Await.result(ShardActors.stop(yggConfig, shardActors), stopTimeout)
+      Await.result(Stoppable.stop(shardStoppable), Duration(2, "minutes"))
+      actorSystem.shutdown()
 
       logger.info("Shutdown")
       sys.exit(0)
