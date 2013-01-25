@@ -3,8 +3,8 @@ package com.precog.shard
 import com.precog.common._
 import com.precog.common.jobs._
 import com.precog.common.security._
-
 import com.precog.daze._
+import com.precog.muspelheim._
 
 import java.nio.CharBuffer
 
@@ -29,7 +29,6 @@ import scalaz.syntax.monad._
 import scalaz.syntax.copointed._
 
 object ManagedQueryTestSupport {
-
   // We use TestFuture as our monad for QueryExecutor, as this let's us pass
   // some information we need for testing outside of the query execution;
   // namely, the JobId and a counter that is incremented after each tick.
@@ -110,7 +109,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
     actorSystem.scheduler.schedule(Duration(0, "milliseconds"), Duration(clock.duration, "milliseconds")) {
         ticker ! Tick
     }
-    startup().copoint
+    startup.copoint
   }
 
   "A managed query" should {
@@ -211,13 +210,13 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
 
   step {
     ticker ! Tick
-    shutdown().copoint
+    shutdown.copoint
     actorSystem.shutdown()
     actorSystem.awaitTermination()
   }
 }
 
-trait TestManagedQueryModule extends QueryExecutorFactory[TestFuture, StreamT[TestFuture, CharBuffer]]
+trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, CharBuffer]]
     with ManagedQueryModule with SchedulableFuturesModule { self =>
 
   def actorSystem: ActorSystem  
@@ -262,9 +261,10 @@ trait TestManagedQueryModule extends QueryExecutorFactory[TestFuture, StreamT[Te
     }))
   }
 
-  def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
-  def structure(apiKey: APIKey, path: Path) = sys.error("I'm an amorphous blob you insensitive clod!")
-  def status() = sys.error("The lowliest of the low :(")
+  val metadataClient = new MetadataClient[TestFuture] {
+    def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
+    def structure(apiKey: APIKey, path: Path) = sys.error("I'm an amorphous blob you insensitive clod!")
+  }
 
   def startup = Pointed[TestFuture].point { true }
   def shutdown = Pointed[TestFuture].point { true }
