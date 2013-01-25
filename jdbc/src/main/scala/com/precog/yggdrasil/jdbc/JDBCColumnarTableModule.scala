@@ -50,6 +50,8 @@ import java.sql._
 
 import org.joda.time.DateTime
 
+import org.postgresql.util.PGobject
+
 import scalaz._
 import scalaz.Ordering._
 import scalaz.std.set._
@@ -103,15 +105,35 @@ trait JDBCColumnarTableModule
 
   type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig with BlockStoreColumnarTableModuleConfig with JDBCColumnarTableModuleConfig
 
-  case class DBColumn(cref: ColumnRef, column: Column, extract: (ResultSet, Int) => Unit) {
-    def asPair: Pair[ColumnRef, Column] = cref -> column
+  trait DBColumns {
+    def extract(rs: ResultSet, rowId: Int): Unit
+
+    // asPairs is intended to be called once reads are complete
+    def columns: Seq[(ColumnRef, Column)]
+  }
+
+  case object EmptyDBColumn extends DBColumns {
+    def extract(rs: ResultSet, rowId: Int) { }
+    def columns = Seq.empty
+  }
+
+  case class SingleDBColumn(cref: ColumnRef, column: Column, extractor: (ResultSet, Int) => Unit) extends DBColumns {
+    def extract(rs: ResultSet, rowId: Int) = extractor(rs, rowId)
+    def columns = Seq(cref -> column)
   }
 
   private def notNull(rs: ResultSet, columnIndex: Int) = rs.getObject(columnIndex) != null
 
   protected def unescapeColumnNames: Boolean
 
-  private def metaToColumn(meta: ResultSetMetaData, index: Int): Option[DBColumn] = {
+  private def truncateString(input: String) = 
+    if (input.length > 43) {
+      input.take(40) + "..."
+    } else {
+      input
+    }
+
+  private def metaToColumn(meta: ResultSetMetaData, index: Int): DBColumns = {
     val columnName = meta.getColumnLabel(index)
     val selector = paths.Value \ CPath(if (unescapeColumnNames) unescapePath(columnName) else columnName)
 
@@ -121,68 +143,110 @@ trait JDBCColumnarTableModule
       case BIT | BOOLEAN         => 
         val column = ArrayBoolColumn.empty
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getBoolean(index)) }
-        Some(DBColumn(ColumnRef(selector, CBoolean), column, update))
+        SingleDBColumn(ColumnRef(selector, CBoolean), column, update)
 
       case CHAR | LONGNVARCHAR | LONGVARCHAR | NCHAR | NVARCHAR | VARCHAR =>
         val column = ArrayStrColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getString(index)) }
-        Some(DBColumn(ColumnRef(selector, CString), column, update))
+        SingleDBColumn(ColumnRef(selector, CString), column, update)
 
       case TINYINT               =>
         val column = ArrayLongColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getByte(index)) }
-        Some(DBColumn(ColumnRef(selector, CLong), column, update))
+        SingleDBColumn(ColumnRef(selector, CLong), column, update)
 
       case SMALLINT               =>
         val column = ArrayLongColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getShort(index)) }
-        Some(DBColumn(ColumnRef(selector, CLong), column, update))
+        SingleDBColumn(ColumnRef(selector, CLong), column, update)
 
       case INTEGER               =>
         val column = ArrayLongColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getInt(index)) }
-        Some(DBColumn(ColumnRef(selector, CLong), column, update))
+        SingleDBColumn(ColumnRef(selector, CLong), column, update)
 
       case BIGINT                =>
         val column = ArrayLongColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getLong(index)) }
-        Some(DBColumn(ColumnRef(selector, CLong), column, update))
+        SingleDBColumn(ColumnRef(selector, CLong), column, update)
 
       case REAL                  =>
         val column = ArrayDoubleColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getFloat(index)) }
-        Some(DBColumn(ColumnRef(selector, CDouble), column, update))
+        SingleDBColumn(ColumnRef(selector, CDouble), column, update)
 
       case DOUBLE | FLOAT        =>
         val column = ArrayDoubleColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getDouble(index)) }
-        Some(DBColumn(ColumnRef(selector, CDouble), column, update))
+        SingleDBColumn(ColumnRef(selector, CDouble), column, update)
 
       case DECIMAL | NUMERIC     =>
         val column = ArrayNumColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getBigDecimal(index)) }
-        Some(DBColumn(ColumnRef(selector, CNum), column, update))
+        SingleDBColumn(ColumnRef(selector, CNum), column, update)
 
       case DATE           =>
         val column = ArrayDateColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, new DateTime(rs.getDate(index).getTime)) }
-        Some(DBColumn(ColumnRef(selector, CDate), column, update))
+        SingleDBColumn(ColumnRef(selector, CDate), column, update)
 
       case TIMESTAMP      =>
         val column = ArrayDateColumn.empty(yggConfig.maxSliceSize)
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, new DateTime(rs.getTimestamp(index).getTime)) }
-        Some(DBColumn(ColumnRef(selector, CDate), column, update))
+        SingleDBColumn(ColumnRef(selector, CDate), column, update)
 
-      case other => logger.warn("Unsupported JDBC column type %d for %s".format(other, selector)); None
+      case OTHER          =>
+        // Here's where things get tricky. We support postgresql for now, but this code needs changed if we want to support something else
+        if (meta.getClass.toString.contains("postgresql")) {
+          new DBColumns {
+            private[this] var buildColumns = Map.empty[ColumnRef, ArrayColumn[_]]
+
+            def columns = buildColumns.toSeq
+
+            def extract(rs: ResultSet, rowId: Int) = rs.getObject(index) match {
+              case pgo: PGobject => pgo.getType match {
+                case "hstore" => 
+                  pgo.getValue.split(",|=>").toList.map { v => val t = v.trim; t.substring(1, t.length - 1) }.grouped(2).foreach {
+                    case List(key, value) =>
+                      val hsRef = ColumnRef(selector \ key, CString)
+                      val column = buildColumns.getOrElse(hsRef, ArrayStrColumn.empty(yggConfig.maxSliceSize)).asInstanceOf[ArrayStrColumn].tap { c => c.update(rowId, value) }
+                      buildColumns += (hsRef -> column)
+
+                    case invalid => logger.error("Invalid pair in hstore value: " + invalid)
+                  }
+
+                case "json"   =>
+                  JParser.parseFromString(pgo.getValue) match {
+                    case Success(jv) => 
+                      buildColumns = Table.withIdsAndValues(jv, buildColumns, rowId, yggConfig.maxSliceSize, Some(selector \ CPath(_)))
+
+                    case Failure(error) => 
+                      logger.error("Failure parsing JSON column value (%s): %s".format(truncateString(pgo.getValue), error.getMessage))
+                  }
+
+                case other    => 
+                  logger.warn("Unsupportd PostgreSQL type: " + other)
+              }
+
+              case other         =>
+                logger.warn("Encountered unknown data from PostgreSQL: %s (%s)".format(other, other.getClass))
+            }
+
+          }
+        } else {
+          EmptyDBColumn
+        }
+
+      case other => logger.warn("Unsupported JDBC column type %d for %s".format(other, selector)); EmptyDBColumn
     }
   }
 
-  private def columnsForResultSet(rs: ResultSet): Seq[DBColumn] = {
+  private def columnsForResultSet(rs: ResultSet): Seq[DBColumns] = {
     val metadata = rs.getMetaData
 
     import java.sql.Types._
 
-    (1 to metadata.getColumnCount).flatMap(metaToColumn(metadata, _))
+    (1 to metadata.getColumnCount).map(metaToColumn(metadata, _))
   }
 
   trait JDBCColumnarTableCompanion extends BlockStoreColumnarTableCompanion with Logging {
@@ -240,10 +304,13 @@ trait JDBCColumnarTableModule
                   M.point {
                     try {
                       databaseMap.get(dbName).map { url =>
-                        val columns = jTypeToProperties(tpe, Set())
+                        // Extra split/take at the end is because we can only map to column level. While hstore and json column types
+                        // will end up with deepeer paths, they cannot be queried against in PostgreSQL
+                        val columns = jTypeToProperties(tpe, Set()).map { c => c.split('.').head }
                         val query = Query("SELECT %s FROM %s".format(if (columns.isEmpty) "*" else columns.mkString(","), tableName), yggConfig.maxSliceSize)
 
                         logger.debug("Running query: " + query)
+
                         val connGen = () => DriverManager.getConnection(url)
 
                         val (slice, nextSkip) = makeSlice(connGen, query, 0)
@@ -295,7 +362,7 @@ trait JDBCColumnarTableModule
 
           val slice = new Slice {
             val size = rowIndex
-            val columns = valColumns.map(_.asPair).toMap
+            val columns = valColumns.flatMap(_.columns).toMap
           }
 
           val nextSkip = if (rowIndex == yggConfig.maxSliceSize) {
