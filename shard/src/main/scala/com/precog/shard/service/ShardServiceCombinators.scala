@@ -81,19 +81,10 @@ trait ShardServiceCombinators extends EventServiceCombinators {
 
     val JSON = application/json
     val CSV = text/csv
-    val xyz = request.headers.header[Accept].map(_.mimeTypes).getOrElse(Nil)
-    System.err.println(xyz.toString)
-
-    val r = xyz.collect {
-      case JSON =>
-        System.err.println("saw json!!!")
-        JsonOutput
-      case CSV =>
-        System.err.println("saw csv!!!")
-        CsvOutput
+    request.headers.header[Accept].map(_.mimeTypes).getOrElse(Nil).collect {
+      case JSON => JsonOutput
+      case CSV => CsvOutput
     }.headOption.getOrElse(JsonOutput)
-    System.err.println("returning %s" format r)
-    r
   }
 
   private def getTimeout(request: HttpRequest[_]): Validation[String, Option[Long]] = {
@@ -151,9 +142,7 @@ trait ShardServiceCombinators extends EventServiceCombinators {
     new DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]] {
       val delegate = next
       val metadata = None
-      System.err.println("query setup")
       val service = (request: HttpRequest[A]) => {
-        System.err.println("query service")
         val query: Option[String] = request.parameters.get('q).filter(_ != null)
         val offsetAndLimit = getOffsetAndLimit(request)
         val sortOn = getSortOn(request).toValidationNEL

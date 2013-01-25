@@ -178,17 +178,11 @@ trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]]
     }
   }
 
-  private def outputChunks(output: QueryOutput)(tableM: M[Table]): StreamT[M, CharBuffer] = {
-    System.err.println("query output: %s" format output)
+  private def outputChunks(output: QueryOutput)(tableM: M[Table]): StreamT[M, CharBuffer] =
     output match {
-      case JsonOutput =>
-        System.err.println("json")
-        jsonChunks(tableM)
-      case CsvOutput =>
-        System.err.println("csv")
-        csvChunks(tableM)
+      case JsonOutput => jsonChunks(tableM)
+      case CsvOutput => csvChunks(tableM)
     }
-  }
 
   private def csvChunks(tableM: M[Table]): StreamT[M, CharBuffer] = {
     import trans._
