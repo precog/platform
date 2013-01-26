@@ -122,7 +122,7 @@ object PlatformBuild extends Build {
 
   val commonPluginsSettings = ScctPlugin.instrumentSettings ++ cpdSettings ++ commonSettings
   val commonNexusSettings = nexusSettings ++ commonPluginsSettings
-  val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
+  val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ Seq(test in assembly := {}) ++ commonNexusSettings
 
   // Logging is simply a common project for the test log configuration files
   lazy val logging = Project(id = "logging", base = file("logging")).settings(commonNexusSettings: _*)

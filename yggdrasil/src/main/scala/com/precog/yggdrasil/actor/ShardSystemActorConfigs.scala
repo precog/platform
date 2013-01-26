@@ -74,8 +74,8 @@ trait KafkaIngestActorProjectionSystemConfig extends ShardConfig {
   }
 
   def zookeeperHosts: String = config[String]("zookeeper.hosts")
-  def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
-  def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
+  //def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
+  //def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
 
   def serviceUID: ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
 
@@ -90,24 +90,30 @@ trait KafkaIngestActorProjectionSystemConfig extends ShardConfig {
 trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
   type YggConfig <: KafkaIngestActorProjectionSystemConfig
 
-  def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog
+  def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog
 
   override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = {
-    val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
-    yggConfig.ingestConfig map { conf => actorSystem.actorOf(Props(
-      new KafkaShardIngestActor(shardId = yggConfig.shardId, 
-                                         initialCheckpoint = checkpoint, 
-                                         consumer = consumer, 
-                                         topic = yggConfig.kafkaTopic, 
-                                         accountManager = accountManager,
-                                         ingestFailureLog = ingestFailureLog(checkpoint),
-                                         fetchBufferSize = conf.bufferSize,
-                                         ingestTimeout = conf.batchTimeout,
-                                         maxCacheSize = conf.maxParallel,
-                                         maxConsecutiveFailures = conf.maxConsecutiveFailures) {
-        def handleBatchComplete(pendingCheckpoint: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]) {
-          logger.debug(pendingCheckpoint + " to be updated")
-          metadataActor ! IngestBatchMetadata(updates, pendingCheckpoint.messageClock, Some(pendingCheckpoint.offset))
+    yggConfig.ingestConfig map { conf => 
+      val consumer = new SimpleConsumer(yggConfig.kafkaHost, 
+                                        yggConfig.kafkaPort, 
+                                        yggConfig.kafkaSocketTimeout.toMillis.toInt, 
+                                        yggConfig.kafkaBufferSize)
+
+      actorSystem.actorOf(Props(
+        new KafkaShardIngestActor( shardId = yggConfig.shardId, 
+                                   initialCheckpoint = checkpoint, 
+                                   consumer = consumer, 
+                                   topic = yggConfig.kafkaTopic, 
+                                   accountManager = accountManager,
+                                   ingestFailureLog = ingestFailureLog(checkpoint, conf.failureLogRoot),
+                                   fetchBufferSize = conf.bufferSize,
+                                   ingestTimeout = conf.batchTimeout,
+                                   maxCacheSize = conf.maxParallel,
+                                   maxConsecutiveFailures = conf.maxConsecutiveFailures) {
+
+        def handleBatchComplete(ck: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]) {
+          logger.debug(ck + " to be updated")
+          metadataActor ! IngestBatchMetadata(updates, ck.messageClock, Some(ck.offset))
         }
       }), "ingest")
     }
