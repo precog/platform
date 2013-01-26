@@ -90,7 +90,7 @@ trait KafkaIngestActorProjectionSystemConfig extends ShardConfig {
 trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
   type YggConfig <: KafkaIngestActorProjectionSystemConfig
 
-  def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog
+  def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog
 
   override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = {
     yggConfig.ingestConfig map { conf => 
@@ -105,7 +105,7 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
                                    consumer = consumer, 
                                    topic = yggConfig.kafkaTopic, 
                                    accountManager = accountManager,
-                                   ingestFailureLog = ingestFailureLog(checkpoint),
+                                   ingestFailureLog = ingestFailureLog(checkpoint, conf.failureLogRoot),
                                    fetchBufferSize = conf.bufferSize,
                                    ingestTimeout = conf.batchTimeout,
                                    maxCacheSize = conf.maxParallel,

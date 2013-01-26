@@ -62,5 +62,10 @@ object JDBMShardServer extends BlueEyesServer
     }
 
     ManagedQueryShardState(platform, apiKeyManager, accountManager, jobManager, clock, stoppable)
+  } recoverWith {
+    case ex: Throwable =>
+      System.err.println("Could not start JDBM Shard server!!!")
+      ex.printStackTrace
+      Promise.failed(ex)
   }
 }
