@@ -158,6 +158,10 @@ trait BasicValidationSpecs extends EvalStackSpecs with Instructions {
     "correctly evaluate exists" in {
       eval("exists(true union false)") mustEqual Set(SBoolean(true))
     }
+    
+    "flatten an array into a set" in {
+      eval("flatten([1, 2, 3])") mustEqual Set(SDecimal(1), SDecimal(2), SDecimal(3))
+    }
   }
 }
 
