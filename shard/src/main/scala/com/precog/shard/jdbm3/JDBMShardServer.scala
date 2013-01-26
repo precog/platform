@@ -26,6 +26,7 @@ import com.precog.common.security._
 import com.precog.common.jobs._
 
 import akka.dispatch.Future
+import akka.dispatch.Promise
 
 import blueeyes.BlueEyesServer
 import blueeyes.bkka._
