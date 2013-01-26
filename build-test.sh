@@ -75,6 +75,7 @@ if [ -z "$SKIPSETUP" ]; then
     echo "Linking quirrel examples"
     (cd quirrel && ln -fs ../../research/quirrel/examples)
 
+    [ -z "$SKIPCLEAN" ] && find . -type d -name target -prune -exec rm -fr {} \;
     [ -z "$SKIPCLEAN" ] && run_sbt clean
     
     run_sbt "${SCCT}compile"
