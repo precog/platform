@@ -33,6 +33,7 @@ import scalaz.syntax.semigroup._
 import scalaz.syntax.order._
 
 trait ProvenanceChecker extends parser.AST with Binder {
+  import library._
   import Function._
   import Utils._
   import ast._

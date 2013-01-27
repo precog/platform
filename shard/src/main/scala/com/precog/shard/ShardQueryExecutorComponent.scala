@@ -55,14 +55,16 @@ trait ShardQueryExecutorConfig
   val queryId = new java.util.concurrent.atomic.AtomicLong()
 }
 
-trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
+trait ShardQueryExecutor[M[+_]] extends QueryExecutor[M, StreamT[M, CharBuffer]] {
   type YggConfig <: ShardQueryExecutorConfig
-
   protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
 
-  case class StackException(error: StackError) extends Exception(error.toString)
-
   implicit def M: Monad[M]
+
+  val evaluator: ParseEvalStack[M]
+  import evaluator._
+
+  case class StackException(error: StackError) extends Exception(error.toString)
 
   implicit def LineDecompose: Decomposer[instructions.Line] = new Decomposer[instructions.Line] {
     def decompose(line: instructions.Line): JValue = {
