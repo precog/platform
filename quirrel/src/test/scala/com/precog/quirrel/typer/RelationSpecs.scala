@@ -21,7 +21,6 @@ package com.precog
 package quirrel
 package typer
 
-import bytecode.StaticLibrary
 import com.codecommit.gll.LineStream
 import org.specs2.mutable.Specification
 
@@ -33,7 +32,7 @@ object RelationSpecs extends Specification
     with CompilerUtils
     with Compiler
     with ProvenanceChecker
-    with StaticLibrary {
+    with StaticLibrarySpec {
 
   import ast._
   

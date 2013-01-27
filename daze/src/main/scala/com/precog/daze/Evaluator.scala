@@ -58,6 +58,10 @@ import scalaz.syntax.traverse._
 import scala.Function._
 import scala.collection.immutable.Queue
 
+trait EvaluatorConfig extends IdSourceConfig {
+  def maxSliceSize: Int
+}
+
 case class EvaluationContext(apiKey: APIKey, basePath: Path, startTime: DateTime)
 
 trait EvaluatorModule[M[+_]] extends CrossOrdering
@@ -75,22 +79,24 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
   type GroupId = Int
 
-  type Evaluator <: EvaluatorLike
-  def Evaluator(M: Monad[M]): EvaluatorLike
-  abstract class EvaluatorLike(M0: Monad[M]) extends OpFinder with ReductionFinder with StaticInliner with YggConfigComponent {
-    type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig 
+  type Evaluator[N[+_]] <: EvaluatorLike[N]
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M): EvaluatorLike[N]
+
+  abstract class EvaluatorLike[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) extends OpFinder with ReductionFinder with StaticInliner with YggConfigComponent {
+    type YggConfig <: EvaluatorConfig
 
     import library._  
     import yggConfig._
     import trans._
     import constants._
 
-    private implicit val M = M0
+    private implicit val N = N0
     private val evalLogger = LoggerFactory.getLogger("com.precog.daze.Evaluator")
     private val transState = StateMonadTrans[EvaluatorState]
-    private val monadState = stateTMonadState[EvaluatorState, M]
+    private val monadState = stateTMonadState[EvaluatorState, N]
     
-    def report: QueryLogger[M, instructions.Line]
+    def report: QueryLogger[N, instructions.Line]
     
     def freshIdScanner: Scanner
     
@@ -122,13 +128,13 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
      * is comprised by the inner functions, `fullEval` (the main evaluator function)
      * and `prepareEval` (which has the primary eval loop).
      */
-    def eval(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean): M[Table] = {
+    def eval(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean): N[Table] = {
       evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
     
       val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
       val stagingPoints = listStagingPoints(Queue(rewrittenDAG))
 
-      def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[M, EvaluatorState, M[GroupingSpec]] = spec match {
+      def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => N[Table])]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {
         case UnionBucketSpec(left, right) => {
           for {
             leftSpec <- resolveTopLevelGroup(left, splits) 
@@ -174,10 +180,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 //val PendingTable(_, _, targetTrans) = prepareEval(target, assume + (reducedTarget -> resultTargetTable), splits)
                   
                 state <- monadState.gets(identity)
-                trans <- transState liftM (prepareEval(target, splits).eval(state.copy(assume = state.assume + (reducedTarget -> resultTargetTable))) map { _.trans })
+                trans <- transState liftM prepareEval(target, splits).eval(state.copy(assume = state.assume + (reducedTarget -> resultTargetTable))) map { _.trans }
                 subSpec <- resolveLowLevelGroup(resultTargetTable, reducedTarget, forest, splits)
               } yield {
-                M.point(GroupingSource(resultTargetTable, SourceKey.Single, Some(liftToValues(trans)), id, subSpec))
+                N.point(GroupingSource(resultTargetTable, SourceKey.Single, Some(liftToValues(trans)), id, subSpec))
               }
             }
             
@@ -189,7 +195,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       }
 
       //** only used in resolveTopLevelGroup **/
-      def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[M, EvaluatorState, GroupKeySpec] = forest match {
+      def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => N[Table])]): StateT[N, EvaluatorState, GroupKeySpec] = forest match {
         case UnionBucketSpec(left, right) => {
           for {
             leftRes <- resolveLowLevelGroup(commonTable, commonGraph, left, splits)
@@ -235,14 +241,14 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         case dag.Group(_, _, _) => sys.error("assertion error")
       }
 
-      def prepareEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[M, EvaluatorState, PendingTable] = {
+      def prepareEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => N[Table])]): StateT[N, EvaluatorState, PendingTable] = {
         evalLogger.trace("Loop on %s".format(graph))
         
-        val assumptionCheck: StateT[M, EvaluatorState, Option[Table]] = for {
+        val assumptionCheck: StateT[N, EvaluatorState, Option[Table]] = for {
           state <- monadState.gets(identity)
         } yield state.assume.get(graph)
         
-        def result: StateT[M, EvaluatorState, PendingTable] = graph match {
+        def result: StateT[N, EvaluatorState, PendingTable] = graph match {
           case s: SplitParam => {
             val (key, _) = splits(s.parent)
             
@@ -255,7 +261,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           // not using extractors due to bug
           case s: SplitGroup => {
             val (_, f) = splits(s.parent)
-            transState liftM (f(s.id) map { PendingTable(_, graph, TransSpec1.Id) })
+            transState liftM f(s.id) map { PendingTable(_, graph, TransSpec1.Id) }
           }
           
           case Const(value) => {
@@ -304,14 +310,14 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               Path(prefixStr) = ctx.basePath
               f1 = concatString(ctx).applyl(CString(prefixStr.replaceAll("/$", "")))
               trans2 = trans.Map1(trans.DerefObjectStatic(pendingTable.trans, paths.Value), f1)
-              back <- transState liftM pendingTable.table.transform(trans2).load(ctx.apiKey, jtpe)
+              back <- transState liftM mn(pendingTable.table.transform(trans2).load(ctx.apiKey, jtpe))
             } yield PendingTable(back, graph, TransSpec1.Id)
           }
           
           case dag.Morph1(mor, parent) => {
             for {
               pendingTable <- prepareEval(parent, splits)
-              back <- transState liftM mor(pendingTable.table.transform(liftToValues(pendingTable.trans)), ctx)
+              back <- transState liftM mn(mor(pendingTable.table.transform(liftToValues(pendingTable.trans)), ctx))
             } yield PendingTable(back, graph, TransSpec1.Id)
           }
           
@@ -351,7 +357,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 else aligned.transform(InnerArrayConcat(trans.WrapArray(leftSpec0), trans.WrapArray(rightSpec0)))
               }
 
-              back <- transState liftM mor(transformed, ctx)
+              back <- transState liftM mn(mor(transformed, ctx))
             } yield PendingTable(back, graph, TransSpec1.Id)
           }
           
@@ -366,7 +372,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
               table = pending.table.transform(liftToValues(pending.trans))
 
-              sorted <- transState liftM table.sort(valueSpec, SortAscending)
+              sorted <- transState liftM mn(table.sort(valueSpec, SortAscending))
               distinct = sorted.distinct(valueSpec)
               result = distinct.transform(idSpec)
             } yield {
@@ -403,11 +409,11 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             for {
               pendingTable <- prepareEval(parent, splits)
               liftedTrans = liftToValues(pendingTable.trans)
-              result = pendingTable.table
+              result = mn(pendingTable.table
                   .transform(liftedTrans)
                   .transform(DerefObjectStatic(Leaf(Source), paths.Value))
                   .transform(spec)
-                  .reduce(reduction.reducer(ctx))(reduction.monoid)
+                  .reduce(reduction.reducer(ctx))(reduction.monoid))
 
               table = result.map(reduction.extract)
 
@@ -421,9 +427,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 keyWrapped,
                 trans.WrapObject(Leaf(Source), paths.Value.name))
 
-              wrapped <- transState liftM (table map { table =>
-                table.transform(valueWrapped)
-              })
+              wrapped <- transState liftM table map { _.transform(valueWrapped) }
               cvalue <- transState liftM result.map(reduction.extractValue)
 
               _ <- monadState.modify { state =>
@@ -441,7 +445,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             for {
               pendingTable <- prepareEval(parent, splits)
               liftedTrans = liftToValues(pendingTable.trans)
-              result <- transState liftM red(pendingTable.table.transform(DerefObjectStatic(liftedTrans, paths.Value)), ctx)
+              result <- transState liftM mn(red(pendingTable.table.transform(DerefObjectStatic(liftedTrans, paths.Value)), ctx))
               wrapped = result transform buildConstantWrapSpec(Leaf(Source))
             } yield PendingTable(wrapped, graph, TransSpec1.Id)
           }
@@ -454,11 +458,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               grouping <- resolveTopLevelGroup(spec, splits)
               state <- monadState.gets(identity)
               grouping2 <- transState liftM grouping
-              result <- transState liftM Table.merge(grouping2) { (key: Table, map: Int => M[Table]) =>
-                val back = fullEval(child, splits + (s -> (key -> map)), s :: splits.keys.toList, false)
-
-                back.eval(state)  //: M[Table]
-              }
+              result <- transState liftM mn(Table.merge(grouping2) { (key, map) =>
+                val back = fullEval(child, splits + (s -> (key -> (map andThen mn))), s :: splits.keys.toList, false)
+                back.eval(state)  //: N[Table]
+              })
             } yield {
               result.transform(idSpec)
             }
@@ -473,13 +476,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               liftedTrans = liftToValues(predPending.trans)
               predTable = predPending.table transform DerefObjectStatic(liftedTrans, paths.Value)
               
-              truthiness <- transState liftM predTable.reduce(Forall reducer ctx)(Forall.monoid)
+              truthiness <- transState liftM mn(predTable.reduce(Forall reducer ctx)(Forall.monoid))
               
-              assertion = if (truthiness getOrElse false)
-                M.point(())
-              else
-                report.fatal(graph.loc, "Assertion failed")
-              
+              assertion = if (truthiness getOrElse false) N.point(()) else report.fatal(graph.loc, "Assertion failed")
               _ <- transState liftM assertion
               
               result = childPending.table transform liftToValues(childPending.trans)
@@ -496,8 +495,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               leftTable = leftPending.table.transform(liftToValues(leftPending.trans))
               rightTable = rightPending.table.transform(liftToValues(rightPending.trans))
 
-              leftSortedM = transState liftM leftTable.sort(keyValueSpec, SortAscending)
-              rightSortedM = transState liftM rightTable.sort(keyValueSpec, SortAscending)
+              leftSortedM = transState liftM mn(leftTable.sort(keyValueSpec, SortAscending))
+              rightSortedM = transState liftM mn(rightTable.sort(keyValueSpec, SortAscending))
 
               pair <- zip(leftSortedM, rightSortedM)
               (leftSorted, rightSorted) = pair
@@ -524,8 +523,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               // this transspec prunes everything that is not a key or a value.
               keyValueSpec = TransSpec1.PruneToKeyValue
 
-              leftSortedM = transState liftM leftTable.sort(keyValueSpec, SortAscending)
-              rightSortedM = transState liftM rightTable.sort(keyValueSpec, SortAscending)
+              leftSortedM = transState liftM mn(leftTable.sort(keyValueSpec, SortAscending))
+              rightSortedM = transState liftM mn(rightTable.sort(keyValueSpec, SortAscending))
 
               pair <- zip(leftSortedM, rightSortedM)
               (leftSorted, rightSorted) = pair
@@ -843,7 +842,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 table = pending.table.transform(liftToValues(pending.trans))
                 shuffled = table.transform(makeTableTrans(Map(paths.Key -> idSpec)))
 
-                sorted <- transState liftM shuffled.sort(DerefObjectStatic(Leaf(Source), paths.Key), SortAscending)
+                sorted <- transState liftM mn(shuffled.sort(DerefObjectStatic(Leaf(Source), paths.Key), SortAscending))
 
                 sortedResult = parent.sorting match {
                   case ValueSort(id) =>
@@ -868,7 +867,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 pending <- prepareEval(parent, splits)
                 table = pending.table.transform(liftToValues(pending.trans))
                 
-                sorted <- transState liftM table.sort(sortSpec, SortAscending)
+                sorted <- transState liftM mn(table.sort(sortSpec, SortAscending))
 
                 result = {
                   val wrappedSort = trans.WrapObject(sortSpec, "sort-" + id)
@@ -904,7 +903,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 pending <- prepareEval(parent, splits)
                 table = pending.table.transform(liftToValues(pending.trans))
                 
-                result <- transState liftM table.sort(DerefObjectStatic(Leaf(Source), CPathField("sort-" + id)), SortAscending)
+                result <- transState liftM mn(table.sort(DerefObjectStatic(Leaf(Source), CPathField("sort-" + id)), SortAscending))
               } yield {
                 PendingTable(result, graph, TransSpec1.Id)
               }
@@ -915,7 +914,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             for {
               pending <- prepareEval(parent, splits)
               table = pending.table.transform(liftToValues(pending.trans))
-              result <- transState liftM table.force
+              result <- transState liftM mn(table.force)
             } yield {
               PendingTable(result, graph, TransSpec1.Id)
             }
@@ -948,14 +947,14 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
        * graph is considered to be a special forcing point, but as it is the endpoint,
        * it will perforce be evaluated last.
        */
-      def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])], parentSplits: List[dag.Split], optimize: Boolean): StateT[M, EvaluatorState, Table] = {
+      def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => N[Table])], parentSplits: List[dag.Split], optimize: Boolean): StateT[N, EvaluatorState, Table] = {
         import scalaz.syntax.monoid._
 
         // find the topologically-sorted forcing points (excluding the endpoint)
         // at the current split level
         val toEval = stagingPoints filter referencesOnlySplit(parentSplits)
 
-        type EvaluatorStateT[A] = StateT[M, EvaluatorState, A]
+        type EvaluatorStateT[A] = StateT[N, EvaluatorState, A]
         val preState = toEval.foldLeftM[EvaluatorStateT, DepGraph](graph) {
           case (graph, node) => for {
             rewrittenGraph <- stagedOptimizations(graph, ctx, optimize)
@@ -971,10 +970,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         } yield table
       }
       
-      val resultState: StateT[M, EvaluatorState, Table] =
+      val resultState: StateT[N, EvaluatorState, Table] =
         fullEval(rewrittenDAG, Map(), Nil, optimize)
 
-      val resultTable: M[Table] = resultState.eval(EvaluatorState())
+      val resultTable: N[Table] = resultState.eval(EvaluatorState())
       resultTable map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
     }
 
@@ -1368,7 +1367,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     
     private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
     
-    private def zip[A](table1: StateT[M, EvaluatorState, A], table2: StateT[M, EvaluatorState, A]): StateT[M, EvaluatorState, (A, A)] =
+    private def zip[A](table1: StateT[N, EvaluatorState, A], table2: StateT[N, EvaluatorState, A]): StateT[N, EvaluatorState, (A, A)] =
       monadState.apply(table1, table2) { (_, _) }
     
     private def liftToValues(trans: TransSpec1): TransSpec1 =

@@ -96,13 +96,13 @@ class MongoQueryExecutorConfig(val config: Configuration)
 }
 
 object MongoQueryExecutor {
-  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): MongoQueryExecutor = {
+  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): Platform[Future, StreamT[Future, CharBuffer]] = {
     new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
   }
 }
 
 class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future])
-    extends Platform[Future, StreamT[Future, CharBuffer]] with ShardQueryExecutor[Future] with MongoColumnarTableModule {
+    extends ShardQueryExecutorPlatform[Future] with MongoColumnarTableModule { platform =>
   type YggConfig = MongoQueryExecutorConfig
 
   trait TableCompanion extends MongoColumnarTableCompanion
@@ -130,8 +130,24 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     true
   }
 
+  implicit val nt = NaturalTransformation.refl[Future]
+  object executor extends ShardQueryExecutor[Future](M) with IdSourceScannerModule {
+    val M = platform.M
+    type YggConfig = platform.YggConfig
+    val yggConfig = platform.yggConfig
+    val report = LoggingQueryLogger(M)
+  }
+
   def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
-    Future(Success(this))
+    Future(Success(executor))
+  }
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
+    new Evaluator[N](N0) with IdSourceScannerModule {
+      type YggConfig = platform.YggConfig // JDBMQueryExecutorConfig
+      val yggConfig = platform.yggConfig
+      val report = LoggingQueryLogger[N](N0)
+    }
   }
 
   def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
@@ -165,6 +181,5 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     )
   }
 }
-
 
 // vim: set ts=4 sw=4 et:

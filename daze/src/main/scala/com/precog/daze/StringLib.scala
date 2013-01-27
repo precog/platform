@@ -100,6 +100,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
+    // FIXME: I think it's a bad idea to override Object.equals here...
     object equals extends Op2SSB("equals", _ equals _)
 
     object equalsIgnoreCase

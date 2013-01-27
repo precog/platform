@@ -73,43 +73,46 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       case object Cross extends MorphismAlignment
     }
 
-    abstract class Morphism1(val namespace: Vector[String], val name: String, val opcode: Int = defaultMorphism1Opcode.getAndIncrement) extends Morphism1Like {
+    abstract class Morphism1(val namespace: Vector[String], val name: String) extends Morphism1Like {
+      val opcode: Int = defaultMorphism1Opcode.getAndIncrement
       def apply(input: Table, ctx: EvaluationContext): M[Table]
     }
     
-    abstract class Morphism2(val namespace: Vector[String], val name: String, val opcode: Int = defaultMorphism1Opcode.getAndIncrement) extends Morphism2Like {
-      def alignment: MorphismAlignment
+    abstract class Morphism2(val namespace: Vector[String], val name: String) extends Morphism2Like {
+      val opcode: Int = defaultMorphism1Opcode.getAndIncrement
       val multivariate: Boolean = false
+      def alignment: MorphismAlignment
       def apply(input: Table, ctx: EvaluationContext): M[Table]
     }
    
-    abstract class Op1(namespace: Vector[String], name: String, opcode: Int = defaultUnaryOpcode.getAndIncrement) extends Morphism1(namespace, name, opcode) with Op1Like {
-      def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op1 is wrong")
+    abstract class Op1(namespace: Vector[String], name: String) extends Morphism1(namespace, name) with Op1Like {
       def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A]
 
       def fold[A](op1: Op1 => A, op1F1: Op1F1 => A): A = op1(this)
+      def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op1 is wrong")
     }
 
-    abstract class Op1F1(namespace: Vector[String], name: String, opcode: Int = defaultUnaryOpcode.getAndIncrement) extends Op1(namespace, name, opcode) {
+    abstract class Op1F1(namespace: Vector[String], name: String) extends Op1(namespace, name) {
       def f1(ctx: EvaluationContext): F1
-
       override def fold[A](op1: Op1 => A, op1F1: Op1F1 => A): A = op1F1(this)
     }
 
-    abstract class Op2(val namespace: Vector[String], val name: String, val opcode: Int = defaultBinaryOpcode.getAndIncrement) extends Op2Like {
-      val alignment = MorphismAlignment.Match // Was None, which would have blown up in the evaluator
-      def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op2 is wrong")
+    abstract class Op2(namespace: Vector[String], name: String) extends Morphism2(namespace, name) with Op2Like {
+      val alignment = MorphismAlignment.Match
       def f2(ctx: EvaluationContext): F2
+      def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op2 is wrong")
     }
 
-    abstract class Reduction(val namespace: Vector[String], val name: String, val opcode: Int = defaultReductionOpcode.getAndIncrement) extends ReductionLike {
+    abstract class Reduction(val namespace: Vector[String], val name: String)(implicit M: Monad[M]) extends ReductionLike {
+      val opcode: Int = defaultReductionOpcode.getAndIncrement
       type Result
-      def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx))(monoid) map extract
 
       def monoid: Monoid[Result]
       def reducer(ctx: EvaluationContext): Reducer[Result]
       def extract(res: Result): Table
       def extractValue(res: Result): Option[CValue]
+
+      def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx))(monoid) map extract
     }
 
     def coalesce(reductions: List[(Reduction, Option[Int])]): Reduction

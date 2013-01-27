@@ -87,6 +87,7 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   abstract class YggConfig extends ParseEvalStackSpecConfig
       with IdSourceConfig
+      with EvaluatorConfig
       with StandaloneShardSystemConfig
       with ColumnarTableModuleConfig
       with BlockStoreColumnarTableModuleConfig
@@ -101,6 +102,16 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
+    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
+      val report = LoggingQueryLogger[N](N0)
+      class YggConfig extends EvaluatorConfig {
+        val idSource = new FreshAtomicIdSource
+        val maxSliceSize = 10
+      }
+      val yggConfig = new YggConfig
+    }
 
   val rawProjectionModule = new JDBMProjectionModule {
     type YggConfig = self.YggConfig

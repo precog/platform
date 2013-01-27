@@ -24,9 +24,12 @@ import bytecode._
 import org.specs2.mutable._
 import com.precog.yggdrasil._
 
-object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLibrary with FNDummyModule {
+object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyModule {
   import instructions._
   import dag._
+
+  type Lib = RandomLibrary
+  object library extends RandomLibrary
   
   "cross ordering" should {
     "order in the appropriate direction when one side is singleton" >> {

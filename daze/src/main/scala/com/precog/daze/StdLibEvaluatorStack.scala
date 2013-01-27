@@ -17,38 +17,32 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package quirrel
+package com.precog.daze
 
-import org.specs2.mutable._
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.table.cf
+import scalaz._
 
-import parser._
-import typer._
-import emitter._
+trait StdLibEvaluatorStack[M[+_]] 
+    extends EvaluatorModule[M]
+    with StdLibModule[M] 
+    with StdLibOpFinderModule[M] 
+    with StdLibStaticInlinerModule[M] 
+    with ReductionFinderModule[M] {
 
-object LineErrorsSpecs extends Specification
-    with Parser
-    with TreeShaker
-    with GroupSolver
-    with LineErrors 
-    with RandomLibrarySpec {
+  trait Lib extends StdLib with StdLibOpFinder with StdLibStaticInliner with ReductionFinder
+  object library extends Lib
 
-  "line errors" should {
-    "be correct" in {
-      val input = """
-        |
-        | a := 1
-        |
-        |
-        |
-        | a := 1
-        | 10""".stripMargin
+  abstract class Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) 
+      extends EvaluatorLike[N](N0)(mn, nm)
+      with StdLibOpFinder 
+      with StdLibStaticInliner {
 
-      val tree = parse(input).head
-      bindRoot(tree, tree)
-
-      val result = shakeTree(tree)
-      result.errors.map(e => e.loc.lineNum -> e.loc.colNum) mustEqual Set(3 -> 2, 7 -> 2)
-    }
+    val Exists = library.Exists
+    val Forall = library.Forall
+    def concatString(ctx: EvaluationContext) = library.Infix.concatString.f2(ctx)
+    def coerceToDouble(ctx: EvaluationContext) = cf.util.CoerceToDouble
   }
 }
+
+// vim: set ts=4 sw=4 et:

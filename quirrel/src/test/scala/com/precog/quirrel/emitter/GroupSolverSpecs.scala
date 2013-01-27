@@ -20,8 +20,6 @@
 package com.precog.quirrel
 package emitter
 
-import com.precog.bytecode.{Instructions, StaticLibrary}
-
 import org.specs2.mutable._
 
 import java.io.File
@@ -37,10 +35,11 @@ object GroupSolverSpecs extends Specification
     with GroupSolver
     with ProvenanceChecker
     with RawErrors 
-    with StaticLibrary {
+    with StaticLibrarySpec {
       
   import ast._
   import buckets._
+  import library._
   
   "group solver" should {
     "identify and solve group set for trivial solve example" in {
