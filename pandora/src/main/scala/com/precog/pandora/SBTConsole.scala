@@ -120,8 +120,6 @@ object SBTConsole {
 
     def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
-    val report = LoggingQueryLogger[Future]
-
     val rawProjectionModule = new JDBMProjectionModule {
       type YggConfig = PlatformConfig
       val yggConfig = console.yggConfig
@@ -131,6 +129,12 @@ object SBTConsole {
         def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = metadataStorage.findDescriptorRoot(descriptor)
         def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = metadataStorage.findArchiveRoot(descriptor)
       }
+    }
+
+    def Evaluator(M: Monad[Future]) = new Evaluator(M) with IdSourceScannerModule[Future] {
+      type YggConfig = PlatformConfig
+      val yggConfig = console.yggConfig
+      val report = LoggingQueryLogger[Future](M)
     }
 
     def eval(str: String): Set[SValue] = evalE(str)  match {
