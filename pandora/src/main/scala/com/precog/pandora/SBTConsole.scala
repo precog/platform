@@ -49,6 +49,7 @@ import org.streum.configrity.io.BlockFormat
 
 trait PlatformConfig extends BaseConfig
     with IdSourceConfig
+    with EvaluatorConfig
     with StandaloneShardSystemConfig
     with ColumnarTableModuleConfig
     with BlockStoreColumnarTableModuleConfig
@@ -57,7 +58,7 @@ trait PlatformConfig extends BaseConfig
     with ActorProjectionModuleConfig 
 
 trait Platform extends muspelheim.ParseEvalStack[Future] 
-    with IdSourceScannerModule[Future] 
+    with IdSourceScannerModule
     with SliceColumnarTableModule[Future, Array[Byte]]
     with ActorStorageModule
     with ActorProjectionModule[Array[Byte], Slice]
@@ -131,11 +132,12 @@ object SBTConsole {
       }
     }
 
-    def Evaluator(M: Monad[Future]) = new Evaluator(M) with IdSourceScannerModule[Future] {
-      type YggConfig = PlatformConfig
-      val yggConfig = console.yggConfig
-      val report = LoggingQueryLogger[Future](M)
-    }
+    def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = 
+      new Evaluator[N](N0) with IdSourceScannerModule {
+        type YggConfig = PlatformConfig
+        val yggConfig = console.yggConfig
+        val report = LoggingQueryLogger[N](N0)
+      }
 
     def eval(str: String): Set[SValue] = evalE(str)  match {
       case Success(results) => results.map(_._2)

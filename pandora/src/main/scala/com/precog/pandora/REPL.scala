@@ -54,6 +54,7 @@ trait Lifecycle {
 
 class REPLConfig(dataDir: Option[String]) extends BaseConfig
     with IdSourceConfig
+    with EvaluatorConfig
     with StandaloneShardSystemConfig
     with ColumnarTableModuleConfig
     with BlockStoreColumnarTableModuleConfig
@@ -301,11 +302,12 @@ object Console extends App {
 
         object Table extends TableCompanion
 
-        def Evaluator(M: Monad[Future]) = new Evaluator(M) with IdSourceScannerModule[Future] {
-          type YggConfig = REPLConfig
-          val yggConfig = replConfig
-          val report = LoggingQueryLogger[Future](M)
-        }
+        def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = 
+          new Evaluator[N](N0) with IdSourceScannerModule {
+            type YggConfig = REPLConfig
+            val yggConfig = replConfig
+            val report = LoggingQueryLogger[N](N0)
+          }
 
         def startup = IO { PrecogUnit }
 
