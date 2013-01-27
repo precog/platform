@@ -81,8 +81,6 @@ trait JDBMQueryExecutorConfig
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
   lazy val jobPollFrequency: Duration = config[Int]("precog.evaluator.poll.cancellation", 3) seconds
-
-  def ingestFailureLogRoot: File
 }
 
 
@@ -109,7 +107,6 @@ trait JDBMQueryExecutorComponent  {
 
         val clock = blueeyes.util.Clock.System
         val maxSliceSize = config[Int]("jdbm.max_slice_size", 10000)
-        val ingestFailureLogRoot = new File(config[String]("ingest.failure_log_root"))
         val smallSliceSize = config[Int]("jdbm.small_slice_size", 8)
 
         //TODO: Get a producer ID
@@ -193,9 +190,7 @@ trait JDBMQueryExecutorComponent  {
         }
       }
 
-      def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog = {
-        FilesystemIngestFailureLog(yggConfig.ingestFailureLogRoot, checkpoint)
-      }
+      def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog = FilesystemIngestFailureLog(logRoot, checkpoint)
 
       def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
         (for {

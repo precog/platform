@@ -187,10 +187,10 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
     }
 
     private def sleep: IO[PrecogUnit] = {
-      logger.info("Closing projection for %s at %d due to excessive idle time.".format(descriptor.shows, now))
+      logger.info("Closing projection for %s at %d.".format(descriptor.shows, now))
       (for {
+        _ <- (projection map rawProjectionModule.Projection.close).sequence
         _ <- IO { projection = None }
-        _ <- (projection map rawProjectionModule.Projection.close) sequence
       } yield PrecogUnit) except { t => 
         IO { logger.error("Error closing projection for %s.".format(descriptor), t); PrecogUnit } 
       }

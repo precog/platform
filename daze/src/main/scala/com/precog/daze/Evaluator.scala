@@ -105,14 +105,23 @@ trait Evaluator[M[+_]] extends DAG
   def Forall: Reduction { type Result = Option[Boolean] }
   def Exists: Reduction { type Result = Option[Boolean] }
 
-  def rewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph = {
-    (if (optimize) inlineStatics(_: DepGraph, ctx) else identity[DepGraph] _) andThen
-    (if (optimize) optimizeJoins(_) else identity) andThen
+  def composeOptimizations(optimize: Boolean, funcs: List[DepGraph => DepGraph]): DepGraph => DepGraph =
+    if (optimize) funcs.map(Endo[DepGraph]).suml.run else identity
+
+  def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
+    composeOptimizations(optimize, List(
+      inlineStatics(_, ctx),
+      optimizeJoins(_)
+    ))
+
+  def fullRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
+    stagedRewriteDAG(optimize, ctx) andThen
     (orderCrosses _) andThen
-    (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
-    (if (optimize) { g => megaReduce(g, findReductions(g, ctx)) } else identity) andThen
-    (if (optimize) (memoize _) else identity)
-  }
+    composeOptimizations(optimize, List(
+      inferTypes(JType.JUnfixedT),
+      { g => megaReduce(g, findReductions(g, ctx)) },
+      memoize
+    ))
   
   /**
    * The entry point to the evaluator.  The main implementation of the evaluator
@@ -122,7 +131,7 @@ trait Evaluator[M[+_]] extends DAG
   def eval(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean): M[Table] = {
     evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
   
-    val rewrittenDAG = rewriteDAG(optimize, ctx)(graph)
+    val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
     val stagingPoints = listStagingPoints(Queue(rewrittenDAG))
 
     def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => M[Table])]): StateT[M, EvaluatorState, M[GroupingSpec]] = spec match {
@@ -407,12 +416,13 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pendingTable <- prepareEval(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
-            result = reduction(
-              pendingTable.table
+            result = pendingTable.table
                 .transform(liftedTrans)
                 .transform(DerefObjectStatic(Leaf(Source), paths.Value))
-                .transform(spec),
-              ctx)
+                .transform(spec)
+                .reduce(reduction.reducer(ctx))(reduction.monoid)
+
+            table = result.map(reduction.extract)
 
             keyWrapped = trans.WrapObject(
               trans.ConstLiteral(
@@ -424,12 +434,16 @@ trait Evaluator[M[+_]] extends DAG
               keyWrapped,
               trans.WrapObject(Leaf(Source), paths.Value.name))
 
-            wrapped <- transState liftM (result map { table =>
+            wrapped <- transState liftM (table map { table =>
               table.transform(valueWrapped)
             })
+            cvalue <- transState liftM result.map(reduction.extractValue)
 
             _ <- monadState.modify { state =>
-              state.copy(assume = state.assume + (m -> wrapped))
+              state.copy(
+                assume = state.assume + (m -> wrapped),
+                reductions = state.reductions + (m -> cvalue)
+              )
             }
           } yield {
             PendingTable(wrapped, graph, TransSpec1.Id)
@@ -454,7 +468,7 @@ trait Evaluator[M[+_]] extends DAG
             state <- monadState.gets(identity)
             grouping2 <- transState liftM grouping
             result <- transState liftM Table.merge(grouping2) { (key: Table, map: Int => M[Table]) =>
-              val back = fullEval(child, splits + (s -> (key -> map)), s :: splits.keys.toList)
+              val back = fullEval(child, splits + (s -> (key -> map)), s :: splits.keys.toList, false)
 
               back.eval(state)  //: M[Table]
             }
@@ -947,35 +961,75 @@ trait Evaluator[M[+_]] extends DAG
      * graph is considered to be a special forcing point, but as it is the endpoint,
      * it will perforce be evaluated last.
      */
-    def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])], parentSplits: List[dag.Split]): StateT[M, EvaluatorState, Table] = {
+    def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => M[Table])], parentSplits: List[dag.Split], optimize: Boolean): StateT[M, EvaluatorState, Table] = {
       import scalaz.syntax.monoid._
 
       // find the topologically-sorted forcing points (excluding the endpoint)
       // at the current split level
       val toEval = stagingPoints filter referencesOnlySplit(parentSplits)
-      
-      val preStates = toEval map { graph =>
-        for {
-          _ <- prepareEval(graph, splits)
-        } yield ()        // the result is uninteresting, since it has been stored in `assumed`
+
+      type EvaluatorStateT[A] = StateT[M, EvaluatorState, A]
+      val preState = toEval.foldLeftM[EvaluatorStateT, DepGraph](graph) {
+        case (graph, node) => for {
+          rewrittenGraph <- stagedOptimizations(graph, ctx, optimize)
+          _ <- prepareEval(node, splits)
+        } yield rewrittenGraph
       }
-      
-      val preState = preStates reduceOption { _ >> _ } getOrElse StateT.stateT[M, EvaluatorState, Unit](())
-      
+
       // run the evaluator on all forcing points *including* the endpoint, in order
       for {
-        pendingTable <- preState >> prepareEval(graph, splits)
+        rewrittenGraph <- preState
+        pendingTable <- prepareEval(rewrittenGraph, splits)
         table = pendingTable.table transform liftToValues(pendingTable.trans)
       } yield table
     }
     
     val resultState: StateT[M, EvaluatorState, Table] =
-      fullEval(rewrittenDAG, Map(), Nil)
+      fullEval(rewrittenDAG, Map(), Nil, optimize)
 
     val resultTable: M[Table] = resultState.eval(EvaluatorState())
     resultTable map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
   }
-  
+
+  private[this] def stagedOptimizations(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean) =
+    for {
+      reductions <- monadState.gets(_.reductions)
+    } yield stagedRewriteDAG(optimize, ctx)(reductions.toList.foldLeft(graph) {
+      case (graph, (from, Some(result))) if optimize => inlineNodeValue(graph, from, result)
+      case (graph, _) => graph
+    })
+
+  /**
+   * Takes a graph, a node and a value. Replaces the node (and
+   * possibly its parents) with the value into the graph.
+   */
+  def inlineNodeValue(graph: DepGraph, from: DepGraph, result: CValue) = {
+    val replacements = graph.foldDown(true) {
+      case join@Join(
+        DerefArray,
+        CrossLeftSort,
+        Join(
+          DerefArray,
+          CrossLeftSort,
+          `from`,
+          Const(CLong(index1))),
+        Const(CLong(index2))) =>
+
+        List(
+          (join, Const(result)(from.loc))
+        )
+    }
+
+    replacements.foldLeft(graph) {
+      case (graph, (from, to)) => replaceNode(graph, from, to)
+    }
+  }
+
+  private[this] def replaceNode(graph: DepGraph, from: DepGraph, to: DepGraph) =
+    graph.mapDown(recurse => {
+      case `from` => to
+    })
+
   /**
    * Returns all forcing points in the graph, ordered topologically.
    */
@@ -1356,7 +1410,11 @@ trait Evaluator[M[+_]] extends DAG
     }
   }
 
-  private case class EvaluatorState(assume: Map[DepGraph, Table] = Map.empty, extraCount: Int = 0)
+  private case class EvaluatorState(
+    assume: Map[DepGraph, Table] = Map.empty,
+    reductions: Map[DepGraph, Option[CValue]] = Map.empty,
+    extraCount: Int = 0
+  )
   
   private case class PendingTable(table: Table, graph: DepGraph, trans: TransSpec1)
 }

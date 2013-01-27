@@ -130,12 +130,11 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
       val theta = result collect {
         case (ids, SObject(elems)) if ids.length == 0 => {
-          elems.keys mustEqual Set("Model1")
+		  elems.keys mustEqual Set("Model1")
+		  val SArray(arr) = elems("Model1")
 
-          val SArray(arr1) = elems("Model1")
-
-          val SDecimal(theta1) = arr1(0) match { case SArray(elems2) => elems2(0) }
-          val SDecimal(theta0) = arr1(1)
+          val SDecimal(theta1) = (arr(0): @unchecked) match { case SArray(elems2) => elems2(0) }
+          val SDecimal(theta0) = arr(1)
           List(theta0.toDouble, theta1.toDouble)
         }
       }
@@ -193,13 +192,12 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       val theta = result collect {
         case (ids, SObject(elems)) if ids.length == 0 => {
           elems.keys mustEqual Set("Model1")
+ 		  val SArray(arr) = elems("Model1")
 
-          val SArray(arr1) = elems("Model1")
-
-          val SDecimal(theta1) = arr1(0) match { case SObject(map) => map("bar") }
-          val SDecimal(theta2) = arr1(0) match { case SObject(map) => map("baz") }
-          val SDecimal(theta3) = arr1(0) match { case SObject(map) => map("foo") }
-          val SDecimal(theta0) = arr1(1) 
+          val SDecimal(theta1) = (arr(0): @unchecked) match { case SObject(map) => map("bar") }
+          val SDecimal(theta2) = (arr(0): @unchecked) match { case SObject(map) => map("baz") }
+          val SDecimal(theta3) = (arr(0): @unchecked) match { case SObject(map) => map("foo") }
+          val SDecimal(theta0) = arr(1) 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble, theta3.toDouble)
         }
       }
@@ -267,18 +265,17 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       def theta(model: String) = result collect {
         case (ids, SObject(elems)) if ids.length == 0 => {
           elems.keys mustEqual Set("Model1", "Model2", "Model3")
+          val SArray(arr) = elems(model)
 
-          val SArray(arr1) = elems(model)
-
-          val SDecimal(theta1) = arr1(0) match { case SObject(map) => 
-            map("bar") match { case SObject(map) => 
-              map("baz") match { case SArray(elems) =>
+          val SDecimal(theta1) = (arr(0): @unchecked) match { case SObject(map) => 
+            (map("bar"): @unchecked) match { case SObject(map) => 
+              (map("baz"): @unchecked) match { case SArray(elems) =>
                 elems(0)
               }
             } 
           }
-          val SDecimal(theta2) = arr1(0) match { case SObject(map) => map("foo") }
-          val SDecimal(theta0) = arr1(1) 
+          val SDecimal(theta2) = (arr(0): @unchecked) match { case SObject(map) => map("foo") }
+          val SDecimal(theta0) = arr(1) 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble)
         }
       }
