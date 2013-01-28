@@ -205,7 +205,9 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
     new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
-      val report = LoggingQueryLogger[N](N0)
+      val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] {
+        val M = N0
+      }
       class YggConfig extends EvaluatorConfig {
         val idSource = new FreshAtomicIdSource
         val maxSliceSize = 10
