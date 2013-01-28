@@ -17,6 +17,7 @@ trait Emitter extends AST
     with Tracer {
       
   import instructions._
+  import library._
 
   case class EmitterError(expr: Option[Expr], message: String) extends Exception(message)
   

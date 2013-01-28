@@ -75,7 +75,7 @@ trait ColumnarTableModuleConfig {
 trait ColumnarTableModule[M[+_]]
     extends TableModule[M]
     with ColumnarTableTypes
-    with IdSourceScannerModule[M]
+    with IdSourceScannerModule
     with SliceTransforms[M]
     with SamplableColumnarTableModule[M]
     with IndicesModule[M]
@@ -90,6 +90,8 @@ trait ColumnarTableModule[M[+_]]
   type Table <: ColumnarTable
   type TableCompanion <: ColumnarTableCompanion
   case class TableMetrics(startCount: Int, sliceTraversedCount: Int)
+
+  implicit def M: Monad[M]
 
   def newScratchDir(): File = IOUtils.createTmpDir("ctmscratch").unsafePerformIO
   def jdbmCommitInterval: Long = 200000l
@@ -282,7 +284,7 @@ trait ColumnarTableModule[M[+_]]
     /**
      * Merge controls the iteration over the table of group key values. 
      */
-    def merge(grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => M[Table]): M[Table] = {
+    def merge[N[+_]](grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table] = {
       import GroupKeySpec.{ dnf, toVector }
       
       type Key = Seq[JValue]
@@ -392,7 +394,7 @@ trait ColumnarTableModule[M[+_]]
             t.sort(DerefObjectStatic(Leaf(Source), CPathField("key")))
           }
 
-          body(groupKeyTable, map)
+          nt(body(groupKeyTable, map))
         }
 
         // TODO: this can probably be done as one step, but for now
@@ -401,6 +403,7 @@ trait ColumnarTableModule[M[+_]]
           case k :: ks => evaluateGroupKey(k).map(t => Some((t, ks)))
           case Nil => M.point(None)
         }
+
         val slices: StreamT[M, Slice] = tables.flatMap(_.slices)
 
         M.point(Table(slices, UnknownSize))

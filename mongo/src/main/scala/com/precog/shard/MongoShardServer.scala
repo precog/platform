@@ -1,6 +1,7 @@
 package com.precog.shard
 package mongo
 
+import akka.actor.ActorSystem
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
 import com.precog.common.security._
@@ -15,8 +16,6 @@ import blueeyes.util.Clock
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 import org.eclipse.jetty.server.{Handler, Request, Server}
 import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, HandlerList, ResourceHandler}
-
-import akka.actor.ActorSystem
 
 import scalaz._
 
