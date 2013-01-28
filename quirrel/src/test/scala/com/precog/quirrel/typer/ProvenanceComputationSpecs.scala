@@ -2,7 +2,6 @@ package com.precog
 package quirrel
 package typer
 
-import bytecode.StaticLibrary
 import com.codecommit.gll.LineStream
 import org.specs2.mutable.Specification
 
@@ -14,9 +13,10 @@ object ProvenanceComputationSpecs extends Specification
     with CompilerUtils
     with Compiler
     with ProvenanceChecker 
-    with StaticLibrary {
+    with StaticLibrarySpec {
 
   import ast._
+  import library._
   
   "provenance computation" should {
     "compute result provenance correctly in BIF1" in {
