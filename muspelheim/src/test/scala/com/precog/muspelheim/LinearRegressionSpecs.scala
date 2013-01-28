@@ -23,8 +23,14 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
 
           val SArray(arr1) = elems("Model1")
 
-          arr1(0) must beLike { case SObject(elems) => elems("height") match { case SDecimal(d) => elems must haveSize(1) } }
+          arr1(0) must beLike { case SObject(elems) => 
+            elems("height") match { 
+              case SDecimal(d) => elems must haveSize(1)
+              case _ => ko
+            }
+          }
           arr1(1) must beLike { case SDecimal(d) => ok }
+        case _ => ko
       }
     }    
     
@@ -46,7 +52,21 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
           elems.keys mustEqual Set("Model1")
 
           elems("Model1") must beLike { case SDecimal(d) => ok }
+        case _ => ko
       }
+    }
+
+    "predict linear regression when no field names in model are present in data" >> {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        model := std::stats::linearRegression({ height: medals.HeightIncm }, medals.Weight)
+        std::stats::predictLinear(model, {weight: 34, other: 35})
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(0)
     }
 
     "return correct number of results in more complex case of linear regression" >> {
@@ -64,6 +84,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
         case (ids, SObject(elems)) =>
           ids must haveSize(0)
           elems.keys mustEqual Set("Model1", "Model2", "Model3", "Model4")
+        case _ => ko
       }
     }
 

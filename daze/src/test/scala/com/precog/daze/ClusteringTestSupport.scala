@@ -1,6 +1,7 @@
 package com.precog.daze
 
 import scala.util.Random._
+
 import blueeyes.json._
 
 import com.precog.util.IOUtils

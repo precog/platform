@@ -1,0 +1,2 @@
+{ "Model1": { "Cluster1": {"foo":3.0, "bar": 2.0}, "Cluster2": {"foo":4.4, "bar":9}}, "Model2": {"Cluster1": {"baz": 4.0 } } }
+{ "Model1": {"Cluster1": [5,6,7], "Cluster2": [6,3,2], "Cluster3": [7,4,3], "Cluster4": [0,33,2]}}
