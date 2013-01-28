@@ -173,7 +173,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
       // Sort by _id always to mimic JDBM
       val cursor = cursorGen().sort(new BasicDBObject("_id", 1))skip(skip)
 
-      @tailrec def buildColArrays(from: DBCursor, into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
+      @tailrec def buildColArrays(from: DBCursor, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
         if (sliceIndex < yggConfig.maxSliceSize && from.hasNext) {
           // horribly inefficient, but a place to start
           val Success(jv) = MongoToJson(from.next())
@@ -194,17 +194,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
       // columns won't satisfy sampleData.schema. This will cause the subsumption test in
       // Slice#typed to fail unless it allows for vacuous success
       val slice = new Slice {
-        val (cols, size) = buildColArrays(cursor, Map.empty[ColumnRef, (BitSet, Array[_])], 0) 
-        val columns = cols map {
-          case (ref @ ColumnRef(_, CBoolean), (defined, values))     => (ref, ArrayBoolColumn(defined, values.asInstanceOf[Array[Boolean]]))
-          case (ref @ ColumnRef(_, CLong), (defined, values))        => (ref, ArrayLongColumn(defined, values.asInstanceOf[Array[Long]]))
-          case (ref @ ColumnRef(_, CDouble), (defined, values))      => (ref, ArrayDoubleColumn(defined, values.asInstanceOf[Array[Double]]))
-          case (ref @ ColumnRef(_, CNum), (defined, values))         => (ref, ArrayNumColumn(defined, values.asInstanceOf[Array[BigDecimal]]))
-          case (ref @ ColumnRef(_, CString), (defined, values))      => (ref, ArrayStrColumn(defined, values.asInstanceOf[Array[String]]))
-          case (ref @ ColumnRef(_, CEmptyArray), (defined, values))  => (ref, new BitsetColumn(defined) with EmptyArrayColumn)
-          case (ref @ ColumnRef(_, CEmptyObject), (defined, values)) => (ref, new BitsetColumn(defined) with EmptyObjectColumn)
-          case (ref @ ColumnRef(_, CNull), (defined, values))        => (ref, new BitsetColumn(defined) with NullColumn)
-        }
+        val (columns, size) = buildColArrays(cursor, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
       }
 
       val nextSkip = if (cursor.hasNext) {

@@ -20,9 +20,10 @@
 package com.precog
 package daze
 
+import yggdrasil._
 import bytecode.{ BinaryOperationType, JNumberT, JBooleanT, JTextT, Library, Instructions }
 
-trait OpFinderModule[M[+_]] extends Instructions with TableLibModule[M] {
+trait OpFinderModule[M[+_]] extends Instructions with TableModule[M] with TableLibModule[M] {
   import instructions._
 
   trait OpFinder {

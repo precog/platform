@@ -18,7 +18,7 @@
  *
  */
 package com.precog.shard
-package mongo
+package jdbc
 
 import blueeyes.json._
 import blueeyes.json.serialization._
@@ -26,8 +26,15 @@ import DefaultSerialization._
 
 import com.precog.accounts._
 
+import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
+
+import com.precog.daze._
+
+import com.precog.muspelheim._
+
+import com.precog.util.FilesystemFileOps
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
@@ -35,14 +42,8 @@ import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
-import com.precog.yggdrasil.table.mongo._
+import com.precog.yggdrasil.table.jdbc._
 import com.precog.yggdrasil.util._
-
-import com.precog.daze._
-import com.precog.muspelheim._
-
-import com.precog.common._
-import com.precog.util.FilesystemFileOps
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -51,13 +52,13 @@ import akka.util.duration._
 import akka.util.Duration
 import akka.util.Timeout
 
-import com.mongodb.{Mongo, MongoURI}
-
 import org.streum.configrity.Configuration
-import org.slf4j.{LoggerFactory, MDC}
+
+import com.weiglewilczek.slf4s.Logging
 
 import java.io.File
 import java.nio.CharBuffer
+import java.sql.DriverManager
 
 import scalaz._
 import scalaz.Validation._
@@ -65,12 +66,13 @@ import scalaz.effect.IO
 import scalaz.syntax.monad._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.std.either._
+import scalaz.syntax.std.option._
 import scala.collection.JavaConverters._
 
-class MongoQueryExecutorConfig(val config: Configuration)
+class JDBCQueryExecutorConfig(val config: Configuration)
   extends BaseConfig
   with ColumnarTableModuleConfig
-  with MongoColumnarTableModuleConfig
+  with JDBCColumnarTableModuleConfig
   with BlockStoreColumnarTableModuleConfig
   with ShardQueryExecutorConfig
   with IdSourceConfig
@@ -80,13 +82,11 @@ class MongoQueryExecutorConfig(val config: Configuration)
   val smallSliceSize = config[Int]("mongo.small_slice_size", 8)
 
   val shardId = "standalone"
-  val logPrefix = "mongo"
+  val logPrefix = "jdbc"
 
   val idSource = new FreshAtomicIdSource
 
-  def mongoServer: String = config[String]("mongo.server", "localhost:27017")
-
-  def dbAuthParams = config.detach("mongo.dbAuth")
+  val dbMap = config.detach("databases").data
 
   def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
 
@@ -95,40 +95,35 @@ class MongoQueryExecutorConfig(val config: Configuration)
   val ingestConfig = None
 }
 
-object MongoQueryExecutor {
+object JDBCQueryExecutor {
   def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): Platform[Future, StreamT[Future, CharBuffer]] = {
-    new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
-  }
+    new JDBCQueryExecutor(new JDBCQueryExecutorConfig(config))
+  }  
 }
 
-class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future])
-    extends ShardQueryExecutorPlatform[Future] with MongoColumnarTableModule { platform =>
-  type YggConfig = MongoQueryExecutorConfig
+class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future])
+    extends ShardQueryExecutorPlatform[Future] 
+    with JDBCColumnarTableModule 
+    with Logging { platform =>
+  type YggConfig = JDBCQueryExecutorConfig
 
-  trait TableCompanion extends MongoColumnarTableCompanion
+  trait TableCompanion extends JDBCColumnarTableCompanion
   object Table extends TableCompanion {
-    var mongo: Mongo = _
-    val dbAuthParams = yggConfig.dbAuthParams.data
+    val databaseMap = yggConfig.dbMap
   }
 
-  lazy val storage = new MongoStorageMetadataSource(Table.mongo)
+  // Not for production
+  val unescapeColumnNames = false
+
+  lazy val storage = new JDBCStorageMetadataSource(yggConfig.dbMap)
   def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
   // to satisfy abstract defines in parent traits
   val asyncContext = extAsyncContext
   val M = extM
 
-  val report = LoggingQueryLogger[Future]
-
-  def startup() = Future {
-    Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
-    true
-  }
-
-  def shutdown() = Future {
-    Table.mongo.close()
-    true
-  }
+  def startup() = Promise.successful(true)
+  def shutdown() = Promise.successful(true)
 
   implicit val nt = NaturalTransformation.refl[Future]
   object executor extends ShardQueryExecutor[Future](M) with IdSourceScannerModule {
@@ -154,30 +149,43 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
       Future {
         path.elements.toList match {
-          case Nil => 
-            val dbs = Table.mongo.getDatabaseNames.asScala.toList
-            // TODO: Poor behavior on Mongo's part, returning database+collection names
-            // See https://groups.google.com/forum/#!topic/mongodb-user/HbE5wNOfl6k for details
-            
-            val finalNames = dbs.foldLeft(dbs.toSet) {
-              case (acc, dbName) => acc.filterNot { t => t.startsWith(dbName) && t != dbName }
-            }.toList.sorted
-            Success(finalNames.map {d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
+          case Nil =>
+            Success(yggConfig.dbMap.keys.toList.map { d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
 
-          case dbName :: Nil => 
-            val db = Table.mongo.getDB(dbName)
-            Success(if (db == null) JArray(Nil) else db.getCollectionNames.asScala.map {d => "/" + d + "/" }.toList.sorted.serialize.asInstanceOf[JArray])
+          case dbName :: Nil =>
+            // A little more complicated. Need to use metadata interface to enumerate table names
+            yggConfig.dbMap.get(dbName).toSuccess("DB %s is not configured".format(dbName)) flatMap { url =>
+              Validation.fromTryCatch {
+                val conn = DriverManager.getConnection(url)
 
-          case _ => 
-            Failure("MongoDB paths have the form /databaseName/collectionName; longer paths are not supported.")
+                try {
+                  // May need refinement to get meaningful results
+                  val results = conn.getMetaData.getTables(null, null, "%", Array("TABLE"))
+
+                  var tables = List.empty[String]
+
+                  while (results.next) {
+                    tables ::= "/" + results.getString("TABLE_NAME") + "/"
+                  }
+
+                  tables.serialize.asInstanceOf[JArray]
+                } finally {
+                  conn.close()
+                }
+              }.bimap({ t => logger.error("Error enumerating tables", t); t.getMessage }, x => x)
+            }
+
+          case _ =>
+            Failure("JDBC paths have the form /databaseName/tableName; longer paths are not supported.")
         }
       }
     }
 
     def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = Promise.successful (
-      Success(JObject.empty) // TODO: Implement somehow?
+      Success(JObject.empty) // TODO: Implement from table metadata
     )
   }
 }
+
 
 // vim: set ts=4 sw=4 et:
