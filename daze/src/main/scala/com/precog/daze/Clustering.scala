@@ -496,7 +496,7 @@ trait KMediansCoreSetClustering {
   }
 }
 
-trait ClusteringLib[M[+_]] extends GenOpcode[M] {
+trait ClusteringLib[M[+_]] extends GenOpcode[M] with Evaluator[M] {
   import trans._
   import TransSpecModule._
 

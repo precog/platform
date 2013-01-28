@@ -690,7 +690,10 @@ trait DAG extends Instructions with TransSpecModule {
 
     case class Morph2(loc: Line, mor: Morphism2, left: DepGraph, right: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = {
-        if (mor.retainIds) sys.error("not implemented yet") //TODO need to retain only the identities that are being used in the match
+        if (mor.retainIds) {
+          if (mor.idAlignment == IdentityAlignment.MatchAlignment) (left.identities ++ right.identities).distinct
+          else left.identities ++ right.identities
+        }
         else Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       }
       

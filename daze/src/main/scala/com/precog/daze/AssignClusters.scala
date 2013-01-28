@@ -17,7 +17,6 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-
 package com.precog
 package daze
 
@@ -41,7 +40,7 @@ import scalaz.syntax.traverse._
 
 import spire.implicits._
 
-trait PredictionHelper[M[+_]] extends GenOpcode[M] {
+trait AssignPredictionHelper[M[+_]] extends GenOpcode[M] {
   import trans._
 
   type ClusterId = String
@@ -72,13 +71,13 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
       }
 
       val rowModels: Int => Set[Model] = {
-        val modelTules: Map[ModelId, Set[(ModelId, ClusterId, CPath, DoubleColumn)]] = {
+        val modelTuples: Map[ModelId, Set[(ModelId, ClusterId, CPath, DoubleColumn)]] = {
           schema.columnRefs.flatMap {
             case ColumnRef(path @ CPath(TableModule.paths.Value, CPathField(modelName), CPathField(clusterName), rest @ _*), ctype) => 
               Schema.mkType((path, ctype) :: Nil) flatMap { case jType =>
                 schema.columns(jType) collectFirst { case (col: DoubleColumn) => col }
               } map { col =>
-                (modelName, clusterName, CPath((TableModule.paths.Value +: rest): _*), ctype)
+                (modelName, clusterName, CPath((TableModule.paths.Value +: rest): _*), col)
               }
 
             case _ => None
@@ -89,26 +88,28 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
 
         val modelMap: Map[ModelId, List[(ClusterId, Map[CPath, DoubleColumn])]] = modelTuples map { case (modelId, clusterTuples) =>
           val featureTuples: Map[ClusterId, Set[(ModelId, ClusterId, CPath, DoubleColumn)]] = clusterTuples.groupBy(_._2)
-          featureTuples.map({ case (clusterId, values) =>
-            (clusterId, values map { case (_, _, cpath, col) => (cpath, col) })
-          })(collection.breakOut)
+          val clusters = featureTuples.map({ case (clusterId, values) =>
+            (clusterId, values.map { case (_, _, cpath, col) => (cpath, col) }.toMap)
+          }).toList
+
+          (modelId -> clusters)
         }
 
-        val models: Set[(ModelId, List[CPath], Map[ClusterId, List[DoubleColumn]])] = modelMap map { case (modelId, clusters) =>
-          val paths: List[CPath] = clusters.toSet.flatMap(_._2.keySet).toList
+        val models: Set[(ModelId, List[CPath], Map[ClusterId, List[DoubleColumn]])] = modelMap.map { case (modelId, clusters) =>
+          val paths: List[CPath] = clusters.flatMap { case (_, cols) => cols.keySet.toList }.toSet.toList
           val clusterMap: Map[ClusterId, List[DoubleColumn]] = clusters.map({ case (clusterId, colMap) =>
             (clusterId, paths map (colMap))
           }).toMap
           (modelId, paths, clusterMap)
-        }
+        }.toSet
 
         { (i: Int) =>
           models.collect({ case (modelId, paths, clusters) => 
-            val clusterModels: List[ClusterModel] = clusters map { case (clusterId, columns) =>
-              ClusterModel(clusterId, columns.collect { case col if col.isDefinedAt(i) =>
+            val clusterModels: List[ModelCluster] = clusters.map { case (clusterId, columns) =>
+              ModelCluster(clusterId, columns.collect { case col if col.isDefinedAt(i) =>
                 col.apply(i)
               }.toArray)
-            }
+            }.toList
 
             Model(modelId, paths, clusterModels.toArray)
           }).toSet
@@ -119,7 +120,7 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
     }
   }
 
-  def morph1Apply(models: Models, function: Double => Double): Morph1Apply = new Morph1Apply {
+  def morph1Apply(models: Models): Morph1Apply = new Morph1Apply {
 
     def scanner(modelSet: ModelSet): CScanner = new CScanner {
       type A = Unit
@@ -127,7 +128,7 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
 
       def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
         def included(model: Model): Map[ColumnRef, Column] = {
-          val featurePaths = model.cpaths
+          val featurePaths = model.cpaths.toSet
 
           val res = cols filter { case (ColumnRef(cpath, ctype), col) =>
             featurePaths.contains(cpath)
@@ -158,14 +159,14 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
             val clusterIds: Array[String] = model.clusters map (_.name)
             val clusterCenters: Array[Array[Double]] = model.clusters.map(_.featureValues)
             val includedCols = includedModel.collect { case (ColumnRef(cpath, _), col: DoubleColumn) => (cpath, col) }.toMap
-            val featureColumns: Array[DoubleColumn] = cpaths.map { includedCols(_) }.toArray
+            val featureColumns: Array[DoubleColumn] = model.cpaths.map { includedCols(_) }.toArray
             val numFeatures = model.cpaths.size
 
             // TODO: Make faster with arrays and fast isDefined checking.
             val resultArray = filteredRange(includedModel).foldLeft(new Array[String](range.end)) { case (arr, row) =>
               val feature = new Array[Double](numFeatures)
               var i = 0
-              while (i < points.length) {
+              while (i < feature.length) {
                 feature(i) = featureColumns(i)(row)
                 i += 1
               }
@@ -177,7 +178,7 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
                 // TODO: Don't box for fancy operators...
                 val diff = (feature - clusterCenters(i))
                 val distSq = diff dot diff
-                if (distSq < minDist) {
+                if (distSq < minDistSq) {
                   minDistSq = distSq
                   minCluster = i
                 }
@@ -222,7 +223,7 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
       val spec: TransSpec1 = scanners reduceOption { (s1, s2) => InnerArrayConcat(s1, s2) } getOrElse TransSpec1.Id
 
       val forcedTable = table.transform(spec).force
-      val tables0 = Range(0, scanners.size) map { i => forcedTable.map(_.transform(DerefArrayStatic(TransSpec1.Id, CPathIndex(i)))) }
+      val tables0 = (0 until scanners.size) map { i => forcedTable.map(_.transform(DerefArrayStatic(TransSpec1.Id, CPathIndex(i)))) }
       val tables: M[Seq[Table]] = (tables0.toList).sequence
 
       tables.map(_.reduceOption { _ concat _ } getOrElse Table.empty)
@@ -230,11 +231,15 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
   }
 }
 
-trait AssignClustersLib[M[+_]] extends Evaluator[M] {
+trait AssignClustersLib[M[+_]] extends AssignPredictionHelper[M] with Evaluator[M] {
+  import trans._
+
   override def _libMorphism2 = super._libMorphism2 ++ Set(AssignClusters)
 
   object AssignClusters extends Morphism2(Vector("std", "stats"), "assignClusters") {
     val tpe = BinaryOperationType(JObjectUnfixedT, JType.JUniverseT, JObjectUnfixedT)
+
+    override val retainIds = true
 
     lazy val alignment = MorphismAlignment.Custom(alignCustom _)
 

@@ -83,13 +83,18 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   trait Morphism1Impl extends Morphism1Like with Morph1Apply
 
   trait Morphism2Impl extends Morphism2Like {
+    override final def idAlignment: IdentityAlignment = alignment match {
+      case MorphismAlignment.Match(_) => IdentityAlignment.MatchAlignment
+      case _ => IdentityAlignment.CrossAlignment
+    }
+
     def alignment: MorphismAlignment
   }
  
   sealed trait MorphismAlignment
   
   object MorphismAlignment {
-    case class Match(morph: M[Morph1Apply]) extends MorphismAlignment
+    case class Match(morph: M[Morph1Apply]) extends MorphismAlignment 
     case class Cross(morph: M[Morph1Apply]) extends MorphismAlignment
     case class Custom(f: (Table, Table) => M[(Table, Morph1Apply)]) extends MorphismAlignment
   }

@@ -21,7 +21,6 @@ package com.precog.daze
 
 import com.precog.common.Path
 import com.precog.yggdrasil._
-import com.precog.util.IOUtils
 
 import org.specs2.mutable._
 
@@ -30,15 +29,12 @@ import spire.implicits._
 
 import blueeyes.json._
 
-import java.io.File
-
-import scala.util.Random._
-
 import scalaz._
 
 trait ClusteringLibSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
     with ClusteringLib[M]
+    with ClusteringTestSupport
     with LongIdMemoryDatasetConsumer[M]{ self =>
 
   import dag._
@@ -61,58 +57,9 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
     }
   }
 
-  case class GeneratedPointSet(points: Array[Array[Double]], centers: Array[Array[Double]])
-
-  def genPoints(n: Int, dimension: Int, k: Int): GeneratedPointSet = {
-
-    def genPoint(x: => Double): Array[Double] = Array.fill(dimension)(x)
-
-    val s = math.pow(2 * k, 1.0 / dimension)
-    val centers = (1 to k).map({ _ => genPoint(nextDouble * s) }).toArray
-    val points = (1 to n).map({ _ =>
-      val c = nextInt(k)
-      genPoint(nextGaussian) + centers(c)
-    }).toArray
-
-    GeneratedPointSet(points, centers)
-  }
-
-  def pointsToJson(points: Array[Array[Double]]): List[JValue] = {
-    points.toList map { p =>
-      JArray(p.toSeq map (JNum(_)): _*)
-    }
-  }
-
-  def writePointsToDataset[A](points: Array[Array[Double]])(f: String => A): A = {
-    val lines = pointsToJson(points) map { _.renderCompact }
-    val tmpFile = File.createTempFile("values", ".json")
-    IOUtils.writeSeqToFile(lines, tmpFile).unsafePerformIO
-    val pointsString0 = "filesystem" + tmpFile.toString
-    val pointsString = pointsString0.take(pointsString0.length - 5)
-    val result = f(pointsString)
-    tmpFile.delete()
-    result
-  }
-
   val ClusterIdPattern = """Cluster\d+""".r
 
   "k-medians clustering" should {
-  /*
-    "return something" in {
-      val line = Line(0, "")
-
-      val input = dag.Morph2(line, KMediansClustering,
-        dag.LoadLocal(line, Const(line, CString("/hom/heightWeightAcrossSlices"))),
-        dag.LoadLocal(line, Const(line, CString("/hom/smallnumbers"))))
-
-      val result = testEval(input)
-
-      println("result: " + result)
-
-      result must not beEmpty
-    }
-    */
-
     "compute good k-medians clustering" in {
       val dimension = 4
       val k = 5
