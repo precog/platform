@@ -1,6 +1,12 @@
 package com.precog
 package bytecode
 
+sealed trait IdentityAlignment
+object IdentityAlignment {
+  object CrossAlignment extends IdentityAlignment
+  object MatchAlignment extends IdentityAlignment
+}
+
 trait Morphism1Like {
   val namespace: Vector[String]
   val name: String
@@ -23,6 +29,7 @@ trait Morphism2Like {
   val opcode: Int
   val tpe: BinaryOperationType
   val retainIds: Boolean = false
+  def idAlignment: IdentityAlignment = IdentityAlignment.CrossAlignment
 
   lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   override def toString = "[0x%06x]".format(opcode) + fqn
