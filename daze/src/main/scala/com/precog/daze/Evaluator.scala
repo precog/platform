@@ -350,7 +350,7 @@ trait Evaluator[M[+_]] extends DAG
             })
 
             (transformed, morph1) = transformedAndMorph1
-
+            
             back <- transState liftM morph1(transformed, ctx) 
           } yield PendingTable(back, graph, TransSpec1.Id)
         }

@@ -119,6 +119,7 @@ trait KMediansCoreSetClustering {
     def fromPoints(points: Array[Array[Double]], k: Int): CoreSetTree = {
       val weights = new Array[Long](points.length)
       java.util.Arrays.fill(weights, 1L)
+
       CoreSetTree(CoreSet.fromWeightedPoints(points, weights, k, epsilon), k)
     }
 
@@ -411,7 +412,11 @@ trait KMediansCoreSetClustering {
         require(j < sideLengths.length, "Point found outside of grid. What to do...")
 
         val sideLength = sideLengths(j)
-        val scaledPoint = (point - center) :/ sideLength
+        val scaledPoint = {
+          if (sideLength == 0) (point - center)
+          else (point - center) :/ sideLength
+        }
+
         var i = 0
         while (i < scaledPoint.length) {
           scaledPoint(i) = center(i) + math.floor(scaledPoint(i)) * sideLength + (sideLength / 2)
@@ -503,7 +508,7 @@ trait ClusteringLib[M[+_]] extends GenOpcode[M] with Evaluator[M] {
   override def _libMorphism2 = super._libMorphism2 ++ Set(KMediansClustering)
   val Stats4Namespace = Vector("std", "stats")
 
-  object KMediansClustering extends Morphism2(Stats4Namespace, "kmeans") with KMediansCoreSetClustering {
+  object KMediansClustering extends Morphism2(Stats4Namespace, "kMedians") with KMediansCoreSetClustering {
     val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
 
     lazy val alignment = MorphismAlignment.Custom(alignCustom _)
@@ -581,19 +586,19 @@ trait ClusteringLib[M[+_]] extends GenOpcode[M] with Evaluator[M] {
 
       val cpaths = Schema.cpath(jtype)
 
-      val tree = CPath.makeTree(cpaths, Range(0, points.length).toSeq)
+      val tree = CPath.makeTree(cpaths, Range(0, points.head.length).toSeq)
 
       val spec = TransSpec.concatChildren(tree)
 
       val tables = points map { pt => Table.constArray(Set(CArray[Double](pt))) }
 
-      val arrays = tables map { table => table.transform(spec) }
+      val transformedTables = tables map { table => table.transform(spec) }
 
-      val wrappedArrays = arrays.zipWithIndex map {
+      val wrappedTables = transformedTables.zipWithIndex map {
         case (tbl, idx) => tbl.transform(trans.WrapObject(TransSpec1.Id, "Cluster" + (idx + 1)))
       }
 
-      val table = wrappedArrays reduce { 
+      val table = wrappedTables reduce { 
         (t1, t2) => t1.cross(t2)(trans.InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
       }
 
@@ -627,6 +632,7 @@ trait ClusteringLib[M[+_]] extends GenOpcode[M] with Evaluator[M] {
           val sliceSize = 1000
           val features: StreamT[M, Table] = tables flatMap { case (tbl, jtype) =>
             val coreSetTree = tbl.canonicalize(sliceSize).toArray[Double].normalize.reduce(reducerFeatures(k))
+
             StreamT(coreSetTree map { tree =>
               StreamT.Yield(extract(tree, k, jtype, defaultNumber.getAndIncrement), StreamT.empty[M, Table])
             })
@@ -657,10 +663,7 @@ trait ClusteringLib[M[+_]] extends GenOpcode[M] with Evaluator[M] {
       }
     }
 
-    def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
-      t2.reduce(reducerKS) map { ks =>
-        (t1.transform(TransSpec1.Id), morph1Apply(ks))
-      }
-    }
+    def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] =
+      t2.reduce(reducerKS) map { ks => (t1, morph1Apply(ks)) }
   }
 }

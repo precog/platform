@@ -229,6 +229,7 @@ trait StdLib[M[+_]] extends
       StringLib[M] with 
       StatsLib[M] with 
       ClusteringLib[M] with 
+      AssignClustersLib[M] with 
       PredictionLib[M] with 
       LogisticRegressionLib[M] with
       LinearRegressionLib[M] with

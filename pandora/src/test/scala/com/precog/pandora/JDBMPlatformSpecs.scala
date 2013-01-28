@@ -148,6 +148,10 @@ class JDBMHelloQuirrelSpecs extends HelloQuirrelSpecs with JDBMPlatformSpecs
 
 class JDBMLogisticRegressionSpecs extends LogisticRegressionSpecs with JDBMPlatformSpecs
 
+class JDBMLinearRegressionSpecs extends LinearRegressionSpecs with JDBMPlatformSpecs
+
+class JDBMClusteringSpecs extends ClusteringSpecs with JDBMPlatformSpecs
+
 class JDBMMiscStackSpecs extends MiscStackSpecs with JDBMPlatformSpecs
 
 class JDBMNonObjectStackSpecs extends NonObjectStackSpecs with JDBMPlatformSpecs
