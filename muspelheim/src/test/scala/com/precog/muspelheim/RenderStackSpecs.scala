@@ -21,7 +21,6 @@ trait RenderStackSpecs extends EvalStackSpecs
   implicit val M: Monad[Future] with Copointed[Future]
 
   implicit val ntFuture = NaturalTransformation.refl[Future]
-  val evaluator = Evaluator[Future](M)
 
   "full stack rendering" should {
     def evalTable(str: String, debug: Boolean = false): Table = {
@@ -29,6 +28,8 @@ trait RenderStackSpecs extends EvalStackSpecs
       
       logger.debug("Beginning evaluation of query: " + str)
       
+      val evaluator = Evaluator[Future](M)
+
       val forest = compile(str) filter { _.errors.isEmpty }
       forest must haveSize(1)
       
