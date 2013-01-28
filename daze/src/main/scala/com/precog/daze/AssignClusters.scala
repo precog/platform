@@ -245,7 +245,7 @@ trait AssignClustersLib[M[+_]] extends AssignPredictionHelper[M] with Evaluator[
 
     def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
       val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
-      t1.transform(spec).reduce(reducer) map { models => (t2.transform(spec), morph1Apply(models)) }
+      t2.transform(spec).reduce(reducer) map { models => (t1.transform(spec), morph1Apply(models)) }
     }
   }
 }

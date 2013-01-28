@@ -74,8 +74,8 @@ trait AssignClustersSpecs[M[+_]] extends Specification
           val points = dag.LoadLocal(line, Const(line, CString(pointsDataSet)))
 
           val input = dag.Morph2(line, AssignClusters,
-            dag.LoadLocal(line, Const(line, CString(modelDataSet))),
-            points)
+            points,
+            dag.LoadLocal(line, Const(line, CString(modelDataSet))))
 
          val input2 = dag.Join(line, JoinObject, IdentitySort,
            input,
