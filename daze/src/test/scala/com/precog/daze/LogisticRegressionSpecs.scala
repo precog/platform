@@ -36,7 +36,10 @@ import java.io.File
 
 import scalaz._
 
-trait LogisticRegressionTestSupport[M[+_]] extends LogisticRegressionLib[M] with RegressionTestSupport[M] {
+trait LogisticRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
+    with RegressionTestSupport[M] {
+  import library._
+
   def sigmoid(z: Double): Double = 1 / (1 + math.exp(z))
 
   def createLogisticSamplePoints(length: Int, noSamples: Int, actualThetas: Array[Double]): Seq[(Array[Double], Double)] = {
@@ -81,6 +84,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
   import dag._
   import instructions._
+  import library._
 
   val testAPIKey = "testAPIKey"
 

@@ -24,6 +24,7 @@ import com.codecommit.gll.LineStream
 
 trait TreeShaker extends Phases with parser.AST with Binder {
   import ast._
+  import library._
 
   /**
    * @return The <em>root</em> of the shaken tree

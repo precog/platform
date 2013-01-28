@@ -353,3 +353,13 @@ object Column {
     i < cols.length
   }
 }
+  
+abstract class ModUnionColumn(table: Array[Column]) extends Column {
+  final def isDefinedAt(i: Int) = {
+    val c = col(i)
+    c != null && c.isDefinedAt(row(i))
+  }
+  
+  final def col(i: Int) = table(i % table.length)
+  final def row(i: Int) = i / table.length
+}

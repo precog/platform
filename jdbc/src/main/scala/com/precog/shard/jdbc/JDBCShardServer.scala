@@ -20,11 +20,13 @@
 package com.precog.shard
 package jdbc
 
+import akka.actor.ActorSystem
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
 import com.precog.common.security._
 
 import blueeyes.BlueEyesServer
+import blueeyes.bkka._
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
 import blueeyes.json.JValue
@@ -34,11 +36,20 @@ import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 import org.eclipse.jetty.server.{Handler, Request, Server}
 import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, HandlerList, ResourceHandler}
 
+import scalaz._
+
 import org.streum.configrity.Configuration
 
-object JDBCShardServer extends BlueEyesServer with ShardService with JDBCQueryExecutorComponent with StaticAPIKeyManagerComponent {
+object JDBCShardServer extends BlueEyesServer with ShardService  with StaticAPIKeyManagerComponent {
+  val actorSystem = ActorSystem("mongoExecutorActorSystem")
+  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  val futureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
   
   val clock = Clock.System
+
+  def configureShardState(config: Configuration) = futureMonad.point {
+    BasicShardState(JDBCQueryExecutor(config.detach("queryExecutor"))(asyncContext, futureMonad), apiKeyManagerFactory(config.detach("security")), Stoppable.fromFuture(Future(())))
+  }
 
   val jettyService = this.service("labcoat", "1.0") { context =>
     startup {

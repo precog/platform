@@ -30,6 +30,8 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.test.YId
 import com.precog.util.IdGen
 
+import scala.Function._
+
 import scalaz.Failure
 import scalaz.Success
 
@@ -37,13 +39,11 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
     with JoinOptimizer
     with PrettyPrinter
-    with StdLib[M]
     with LongIdMemoryDatasetConsumer[M] { self =>
-
-  import Function._
   
   import dag._
   import instructions._
+  import library._
 
   val testAPIKey = "testAPIKey"
 

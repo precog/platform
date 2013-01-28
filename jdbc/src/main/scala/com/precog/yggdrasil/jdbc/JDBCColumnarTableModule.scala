@@ -21,11 +21,10 @@ package com.precog.yggdrasil
 package table
 package jdbc
 
+import com.precog.bytecode._
 import com.precog.common.{MetadataStats,Path,VectorCase}
 import com.precog.common.json._
 import com.precog.common.security._
-import com.precog.daze.Evaluator
-import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
 import com.precog.util._
@@ -99,8 +98,7 @@ object JDBCColumnarTableModule {
   
 
 trait JDBCColumnarTableModule 
-    extends BlockStoreColumnarTableModule[Future] 
-    with Evaluator[Future] {
+    extends BlockStoreColumnarTableModule[Future] {
   import JDBCColumnarTableModule._
 
   type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig with BlockStoreColumnarTableModuleConfig with JDBCColumnarTableModuleConfig

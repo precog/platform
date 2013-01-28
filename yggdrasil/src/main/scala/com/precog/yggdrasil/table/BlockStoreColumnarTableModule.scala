@@ -63,7 +63,6 @@ trait BlockStoreColumnarTableModuleConfig {
 
 trait BlockStoreColumnarTableModule[M[+_]] extends
   ColumnarTableModule[M] with
-  IdSourceScannerModule[M] with
   YggConfigComponent { self =>
 
   protected lazy val blockModuleLogger = LoggerFactory.getLogger("com.precog.yggdrasil.table.BlockStoreColumnarTableModule")

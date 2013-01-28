@@ -31,12 +31,8 @@ import org.specs2.mutable._
 
 import scalaz._
 
-trait TypeInferencerSpec[M[+_]] extends Specification
+trait TypeInferencerSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M] 
-    with ReductionLib[M] 
-    with StatsLib[M]
-    with MathLib[M]
-    with InfixLib[M]
     with LongIdMemoryDatasetConsumer[M] {
 
   import dag._
@@ -49,6 +45,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     Map2Cross, Map2CrossLeft, Map2CrossRight, Map2Match
   }
   import bytecode._
+  import library._
 
   def flattenType(jtpe : JType) : Map[JPath, Set[CType]] = {
     def flattenAux(jtpe : JType) : Set[(JPath, Option[CType])] = jtpe match {
@@ -619,7 +616,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
   }
 }
 
-object TypeInferencerSpec extends TypeInferencerSpec[test.YId] with test.YIdInstances
+object TypeInferencerSpecs extends TypeInferencerSpecs[test.YId] with test.YIdInstances
 
 // vim: set ts=4 sw=4 et:
 

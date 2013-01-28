@@ -33,7 +33,10 @@ import java.io.File
 
 import scalaz._
 
-trait LinearRegressionTestSupport[M[+_]] extends LinearRegressionLib[M] with RegressionTestSupport[M] {
+trait LinearRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
+    with RegressionTestSupport[M] {
+  import library._
+
   def createLinearSamplePoints(length: Int, noSamples: Int, actualThetas: Array[Double]): Seq[(Array[Double], Double)] = {
     val testSeqX = {
       def createXs: Array[Double] = {
@@ -60,13 +63,14 @@ trait LinearRegressionTestSupport[M[+_]] extends LinearRegressionLib[M] with Reg
   }
 }
 
-trait LinearRegressionSpec[M[+_]] extends Specification 
+trait LinearRegressionSpecs[M[+_]] extends Specification 
     with EvaluatorTestSupport[M]
     with LinearRegressionTestSupport[M]
     with LongIdMemoryDatasetConsumer[M] { self =>
 
   import dag._
   import instructions._
+  import library._
 
   def testAPIKey = "testAPIKey"
 
@@ -286,4 +290,4 @@ trait LinearRegressionSpec[M[+_]] extends Specification
   }
 }
 
-object LinearRegressionSpec extends LinearRegressionSpec[test.YId] with test.YIdInstances
+object LinearRegressionSpecs extends LinearRegressionSpecs[test.YId] with test.YIdInstances

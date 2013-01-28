@@ -26,11 +26,11 @@ import yggdrasil._
 import yggdrasil.test._
 
 trait StaticInlinerSpecs[M[+_]] extends Specification
-    with EvaluatorTestSupport[M]
-    with StaticInliner[M] {
+    with EvaluatorTestSupport[M] {
       
   import dag._
   import instructions._
+  import library._
   
   "static inlining of Root computation" should {
     "detect and resolve addition" in {

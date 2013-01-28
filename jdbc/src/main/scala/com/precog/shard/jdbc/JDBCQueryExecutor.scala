@@ -26,8 +26,15 @@ import DefaultSerialization._
 
 import com.precog.accounts._
 
+import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
+
+import com.precog.daze._
+
+import com.precog.muspelheim._
+
+import com.precog.util.FilesystemFileOps
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
@@ -37,12 +44,6 @@ import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.jdbc._
 import com.precog.yggdrasil.util._
-
-import com.precog.daze._
-import com.precog.muspelheim.ParseEvalStack
-
-import com.precog.common._
-import com.precog.util.FilesystemFileOps
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -78,6 +79,7 @@ class JDBCQueryExecutorConfig(val config: Configuration)
   with ShardConfig {
     
   val maxSliceSize = config[Int]("mongo.max_slice_size", 10000)
+  val smallSliceSize = config[Int]("mongo.small_slice_size", 8)
 
   val shardId = "standalone"
   val logPrefix = "jdbc"
@@ -93,22 +95,16 @@ class JDBCQueryExecutorConfig(val config: Configuration)
   val ingestConfig = None
 }
 
-trait JDBCQueryExecutorComponent {
-  val actorSystem = ActorSystem("jdbcExecutorActorSystem")
-  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit val futureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
-  
-  def accountManagerFactory(config: Configuration) = new InMemoryAccountManager[Future]()
-  def queryExecutorFactoryFactory(config: Configuration, extAccessControl: APIKeyManager[Future], extAccountManager: BasicAccountManager[Future]): QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] = {
+object JDBCQueryExecutor {
+  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): Platform[Future, StreamT[Future, CharBuffer]] = {
     new JDBCQueryExecutor(new JDBCQueryExecutorConfig(config))
-  }
+  }  
 }
 
 class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future])
-    extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] 
-    with ShardQueryExecutor[Future] 
+    extends ShardQueryExecutorPlatform[Future] 
     with JDBCColumnarTableModule 
-    with Logging {
+    with Logging { platform =>
   type YggConfig = JDBCQueryExecutorConfig
 
   trait TableCompanion extends JDBCColumnarTableCompanion
@@ -120,6 +116,7 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
   val unescapeColumnNames = false
 
   lazy val storage = new JDBCStorageMetadataSource(yggConfig.dbMap)
+  def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
   // to satisfy abstract defines in parent traits
   val asyncContext = extAsyncContext
@@ -128,50 +125,66 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
   def startup() = Promise.successful(true)
   def shutdown() = Promise.successful(true)
 
-  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
-    Future(Success(this))
+  implicit val nt = NaturalTransformation.refl[Future]
+  object executor extends ShardQueryExecutor[Future](M) with IdSourceScannerModule {
+    val M = platform.M
+    type YggConfig = platform.YggConfig
+    val yggConfig = platform.yggConfig
+    val report = LoggingQueryLogger(M)
   }
 
-  def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
+  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
+    Future(Success(executor))
+  }
 
-  def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
-    Future {
-      path.elements.toList match {
-        case Nil => 
-          Success(yggConfig.dbMap.keys.toList.map { d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
-
-        case dbName :: Nil => 
-          // A little more complicated. Need to use metadata interface to enumerate table names
-          yggConfig.dbMap.get(dbName).toSuccess("DB %s is not configured".format(dbName)) flatMap { url =>
-            Validation.fromTryCatch {
-              val conn = DriverManager.getConnection(url)
-
-              try {
-                // May need refinement to get meaningful results
-                val results = conn.getMetaData.getTables(null, null, "%", Array("TABLE"))
-
-                var tables = List.empty[String]
-
-                while (results.next) {
-                  tables ::= "/" + results.getString("TABLE_NAME") + "/"
-                }
-
-                tables.serialize.asInstanceOf[JArray]
-              } finally {
-                conn.close()
-              }
-            }.bimap({ t => logger.error("Error enumerating tables", t); t.getMessage }, x => x)
-          }
-
-        case _ => 
-          Failure("JDBC paths have the form /databaseName/tableName; longer paths are not supported.")
-      }
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
+    new Evaluator[N](N0) with IdSourceScannerModule {
+      type YggConfig = platform.YggConfig // JDBMQueryExecutorConfig
+      val yggConfig = platform.yggConfig
+      val report = LoggingQueryLogger[N](N0)
     }
   }
 
-  def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = Promise.successful (
-    Success(JObject.empty) // TODO: Implement from table metadata
-  )
+  val metadataClient = new MetadataClient[Future] {
+    def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
+      Future {
+        path.elements.toList match {
+          case Nil =>
+            Success(yggConfig.dbMap.keys.toList.map { d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
+
+          case dbName :: Nil =>
+            // A little more complicated. Need to use metadata interface to enumerate table names
+            yggConfig.dbMap.get(dbName).toSuccess("DB %s is not configured".format(dbName)) flatMap { url =>
+              Validation.fromTryCatch {
+                val conn = DriverManager.getConnection(url)
+
+                try {
+                  // May need refinement to get meaningful results
+                  val results = conn.getMetaData.getTables(null, null, "%", Array("TABLE"))
+
+                  var tables = List.empty[String]
+
+                  while (results.next) {
+                    tables ::= "/" + results.getString("TABLE_NAME") + "/"
+                  }
+
+                  tables.serialize.asInstanceOf[JArray]
+                } finally {
+                  conn.close()
+                }
+              }.bimap({ t => logger.error("Error enumerating tables", t); t.getMessage }, x => x)
+            }
+
+          case _ =>
+            Failure("JDBC paths have the form /databaseName/tableName; longer paths are not supported.")
+        }
+      }
+    }
+
+    def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = Promise.successful (
+      Success(JObject.empty) // TODO: Implement from table metadata
+    )
+  }
 }
 
 
