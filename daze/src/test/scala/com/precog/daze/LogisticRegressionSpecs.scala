@@ -17,7 +17,10 @@ import java.io.File
 
 import scalaz._
 
-trait LogisticRegressionTestSupport[M[+_]] extends LogisticRegressionLib[M] with RegressionTestSupport[M] {
+trait LogisticRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
+    with RegressionTestSupport[M] {
+  import library._
+
   def sigmoid(z: Double): Double = 1 / (1 + math.exp(z))
 
   def createLogisticSamplePoints(length: Int, noSamples: Int, actualThetas: Array[Double]): Seq[(Array[Double], Double)] = {
@@ -55,13 +58,14 @@ trait LogisticRegressionTestSupport[M[+_]] extends LogisticRegressionLib[M] with
   }
 }
 
-trait LogisticRegressionSpec[M[+_]] extends Specification
+trait LogisticRegressionSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M] 
     with LogisticRegressionTestSupport[M]
     with LongIdMemoryDatasetConsumer[M]{ self =>
 
   import dag._
   import instructions._
+  import library._
 
   val testAPIKey = "testAPIKey"
 
@@ -111,7 +115,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
       val theta = result collect {
         case (ids, SArray(elems)) if ids.length == 0 => {
-          val SDecimal(theta1) = elems(0) match { case SArray(elems2) => elems2(0) }
+          val SDecimal(theta1) = (elems(0): @unchecked) match { case SArray(elems2) => elems2(0) }
           val SDecimal(theta0) = elems(1)
           List(theta0.toDouble, theta1.toDouble)
         }
@@ -169,9 +173,9 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
       val theta = result collect {
         case (ids, SArray(elems)) if ids.length == 0 => {
-          val SDecimal(theta1) = elems(0) match { case SObject(map) => map("bar") }
-          val SDecimal(theta2) = elems(0) match { case SObject(map) => map("baz") }
-          val SDecimal(theta3) = elems(0) match { case SObject(map) => map("foo") }
+          val SDecimal(theta1) = (elems(0): @unchecked) match { case SObject(map) => map("bar") }
+          val SDecimal(theta2) = (elems(0): @unchecked) match { case SObject(map) => map("baz") }
+          val SDecimal(theta3) = (elems(0): @unchecked) match { case SObject(map) => map("foo") }
           val SDecimal(theta0) = elems(1) 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble, theta3.toDouble)
         }
@@ -239,14 +243,14 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
       def theta(numOfFields: Int) = result collect {
         case (ids, SArray(elems)) if ids.length == 0 && elems(0).asInstanceOf[SObject].fields.size == numOfFields => {
-          val SDecimal(theta1) = elems(0) match { case SObject(map) => 
-            map("bar") match { case SObject(map) => 
-              map("baz") match { case SArray(elems) =>
+          val SDecimal(theta1) = (elems(0): @unchecked) match { case SObject(map) => 
+            (map("bar"): @unchecked) match { case SObject(map) => 
+              (map("baz"): @unchecked) match { case SArray(elems) =>
                 elems(0)
               }
             } 
           }
-          val SDecimal(theta2) = elems(0) match { case SObject(map) => map("foo") }
+          val SDecimal(theta2) = (elems(0): @unchecked) match { case SObject(map) => map("foo") }
           val SDecimal(theta0) = elems(1) 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble)
         }
@@ -282,4 +286,4 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
   }
 }
 
-object LogisticRegressionSpec extends LogisticRegressionSpec[test.YId] with test.YIdInstances
+object LogisticRegressionSpecs extends LogisticRegressionSpecs[test.YId] with test.YIdInstances
