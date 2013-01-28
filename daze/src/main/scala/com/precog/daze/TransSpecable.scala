@@ -21,15 +21,15 @@ package com.precog.daze
 
 import com.precog.common.Path
 import com.precog.common.json.{ CPathField, CPathIndex, CPathMeta }
-import com.precog.yggdrasil.{ CDouble, CEmptyArray, CEmptyObject, CLong, CNum, CString, CValue } 
-import com.precog.yggdrasil.table.CF1
+import com.precog.yggdrasil._
 
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.monadPlus._
 
-trait TransSpecableModule[M[+_]] extends EvaluatorMethodsModule[M] with TableModule[M] {
+trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] with EvaluatorMethodsModule[M] {
   import dag._ 
+  import library._
   import instructions._
 
   trait TransSpecable extends EvaluatorMethods {
@@ -47,7 +47,7 @@ trait TransSpecableModule[M[+_]] extends EvaluatorMethodsModule[M] with TableMod
       def Map1Left(node: Join)(parent: T, op: Op2, graph: DepGraph, value: CValue): T
       def Map1Right(node: Join)(parent: T, op: Op2, graph: DepGraph, value: CValue): T
       def binOp(node: Join)(leftParent: T, rightParent: => T, op: BinaryOperation): T
-      def Filter(node: Filter)(leftParent: T, rightParent: => T): T
+      def Filter(node: dag.Filter)(leftParent: T, rightParent: => T): T
       def WrapArray(node: Operate)(parent: T): T
       def Op1(node: Operate)(parent: T, op: UnaryOperation): T
       def unmatched(node: DepGraph): T
@@ -66,7 +66,7 @@ trait TransSpecableModule[M[+_]] extends EvaluatorMethodsModule[M] with TableMod
       def Map1Left(node: Join)(parent: Boolean, op: Op2, graph: DepGraph, value: CValue) = parent
       def Map1Right(node: Join)(parent: Boolean, op: Op2, graph: DepGraph, value: CValue) = parent
       def binOp(node: Join)(leftParent: Boolean, rightParent: => Boolean, op: BinaryOperation) = leftParent && rightParent
-      def Filter(node: Filter)(leftParent: Boolean, rightParent: => Boolean) = leftParent && rightParent
+      def Filter(node: dag.Filter)(leftParent: Boolean, rightParent: => Boolean) = leftParent && rightParent
       def WrapArray(node: Operate)(parent: Boolean) = parent
       def Op1(node: Operate)(parent: Boolean, op: UnaryOperation) = parent
       def unmatched(node: DepGraph) = false
@@ -115,10 +115,10 @@ trait TransSpecableModule[M[+_]] extends EvaluatorMethodsModule[M] with TableMod
           parent.map(leftMap(_)(trans.InnerArrayConcat(_)))
 
         def Map1Left(node: Join)(parent: N[S], op: Op2, graph: DepGraph, value: CValue) =
-          parent.map(leftMap(_)(trans.Map1(_, op.f2(ctx).partialRight(value))))
+          parent.map(leftMap(_)(trans.Map1(_, op.f2(ctx).applyr(value))))
           
         def Map1Right(node: Join)(parent: N[S], op: Op2, graph: DepGraph, value: CValue) =
-          parent.map(leftMap(_)(trans.Map1(_, op.f2(ctx).partialLeft(value))))
+          parent.map(leftMap(_)(trans.Map1(_, op.f2(ctx).applyl(value))))
         
         def binOp(node: Join)(leftParent: N[S], rightParent: => N[S], op: BinaryOperation) = {
           for {
@@ -143,7 +143,7 @@ trait TransSpecableModule[M[+_]] extends EvaluatorMethodsModule[M] with TableMod
           parent.map(leftMap(_)(trans.WrapArray(_)))
         
         def Op1(node: Operate)(parent: N[S], op: UnaryOperation) =
-          parent.map(leftMap(_)(parent => op1(op).spec(ctx)(parent)))
+          parent.map(leftMap(_)(parent => op1ForUnOp(op).spec(ctx)(parent)))
 
         def unmatched(node: DepGraph) = init(Leaf(Source), node)
         
@@ -181,7 +181,7 @@ trait TransSpecableModule[M[+_]] extends EvaluatorMethodsModule[M] with TableMod
         case node @ Join(NotEq, CrossLeftSort | CrossRightSort, Const(value), right) =>
           alg.EqualLiteral(node)(loop(right), value, true)
 
-        case node @ Join(WrapObject, CrossLeftSort | CrossRightSort, Const(CString(field)), right) =>
+        case node @ Join(instructions.WrapObject, CrossLeftSort | CrossRightSort, Const(CString(field)), right) =>
           alg.WrapObject(node)(loop(right), field)
 
         case node @ Join(DerefObject, CrossLeftSort | CrossRightSort, left, Const(CString(field))) =>
@@ -193,7 +193,7 @@ trait TransSpecableModule[M[+_]] extends EvaluatorMethodsModule[M] with TableMod
         case node @ Join(DerefArray, CrossLeftSort | CrossRightSort, left, ConstInt(index)) =>
           alg.DerefArrayStatic(node)(loop(left), index)
         
-        case node @ Join(ArraySwap, CrossLeftSort | CrossRightSort, left, ConstInt(index)) =>
+        case node @ Join(instructions.ArraySwap, CrossLeftSort | CrossRightSort, left, ConstInt(index)) =>
           alg.ArraySwap(node)(loop(left), index)
 
         case node @ Join(JoinObject, CrossLeftSort | CrossRightSort, left, Const(CEmptyObject)) =>
@@ -217,10 +217,10 @@ trait TransSpecableModule[M[+_]] extends EvaluatorMethodsModule[M] with TableMod
         case node @ Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
           alg.binOp(node)(loop(left), loop(right), op)
 
-        case node @ Filter(joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
+        case node @ dag.Filter(joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
           alg.Filter(node)(loop(left), loop(right))
 
-        case node @ Operate(WrapArray, parent) =>
+        case node @ Operate(instructions.WrapArray, parent) =>
           alg.WrapArray(node)(loop(parent))
 
         case node @ Operate(op, parent) =>

@@ -238,13 +238,13 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         
         def get0(pt: PendingTable): (TransSpec1, DepGraph) = (pt.trans, pt.graph)
         def set0(pt: PendingTable, tg: (TransSpec1, DepGraph)): PendingTable = pt.copy(trans = tg._1, graph = tg._2)
-        def init0(tg: (TransSpec1, DepGraph)): StateT[M, EvaluatorState, PendingTable] = evalNotTransSpecable(tg._2)
+        def init0(tg: (TransSpec1, DepGraph)): StateT[N, EvaluatorState, PendingTable] = evalNotTransSpecable(tg._2)
         
-        type TSM[+T] = StateT[M, EvaluatorState, T]
-        def evalTransSpecable(to: DepGraph): StateT[M, EvaluatorState, PendingTable] =
+        type TSM[+T] = StateT[N, EvaluatorState, T]
+        def evalTransSpecable(to: DepGraph): StateT[N, EvaluatorState, PendingTable] =
           mkTransSpecWithState[TSM, PendingTable](to, None, ctx, get0, set0, init0)
         
-        def evalNotTransSpecable(graph: DepGraph): StateT[M, EvaluatorState, PendingTable] = graph match {
+        def evalNotTransSpecable(graph: DepGraph): StateT[N, EvaluatorState, PendingTable] = graph match {
           case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
             // TODO binary typing
 

@@ -31,12 +31,12 @@ import com.precog.yggdrasil.CLong
 
 import scalaz.std.map._
 
-trait ReductionFinderModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] {
+trait ReductionFinderModule[M[+_]] extends DAG with TableModule[M] with TableLibModule[M] with EvaluatorMethodsModule[M] with TransSpecableModule[M] {
   type TS1 = trans.TransSpec1
   import library._
   import trans._
 
-  trait ReductionFinder extends EvaluatorMethods {
+  trait ReductionFinder extends EvaluatorMethods with TransSpecable {
     import dag._ 
     import instructions._
 
