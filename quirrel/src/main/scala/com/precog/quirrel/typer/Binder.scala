@@ -199,9 +199,10 @@ trait Binder extends parser.AST {
     }
     
     // Need to make sure none of the primitives in the bottom Set are
-    // in the libraries. This is because HotSpot will *sometimes*
-    // intern the names of the bindings, give them a new hashCode and
-    // cause non-deterministic selection of the binding.
+    // in the libraries. This is because the Set is ordered by
+    // hashCode and the Binding hashCode seems non-deterministic. In
+    // any case, we just shouldn't have a Set of Bindings where two or
+    // more have the same name.
     val builtIns = lib1.map(Op1Binding) ++
       lib2.map(Op2Binding) ++
       libReduction.map(ReductionBinding) ++
